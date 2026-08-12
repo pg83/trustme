@@ -202,7 +202,7 @@ void HIR::InherentCache::insert_all(const Span& sp, const HIR::TypeImpl& impl, c
     }
 }
 
-void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::TypeData* ty, t_cb_resolve_type ty_res, callback_t cb) const {
+void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::TypeData* ty, t_cb_resolve_type ty_res, callbackT cb) const {
     TRACE_FUNCTION_F(name << ", " << ty);
     // Callback that ensures that a potential impl fully matches the required receiver type
     inner_callback_t inner_cb = [&](const HIR::TypeData* rough_self_ty, const HIR::TypeImpl& impl) {

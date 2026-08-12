@@ -56,15 +56,15 @@ public:
 
     void set_impl_generics_raw(MetadataType self_meta_type, const ::HIR::GenericParams& gps);
 
-    void clear_impl_generics();
+    void clearImplGenerics();
 
     void set_item_generics_raw(const ::HIR::GenericParams& gps);
 
-    void clear_item_generics();
+    void clearItemGenerics();
 
     void set_both_generics_raw(const ::HIR::GenericParams* gps_impl, const ::HIR::GenericParams* gps_fcn);
 
-    void clear_both_generics();
+    void clearBothGenerics();
 
     // Used by ResolveUFCS to regenerate
     void prep_indexes(const Span& sp) {
@@ -87,7 +87,7 @@ private:
     bool findImplBounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb) const;
     bool findImplCheckCrate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb, const ::HIR::TraitImpl& impl) const;
     bool findImplCheckCrateRaw(const Span& sp, const ::HIR::SimplePath& des_trait_path, const ::HIR::PathParams* des_trait_params, const ::HIR::TypeData* des_type, const ::HIR::GenericParams& impl_params_def, const ::HIR::PathParams& impl_trait_params, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
-    ::HIR::Compare check_auto_trait_impl_destructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeData* type) const;
+    ::HIR::Compare checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeData* type) const;
 
 public:
     const ::HIR::TypeData* fix_trait_default_return(const Span& sp, const HIR::ItemPath& p, const ::HIR::TypeData* tpl, ::HIR::TypeRef& tmp) const;
@@ -120,7 +120,7 @@ public:
     /// \}
 
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
-    bool find_named_trait_in_trait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& params, const ::HIR::Trait& trait_ptr, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& pp, const ::HIR::TypeData* self_type, ::std::function<bool(const ::HIR::PathParams&, ::HIR::TraitPath::assoc_list_t)> callback) const;
+    bool find_named_trait_in_trait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& params, const ::HIR::Trait& trait_ptr, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& pp, const ::HIR::TypeData* self_type, ::std::function<bool(const ::HIR::PathParams&, ::HIR::TraitPath::assocListT)> callback) const;
     ///
     bool trait_contains_type(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const char* name, ::HIR::GenericPath& out_path) const;
     bool iterate_aty_bounds(const Span& sp, const ::HIR::Path::Data::Data_UfcsKnown& pe, ::std::function<bool(const ::HIR::TraitPath&)> cb) const;
@@ -132,7 +132,7 @@ public:
     bool type_is_clone(const Span& sp, const ::HIR::TypeData* ty) const; // 1.29
     bool type_is_sized(const Span& sp, const ::HIR::TypeData* ty) const;
     bool type_is_impossible(const Span& sp, const ::HIR::TypeData* ty) const;
-    bool can_unsize(const Span& sp, const ::HIR::TypeData* dst, const ::HIR::TypeData* src) const;
+    bool canUnsize(const Span& sp, const ::HIR::TypeData* dst, const ::HIR::TypeData* src) const;
     /// Check if the passed type contains an UnsafeCell (i.e. is interior mutable)
     /// Returns:
     /// - `Fuzzy` if generic (can't know for sure yet)

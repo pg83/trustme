@@ -350,9 +350,9 @@ namespace AST {
             return mItems;
         }
 
-        void add_type(Span sp, RcString name, AttributeList attrs, TypeRef type);
-        void add_function(Span sp, RcString name, AttributeList attrs, Function fcn);
-        void add_static(Span sp, RcString name, AttributeList attrs, Static v);
+        void addType(Span sp, RcString name, AttributeList attrs, TypeRef type);
+        void addFunction(Span sp, RcString name, AttributeList attrs, Function fcn);
+        void addStatic(Span sp, RcString name, AttributeList attrs, Static v);
 
         void set_is_marker();
         bool is_marker() const;
@@ -412,7 +412,7 @@ namespace AST {
                 I128
             } repr = Repr::Rust;
             bool is_repr_c = false;
-            uint64_t align_value = 0;
+            uint64_t alignValue = 0;
         } markings;
 
         Enum();
@@ -455,7 +455,7 @@ namespace AST {
                 Simd,
                 Transparent,
             } repr = Repr::Rust;
-            uint64_t align_value = 0;
+            uint64_t alignValue = 0;
             // Indicates packing
             uint64_t max_field_align = 0;
 
@@ -593,10 +593,10 @@ namespace AST {
         ~Impl();
         Impl& operator=(Impl&&);
 
-        void add_function(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Function fcn);
-        void add_type(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, GenericParams params, TypeRef type);
-        void add_static(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Static v);
-        void add_macro_invocation(MacroInvocation inv);
+        void addFunction(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Function fcn);
+        void addType(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, GenericParams params, TypeRef type);
+        void addStatic(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Static v);
+        void addMacroInvocation(MacroInvocation inv);
 
         const ImplDef& def() const {
             return mDef;
@@ -657,7 +657,7 @@ namespace AST {
             return mAbi;
         }
 
-        void add_item(Named<Item> named_item);
+        void addItem(Named<Item> named_item);
 
         // NOTE: Only Function and Static are valid.
         ::std::vector<Named<Item>>& items() {
@@ -764,14 +764,14 @@ namespace AST {
         }
 
         /// Create an anon module (for use inside expressions)
-        ::std::shared_ptr<AST::Module> add_anon();
+        ::std::shared_ptr<AST::Module> addAnon();
 
-        void add_item(Named<Item> item);
-        void add_item(Span sp, Visibility vis, RcString name, Item it, AttributeList attrs);
-        void add_ext_crate(Span sp, Visibility vis, RcString ext_name, RcString imp_name, AttributeList attrs);
-        void add_macro_invocation(MacroInvocation item);
+        void addItem(Named<Item> item);
+        void addItem(Span sp, Visibility vis, RcString name, Item it, AttributeList attrs);
+        void addExtCrate(Span sp, Visibility vis, RcString ext_name, RcString imp_name, AttributeList attrs);
+        void addMacroInvocation(MacroInvocation item);
 
-        void add_macro(bool is_exported, RcString name, MacroRulesPtr macro);
+        void addMacro(bool is_exported, RcString name, MacroRulesPtr macro);
 
         const ::AST::AbsolutePath& path() const {
             return myPath;
@@ -780,11 +780,11 @@ namespace AST {
         //      ::std::vector<Named<Item>>& items()       { return m_items; }
         //const ::std::vector<Named<Item>>& items() const { return m_items; }
 
-        ::std::vector<::std::shared_ptr<Module>>& anon_mods() {
+        ::std::vector<::std::shared_ptr<Module>>& anonMods() {
             return anonModules;
         }
 
-        const ::std::vector<::std::shared_ptr<Module>>& anon_mods() const {
+        const ::std::vector<::std::shared_ptr<Module>>& anonMods() const {
             return anonModules;
         }
 

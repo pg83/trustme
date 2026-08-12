@@ -451,7 +451,7 @@ Writer::CloseOnDrop::CloseOnDrop(CloseOnDrop&& x)
 }
 Writer::CloseOnDrop::~CloseOnDrop() {
     if (r) {
-        r->close_object();
+        r->closeObject();
     }
     r = nullptr;
 }
@@ -624,7 +624,7 @@ Reader::CloseOnDrop::CloseOnDrop(CloseOnDrop&& x)
 }
 Reader::CloseOnDrop::~CloseOnDrop() {
     if (r) {
-        r->close_object();
+        r->closeObject();
     }
     r = nullptr;
 }
@@ -655,7 +655,7 @@ Reader::CloseOnDrop Reader::open_anon_object() {
     }
     return CloseOnDrop(*this);
 }
-void Reader::close_object() {
+void Reader::closeObject() {
     auto v = read_u8();
     if (v != 0xFF) {
         std::cerr << "Expected CloseObject(0xFF), got " << unsigned(v) << ::std::endl;

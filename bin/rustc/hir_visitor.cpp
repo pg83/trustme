@@ -132,7 +132,7 @@ void ::HIR::Visitor::visit_type_impl(::HIR::TypeImpl& impl) {
         this->visit_inherent_type(p + ent.first, ent.second.data);
     }
     if (mResolve) {
-        mResolve->clear_impl_generics();
+        mResolve->clearImplGenerics();
     }
 }
 
@@ -144,7 +144,7 @@ void ::HIR::Visitor::visit_inherent_type(ItemPath p, ::HIR::TypeAlias& item) {
     this->visit_params(item.mParams);
     this->visit_type(item.mType);
     if (mResolve) {
-        mResolve->clear_item_generics();
+        mResolve->clearItemGenerics();
     }
 }
 
@@ -180,7 +180,7 @@ void ::HIR::Visitor::visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR
         this->visit_type(ent.second.data);
     }
     if (mResolve) {
-        mResolve->clear_impl_generics();
+        mResolve->clearImplGenerics();
     }
 }
 
@@ -192,7 +192,7 @@ void ::HIR::Visitor::visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HI
     this->visit_path_params(impl.traitArgs);
     this->visit_type(impl.mType);
     if (mResolve) {
-        mResolve->clear_impl_generics();
+        mResolve->clearImplGenerics();
     }
 }
 
@@ -203,7 +203,7 @@ void ::HIR::Visitor::visit_type_alias(::HIR::ItemPath p, ::HIR::TypeAlias& item)
     this->visit_params(item.mParams);
     this->visit_type(item.mType);
     if (mResolve) {
-        mResolve->clear_impl_generics();
+        mResolve->clearImplGenerics();
     }
 }
 
@@ -216,7 +216,7 @@ void ::HIR::Visitor::visit_trait_alias(::HIR::ItemPath p, ::HIR::TraitAlias& ite
         this->visit_trait_path(p);
     }
     if (mResolve) {
-        mResolve->clear_impl_generics();
+        mResolve->clearImplGenerics();
     }
 }
 
@@ -255,7 +255,7 @@ void ::HIR::Visitor::visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) {
         )
     }
     if (mResolve) {
-        mResolve->clear_impl_generics();
+        mResolve->clearImplGenerics();
     }
 }
 
@@ -282,7 +282,7 @@ void ::HIR::Visitor::visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) {
         }
     }
     if( mResolve ) {
-        mResolve->clear_impl_generics();
+        mResolve->clearImplGenerics();
     }
 }
 
@@ -305,7 +305,7 @@ void ::HIR::Visitor::visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) {
         }
     }
     if( mResolve ) {
-        mResolve->clear_impl_generics();
+        mResolve->clearImplGenerics();
     }
 }
 
@@ -320,7 +320,7 @@ void ::HIR::Visitor::visit_union(::HIR::ItemPath p, ::HIR::Union& item) {
         assert(!var.default_value);
     }
     if (mResolve) {
-        mResolve->clear_impl_generics();
+        mResolve->clearImplGenerics();
     }
 }
 
@@ -345,7 +345,7 @@ void ::HIR::Visitor::visit_function(::HIR::ItemPath p, ::HIR::Function& item) {
     this->visit_type(item.returnType);
     this->visit_expr(item.mCode);
     if (mResolve) {
-        mResolve->clear_item_generics();
+        mResolve->clearItemGenerics();
     }
 }
 
@@ -357,7 +357,7 @@ void ::HIR::Visitor::visit_static(::HIR::ItemPath p, ::HIR::Static& item) {
     this->visit_type(item.mType);
     this->visit_expr(item.mValue);
     if (mResolve) {
-        mResolve->clear_item_generics();
+        mResolve->clearItemGenerics();
     }
 }
 
@@ -370,7 +370,7 @@ void ::HIR::Visitor::visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) {
     this->visit_type(item.mType);
     this->visit_expr(item.mValue);
     if (mResolve) {
-        mResolve->clear_item_generics();
+        mResolve->clearItemGenerics();
     }
 }
 
@@ -412,7 +412,7 @@ void ::HIR::Visitor::visit_generic_bound(::HIR::GenericBound& bound) {
 
 void ::HIR::Visitor::visit_type(::HIR::TypeRef& ty) {
     assert(ty);
-    auto data = ty->clone_data();
+    auto data = ty->cloneData();
     visit_type_data(data);
     ty = type_interner().intern(mv$(data));
 }

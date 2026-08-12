@@ -2,7 +2,7 @@
 #include "hir_typeck_static.h" // StaticTraitResolve
 #include "trans_mangling.h"
 
-TransListFunction* TransList::add_function(HIR::TypeInterner& types, ::HIR::Path p) {
+TransListFunction* TransList::addFunction(HIR::TypeInterner& types, ::HIR::Path p) {
     auto symbol = FMT(TransMangle(p));
     auto existing = functionSymbols.find(symbol);
     if (existing != functionSymbols.end()) {
@@ -56,7 +56,7 @@ bool TransList::has_type(::HIR::TypeRef type, bool shallow) const {
     return existing->second.has_definition || (shallow && existing->second.has_prototype);
 }
 
-bool TransList::add_type(::HIR::TypeRef type, bool shallow) {
+bool TransList::addType(::HIR::TypeRef type, bool shallow) {
     auto symbol = FMT(TransMangle(type));
     auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
@@ -65,22 +65,22 @@ bool TransList::add_type(::HIR::TypeRef type, bool shallow) {
         auto& state = existing->second;
         ASSERT_BUG(Span(), state.canonical == type || state.canonical->equals_ignoring_regions(type),
             "Distinct types have the same mangled name: " << state.canonical << " and " << type);
-        auto& already_emitted = shallow ? state.has_prototype : state.has_definition;
-        if (already_emitted || (shallow && state.has_definition)) {
+        auto& alreadyEmitted = shallow ? state.has_prototype : state.has_definition;
+        if (alreadyEmitted || (shallow && state.has_definition)) {
             return false;
         }
-        already_emitted = true;
+        alreadyEmitted = true;
     }
     types.push_back(::std::make_pair(type, shallow));
     return true;
 }
 
-void TransList::clear_types() {
+void TransList::clearTypes() {
     types.clear();
     typeSymbols.clear();
 }
 
-TransListStatic* TransList::add_static(HIR::TypeInterner& types, ::HIR::Path p) {
+TransListStatic* TransList::addStatic(HIR::TypeInterner& types, ::HIR::Path p) {
     auto symbol = FMT(TransMangle(p));
     auto existing = staticSymbols.find(symbol);
     if (existing != staticSymbols.end()) {

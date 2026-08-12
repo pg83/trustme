@@ -44,7 +44,7 @@ LifetimeRef LifetimeRef::new_static() {
     rv.binding = LifetimeRef::STATIC;
     return rv;
 }
-GenericRef LifetimeRef::as_param() const {
+GenericRef LifetimeRef::asParam() const {
     assert(is_param());
     return GenericRef(RcString(), binding);
 }

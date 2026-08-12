@@ -44,7 +44,7 @@ namespace {
 
     public:
         struct CheckSpec {
-            bool any_names = false;
+            bool anyNames = false;
             ::std::vector<::std::string> names;
             ExpectedCfgValues values;
         };
@@ -164,7 +164,7 @@ namespace {
             fail("unterminated string literal");
         }
 
-        bool at_end() {
+        bool atEnd() {
             skip_ws();
             return pos == input.size();
         }
@@ -175,7 +175,7 @@ namespace {
             if (take('=')) {
                 value = string_literal();
             }
-            if (!at_end()) {
+            if (!atEnd()) {
                 fail("expected `key` or `key=\"value\"`");
             }
             return {::std::move(name), ::std::move(value)};
@@ -190,7 +190,7 @@ namespace {
             CheckSpec rv;
             bool saw_values = false;
             if (take(')')) {
-                if (!at_end()) {
+                if (!atEnd()) {
                     fail("unexpected input after `cfg(...)`");
                 }
                 return rv;
@@ -200,11 +200,11 @@ namespace {
                 auto word = ident();
                 if (take('(')) {
                     if (word == "any") {
-                        if (!rv.names.empty() || saw_values || rv.any_names) {
+                        if (!rv.names.empty() || saw_values || rv.anyNames) {
                             fail("`cfg(any())` can only be provided in isolation");
                         }
                         expect(')', "`)` after `any(`");
-                        rv.any_names = true;
+                        rv.anyNames = true;
                     } else if (word == "values") {
                         if (rv.names.empty()) {
                             fail("`values()` cannot be specified before the names");
@@ -268,13 +268,13 @@ namespace {
                     break;
                 }
             }
-            if (!at_end()) {
+            if (!atEnd()) {
                 fail("unexpected input after `cfg(...)`");
             }
-            if (rv.any_names && (!rv.names.empty() || saw_values)) {
+            if (rv.anyNames && (!rv.names.empty() || saw_values)) {
                 fail("`cfg(any())` can only be provided in isolation");
             }
-            if (!saw_values && !rv.any_names) {
+            if (!saw_values && !rv.anyNames) {
                 rv.values.none = true;
             }
             return rv;
@@ -321,28 +321,28 @@ namespace {
         UnexpectedValue,
     };
 
-    BuiltinExpectation check_builtin_cfg(const ::std::string& name, const ::std::optional<::std::string>& value) {
+    BuiltinExpectation checkBuiltinCfg(const ::std::string& name, const ::std::optional<::std::string>& value) {
         static const ::std::set<::std::string> no_value_names = {
             "debug_assertions", "clippy", "doc", "doctest", "miri", "rustfmt",
             "overflow_checks", "proc_macro", "sanitizer_cfi_generalize_pointers",
             "sanitizer_cfi_normalize_integers", "target_thread_local", "ub_checks",
             "contract_checks", "unix", "windows",
         };
-        static const ::std::set<::std::string> any_value_names = {
+        static const ::std::set<::std::string> anyValueNames = {
             "fmt_debug", "panic", "relocation_model", "sanitize", "target_feature",
             "target_abi", "target_arch", "target_endian", "target_env", "target_family",
             "target_os", "target_pointer_width", "target_vendor",
         };
-        static const ::std::set<::std::string> atomic_names = {
+        static const ::std::set<::std::string> atomicNames = {
             "target_has_atomic", "target_has_atomic_equal_alignment", "target_has_atomic_load_store",
         };
         if (no_value_names.count(name) != 0) {
             return value ? BuiltinExpectation::UnexpectedValue : BuiltinExpectation::Expected;
         }
-        if (any_value_names.count(name) != 0) {
+        if (anyValueNames.count(name) != 0) {
             return value ? BuiltinExpectation::Expected : BuiltinExpectation::UnexpectedValue;
         }
-        if (atomic_names.count(name) != 0) {
+        if (atomicNames.count(name) != 0) {
             if (!value || *value == "ptr" || *value == "8" || *value == "16"
                 || *value == "32" || *value == "64" || *value == "128") {
                 return BuiltinExpectation::Expected;
@@ -352,13 +352,13 @@ namespace {
         return BuiltinExpectation::UnknownName;
     }
 
-    void report_unexpected_cfg(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value, bool bad_value) {
+    void report_unexpected_cfg(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value, bool badValue) {
         const auto level = unexpected_cfg_level();
         if (level == CfgLintLevel::Allow) {
             return;
         }
         const auto condition = value ? FMT("`" << name << " = \"" << *value << "\"`") : FMT("`" << name << "`");
-        const auto message = bad_value
+        const auto message = badValue
             ? FMT("unexpected cfg condition value " << condition)
             : FMT("unexpected cfg condition name " << condition);
         if (level == CfgLintLevel::Warn || level == CfgLintLevel::ForceWarn) {
@@ -381,7 +381,7 @@ namespace {
             }
             return;
         }
-        switch (check_builtin_cfg(name, value)) {
+        switch (checkBuiltinCfg(name, value)) {
             case BuiltinExpectation::Expected:
                 return;
             case BuiltinExpectation::UnexpectedValue:
@@ -437,7 +437,7 @@ bool CfgSetCheckSpec(const ::std::string& spec, ::std::string& error) {
     try {
         auto parsed = CfgSpecParser(spec).parse_check_spec();
         g_check_cfg.active = true;
-        if (parsed.any_names) {
+        if (parsed.anyNames) {
             g_check_cfg.exhaustive_names = false;
         }
         for (auto& name : parsed.names) {
@@ -477,14 +477,14 @@ void CfgSetLintCap(CfgLintLevel level) {
 }
 
 namespace {
-    bool check_cfg_inner1(const RcString& name, TokenStream& lex);
+    bool checkCfgInner1(const RcString& name, TokenStream& lex);
 
-    bool check_cfg_inner(TokenStream& lex) {
+    bool checkCfgInner(TokenStream& lex) {
         TRACE_FUNCTION;
         if (lex.lookahead(0) == TOK_INTERPOLATED_META) {
             auto meta = std::move(lex.getTokenCheck(TOK_INTERPOLATED_META).frag_meta());
             auto ilex = TTStream(meta.span(), ParseState(), meta.data());
-            return check_cfg_inner1(meta.name().as_trivial(), ilex);
+            return checkCfgInner1(meta.name().asTrivial(), ilex);
         } else if (lex.lookahead(0) == TOK_RWORD_TRUE) {
             lex.getTokenCheck(TOK_RWORD_TRUE);
             return true;
@@ -493,14 +493,14 @@ namespace {
             return false;
         } else {
             auto name = lex.getTokenCheck(TOK_IDENT).ident().name;
-            return check_cfg_inner1(name, lex);
+            return checkCfgInner1(name, lex);
         }
     }
 
-    bool check_cfg_inner1(const RcString& name, TokenStream& lex) {
+    bool checkCfgInner1(const RcString& name, TokenStream& lex) {
         // Some compiler-generated cfg streams have no source parent.  They do
         // not need a diagnostic span unless check-cfg is actually enabled.
-        const auto condition_span = g_check_cfg.active ? lex.point_span() : Span();
+        const auto conditionSpan = g_check_cfg.active ? lex.point_span() : Span();
         Token tok;
         switch (lex.lookahead(0)) {
             case TOK_EQUAL: {
@@ -515,7 +515,7 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_STRING);
                     val = tok.str();
                 }
-                validate_cfg_use(condition_span, name.c_str(), val);
+                validate_cfg_use(conditionSpan, name.c_str(), val);
                 // Equality
                 auto its = g_cfg_values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
@@ -547,7 +547,7 @@ namespace {
                 if (name == rcstring_any || name == rcstring_cfg) {
                     bool rv = false;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                        rv |= check_cfg_inner(lex);
+                        rv |= checkCfgInner(lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
                         }
@@ -556,7 +556,7 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
                 } else if (name == rcstring_not) {
-                    bool rv = check_cfg_inner(lex);
+                    bool rv = checkCfgInner(lex);
                     // Allow a trailing comma
                     lex.getTokenIf(TOK_COMMA);
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
@@ -564,7 +564,7 @@ namespace {
                 } else if (name == rcstring_all) {
                     bool rv = true;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                        rv &= check_cfg_inner(lex);
+                        rv &= checkCfgInner(lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
                         }
@@ -581,7 +581,7 @@ namespace {
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         const auto field = lex.getTokenCheck(TOK_IDENT).ident().name;
                         const auto canonical = RcString::new_interned(FMT("target_" << field));
-                        rv &= check_cfg_inner1(canonical, lex);
+                        rv &= checkCfgInner1(canonical, lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
                         }
@@ -596,7 +596,7 @@ namespace {
 
                 break;
             default:
-                validate_cfg_use(condition_span, name.c_str(), ::std::nullopt);
+                validate_cfg_use(conditionSpan, name.c_str(), ::std::nullopt);
                 auto its = g_cfg_values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
                     return true;
@@ -608,12 +608,12 @@ namespace {
     }
 }
 
-bool check_cfg_stream(TokenStream& lex) {
+bool checkCfgStream(TokenStream& lex) {
     Token tok;
     bool rv = false;
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-        rv |= check_cfg_inner(lex);
+        rv |= checkCfgInner(lex);
         if (lex.lookahead(0) != TOK_COMMA) {
             break;
         }
@@ -623,15 +623,15 @@ bool check_cfg_stream(TokenStream& lex) {
     return rv;
 }
 
-bool check_cfg(const Span& sp, const ::AST::Attribute& mi) {
+bool checkCfg(const Span& sp, const ::AST::Attribute& mi) {
     TTStream lex(sp, ParseState(), mi.data());
-    return check_cfg_stream(lex);
+    return checkCfgStream(lex);
 }
 
-bool check_cfg_attrs(const ::AST::AttributeList& attrs) {
+bool checkCfgAttrs(const ::AST::AttributeList& attrs) {
     for (auto& a : attrs.mItems) {
         if (a.name() == rcstring_cfg) {
-            if (!check_cfg(a.span(), a)) {
+            if (!checkCfg(a.span(), a)) {
                 return false;
             }
         }
@@ -639,20 +639,20 @@ bool check_cfg_attrs(const ::AST::AttributeList& attrs) {
     return true;
 }
 
-std::vector<AST::Attribute> check_cfg_attr(const ::AST::Attribute& mi) {
+std::vector<AST::Attribute> checkCfgAttr(const ::AST::Attribute& mi) {
     TTStream lex(mi.span(), ParseState(), mi.data());
 
     Token tok;
     std::vector<AST::Attribute> rv;
     lex.getTokenCheck(TOK_PAREN_OPEN);
-    auto cfg_res = check_cfg_inner(lex);
+    auto cfgRes = checkCfgInner(lex);
     while (lex.lookahead(0) == TOK_COMMA) {
         lex.getTokenCheck(TOK_COMMA);
         rv.push_back(ParseMetaItem(lex));
     }
     lex.getTokenCheck(TOK_PAREN_CLOSE);
     lex.getTokenCheck(TOK_EOF);
-    if (cfg_res) {
+    if (cfgRes) {
         return rv;
     } else {
         return std::vector<AST::Attribute>();
@@ -663,7 +663,7 @@ class CCfgExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         DEBUG("cfg!() - " << tt);
         auto lex = TTStream(sp, ParseState(), tt);
-        bool rv = check_cfg_inner(lex);
+        bool rv = checkCfgInner(lex);
         lex.getTokenCheck(TOK_EOF);
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(AST::Edition::Rust2015, {}, rv ? TOK_RWORD_TRUE : TOK_RWORD_FALSE)));
@@ -675,7 +675,7 @@ class CCfgSelectExpander: public ExpandProcMacro {
         DEBUG("cfg_select!() - " << tt);
         auto lex = TTStream(sp, ParseState(), tt);
         for (;;) {
-            bool rv = lex.getTokenIf(TOK_UNDERSCORE) || check_cfg_inner(lex);
+            bool rv = lex.getTokenIf(TOK_UNDERSCORE) || checkCfgInner(lex);
             lex.getTokenCheck(TOK_FATARROW);
             auto t = ParseTT(lex, true);
             if (rv) {
@@ -696,7 +696,7 @@ class CCfgHandler: public ExpandDecorator {
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate) const override {
         DEBUG("#[cfg] crate - " << mi);
         // Ignore, as #[cfg] on a crate is handled in expand/mod.cpp
-        if (check_cfg(sp, mi)) {
+        if (checkCfg(sp, mi)) {
         } else {
             // Remove all items (can't remove the module)
             crate.rootModule.mItems.clear();
@@ -705,7 +705,7 @@ class CCfgHandler: public ExpandDecorator {
 
     void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module&, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
         TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
-        if (check_cfg(sp, mi)) {
+        if (checkCfg(sp, mi)) {
             // Leave
         } else {
             i = AST::Item::make_None({});
@@ -714,7 +714,7 @@ class CCfgHandler: public ExpandDecorator {
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, AST::Impl& impl, const RcString& name, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
         TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
-        if (check_cfg(sp, mi)) {
+        if (checkCfg(sp, mi)) {
             // Leave
         } else {
             i = AST::Item::make_None({});
@@ -723,7 +723,7 @@ class CCfgHandler: public ExpandDecorator {
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, const AST::AbsolutePath& path, AST::Trait& trait, slice<const AST::Attribute> attrs, AST::Item& i) const override {
         TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
-        if (check_cfg(sp, mi)) {
+        if (checkCfg(sp, mi)) {
             // Leave
         } else {
             i = AST::Item::make_None({});
@@ -732,7 +732,7 @@ class CCfgHandler: public ExpandDecorator {
 
     void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, ::AST::ExprNodeP& expr) const override {
         DEBUG("#[cfg] expr - " << mi);
-        if (check_cfg(sp, mi)) {
+        if (checkCfg(sp, mi)) {
             // Leave
         } else {
             expr.reset();
@@ -741,35 +741,35 @@ class CCfgHandler: public ExpandDecorator {
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::StructItem& si) const override {
         DEBUG("#[cfg] struct item - " << mi);
-        if (!check_cfg(sp, mi)) {
+        if (!checkCfg(sp, mi)) {
             si.mName = RcString();
         }
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::TupleItem& i) const override {
         DEBUG("#[cfg] tuple item - " << mi);
-        if (!check_cfg(sp, mi)) {
+        if (!checkCfg(sp, mi)) {
             i.mType = ::TypeRef(sp);
         }
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::EnumVariant& i) const override {
         DEBUG("#[cfg] enum variant - " << mi);
-        if (!check_cfg(sp, mi)) {
+        if (!checkCfg(sp, mi)) {
             i.mName = RcString();
         }
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeMatchArm& i) const override {
         DEBUG("#[cfg] match arm - " << mi);
-        if (!check_cfg(sp, mi)) {
+        if (!checkCfg(sp, mi)) {
             i.patterns.clear();
         }
     }
 
     void handle(const Span& sp, const AST::Attribute& mi, AST::Crate& crate, ::AST::ExprNodeStructLiteral::Ent& i) const override {
         DEBUG("#[cfg] struct lit - " << mi);
-        if (!check_cfg(sp, mi)) {
+        if (!checkCfg(sp, mi)) {
             i.value.reset();
         }
     }

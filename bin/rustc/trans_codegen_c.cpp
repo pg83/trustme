@@ -489,8 +489,8 @@ namespace {
                 // TODO: Define this function in MIR?
                 of << "}\n";
                 of << "int main(int argc, const char* argv[]) {\n";
-                auto c_start_path = mResolve.crate.get_lang_item_path_opt("mrustc-start");
-                if (c_start_path == ::HIR::SimplePath()) {
+                auto cStartPath = mResolve.crate.get_lang_item_path_opt("mrustc-start");
+                if (cStartPath == ::HIR::SimplePath()) {
                     auto main_path = crate.get_lang_item_path(Span(), "mrustc-main");
                     const auto& main_fcn = crate.get_function_by_path(sp, main_path);
 
@@ -510,7 +510,7 @@ namespace {
                         of << ");\n";
                     }
                 } else {
-                    of << "\treturn " << TransMangle(::HIR::GenericPath(c_start_path)) << "(argc, (uint8_t**)argv);\n";
+                    of << "\treturn " << TransMangle(::HIR::GenericPath(cStartPath)) << "(argc, (uint8_t**)argv);\n";
                 }
                 of << "}\n";
                 of << "extern \"C\" {\n";
@@ -520,10 +520,10 @@ namespace {
             if (create_shims) {
                 // Allocator/panic shims
                 {
-                    const auto allocator_it = crate.mLangItems.find(GLOBAL_ALLOCATOR_LANG_ITEM);
-                    const bool has_global_allocator = allocator_it != crate.mLangItems.end();
+                    const auto allocatorIt = crate.mLangItems.find(GLOBAL_ALLOCATOR_LANG_ITEM);
+                    const bool has_global_allocator = allocatorIt != crate.mLangItems.end();
                     const HIR::Static* global_allocator = has_global_allocator
-                        ? &crate.get_static_by_path(Span(), allocator_it->second)
+                        ? &crate.get_static_by_path(Span(), allocatorIt->second)
                         : nullptr;
                     for (size_t i = 0; i < NUM_ALLOCATOR_METHODS; i++) {
                         struct H {
@@ -581,15 +581,15 @@ namespace {
                         H::emit_proto(of, method, "__rust_", args);
                         of << " {\n";
                         if (!has_global_allocator) {
-                            const char* alloc_prefix = "__rdl_";
+                            const char* allocPrefix = "__rdl_";
                             of << "\textern ";
-                            H::emit_proto(of, method, alloc_prefix, args);
+                            H::emit_proto(of, method, allocPrefix, args);
                             of << ";\n";
                             of << "\t";
                             if (method.ret != AllocatorDataTy::Unit) {
                                 of << "return ";
                             }
-                            of << alloc_prefix << method.name << "(";
+                            of << allocPrefix << method.name << "(";
                             for (size_t j = 0; j < args.size(); j++) {
                                 if (j != 0) {
                                     of << ", ";
@@ -620,7 +620,7 @@ namespace {
                             }
 
                             const auto method_path = TransAllocatorMethodPath(crate, global_allocator->mType, method);
-                            const HIR::Path static_path = HIR::GenericPath(allocator_it->second);
+                            const HIR::Path static_path = HIR::GenericPath(allocatorIt->second);
                             of << "\t";
                             if (method.ret != AllocatorDataTy::Unit) {
                                 of << "return reinterpret_cast<int8_t*>(";
@@ -928,7 +928,7 @@ namespace {
 
             // Execute $CC with the required libraries
             StringList args;
-            size_t arg_file_start = 0;
+            size_t argFileStart = 0;
             // Pick the C++ compiler.
             {
                 std::string varname = "CXX_" + TargetGetCurSpec().backendC.cCompiler;
@@ -944,7 +944,7 @@ namespace {
                     args.push_back("g++");
                 }
             }
-            arg_file_start = args.get_vec().size();
+            argFileStart = args.get_vec().size();
             args.push_back("-std=gnu++20");
             args.push_back("-fexceptions");
             for (const auto& a : TargetGetCurSpec().backendC.compilerOpts) {
@@ -1054,35 +1054,35 @@ namespace {
                     break;
             }
 
-            ::std::stringstream cmd_ss;
-            std::string command_file = outfilePath + "_cmd.txt";
-            std::ofstream command_file_stream;
+            ::std::stringstream cmdSs;
+            std::string commandFile = outfilePath + "_cmd.txt";
+            std::ofstream commandFileStream;
             if (getenv("MRUSTC_CCACHE")) {
-                cmd_ss << "ccache ";
+                cmdSs << "ccache ";
             }
-            bool use_arg_file = arg_file_start > 0;
+            bool use_arg_file = argFileStart > 0;
             if (use_arg_file) {
-                command_file_stream.open(command_file);
-                ASSERT_BUG(Span(), command_file_stream.is_open(), "Failed to open command file `" << command_file << "` for writing");
+                commandFileStream.open(commandFile);
+                ASSERT_BUG(Span(), commandFileStream.is_open(), "Failed to open command file `" << commandFile << "` for writing");
             }
             size_t i = -1;
             for (const auto& arg : args.get_vec()) {
                 i++;
-                auto& out_ss = (use_arg_file && i >= arg_file_start ? static_cast<::std::ostream&>(command_file_stream) : cmd_ss);
+                auto& out_ss = (use_arg_file && i >= argFileStart ? static_cast<::std::ostream&>(commandFileStream) : cmdSs);
                 out_ss << "\"" << FmtShell(arg) << "\" ";
             }
             if (use_arg_file) {
-                cmd_ss << "@\"" << FmtShell(command_file) << "\"";
-                command_file_stream.close();
-                ASSERT_BUG(Span(), !command_file_stream.bad(), "Error set on output stream for: " << outfilePathC);
+                cmdSs << "@\"" << FmtShell(commandFile) << "\"";
+                commandFileStream.close();
+                ASSERT_BUG(Span(), !commandFileStream.bad(), "Error set on output stream for: " << outfilePathC);
             }
             //DEBUG("- " << cmd_ss.str());
-            ::std::cout << "Running command - " << cmd_ss.str() << ::std::endl;
-            if (opt.build_command_file != "") {
-                ::std::cerr << "INVOKE CC: " << cmd_ss.str() << ::std::endl;
-                ::std::ofstream(opt.build_command_file) << cmd_ss.str() << ::std::endl;
+            ::std::cout << "Running command - " << cmdSs.str() << ::std::endl;
+            if (opt.buildCommandFile != "") {
+                ::std::cerr << "INVOKE CC: " << cmdSs.str() << ::std::endl;
+                ::std::ofstream(opt.buildCommandFile) << cmdSs.str() << ::std::endl;
             } else {
-                int ec = system(cmd_ss.str().c_str());
+                int ec = system(cmdSs.str().c_str());
                 if (ec == -1) {
                     ::std::cerr << "C Compiler failed to execute (system returned -1)" << ::std::endl;
                     perror("system");
@@ -1102,22 +1102,22 @@ namespace {
             }
         }
 
-        void emit_box_drop(unsigned indent_level, const ::HIR::TypeData* inner_type, const ::HIR::TypeData* box_type, const ::MIR::LValue& slot, bool run_destructor) {
+        void emit_box_drop(unsigned indent_level, const ::HIR::TypeData* inner_type, const ::HIR::TypeData* boxType, const ::MIR::LValue& slot, bool run_destructor) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
             if (run_destructor) {
                 auto inner_ptr = ::MIR::LValue::newField(::MIR::LValue::newField(::MIR::LValue::newField(slot.clone(), 0), 0), 0);
                 emit_destructor_call(::MIR::LValue::newDeref(mv$(inner_ptr)), inner_type, /*unsized_valid=*/true, indent_level);
             }
 
-            auto p = ::HIR::Path(box_type, crate.get_lang_item_path(Span(), "drop"), "drop");
+            auto p = ::HIR::Path(boxType, crate.get_lang_item_path(Span(), "drop"), "drop");
             of << indent << TransMangle(p) << "(&";
             emit_lvalue(slot);
             of << ");\n";
 
             // The pointee is a synthetic Box move-path, not a physical field. A shallow
             // drop skips that path, but still drops the real fields after Box::drop.
-            const auto* repr = TargetGetTypeRepr(sp, mResolve, box_type);
-            MIR_ASSERT(*mirRes, repr, "No repr for Box " << box_type);
+            const auto* repr = TargetGetTypeRepr(sp, mResolve, boxType);
+            MIR_ASSERT(*mirRes, repr, "No repr for Box " << boxType);
             auto field = ::MIR::LValue::newField(slot.clone(), 0);
             for (const auto& field_repr : repr->fields) {
                 if (mResolve.type_needs_drop_glue(sp, field_repr.ty)) {
@@ -1129,7 +1129,7 @@ namespace {
 
         void emit_global_asm(const ::HIR::GlobalAssembly& se) override {
             of << "__asm__ (\"";
-            if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.att_syntax) {
+            if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.attSyntax) {
                 of << ".intel_syntax noprefix; ";
             }
             for (const auto& l : se.lines) {
@@ -1141,7 +1141,7 @@ namespace {
                 of << FmtGccAsm(l.trailing, false);
                 of << ";\\n ";
             }
-            if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.att_syntax) {
+            if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.attSyntax) {
                 of << ".att_syntax; ";
             }
             of << "\");\n";
@@ -1256,7 +1256,7 @@ namespace {
             zsts.reserve(repr->fields.size());
             size_t max_align = 0;
             // `max_align` is the largest natural field alignment; `c_max_align` is what the C compiler will derive for the emitted struct.
-            size_t c_max_align = 0;
+            size_t cMaxAlign = 0;
             bool has_manual_align = false;
             for (const auto& ent : repr->fields) {
                 const auto& ty = ent.ty;
@@ -1269,17 +1269,17 @@ namespace {
                 max_align = std::max(max_align, al);
                 // Track what C will derive separately - under a capping ABI an interior over-aligned member doesn't raise it
                 {
-                    size_t al_c = al;
-                    if (TargetCapsMemberAlignment() && sz > 0 && ent.offset != 0 && al_c > 4 && !TargetTypeHasUserAlignment(sp, mResolve, ty)) {
-                        al_c = 4;
+                    size_t alC = al;
+                    if (TargetCapsMemberAlignment() && sz > 0 && ent.offset != 0 && alC > 4 && !TargetTypeHasUserAlignment(sp, mResolve, ty)) {
+                        alC = 4;
                     }
-                    c_max_align = std::max(c_max_align, al_c);
+                    cMaxAlign = std::max(cMaxAlign, alC);
                 }
 
                 fields.push_back(fields.size());
                 zsts.push_back(sz == 0);
             }
-            if (packing_max_align == 0 && c_max_align != repr->align /*&& repr->size > 0*/) {
+            if (packing_max_align == 0 && cMaxAlign != repr->align /*&& repr->size > 0*/) {
                 has_manual_align = true;
             }
             // An align-1 type must be emitted packed - gcc takes a container's alignment from the member's natural alignment
@@ -1743,7 +1743,7 @@ namespace {
             ASSERT_BUG(sp, str.mData.is_Tuple(), "");
             const auto& e = str.mData.as_Tuple();
 
-            HIR::Function::args_t args;
+            HIR::Function::argsT args;
             for (unsigned int i = 0; i < e.size(); i++) {
                 args.push_back(::std::make_pair(HIR::Pattern(), monomorph(e[i].ent)));
             }
@@ -2342,7 +2342,7 @@ namespace {
         void emit_function_code(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
-            ::MIR::TypeResolve::args_t arg_types;
+            ::MIR::TypeResolve::argsT arg_types;
             for (const auto& ent : item.mArgs) {
                 arg_types.push_back(::std::make_pair(::HIR::Pattern{}, params.monomorph(mResolve, ent.second)));
             }
@@ -2384,7 +2384,7 @@ namespace {
                 of << "\tbool df" << i << " = " << code->drop_flags[i] << ";\n";
             }
 
-            ::std::set<unsigned> cleanup_blocks;
+            ::std::set<unsigned> cleanupBlocks;
             ::std::vector<unsigned> pending_cleanup_blocks;
             for (const auto& block : code->blocks) {
                 TU_MATCH_HDRA((block.terminator), {)
@@ -2402,23 +2402,23 @@ namespace {
                 }
             }
             while (!pending_cleanup_blocks.empty()) {
-                const auto block_index = pending_cleanup_blocks.back();
+                const auto blockIndex = pending_cleanup_blocks.back();
                 pending_cleanup_blocks.pop_back();
-                MIR_ASSERT(mir_res, block_index < code->blocks.size(), "Cleanup target BB" << block_index << " is out of range");
-                if (!cleanup_blocks.insert(block_index).second) {
+                MIR_ASSERT(mir_res, blockIndex < code->blocks.size(), "Cleanup target BB" << blockIndex << " is out of range");
+                if (!cleanupBlocks.insert(blockIndex).second) {
                     continue;
                 }
-                ::MIR::visit::visit_terminator_target(code->blocks[block_index].terminator, [&](const auto& target) {
+                ::MIR::visit::visit_terminator_target(code->blocks[blockIndex].terminator, [&](const auto& target) {
                     pending_cleanup_blocks.push_back(target);
                 });
             }
-            if (!cleanup_blocks.empty()) {
-                emit_cleanup_runner(mir_res, cleanup_blocks);
+            if (!cleanupBlocks.empty()) {
+                emit_cleanup_runner(mir_res, cleanupBlocks);
             }
 
             for (unsigned i = 0; i < code->blocks.size(); i++) {
                 const auto& block = code->blocks[i];
-                if (cleanup_blocks.count(i) != 0) {
+                if (cleanupBlocks.count(i) != 0) {
                     continue;
                 }
                 of << "bb" << i << ": {\n";
@@ -2463,7 +2463,7 @@ namespace {
             }
         }
 
-        void emit_block_terminator(::MIR::TypeResolve& mir_res, const ::MIR::Terminator& term, unsigned block_index, bool cleanup, unsigned indent_level) {
+        void emit_block_terminator(::MIR::TypeResolve& mir_res, const ::MIR::Terminator& term, unsigned blockIndex, bool cleanup, unsigned indent_level) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
             auto emit_target = [&](unsigned target) {
                 of << indent << "goto " << (cleanup ? "cleanup_bb" : "bb") << target << ";\n";
@@ -2500,8 +2500,8 @@ namespace {
                 TU_ARMA(If, e) {
                     of << indent << "if(";
                     emit_lvalue(e.cond);
-                    of << ") goto " << (cleanup ? "cleanup_bb" : "bb") << e.bb_true;
-                    of << "; else goto " << (cleanup ? "cleanup_bb" : "bb") << e.bb_false << ";\n";
+                    of << ") goto " << (cleanup ? "cleanup_bb" : "bb") << e.bbTrue;
+                    of << "; else goto " << (cleanup ? "cleanup_bb" : "bb") << e.bbFalse << ";\n";
                 }
                 TU_ARMA(Switch, e) {
                     if (e.valid_flag != ~0u) {
@@ -2531,26 +2531,26 @@ namespace {
                 }
             }
             of << indent << "// ^ " << term << "\n";
-            (void)block_index;
+            (void)blockIndex;
         }
 
-        void emit_cleanup_runner(::MIR::TypeResolve& mir_res, const ::std::set<unsigned>& cleanup_blocks) {
+        void emit_cleanup_runner(::MIR::TypeResolve& mir_res, const ::std::set<unsigned>& cleanupBlocks) {
             of << "\tauto mrustc_run_cleanup = [&](unsigned mrustc_cleanup_entry) {\n";
             of << "\t\tswitch(mrustc_cleanup_entry) {\n";
-            for (auto block : cleanup_blocks) {
+            for (auto block : cleanupBlocks) {
                 of << "\t\tcase " << block << ": goto cleanup_bb" << block << ";\n";
             }
             of << "\t\tdefault: abort();\n";
             of << "\t\t}\n";
-            for (auto block_index : cleanup_blocks) {
-                const auto& block = mir_res.fcn.blocks.at(block_index);
-                of << "\tcleanup_bb" << block_index << ": {\n";
+            for (auto blockIndex : cleanupBlocks) {
+                const auto& block = mir_res.fcn.blocks.at(blockIndex);
+                of << "\tcleanup_bb" << blockIndex << ": {\n";
                 for (const auto& stmt : block.statements) {
-                    mir_res.set_cur_stmt(block_index, &stmt - block.statements.data());
+                    mir_res.set_cur_stmt(blockIndex, &stmt - block.statements.data());
                     emit_statement(mir_res, stmt, 2);
                 }
-                mir_res.set_cur_stmt_term(block_index);
-                emit_block_terminator(mir_res, block.terminator, block_index, true, 2);
+                mir_res.set_cur_stmt_term(blockIndex);
+                emit_block_terminator(mir_res, block.terminator, blockIndex, true, 2);
                 of << "\t}\n";
             }
             of << "\t};\n";
@@ -2632,12 +2632,12 @@ namespace {
             else if (val.is_Field()) {
                 auto meta_ty = metadata_type(ty);
                 if (meta_ty != MetadataType::None) {
-                    auto base_val = ::MIR::LValue::CRef(val).inner_ref();
-                    while (base_val.is_Field()) {
-                        base_val.try_unwrap();
+                    auto baseVal = ::MIR::LValue::CRef(val).inner_ref();
+                    while (baseVal.is_Field()) {
+                        baseVal.try_unwrap();
                     }
-                    MIR_ASSERT(mir_res, base_val.is_Deref(), "DST access must be via a deref");
-                    const auto base_ptr = base_val.inner_ref();
+                    MIR_ASSERT(mir_res, baseVal.is_Deref(), "DST access must be via a deref");
+                    const auto basePtr = baseVal.inner_ref();
 
                     // Construct the new DST
                     switch (meta_ty) {
@@ -2655,21 +2655,21 @@ namespace {
                             break;
                     }
                     if (meta_ty == MetadataType::TraitObject) {
-                        ::HIR::TypeRef base_tmp;
-                        const auto& base_ty = mir_res.get_lvalue_type(base_tmp, base_val.clone());
-                        const auto base_param = ::MIR::Param::make_LValue(base_ptr.clone());
-                        if (get_inner_unsized_type(base_ty)->is_TraitObject()) {
-                            const auto* cur_ty = &base_ty;
+                        ::HIR::TypeRef baseTmp;
+                        const auto& baseTy = mir_res.get_lvalue_type(baseTmp, baseVal.clone());
+                        const auto baseParam = ::MIR::Param::make_LValue(basePtr.clone());
+                        if (get_inner_unsized_type(baseTy)->is_TraitObject()) {
+                            const auto* cur_ty = &baseTy;
                             of << "(uint8_t*)";
-                            emit_lvalue(base_ptr);
+                            emit_lvalue(basePtr);
                             of << ".PTR + ";
-                            for (size_t i = base_val.wrapper_count(); i < val.wrappers.size(); i++) {
+                            for (size_t i = baseVal.wrapper_count(); i < val.wrappers.size(); i++) {
                                 const auto& wrapper = val.wrappers[i];
                                 MIR_ASSERT(mir_res, wrapper.is_Field(), "Unexpected DST lvalue wrapper - " << val);
-                                if (i != base_val.wrapper_count()) {
+                                if (i != baseVal.wrapper_count()) {
                                     of << " + ";
                                 }
-                                emit_trait_object_dst_field_offset(*cur_ty, wrapper.as_Field(), base_param);
+                                emit_trait_object_dst_field_offset(*cur_ty, wrapper.as_Field(), baseParam);
                                 const auto* repr = TargetGetTypeRepr(sp, mResolve, *cur_ty);
                                 MIR_ASSERT(mir_res, repr && wrapper.as_Field() < repr->fields.size(), "Invalid DST field - " << val);
                                 cur_ty = &repr->fields[wrapper.as_Field()].ty;
@@ -2683,7 +2683,7 @@ namespace {
                         emit_lvalue(val);
                     }
                     of << ", ";
-                    emit_lvalue(base_ptr);
+                    emit_lvalue(basePtr);
                     of << ".META)";
                     special = true;
                 }
@@ -2897,17 +2897,17 @@ namespace {
                     TU_ARM(stmt, SaveDropFlag, e) {
                         of << indent << "if(df" << e.idx << ") { ";
                         emit_lvalue(e.slot);
-                        of << ".DATA[" << (e.bit_index / 8) << "] |= (1 << " << (e.bit_index % 8) << ");";
+                        of << ".DATA[" << (e.bitIndex / 8) << "] |= (1 << " << (e.bitIndex % 8) << ");";
                         of << " } else { ";
                         emit_lvalue(e.slot);
-                        of << ".DATA[" << (e.bit_index / 8) << "] &= ~(1 << " << (e.bit_index % 8) << ");";
+                        of << ".DATA[" << (e.bitIndex / 8) << "] &= ~(1 << " << (e.bitIndex % 8) << ");";
                         of << " }\n";
                     }
                     break;
                     TU_ARM(stmt, LoadDropFlag, e) {
                         of << indent << "df" << e.idx << " = ((";
                         emit_lvalue(e.slot);
-                        of << ".DATA[" << (e.bit_index / 8) << "] & (1 << " << (e.bit_index % 8) << ")) != 0)";
+                        of << ".DATA[" << (e.bitIndex / 8) << "] & (1 << " << (e.bitIndex % 8) << ")) != 0)";
                         of << ";\n";
                     }
                     break;
@@ -4268,9 +4268,9 @@ namespace {
             }
         }
 
-        bool asm_matches_template(const ::MIR::Statement::Data_Asm& e, const char* tpl, ::std::initializer_list<const char*> inputs, ::std::initializer_list<const char*> outputs) {
+        bool asmMatchesTemplate(const ::MIR::Statement::Data_Asm& e, const char* tpl, ::std::initializer_list<const char*> inputs, ::std::initializer_list<const char*> outputs) {
             struct H {
-                static bool check_list(const std::vector<std::pair<std::string, MIR::LValue>>& have, const ::std::initializer_list<const char*>& exp) {
+                static bool checkList(const std::vector<std::pair<std::string, MIR::LValue>>& have, const ::std::initializer_list<const char*>& exp) {
                     if (have.size() != exp.size()) {
                         return false;
                     }
@@ -4286,7 +4286,7 @@ namespace {
             };
 
             if (e.tpl == tpl) {
-                if (!H::check_list(e.inputs, inputs) || !H::check_list(e.outputs, outputs)) {
+                if (!H::checkList(e.inputs, inputs) || !H::checkList(e.outputs, outputs)) {
                     MIR_BUG(*mirRes, "Hard-coded asm translation doesn't apply - `" << e.tpl << "` inputs=" << e.inputs << " outputs=" << e.outputs);
                 }
                 return true;
@@ -4324,7 +4324,7 @@ namespace {
 
             // The following clobber overlaps with an output
             // __asm__ ("cpuid": "=a" (var0), "=b" (var1), "=c" (var2), "=d" (var3): "a" (arg0), "c" (var4): "rbx");
-            if (asm_matches_template(e, "cpuid", {"{eax}", "{ecx}"}, {"={eax}", "={ebx}", "={ecx}", "={edx}"})) {
+            if (asmMatchesTemplate(e, "cpuid", {"{eax}", "{ecx}"}, {"={eax}", "={ebx}", "={ecx}", "={edx}"})) {
                 if (e.clobbers.size() == 1 && e.clobbers[0] == "rbx") {
                     of << indent << "__asm__(\"cpuid\"";
                     of << " : ";
@@ -4351,13 +4351,13 @@ namespace {
                     return;
                 }
             }
-            if (asm_matches_template(e, "pushfd; popl $0", {}, {"=r"})) {
+            if (asmMatchesTemplate(e, "pushfd; popl $0", {}, {"=r"})) {
                 of << indent << "__asm__ __volatile__ (\"pushfl; popl %0\" : \"=r\" (";
                 emit_lvalue(e.outputs[0].second);
                 of << ") : : );\n";
                 return;
             }
-            if (asm_matches_template(e, "pushl $0; popfd", {"r"}, {})) {
+            if (asmMatchesTemplate(e, "pushl $0; popfd", {"r"}, {})) {
                 of << indent << "__asm__ __volatile__ (\"pushl %0; popfl\" : : \"r\" (";
                 emit_lvalue(e.inputs[0].second);
                 of << ") : );\n";
@@ -4471,11 +4471,11 @@ namespace {
             }
 
             bool matches_template(::std::initializer_list<const char*> lines, ::std::initializer_list<const char*> params) const {
-                if (!check_list(fmt_lines, lines)) {
+                if (!checkList(fmt_lines, lines)) {
                     return false;
                 }
 
-                if (!check_list(fmt_params, params)) {
+                if (!checkList(fmt_params, params)) {
                     MIR_BUG(
                         mirRes,
                         "Hard-coded asm translation doesn't apply - " << stmt << "\n"
@@ -4538,7 +4538,7 @@ namespace {
                 throw "";
             }
 
-            static bool check_list(const std::vector<std::string>& have, const ::std::initializer_list<const char*>& exp) {
+            static bool checkList(const std::vector<std::string>& have, const ::std::initializer_list<const char*>& exp) {
                 if (have.size() != exp.size()) {
                     return false;
                 }
@@ -4665,17 +4665,17 @@ namespace {
                 of << "abort();\n";
                 return;
             } else {
-                std::vector<unsigned> arg_mappings(se.params.size(), UINT_MAX);
+                std::vector<unsigned> argMappings(se.params.size(), UINT_MAX);
                 // If there is an explicit register, create a block and add `register uintptr_t asm_REGNAME asm("REGNAME");`
                 // - Requires updating the arg mappings, as doing so would remove the argument from the list.
-                bool block_open = false;
+                bool blockOpen = false;
                 for (size_t i = 0; i < se.params.size(); i++) {
                     if (const auto* pe = se.params[i].opt_Reg()) {
                         if (!pe->input && !pe->output) {
                         } else if (const auto* regname_p = pe->spec.opt_Explicit()) {
-                            arg_mappings[i] = UINT_MAX - 1;
-                            if (!block_open) {
-                                block_open = true;
+                            argMappings[i] = UINT_MAX - 1;
+                            if (!blockOpen) {
+                                blockOpen = true;
                                 of << indent << "{\n";
                             }
                             of << indent << "register uintptr_t asm_" << *regname_p << " asm(\"" << *regname_p << "\")";
@@ -4697,16 +4697,16 @@ namespace {
                                 outputs.push_back(pe);
                             }
                         } else if (!pe->output && !pe->input) {
-                            if (!block_open) {
-                                block_open = true;
+                            if (!blockOpen) {
+                                blockOpen = true;
                                 of << indent << "{\n";
                             }
                             of << indent << "uintptr_t asm_anon_" << outputs.size() << " = 0;\n";
 
-                            arg_mappings[i] = outputs.size();
+                            argMappings[i] = outputs.size();
                             outputs.push_back(pe);
                         } else if (pe->output) {
-                            arg_mappings[i] = outputs.size();
+                            argMappings[i] = outputs.size();
                             outputs.push_back(pe);
                         }
                     }
@@ -4724,7 +4724,7 @@ namespace {
                                 inputs.push_back(&se.params[i]);
                             }
                         } else if (pe->input && !pe->output) {
-                            arg_mappings[i] = outputs.size() + inputs.size();
+                            argMappings[i] = outputs.size() + inputs.size();
                             inputs.push_back(&se.params[i]);
                         }
                     }
@@ -4744,16 +4744,16 @@ namespace {
                 of << indent << "__asm__ ";
                 of << "__volatile__"; // Default everything to volatile
                 of << "(\"";
-                if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.att_syntax) {
+                if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.attSyntax) {
                     of << ".intel_syntax noprefix; ";
                 }
                 bool escape_percent = true || !inputs.empty() || !outputs.empty();
                 for (const auto& l : se.lines) {
                     for (const auto& f : l.frags) {
                         of << FmtGccAsm(f.before, escape_percent);
-                        MIR_ASSERT(mir_res, arg_mappings.at(f.index) != UINT_MAX, stmt);
+                        MIR_ASSERT(mir_res, argMappings.at(f.index) != UINT_MAX, stmt);
                         of << "%";
-                        if (arg_mappings.at(f.index) == UINT8_MAX - 1) {
+                        if (argMappings.at(f.index) == UINT8_MAX - 1) {
                             of << se.params[f.index].as_Reg().spec.as_Explicit();
                             continue;
                         }
@@ -4769,12 +4769,12 @@ namespace {
                             default:
                                 MIR_TODO(mir_res, "Asm2 GCC: modifier " << f.modifier << " - " << stmt);
                         }
-                        of << arg_mappings.at(f.index);
+                        of << argMappings.at(f.index);
                     }
                     of << FmtGccAsm(l.trailing, escape_percent);
                     of << ";\\n ";
                 }
-                if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.att_syntax) {
+                if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.attSyntax) {
                     of << ".att_syntax; ";
                 }
                 of << "\" :";
@@ -4932,7 +4932,7 @@ namespace {
                         }
                     }
                 }
-                if (block_open) {
+                if (blockOpen) {
                     of << indent << "}\n";
                 }
             }
@@ -4947,7 +4947,7 @@ namespace {
             if (has_erased || monomorphise_type_needed(item.returnType)) {
                 // If there's an erased type, make a copy with the erased type expanded
                 if (has_erased) {
-                    tmp = clone_ty_with(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
+                    tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
                         if (const auto* te = x->opt_ErasedType()) {
                             if (const auto* e = te->inner.opt_Fcn()) {
                                 out = item.mCode.erasedTypes.at(e->index);
@@ -5114,17 +5114,17 @@ namespace {
             // pointer value itself.  Represent them as integer atomics in C:
             // C pointer fetch_add takes an element count and would both reject
             // the operand type and scale a byte offset.
-            const bool atomic_type_is_pointer = params.types.size() > 0
+            const bool atomicTypeIsPointer = params.types.size() > 0
                 && params.types.at(0)->is_Pointer();
             auto emit_atomic_rmw_cast = [&]() {
-                if (atomic_type_is_pointer) {
+                if (atomicTypeIsPointer) {
                     of << "(";
                     emit_ctype(params.types.at(0));
                     of << ")";
                 }
             };
             auto emit_atomic_rmw_operand = [&](const ::MIR::Param& param) {
-                if (atomic_type_is_pointer) {
+                if (atomicTypeIsPointer) {
                     of << "(uintptr_t)";
                 }
                 emit_param(param);
@@ -5189,7 +5189,7 @@ namespace {
                         break;
                 }
                 of << "(";
-                if (atomic_type_is_pointer) {
+                if (atomicTypeIsPointer) {
                     of << "(uintptr_t *)";
                 } else {
                     emit_atomic_cast();
@@ -5227,7 +5227,7 @@ namespace {
                 }
                 // slice metadata (`[T]` and `str`)
                 else if (inner_ty->is_Slice() || inner_ty == ::HIR::CoreType::Str) {
-                    bool align_needed = false;
+                    bool alignNeeded = false;
                     size_t item_size = 0;
                     size_t item_align = 0;
                     if (const auto* te = inner_ty->opt_Slice()) {
@@ -5244,7 +5244,7 @@ namespace {
                         MIR_ASSERT(mir_res, TargetGetSizeAndAlignOf(sp, mResolve, ty, wrapper_size_ignore, wrapper_align), "Can't get align of " << ty);
                         if (wrapper_align > item_align) {
                             item_align = wrapper_align;
-                            align_needed = true;
+                            alignNeeded = true;
                             of << "ALIGN_TO(";
                         }
                         const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
@@ -5252,7 +5252,7 @@ namespace {
                     }
                     emit_param(e.args.at(0));
                     of << ".META * " << item_size;
-                    if (align_needed) {
+                    if (alignNeeded) {
                         of << ", " << item_align << ")";
                     }
                 }
@@ -5325,15 +5325,15 @@ namespace {
             } else if (name == "assert_uninit_valid") {
                 // TODO: Detect nonzero or enum within
             } else if (name == "const_eval_select") {
-                const auto& arg_ty_tuple = params.types.at(0)->as_Tuple();
+                const auto& argTyTuple = params.types.at(0)->as_Tuple();
                 const auto& arg = e.args.at(0).as_LValue();
                 // Note: arg 1 is the constant function
                 const auto& fcn_path = *e.args.at(2).as_Constant().as_Function().p;
 
                 // Reuse ordinary call emission for the runtime branch of const_eval_select.
                 ::std::vector<MIR::Param> args;
-                args.reserve(arg_ty_tuple.size());
-                for (size_t i = 0; i < arg_ty_tuple.size(); i++) {
+                args.reserve(argTyTuple.size());
+                for (size_t i = 0; i < argTyTuple.size(); i++) {
                     args.push_back(MIR::LValue::newField(arg.clone(), i));
                 }
                 auto pseudo_term = MIR::Terminator::Data_Call{e.ret_block, MIR::UnwindAction::make_Continue({}), e.ret_val.clone(), MIR::CallTarget::make_Path(fcn_path.clone()), std::move(args)};

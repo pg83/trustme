@@ -210,7 +210,7 @@ TypeRef::TypeRef(Span sp, AST::Path path)
 
 TypeRef TypeRef::clone() const {
     struct H {
-        static ::std::vector<::TypeRef> clone_ty_vec(const ::std::vector<TypeRef>& x) {
+        static ::std::vector<::TypeRef> cloneTyVec(const ::std::vector<TypeRef>& x) {
             ::std::vector<TypeRef> rv;
             rv.reserve(x.size());
             for (const auto& t : x) {
@@ -240,7 +240,7 @@ TypeRef TypeRef::clone() const {
             _COPY(Unit)
             _COPY(Primitive)
             _COPY(Function)
-            _CLONE(Tuple, {H::clone_ty_vec(old.inner_types)})
+            _CLONE(Tuple, {H::cloneTyVec(old.inner_types)})
             _CLONE(Borrow, {AST::LifetimeRef(old.lifetime), old.is_mut, box$(old.inner->clone())})
             _CLONE(Pointer, {old.is_mut, box$(old.inner->clone())})
             _CLONE(Array, {box$(old.inner->clone()), old.size})

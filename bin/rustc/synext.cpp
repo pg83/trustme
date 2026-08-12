@@ -19,7 +19,7 @@ class CMacroRulesExpander: public ExpandProcMacro {
         TTStream lex(sp, ParseState(), tt);
         auto mac = ParseMacroRules(lex);
         DEBUG("macro_rules! " << mod.path() + ident << " " << &*mac);
-        mod.add_macro(false, ident, mv$(mac));
+        mod.addMacro(false, ident, mv$(mac));
 
         return ::std::unique_ptr<TokenStream>(new TTStreamO(sp, ParseState(), TokenTree()));
     }
@@ -127,7 +127,7 @@ class CMacroUseHandler: public ExpandDecorator {
                         }
                     } else {
                     }
-                    path = AST::AbsolutePath(imp->path.crate_name(), imp->path.components_vec());
+                    path = AST::AbsolutePath(imp->path.crate_name(), imp->path.componentsVec());
                 }
 
                 MacroRef mr;
@@ -218,10 +218,10 @@ class CMacroExportHandler: public ExpandDecorator {
             const auto& name = p.nodes.front().name();
             mod.macroImports.push_back(AST::Module::MacroImport{true, u->entries.front().name, AST::AbsolutePath(p.crate, {name}), {}});
 
-            crate.rootModule.add_item(sp, AST::Visibility::make_global(), name, i.clone(), {});
+            crate.rootModule.addItem(sp, AST::Visibility::make_global(), name, i.clone(), {});
         } else if (i.is_MacroInv()) {
             const auto& mac = i.as_MacroInv();
-            if (!(mac.path().is_trivial() && mac.path().as_trivial() == "macro_rules")) {
+            if (!(mac.path().is_trivial() && mac.path().asTrivial() == "macro_rules")) {
                 ERROR(sp, E0000, "#[macro_export] is only valid on macro_rules!");
             }
             const auto& name = mac.input_ident();
@@ -299,7 +299,7 @@ class CBuiltinMacroHandler: public ExpandDecorator {
         RcString name;
         if (i.is_MacroInv()) {
             const auto& e = i.as_MacroInv();
-            if (!(e.path().is_trivial() && e.path().as_trivial() == "macro_rules")) {
+            if (!(e.path().is_trivial() && e.path().asTrivial() == "macro_rules")) {
                 ERROR(sp, E0000, "Use of #[rustc_builtin_macro] on macro other than macro_rules! - " << i.tag_str());
             }
             name = e.input_ident();

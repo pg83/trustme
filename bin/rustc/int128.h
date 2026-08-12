@@ -212,7 +212,7 @@ private:
     // TODO: All of these are functionally identical to code in `codegen_c.cpp` - could it be shared?
     static int cmp128(U128 a, U128 b);
 
-    static bool add128_o(U128 a, U128 b, U128* o);
+    static bool add128O(U128 a, U128 b, U128* o);
 
     static bool sub128_o(U128 a, U128 b, U128* o);
 

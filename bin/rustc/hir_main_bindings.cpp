@@ -287,8 +287,8 @@ public:
             auto name = in.read_istring();
             rv.methods.insert(::std::make_pair(mv$(name), ::HIR::TypeImpl::VisImplEnt<::HIR::Function>{deserialise_pub(), in.read_bool(), deserialise_function()}));
         }
-        size_t const_count = in.read_count();
-        for (size_t i = 0; i < const_count; i++) {
+        size_t constCount = in.read_count();
+        for (size_t i = 0; i < constCount; i++) {
             auto name = in.read_istring();
             rv.constants.insert(::std::make_pair(mv$(name), ::HIR::TypeImpl::VisImplEnt<::HIR::Constant>{deserialise_pub(), in.read_bool(), deserialise_constant()}));
         }
@@ -318,8 +318,8 @@ public:
             DEBUG((is_spec ? "default " : "") << "fn " << name);
             rv.methods.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Function>{is_spec, deserialise_function()}));
         }
-        size_t const_count = in.read_count();
-        for (size_t i = 0; i < const_count; i++) {
+        size_t constCount = in.read_count();
+        for (size_t i = 0; i < constCount; i++) {
             auto name = in.read_istring();
             auto is_spec = in.read_bool();
             DEBUG((is_spec ? "default " : "") << "const " << name);
@@ -796,8 +796,8 @@ public:
 
         auto linkage = deserialise_linkage();
         auto params = deserialise_genericparams();
-        uint8_t bitflag_1 = in.read_u8();
-#define BIT(i, fld) fld = (bitflag_1 & (1 << (i))) != 0;
+        uint8_t bitflag1 = in.read_u8();
+#define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         bool is_mut;
         bool save_literal;
         BIT(0, is_mut);
@@ -824,8 +824,8 @@ public:
 
     ::HIR::TraitMarkings deserialise_markings() {
         ::HIR::TraitMarkings m;
-        uint8_t bitflag_1 = in.read_u8();
-#define BIT(i, fld) fld = (bitflag_1 & (1 << (i))) != 0;
+        uint8_t bitflag1 = in.read_u8();
+#define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         BIT(0, m.has_a_deref)
         BIT(1, m.is_copy)
         BIT(2, m.has_drop_impl)
@@ -836,21 +836,21 @@ public:
 
     ::HIR::StructMarkings deserialise_str_markings() {
         ::HIR::StructMarkings m;
-        uint8_t bitflag_1 = in.read_u8();
-#define BIT(i, fld) fld = (bitflag_1 & (1 << (i))) != 0;
-        BIT(0, m.can_unsize)
+        uint8_t bitflag1 = in.read_u8();
+#define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
+        BIT(0, m.canUnsize)
         BIT(1, m.is_nonzero)
-        BIT(2, m.bounded_max)
+        BIT(2, m.boundedMax)
         BIT(3, m.is_fundamental)
 #undef BIT
         m.dst_type = static_cast<::HIR::StructMarkings::DstType>(in.read_tag());
-        m.coerce_unsized = static_cast<::HIR::StructMarkings::Coerce>(in.read_tag());
-        m.coerce_unsized_index = in.read_count();
-        m.coerce_param = in.read_count();
+        m.coerceUnsized = static_cast<::HIR::StructMarkings::Coerce>(in.read_tag());
+        m.coerceUnsizedIndex = in.read_count();
+        m.coerceParam = in.read_count();
         m.unsized_field = in.read_count();
         m.unsized_param = in.read_count();
-        if (m.bounded_max) {
-            m.bounded_max_value = in.read_u128();
+        if (m.boundedMax) {
+            m.boundedMaxValue = in.read_u128();
         }
         // TODO: auto_impls
         return m;
@@ -1364,9 +1364,9 @@ EncodedLiteral HirDeserialiser::deserialise_encodedliteral() {
 
 AsmCommon::Options HirDeserialiser::deserialise_asm_options() {
     AsmCommon::Options o;
-    const uint16_t bitflag_1 = in.read_u16();
+    const uint16_t bitflag1 = in.read_u16();
 #define BIT(i, fld)             \
-    if (bitflag_1 & (1 << (i))) \
+    if (bitflag1 & (1 << (i))) \
     fld = true
     BIT(0, o.pure);
     BIT(1, o.nomem);
@@ -1374,7 +1374,7 @@ AsmCommon::Options HirDeserialiser::deserialise_asm_options() {
     BIT(3, o.preserves_flags);
     BIT(4, o.noreturn);
     BIT(5, o.nostack);
-    BIT(6, o.att_syntax);
+    BIT(6, o.attSyntax);
 #undef BIT
     return o;
 }
@@ -2811,13 +2811,13 @@ public:
 
     void serialise(const ::HIR::TraitPath::AtyEqual& e) {
         serialise(e.source_trait);
-        serialise_pathparams(e.aty_params);
+        serialise_pathparams(e.atyParams);
         serialise(e.type);
     }
 
     void serialise(const ::HIR::TraitPath::AtyBound& e) {
         serialise(e.source_trait);
-        serialise_pathparams(e.aty_params);
+        serialise_pathparams(e.atyParams);
         serialise_vec(e.traits);
     }
 
@@ -3343,19 +3343,19 @@ public:
     }
 
     void serialise(const ::AsmCommon::Options& o) {
-        uint16_t bitflag_1 = 0;
+        uint16_t bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
-        bitflag_1 |= 1 << (i);
+        bitflag1 |= 1 << (i);
         BIT(0, o.pure);
         BIT(1, o.nomem);
         BIT(2, o.readonly);
         BIT(3, o.preserves_flags);
         BIT(4, o.noreturn);
         BIT(5, o.nostack);
-        BIT(6, o.att_syntax);
+        BIT(6, o.attSyntax);
 #undef BIT
-        out.write_u16(bitflag_1);
+        out.write_u16(bitflag1);
     }
 
     void serialise(const ::MIR::Statement& stmt) {
@@ -3393,14 +3393,14 @@ public:
             TU_ARMA(SaveDropFlag, e) {
                 out.write_tag(6);
                 serialise(e.slot);
-                out.write_count(e.bit_index);
+                out.write_count(e.bitIndex);
                 out.write_count(e.idx);
             }
             TU_ARMA(LoadDropFlag, e) {
                 out.write_tag(7);
                 out.write_count(e.idx);
                 serialise(e.slot);
-                out.write_count(e.bit_index);
+                out.write_count(e.bitIndex);
             }
             }
     }
@@ -3424,7 +3424,7 @@ public:
             (UnwindTerminate, ),
             (Unreachable, ),
             (Goto, out.write_count(e);),
-            (If, serialise(e.cond); out.write_count(e.bb_true); out.write_count(e.bb_false);),
+            (If, serialise(e.cond); out.write_count(e.bbTrue); out.write_count(e.bbFalse);),
             (Switch, serialise(e.val); serialise_vec(e.targets); out.write_count(e.valid_flag); out.write_count(e.invalid_target);),
             (SwitchValue, serialise(e.val); out.write_count(e.def_target); serialise_vec(e.targets); serialise(e.values);),
             (Drop, out.write_tag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.write_count(e.flag_idx); out.write_count(e.target); serialise_unwind(e.unwind);),
@@ -3567,14 +3567,14 @@ public:
         serialise(item.linkage);
         serialise_generics(item.mParams);
 
-        uint8_t bitflag_1 = 0;
+        uint8_t bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
-        bitflag_1 |= 1 << (i);
+        bitflag1 |= 1 << (i);
         BIT(0, item.isMut);
         BIT(1, item.saveLiteral)
 #undef BIT
-        out.write_u8(bitflag_1);
+        out.write_u8(bitflag1);
         serialise(item.mType);
 
         if (item.mParams.is_generic()) {
@@ -3627,39 +3627,39 @@ public:
     }
 
     void serialise(const ::HIR::TraitMarkings& m) {
-        uint8_t bitflag_1 = 0;
+        uint8_t bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
-        bitflag_1 |= 1 << (i);
+        bitflag1 |= 1 << (i);
         BIT(0, m.has_a_deref)
         BIT(1, m.is_copy)
         BIT(2, m.has_drop_impl)
 #undef BIT
-        out.write_u8(bitflag_1);
+        out.write_u8(bitflag1);
 
         // TODO: auto_impls
     }
 
     void serialise(const ::HIR::StructMarkings& m) {
-        uint8_t bitflag_1 = 0;
+        uint8_t bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
-        bitflag_1 |= 1 << (i);
-        BIT(0, m.can_unsize)
+        bitflag1 |= 1 << (i);
+        BIT(0, m.canUnsize)
         BIT(1, m.is_nonzero)
-        BIT(2, m.bounded_max)
+        BIT(2, m.boundedMax)
         BIT(3, m.is_fundamental)
 #undef BIT
-        out.write_u8(bitflag_1);
+        out.write_u8(bitflag1);
 
         out.write_tag(static_cast<unsigned int>(m.dst_type));
-        out.write_tag(static_cast<unsigned int>(m.coerce_unsized));
-        out.write_count(m.coerce_unsized_index);
-        out.write_count(m.coerce_param);
+        out.write_tag(static_cast<unsigned int>(m.coerceUnsized));
+        out.write_count(m.coerceUnsizedIndex);
+        out.write_count(m.coerceParam);
         out.write_count(m.unsized_field);
         out.write_count(m.unsized_param);
-        if (m.bounded_max) {
-            out.write_u128(m.bounded_max_value);
+        if (m.boundedMax) {
+            out.write_u128(m.boundedMaxValue);
         }
         // TODO: auto_impls
     }

@@ -17,9 +17,9 @@ Ordering HIR::ConstGeneric::ord(const HIR::ConstGeneric&) const {
 }
 
 namespace {
-    HIR::TraitPath make_trait_path(const char* name, bool apply_elision) {
+    HIR::TraitPath make_trait_path(const char* name, bool applyElision) {
         std::unique_ptr<HIR::GenericParams> hrtbs;
-        if (apply_elision) {
+        if (applyElision) {
             hrtbs = std::make_unique<HIR::GenericParams>();
         }
 
@@ -27,7 +27,7 @@ namespace {
         components.push_back(RcString::new_interned(name));
         HIR::GenericPath path(HIR::SimplePath(RcString::new_interned("test"), std::move(components)));
         HIR::TraitPath trait(std::move(hrtbs), std::move(path));
-        trait.lifetimeElision = apply_elision;
+        trait.lifetimeElision = applyElision;
         return trait;
     }
 }

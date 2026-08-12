@@ -544,7 +544,7 @@ namespace {
         for (; ai != a.typeBounds.end(); ++ai, ++bi) {
             if (ai->first != bi->first
                 || !exact_generic_path_equal(ai->second.source_trait, bi->second.source_trait)
-                || !exact_path_params_equal(ai->second.aty_params, bi->second.aty_params)
+                || !exact_path_params_equal(ai->second.atyParams, bi->second.atyParams)
                 || ai->second.type != bi->second.type) return false;
         }
         auto ati = a.traitBounds.begin();
@@ -552,7 +552,7 @@ namespace {
         for (; ati != a.traitBounds.end(); ++ati, ++bti) {
             if (ati->first != bti->first
                 || !exact_generic_path_equal(ati->second.source_trait, bti->second.source_trait)
-                || !exact_path_params_equal(ati->second.aty_params, bti->second.aty_params)
+                || !exact_path_params_equal(ati->second.atyParams, bti->second.atyParams)
                 || ati->second.traits.size() != bti->second.traits.size()) return false;
             for (size_t i = 0; i < ati->second.traits.size(); i++) {
                 if (!exact_trait_path_equal(ati->second.traits[i], bti->second.traits[i])) return false;
@@ -686,12 +686,12 @@ namespace {
         throw "";
     }
 
-    void add_type_flags(uint32_t& flags, TypeRef type) {
+    void addTypeFlags(uint32_t& flags, TypeRef type) {
         flags |= type->flags;
     }
 
-    void add_lifetime_flags(uint32_t& flags, LifetimeRef lifetime) {
-        if (lifetime.is_param() && lifetime.as_param().group() != GENERICHrtb) {
+    void addLifetimeFlags(uint32_t& flags, LifetimeRef lifetime) {
+        if (lifetime.is_param() && lifetime.asParam().group() != GENERICHrtb) {
             flags |= TypeData::HAS_LIFETIME_PARAM;
         }
     }
@@ -706,12 +706,12 @@ namespace {
         auto flags = type_flags(trait.mPath);
         for (const auto& bound : trait.typeBounds) {
             flags |= type_flags(bound.second.source_trait);
-            flags |= type_flags(bound.second.aty_params);
-            add_type_flags(flags, bound.second.type);
+            flags |= type_flags(bound.second.atyParams);
+            addTypeFlags(flags, bound.second.type);
         }
         for (const auto& bound : trait.traitBounds) {
             flags |= type_flags(bound.second.source_trait);
-            flags |= type_flags(bound.second.aty_params);
+            flags |= type_flags(bound.second.atyParams);
             for (const auto& nested : bound.second.traits) {
                 flags |= type_flags(nested);
             }
@@ -722,10 +722,10 @@ namespace {
     uint32_t type_flags(const PathParams& params) {
         uint32_t flags = 0;
         for (const auto lifetime : params.mLifetimes) {
-            add_lifetime_flags(flags, lifetime);
+            addLifetimeFlags(flags, lifetime);
         }
         for (const auto type : params.types) {
-            add_type_flags(flags, type);
+            addTypeFlags(flags, type);
         }
         for (const auto& value : params.values) {
             if (value.is_Generic()) {
@@ -744,17 +744,17 @@ namespace {
             flags |= type_flags(e.mParams);
         }
         TU_ARMA(UfcsInherent, e) {
-            add_type_flags(flags, e.type);
+            addTypeFlags(flags, e.type);
             flags |= type_flags(e.params);
             flags |= type_flags(e.impl_params);
         }
         TU_ARMA(UfcsKnown, e) {
-            add_type_flags(flags, e.type);
+            addTypeFlags(flags, e.type);
             flags |= type_flags(e.trait);
             flags |= type_flags(e.params);
         }
         TU_ARMA(UfcsUnknown, e) {
-            add_type_flags(flags, e.type);
+            addTypeFlags(flags, e.type);
             flags |= type_flags(e.params);
         }
         }
@@ -784,7 +784,7 @@ namespace {
             for (const auto& marker : e.markers) {
                 flags |= type_flags(marker);
             }
-            add_lifetime_flags(flags, e.lifetime);
+            addLifetimeFlags(flags, e.lifetime);
         }
         TU_ARMA(ErasedType, e) {
             for (const auto& trait : e.traits) {
@@ -792,32 +792,32 @@ namespace {
             }
             flags |= type_flags(e.use);
             for (const auto lifetime : e.lifetimeBounds) {
-                add_lifetime_flags(flags, lifetime);
+                addLifetimeFlags(flags, lifetime);
             }
             TU_MATCH_HDRA((e.inner), {)
             TU_ARMA(Fcn, inner) flags |= type_flags(inner.origin);
-            TU_ARMA(Known, inner) add_type_flags(flags, inner);
+            TU_ARMA(Known, inner) addTypeFlags(flags, inner);
             TU_ARMA(Alias, inner) flags |= type_flags(inner.params);
             }
         }
         TU_ARMA(Array, e) {
-            add_type_flags(flags, e.inner);
+            addTypeFlags(flags, e.inner);
             if (e.size.is_Unevaluated()) {
                 flags |= TypeData::HAS_UNEVALUATED_CONST;
             }
         }
-        TU_ARMA(Slice, e) add_type_flags(flags, e.inner);
-        TU_ARMA(Tuple, e) for (const auto inner : e) add_type_flags(flags, inner);
+        TU_ARMA(Slice, e) addTypeFlags(flags, e.inner);
+        TU_ARMA(Tuple, e) for (const auto inner : e) addTypeFlags(flags, inner);
         TU_ARMA(Borrow, e) {
-            add_type_flags(flags, e.inner);
-            add_lifetime_flags(flags, e.lifetime);
+            addTypeFlags(flags, e.inner);
+            addLifetimeFlags(flags, e.lifetime);
         }
-        TU_ARMA(Pointer, e) add_type_flags(flags, e.inner);
+        TU_ARMA(Pointer, e) addTypeFlags(flags, e.inner);
         TU_ARMA(NamedFunction, e) flags |= type_flags(e.path);
         TU_ARMA(Function, e) {
-            add_type_flags(flags, e.mRettype);
+            addTypeFlags(flags, e.mRettype);
             for (const auto argument : e.argTypes) {
-                add_type_flags(flags, argument);
+                addTypeFlags(flags, argument);
             }
         }
         TU_ARMA(NodeType, e) {}
@@ -957,7 +957,7 @@ namespace {
             for (const auto& bound : e.mTrait.typeBounds) {
                 h = hash_mix(h, ::std::hash<RcString>()(bound.first));
                 h = hash_mix(h, hash_generic_path(bound.second.source_trait));
-                h = hash_mix(h, hash_path_params(bound.second.aty_params));
+                h = hash_mix(h, hash_path_params(bound.second.atyParams));
                 h = hash_mix(h, hash_type_ref(bound.second.type));
             }
         }
@@ -1069,7 +1069,7 @@ namespace {
     return intern(TypeData::make_NodeType(TypeDataNodeType::make_Generator(node)));
 }
 
-::HIR::TypeRef HIR::TypeInterner::async_block(ExprNodeAsyncBlock* node) {
+::HIR::TypeRef HIR::TypeInterner::asyncBlock(ExprNodeAsyncBlock* node) {
     return intern(TypeData::make_NodeType(TypeDataNodeType::make_Async(node)));
 }
 
@@ -1307,7 +1307,7 @@ bool ::HIR::TypeData::match_test_generics(const Span& sp, ::HIR::TypeRef x_in, t
 
 ::HIR::Compare HIR::TypeData::match_test_generics_fuzz(const Span& sp, ::HIR::TypeRef x_in, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) const {
     const TypeRef self = this;
-    return callback.cmp_type(sp, self, x_in, resolve_placeholder);
+    return callback.cmpType(sp, self, x_in, resolve_placeholder);
 }
 
 HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr<HIR::GenericParams>& params) const {
@@ -1315,7 +1315,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
     return params ? push_hrb(*params) : PopOnDrop();
 }
 
-::HIR::Compare HIR::MatchGenerics::cmp_path(const Span& sp, const ::HIR::Path& path_l, const ::HIR::Path& path_r, t_cb_resolve_type resolve_placeholder) {
+::HIR::Compare HIR::MatchGenerics::cmpPath(const Span& sp, const ::HIR::Path& path_l, const ::HIR::Path& path_r, t_cb_resolve_type resolve_placeholder) {
     ::HIR::Compare rv = Compare::Unequal;
     if (path_l.mData.tag() != path_r.mData.tag()) {
         rv = Compare::Unequal;
@@ -1329,7 +1329,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 }
             }
             TU_ARMA(UfcsKnown, tpe, xpe) {
-                rv = this->cmp_type(sp, tpe.type, xpe.type, resolve_placeholder);
+                rv = this->cmpType(sp, tpe.type, xpe.type, resolve_placeholder);
                 if (tpe.trait.mPath != xpe.trait.mPath) {
                     rv = Compare::Unequal;
                 }
@@ -1340,14 +1340,14 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 rv &= match_generics_pp(sp, tpe.params, xpe.params, resolve_placeholder, *this);
             }
             TU_ARMA(UfcsUnknown, tpe, xpe) {
-                rv = this->cmp_type(sp, tpe.type, xpe.type, resolve_placeholder);
+                rv = this->cmpType(sp, tpe.type, xpe.type, resolve_placeholder);
                 if (tpe.item != xpe.item) {
                     rv = Compare::Unequal;
                 }
                 rv &= match_generics_pp(sp, tpe.params, xpe.params, resolve_placeholder, *this);
             }
             TU_ARMA(UfcsInherent, tpe, xpe) {
-                rv = this->cmp_type(sp, tpe.type, xpe.type, resolve_placeholder);
+                rv = this->cmpType(sp, tpe.type, xpe.type, resolve_placeholder);
                 if (tpe.item != xpe.item) {
                     rv = Compare::Unequal;
                 }
@@ -1359,7 +1359,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
     return rv;
 }
 
-::HIR::Compare HIR::MatchGenerics::cmp_type(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, t_cb_resolve_type resolve_placeholder) {
+::HIR::Compare HIR::MatchGenerics::cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, t_cb_resolve_type resolve_placeholder) {
     if (const auto* e = ty_l->opt_Generic()) {
         return this->match_ty(*e, ty_r, resolve_placeholder);
     }
@@ -1532,7 +1532,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             return Compare::Equal;
         }
         TU_ARMA(Path, te, xe) {
-            auto rv = this->cmp_path(sp, te.path, xe.path, resolve_placeholder);
+            auto rv = this->cmpPath(sp, te.path, xe.path, resolve_placeholder);
 
             if (rv == ::HIR::Compare::Unequal) {
                 if (te.binding.is_Unbound() || xe.binding.is_Unbound()) {
@@ -1596,7 +1596,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             }
             TU_ARMA(Fcn, l, r) {
                 return l.index == r.index
-                    ? this->cmp_path(sp, l.origin, r.origin, resolve_placeholder)
+                    ? this->cmpPath(sp, l.origin, r.origin, resolve_placeholder)
                     : Compare::Unequal;
             }
             }
@@ -1625,10 +1625,10 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             } else if (te.size != xe.size) {
                 return Compare::Unequal;
             }
-            return this->cmp_type(sp, te.inner, xe.inner, resolve_placeholder);
+            return this->cmpType(sp, te.inner, xe.inner, resolve_placeholder);
         }
         TU_ARMA(Slice, te, xe) {
-            return this->cmp_type(sp, te.inner, xe.inner, resolve_placeholder);
+            return this->cmpType(sp, te.inner, xe.inner, resolve_placeholder);
         }
         TU_ARMA(Tuple, te, xe) {
             if (te.size() != xe.size()) {
@@ -1636,7 +1636,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             }
             auto rv = Compare::Equal;
             for (unsigned int i = 0; i < te.size(); i++) {
-                rv &= this->cmp_type(sp, te[i], xe[i], resolve_placeholder);
+                rv &= this->cmpType(sp, te[i], xe[i], resolve_placeholder);
                 if (rv == Compare::Unequal) {
                     return Compare::Unequal;
                 }
@@ -1647,7 +1647,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             if (te.type != xe.type) {
                 return Compare::Unequal;
             }
-            return this->cmp_type(sp, te.inner, xe.inner, resolve_placeholder);
+            return this->cmpType(sp, te.inner, xe.inner, resolve_placeholder);
         }
         TU_ARMA(Borrow, te, xe) {
             if (te.type != xe.type) {
@@ -1655,16 +1655,16 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             }
             auto rv = Compare::Equal;
             if (te.lifetime.is_param()) {
-                /*rv &=*/this->match_lft(te.lifetime.as_param(), xe.lifetime);
+                /*rv &=*/this->match_lft(te.lifetime.asParam(), xe.lifetime);
             } else {
                 //if( te.lifetime != xe.lifetime )
                 //    return Compare::Unequal;
             }
-            rv &= this->cmp_type(sp, te.inner, xe.inner, resolve_placeholder);
+            rv &= this->cmpType(sp, te.inner, xe.inner, resolve_placeholder);
             return rv;
         }
         TU_ARMA(NamedFunction, te, xe) {
-            return this->cmp_path(sp, te.path, xe.path, resolve_placeholder);
+            return this->cmpPath(sp, te.path, xe.path, resolve_placeholder);
         }
         TU_ARMA(Function, te, xe) {
             if (te.is_unsafe != xe.is_unsafe) {
@@ -1679,12 +1679,12 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             auto _ = push_hrb(te.hrls);
             auto rv = Compare::Equal;
             for (unsigned int i = 0; i < te.argTypes.size(); i++) {
-                rv &= this->cmp_type(sp, te.argTypes[i], xe.argTypes[i], resolve_placeholder);
+                rv &= this->cmpType(sp, te.argTypes[i], xe.argTypes[i], resolve_placeholder);
                 if (rv == Compare::Unequal) {
                     return rv;
                 }
             }
-            rv &= this->cmp_type(sp, te.mRettype, xe.mRettype, resolve_placeholder);
+            rv &= this->cmpType(sp, te.mRettype, xe.mRettype, resolve_placeholder);
             return rv;
         }
         TU_ARMA(NodeType, te, xe) {
@@ -1739,7 +1739,7 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
     throw "";
 }
 
-::HIR::TypeData HIR::TypeData::clone_data() const {
+::HIR::TypeData HIR::TypeData::cloneData() const {
     TU_MATCH_HDRA( (*this), {)
     TU_ARMA(Infer, e) {
             return TypeData::make_Infer(e);
@@ -1827,7 +1827,7 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
     throw "";
 }
 
-::HIR::Compare HIR::TypeData::compare_with_placeholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const {
+::HIR::Compare HIR::TypeData::compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const {
     //TRACE_FUNCTION_F(*this << " ?= " << x);
     const TypeRef self = this;
     const auto& left = resolve_placeholder.get_type(sp, self);
@@ -2000,7 +2000,7 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
             return (le == re ? Compare::Equal : Compare::Unequal);
         }
         TU_ARMA(Path, le, re) {
-            auto rv = le.path.compare_with_placeholders(sp, re.path, resolve_placeholder);
+            auto rv = le.path.compareWithPlaceholders(sp, re.path, resolve_placeholder);
             if (rv == ::HIR::Compare::Unequal) {
                 if (le.binding.is_Unbound() || re.binding.is_Unbound()) {
                     rv = ::HIR::Compare::Fuzzy;
@@ -2024,12 +2024,12 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
             if (le.markers.size() != re.markers.size()) {
                 return Compare::Unequal;
             }
-            auto rv = le.mTrait.compare_with_placeholders(sp, re.mTrait, resolve_placeholder);
+            auto rv = le.mTrait.compareWithPlaceholders(sp, re.mTrait, resolve_placeholder);
             if (rv == Compare::Unequal) {
                 return rv;
             }
             for (unsigned int i = 0; i < le.markers.size(); i++) {
-                auto rv2 = le.markers[i].compare_with_placeholders(sp, re.markers[i], resolve_placeholder);
+                auto rv2 = le.markers[i].compareWithPlaceholders(sp, re.markers[i], resolve_placeholder);
                 if (rv2 == Compare::Unequal) {
                     return Compare::Unequal;
                 }
@@ -2045,19 +2045,19 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
             }
         TU_MATCH_HDRA( (le.inner, re.inner), {)
         TU_ARMA(Known, l,r) {
-                    return l->compare_with_placeholders(sp, r, resolve_placeholder);
+                    return l->compareWithPlaceholders(sp, r, resolve_placeholder);
                 }
                 TU_ARMA(Alias, l, r) {
                     if (l.inner != r.inner) {
                         return Compare::Unequal;
                     }
-                    return l.params.compare_with_placeholders(sp, r.params, resolve_placeholder);
+                    return l.params.compareWithPlaceholders(sp, r.params, resolve_placeholder);
                 }
                 TU_ARMA(Fcn, l, r) {
                     if (l.index != r.index) {
                         return Compare::Unequal;
                     }
-                    return l.origin.compare_with_placeholders(sp, r.origin, resolve_placeholder);
+                    return l.origin.compareWithPlaceholders(sp, r.origin, resolve_placeholder);
                 }
         }
         return Compare::Equal;
@@ -2073,11 +2073,11 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
             } else {
                 // Sizes equal
             }
-            rv &= le.inner->compare_with_placeholders(sp, re.inner, resolve_placeholder);
+            rv &= le.inner->compareWithPlaceholders(sp, re.inner, resolve_placeholder);
             return rv;
         }
         TU_ARMA(Slice, le, re) {
-            return le.inner->compare_with_placeholders(sp, re.inner, resolve_placeholder);
+            return le.inner->compareWithPlaceholders(sp, re.inner, resolve_placeholder);
         }
         TU_ARMA(Tuple, le, re) {
             if (le.size() != re.size()) {
@@ -2085,7 +2085,7 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
             }
             auto rv = Compare::Equal;
             for (unsigned int i = 0; i < le.size(); i++) {
-                auto rv2 = le[i]->compare_with_placeholders(sp, re[i], resolve_placeholder);
+                auto rv2 = le[i]->compareWithPlaceholders(sp, re[i], resolve_placeholder);
                 if (rv2 == Compare::Unequal) {
                     return Compare::Unequal;
                 }
@@ -2099,16 +2099,16 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
             if (le.type != re.type) {
                 return Compare::Unequal;
             }
-            return le.inner->compare_with_placeholders(sp, re.inner, resolve_placeholder);
+            return le.inner->compareWithPlaceholders(sp, re.inner, resolve_placeholder);
         }
         TU_ARMA(Pointer, le, re) {
             if (le.type != re.type) {
                 return Compare::Unequal;
             }
-            return le.inner->compare_with_placeholders(sp, re.inner, resolve_placeholder);
+            return le.inner->compareWithPlaceholders(sp, re.inner, resolve_placeholder);
         }
         TU_ARMA(NamedFunction, le, re) {
-            return le.path.compare_with_placeholders(sp, re.path, resolve_placeholder);
+            return le.path.compareWithPlaceholders(sp, re.path, resolve_placeholder);
         }
         TU_ARMA(Function, le, re) {
             if (le.mAbi != re.mAbi || le.is_unsafe != re.is_unsafe) {
@@ -2119,12 +2119,12 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
             }
             auto rv = Compare::Equal;
             for (unsigned int i = 0; i < le.argTypes.size(); i++) {
-                rv &= le.argTypes[i]->compare_with_placeholders(sp, re.argTypes[i], resolve_placeholder);
+                rv &= le.argTypes[i]->compareWithPlaceholders(sp, re.argTypes[i], resolve_placeholder);
                 if (rv == Compare::Unequal) {
                     return Compare::Unequal;
                 }
             }
-            rv &= le.mRettype->compare_with_placeholders(sp, re.mRettype, resolve_placeholder);
+            rv &= le.mRettype->compareWithPlaceholders(sp, re.mRettype, resolve_placeholder);
             return rv;
         }
         TU_ARMA(NodeType, le, re) {

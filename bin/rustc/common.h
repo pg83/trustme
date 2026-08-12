@@ -700,11 +700,11 @@ public:
     }
 
     Ordering ord(const ThinVector<T>& x) const {
-        size_t cmp_len = this->size();
-        if (cmp_len > x.size()) {
-            cmp_len = x.size();
+        size_t cmpLen = this->size();
+        if (cmpLen > x.size()) {
+            cmpLen = x.size();
         }
-        for (size_t i = 0; i < cmp_len; i++) {
+        for (size_t i = 0; i < cmpLen; i++) {
             auto rv = ::ord((*this)[i], x[i]);
             if (rv != OrdEqual) {
                 return rv;

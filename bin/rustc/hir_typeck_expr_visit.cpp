@@ -28,7 +28,7 @@ namespace typeck {
                 }
             }
 
-            static void add_traits_from_mod(ModuleState& ms, const ::HIR::Module& mod) {
+            static void addTraitsFromMod(ModuleState& ms, const ::HIR::Module& mod) {
                 // In-scope traits.
                 ms.traits.clear();
                 for (const auto& tp : mod.traits) {
@@ -64,7 +64,7 @@ namespace typeck {
         } else {
             // Namespace path
             const auto& mod = H::get_mod_for_ip(crate, *ip.parent);
-            H::add_traits_from_mod(*this, mod);
+            H::addTraitsFromMod(*this, mod);
             const auto& item = mod.valueItems.at(ip.name)->ent;
             implGenerics = nullptr;
             TU_MATCH_HDRA( (item), { )
@@ -163,7 +163,7 @@ namespace {
 
         void visit_type(::HIR::TypeRef& ty) override {
             if (ty->is_Array()) {
-                auto data = ty->clone_data();
+                auto data = ty->cloneData();
                 auto& e = data.as_Array();
                 this->visit_type(e.inner);
                 DEBUG("Array size " << ty);

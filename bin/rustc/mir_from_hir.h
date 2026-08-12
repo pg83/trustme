@@ -68,7 +68,7 @@ extern ::std::ostream& operator<<(::std::ostream& os, const VarState& x);
 
 struct SplitArm {
     bool has_early_terminated = false;
-    bool always_early_terminated = false; // Populated on completion
+    bool alwaysEarlyTerminated = false; // Populated on completion
     //BasicBlockId  source_block;
     ::std::map<unsigned int, VarState> states;
     ::std::map<unsigned int, VarState> arg_states;
@@ -96,15 +96,15 @@ TAGGED_UNION(
     (Split,
      struct {
          bool end_state_valid = false;
-         SplitEnd cond_state;
+         SplitEnd condState;
          SplitEnd end_state;
          ::std::vector<SplitArm> arms;
      }),
     (Loop,
      struct {
          // NOTE: This contains the original state for variables changed after `exit_state_valid` is true
-         ::std::map<unsigned int, VarState> changed_slots;
-         ::std::map<unsigned int, VarState> changed_args;
+         ::std::map<unsigned int, VarState> changedSlots;
+         ::std::map<unsigned int, VarState> changedArgs;
          bool exit_state_valid;
          SplitEnd exit_state;
          // TODO: Any drop flags allocated in the loop must be re-initialised at the start of the loop (or before a loopback)
@@ -176,7 +176,7 @@ class MirBuilder {
     const Span& rootSpan;
     const StaticTraitResolve& mResolve;
     const ::HIR::TypeData* retTy;
-    const ::HIR::Function::args_t& mArgs;
+    const ::HIR::Function::argsT& mArgs;
     ::MIR::Function& output;
 
     const ::HIR::SimplePath* mLangBox;
@@ -231,7 +231,7 @@ class MirBuilder {
     ::MIR::LValue ifCondLval;
 
 public:
-    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ret_ty, const ::HIR::Function::args_t& args, ::MIR::Function& output);
+    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ret_ty, const ::HIR::Function::argsT& args, ::MIR::Function& output);
 
     void final_cleanup();
 
@@ -262,7 +262,7 @@ public:
     void restore_aliases(SavedAliases a);
 
     // Variable aliases (used for match guards)
-    void add_variable_alias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv);
+    void addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv);
 
     const var_alias_t* get_variable_alias(const Span& sp, unsigned idx) const;
 
@@ -284,9 +284,9 @@ public:
     /// Obtains the result, unwrapping into a LValue (and erroring if not)
     ::MIR::LValue get_result_unwrap_lvalue(const Span& sp);
     /// Obtains the result, copying into a temporary if required
-    ::MIR::LValue get_result_in_lvalue(const Span& sp, const ::HIR::TypeData* ty, bool allow_missing_value = false);
+    ::MIR::LValue get_result_in_lvalue(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
     /// Obtains a result in a param (or a lvalue)
-    ::MIR::Param get_result_in_param(const Span& sp, const ::HIR::TypeData* ty, bool allow_missing_value = false);
+    ::MIR::Param get_result_in_param(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
 
     ::MIR::LValue get_if_cond() const {
         return ifCondLval.clone();
@@ -333,7 +333,7 @@ public:
 
     /// @brief Start saving code for later duplication (match guards)
     /// @return Handle to the current save stack entry
-    SaveCodeProto code_save_start();
+    SaveCodeProto codeSaveStart();
 
     class SavedCode {
         friend class MirBuilder;
@@ -341,11 +341,11 @@ public:
     };
 
     /// @brief Complete and finalise saved code
-    SavedCode code_save_end(SaveCodeProto h);
+    SavedCode codeSaveEnd(SaveCodeProto h);
 
     class CloneMapper {
     public:
-        virtual MIR::BasicBlockId update_bb_ref(MIR::BasicBlockId bb_idx) = 0;
+        virtual MIR::BasicBlockId update_bb_ref(MIR::BasicBlockId bbIdx) = 0;
     };
 
     /// @brief Insert saved code, applying the supplied mapper
@@ -431,7 +431,7 @@ private:
         /// Function argument. Maps to `LValue::Argument`
         Argument
     };
-    const VarState& get_slot_state(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* above_scope = nullptr) const;
+    const VarState& get_slot_state(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* aboveScope = nullptr) const;
     VarState& get_slot_state_mut(const Span& sp, unsigned int idx, SlotType type);
 
     VarState* get_val_state_mut_p(const Span& sp, const ::MIR::LValue& lv, bool expect_valid = false);
@@ -442,10 +442,10 @@ private:
 
     void drop_value_from_state(const Span& sp, VarState& vs, ::MIR::LValue lv);
     void drop_scope_values(ScopeDef& sd);
-    ::MIR::UnwindAction make_unwind_action(const Span& sp, const ::MIR::LValue* consumed_value = nullptr);
+    ::MIR::UnwindAction make_unwind_action(const Span& sp, const ::MIR::LValue* consumedValue = nullptr);
     void push_drop_terminator(const Span& sp, ::MIR::eDropKind kind, ::MIR::LValue val, unsigned int drop_flag);
     /// Finalise a scope before it's fully destroyed. Doesn't emit destructors (already done by `drop_scope_values`)
-    void complete_scope(ScopeDef& sd);
+    void completeScope(ScopeDef& sd);
 
 public:
     void with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const ::MIR::LValue::Wrapper* stop_wrapper = nullptr) const;

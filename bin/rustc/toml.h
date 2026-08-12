@@ -113,13 +113,13 @@ struct TomlValue {
 
     TomlValue(bool v);
 
-    const ::std::string& as_string() const;
+    const ::std::string& asString() const;
 
-    bool as_bool() const;
+    bool asBool() const;
 
-    uint64_t as_int() const;
+    uint64_t asInt() const;
 
-    const ::std::vector<TomlValue>& as_list() const;
+    const ::std::vector<TomlValue>& asList() const;
 
     friend ::std::ostream& operator<<(::std::ostream& os, const TomlValue& x);
 };

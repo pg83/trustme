@@ -113,7 +113,7 @@ namespace AsmCommon {
         unsigned preserves_flags : 1;
         unsigned noreturn : 1;
         unsigned nostack : 1;
-        unsigned att_syntax : 1;
+        unsigned attSyntax : 1;
         // Indicates `naked_asm!`
         unsigned naked : 1;
 

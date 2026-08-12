@@ -29,9 +29,9 @@ extern bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool&
 extern bool CfgSetCheckSpec(const ::std::string& spec, ::std::string& error);
 extern void CfgSetLintLevel(::std::string name, CfgLintLevel level);
 extern void CfgSetLintCap(CfgLintLevel level);
-extern bool check_cfg_attrs(const ::AST::AttributeList& attrs);
-extern bool check_cfg(const Span& sp, const ::AST::Attribute& mi);
+extern bool checkCfgAttrs(const ::AST::AttributeList& attrs);
+extern bool checkCfg(const Span& sp, const ::AST::Attribute& mi);
 /// Check a parenthesised list of cfg rules (treated as `all()`)
-extern bool check_cfg_stream(TokenStream& lex);
+extern bool checkCfgStream(TokenStream& lex);
 /// Parse an attribute from a `cfg_attr()` attribute. Returns with an empty name if check failed
-extern std::vector<AST::Attribute> check_cfg_attr(const ::AST::Attribute& mi);
+extern std::vector<AST::Attribute> checkCfgAttr(const ::AST::Attribute& mi);

@@ -2,16 +2,16 @@
 
 Monomorphiser::Monomorphiser(HIR::TypeInterner& types)
     : types(types)
-    , consteval_crate(nullptr)
-    , consteval_path("") {
+    , constevalCrate(nullptr)
+    , constevalPath("") {
 }
 void Monomorphiser::set_consteval_state(const HIR::Crate& crate, HIR::ItemPath ip) {
-    this->consteval_crate = &crate;
-    this->consteval_path = ip;
+    this->constevalCrate = &crate;
+    this->constevalPath = ip;
 }
-const ::HIR::TypeData* Monomorphiser::maybe_monomorph_type(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* ty, bool allow_infer) const {
+const ::HIR::TypeData* Monomorphiser::maybe_monomorph_type(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* ty, bool allowInfer) const {
     if (monomorphise_type_needed(ty)) {
-        return tmp = monomorph_type(sp, ty, allow_infer);
+        return tmp = monomorph_type(sp, ty, allowInfer);
     } else {
         return ty;
     }

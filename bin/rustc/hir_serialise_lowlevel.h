@@ -106,7 +106,7 @@ namespace HIR {
 
             CloseOnDrop open_anon_object();
 
-            void close_object() {
+            void closeObject() {
                 write_u8(0xFF);
             }
         };
@@ -210,7 +210,7 @@ namespace HIR {
 
             CloseOnDrop open_anon_object();
 
-            void close_object();
+            void closeObject();
         };
 
     } // namespace serialise

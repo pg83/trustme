@@ -430,7 +430,7 @@ namespace AST {
             TU_MATCH_DEF(Class, (cls), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().is_empty();))
         }
 
-        const RcString& as_trivial() const;
+        const RcString& asTrivial() const;
 
         bool is_valid() const {
             return !cls.is_Invalid();
@@ -448,7 +448,7 @@ namespace AST {
 
         bool is_parent_of(const Path& x) const;
 
-        void bind_variable(unsigned int slot);
+        void bindVariable(unsigned int slot);
 
         ::std::vector<PathNode>& nodes();
 
@@ -477,7 +477,7 @@ namespace AST {
     private:
         static void resolve_args_nl(::std::vector<PathNode>& nodes, ::std::function<TypeRef(const char*)> fcn);
 
-        void check_param_counts(const GenericParams& params, bool expect_params, PathNode& node);
+        void checkParamCounts(const GenericParams& params, bool expect_params, PathNode& node);
 
     public:
         //void bind_enum_var(const Enum& ent, const RcString& name);

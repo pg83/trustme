@@ -65,7 +65,7 @@ struct TransParams: public MonomorphiserPP {
 
 struct CachedFunction {
     ::HIR::TypeRef ret_ty;
-    ::HIR::Function::args_t arg_tys;
+    ::HIR::Function::argsT argTys;
     ::MIR::FunctionPointer code;
 };
 
@@ -129,9 +129,9 @@ public:
     /// Required struct/enum constructor impls
     ::std::set<::HIR::GenericPath> constructors;
     // Automatic Clone impls
-    ::std::set<::HIR::TypeRef> auto_clone_impls;
+    ::std::set<::HIR::TypeRef> autoCloneImpls;
     // Automatic FnPtr impls
-    ::std::set<::HIR::TypeRef> auto_fnptr_impls;
+    ::std::set<::HIR::TypeRef> autoFnptrImpls;
     // Trait methods
     ::std::set<::HIR::Path> trait_object_methods;
 
@@ -141,16 +141,16 @@ public:
     // .second is `true` if this is a from a reference to the type
     ::std::vector<::std::pair<::HIR::TypeRef, bool>> types;
 
-    TransListFunction* add_function(HIR::TypeInterner& types, ::HIR::Path p);
-    TransListStatic* add_static(HIR::TypeInterner& types, ::HIR::Path p);
+    TransListFunction* addFunction(HIR::TypeInterner& types, ::HIR::Path p);
+    TransListStatic* addStatic(HIR::TypeInterner& types, ::HIR::Path p);
     TransListConst* add_const(HIR::TypeInterner& types, ::HIR::Path p);
     TransListFunction* find_function(const ::HIR::Path& p);
     const TransListFunction* find_function(const ::HIR::Path& p) const;
     bool has_type(::HIR::TypeRef type, bool shallow) const;
-    bool add_type(::HIR::TypeRef type, bool shallow);
-    void clear_types();
+    bool addType(::HIR::TypeRef type, bool shallow);
+    void clearTypes();
 
-    bool add_vtable(::HIR::Path p, TransParams pp) {
+    bool addVtable(::HIR::Path p, TransParams pp) {
         return vtables.insert(::std::make_pair(mv$(p), mv$(pp))).second;
     }
 };

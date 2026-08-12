@@ -147,8 +147,8 @@ F128::F128()
 }
 
 F128::F128(FloatValue value)
-    : lo(value.bits_lo())
-    , hi(value.bits_hi())
+    : lo(value.bitsLo())
+    , hi(value.bitsHi())
 {
 }
 

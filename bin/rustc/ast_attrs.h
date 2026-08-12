@@ -54,7 +54,7 @@ namespace AST {
             return elems.size() == 1;
         }
 
-        const RcString& as_trivial() const {
+        const RcString& asTrivial() const {
             return elems.at(0);
         }
 

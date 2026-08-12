@@ -107,7 +107,7 @@ InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
 ::std::ostream& operator<<(::std::ostream& os, InterpolatedFragment const& x) {
     switch (x.mType) {
         case InterpolatedFragment::TT:
-            os << "tt[" << x.as_tt() << "]";
+            os << "tt[" << x.asTt() << "]";
             break;
         case InterpolatedFragment::PAT:
             os << "pat[" << *reinterpret_cast<AST::Pattern*>(x.ptr) << "]";
@@ -149,11 +149,11 @@ InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
 
 // :vis
 
-TokenTree& InterpolatedFragment::as_tt() {
+TokenTree& InterpolatedFragment::asTt() {
     assert(mType == TT);
     return *reinterpret_cast<TokenTree*>(ptr);
 }
-const TokenTree& InterpolatedFragment::as_tt() const {
+const TokenTree& InterpolatedFragment::asTt() const {
     assert(mType == TT);
     return *reinterpret_cast<TokenTree*>(ptr);
 }

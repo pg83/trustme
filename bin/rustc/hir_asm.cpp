@@ -13,7 +13,7 @@ Options::Options()
     , preserves_flags(0)
     , noreturn(0)
     , nostack(0)
-    , att_syntax(0) {
+    , attSyntax(0) {
 }
 bool Options::any() const {
 #define _(n) \
@@ -25,7 +25,7 @@ bool Options::any() const {
     _(preserves_flags);
     _(noreturn);
     _(nostack);
-    _(att_syntax);
+    _(attSyntax);
     _(naked);
 #undef _
     return false;
@@ -41,7 +41,7 @@ void Options::fmt(std::ostream& os) const {
     _(preserves_flags);
     _(noreturn);
     _(nostack);
-    _(att_syntax);
+    _(attSyntax);
     _(naked);
 #undef _
     os << ")";
@@ -56,7 +56,7 @@ bool Options::operator==(const Options& x) const {
     _(preserves_flags);
     _(noreturn);
     _(nostack);
-    _(att_syntax);
+    _(attSyntax);
     _(naked);
 #undef _
     return true;

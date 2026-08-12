@@ -25,7 +25,7 @@ struct TraitResolveCommon {
     struct CachedBound {
         HIR::GenericParams hrbs;
         const HIR::Trait* trait_ptr;
-        HIR::TraitPath::assoc_list_t assoc;
+        HIR::TraitPath::assocListT assoc;
         HIR::BoundConstness constness = HIR::BoundConstness::Never;
     };
 
@@ -63,8 +63,8 @@ struct TraitResolveCommon {
         }
     };
 
-    typedef RangeVecMap<std::pair<::HIR::TypeRef, ::HIR::GenericPath>, CachedBound, CachedBoundCmp> cached_bounds_t;
-    cached_bounds_t traitBounds;
+    typedef RangeVecMap<std::pair<::HIR::TypeRef, ::HIR::GenericPath>, CachedBound, CachedBoundCmp> cachedBoundsT;
+    cachedBoundsT traitBounds;
 
     ::HIR::SimplePath mLangCopy;
     ::HIR::SimplePath mLangClone; // 1.29
@@ -104,7 +104,7 @@ struct TraitResolveCommon {
 
 protected:
     void prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef long_ty, ::HIR::TypeRef short_ty);
-    void prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool add_parents = true);
+    void prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool addParents = true);
 
     /// Iterate over in-scope bounds (function then type)
     bool iterate_bounds(::std::function<bool(const ::HIR::GenericBound&)> cb) const;

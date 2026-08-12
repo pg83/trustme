@@ -25,14 +25,14 @@ struct ImplRef {
              ::HIR::PathParams hrls;
              const ::HIR::TypeData* type;
              const ::HIR::PathParams* trait_args;
-             const ::HIR::TraitPath::assoc_list_t* assoc;
+             const ::HIR::TraitPath::assocListT* assoc;
              ::HIR::BoundConstness constness;
          }),
         (Bounded, struct {
             ::HIR::PathParams hrls;
             ::HIR::TypeRef type;
             ::HIR::PathParams trait_args;
-            ::HIR::TraitPath::assoc_list_t assoc;
+            ::HIR::TraitPath::assocListT assoc;
             ::HIR::BoundConstness constness;
         })
     );
@@ -44,13 +44,13 @@ struct ImplRef {
 
     ImplRef(HIR::PathParams impl_params, const HIR::Trait& trait_ref, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl);
 
-    ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
+    ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
 
-    ImplRef(::HIR::PathParams hrls, const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
+    ImplRef(::HIR::PathParams hrls, const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
 
-    ImplRef(::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
+    ImplRef(::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assocListT assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
 
-    ImplRef(::HIR::PathParams hrls, ::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
+    ImplRef(::HIR::PathParams hrls, ::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assocListT assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
 
     bool is_valid() const {
         return !(mData.is_TraitImpl() && mData.as_TraitImpl().impl == nullptr);
@@ -64,7 +64,7 @@ struct ImplRef {
         isAmbiguousIdentity = true;
     }
 
-    ::HIR::BoundConstness bound_constness() const;
+    ::HIR::BoundConstness boundConstness() const;
 
     bool more_specific_than(HIR::TypeInterner& types, const ImplRef& other) const;
     bool overlaps_with(const ::HIR::Crate& crate, const ImplRef& other) const;

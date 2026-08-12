@@ -54,7 +54,7 @@ struct TomlToken {
     static TomlToken lex_from(::std::ifstream& is, unsigned& line);
     static TomlToken lex_from_inner(::std::ifstream& is, unsigned& line);
 
-    const ::std::string& as_string() const {
+    const ::std::string& asString() const {
         assert(mType == Type::Ident || mType == Type::String);
         return mData;
     }
@@ -143,7 +143,7 @@ TomlKeyValue TomlFile::get_next_value() {
                     if (!(t.mType == TomlToken::Type::Ident || t.mType == TomlToken::Type::String)) {
                         throw ::std::runtime_error(::format(mLexer, ": Unexpected token in block name - ", t));
                     }
-                    currentBlock.push_back(t.as_string());
+                    currentBlock.push_back(t.asString());
 
                     t = mLexer.get_token();
                     if (t.mType != TomlToken::Type::Dot) {
@@ -188,7 +188,7 @@ TomlKeyValue TomlFile::get_next_value() {
             default:
                 throw ::std::runtime_error(::format(mLexer, ": Unexpected token for key - ", t));
         }
-        key_name.push_back(t.as_string());
+        key_name.push_back(t.asString());
         t = mLexer.get_token();
         if (t.mType == TomlToken::Type::Assign) {
             break;
@@ -227,7 +227,7 @@ TomlKeyValue TomlFile::get_next_value() {
 
                 switch (t.mType) {
                     case TomlToken::Type::String:
-                        rv.value.subValues.push_back(TomlValue{t.as_string()});
+                        rv.value.subValues.push_back(TomlValue{t.asString()});
                         break;
                     case TomlToken::Type::Integer:
                         rv.value.subValues.push_back(TomlValue{t.intval});
@@ -346,8 +346,8 @@ void TomlFile::skip_composite_value() {
 std::vector<std::string> TomlFile::get_path(std::vector<std::string> tail) const {
     std::vector<std::string> path;
     path = currentBlock;
-    for (const auto& composite_ent : currentComposite) {
-        path.insert(path.end(), composite_ent.begin(), composite_ent.end());
+    for (const auto& compositeEnt : currentComposite) {
+        path.insert(path.end(), compositeEnt.begin(), compositeEnt.end());
     }
     path.insert(path.end(), std::make_move_iterator(tail.begin()), std::make_move_iterator(tail.end()));
     return path;
@@ -687,25 +687,25 @@ TomlValue::TomlValue(bool v)
     : mType(Type::Boolean)
     , intValue(v ? 1 : 0) {
 }
-const ::std::string& TomlValue::as_string() const {
+const ::std::string& TomlValue::asString() const {
     if (mType != Type::String) {
         throw TypeError{mType, Type::String};
     }
     return strValue;
 }
-bool TomlValue::as_bool() const {
+bool TomlValue::asBool() const {
     if (mType != Type::Boolean) {
         throw TypeError{mType, Type::Boolean};
     }
     return intValue != 0;
 }
-uint64_t TomlValue::as_int() const {
+uint64_t TomlValue::asInt() const {
     if (mType != Type::Integer) {
         throw TypeError{mType, Type::Integer};
     }
     return intValue;
 }
-const ::std::vector<TomlValue>& TomlValue::as_list() const {
+const ::std::vector<TomlValue>& TomlValue::asList() const {
     if (mType != Type::List) {
         throw TypeError{mType, Type::List};
     }

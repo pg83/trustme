@@ -56,7 +56,7 @@ void U128::from_be_bytes(const uint8_t* src, size_t max_len) {
 }
 U128 U128::operator+(U128 x) const {
     U128 rv(0);
-    add128_o(*this, x, &rv);
+    add128O(*this, x, &rv);
     return rv;
 }
 U128 U128::operator-(U128 x) const {
@@ -183,7 +183,7 @@ int U128::cmp128(U128 a, U128 b) {
     }
     return 0;
 }
-bool U128::add128_o(U128 a, U128 b, U128* o) {
+bool U128::add128O(U128 a, U128 b, U128* o) {
     o->lo = a.lo + b.lo;
     o->hi = a.hi + b.hi + (o->lo < a.lo ? 1 : 0);
     return (o->hi < a.hi);
@@ -206,7 +206,7 @@ bool U128::mul128_o(U128 a, U128 b, U128* o) {
             break;
         }
         if (m & (i >= 64 ? a.hi : a.lo)) {
-            of |= add128_o(*o, b, o);
+            of |= add128O(*o, b, o);
         }
         b.hi = (b.hi << 1) | (b.lo >> 63);
         b.lo = (b.lo << 1);
@@ -236,9 +236,9 @@ bool U128::div128_o(U128 a, U128 b, U128* q, U128* r) {
         }
         return false;
     }
-    U128 a_div_2((a.lo >> 1) | (a.hi << 63), a.hi >> 1);
+    U128 aDiv2((a.lo >> 1) | (a.hi << 63), a.hi >> 1);
     int shift = 0;
-    while (cmp128(a_div_2, b) >= 0 && shift < 128) {
+    while (cmp128(aDiv2, b) >= 0 && shift < 128) {
         shift += 1;
         b.hi = (b.hi << 1) | (b.lo >> 63);
         b.lo <<= 1;
@@ -255,7 +255,7 @@ bool U128::div128_o(U128 a, U128 b, U128* q, U128* r) {
     while (shift--) {
         if (cmp128(a, b) >= 0) {
             if (q) {
-                add128_o(*q, mask, q);
+                add128O(*q, mask, q);
             }
             sub128_o(a, b, &a);
         }

@@ -267,7 +267,7 @@ namespace AST {
         return true;
     }
 
-    void Path::bind_variable(unsigned int slot) {
+    void Path::bindVariable(unsigned int slot) {
         mBindings.value.set(AST::AbsolutePath(), PathBindingValue::make_Variable({slot}));
     }
 
@@ -512,7 +512,7 @@ Path& Path::operator+=(PathNode pn) {
     this->append(mv$(pn));
     return *this;
 }
-const RcString& Path::as_trivial() const {
+const RcString& Path::asTrivial() const {
 TU_MATCH_HDRA( (cls), {)
 default:
     break;

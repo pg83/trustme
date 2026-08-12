@@ -161,7 +161,7 @@ namespace HIR {
             Custom,
         };
 
-        typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> args_t;
+        typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> argsT;
 
         bool saveCode = false; // Filled by enumerate, defaults to false
         Linkage linkage;
@@ -174,7 +174,7 @@ namespace HIR {
 
         GenericParams mParams;
 
-        args_t mArgs;
+        argsT mArgs;
         bool variadic = false;
         TypeRef returnType;
 
@@ -195,7 +195,7 @@ namespace HIR {
 
         Function();
 
-        Function(Receiver receiver, GenericParams params, args_t args, TypeRef ret_ty, ExprPtr code);
+        Function(Receiver receiver, GenericParams params, argsT args, TypeRef ret_ty, ExprPtr code);
 
         ::HIR::TypeRef make_ptr_ty(const Span& sp, const Monomorphiser& ms) const;
     };
@@ -247,7 +247,7 @@ namespace HIR {
         };
 
         // General auto trait impls
-        mutable ::std::map<::HIR::SimplePath, AutoMarking> auto_impls;
+        mutable ::std::map<::HIR::SimplePath, AutoMarking> autoImpls;
     };
 
     // Trait implementations relevant only to structs
@@ -257,7 +257,7 @@ namespace HIR {
         bool is_fundamental = false;
 
         /// This type has a <T: ?Sized> parameter that is used directly
-        bool can_unsize = false;
+        bool canUnsize = false;
         /// Index of the parameter that is ?Sized
         unsigned int unsized_param = ~0u;
 
@@ -274,19 +274,19 @@ namespace HIR {
             None,        // No CoerceUnsized impl
             Passthrough, // Is generic over T: CoerceUnsized
             Pointer,     // Contains a pointer to a ?Sized type
-        } coerce_unsized = Coerce::None;
+        } coerceUnsized = Coerce::None;
 
         // If populated, indicates the field that is the coercable pointer.
-        unsigned int coerce_unsized_index = ~0u;
+        unsigned int coerceUnsizedIndex = ~0u;
         // Index of the parameter that controls the CoerceUnsized (either a T: ?Sized, or a T: CoerceUnsized)
-        unsigned int coerce_param = ~0u;
+        unsigned int coerceParam = ~0u;
 
         // #[rustc_nonnull_optimization_guaranteed]
         bool is_nonzero = false;
 
         // #[rustc_layout_scalar_valid_range_end]
-        bool bounded_max = false;
-        U128 bounded_max_value;
+        bool boundedMax = false;
+        U128 boundedMaxValue;
     };
 
     class ExternType {
@@ -389,7 +389,7 @@ namespace HIR {
         TraitMarkings markings;
         StructMarkings structMarkings;
 
-        ConstEvalState const_eval_state = ConstEvalState::None;
+        ConstEvalState constEvalState = ConstEvalState::None;
     };
 
     extern ::std::ostream& operator<<(::std::ostream& os, const Struct::Repr& x);
@@ -765,7 +765,7 @@ namespace HIR {
         bool find_auto_trait_impls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
         bool find_type_impls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
 
-        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::args_t& args, ::HIR::TypeRef& ret_ty) const;
+        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& ret_ty) const;
 
         const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const;
 

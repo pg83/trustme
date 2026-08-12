@@ -16,4 +16,4 @@ extern void MIRCleanupSetPostMonomorph();
 extern void MIROptimiseCrate(::HIR::Crate& crate, unsigned opt_level, bool enable_inlining);
 extern void MIROptimiseCrateInlining(const ::HIR::Crate& crate, TransList& list, bool post_save, unsigned opt_level, bool enable_inlining);
 
-extern void HIRGenerateMIRExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path, ::HIR::ExprPtr& expr_ptr, const ::HIR::Function::args_t& args, const ::HIR::TypeData* res_ty);
+extern void HIRGenerateMIRExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& path, ::HIR::ExprPtr& expr_ptr, const ::HIR::Function::argsT& args, const ::HIR::TypeData* res_ty);

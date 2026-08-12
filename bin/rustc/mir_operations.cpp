@@ -62,7 +62,7 @@ namespace {
         {
         }
 
-        void check_inner_state(const ::MIR::TypeResolve& state, const MIR::LValue& lv, std::function<bool(ValState vs)> cb) const {
+        void checkInnerState(const ::MIR::TypeResolve& state, const MIR::LValue& lv, std::function<bool(ValState vs)> cb) const {
             const auto& val_state = get_state(state, lv);
             if (val_state.partial_idx != 0) {
                 // Recurse into all inner entries
@@ -135,7 +135,7 @@ namespace {
             return *rv;
         }
 
-        VarState* get_state_mut(const ::MIR::TypeResolve& state, const MIR::LValue& lv, bool allow_parent) {
+        VarState* get_state_mut(const ::MIR::TypeResolve& state, const MIR::LValue& lv, bool allowParent) {
             VarState* rv = &this->get_state_root_mut(lv.root);
             for (const auto& w : lv.wrappers) {
                 TU_MATCH_HDRA( (w), {)
@@ -149,7 +149,7 @@ namespace {
                         MIR_TODO(state, "get_state_mut - Variant");
                     }
                     TU_ARMA(Index, e) {
-                        if (allow_parent) {
+                        if (allowParent) {
                             return rv;
                         }
                         return nullptr;
@@ -221,11 +221,11 @@ namespace {
         void move_lvalue(const ::MIR::TypeResolve& state, const MIR::LValue& lv) {
             // Must be `init` (or if Copy, `Shared`)
             if (state.lvalue_is_copy(lv)) {
-                check_inner_state(state, lv, [&](const ValState vs) {
+                checkInnerState(state, lv, [&](const ValState vs) {
                     return vs == ValState::FullInit || vs == ValState::Shared;
                 });
             } else {
-                check_inner_state(state, lv, [&](const ValState vs) {
+                checkInnerState(state, lv, [&](const ValState vs) {
                     return vs == ValState::FullInit;
                 });
                 set_state(state, lv, ValState::Uninit);
@@ -233,23 +233,23 @@ namespace {
         }
 
         void write_lvalue(const ::MIR::TypeResolve& state, const MIR::LValue& lv) {
-            check_inner_state(state, lv, [&](const ValState vs) {
+            checkInnerState(state, lv, [&](const ValState vs) {
                 return vs != ValState::Shared || vs != ValState::Frozen;
             });
             set_state(state, lv, ValState::FullInit);
         }
 
-        void borrow_lvalue(const ::MIR::TypeResolve& state, ::HIR::BorrowType bt, const MIR::LValue& lv) {
+        void borrowLvalue(const ::MIR::TypeResolve& state, ::HIR::BorrowType bt, const MIR::LValue& lv) {
             switch (bt) {
                 case ::HIR::BorrowType::Owned:
                 case ::HIR::BorrowType::Unique:
-                    check_inner_state(state, lv, [&](const ValState vs) {
+                    checkInnerState(state, lv, [&](const ValState vs) {
                         return vs == ValState::FullInit;
                     });
                     set_state(state, lv, ValState::Frozen);
                     break;
                 case ::HIR::BorrowType::Shared:
-                    check_inner_state(state, lv, [&](const ValState vs) {
+                    checkInnerState(state, lv, [&](const ValState vs) {
                         return vs == ValState::FullInit || vs == ValState::Shared;
                     });
                     set_state(state, lv, ValState::Shared);
@@ -417,7 +417,7 @@ namespace {
             if (const auto* b = param.opt_Borrow()) {
                 HIR::TypeRef tmp;
                 auto src_ty = state.get_lvalue_type(tmp, b->val);
-                auto lft = borrow_lvalue(ofs, b->type, b->val);
+                auto lft = borrowLvalue(ofs, b->type, b->val);
                 type_assign(target, state.crate.types.borrow(b->type, src_ty, lft));
             } else {
                 HIR::TypeRef tmp;
@@ -436,7 +436,7 @@ namespace {
         /// </summary>
         /// <param name="stmt_inner_ofs">Offset within the statement (e.g. argument index)</param>
         /// <param name="lv">LValue</param>
-        HIR::LifetimeRef borrow_lvalue(size_t stmt_inner_ofs, HIR::BorrowType bt, const MIR::LValue& lv) {
+        HIR::LifetimeRef borrowLvalue(size_t stmt_inner_ofs, HIR::BorrowType bt, const MIR::LValue& lv) {
             MIR::LValue::CRef lvr(lv);
             // Unwrap until a deref or the bottom value
             while (lvr.wrapper_count() > 0 && !lvr.is_Deref()) {
@@ -468,25 +468,25 @@ namespace {
                 TU_ARMA(Local, _) {
                     // Allocate/find a local borrow reference for this slot
                     // - Record the entire lvalue for this borrow
-                    return this->allocate_local(SubStmtRef(state.get_cur_block(), state.get_cur_stmt_ofs(), stmt_inner_ofs), lv.clone());
+                    return this->allocateLocal(SubStmtRef(state.get_cur_block(), state.get_cur_stmt_ofs(), stmt_inner_ofs), lv.clone());
                 }
                 TU_ARMA(Argument, _) {
                     // Allocate/find a local borrow reference for this slot
                     // - Record the entire lvalue for this borrow
-                    return this->allocate_local(SubStmtRef(state.get_cur_block(), state.get_cur_stmt_ofs(), stmt_inner_ofs), lv.clone());
+                    return this->allocateLocal(SubStmtRef(state.get_cur_block(), state.get_cur_stmt_ofs(), stmt_inner_ofs), lv.clone());
                 }
             }
             throw "";
         }
 
-        HIR::LifetimeRef allocate_ivar() {
+        HIR::LifetimeRef allocateIvar() {
             auto idx = ivar_lifetimes.size();
             ivar_lifetimes.push_back(LifetimeIvar());
             return HIR::LifetimeRef(static_cast<uint32_t>(idx + 0x14000));
         }
 
     private:
-        HIR::LifetimeRef allocate_local(SubStmtRef origin, MIR::LValue value) {
+        HIR::LifetimeRef allocateLocal(SubStmtRef origin, MIR::LValue value) {
             DEBUG(state << "New local: " << value);
             auto idx = local_lifetimes.size();
             local_lifetimes.push_back(LifetimeInfo{origin, std::move(value)});
@@ -503,7 +503,7 @@ namespace {
     };
 }
 
-void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
+void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type) {
     static Span sp;
     TRACE_FUNCTION_F(path);
     ::MIR::TypeResolve state {
@@ -512,7 +512,7 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
 
     DEBUG(FMT_CB(ss, MIRDumpFcn(ss, fcn)));
 
-    BorrowState borrow_state{state};
+    BorrowState borrowState{state};
 
     // 0. Create liftime names/references for all borrows
     // - Each type instance gets its own new lifetime reference
@@ -521,18 +521,18 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
 
         struct LifetimeVisitor: public HIR::Visitor {
             const ::MIR::TypeResolve& state;
-            BorrowState& borrow_state;
+            BorrowState& borrowState;
 
-            LifetimeVisitor(const ::MIR::TypeResolve& state, BorrowState& borrow_state)
+            LifetimeVisitor(const ::MIR::TypeResolve& state, BorrowState& borrowState)
                 : HIR::Visitor(nullptr, state.crate.types)
                 , state(state)
-                , borrow_state(borrow_state)
+                , borrowState(borrowState)
             {
             }
 
             void visit_lifetime_ref(::HIR::LifetimeRef& lr) {
                 if (lr.binding == ::HIR::LifetimeRef::UNKNOWN) {
-                    lr = borrow_state.allocate_ivar();
+                    lr = borrowState.allocateIvar();
                 }
             }
 
@@ -544,7 +544,7 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
             }
 
             void visit_type(::HIR::TypeRef& t) override {
-                auto data = t->clone_data();
+                auto data = t->cloneData();
                 if (auto* te = data.opt_Borrow()) {
                     visit_lifetime_ref(te->lifetime);
                 } else if (auto* te = data.opt_TraitObject()) {
@@ -560,15 +560,15 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
         struct V: public MIR::visit::VisitorMut {
             LifetimeVisitor lifetimes;
 
-            V(const ::MIR::TypeResolve& state, BorrowState& borrow_state)
-                : lifetimes(state, borrow_state)
+            V(const ::MIR::TypeResolve& state, BorrowState& borrowState)
+                : lifetimes(state, borrowState)
             {
             }
 
             void visit_type(::HIR::TypeRef& t) override {
                 lifetimes.visit_type(t);
             }
-        } v{state, borrow_state};
+        } v{state, borrowState};
 
         v.visit_function(state, fcn);
     }
@@ -584,25 +584,25 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
                     TU_MATCH_HDRA((se.src), {)
                     TU_ARMA(Use, rse) {
                                 HIR::TypeRef tmp;
-                                borrow_state.do_assign(se.dst, state.get_lvalue_type(tmp, rse));
+                                borrowState.do_assign(se.dst, state.get_lvalue_type(tmp, rse));
                             }
                             TU_ARMA(Borrow, rse) {
                                 HIR::TypeRef tmp;
                                 auto src_ty = state.get_lvalue_type(tmp, rse.val);
-                                auto lft = borrow_state.borrow_lvalue(0, rse.type, rse.val);
-                                borrow_state.do_assign(se.dst, state.crate.types.borrow(rse.type, src_ty, lft));
+                                auto lft = borrowState.borrowLvalue(0, rse.type, rse.val);
+                                borrowState.do_assign(se.dst, state.crate.types.borrow(rse.type, src_ty, lft));
                             }
                             TU_ARMA(Array, rse) {
                                 HIR::TypeRef tmp;
                                 const auto& dst_ty = state.get_lvalue_type(tmp, se.dst)->as_Array().inner;
                                 for (size_t i = 0; i < rse.vals.size(); i++) {
-                                    borrow_state.handle_param(dst_ty, rse.vals[i], i);
+                                    borrowState.handle_param(dst_ty, rse.vals[i], i);
                                 }
                             }
                             TU_ARMA(SizedArray, rse) {
                                 HIR::TypeRef tmp;
                                 const auto& dst_ty = state.get_lvalue_type(tmp, se.dst)->as_Array().inner;
-                                borrow_state.handle_param(dst_ty, rse.val, 0);
+                                borrowState.handle_param(dst_ty, rse.val, 0);
                             }
                             TU_ARMA(Struct, rse) {
                                 const auto& str = resolve.crate.get_struct_by_path(state.sp, rse.path.mPath);
@@ -628,7 +628,7 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
                             throw "";
                                 };
                                 for (size_t i = 0; i < rse.vals.size(); i++) {
-                                    borrow_state.handle_param(get_field_ty(i), rse.vals[i], i);
+                                    borrowState.handle_param(get_field_ty(i), rse.vals[i], i);
                                 }
                             }
                             TU_ARMA(EnumVariant, rse) {
@@ -656,13 +656,13 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
                                         TU_ARMA(Tuple, se) {
                                             MIR_ASSERT(state, se.size() == rse.vals.size(), "Field index out of range in tuple enum variant " << rse.path);
                                             for (size_t i = 0; i < rse.vals.size(); i++) {
-                                                borrow_state.handle_param(maybe_monomorph(se[i].ent), rse.vals[i], i);
+                                                borrowState.handle_param(maybe_monomorph(se[i].ent), rse.vals[i], i);
                                             }
                                         }
                                         TU_ARMA(Named, se) {
                                             MIR_ASSERT(state, se.size() == rse.vals.size(), "Field index out of range in named enum variant " << rse.path);
                                             for (size_t i = 0; i < rse.vals.size(); i++) {
-                                                borrow_state.handle_param(maybe_monomorph(se[i].ty), rse.vals[i], i);
+                                                borrowState.handle_param(maybe_monomorph(se[i].ty), rse.vals[i], i);
                                             }
                                         }
                             }
@@ -677,7 +677,7 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
                                 const auto& de = dst_ty->as_Tuple();
                                 MIR_ASSERT(state, de.size() == rse.vals.size(), "Tuple size and rvalue mismatch");
                                 for (size_t i = 0; i < rse.vals.size(); i++) {
-                                    borrow_state.handle_param(de[i], rse.vals[i], i);
+                                    borrowState.handle_param(de[i], rse.vals[i], i);
                                 }
                             }
                             TU_ARMA(DstPtr, rse) {
@@ -694,7 +694,7 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
                                     } else {
                                         HIR::TypeRef tmp2;
                                         const auto& src_ty = state.get_param_type(tmp2, rse.ptr_val);
-                                        borrow_state.lifetime_assign(dst_ty->as_Borrow().lifetime, src_ty->as_Borrow().lifetime);
+                                        borrowState.lifetime_assign(dst_ty->as_Borrow().lifetime, src_ty->as_Borrow().lifetime);
                                     }
                                 }
                             }
@@ -703,7 +703,7 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
                             TU_ARMA(BinOp, rse) {
                             }
                             TU_ARMA(Constant, rse) {
-                                borrow_state.do_assign(se.dst, state.get_const_type(rse));
+                                borrowState.do_assign(se.dst, state.get_const_type(rse));
                             }
                             TU_ARMA(Cast, rse) {
                                 HIR::TypeRef tmp;
@@ -712,7 +712,7 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
                                 const auto& src_ty = state.get_lvalue_type(tmp2, rse.val);
                                 // Handle both being borrows
                                 if (dst_ty->is_Borrow() && src_ty->is_Borrow()) {
-                                    borrow_state.lifetime_assign(dst_ty->as_Borrow().lifetime, src_ty->as_Borrow().lifetime);
+                                    borrowState.lifetime_assign(dst_ty->as_Borrow().lifetime, src_ty->as_Borrow().lifetime);
                                 }
                             }
                     }
@@ -750,9 +750,9 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
                             // TODO: HKTs
                             MIR_ASSERT(state, fcn.argTypes.size() == e.args.size(), "");
                             for (size_t i = 0; i < fcn.argTypes.size(); i++) {
-                                borrow_state.handle_param(fcn.argTypes[i], e.args[i], i);
+                                borrowState.handle_param(fcn.argTypes[i], e.args[i], i);
                             }
-                            borrow_state.do_assign(e.ret_val, fcn.mRettype);
+                            borrowState.do_assign(e.ret_val, fcn.mRettype);
                         }
                         TU_ARMA(Path, fe) {
                             HIR::TypeRef tmp;
@@ -770,11 +770,11 @@ void MIRBorrowCheck(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
                                 const auto& exp_ty = maybe_monomorph(fcn.mArgs[i].second);
                                 DEBUG("ARG" << i << " " << exp_ty << " = " << e.args[i]);
 
-                                borrow_state.handle_param(exp_ty, e.args[i], i);
+                                borrowState.handle_param(exp_ty, e.args[i], i);
                             }
                             const auto& rv_ty = maybe_monomorph(fcn.returnType);
                             DEBUG("RV" << " " << e.ret_val << " = " << rv_ty);
-                            borrow_state.do_assign(e.ret_val, rv_ty);
+                            borrowState.do_assign(e.ret_val, rv_ty);
                         }
                 }
                 }
@@ -940,21 +940,21 @@ void MIRValidateValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn) 
 
             class reference {
                 uint64_t& slot;
-                uint8_t bit_ofs;
+                uint8_t bitOfs;
                 State v;
 
                 friend StateVec;
 
-                reference(uint64_t& slot, uint8_t bit_ofs)
+                reference(uint64_t& slot, uint8_t bitOfs)
                     : slot(slot)
-                    , bit_ofs(bit_ofs)
-                    , v((slot >> bit_ofs) & 3)
+                    , bitOfs(bitOfs)
+                    , v((slot >> bitOfs) & 3)
                 {
                 }
 
             public:
                 ~reference() {
-                    slot = (slot & ~(uint64_t(3) << bit_ofs)) | (uint64_t(v.v) << bit_ofs);
+                    slot = (slot & ~(uint64_t(3) << bitOfs)) | (uint64_t(v.v) << bitOfs);
                 }
 
                 State& get() {
@@ -1053,8 +1053,8 @@ void MIRValidateValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn) 
             return true;
         }
 
-        bool merge(unsigned bb_idx, const ValStates& other) {
-            DEBUG("bb" << bb_idx << " this=" << FMT_CB(ss, this->fmt(ss);) << ", other=" << FMT_CB(ss, other.fmt(ss);));
+        bool merge(unsigned bbIdx, const ValStates& other) {
+            DEBUG("bb" << bbIdx << " this=" << FMT_CB(ss, this->fmt(ss);) << ", other=" << FMT_CB(ss, other.fmt(ss);));
             if (*this == other) {
                 return false;
             } else {
@@ -1166,38 +1166,38 @@ void MIRValidateValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn) 
         }
     };
 
-    ::std::vector<ValStates> block_start_states(fcn.blocks.size());
-    ::std::vector<bool> block_has_start_state(fcn.blocks.size());
-    ::std::vector<bool> block_is_queued(fcn.blocks.size());
+    ::std::vector<ValStates> blockStartStates(fcn.blocks.size());
+    ::std::vector<bool> blockHasStartState(fcn.blocks.size());
+    ::std::vector<bool> blockIsQueued(fcn.blocks.size());
     ::std::vector<unsigned int> to_visit_blocks;
     size_t next_block_to_visit = 0;
 
     // TODO: Check that all used locals are also set (anywhere at all)
 
-    auto add_to_visit = [&](unsigned int idx, const ValStates& incoming) {
-        auto& start_state = block_start_states.at(idx);
+    auto addToVisit = [&](unsigned int idx, const ValStates& incoming) {
+        auto& start_state = blockStartStates.at(idx);
         bool changed;
-        if (!block_has_start_state[idx]) {
+        if (!blockHasStartState[idx]) {
             start_state = ValStates(incoming);
-            block_has_start_state[idx] = true;
+            blockHasStartState[idx] = true;
             changed = true;
         } else {
             changed = start_state.merge(idx, incoming);
         }
-        if (changed && !block_is_queued[idx]) {
-            block_is_queued[idx] = true;
+        if (changed && !blockIsQueued[idx]) {
+            blockIsQueued[idx] = true;
             to_visit_blocks.push_back(idx);
         }
     };
-    add_to_visit(0, ValStates{state.mArgs.size(), fcn.locals.size()});
+    addToVisit(0, ValStates{state.mArgs.size(), fcn.locals.size()});
     while (next_block_to_visit < to_visit_blocks.size()) {
         auto block = to_visit_blocks[next_block_to_visit++];
-        block_is_queued[block] = false;
+        blockIsQueued[block] = false;
         assert(block < fcn.blocks.size());
 
         // 1. Copy the stable entry state. Incoming states are merged before a block is queued,
         // so each block is visited only when its entry state changes.
-        auto val_state = ValStates(block_start_states.at(block));
+        auto val_state = ValStates(blockStartStates.at(block));
         ASSERT_BUG(Span(), val_state.locals.size() == fcn.locals.size(), "");
         DEBUG("BB" << block << " " << FMT_CB(ss, val_state.fmt(ss);));
 
@@ -1338,13 +1338,13 @@ void MIRValidateValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn) 
             }
             TU_ARMA(Goto, e) {
                 // Push block with the new state
-                add_to_visit(e, val_state);
+                addToVisit(e, val_state);
             }
             TU_ARMA(If, e) {
                 // Push blocks
                 val_state.ensure_valid(state, e.cond);
-                add_to_visit(e.bb_true, val_state);
-                add_to_visit(e.bb_false, val_state);
+                addToVisit(e.bbTrue, val_state);
+                addToVisit(e.bbFalse, val_state);
             }
             TU_ARMA(Switch, e) {
                 if (e.valid_flag == ~0u) {
@@ -1352,18 +1352,18 @@ void MIRValidateValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn) 
                 } else {
                     MIR_ASSERT(state, e.valid_flag < fcn.drop_flags.size(), "df" << e.valid_flag << " out of range");
                     MIR_ASSERT(state, e.invalid_target < fcn.blocks.size(), "Invalid conditional switch target");
-                    add_to_visit(e.invalid_target, val_state);
+                    addToVisit(e.invalid_target, val_state);
                 }
                 for (const auto& tgt : e.targets) {
-                    add_to_visit(tgt, val_state);
+                    addToVisit(tgt, val_state);
                 }
             }
             TU_ARMA(SwitchValue, e) {
                 val_state.ensure_valid(state, e.val);
                 for (const auto& tgt : e.targets) {
-                    add_to_visit(tgt, val_state);
+                    addToVisit(tgt, val_state);
                 }
-                add_to_visit(e.def_target, val_state);
+                addToVisit(e.def_target, val_state);
             }
             TU_ARMA(Drop, e) {
                 if (e.flag_idx == ~0u) {
@@ -1373,9 +1373,9 @@ void MIRValidateValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn) 
                 }
                 val_state.mark_validity(state, e.slot, false);
                 TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target,
-                    add_to_visit(target, val_state);
+                    addToVisit(target, val_state);
                 )
-                add_to_visit(e.target, val_state);
+                addToVisit(e.target, val_state);
             }
             TU_ARMA(Call, e) {
                 if (e.fcn.is_Value()) {
@@ -1385,18 +1385,18 @@ void MIRValidateValState(::MIR::TypeResolve& state, const ::MIR::Function& fcn) 
                     val_state.move_val(state, arg);
                 }
                 TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target,
-                    add_to_visit(target, val_state);
+                    addToVisit(target, val_state);
                 )
 
                 // TODO: If the function returns !, don't follow the ret_block
                 val_state.mark_validity(state, e.ret_val, true);
-                add_to_visit(e.ret_block, val_state);
+                addToVisit(e.ret_block, val_state);
             }
         }
     }
 }
 
-void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
+void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type) {
     TRACE_FUNCTION_F(path);
     Span sp;
     ::MIR::TypeResolve state {
@@ -1466,7 +1466,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 (UnwindTerminate, ),
                 (Unreachable, ),
                 (Goto, PUSH_BB(e, "Goto");),
-                (If, PUSH_BB(e.bb_true, "If true"); PUSH_BB(e.bb_false, "If false");),
+                (If, PUSH_BB(e.bbTrue, "If true"); PUSH_BB(e.bbFalse, "If false");),
                 (Switch, for (unsigned int i = 0; i < e.targets.size(); i++) { PUSH_BB(e.targets[i], "Switch V" << i); }),
                 (SwitchValue, for (unsigned int i = 0; i < e.targets.size(); i++) { PUSH_BB(e.targets[i], "SwitchValue " << i); } PUSH_BB(e.def_target, "SwitchValue def");),
                 (Drop, PUSH_BB(e.target, "Drop ret"); TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, PUSH_BB(target, "Drop cleanup");)),
@@ -1484,11 +1484,11 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
     //  - Simple check of all assignments/calls/...
     DEBUG("=== FLAT CHECKS");
     {
-        for (unsigned int bb_idx = 0; bb_idx < fcn.blocks.size(); bb_idx++) {
-            const auto& bb = fcn.blocks[bb_idx];
+        for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
+            const auto& bb = fcn.blocks[bbIdx];
             for (unsigned int stmt_idx = 0; stmt_idx < bb.statements.size(); stmt_idx++) {
                 const auto& stmt = bb.statements[stmt_idx];
-                state.set_cur_stmt(bb_idx, stmt_idx);
+                state.set_cur_stmt(bbIdx, stmt_idx);
                 DEBUG(state << stmt);
 
                 switch (stmt.tag()) {
@@ -1501,7 +1501,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                         const auto idx = stmt.is_SaveDropFlag() ? stmt.as_SaveDropFlag().idx : stmt.as_LoadDropFlag().idx;
                         MIR_ASSERT(state, idx < fcn.drop_flags.size(), "df" << idx << " out of range (nflags " << fcn.drop_flags.size() << ")");
                         const auto& slot = stmt.is_SaveDropFlag() ? stmt.as_SaveDropFlag().slot : stmt.as_LoadDropFlag().slot;
-                        const auto bit = stmt.is_SaveDropFlag() ? stmt.as_SaveDropFlag().bit_index : stmt.as_LoadDropFlag().bit_index;
+                        const auto bit = stmt.is_SaveDropFlag() ? stmt.as_SaveDropFlag().bitIndex : stmt.as_LoadDropFlag().bitIndex;
                         ::HIR::TypeRef slot_tmp;
                         const auto& slot_ty = state.get_lvalue_type(slot_tmp, slot);
                         MIR_ASSERT(state, slot_ty->is_Array(), "Save/Load Drop flag, slot not array: " << slot_ty);
@@ -1515,7 +1515,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                         ::HIR::TypeRef dst_tmp;
                         const auto& dst_ty = state.get_lvalue_type(dst_tmp, a.dst);
 
-                        auto check_types = [&](const auto& dst_ty, const auto& src_ty) {
+                        auto checkTypes = [&](const auto& dst_ty, const auto& src_ty) {
                             DEBUG("check_types: " << dst_ty << " := " << src_ty);
                             if (src_ty == types.diverge()) {
                                 // It's valid to assign to anything from a !
@@ -1533,7 +1533,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                     TU_MATCH_HDRA( (a.src), {)
                     TU_ARMA(Use, e) {
                                 ::HIR::TypeRef tmp;
-                                check_types(dst_ty, state.get_lvalue_type(tmp, e));
+                                checkTypes(dst_ty, state.get_lvalue_type(tmp, e));
                             }
                             TU_ARMA(Constant, e) {
                                 // TODO: Check constant types.
@@ -1598,13 +1598,13 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                                         }
                                     }
                                     TU_ARMA(Bool, c) {
-                                        check_types(dst_ty, types.primitive(::HIR::CoreType::Bool));
+                                        checkTypes(dst_ty, types.primitive(::HIR::CoreType::Bool));
                                     }
                                     TU_ARMA(Bytes, c) {
-                                        check_types(dst_ty, types.borrow(::HIR::BorrowType::Shared, types.array(types.primitive(::HIR::CoreType::U8), c.size())));
+                                        checkTypes(dst_ty, types.borrow(::HIR::BorrowType::Shared, types.array(types.primitive(::HIR::CoreType::U8), c.size())));
                                     }
                                     TU_ARMA(StaticString, c) {
-                                        check_types(dst_ty, types.borrow(::HIR::BorrowType::Shared, types.primitive(::HIR::CoreType::Str)));
+                                        checkTypes(dst_ty, types.borrow(::HIR::BorrowType::Shared, types.primitive(::HIR::CoreType::Str)));
                                     }
                                     TU_ARMA(Const, c) {
                                         // TODO: Check result type against type of const
@@ -1639,9 +1639,9 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                                                 resolve.expand_associated_types(state.sp, tmp);
                                                 // TODO: Have a raw pointer flag
                                                 if (const auto* te = dst_ty->opt_Pointer()) {
-                                                    check_types(te->inner, tmp);
+                                                    checkTypes(te->inner, tmp);
                                                 } else {
-                                                    check_types(dst_ty, types.borrow(::HIR::BorrowType::Shared, tmp));
+                                                    checkTypes(dst_ty, types.borrow(::HIR::BorrowType::Shared, tmp));
                                                 }
                                             }
                                             TU_ARMA(Function, ve) {
@@ -1667,14 +1667,14 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                             TU_ARMA(Borrow, e) {
                                 ::HIR::TypeRef tmp;
                                 if (e.is_raw) {
-                                    check_types(dst_ty, types.pointer(e.type, state.get_lvalue_type(tmp, e.val)));
+                                    checkTypes(dst_ty, types.pointer(e.type, state.get_lvalue_type(tmp, e.val)));
                                 } else {
-                                    check_types(dst_ty, types.borrow(e.type, state.get_lvalue_type(tmp, e.val)));
+                                    checkTypes(dst_ty, types.borrow(e.type, state.get_lvalue_type(tmp, e.val)));
                                 }
                             }
                             TU_ARMA(Cast, e) {
                                 // Check return type
-                                check_types(dst_ty, e.type);
+                                checkTypes(dst_ty, e.type);
 
                                 // TODO: Move this to a function shared by the HIR (typecheck validate) and here
 
@@ -1888,7 +1888,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                                     MIR_BUG(state, "Tuple assigned slot of invalid type, " << dst_ty << " - expected " << e.vals.size() << " elements");
                                 for (size_t i = 0; i < e.vals.size(); i++) {
                                     ::HIR::TypeRef tmp2;
-                                    check_types(dst_itys[i], state.get_param_type(tmp2, e.vals[i]));
+                                    checkTypes(dst_itys[i], state.get_param_type(tmp2, e.vals[i]));
                                 }
                             }
                             TU_ARMA(Array, e) {
@@ -1915,7 +1915,7 @@ void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 }
             }
 
-            state.set_cur_stmt_term(bb_idx);
+            state.set_cur_stmt_term(bbIdx);
             DEBUG(state << bb.terminator);
             TU_MATCH_HDRA( (bb.terminator), {)
             TU_ARMA(Incomplete, e) {
@@ -2109,11 +2109,11 @@ namespace {
 
         ::std::vector<::std::vector<State>> inner_states;
 
-        ::std::vector<unsigned int> bb_path;
+        ::std::vector<unsigned int> bbPath;
 
         ValueStates clone() const {
             struct H {
-                static ::std::vector<State> clone_state_list(const ::std::vector<State>& l) {
+                static ::std::vector<State> cloneStateList(const ::std::vector<State>& l) {
                     ::std::vector<State> rv;
                     rv.reserve(l.size());
                     for (const auto& s : l) {
@@ -2125,14 +2125,14 @@ namespace {
 
             ValueStates rv;
             rv.return_value = State(this->return_value);
-            rv.args = H::clone_state_list(this->args);
-            rv.locals = H::clone_state_list(this->locals);
+            rv.args = H::cloneStateList(this->args);
+            rv.locals = H::cloneStateList(this->locals);
             rv.drop_flags = this->drop_flags;
             rv.inner_states.reserve(this->inner_states.size());
             for (const auto& isl : this->inner_states) {
-                rv.inner_states.push_back(H::clone_state_list(isl));
+                rv.inner_states.push_back(H::cloneStateList(isl));
             }
-            rv.bb_path = this->bb_path;
+            rv.bbPath = this->bbPath;
             return *this;
         }
 
@@ -2241,29 +2241,29 @@ namespace {
 
             // Dump all statements
             if (true) {
-                for (size_t i = 0; i < this->bb_path.size() - 1; i++) {
-                    size_t bb_idx = this->bb_path[i];
-                    const auto& bb = mir_res.fcn.blocks.at(bb_idx);
+                for (size_t i = 0; i < this->bbPath.size() - 1; i++) {
+                    size_t bbIdx = this->bbPath[i];
+                    const auto& bb = mir_res.fcn.blocks.at(bbIdx);
 
                     for (size_t stmt_idx = 0; stmt_idx < bb.statements.size(); stmt_idx++) {
-                        DEBUG("BB" << bb_idx << "/" << stmt_idx << " - " << bb.statements[stmt_idx]);
+                        DEBUG("BB" << bbIdx << "/" << stmt_idx << " - " << bb.statements[stmt_idx]);
                     }
-                    DEBUG("BB" << bb_idx << "/TERM - " << bb.terminator);
+                    DEBUG("BB" << bbIdx << "/TERM - " << bb.terminator);
                 }
 
                 {
-                    size_t bb_idx = this->bb_path.back();
-                    const auto& bb = mir_res.fcn.blocks.at(bb_idx);
+                    size_t bbIdx = this->bbPath.back();
+                    const auto& bb = mir_res.fcn.blocks.at(bbIdx);
                     for (size_t stmt_idx = 0; stmt_idx < cur_stmt; stmt_idx++) {
-                        DEBUG("BB" << bb_idx << "/" << stmt_idx << " - " << bb.statements[stmt_idx]);
+                        DEBUG("BB" << bbIdx << "/" << stmt_idx << " - " << bb.statements[stmt_idx]);
                     }
                 }
             }
 
             if (!is_copy) {
                 // Walk backwards through the BBs and find where it's used by value
-                assert(this->bb_path.size() > 0);
-                size_t bb_idx;
+                assert(this->bbPath.size() > 0);
+                size_t bbIdx;
                 size_t stmt_idx;
 
                 bool was_moved = false;
@@ -2273,7 +2273,7 @@ namespace {
                     // e.g. if `root_lv` is `_1.0` then `_1` and `_1.0*` should be handled, but `_1.1` should not
                     if (lv.is_either_subset(root_lv) && vu == ValUsage::Move) {
                         was_moved = true;
-                        moved_bb = bb_idx;
+                        moved_bb = bbIdx;
                         moved_stmt = stmt_idx;
                         return false;
                     }
@@ -2281,15 +2281,15 @@ namespace {
                 };
                 // Most recent block (incomplete)
                 {
-                    bb_idx = this->bb_path.back();
-                    const auto& bb = mir_res.fcn.blocks.at(bb_idx);
+                    bbIdx = this->bbPath.back();
+                    const auto& bb = mir_res.fcn.blocks.at(bbIdx);
                     for (stmt_idx = cur_stmt; stmt_idx-- && !was_moved;) {
                         visit_mir_lvalues(bb.statements[stmt_idx], visit_cb);
                     }
                 }
-                for (size_t i = this->bb_path.size() - 1; i-- && !was_moved;) {
-                    bb_idx = this->bb_path[i];
-                    const auto& bb = mir_res.fcn.blocks.at(bb_idx);
+                for (size_t i = this->bbPath.size() - 1; i-- && !was_moved;) {
+                    bbIdx = this->bbPath[i];
+                    const auto& bb = mir_res.fcn.blocks.at(bbIdx);
                     stmt_idx = bb.statements.size();
 
                     visit_mir_lvalues(bb.terminator, visit_cb);
@@ -2306,8 +2306,8 @@ namespace {
                 }
             } else {
                 // Walk backwards to find assignment (if none, it's never initialized)
-                assert(this->bb_path.size() > 0);
-                size_t bb_idx;
+                assert(this->bbPath.size() > 0);
+                size_t bbIdx;
                 size_t stmt_idx;
 
                 bool assigned = false;
@@ -2323,15 +2323,15 @@ namespace {
 
                 // Most recent block (incomplete)
                 {
-                    bb_idx = this->bb_path.back();
-                    const auto& bb = mir_res.fcn.blocks.at(bb_idx);
+                    bbIdx = this->bbPath.back();
+                    const auto& bb = mir_res.fcn.blocks.at(bbIdx);
                     for (stmt_idx = cur_stmt; stmt_idx-- && !assigned;) {
                         visit_mir_lvalues(bb.statements[stmt_idx], visit_cb);
                     }
                 }
-                for (size_t i = this->bb_path.size() - 1; i-- && !assigned;) {
-                    bb_idx = this->bb_path[i];
-                    const auto& bb = mir_res.fcn.blocks.at(bb_idx);
+                for (size_t i = this->bbPath.size() - 1; i-- && !assigned;) {
+                    bbIdx = this->bbPath[i];
+                    const auto& bb = mir_res.fcn.blocks.at(bbIdx);
                     stmt_idx = bb.statements.size();
 
                     visit_mir_lvalues(bb.terminator, visit_cb);
@@ -2367,7 +2367,7 @@ namespace {
             } else if (!vs.is_valid()) {
                 // Locate where it was invalidated.
                 auto reason = find_invalid_reason(mir_res, root_lv);
-                MIR_BUG(mir_res, "Accessing invalidated lvalue - " << root_lv << " - " << FMT_CB(s, reason.fmt(s);) << " - field path=[" << path << "], BBs=[" << this->bb_path << "]");
+                MIR_BUG(mir_res, "Accessing invalidated lvalue - " << root_lv << " - " << FMT_CB(s, reason.fmt(s);) << " - field path=[" << path << "], BBs=[" << this->bbPath << "]");
             } else {
             }
         }
@@ -2417,7 +2417,7 @@ namespace {
         }
 
     private:
-        ::std::vector<State>& allocate_composite_int(State& out_state) {
+        ::std::vector<State>& allocateCompositeInt(State& out_state) {
             // 1. Search for an unused (empty) slot
             for (size_t i = 0; i < this->inner_states.size(); i++) {
                 if (this->inner_states[i].size() == 0) {
@@ -2432,12 +2432,12 @@ namespace {
             return inner_states.back();
         }
 
-        State allocate_composite(unsigned int n_fields, const State& basis) {
+        State allocateComposite(unsigned int n_fields, const State& basis) {
             assert(n_fields > 0);
             assert(!basis.is_composite());
 
             State rv;
-            auto& sub_states = allocate_composite_int(rv);
+            auto& sub_states = allocateCompositeInt(rv);
             assert(sub_states.size() == 0);
 
             sub_states.reserve(n_fields);
@@ -2496,11 +2496,11 @@ namespace {
             return *state_p;
         }
 
-        void clear_state(const ::MIR::TypeResolve& mir_res, State& s) {
+        void clearState(const ::MIR::TypeResolve& mir_res, State& s) {
             if (s.is_composite()) {
                 auto& sub_states = this->get_composite(mir_res, s);
                 for (auto& ss : sub_states) {
-                    this->clear_state(mir_res, ss);
+                    this->clearState(mir_res, ss);
                 }
                 sub_states.clear();
             }
@@ -2539,7 +2539,7 @@ namespace {
                                 MIR_BUG(mir_res, "Unknown type being accessed with Field " << lv << ": " << ty);
                             }
 
-                            cur_vs = State(this->allocate_composite(n_fields, cur_vs));
+                            cur_vs = State(this->allocateComposite(n_fields, cur_vs));
                         }
                         // Get composite state and assign into it
                         auto& states = this->get_composite(mir_res, cur_vs);
@@ -2548,7 +2548,7 @@ namespace {
                     }
                     TU_ARMA(Deref, e) {
                         if (!cur_vs.is_composite()) {
-                            cur_vs = State(this->allocate_composite(2, cur_vs));
+                            cur_vs = State(this->allocateComposite(2, cur_vs));
                         }
                         // Get composite state and assign into it
                         auto& states = this->get_composite(mir_res, cur_vs);
@@ -2568,7 +2568,7 @@ namespace {
                     }
                     TU_ARMA(Downcast, e) {
                         if (!cur_vs.is_composite()) {
-                            cur_vs = State(this->allocate_composite(1, cur_vs));
+                            cur_vs = State(this->allocateComposite(1, cur_vs));
                         }
                         // Get composite state and assign into it
                         auto& states = this->get_composite(mir_res, cur_vs);
@@ -2578,7 +2578,7 @@ namespace {
                 }
                 MIR_ASSERT(mir_res, state_p, "No state result?");
             }
-            this->clear_state(mir_res, *state_p);
+            this->clearState(mir_res, *state_p);
             *state_p = mv$(new_vs);
         }
     };
@@ -2586,14 +2586,14 @@ namespace {
     struct StateSet {
         ::std::vector<ValueStates> known_state_sets;
 
-        bool add_state(const ValueStates& state_set) {
+        bool addState(const ValueStates& state_set) {
             for (const auto& s : this->known_state_sets) {
                 if (s.is_equivalent_to(state_set)) {
                     return false;
                 }
             }
             this->known_state_sets.push_back(state_set.clone());
-            this->known_state_sets.back().bb_path = ::std::vector<unsigned int>();
+            this->known_state_sets.back().bbPath = ::std::vector<unsigned int>();
             return true;
         }
     };
@@ -2627,7 +2627,7 @@ namespace std {
             }
         };
 
-        os << "ValueStates(path=[" << x.bb_path << "]";
+        os << "ValueStates(path=[" << x.bbPath << "]";
         print_val(",rv", x.return_value);
         for (unsigned int i = 0; i < x.args.size(); i++) {
             print_val(FMT_CB(ss, ss << ",a" << i;), x.args[i]);
@@ -2650,8 +2650,8 @@ void MIRValidateFullValState(::MIR::TypeResolve& mir_res, const ::MIR::Function&
     // TODO: Use a timer to check elapsed CPU time in this function, and check on each iteration
     // - If more than `n` (10?) seconds passes on one function, warn and abort
     //ElapsedTimeCounter    timer;
-    ::std::vector<unsigned> block_ref_counts(fcn.blocks.size());
-    ::std::vector<StateSet> block_entry_states(fcn.blocks.size());
+    ::std::vector<unsigned> blockRefCounts(fcn.blocks.size());
+    ::std::vector<StateSet> blockEntryStates(fcn.blocks.size());
 
     // Determine value lifetimes (BBs in which Copy values are valid)
     // - Used to mask out Copy value (prevents combinatorial explosion)
@@ -2675,10 +2675,10 @@ void MIRValidateFullValState(::MIR::TypeResolve& mir_res, const ::MIR::Function&
     state.locals = H::make_list(fcn.locals.size(), false);
     state.drop_flags = fcn.drop_flags;
 
-    block_ref_counts[0] = 1;
+    blockRefCounts[0] = 1;
     for (const auto& blk : fcn.blocks) {
         MIR::visit::visit_terminator_target(blk.terminator, [&](const ::MIR::BasicBlockId& e) {
-            block_ref_counts.at(e) += 1;
+            blockRefCounts.at(e) += 1;
         });
     }
 
@@ -2711,12 +2711,12 @@ void MIRValidateFullValState(::MIR::TypeResolve& mir_res, const ::MIR::Function&
 
         // If this state already exists in the map, skip
         // - Note: The `block_ref_counts` check saves a tiny bit of time, but not a huge amount
-        if (block_ref_counts[cur_block] > 1 && !block_entry_states[cur_block].add_state(state)) {
+        if (blockRefCounts[cur_block] > 1 && !blockEntryStates[cur_block].addState(state)) {
             DEBUG("BB" << cur_block << " - Nothing new");
             continue;
         }
         DEBUG("BB" << cur_block << " - " << state);
-        state.bb_path.push_back(cur_block);
+        state.bbPath.push_back(cur_block);
 
         const auto& blk = fcn.blocks.at(cur_block);
         for (size_t i = 0; i < blk.statements.size(); i++) {
@@ -2821,7 +2821,7 @@ void MIRValidateFullValState(::MIR::TypeResolve& mir_res, const ::MIR::Function&
             (Unreachable, ),
             (Goto, // Jump to another block
              todo_queue.push_back(::std::make_pair(te, mv$(state)));),
-            (If, state.ensure_lvalue_valid(mir_res, te.cond); todo_queue.push_back(::std::make_pair(te.bb_true, state.clone())); todo_queue.push_back(::std::make_pair(te.bb_false, mv$(state)));),
+            (If, state.ensure_lvalue_valid(mir_res, te.cond); todo_queue.push_back(::std::make_pair(te.bbTrue, state.clone())); todo_queue.push_back(::std::make_pair(te.bbFalse, mv$(state)));),
             (Switch, if (te.valid_flag != ~0u && !state.drop_flags.at(te.valid_flag)) { todo_queue.push_back(::std::make_pair(te.invalid_target, mv$(state))); } else {
                 state.ensure_lvalue_valid(mir_res, te.val);
                 for (size_t i = 0; i < te.targets.size(); i++) {
@@ -2858,7 +2858,7 @@ void MIRValidateFullValState(::MIR::TypeResolve& mir_res, const ::MIR::Function&
     }
 }
 
-void MIRValidateFull(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
+void MIRValidateFull(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type) {
     TRACE_FUNCTION_F(path);
     Span sp;
     ::MIR::TypeResolve state {
@@ -3146,7 +3146,7 @@ namespace {
                 if (enm.mData.is_Data()) {
                     const auto& fld = repr->fields.at(var_idx);
 
-                    size_t base_ofs = fld.offset;
+                    size_t baseOfs = fld.offset;
                     const auto* repr = TargetGetTypeRepr(state.sp, state.mResolve, fld.ty);
                     vals.reserve(repr->fields.size());
 
@@ -3154,7 +3154,7 @@ namespace {
                         if (has_tag_field && &fld == &repr->fields.back()) {
                             continue;
                         }
-                        auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(base_ofs + fld.offset), monomorph_erase_lifetimes.monomorph_type(state.sp, fld.ty), params, ::HIR::GenericPath());
+                        auto rval = MIRCleanupLiteralToRValue(state, mutator, lit.slice(baseOfs + fld.offset), monomorph_erase_lifetimes.monomorph_type(state.sp, fld.ty), params, ::HIR::GenericPath());
                         vals.push_back(mutator.in_temporary(monomorph_erase_lifetimes.monomorph_type(state.sp, fld.ty), mv$(rval)));
                     }
                 } else {
@@ -3496,7 +3496,7 @@ namespace {
                     TU_ARMA(Tuple, se) {
                         for (unsigned int i = 0; i < se.size(); i++) {
                             auto val = ::MIR::LValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
-                            if (i == str.structMarkings.coerce_unsized_index) {
+                            if (i == str.structMarkings.coerceUnsizedIndex) {
                                 vals.push_back(H::get_unit_ptr(state, mutator, monomorph(se[i].ent), mv$(val), out_inner_ptr));
                             } else {
                                 vals.push_back(mv$(val));
@@ -3506,7 +3506,7 @@ namespace {
                     TU_ARMA(Named, se) {
                         for (unsigned int i = 0; i < se.size(); i++) {
                             auto val = ::MIR::LValue::newField((i == se.size() - 1 ? mv$(lv) : lv.clone()), i);
-                            if (i == str.structMarkings.coerce_unsized_index) {
+                            if (i == str.structMarkings.coerceUnsizedIndex) {
                                 vals.push_back(H::get_unit_ptr(state, mutator, monomorph(se[i].ty), mv$(val), out_inner_ptr));
                             } else {
                                 vals.push_back(mv$(val));
@@ -3529,7 +3529,7 @@ namespace {
     ::MIR::LValue receiver_ptr;
     ::MIR::LValue inner_dyn_ptr;
 
-    if (receiver->is_Path() && receiver->as_Path().binding.is_Struct() && receiver->as_Path().binding.as_Struct()->structMarkings.coerce_unsized != ::HIR::StructMarkings::Coerce::None) {
+    if (receiver->is_Path() && receiver->as_Path().binding.is_Struct() && receiver->as_Path().binding.as_Struct()->structMarkings.coerceUnsized != ::HIR::StructMarkings::Coerce::None) {
         // If the receiver is Box (or anything that implements CoerceUnsized), create a Foo<()> as the value.
         // - Requires de/restructuring the Box same as CoerceUnsized
         // - Can use the `coerce_unsized_index` field too
@@ -3687,7 +3687,7 @@ bool MIRCleanupUnsizeGetMetadata(const ::MIR::TypeResolve& state, MirMutator& mu
         MIR_ASSERT(state, dte.binding.tag() == ste.binding.tag(), "Note, can't CoerceUnsized mismatched structs - " << src_ty << " to " << dst_ty);
         MIR_ASSERT(state, dte.binding.as_Struct() == ste.binding.as_Struct(), "Note, can't CoerceUnsized mismatched structs - " << src_ty << " to " << dst_ty);
         const auto& str = *dte.binding.as_Struct();
-        MIR_ASSERT(state, str.structMarkings.coerce_unsized_index != ~0u, "Struct " << src_ty << " doesn't impl CoerceUnsized");
+        MIR_ASSERT(state, str.structMarkings.coerceUnsizedIndex != ~0u, "Struct " << src_ty << " doesn't impl CoerceUnsized");
 
         auto monomorph_cb_d = MonomorphStatePtr(state.crate.types, nullptr, &dte.path.mData.as_Generic().mParams, nullptr);
         auto monomorph_cb_s = MonomorphStatePtr(state.crate.types, nullptr, &ste.path.mData.as_Generic().mParams, nullptr);
@@ -3701,7 +3701,7 @@ bool MIRCleanupUnsizeGetMetadata(const ::MIR::TypeResolve& state, MirMutator& mu
             TU_ARMA(Tuple, se) {
                 ents.reserve(se.size());
                 for (unsigned int i = 0; i < se.size(); i++) {
-                    if (i == str.structMarkings.coerce_unsized_index) {
+                    if (i == str.structMarkings.coerceUnsizedIndex) {
                         auto ty_d = monomorph_cb_d.monomorph_type(state.sp, se[i].ent, false);
                         auto ty_s = monomorph_cb_s.monomorph_type(state.sp, se[i].ent, false);
 
@@ -3724,7 +3724,7 @@ bool MIRCleanupUnsizeGetMetadata(const ::MIR::TypeResolve& state, MirMutator& mu
             TU_ARMA(Named, se) {
                 ents.reserve(se.size());
                 for (unsigned int i = 0; i < se.size(); i++) {
-                    if (i == str.structMarkings.coerce_unsized_index) {
+                    if (i == str.structMarkings.coerceUnsizedIndex) {
                         auto ty_d = monomorph_cb_d.monomorph_type(state.sp, se[i].ty, false);
                         auto ty_s = monomorph_cb_s.monomorph_type(state.sp, se[i].ty, false);
 
@@ -3873,19 +3873,19 @@ void MIRCleanupParam(const ::MIR::TypeResolve& state, MirMutator& mutator, ::MIR
     if( p.is_Constant() && p.as_Constant().is_Const() )
     {
         const auto& ce = p.as_Constant().as_Const();
-        ::HIR::TypeRef c_ty;
+        ::HIR::TypeRef cTy;
         MonomorphState params(state.crate.types);
-        const auto* lit_ptr = MIRCleanupGetConstant(state, *ce.p, c_ty, params);
+        const auto* lit_ptr = MIRCleanupGetConstant(state, *ce.p, cTy, params);
         if (lit_ptr) {
             DEBUG("Replace constant " << *ce.p << " with " << *lit_ptr);
-            auto new_rval = MIRCleanupLiteralToRValue(state, mutator, *lit_ptr, c_ty, params, mv$(*ce.p));
+            auto new_rval = MIRCleanupLiteralToRValue(state, mutator, *lit_ptr, cTy, params, mv$(*ce.p));
             if (auto* lv = new_rval.opt_Use()) {
                 p = ::MIR::Param::make_LValue(::std::move(*lv));
             } else if (auto* c = new_rval.opt_Constant()) {
                 MIRCleanupConstant(state, mutator, *c);
                 p = ::MIR::Param::make_Constant(::std::move(*c));
             } else {
-                auto tmp_lv = mutator.in_temporary(mv$(c_ty), mv$(new_rval));
+                auto tmp_lv = mutator.in_temporary(mv$(cTy), mv$(new_rval));
                 p = ::MIR::Param::make_LValue(::std::move(tmp_lv));
             }
         } else {
@@ -3894,7 +3894,7 @@ void MIRCleanupParam(const ::MIR::TypeResolve& state, MirMutator& mutator, ::MIR
     }
 }
 
-void MIRCleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
+void MIRCleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type) {
     Span sp;
     TRACE_FUNCTION_F(path);
     ::MIR::TypeResolve state {
@@ -4186,14 +4186,14 @@ void MIRCleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, 
                     if (pe.trait.mPath == resolve.mLangFn || pe.trait.mPath == resolve.mLangFnMut || pe.trait.mPath == resolve.mLangFnOnce) {
                         MIR_ASSERT(state, e.args.size() == 2, "Fn* call requires two arguments");
                         auto fcn_lvalue = mv$(e.args[0].as_LValue());
-                        auto args_lvalue = mv$(e.args[1].as_LValue());
+                        auto argsLvalue = mv$(e.args[1].as_LValue());
 
                         DEBUG("Convert function pointer call");
 
                         e.args.clear();
                         e.args.reserve(fcn_ty.argTypes.size());
                         for (unsigned int i = 0; i < fcn_ty.argTypes.size(); i++) {
-                            e.args.push_back(::MIR::LValue::newField(args_lvalue.clone(), i));
+                            e.args.push_back(::MIR::LValue::newField(argsLvalue.clone(), i));
                         }
                         // If the trait is Fn/FnMut, dereference the input value.
                         if (pe.trait.mPath == resolve.mLangFnOnce) {
@@ -4210,14 +4210,14 @@ void MIRCleanup(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, 
                         auto n_args = fcn_ty.decay(state.crate.types, state.sp).argTypes.size();
                         MIR_ASSERT(state, e.args.size() == 2, "Fn* call requires two arguments");
                         auto fcn_lvalue = mv$(e.args[0].as_LValue());
-                        auto args_lvalue = mv$(e.args[1].as_LValue());
+                        auto argsLvalue = mv$(e.args[1].as_LValue());
 
                         DEBUG("Convert named function pointer call");
 
                         e.args.clear();
                         e.args.reserve(n_args);
                         for (unsigned int i = 0; i < n_args; i++) {
-                            e.args.push_back(::MIR::LValue::newField(args_lvalue.clone(), i));
+                            e.args.push_back(::MIR::LValue::newField(argsLvalue.clone(), i));
                         }
                         TU_MATCH_HDRA( (fcn_ty.def), {)
                         TU_ARMA(Function, ve) {
@@ -4310,7 +4310,7 @@ enum {
     CHECKMODE_ALL,
 };
 
-static int check_mode() {
+static int checkMode() {
     static int mode = CHECKMODE_UNKNOWN;
     if (mode == CHECKMODE_UNKNOWN) {
         const auto* n = getenv("MRUSTC_MIR_CHECK");
@@ -4340,15 +4340,15 @@ static int check_mode() {
     return mode;
 }
 
-static bool check_after_all() {
-    return check_mode() >= CHECKMODE_ALL;
+static bool checkAfterAll() {
+    return checkMode() >= CHECKMODE_ALL;
 }
 
 /// A minimum set of optimisations:
 /// - Runs only the mandatory-inlining hook, not normal cost-based inlining
 /// - Simplifies the call graph (by removing chained gotos)
 /// - Sorts blocks into a rough flow order
-void MIROptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type) {
+void MIROptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type) {
     static Span sp;
     TRACE_FUNCTION_F(path);
     ::MIR::TypeResolve state {
@@ -4358,7 +4358,7 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
     while (MIROptimiseInlining(state, fcn, true)) {
         MIRCleanup(resolve, path, fcn, args, ret_type);
         //MIR_Dump_Fcn(::std::cout, fcn);
-        if (check_after_all()) {
+        if (checkAfterAll()) {
             MIRValidate(resolve, path, fcn, args, ret_type);
         }
     }
@@ -4377,7 +4377,7 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
     MIRSortBlocks(resolve, path, fcn);
 
 #if CHECK_AFTER_DONE > 1
-    if (check_mode() >= CHECKMODE_FINAL) {
+    if (checkMode() >= CHECKMODE_FINAL) {
         MIRValidate(resolve, path, fcn, args, ret_type);
     }
 #endif
@@ -4387,7 +4387,7 @@ void MIROptimiseMin(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pa
 /// Perfom inlining only, using a list of monomorphised functions, then cleans up the flow graph
 ///
 /// Returns true if any optimisation was performed
-bool MIROptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type, const TransList& list, unsigned opt_level) {
+bool MIROptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type, const TransList& list, unsigned opt_level) {
     static Span sp;
     bool rv = false;
     TRACE_FUNCTION_FR(path, rv);
@@ -4397,7 +4397,7 @@ bool MIROptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath&
 
     while (MIROptimiseInlining(state, fcn, false, &list)) {
         MIRCleanup(resolve, path, fcn, args, ret_type);
-        if (check_after_all()) {
+        if (checkAfterAll()) {
             MIRValidate(resolve, path, fcn, args, ret_type);
         }
         rv = true;
@@ -4410,7 +4410,7 @@ bool MIROptimiseInline(const StaticTraitResolve& resolve, const ::HIR::ItemPath&
     return rv;
 }
 
-void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type, unsigned opt_level, bool do_inline /*=true*/, bool validate /*=true*/) {
+void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, ::MIR::Function& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type, unsigned opt_level, bool do_inline /*=true*/, bool validate /*=true*/) {
     static Span sp;
     assert(opt_level > 0);
     TRACE_FUNCTION_F(path);
@@ -4418,13 +4418,13 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
         sp, resolve, FMT_CB(ss, ss << path;), ret_type, args, fcn
     };
 
-    bool change_happened;
+    bool changeHappened;
     unsigned int pass_num = 0;
     do {
         MIR_ASSERT(state, pass_num < 100, "Too many MIR optimisation iterations");
 
-        change_happened = false;
-        TRACE_FUNCTION_FR("Pass " << pass_num, change_happened);
+        changeHappened = false;
+        TRACE_FUNCTION_FR("Pass " << pass_num, changeHappened);
 
         // >> Simplify call graph (removes gotos to blocks with a single use)
         if (MIROptimiseBlockSimplify(state, fcn)) {
@@ -4433,7 +4433,7 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
             // NOTE: Don't set `change_happened`, as this is the first pass
@@ -4447,17 +4447,17 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
 
         // >> Attempt to remove useless temporaries
         if (MIROptimiseDeTemporary(state, fcn)) {
             // - Run until no changes
             while (MIROptimiseDeTemporary(state, fcn)) {
-                if (check_after_all()) {
+                if (checkAfterAll()) {
                     MIRValidate(resolve, path, fcn, args, ret_type);
                 }
             }
@@ -4466,10 +4466,10 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
         //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
@@ -4482,10 +4482,10 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
         //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
@@ -4497,10 +4497,10 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
         //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
@@ -4516,10 +4516,10 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
         //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
@@ -4539,10 +4539,10 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
         // >> Remove assignments of unsed drop flags
         if (MIROptimiseDeadDropFlags(state, fcn)) {
@@ -4551,10 +4551,10 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
         // >> Remove assignments that are never read
         if (opt_level >= 2 && MIROptimiseDeadAssignments(state, fcn)) {
@@ -4563,10 +4563,10 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
         // >> Remove no-op assignments
         if (MIROptimiseNoopRemoval(state, fcn)) {
@@ -4575,10 +4575,10 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
 
         // >> Remove re-borrow operations that don't need to exist
@@ -4588,10 +4588,10 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
 
         // >> If the first statement of a block is an assignment, and the last op of the previous is to that assignment's source, move up.
@@ -4601,14 +4601,14 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
-            change_happened = true;
+            changeHappened = true;
         }
 
         // >> Inline short functions
-        if (do_inline && !change_happened) {
+        if (do_inline && !changeHappened) {
             if (MIROptimiseInlining(state, fcn, /*minimal=*/false)) {
                 // Apply cleanup again (as monomorpisation in inlining may have exposed a vtable call)
                 MIRCleanup(resolve, path, fcn, args, ret_type);
@@ -4618,40 +4618,40 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
                     MIRDumpFcn(::std::cout, fcn);
                 }
 #endif
-                if (check_after_all()) {
+                if (checkAfterAll()) {
                     MIRValidate(resolve, path, fcn, args, ret_type);
                 }
-                change_happened = true;
+                changeHappened = true;
             }
         }
 
-        if (change_happened) {
+        if (changeHappened) {
 #if DUMP_AFTER_PASS
             if (debug_enabled()) {
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_mode() == CHECKMODE_PASS) { // NOTE: Skipped if CHECKMODE_ALL
+            if (checkMode() == CHECKMODE_PASS) { // NOTE: Skipped if CHECKMODE_ALL
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
         }
         //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
         if (MIROptimiseGarbageCollectPartial(state, fcn)) {
-            change_happened = true;
+            changeHappened = true;
 #if DUMP_AFTER_ALL
             if (debug_enabled()) {
                 MIRDumpFcn(::std::cout, fcn);
             }
 #endif
-            if (check_after_all()) {
+            if (checkAfterAll()) {
                 MIRValidate(resolve, path, fcn, args, ret_type);
             }
         }
         //else { MIR_Validate(resolve, path, fcn, args, ret_type); }
 
         pass_num += 1;
-    } while (change_happened);
+    } while (changeHappened);
 
     // Run UnifyTemporaries last, then unify blocks, then run some
     // optimisations that might be affected
@@ -4661,7 +4661,7 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
         MIRDumpFcn(::std::cout, fcn);
     }
 #endif
-    if (validate && check_mode() >= CHECKMODE_FINAL) {
+    if (validate && checkMode() >= CHECKMODE_FINAL) {
         // DEFENCE: Run validation _before_ GC (so validation errors refer to the pre-gc numbers)
         MIRValidate(resolve, path, fcn, args, ret_type);
     }
@@ -4672,7 +4672,7 @@ void MIROptimise(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path,
     //MIR_Validate_Full(resolve, path, fcn, args, ret_type);
 
     MIRSortBlocks(resolve, path, fcn);
-    if (validate && check_mode() >= CHECKMODE_FINAL) {
+    if (validate && checkMode() >= CHECKMODE_FINAL) {
         MIRValidate(resolve, path, fcn, args, ret_type);
     }
 }
@@ -4909,16 +4909,16 @@ namespace {
     }
 
     void visit_mir_lvalues_mut(::MIR::TypeResolve& state, ::MIR::Function& fcn, ::std::function<bool(::MIR::LValue&, ValUsage)> cb) {
-        for (unsigned int block_idx = 0; block_idx < fcn.blocks.size(); block_idx++) {
-            auto& block = fcn.blocks[block_idx];
+        for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
+            auto& block = fcn.blocks[blockIdx];
             for (auto& stmt : block.statements) {
-                state.set_cur_stmt(block_idx, (&stmt - &block.statements.front()));
+                state.set_cur_stmt(blockIdx, (&stmt - &block.statements.front()));
                 visit_mir_lvalues_mut(stmt, cb);
             }
             if (block.terminator.tag() == ::MIR::Terminator::TAGDEAD) {
                 continue;
             }
-            state.set_cur_stmt_term(block_idx);
+            state.set_cur_stmt_term(blockIdx);
             visit_mir_lvalues_mut(block.terminator, cb);
         }
     }
@@ -5060,8 +5060,8 @@ namespace {
                 cb(e);
             }
             TU_ARMA(If, e) {
-                cb(e.bb_true);
-                cb(e.bb_false);
+                cb(e.bbTrue);
+                cb(e.bbFalse);
             }
             TU_ARMA(Switch, e) {
                 for (auto& target : e.targets) {
@@ -5313,7 +5313,7 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
 
     struct InlineEvent {
         ::HIR::Path path;
-        ::std::vector<size_t> bb_list;
+        ::std::vector<size_t> bbList;
 
         InlineEvent(::HIR::Path p)
             : path(::std::move(p))
@@ -5321,12 +5321,12 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
         }
 
         bool has_bb(size_t i) const {
-            return ::std::find(this->bb_list.begin(), this->bb_list.end(), i) != this->bb_list.end();
+            return ::std::find(this->bbList.begin(), this->bbList.end(), i) != this->bbList.end();
         }
 
-        void add_range(size_t start, size_t count) {
+        void addRange(size_t start, size_t count) {
             for (size_t j = 0; j < count; j++) {
-                this->bb_list.push_back(start + j);
+                this->bbList.push_back(start + j);
             }
         }
     };
@@ -5335,54 +5335,54 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
 
     struct H {
         struct Source {
-            unsigned bb_idx;
+            unsigned bbIdx;
             unsigned stmt_idx;
             const ::MIR::Statement* stmt;
 
-            Source(unsigned bb_idx, unsigned stmt_idx, const ::MIR::Statement* stmt = nullptr)
-                : bb_idx(bb_idx)
+            Source(unsigned bbIdx, unsigned stmt_idx, const ::MIR::Statement* stmt = nullptr)
+                : bbIdx(bbIdx)
                 , stmt_idx(stmt_idx)
                 , stmt(stmt)
             {
             }
         };
 
-        static Source find_source(const ::MIR::Function& fcn, unsigned bb_idx, unsigned stmt_idx, const ::MIR::LValue& val) {
+        static Source find_source(const ::MIR::Function& fcn, unsigned bbIdx, unsigned stmt_idx, const ::MIR::LValue& val) {
             if (!val.wrappers.empty()) {
-                return Source(bb_idx, stmt_idx);
+                return Source(bbIdx, stmt_idx);
             }
-            const auto& bb = fcn.blocks.at(bb_idx);
+            const auto& bb = fcn.blocks.at(bbIdx);
             while (stmt_idx--) {
                 const auto& stmt = bb.statements[stmt_idx];
                 if (stmt.is_Asm()) {
-                    return Source(bb_idx, stmt_idx);
+                    return Source(bbIdx, stmt_idx);
                 }
                 if (stmt.is_Assign()) {
                     const auto& se = stmt.as_Assign();
                     if (se.dst == val) {
-                        return Source(bb_idx, stmt_idx, &stmt);
+                        return Source(bbIdx, stmt_idx, &stmt);
                     }
                 }
             }
-            return Source(bb_idx, 0);
+            return Source(bbIdx, 0);
         }
 
         /// Checks if the passed lvalue would optimise/expand to a constant value
-        static bool value_is_const(const ::MIR::Function& fcn, unsigned bb_idx, unsigned stmt_idx, const ::MIR::LValue& val, const std::vector<::MIR::Param>& params) {
+        static bool value_is_const(const ::MIR::Function& fcn, unsigned bbIdx, unsigned stmt_idx, const ::MIR::LValue& val, const std::vector<::MIR::Param>& params) {
             if (val.root.is_Argument()) {
                 auto a = val.root.as_Argument();
                 return params[a].is_Constant() && !params[a].as_Constant().is_Const();
             }
 
             // Find the source of this lvalue, chase it backwards
-            auto src = H::find_source(fcn, bb_idx, stmt_idx, val);
+            auto src = H::find_source(fcn, bbIdx, stmt_idx, val);
             if (src.stmt) {
                 if (const auto* se = src.stmt->opt_Assign()) {
                     if (se->src.is_Use()) {
-                        return value_is_const(fcn, src.bb_idx, src.stmt_idx, se->src.as_Use(), params);
+                        return value_is_const(fcn, src.bbIdx, src.stmt_idx, se->src.as_Use(), params);
                     }
                     if (const auto* rve = se->src.opt_BinOp()) {
-                        return value_is_const(fcn, src.bb_idx, src.stmt_idx, rve->val_l, params) && value_is_const(fcn, src.bb_idx, src.stmt_idx, rve->val_r, params);
+                        return value_is_const(fcn, src.bbIdx, src.stmt_idx, rve->val_l, params) && value_is_const(fcn, src.bbIdx, src.stmt_idx, rve->val_r, params);
                     }
                 }
             }
@@ -5390,15 +5390,15 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
             return false;
         }
 
-        static bool value_is_const(const ::MIR::Function& fcn, unsigned bb_idx, unsigned stmt_idx, const ::MIR::Param& val, const std::vector<::MIR::Param>& params) {
+        static bool value_is_const(const ::MIR::Function& fcn, unsigned bbIdx, unsigned stmt_idx, const ::MIR::Param& val, const std::vector<::MIR::Param>& params) {
             if (val.is_LValue()) {
-                return value_is_const(fcn, bb_idx, stmt_idx, val.as_LValue(), params);
+                return value_is_const(fcn, bbIdx, stmt_idx, val.as_LValue(), params);
             } else {
                 return val.is_Constant() && !val.as_Constant().is_Const();
             }
         }
 
-        static bool can_inline(const ::HIR::Path& path, const ::MIR::Function& fcn, const std::vector<::MIR::Param>& params, bool minimal) {
+        static bool canInline(const ::HIR::Path& path, const ::MIR::Function& fcn, const std::vector<::MIR::Param>& params, bool minimal) {
             // TODO: If the function is marked as `inline(always)`, then inline it regardless of the contents
             // TODO: If the function is marked as `inline(never)`, then don't inline
             // TODO: Take a monomorph helper so recursion can be detected
@@ -5411,7 +5411,7 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
             if (fcn.blocks.size() == 1) {
                 return fcn.blocks[0].statements.size() < 10 && !fcn.blocks[0].terminator.is_Goto();
             } else if (fcn.blocks.size() == 2 && fcn.blocks[0].terminator.is_Call()) {
-                const auto& blk0_te = fcn.blocks[0].terminator.as_Call();
+                const auto& blk0Te = fcn.blocks[0].terminator.as_Call();
                 if (!(fcn.blocks[1].terminator.is_UnwindResume() || fcn.blocks[1].terminator.is_UnwindTerminate() || fcn.blocks[1].terminator.is_Unreachable())) {
                     return false;
                 }
@@ -5421,12 +5421,12 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
                 // Detect and avoid simple recursion.
                 // - This won't detect mutual recursion - that also needs prevention.
                 // TODO: This is the pre-monomorph path, but we're comparing with the post-monomorph path
-                if (blk0_te.fcn.is_Path() && blk0_te.fcn.as_Path() == path) {
+                if (blk0Te.fcn.is_Path() && blk0Te.fcn.as_Path() == path) {
                     return false;
                 }
                 return true;
             } else if (fcn.blocks.size() == 3 && fcn.blocks[0].terminator.is_Call()) {
-                const auto& blk0_te = fcn.blocks[0].terminator.as_Call();
+                const auto& blk0Te = fcn.blocks[0].terminator.as_Call();
                 if (!(fcn.blocks[1].terminator.is_UnwindResume() || fcn.blocks[1].terminator.is_UnwindTerminate() || fcn.blocks[1].terminator.is_Unreachable() || fcn.blocks[1].terminator.is_Return())) {
                     return false;
                 }
@@ -5439,7 +5439,7 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
                 // Detect and avoid simple recursion.
                 // - This won't detect mutual recursion - that also needs prevention.
                 // TODO: This is the pre-monomorph path, but we're comparing with the post-monomorph path
-                if (blk0_te.fcn.is_Path() && blk0_te.fcn.as_Path() == path) {
+                if (blk0Te.fcn.is_Path() && blk0Te.fcn.as_Path() == path) {
                     return false;
                 }
                 return true;
@@ -5552,12 +5552,12 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
         const ::MIR::Terminator::Data_Call& te;
         ::std::vector<unsigned> copy_args; // Local indexes containing copies of Copy args
         ParamsSet params;
-        unsigned int bb_base = ~0u;
+        unsigned int bbBase = ~0u;
         unsigned int var_base = ~0u;
         unsigned int df_base = ~0u;
 
         size_t tmp_end = 0;
-        mutable ::std::vector<::MIR::Param> const_assignments;
+        mutable ::std::vector<::MIR::Param> constAssignments;
 
         ::MIR::LValue retval;
 
@@ -5571,7 +5571,7 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
         }
 
         ::MIR::BasicBlockId map_bb_idx(::MIR::BasicBlockId idx) const override {
-            return this->bb_base + idx;
+            return this->bbBase + idx;
         }
 
         virtual unsigned map_local(unsigned f) const {
@@ -5607,13 +5607,13 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
             return &this->mResolve;
         }
 
-        ::MIR::BasicBlock clone_bb(const ::MIR::BasicBlock& src, unsigned src_idx, unsigned new_idx) const {
+        ::MIR::BasicBlock cloneBb(const ::MIR::BasicBlock& src, unsigned src_idx, unsigned new_idx) const {
             ::MIR::BasicBlock rv;
             rv.is_cleanup = src.is_cleanup;
             rv.statements.reserve(src.statements.size());
             for (const auto& stmt : src.statements) {
                 DEBUG("BB" << src_idx << "->BB" << new_idx << "/" << rv.statements.size() << ": " << stmt);
-                rv.statements.push_back(this->clone_stmt(stmt));
+                rv.statements.push_back(this->cloneStmt(stmt));
                 DEBUG("-> " << rv.statements.back());
             }
             DEBUG("BB" << src_idx << "->BB" << new_idx << "/" << rv.statements.size() << ": " << src.terminator);
@@ -5621,12 +5621,12 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
                 rv.statements.push_back(::MIR::Statement::make_Assign({this->te.ret_val.clone(), this->retval.clone()}));
                 DEBUG("++ " << rv.statements.back());
             }
-            rv.terminator = this->clone_term(src.terminator);
+            rv.terminator = this->cloneTerm(src.terminator);
             DEBUG("-> " << rv.terminator);
             return rv;
         }
 
-        ::MIR::Terminator clone_term(const ::MIR::Terminator& src) const override {
+        ::MIR::Terminator cloneTerm(const ::MIR::Terminator& src) const override {
             if (src.is_Return()) {
                 return ::MIR::Terminator::make_Goto(this->te.ret_block);
             } else if (src.is_UnwindResume()) {
@@ -5638,14 +5638,14 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
                 )
                 throw "";
             } else {
-                return ::MIR::Cloner::clone_term(src);
+                return ::MIR::Cloner::cloneTerm(src);
             }
         }
 
-        ::MIR::LValue clone_lval(const ::MIR::LValue& src) const override {
-            auto rv = ::MIR::Cloner::clone_lval(src);
+        ::MIR::LValue cloneLval(const ::MIR::LValue& src) const override {
+            auto rv = ::MIR::Cloner::cloneLval(src);
             if (rv.root.is_Return()) {
-                return this->retval.clone_wrapped(std::move(rv.wrappers));
+                return this->retval.cloneWrapped(std::move(rv.wrappers));
             }
             if (rv.root.is_Argument()) {
                 auto se = rv.root.as_Argument();
@@ -5654,7 +5654,7 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
                     return ::MIR::LValue(::MIR::LValue::Storage::newLocal(this->copy_args[se]), std::move(rv.wrappers));
                 } else {
                     assert(!arg.is_Constant()); // Should have been handled in the above
-                    return arg.as_LValue().clone_wrapped(std::move(rv.wrappers));
+                    return arg.as_LValue().cloneWrapped(std::move(rv.wrappers));
                 }
             }
             return rv;
@@ -5677,11 +5677,11 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
             }
 
             Cloner cloner{state.sp, state.mResolve, *te};
-            const auto* called_mir = get_called_mir(state, list, path, cloner.params);
-            if (!called_mir) {
+            const auto* calledMir = get_called_mir(state, list, path, cloner.params);
+            if (!calledMir) {
                 continue;
             }
-            if (called_mir == &fcn) {
+            if (calledMir == &fcn) {
                 DEBUG("Can't inline - recursion");
                 continue;
             }
@@ -5694,7 +5694,7 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
             // Inline IF:
             // - First BB ends with a call and total count is 3
             // - Statement count smaller than 10
-            if (!H::can_inline(path, *called_mir, te->args, minimal)) {
+            if (!H::canInline(path, *calledMir, te->args, minimal)) {
                 DEBUG("Can't inline " << path);
                 continue;
             }
@@ -5711,21 +5711,21 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
 
             // Monomorph locals and append
             cloner.var_base = fcn.locals.size();
-            for (const auto& ty : called_mir->locals) {
+            for (const auto& ty : calledMir->locals) {
                 fcn.locals.push_back(cloner.monomorph(ty));
             }
             cloner.tmp_end = fcn.locals.size();
 
             cloner.df_base = fcn.drop_flags.size();
-            fcn.drop_flags.insert(fcn.drop_flags.end(), called_mir->drop_flags.begin(), called_mir->drop_flags.end());
-            cloner.bb_base = fcn.blocks.size();
+            fcn.drop_flags.insert(fcn.drop_flags.end(), calledMir->drop_flags.begin(), calledMir->drop_flags.end());
+            cloner.bbBase = fcn.blocks.size();
 
             // Store all Copy lvalue arguments and Constants in variables
             for (size_t i = 0; i < te->args.size(); i++) {
                 const auto& a = te->args[i];
                 if (!a.is_LValue() || state.lvalue_is_copy(a.as_LValue())) {
-                    cloner.copy_args[i] = cloner.tmp_end + cloner.const_assignments.size();
-                    cloner.const_assignments.push_back(a.clone());
+                    cloner.copy_args[i] = cloner.tmp_end + cloner.constAssignments.size();
+                    cloner.constAssignments.push_back(a.clone());
                     DEBUG("- Taking a copy of arg " << i << " (" << a << ") in Local(" << cloner.copy_args[i] << ")");
                 }
             }
@@ -5733,14 +5733,14 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
             // Append monomorphised copy of all blocks.
             // > Arguments replaced by input lvalues
             ::std::vector<::MIR::BasicBlock> new_blocks;
-            new_blocks.reserve(called_mir->blocks.size());
-            for (const auto& bb : called_mir->blocks) {
-                new_blocks.push_back(cloner.clone_bb(bb, (&bb - called_mir->blocks.data()), fcn.blocks.size() + new_blocks.size()));
+            new_blocks.reserve(calledMir->blocks.size());
+            for (const auto& bb : calledMir->blocks) {
+                new_blocks.push_back(cloner.cloneBb(bb, (&bb - calledMir->blocks.data()), fcn.blocks.size() + new_blocks.size()));
             }
 
             // > Append new temporaries
             DEBUG("- Insert argument lval assignments");
-            for (auto& val : cloner.const_assignments) {
+            for (auto& val : cloner.constAssignments) {
                 ::HIR::TypeRef tmp;
                 auto ty = val.is_Constant() ? state.get_const_type(val.as_Constant()) : state.get_lvalue_type(tmp, val.as_LValue());
                 auto lv = ::MIR::LValue::newLocal(static_cast<unsigned>(fcn.locals.size()));
@@ -5750,16 +5750,16 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
                 DEBUG("++ " << stmt);
                 new_blocks[0].statements.insert(new_blocks[0].statements.begin(), mv$(stmt));
             }
-            cloner.const_assignments.clear();
+            cloner.constAssignments.clear();
 
             // Record the inline event
             for (auto& e : inlined_functions) {
                 if (e.has_bb(i)) {
-                    e.add_range(cloner.bb_base, new_blocks.size());
+                    e.addRange(cloner.bbBase, new_blocks.size());
                 }
             }
             inlined_functions.push_back(InlineEvent(path.clone()));
-            inlined_functions.back().add_range(cloner.bb_base, new_blocks.size());
+            inlined_functions.back().addRange(cloner.bbBase, new_blocks.size());
 
             // Apply
             DEBUG("- Append new blocks");
@@ -5767,7 +5767,7 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
             for (auto& b : new_blocks) {
                 fcn.blocks.push_back(mv$(b));
             }
-            fcn.blocks[i].terminator = ::MIR::Terminator::make_Goto(cloner.bb_base);
+            fcn.blocks[i].terminator = ::MIR::Terminator::make_Goto(cloner.bbBase);
             inline_happened = true;
 
             // TODO: Store the inlined path along with the start and end BBs, and then use that to detect recursive
@@ -5780,28 +5780,28 @@ bool MIROptimiseInlining(::MIR::TypeResolve& state, ::MIR::Function& fcn, bool m
 
 namespace {
     struct OptimiseStmtRef {
-        unsigned bb_idx;
+        unsigned bbIdx;
         unsigned stmt_idx;
 
         OptimiseStmtRef()
-            : bb_idx(~0u)
+            : bbIdx(~0u)
             , stmt_idx(0)
         {
         }
 
         OptimiseStmtRef(unsigned b, unsigned s)
-            : bb_idx(b)
+            : bbIdx(b)
             , stmt_idx(s)
         {
         }
 
         bool operator==(const OptimiseStmtRef& x) const {
-            return bb_idx == x.bb_idx && stmt_idx == x.stmt_idx;
+            return bbIdx == x.bbIdx && stmt_idx == x.stmt_idx;
         }
     };
 
     ::std::ostream& operator<<(::std::ostream& os, const OptimiseStmtRef& x) {
-        return os << "BB" << x.bb_idx << "/" << x.stmt_idx;
+        return os << "BB" << x.bbIdx << "/" << x.stmt_idx;
     }
 
     // Iterates the path between two positions, NOT visiting entry specified by `end`
@@ -5811,18 +5811,18 @@ namespace {
         Complete,
     };
 
-    IterPathRes iter_path(const ::MIR::Function& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, ::std::function<bool(OptimiseStmtRef, const ::MIR::Statement&)> cb_stmt, ::std::function<bool(OptimiseStmtRef, const ::MIR::Terminator&)> cb_term) {
-        if (start.bb_idx == end.bb_idx) {
+    IterPathRes iter_path(const ::MIR::Function& fcn, const OptimiseStmtRef& start, const OptimiseStmtRef& end, ::std::function<bool(OptimiseStmtRef, const ::MIR::Statement&)> cbStmt, ::std::function<bool(OptimiseStmtRef, const ::MIR::Terminator&)> cbTerm) {
+        if (start.bbIdx == end.bbIdx) {
             assert(start.stmt_idx <= end.stmt_idx);
         }
 
         auto visted_bbs = ::std::set<unsigned>();
         // Loop while not equal (either not in the right block, or before the statement) to the end point
-        for (auto ref = start; ref.bb_idx != end.bb_idx || ref.stmt_idx < end.stmt_idx;) {
-            const auto& bb = fcn.blocks.at(ref.bb_idx);
+        for (auto ref = start; ref.bbIdx != end.bbIdx || ref.stmt_idx < end.stmt_idx;) {
+            const auto& bb = fcn.blocks.at(ref.bbIdx);
             if (ref.stmt_idx < bb.statements.size()) {
                 DEBUG(ref << " " << bb.statements.at(ref.stmt_idx));
-                if (cb_stmt(ref, bb.statements.at(ref.stmt_idx))) {
+                if (cbStmt(ref, bb.statements.at(ref.stmt_idx))) {
                     DEBUG("> Early true");
                     return IterPathRes::EarlyTrue;
                 }
@@ -5830,13 +5830,13 @@ namespace {
                 ref.stmt_idx++;
             } else {
                 DEBUG(ref << " " << bb.terminator);
-                if (cb_term(ref, bb.terminator)) {
+                if (cbTerm(ref, bb.terminator)) {
                     DEBUG("> Early true");
                     return IterPathRes::EarlyTrue;
                 }
 
                 // If this is the end point, break out before checking the terminator for looping
-                if (ref.bb_idx == end.bb_idx) {
+                if (ref.bbIdx == end.bbIdx) {
                     // ^ don't need to check the statment index, this is the last "statement"
                     break;
                 }
@@ -5849,7 +5849,7 @@ namespace {
                         return IterPathRes::Abort;
                     }
                     ref.stmt_idx = 0;
-                    ref.bb_idx = *te;
+                    ref.bbIdx = *te;
                 }
                 // A call's panic edge cannot reach `end`, so only follow the
                 // normal return edge while inspecting a path between two
@@ -5861,7 +5861,7 @@ namespace {
                         return IterPathRes::Abort;
                     }
                     ref.stmt_idx = 0;
-                    ref.bb_idx = te->ret_block;
+                    ref.bbIdx = te->ret_block;
                 } else {
                     DEBUG("> Terminator abort");
                     return IterPathRes::Abort;
@@ -5871,13 +5871,13 @@ namespace {
         return IterPathRes::Complete;
     }
 
-    ::std::function<bool(const ::MIR::LValue&, ValUsage)> check_invalidates_lvalue_cb(const ::MIR::LValue& val, bool is_copy, bool also_read = false) {
+    ::std::function<bool(const ::MIR::LValue&, ValUsage)> checkInvalidatesLvalueCb(const ::MIR::LValue& val, bool is_copy, bool alsoRead = false) {
         bool has_index = ::std::any_of(val.wrappers.begin(), val.wrappers.end(), [](const auto& w) {
             return w.is_Index();
         });
         // Value is invalidated if it's used with ValUsage::Write or ValUsage::Borrow
         // - Same applies to any component of the lvalue
-        return [&val, has_index, is_copy, also_read](const ::MIR::LValue& lv, ValUsage vu) {
+        return [&val, has_index, is_copy, alsoRead](const ::MIR::LValue& lv, ValUsage vu) {
             switch (vu) {
                     // - Ideally this would check if it DOES invalidate
                 case ValUsage::Write:
@@ -5912,7 +5912,7 @@ namespace {
                     }
                     break;
                 case ValUsage::Read:
-                    if (also_read) {
+                    if (alsoRead) {
                         // NOTE: A read of the same root is a read of this value (what if they're disjoint fields?)
                         if (lv.root == val.root) {
                             return true;
@@ -5924,12 +5924,12 @@ namespace {
         };
     }
 
-    bool check_invalidates_lvalue(const ::MIR::Statement& stmt, const ::MIR::LValue& val, bool is_copy, bool also_read = false) {
-        return visit_mir_lvalues(stmt, check_invalidates_lvalue_cb(val, is_copy, also_read));
+    bool checkInvalidatesLvalue(const ::MIR::Statement& stmt, const ::MIR::LValue& val, bool is_copy, bool alsoRead = false) {
+        return visit_mir_lvalues(stmt, checkInvalidatesLvalueCb(val, is_copy, alsoRead));
     }
 
-    bool check_invalidates_lvalue(const ::MIR::Terminator& term, const ::MIR::LValue& val, bool is_copy, bool also_read = false) {
-        return visit_mir_lvalues(term, check_invalidates_lvalue_cb(val, is_copy, also_read));
+    bool checkInvalidatesLvalue(const ::MIR::Terminator& term, const ::MIR::LValue& val, bool is_copy, bool alsoRead = false) {
+        return visit_mir_lvalues(term, checkInvalidatesLvalueCb(val, is_copy, alsoRead));
     }
 }
 
@@ -6015,14 +6015,14 @@ bool MIROptimiseDeTemporarySingleSetAndUse(::MIR::TypeResolve& state, ::MIR::Fun
             // Single-use variable, now check how we can eliminate it
             DEBUG("Single-use: _" << var_idx << " - Set " << slot.set_loc << ", Use " << slot.use_loc);
 
-            auto& use_bb = fcn.blocks[slot.use_loc.bb_idx];
-            auto& set_bb = fcn.blocks[slot.set_loc.bb_idx];
+            auto& use_bb = fcn.blocks[slot.use_loc.bbIdx];
+            auto& set_bb = fcn.blocks[slot.set_loc.bbIdx];
 
             auto set_loc_next = slot.set_loc;
             if (slot.set_loc.stmt_idx < set_bb.statements.size()) {
                 set_loc_next.stmt_idx += 1;
             } else {
-                set_loc_next.bb_idx = set_bb.terminator.as_Call().ret_block;
+                set_loc_next.bbIdx = set_bb.terminator.as_Call().ret_block;
                 set_loc_next.stmt_idx = 0;
             }
 
@@ -6044,10 +6044,10 @@ bool MIROptimiseDeTemporarySingleSetAndUse(::MIR::TypeResolve& state, ::MIR::Fun
                                                                 slot.use_loc,
                                                                 // TODO: What about a mutable borrow?
                                                                 [&](auto loc, const auto& stmt) -> bool {
-                    return check_invalidates_lvalue(stmt, dst, false, /*also_read=*/true);
+                    return checkInvalidatesLvalue(stmt, dst, false, /*also_read=*/true);
                 },
                                                                 [&](auto loc, const auto& term) -> bool {
-                    return check_invalidates_lvalue(term, dst, false, /*also_read=*/true);
+                    return checkInvalidatesLvalue(term, dst, false, /*also_read=*/true);
                 }
                                                             );
                 if (!invalidated) {
@@ -6120,10 +6120,10 @@ bool MIROptimiseDeTemporarySingleSetAndUse(::MIR::TypeResolve& state, ::MIR::Fun
                                                                 use_loc_inc,
                                                                 // NOTE: If a mutable borrow happens, assume it invalidates the source
                                                                 [&](auto loc, const auto& stmt) -> bool {
-                    return check_invalidates_lvalue(stmt, src, src_copy) || TU_TEST2(stmt, Assign, .src, Borrow, .type != HIR::BorrowType::Shared);
+                    return checkInvalidatesLvalue(stmt, src, src_copy) || TU_TEST2(stmt, Assign, .src, Borrow, .type != HIR::BorrowType::Shared);
                 },
                                                                 [&](auto loc, const auto& term) -> bool {
-                    return check_invalidates_lvalue(term, src, src_copy);
+                    return checkInvalidatesLvalue(term, src, src_copy);
                 }
                                                             );
                 DEBUG("invalidated = " << invalidated);
@@ -6133,7 +6133,7 @@ bool MIROptimiseDeTemporarySingleSetAndUse(::MIR::TypeResolve& state, ::MIR::Fun
                 })) {
                     // If there are any move ops between the set and the usage, invalidate
                     bool stop = false;
-                    auto check_cb = [&](const MIR::LValue& lv, ValUsage vu) {
+                    auto checkCb = [&](const MIR::LValue& lv, ValUsage vu) {
                         if (lv == this_var) {
                             stop = true;
                             return false;
@@ -6149,11 +6149,11 @@ bool MIROptimiseDeTemporarySingleSetAndUse(::MIR::TypeResolve& state, ::MIR::Fun
                         return false;
                     };
                     invalidated = IterPathRes::Complete != iter_path(fcn, set_loc_next, use_loc_inc, [&](auto loc, const auto& stmt) -> bool {
-                        return visit_mir_lvalues(stmt, check_cb);
+                        return visit_mir_lvalues(stmt, checkCb);
                     }, [&](auto loc, const auto& term) -> bool {
                         return (term.is_Call() && !visit_mir_lvalues(term, [&](const MIR::LValue& lv, ValUsage vu) {
                             return lv == this_var;
-                        })) || visit_mir_lvalues(term, check_cb);
+                        })) || visit_mir_lvalues(term, checkCb);
                     });
                     DEBUG("invalidated = " << invalidated);
                 }
@@ -6174,7 +6174,7 @@ bool MIROptimiseDeTemporarySingleSetAndUse(::MIR::TypeResolve& state, ::MIR::Fun
                     };
                     if (slot.use_loc.stmt_idx < use_bb.statements.size()) {
                         auto& use_stmt = use_bb.statements[slot.use_loc.stmt_idx];
-                        DEBUG("Replace " << this_var << " with " << src << " in BB" << slot.use_loc.bb_idx << "/" << slot.use_loc.stmt_idx << " " << use_stmt);
+                        DEBUG("Replace " << this_var << " with " << src << " in BB" << slot.use_loc.bbIdx << "/" << slot.use_loc.stmt_idx << " " << use_stmt);
                         bool found = visit_mir_lvalues_mut(use_stmt, replace_cb);
                         if (!found) {
                             DEBUG("Can't find use of " << this_var << " in " << use_stmt);
@@ -6302,7 +6302,7 @@ bool MIROptimiseDeTemporaryBorrows(::MIR::TypeResolve& state, ::MIR::Function& f
         }
 
         // Check that the source was a borrow statement
-        auto& src_bb = fcn.blocks[slot.set_loc.bb_idx];
+        auto& src_bb = fcn.blocks[slot.set_loc.bbIdx];
         if (!(slot.set_loc.stmt_idx < src_bb.statements.size() && TU_TEST1(src_bb.statements[slot.set_loc.stmt_idx], Assign, .src.is_Borrow()))) {
             DEBUG(this_var << " - Source is not a borrow op");
             continue;
@@ -6354,12 +6354,12 @@ bool MIROptimiseDeTemporaryBorrows(::MIR::TypeResolve& state, ::MIR::Function& f
             return false;
         };
         for (bool stop = false; !stop;) {
-            auto& cur_bb = fcn.blocks[cur_loc.bb_idx];
+            auto& cur_bb = fcn.blocks[cur_loc.bbIdx];
             for (; cur_loc.stmt_idx < cur_bb.statements.size(); cur_loc.stmt_idx++) {
                 auto& stmt = cur_bb.statements[cur_loc.stmt_idx];
                 DEBUG(cur_loc << " " << stmt);
                 // Check for invalidation (actual check done before replacement)
-                bool invalidates = check_invalidates_lvalue(stmt, src_lv, src_copy);
+                bool invalidates = checkInvalidatesLvalue(stmt, src_lv, src_copy);
                 if (invalidates) {
                     // Invalidated, stop here.
                     DEBUG(this_var << " - Source invalidated @ " << cur_loc << " in " << stmt);
@@ -6383,7 +6383,7 @@ bool MIROptimiseDeTemporaryBorrows(::MIR::TypeResolve& state, ::MIR::Function& f
                 break;
             }
             // Check for invalidation
-            if (check_invalidates_lvalue(cur_bb.terminator, src_lv, src_copy)) {
+            if (checkInvalidatesLvalue(cur_bb.terminator, src_lv, src_copy)) {
                 DEBUG(this_var << " - Source invalidated @ " << cur_loc << " in " << cur_bb.terminator);
                 stop = true;
                 break;
@@ -6420,7 +6420,7 @@ bool MIROptimiseDeTemporaryBorrows(::MIR::TypeResolve& state, ::MIR::Function& f
             src_bb.statements[slot.set_loc.stmt_idx] = ::MIR::Statement();
             for (const auto& drop_loc : slot.drop_locs) {
                 DEBUG(this_var << " - Drop at " << drop_loc);
-                auto& drop_bb = fcn.blocks[drop_loc.bb_idx];
+                auto& drop_bb = fcn.blocks[drop_loc.bbIdx];
                 MIR_ASSERT(state, drop_loc.stmt_idx == drop_bb.statements.size() && drop_bb.terminator.is_Drop(), "Recorded drop is no longer a terminator");
                 auto target = drop_bb.terminator.as_Drop().target;
                 drop_bb.terminator = ::MIR::Terminator::make_Goto(target);
@@ -6520,17 +6520,17 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(::MIR::TypeResolve& state, ::MIR::Fu
                 incoming_edges[target]++;
             });
         }
-        std::vector<unsigned int> acyclic_blocks;
-        acyclic_blocks.reserve(fcn.blocks.size());
+        std::vector<unsigned int> acyclicBlocks;
+        acyclicBlocks.reserve(fcn.blocks.size());
         for (unsigned int i = 0; i < incoming_edges.size(); i++) {
             if (incoming_edges[i] == 0) {
-                acyclic_blocks.push_back(i);
+                acyclicBlocks.push_back(i);
             }
         }
-        for (size_t i = 0; i < acyclic_blocks.size(); i++) {
-            visit_terminator_target(fcn.blocks[acyclic_blocks[i]].terminator, [&](const auto& target) {
+        for (size_t i = 0; i < acyclicBlocks.size(); i++) {
+            visit_terminator_target(fcn.blocks[acyclicBlocks[i]].terminator, [&](const auto& target) {
                 if (--incoming_edges[target] == 0) {
-                    acyclic_blocks.push_back(target);
+                    acyclicBlocks.push_back(target);
                 }
             });
         }
@@ -6552,9 +6552,9 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(::MIR::TypeResolve& state, ::MIR::Fu
                 visited[root_idx] = true;
                 stack.push_back(root_idx);
                 while (!stack.empty()) {
-                    auto bb_idx = stack.back();
+                    auto bbIdx = stack.back();
                     stack.pop_back();
-                    auto& bb = fcn.blocks[bb_idx];
+                    auto& bb = fcn.blocks[bbIdx];
                     bool is_loop = false;
                     visit_terminator_target(bb.terminator, [&](const ::MIR::BasicBlockId& idx) {
                         if (idx == root_idx) {
@@ -6573,15 +6573,15 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(::MIR::TypeResolve& state, ::MIR::Fu
             }
         } vs{fcn};
 
-        if (acyclic_blocks.size() != fcn.blocks.size()) {
+        if (acyclicBlocks.size() != fcn.blocks.size()) {
             std::vector<bool> visited(fcn.blocks.size());
             std::vector<bool> loops(fcn.blocks.size());
             for (auto& poss : possible) {
-                if (!visited[poss.pos.bb_idx]) {
-                    visited[poss.pos.bb_idx] = true;
-                    loops[poss.pos.bb_idx] = vs.does_block_loop(poss.pos.bb_idx);
+                if (!visited[poss.pos.bbIdx]) {
+                    visited[poss.pos.bbIdx] = true;
+                    loops[poss.pos.bbIdx] = vs.does_block_loop(poss.pos.bbIdx);
                 }
-                poss.used |= loops[poss.pos.bb_idx];
+                poss.used |= loops[poss.pos.bbIdx];
             }
         }
     }
@@ -6652,7 +6652,7 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(::MIR::TypeResolve& state, ::MIR::Fu
         source_slots.insert(source);
         auto next = replacements.find(source);
         replacements[destination] = next == replacements.end() ? source : next->second;
-        fcn.blocks[it->pos.bb_idx].statements[it->pos.stmt_idx] = ::MIR::Statement();
+        fcn.blocks[it->pos.bbIdx].statements[it->pos.stmt_idx] = ::MIR::Statement();
     }
     for (auto& blk : fcn.blocks) {
         for (auto& stmt : blk.statements) {
@@ -6708,15 +6708,15 @@ bool MIROptimiseDeTemporary(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
     changed |= MIROptimiseDeTemporaryReborrowOfUnused(state, fcn);
 
     // OLD ALGORITHM.
-    for (unsigned int bb_idx = 0; bb_idx < fcn.blocks.size(); bb_idx++) {
-        auto& bb = fcn.blocks[bb_idx];
+    for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
+        auto& bb = fcn.blocks[bbIdx];
         ::std::map<unsigned, unsigned> local_assignments; // Local number -> statement index
         // TODO: Keep track of what variables would invalidate a local (and compound on assignment)
         ::std::vector<unsigned> statements_to_remove; // List of statements that have to be removed
 
         // ----- Helper closures -----
         // > Check if a recorded assignment is no longer valid.
-        auto cb_check_invalidate = [&](const ::MIR::LValue& lv, ValUsage vu) {
+        auto cbCheckInvalidate = [&](const ::MIR::LValue& lv, ValUsage vu) {
             for (auto it = local_assignments.begin(); it != local_assignments.end();) {
                 bool invalidated = false;
                 const auto& src_rvalue = bb.statements[it->second].as_Assign().src;
@@ -6763,7 +6763,7 @@ bool MIROptimiseDeTemporary(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
             return false;
         };
         // ^^^ Check for invalidations
-        auto cb_apply_replacements = [&](auto& top_lv, auto top_usage) {
+        auto cbApplyReplacements = [&](auto& top_lv, auto top_usage) {
             // NOTE: Visits only the top-level LValues
             // - The inner `visit_mir_lvalue_mut` handles sub-values
 
@@ -6779,7 +6779,7 @@ bool MIROptimiseDeTemporary(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
                     const auto& new_val = bb.statements[it->second].as_Assign().src.as_Use();
                     // - Copy? All is good.
                     if (state.lvalue_is_copy(ilv)) {
-                        top_lv = new_val.clone_wrapped(top_lv.wrappers.begin(), top_lv.wrappers.end());
+                        top_lv = new_val.cloneWrapped(top_lv.wrappers.begin(), top_lv.wrappers.end());
                         DEBUG(state << "> Replace (and keep) Local(" << it->first << ") with " << new_val);
                         changed = true;
                     }
@@ -6809,17 +6809,17 @@ bool MIROptimiseDeTemporary(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
         //  > Delete entry when source is mutated or invalidated (moved)
         for (unsigned int stmt_idx = 0; stmt_idx < bb.statements.size(); stmt_idx++) {
             auto& stmt = bb.statements[stmt_idx];
-            state.set_cur_stmt(bb_idx, stmt_idx);
+            state.set_cur_stmt(bbIdx, stmt_idx);
             DEBUG(state << stmt);
 
             // - Check if this statement mutates or borrows a recorded local
             //  > (meaning that the slot isn't a temporary)
             // - Check if this statement mutates or moves the source
             //  > (thus making it invalid to move the source forwards)
-            visit_mir_lvalues(stmt, cb_check_invalidate);
+            visit_mir_lvalues(stmt, cbCheckInvalidate);
 
             // - Apply known relacements
-            visit_mir_lvalues_mut(stmt, cb_apply_replacements);
+            visit_mir_lvalues_mut(stmt, cbApplyReplacements);
 
             // - Check if this is a new assignment
             if (stmt.is_Assign() && stmt.as_Assign().dst.is_Local() && stmt.as_Assign().src.is_Use()) {
@@ -6841,13 +6841,13 @@ bool MIROptimiseDeTemporary(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
         } // for(stmt in bb.statements)
 
         // TERMINATOR
-        state.set_cur_stmt_term(bb_idx);
+        state.set_cur_stmt_term(bbIdx);
         DEBUG(state << bb.terminator);
         // > Check for invalidations (e.g. move of a source value)
-        visit_mir_lvalues(bb.terminator, cb_check_invalidate);
+        visit_mir_lvalues(bb.terminator, cbCheckInvalidate);
         // > THEN check for replacements
         if (!bb.terminator.is_Switch()) {
-            visit_mir_lvalues_mut(bb.terminator, cb_apply_replacements);
+            visit_mir_lvalues_mut(bb.terminator, cbApplyReplacements);
         }
 
         // Remove assignments
@@ -6873,34 +6873,34 @@ bool MIROptimiseCommonStatements(::MIR::TypeResolve& state, ::MIR::Function& fcn
     bool changed = false;
     TRACE_FUNCTION_FR("", changed);
 
-    for (size_t bb_idx = 0; bb_idx < fcn.blocks.size(); bb_idx++) {
-        state.set_cur_stmt(bb_idx, 0);
+    for (size_t bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
+        state.set_cur_stmt(bbIdx, 0);
 
         bool skip = false;
         ::std::vector<size_t> sources;
         // Find source blocks
-        for (size_t bb2_idx = 0; bb2_idx < fcn.blocks.size() && !skip; bb2_idx++) {
-            const auto& blk = fcn.blocks[bb2_idx];
+        for (size_t bb2Idx = 0; bb2Idx < fcn.blocks.size() && !skip; bb2Idx++) {
+            const auto& blk = fcn.blocks[bb2Idx];
             // TODO: Handle non-Goto branches? (e.g. calls)
-            if (blk.terminator.is_Goto() && blk.terminator.as_Goto() == bb_idx) {
+            if (blk.terminator.is_Goto() && blk.terminator.as_Goto() == bbIdx) {
                 if (blk.statements.empty()) {
-                    DEBUG(state << " BB" << bb2_idx << " empty");
+                    DEBUG(state << " BB" << bb2Idx << " empty");
                     skip = true;
                     break;
                 }
                 if (!sources.empty()) {
                     if (blk.statements.back() != fcn.blocks[sources.front()].statements.back()) {
-                        DEBUG(state << " BB" << bb2_idx << " doesn't end with " << fcn.blocks[sources.front()].statements.back() << " instead " << blk.statements.back());
+                        DEBUG(state << " BB" << bb2Idx << " doesn't end with " << fcn.blocks[sources.front()].statements.back() << " instead " << blk.statements.back());
                         skip = true;
                         break;
                     }
                 }
-                sources.push_back(bb2_idx);
+                sources.push_back(bb2Idx);
             } else {
                 visit_terminator_target(blk.terminator, [&](const auto& dst_idx) {
                     // If this terminator points to the current BB, don't attempt to merge
-                    if (dst_idx == bb_idx) {
-                        DEBUG(state << " BB" << bb2_idx << " doesn't end Goto - instead " << blk.terminator);
+                    if (dst_idx == bbIdx) {
+                        DEBUG(state << " BB" << bb2Idx << " doesn't end Goto - instead " << blk.terminator);
                         skip = true;
                     }
                 });
@@ -6912,11 +6912,11 @@ bool MIROptimiseCommonStatements(::MIR::TypeResolve& state, ::MIR::Function& fcn
 
             // Found a common assignment, add to the start and remove from sources.
             auto stmt = ::std::move(fcn.blocks[sources.front()].statements.back());
-            MIR_DEBUG(state, "Move common final statements from " << sources << " to " << bb_idx << " - " << stmt);
+            MIR_DEBUG(state, "Move common final statements from " << sources << " to " << bbIdx << " - " << stmt);
             for (auto idx : sources) {
                 fcn.blocks[idx].statements.pop_back();
             }
-            fcn.blocks[bb_idx].statements.insert(fcn.blocks[bb_idx].statements.begin(), ::std::move(stmt));
+            fcn.blocks[bbIdx].statements.insert(fcn.blocks[bbIdx].statements.begin(), ::std::move(stmt));
         }
     }
     return changed;
@@ -7021,7 +7021,7 @@ bool MIROptimiseUnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
     TRACE_FUNCTION_FR("", changed);
 
     struct H {
-        static size_t block_hash(const ::MIR::BasicBlock& block) {
+        static size_t blockHash(const ::MIR::BasicBlock& block) {
             size_t rv = block.statements.size();
             auto add = [&](size_t v) {
                 rv ^= v + 0x9e3779b9 + (rv << 6) + (rv >> 2);
@@ -7036,7 +7036,7 @@ bool MIROptimiseUnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
             return rv;
         }
 
-        static bool blocks_equal(const ::MIR::BasicBlock& a, const ::MIR::BasicBlock& b) {
+        static bool blocksEqual(const ::MIR::BasicBlock& a, const ::MIR::BasicBlock& b) {
             if (a.is_cleanup != b.is_cleanup) {
                 return false;
             }
@@ -7102,7 +7102,7 @@ bool MIROptimiseUnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
                         if (ae.slot != be.slot) {
                             return false;
                         }
-                        if (ae.bit_index != be.bit_index) {
+                        if (ae.bitIndex != be.bitIndex) {
                             return false;
                         }
                     }
@@ -7113,7 +7113,7 @@ bool MIROptimiseUnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
                         if (ae.slot != be.slot) {
                             return false;
                         }
-                        if (ae.bit_index != be.bit_index) {
+                        if (ae.bitIndex != be.bitIndex) {
                             return false;
                         }
                     }
@@ -7131,24 +7131,24 @@ bool MIROptimiseUnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
     // Locate duplicate blocks and replace
     ::std::map<unsigned int, unsigned int> replacements;
     ::std::unordered_map<size_t, ::std::vector<unsigned int>> candidates;
-    for (unsigned int bb_idx = 0; bb_idx < fcn.blocks.size(); bb_idx++) {
-        if (fcn.blocks[bb_idx].terminator.tag() == ::MIR::Terminator::TAGDEAD) {
+    for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
+        if (fcn.blocks[bbIdx].terminator.tag() == ::MIR::Terminator::TAGDEAD) {
             continue;
         }
-        if (fcn.blocks[bb_idx].terminator.is_Incomplete() && fcn.blocks[bb_idx].statements.size() == 0) {
+        if (fcn.blocks[bbIdx].terminator.is_Incomplete() && fcn.blocks[bbIdx].statements.size() == 0) {
             continue;
         }
-        auto& bucket = candidates[H::block_hash(fcn.blocks[bb_idx])];
+        auto& bucket = candidates[H::blockHash(fcn.blocks[bbIdx])];
         bool found = false;
         for (auto candidate : bucket) {
-            if (H::blocks_equal(fcn.blocks[candidate], fcn.blocks[bb_idx])) {
-                replacements[bb_idx] = candidate;
+            if (H::blocksEqual(fcn.blocks[candidate], fcn.blocks[bbIdx])) {
+                replacements[bbIdx] = candidate;
                 found = true;
                 break;
             }
         }
         if (!found) {
-            bucket.push_back(bb_idx);
+            bucket.push_back(bbIdx);
         }
     }
 
@@ -7188,16 +7188,16 @@ bool MIROptimiseUnifyBlocks(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
 // TODO: Is this needed now that SplitAggregates exists?
 // --------------------------------------------------------------------
 bool MIROptimisePropagateKnownValues(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
-    bool change_happend = false;
-    TRACE_FUNCTION_FR("", change_happend);
+    bool changeHappend = false;
+    TRACE_FUNCTION_FR("", changeHappend);
     // 1. Determine reference counts for blocks (allows reversing up BB tree)
-    ::std::vector<size_t> block_origins(fcn.blocks.size(), SIZE_MAX);
+    ::std::vector<size_t> blockOrigins(fcn.blocks.size(), SIZE_MAX);
     {
-        ::std::vector<unsigned int> block_uses(fcn.blocks.size());
+        ::std::vector<unsigned int> blockUses(fcn.blocks.size());
         ::std::vector<bool> visited(fcn.blocks.size());
         ::std::vector<::MIR::BasicBlockId> to_visit;
         to_visit.push_back(0);
-        block_uses[0]++;
+        blockUses[0]++;
         while (to_visit.size() > 0) {
             auto bb = to_visit.back();
             to_visit.pop_back();
@@ -7211,12 +7211,12 @@ bool MIROptimisePropagateKnownValues(::MIR::TypeResolve& state, ::MIR::Function&
                 if (!visited[idx]) {
                     to_visit.push_back(idx);
                 }
-                if (block_uses[idx] == 0) {
-                    block_origins[idx] = bb;
+                if (blockUses[idx] == 0) {
+                    blockOrigins[idx] = bb;
                 } else {
-                    block_origins[idx] = SIZE_MAX;
+                    blockOrigins[idx] = SIZE_MAX;
                 }
-                block_uses[idx]++;
+                blockUses[idx]++;
             });
         }
     }
@@ -7228,20 +7228,20 @@ bool MIROptimisePropagateKnownValues(::MIR::TypeResolve& state, ::MIR::Function&
         TRACE_FUNCTION_F(slot_lvalue << "." << field << " BB" << start_bb_idx << "/" << start_stmt_idx);
         bool slot_copy = state.lvalue_is_copy(slot_lvalue);
         // NOTE: An infinite loop is (theoretically) impossible.
-        auto bb_idx = start_bb_idx;
+        auto bbIdx = start_bb_idx;
         auto stmt_idx = start_stmt_idx;
         for (;;) {
-            const auto& bb = fcn.blocks[bb_idx];
+            const auto& bb = fcn.blocks[bbIdx];
             while (stmt_idx--) {
                 if (stmt_idx == bb.statements.size()) {
-                    DEBUG("BB" << bb_idx << "/TERM - " << bb.terminator);
-                    if (check_invalidates_lvalue(bb.terminator, slot_lvalue, slot_copy)) {
+                    DEBUG("BB" << bbIdx << "/TERM - " << bb.terminator);
+                    if (checkInvalidatesLvalue(bb.terminator, slot_lvalue, slot_copy)) {
                         return nullptr;
                     }
                     continue;
                 }
                 const auto& stmt = bb.statements[stmt_idx];
-                DEBUG("BB" << bb_idx << "/" << stmt_idx << " - " << stmt);
+                DEBUG("BB" << bbIdx << "/" << stmt_idx << " - " << stmt);
                 if (const auto* se = stmt.opt_Assign()) {
                     if (se->dst == slot_lvalue) {
                         if (!se->src.is_Tuple()) {
@@ -7256,54 +7256,54 @@ bool MIROptimisePropagateKnownValues(::MIR::TypeResolve& state, ::MIR::Function&
                         const auto& src_lval = src_param.as_LValue();
                         bool src_copy = state.lvalue_is_copy(src_lval);
                         // Visit all statements between the start and here, checking for mutation of this value.
-                        auto end_bb_idx = bb_idx;
+                        auto end_bb_idx = bbIdx;
                         auto end_stmt_idx = stmt_idx;
-                        bb_idx = start_bb_idx;
+                        bbIdx = start_bb_idx;
                         stmt_idx = start_stmt_idx;
                         for (;;) {
-                            const auto& bb = fcn.blocks[bb_idx];
+                            const auto& bb = fcn.blocks[bbIdx];
                             while (stmt_idx--) {
-                                if (bb_idx == end_bb_idx && stmt_idx == end_stmt_idx) {
+                                if (bbIdx == end_bb_idx && stmt_idx == end_stmt_idx) {
                                     return &src_lval;
                                 }
                                 if (stmt_idx == bb.statements.size()) {
-                                    DEBUG("BB" << bb_idx << "/TERM - " << bb.terminator);
-                                    if (check_invalidates_lvalue(bb.terminator, src_lval, src_copy)) {
+                                    DEBUG("BB" << bbIdx << "/TERM - " << bb.terminator);
+                                    if (checkInvalidatesLvalue(bb.terminator, src_lval, src_copy)) {
                                         // Invalidated: Return.
                                         return nullptr;
                                     }
                                     continue;
                                 }
-                                if (check_invalidates_lvalue(bb.statements[stmt_idx], src_lval, src_copy)) {
+                                if (checkInvalidatesLvalue(bb.statements[stmt_idx], src_lval, src_copy)) {
                                     // Invalidated: Return.
                                     return nullptr;
                                 }
                             }
-                            assert(block_origins[bb_idx] != SIZE_MAX);
-                            bb_idx = block_origins[bb_idx];
-                            stmt_idx = fcn.blocks[bb_idx].statements.size() + 1;
+                            assert(blockOrigins[bbIdx] != SIZE_MAX);
+                            bbIdx = blockOrigins[bbIdx];
+                            stmt_idx = fcn.blocks[bbIdx].statements.size() + 1;
                         }
                         throw "";
                     }
                 }
 
                 // Check if the slot is invalidated (mutated)
-                if (check_invalidates_lvalue(stmt, slot_lvalue, slot_copy)) {
+                if (checkInvalidatesLvalue(stmt, slot_lvalue, slot_copy)) {
                     return nullptr;
                 }
             }
-            if (block_origins[bb_idx] == SIZE_MAX) {
+            if (blockOrigins[bbIdx] == SIZE_MAX) {
                 break;
             }
-            bb_idx = block_origins[bb_idx];
-            stmt_idx = fcn.blocks[bb_idx].statements.size() + 1;
+            bbIdx = blockOrigins[bbIdx];
+            stmt_idx = fcn.blocks[bbIdx].statements.size() + 1;
         }
         return nullptr;
     };
     for (auto& block : fcn.blocks) {
-        size_t bb_idx = &block - &fcn.blocks.front();
+        size_t bbIdx = &block - &fcn.blocks.front();
         for (size_t i = 0; i < block.statements.size(); i++) {
-            state.set_cur_stmt(bb_idx, i);
+            state.set_cur_stmt(bbIdx, i);
             DEBUG(state << block.statements[i]);
             visit_mir_lvalues_mut(block.statements[i], [&](::MIR::LValue& lv, auto vu) {
                 if (vu == ValUsage::Read && lv.wrappers.size() > 1 && lv.wrappers.front().is_Field() && lv.root.is_Local()) {
@@ -7318,12 +7318,12 @@ bool MIROptimisePropagateKnownValues(::MIR::TypeResolve& state, ::MIR::Function&
                         DEBUG(state << "- not Copy, can't optimise");
                         return false;
                     }
-                    const auto* source_lvalue = get_field(inner_lv, field_index, bb_idx, i);
+                    const auto* source_lvalue = get_field(inner_lv, field_index, bbIdx, i);
                     if (source_lvalue) {
                         if (outer_lv != *source_lvalue) {
                             DEBUG(state << "Source is " << *source_lvalue);
-                            lv = source_lvalue->clone_wrapped(lv.wrappers.begin() + 1, lv.wrappers.end());
-                            change_happend = true;
+                            lv = source_lvalue->cloneWrapped(lv.wrappers.begin() + 1, lv.wrappers.end());
+                            changeHappend = true;
                         } else {
                             DEBUG(state << "No change");
                         }
@@ -7334,7 +7334,7 @@ bool MIROptimisePropagateKnownValues(::MIR::TypeResolve& state, ::MIR::Function&
             });
         }
     }
-    return change_happend;
+    return changeHappend;
 }
 
 // --------------------------------------------------------------------
@@ -7386,21 +7386,21 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
                 changed = true;
             }
         } else if (tef.name == "align_of" || tef.name == "min_align_of") {
-            size_t align_val = 0;
-            if (TargetGetAlignOf(state.sp, state.mResolve, tef.params.types.at(0), align_val)) {
-                DEBUG("align_of = " << align_val);
-                auto val = ::MIR::Constant::make_Uint({U128(align_val), ::HIR::CoreType::Usize});
+            size_t alignVal = 0;
+            if (TargetGetAlignOf(state.sp, state.mResolve, tef.params.types.at(0), alignVal)) {
+                DEBUG("align_of = " << alignVal);
+                auto val = ::MIR::Constant::make_Uint({U128(alignVal), ::HIR::CoreType::Usize});
                 bb.statements.push_back(::MIR::Statement::make_Assign({mv$(te.ret_val), mv$(val)}));
                 bb.terminator = ::MIR::Terminator::make_Goto(te.ret_block);
                 changed = true;
             }
         } else if (tef.name == "min_align_of_val") {
-            size_t align_val = 0;
+            size_t alignVal = 0;
             size_t size_val = 0;
             // Note: Trait object returns align_val = 0 (slice-based types have an alignment)
-            if (TargetGetSizeAndAlignOf(state.sp, state.mResolve, tef.params.types.at(0), size_val, align_val) && align_val > 0) {
-                DEBUG("min_align_of_val = " << align_val);
-                auto val = ::MIR::Constant::make_Uint({U128(align_val), ::HIR::CoreType::Usize});
+            if (TargetGetSizeAndAlignOf(state.sp, state.mResolve, tef.params.types.at(0), size_val, alignVal) && alignVal > 0) {
+                DEBUG("min_align_of_val = " << alignVal);
+                auto val = ::MIR::Constant::make_Uint({U128(alignVal), ::HIR::CoreType::Usize});
                 bb.statements.push_back(::MIR::Statement::make_Assign({mv$(te.ret_val), mv$(val)}));
                 bb.terminator = ::MIR::Terminator::make_Goto(te.ret_block);
                 changed = true;
@@ -7456,7 +7456,7 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
         ::std::map<::MIR::LValue, unsigned> known_values_var;
         ::std::map<unsigned, bool> known_drop_flags;
 
-        auto check_lv = [&](const ::MIR::LValue& lv) -> ::MIR::Constant {
+        auto checkLv = [&](const ::MIR::LValue& lv) -> ::MIR::Constant {
             auto it = known_values.find(lv);
             if (it != known_values.end()) {
                 DEBUG(state << "Value " << lv << " known to be " << it->second);
@@ -7533,9 +7533,9 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
             // - Use a nullptr ItemAddr to indicate this
             return ::MIR::Constant::make_ItemAddr({});
         };
-        auto check_param = [&](::MIR::Param& p) {
+        auto checkParam = [&](::MIR::Param& p) {
             if (const auto* pe = p.opt_LValue()) {
-                auto nv = check_lv(*pe);
+                auto nv = checkLv(*pe);
                 if (nv.is_ItemAddr() && !nv.as_ItemAddr()) {
                     // ItemAddr with a nullptr inner means "no expansion"
                 } else {
@@ -7662,7 +7662,7 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
 
                 TU_MATCH_HDRA( (e->src), {)
                 TU_ARMA(Use, se) {
-                        auto nv = check_lv(se);
+                        auto nv = checkLv(se);
                         if (nv.is_ItemAddr() && !nv.as_ItemAddr()) {
                             // ItemAddr with a nullptr inner means "no expansion"
                         } else {
@@ -7674,7 +7674,7 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
                         // Ignore (knowledge done below)
                     }
                     TU_ARMA(SizedArray, se) {
-                        check_param(se.val);
+                        checkParam(se.val);
                     }
                     TU_ARMA(Borrow, se) {
                         // Shared borrows of statics can be better represented with the ItemAddr constant
@@ -7690,7 +7690,7 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
                         ::MIR::Constant new_value;
 
                         // If casting a number to a number, do the cast and
-                        auto nv = check_lv(se.val);
+                        auto nv = checkLv(se.val);
                         if (!nv.is_ItemAddr()) {
                             if (const auto* te = se.type->opt_Primitive()) {
                                 switch (*te) {
@@ -7819,8 +7819,8 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
                         }
                     }
                     TU_ARMA(BinOp, se) {
-                        check_param(se.val_l);
-                        check_param(se.val_r);
+                        checkParam(se.val_l);
+                        checkParam(se.val_r);
 
                         if (se.val_l.is_Constant() && se.val_r.is_Constant()) {
                             const auto& val_l = se.val_l.as_Constant();
@@ -8277,31 +8277,31 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
                         // This avoids issues with cleanup when optimise is run first
                         if (TU_TEST2(se.meta_val, Constant, , ItemAddr, .get() == nullptr)) {
                         } else {
-                            check_param(se.ptr_val);
-                            check_param(se.meta_val);
+                            checkParam(se.ptr_val);
+                            checkParam(se.meta_val);
                         }
                     }
                     TU_ARMA(Tuple, se) {
                         for (auto& p : se.vals) {
-                            check_param(p);
+                            checkParam(p);
                         }
                     }
                     TU_ARMA(Array, se) {
                         for (auto& p : se.vals) {
-                            check_param(p);
+                            checkParam(p);
                         }
                     }
                     TU_ARMA(UnionVariant, se) {
-                        check_param(se.val);
+                        checkParam(se.val);
                     }
                     TU_ARMA(EnumVariant, se) {
                         for (auto& p : se.vals) {
-                            check_param(p);
+                            checkParam(p);
                         }
                     }
                     TU_ARMA(Struct, se) {
                         for (auto& p : se.vals) {
-                            check_param(p);
+                            checkParam(p);
                         }
                     }
                 }
@@ -8396,7 +8396,7 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
                         if (it->second.is_Const() || it->second.is_Generic()) {
                         } else {
                             MIR_ASSERT(state, it->second.is_Bool(), "Terminator::If with known value not Bool - " << it->second);
-                            auto new_bb = (it->second.as_Bool().v ? te.bb_true : te.bb_false);
+                            auto new_bb = (it->second.as_Bool().v ? te.bbTrue : te.bbFalse);
                             DEBUG(state << "Convert " << bb.terminator << " into Goto(" << new_bb << ") because condition known to be " << it->second);
                             bb.terminator = ::MIR::Terminator::make_Goto(new_bb);
 
@@ -8407,7 +8407,7 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
                 break;
                 TU_ARM(bb.terminator, Call, te) {
                     for (auto& a : te.args) {
-                        check_param(a);
+                        checkParam(a);
                     }
                 }
                 break;
@@ -8465,7 +8465,7 @@ bool MIROptimiseConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
         }
         if (val_known) {
             DEBUG("bb" << bbidx << ": Condition known to be " << known_val);
-            bb.terminator = ::MIR::Terminator::make_Goto(known_val ? te.bb_true : te.bb_false);
+            bb.terminator = ::MIR::Terminator::make_Goto(known_val ? te.bbTrue : te.bbFalse);
             changed = true;
         }
     }
@@ -8513,7 +8513,7 @@ bool MIROptimiseSplitAggregates(::MIR::TypeResolve& state, ::MIR::Function& fcn)
 
     // 1. Find locals created from constructors (struct/tuple)
     for (const auto& block : fcn.blocks) {
-        size_t bb_idx = &block - &fcn.blocks.front();
+        size_t bbIdx = &block - &fcn.blocks.front();
         for (size_t i = 0; i < block.statements.size(); i++) {
             const auto& stmt = block.statements[i];
             if (const auto* se = stmt.opt_Assign()) {
@@ -8541,8 +8541,8 @@ bool MIROptimiseSplitAggregates(::MIR::TypeResolve& state, ::MIR::Function& fcn)
                     if (sse->vals.size() == 0) {
                         continue;
                     }
-                    DEBUG("> BB" << bb_idx << "/" << i << ": POSSIBLE " << stmt);
-                    potentials.insert(std::make_pair(se->dst.as_Local(), Potential(bb_idx, i, sse->index)));
+                    DEBUG("> BB" << bbIdx << "/" << i << ": POSSIBLE " << stmt);
+                    potentials.insert(std::make_pair(se->dst.as_Local(), Potential(bbIdx, i, sse->index)));
                     continue;
                 }
                 // NOTE: Union variants need special handling in the replacement
@@ -8551,8 +8551,8 @@ bool MIROptimiseSplitAggregates(::MIR::TypeResolve& state, ::MIR::Function& fcn)
                 }
 
                 // Found a potential.
-                DEBUG("> BB" << bb_idx << "/" << i << ": POSSIBLE " << stmt);
-                potentials.insert(std::make_pair(se->dst.as_Local(), Potential(bb_idx, i)));
+                DEBUG("> BB" << bbIdx << "/" << i << ": POSSIBLE " << stmt);
+                potentials.insert(std::make_pair(se->dst.as_Local(), Potential(bbIdx, i)));
             }
         }
     }
@@ -8613,12 +8613,12 @@ bool MIROptimiseSplitAggregates(::MIR::TypeResolve& state, ::MIR::Function& fcn)
     // 3. Explode sources into locals
     // NOTE: This needs to handle movement of indexes
     for (auto& p : potentials) {
-        auto bb_idx = p.second.src_bb_idx;
+        auto bbIdx = p.second.src_bb_idx;
         auto stmt_idx = p.second.src_stmt_idx;
-        state.set_cur_stmt(bb_idx, stmt_idx);
-        auto& block = fcn.blocks[bb_idx];
+        state.set_cur_stmt(bbIdx, stmt_idx);
+        auto& block = fcn.blocks[bbIdx];
 
-        DEBUG("- BB" << bb_idx << "/" << stmt_idx << ": " << block.statements[stmt_idx]);
+        DEBUG("- BB" << bbIdx << "/" << stmt_idx << ": " << block.statements[stmt_idx]);
         // Extract the list of values from the existing statement
         std::vector<MIR::Param> vals;
         {
@@ -8663,7 +8663,7 @@ bool MIROptimiseSplitAggregates(::MIR::TypeResolve& state, ::MIR::Function& fcn)
             p.second.replacements[i] = new_local;
             // Set the relevant statement to be an assignment to that new local
             block.statements[stmt_idx + i] = MIR::Statement::make_Assign({MIR::LValue::newLocal(new_local), param_to_rvalue(mv$(vals[i]))});
-            DEBUG("+ BB" << bb_idx << "/" << (stmt_idx + i) << ": " << block.statements[stmt_idx + i]);
+            DEBUG("+ BB" << bbIdx << "/" << (stmt_idx + i) << ": " << block.statements[stmt_idx + i]);
         }
 
         //for(size_t i = 0; i < block.statements.size(); i ++)
@@ -8672,7 +8672,7 @@ bool MIROptimiseSplitAggregates(::MIR::TypeResolve& state, ::MIR::Function& fcn)
         // If this replacement changed the number of statements in this block, update all existing references.
         if (offset > 0) {
             for (auto& other_p : potentials) {
-                if (other_p.second.src_bb_idx == bb_idx && other_p.second.src_stmt_idx > stmt_idx) {
+                if (other_p.second.src_bb_idx == bbIdx && other_p.second.src_stmt_idx > stmt_idx) {
                     other_p.second.src_stmt_idx += offset;
                 }
             }
@@ -8851,7 +8851,7 @@ bool MIROptimisePropagateSingleAssignments(::MIR::TypeResolve& state, ::MIR::Fun
                     DEBUG(state << "[find usage] " << stmt2);
 
                     // Check for invalidation (done first, to avoid cases where the source is moved into a struct)
-                    if (check_invalidates_lvalue(stmt2, e.src.as_Use(), false)) {
+                    if (checkInvalidatesLvalue(stmt2, e.src.as_Use(), false)) {
                         stop = true;
                         DEBUG("Source invalidated");
                         break;
@@ -8879,7 +8879,7 @@ bool MIROptimisePropagateSingleAssignments(::MIR::TypeResolve& state, ::MIR::Fun
                     }
                 }
                 if (!stop) {
-                    if (check_invalidates_lvalue(block.terminator, e.src.as_Use(), false)) {
+                    if (checkInvalidatesLvalue(block.terminator, e.src.as_Use(), false)) {
                         stop = true;
                         DEBUG("Source invalidated in terminator");
                     }
@@ -8955,19 +8955,19 @@ bool MIROptimisePropagateSingleAssignments(::MIR::TypeResolve& state, ::MIR::Fun
                     return false;
                 });
             };
-            for (unsigned int block_idx = 0; block_idx < fcn.blocks.size(); block_idx++) {
-                auto& block = fcn.blocks[block_idx];
+            for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
+                auto& block = fcn.blocks[blockIdx];
                 if (block.terminator.tag() == ::MIR::Terminator::TAGDEAD) {
                     continue;
                 }
                 for (auto& stmt : block.statements) {
-                    state.set_cur_stmt(block_idx, (&stmt - &block.statements.front()));
+                    state.set_cur_stmt(blockIdx, (&stmt - &block.statements.front()));
                     DEBUG(state << stmt);
                     {
                         visit_mir_lvalues_mut(stmt, cb);
                     }
                 }
-                state.set_cur_stmt_term(block_idx);
+                state.set_cur_stmt_term(blockIdx);
                 visit_mir_lvalues_mut(block.terminator, cb);
             }
             MIR_ASSERT(state, replaced > old_replaced, "Temporary eliminations didn't advance");
@@ -9370,7 +9370,7 @@ bool MIROptimiseNoopRemoval(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
             // - Note: Accepts `_0 = &*foo; _1 = _0 as T` where `foo: T`
             if (it->is_Assign() && it->as_Assign().dst.is_Local() && it->as_Assign().src.is_Borrow() && it->as_Assign().src.as_Borrow().val.is_Deref()) {
                 const auto& dst_lv = it->as_Assign().dst;
-                auto src_lv = it->as_Assign().src.as_Borrow().val.clone_unwrapped();
+                auto src_lv = it->as_Assign().src.as_Borrow().val.cloneUnwrapped();
                 // Find the next use of this target lvalue
                 for (auto it2 = it + 1; it2 != bb.statements.end(); ++it2) {
                     // If it's a cast back to the original type, then replace with a direct assignment of the original value
@@ -9384,7 +9384,7 @@ bool MIROptimiseNoopRemoval(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
                             break;
                         }
                     }
-                    if (check_invalidates_lvalue(*it2, src_lv, false)) {
+                    if (checkInvalidatesLvalue(*it2, src_lv, false)) {
                         break;
                     }
                 }
@@ -9408,7 +9408,7 @@ bool MIROptimiseNoopRemoval(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
                             break;
                         }
                     }
-                    if (check_invalidates_lvalue(*it2, src_lv, false)) {
+                    if (checkInvalidatesLvalue(*it2, src_lv, false)) {
                         break;
                     }
                 }
@@ -9437,7 +9437,7 @@ bool MIROptimiseNoopRemoval(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
             }
 
             // `Value = Borrow(Deref(Value))`
-            if (it->is_Assign() && it->as_Assign().src.is_Borrow() && it->as_Assign().src.as_Borrow().val.is_Deref() && it->as_Assign().src.as_Borrow().val.clone_unwrapped() == it->as_Assign().dst) {
+            if (it->is_Assign() && it->as_Assign().src.is_Borrow() && it->as_Assign().src.as_Borrow().val.is_Deref() && it->as_Assign().src.as_Borrow().val.cloneUnwrapped() == it->as_Assign().dst) {
                 DEBUG(state << "Useless assignment (v = &*v), remove - " << *it);
                 it = bb.statements.erase(it);
                 changed = true;
@@ -9490,8 +9490,8 @@ bool MIROptimiseGotoAssign(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
         if (dst_bb.statements.empty()) {
             continue;
         }
-        auto bb_idx = &dst_bb - fcn.blocks.data();
-        state.set_cur_stmt(bb_idx, 0);
+        auto bbIdx = &dst_bb - fcn.blocks.data();
+        state.set_cur_stmt(bbIdx, 0);
         auto& stmt = dst_bb.statements[0];
         if (!stmt.is_Assign()) {
             continue;
@@ -9535,7 +9535,7 @@ bool MIROptimiseGotoAssign(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
             }
             return true;
         });
-        state.set_cur_stmt(bb_idx, 0);
+        state.set_cur_stmt(bbIdx, 0);
         if (n_read > 1 || n_borrow > 0) {
             DEBUG(state << "Source " << src << " is read " << n_read << " times and borrowed " << n_borrow);
             continue;
@@ -9546,38 +9546,38 @@ bool MIROptimiseGotoAssign(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
         std::vector<unsigned> sources;
         unsigned num_used = 0;
         for (const auto& src_bb : fcn.blocks) {
-            unsigned bb_idx = &src_bb - fcn.blocks.data();
+            unsigned bbIdx = &src_bb - fcn.blocks.data();
             bool used = false;
             visit_terminator_target(src_bb.terminator, [&](const auto& tgt) {
                 if (tgt == state.get_cur_block()) {
                     used = true;
-                    sources.push_back(bb_idx);
+                    sources.push_back(bbIdx);
                 }
             });
             if (used) {
                 TU_MATCH_HDRA( (src_bb.terminator), { )
                 TU_ARMA(Goto, e) {
                         if (src_bb.statements.empty()) {
-                            DEBUG(state << "BB" << bb_idx << " empty");
+                            DEBUG(state << "BB" << bbIdx << " empty");
                         } else if (TU_TEST1(src_bb.statements.back(), Assign, .dst == src)) {
-                            DEBUG("BB" << bb_idx << "/" << src_bb.statements.size() << " " << src_bb.statements.back());
+                            DEBUG("BB" << bbIdx << "/" << src_bb.statements.size() << " " << src_bb.statements.back());
                             num_used += 1;
                         } else {
-                            DEBUG("BB" << bb_idx << "/" << src_bb.statements.size() << " " << src_bb.statements.back() << " - Doesn't write");
+                            DEBUG("BB" << bbIdx << "/" << src_bb.statements.size() << " " << src_bb.statements.back() << " - Doesn't write");
                         }
                     }
                     TU_ARMA(Call, e) {
                         if (e.ret_block != state.get_cur_block()) {
-                            DEBUG(state << "BB" << bb_idx << "/TERM " << src_bb.terminator << " - Not return block");
+                            DEBUG(state << "BB" << bbIdx << "/TERM " << src_bb.terminator << " - Not return block");
                         } else if (e.ret_val != src) {
-                            DEBUG(state << "BB" << bb_idx << "/TERM " << src_bb.terminator << " - Doesn't write to source");
+                            DEBUG(state << "BB" << bbIdx << "/TERM " << src_bb.terminator << " - Doesn't write to source");
                         } else {
                             num_used += 1;
                         }
                     }
                     break;
                     default:
-                        DEBUG(state << "BB" << bb_idx << "/TERM " << src_bb.terminator << " - Wrong terminator type");
+                        DEBUG(state << "BB" << bbIdx << "/TERM " << src_bb.terminator << " - Wrong terminator type");
                         break;
                 }
             }
@@ -9594,22 +9594,22 @@ bool MIROptimiseGotoAssign(::MIR::TypeResolve& state, ::MIR::Function& fcn) {
 
         // Time to edit.
         // 1. Update all sources
-        for (auto bb_idx : sources) {
-            auto& src_bb = fcn.blocks[bb_idx];
+        for (auto bbIdx : sources) {
+            auto& src_bb = fcn.blocks[bbIdx];
 
             if (TU_TEST1(src_bb.terminator, Call, .ret_val == src)) {
-                DEBUG("- Source block: BB" << bb_idx << " - term " << src_bb.terminator);
+                DEBUG("- Source block: BB" << bbIdx << " - term " << src_bb.terminator);
                 src_bb.terminator.as_Call().ret_val = dst.clone();
             } else if (!src_bb.statements.empty() && TU_TEST1(src_bb.statements.back(), Assign, .dst == src)) {
-                DEBUG("- Source block: BB" << bb_idx << " - tail " << src_bb.statements.back());
+                DEBUG("- Source block: BB" << bbIdx << " - tail " << src_bb.statements.back());
                 src_bb.statements.back().as_Assign().dst = dst.clone();
             } else {
                 MIR_TODO(state, "Handle copying assignment to source");
             }
             if (!src_bb.statements.empty()) {
-                DEBUG("+- BB" << bb_idx << "/" << (src_bb.statements.size() - 1) << " " << src_bb.statements.back());
+                DEBUG("+- BB" << bbIdx << "/" << (src_bb.statements.size() - 1) << " " << src_bb.statements.back());
             }
-            DEBUG("+- BB" << bb_idx << "/TERM " << src_bb.terminator);
+            DEBUG("+- BB" << bbIdx << "/TERM " << src_bb.terminator);
         }
         // IF the value is `Copy` (i.e. the initial assignment could be expected to survive), then reverse the destination
         // - Can't do this, it's going to cause infinite recursion!
@@ -9682,7 +9682,7 @@ bool MIROptimiseGarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
     visit_blocks(state, fcn, [&](auto bb, const auto& block) {
         visited[bb] = true;
 
-        auto assigned_lval = [&](const ::MIR::LValue& lv) {
+        auto assignedLval = [&](const ::MIR::LValue& lv) {
             // TODO: Consume through indexing/field accesses
             for (const auto& w : lv.wrappers) {
                 if (w.is_Field()) {
@@ -9696,7 +9696,7 @@ bool MIROptimiseGarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
         };
 
         for (const auto& stmt : block.statements) {
-            TU_IFLET(::MIR::Statement, stmt, Assign, e, assigned_lval(e.dst);)
+            TU_IFLET(::MIR::Statement, stmt, Assign, e, assignedLval(e.dst);)
             //else if( const auto* e = stmt.opt_Drop() )
             //{
             //    //if( e->flag_idx != ~0u )
@@ -9704,13 +9704,13 @@ bool MIROptimiseGarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
             //}
             else if (const auto* e = stmt.opt_Asm()) {
                 for (const auto& val : e->outputs) {
-                    assigned_lval(val.second);
+                    assignedLval(val.second);
                 }
             }
             else if (const auto* e = stmt.opt_Asm2()) {
                 for (const auto& p : e->params) {
                     if (p.is_Reg() && p.as_Reg().output) {
-                        assigned_lval(*p.as_Reg().output);
+                        assignedLval(*p.as_Reg().output);
                     }
                 }
             }
@@ -9726,7 +9726,7 @@ bool MIROptimiseGarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
         }
 
         if (const auto* te = block.terminator.opt_Call()) {
-            assigned_lval(te->ret_val);
+            assignedLval(te->ret_val);
         } else if (const auto* te = block.terminator.opt_Drop()) {
             if (te->flag_idx != ~0u) {
                 used_dfs.at(te->flag_idx) = true;
@@ -9873,18 +9873,18 @@ bool MIROptimiseGarbageCollect(::MIR::TypeResolve& state, ::MIR::Function& fcn) 
         visited[bb] = true;
     });
 
-    ::std::vector<unsigned int> block_rewrite_table;
+    ::std::vector<unsigned int> blockRewriteTable;
     for (unsigned int i = 0, j = 0; i < fcn.blocks.size(); i++) {
-        block_rewrite_table.push_back(visited[i] ? j++ : ~0u);
+        blockRewriteTable.push_back(visited[i] ? j++ : ~0u);
     }
     for (unsigned int i = 0; i < fcn.blocks.size(); i++) {
         if (!visited[i]) {
             continue;
         }
         visit_terminator_target_mut(fcn.blocks[i].terminator, [&](auto& target) {
-            MIR_ASSERT(state, target < block_rewrite_table.size(), "Block target out of range - bb" << target);
-            MIR_ASSERT(state, block_rewrite_table[target] != ~0u, "Reachable block targets unreachable bb" << target);
-            target = block_rewrite_table[target];
+            MIR_ASSERT(state, target < blockRewriteTable.size(), "Block target out of range - bb" << target);
+            MIR_ASSERT(state, blockRewriteTable[target] != ~0u, "Reachable block targets unreachable bb" << target);
+            target = blockRewriteTable[target];
         });
     }
 
@@ -9917,8 +9917,8 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pat
     ::std::vector<::std::pair<unsigned, unsigned>> depths(fcn.blocks.size());
 
     struct Todo {
-        size_t bb_idx;
-        unsigned branch_count;
+        size_t bbIdx;
+        unsigned branchCount;
         unsigned level;
     };
 
@@ -9929,22 +9929,22 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const ::HIR::ItemPath& pat
     while (!todo.empty()) {
         auto info = todo.back();
         todo.pop_back();
-        if (visited[info.bb_idx]) {
+        if (visited[info.bbIdx]) {
             continue;
         }
 
-        visited[info.bb_idx] = true;
-        depths[info.bb_idx] = ::std::make_pair(info.branch_count, info.level);
-        const auto& bb = fcn.blocks[info.bb_idx];
+        visited[info.bbIdx] = true;
+        depths[info.bbIdx] = ::std::make_pair(info.branchCount, info.level);
+        const auto& bb = fcn.blocks[info.bbIdx];
 
         TU_MATCHA((bb.terminator), (te),
             (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ),
-            (Goto, todo.push_back(Todo{te, info.branch_count, info.level + 1});),
-            (If, todo.push_back(Todo{te.bb_true, ++branches, info.level + 1}); todo.push_back(Todo{te.bb_false, ++branches, info.level + 1});),
+            (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});),
+            (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});),
             (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.valid_flag != ~0u) todo.push_back(Todo{te.invalid_target, ++branches, info.level + 1});),
-            (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.def_target, info.branch_count, info.level + 1});),
-            (Drop, todo.push_back(Todo{te.target, info.branch_count, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)),
-            (Call, todo.push_back(Todo{te.ret_block, info.branch_count, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)))
+            (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.def_target, info.branchCount, info.level + 1});),
+            (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)),
+            (Call, todo.push_back(Todo{te.ret_block, info.branchCount, info.level + 1}); TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)))
     }
 
     // Sort a list of block indexes by `depths`
@@ -10067,9 +10067,9 @@ void MIROptimiseCrateInlining(const ::HIR::Crate& crate, TransList& list, bool p
             ::HIR::ItemPath ip(s);
 
             if (mono_fcn.code) {
-                did_inline_on_pass |= MIROptimiseInline(resolve, ip, *mono_fcn.code, mono_fcn.arg_tys, mono_fcn.ret_ty, list, opt_level);
+                did_inline_on_pass |= MIROptimiseInline(resolve, ip, *mono_fcn.code, mono_fcn.argTys, mono_fcn.ret_ty, list, opt_level);
 
-                MIRCleanup(resolve, ip, *mono_fcn.code, mono_fcn.arg_tys, mono_fcn.ret_ty);
+                MIRCleanup(resolve, ip, *mono_fcn.code, mono_fcn.argTys, mono_fcn.ret_ty);
             } else if (hir_fcn.mCode) {
                 auto& mir = hir_fcn.mCode.get_mir_or_error_mut(Span());
                 bool did_opt = MIROptimiseInline(resolve, ip, mir, hir_fcn.mArgs, hir_fcn.returnType, list, opt_level);

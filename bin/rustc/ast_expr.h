@@ -488,15 +488,15 @@ namespace AST {
 
     // Closure / Lambda
     struct ExprNodeClosure: public ExprNode {
-        typedef ::std::vector<::std::pair<AST::Pattern, TypeRef>> args_t;
+        typedef ::std::vector<::std::pair<AST::Pattern, TypeRef>> argsT;
 
-        args_t mArgs;
+        argsT mArgs;
         TypeRef returnType;
         ExprNodeP mCode;
         bool isMove;   //< The closure takes ownership of all values
         bool isPinned; //< The closure cannot be moved (this is for generators)
 
-        ExprNodeClosure(args_t args, TypeRef rv, ExprNodeP code, bool is_move, bool is_pinned)
+        ExprNodeClosure(argsT args, TypeRef rv, ExprNodeP code, bool is_move, bool is_pinned)
             : mArgs(::std::move(args))
             , returnType(::std::move(rv))
             , mCode(::std::move(code))

@@ -681,9 +681,9 @@ namespace HIR {
     };
 
     struct ExprNodeClosure: public ExprNode {
-        typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> args_t;
+        typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> argsT;
 
-        args_t mArgs;
+        argsT mArgs;
         ::HIR::TypeRef returnType;
         ::HIR::ExprNodeP mCode;
         bool isMove = false;
@@ -709,7 +709,7 @@ namespace HIR {
                 ::HIR::ValueUsage usage;
             };
 
-            ::std::vector<Capture> captured_vars;
+            ::std::vector<Capture> capturedVars;
         } avuCache;
 
         // Lifetime for captured borrows, filled by lifetime infer pass
@@ -720,7 +720,7 @@ namespace HIR {
         ::HIR::GenericPath objPath;
         ::std::vector<::HIR::ExprNodeP> captures;
 
-        ExprNodeClosure(Span sp, args_t args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move);
+        ExprNodeClosure(Span sp, argsT args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move);
 
         static constexpr unsigned int kind = 36;
         unsigned int node_kind() const override;
@@ -741,7 +741,7 @@ namespace HIR {
         // AnnotateValueUsage cache/information
         struct AvuCache {
             ::std::vector<unsigned int> local_vars;
-            ::std::vector<::std::pair<unsigned int, ::HIR::ValueUsage>> captured_vars;
+            ::std::vector<::std::pair<unsigned int, ::HIR::ValueUsage>> capturedVars;
         } avuCache;
 
         // Generated type information

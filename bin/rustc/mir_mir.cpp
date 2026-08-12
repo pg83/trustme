@@ -243,7 +243,7 @@ namespace MIR {
             (UnwindTerminate, os << "UnwindTerminate";),
             (Unreachable, os << "Unreachable";),
             (Goto, os << "Goto(" << e << ")";),
-            (If, os << "If( " << e.cond << " : " << e.bb_true << ", " << e.bb_false << ")";),
+            (If, os << "If( " << e.cond << " : " << e.bbTrue << ", " << e.bbFalse << ")";),
             (Switch, os << "Switch( "; if (e.valid_flag != ~0u) os << "IF df$" << e.valid_flag << " ELSE bb" << e.invalid_target << ", "; os << e.val << " : "; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << ")";),
             (SwitchValue, os << "SwitchValue( " << e.val << " : "; TU_MATCHA((e.values), (ve), (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";), (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";), (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";), (ByteString, for (unsigned int j = 0; j < e.targets.size(); j++) os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";)) os << "else bb" << e.def_target << ")";),
             (Drop, os << "Drop(" << e.slot; if (e.kind == eDropKind::SHALLOW) os << " SHALLOW"; if (e.flag_idx != ~0u) os << " IF df$" << e.flag_idx; os << ") -> bb" << e.target << " unwind "; fmt_unwind(e.unwind);),
@@ -262,7 +262,7 @@ namespace MIR {
             TU_MATCHA((lhs, rhs), (le, re), (Continue, return true;), (Cleanup, return le == re;), (Terminate, return true;), (Unreachable, return true;))
             return false;
         };
-        TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, if (ae != be) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bb_true != be.bb_true) return false; if (ae.bb_false != be.bb_false) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.valid_flag != be.valid_flag) return false; if (ae.invalid_target != be.invalid_target) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.def_target != be.def_target) return false; if (ae.values != be.values) return false;), (Drop, if (ae.kind != be.kind || ae.slot != be.slot || ae.flag_idx != be.flag_idx || ae.target != be.target || !unwind_equal(ae.unwind, be.unwind)) return false;), (Call, if (ae.ret_val != be.ret_val) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.ret_block != be.ret_block) return false; if (!unwind_equal(ae.unwind, be.unwind)) return false;))
+        TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, if (ae != be) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bbTrue != be.bbTrue) return false; if (ae.bbFalse != be.bbFalse) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.valid_flag != be.valid_flag) return false; if (ae.invalid_target != be.invalid_target) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.def_target != be.def_target) return false; if (ae.values != be.values) return false;), (Drop, if (ae.kind != be.kind || ae.slot != be.slot || ae.flag_idx != be.flag_idx || ae.target != be.target || !unwind_equal(ae.unwind, be.unwind)) return false;), (Call, if (ae.ret_val != be.ret_val) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.ret_block != be.ret_block) return false; if (!unwind_equal(ae.unwind, be.unwind)) return false;))
         return true;
     }
 
@@ -400,10 +400,10 @@ namespace MIR {
                 return ae.idx == be.idx && ae.other == be.other && ae.new_val == be.new_val;
             }
             TU_ARMA(SaveDropFlag, ae, be) {
-                return ae.idx == be.idx && ae.slot == be.slot && ae.bit_index == be.bit_index;
+                return ae.idx == be.idx && ae.slot == be.slot && ae.bitIndex == be.bitIndex;
             }
             TU_ARMA(LoadDropFlag, ae, be) {
-                return ae.idx == be.idx && ae.slot == be.slot && ae.bit_index == be.bit_index;
+                return ae.idx == be.idx && ae.slot == be.slot && ae.bitIndex == be.bitIndex;
             }
             TU_ARMA(ScopeEnd, ae, be) {
                 return ae.slots == be.slots;
@@ -540,31 +540,31 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     return rv;
 }
 
-::std::vector<MIR::AsmParam> MIR::Cloner::clone_asm_params(const ::std::vector<MIR::AsmParam>& params) const {
+::std::vector<MIR::AsmParam> MIR::Cloner::cloneAsmParams(const ::std::vector<MIR::AsmParam>& params) const {
     ::std::vector<MIR::AsmParam> rv;
     for (const auto& p : params) {
         TU_MATCH_HDRA((p), {)
         TU_ARMA(Const, v)
-            rv.push_back( this->clone_constant(v) );
+            rv.push_back( this->cloneConstant(v) );
             TU_ARMA(Sym, v)
             rv.push_back(this->monomorph(v));
             TU_ARMA(Reg, v)
-            rv.push_back(::MIR::AsmParam::make_Reg({v.dir, v.spec.clone(), v.input ? box$(this->clone_param(*v.input)) : std::unique_ptr<MIR::Param>(), v.output ? box$(this->clone_lval(*v.output)) : std::unique_ptr<MIR::LValue>()}));
+            rv.push_back(::MIR::AsmParam::make_Reg({v.dir, v.spec.clone(), v.input ? box$(this->cloneParam(*v.input)) : std::unique_ptr<MIR::Param>(), v.output ? box$(this->cloneLval(*v.output)) : std::unique_ptr<MIR::LValue>()}));
         }
     }
     return rv;
 }
 
-::MIR::Statement MIR::Cloner::clone_stmt(const ::MIR::Statement& src) const {
+::MIR::Statement MIR::Cloner::cloneStmt(const ::MIR::Statement& src) const {
     TU_MATCH_HDRA( (src), { )
     TU_ARMA(Assign, se) {
-            return ::MIR::Statement::make_Assign({this->clone_lval(se.dst), this->clone_rval(se.src)});
+            return ::MIR::Statement::make_Assign({this->cloneLval(se.dst), this->cloneRval(se.src)});
         }
         TU_ARMA(Asm, se) {
-            return ::MIR::Statement::make_Asm({se.tpl, this->clone_name_lval_vec(se.outputs), this->clone_name_lval_vec(se.inputs), se.clobbers, se.flags});
+            return ::MIR::Statement::make_Asm({se.tpl, this->cloneNameLvalVec(se.outputs), this->cloneNameLvalVec(se.inputs), se.clobbers, se.flags});
         }
         TU_ARMA(Asm2, se) {
-            return ::MIR::Statement::make_Asm2({se.options, se.lines, this->clone_asm_params(se.params)});
+            return ::MIR::Statement::make_Asm2({se.options, se.lines, this->cloneAsmParams(se.params)});
         }
         TU_ARMA(SetDropFlag, se) {
             return ::MIR::Statement::make_SetDropFlag({map_drop_flag(se.idx), se.new_val, se.other == ~0u ? ~0u : map_drop_flag(se.other)});
@@ -587,7 +587,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     throw "";
 }
 
-::MIR::Terminator MIR::Cloner::clone_term(const ::MIR::Terminator& src) const {
+::MIR::Terminator MIR::Cloner::cloneTerm(const ::MIR::Terminator& src) const {
     TU_MATCH_HDRA( (src), { )
     TU_ARMA(Incomplete, se) {
             return ::MIR::Terminator::make_Incomplete({});
@@ -608,7 +608,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             return ::MIR::Terminator::make_Goto(map_bb_idx(se));
         }
         TU_ARMA(If, se) {
-            return ::MIR::Terminator::make_If({this->clone_lval(se.cond), map_bb_idx(se.bb_true), map_bb_idx(se.bb_false)});
+            return ::MIR::Terminator::make_If({this->cloneLval(se.cond), map_bb_idx(se.bbTrue), map_bb_idx(se.bbFalse)});
         }
         TU_ARMA(Switch, se) {
             ::std::vector<::MIR::BasicBlockId> arms;
@@ -616,7 +616,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             for (const auto& bbi : se.targets) {
                 arms.push_back(map_bb_idx(bbi));
             }
-            return ::MIR::Terminator::make_Switch({this->clone_lval(se.val), mv$(arms), se.valid_flag == ~0u ? ~0u : map_drop_flag(se.valid_flag), se.invalid_target == ~0u ? ~0u : map_bb_idx(se.invalid_target)});
+            return ::MIR::Terminator::make_Switch({this->cloneLval(se.val), mv$(arms), se.valid_flag == ~0u ? ~0u : map_drop_flag(se.valid_flag), se.invalid_target == ~0u ? ~0u : map_bb_idx(se.invalid_target)});
         }
         TU_ARMA(SwitchValue, se) {
             ::std::vector<::MIR::BasicBlockId> arms;
@@ -624,52 +624,52 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             for (const auto& bbi : se.targets) {
                 arms.push_back(map_bb_idx(bbi));
             }
-            return ::MIR::Terminator::make_SwitchValue({this->clone_lval(se.val), map_bb_idx(se.def_target), mv$(arms), se.values.clone()});
+            return ::MIR::Terminator::make_SwitchValue({this->cloneLval(se.val), map_bb_idx(se.def_target), mv$(arms), se.values.clone()});
         }
         TU_ARMA(Drop, se) {
             UnwindAction unwind;
             TU_MATCHA((se.unwind), (ue), (Continue, unwind = UnwindAction::make_Continue({});), (Cleanup, unwind = UnwindAction::make_Cleanup(map_bb_idx(ue));), (Terminate, unwind = UnwindAction::make_Terminate({});), (Unreachable, unwind = UnwindAction::make_Unreachable({});))
-            return ::MIR::Terminator::make_Drop({se.kind, this->clone_lval(se.slot), se.flag_idx == ~0u ? ~0u : map_drop_flag(se.flag_idx), map_bb_idx(se.target), mv$(unwind)});
+            return ::MIR::Terminator::make_Drop({se.kind, this->cloneLval(se.slot), se.flag_idx == ~0u ? ~0u : map_drop_flag(se.flag_idx), map_bb_idx(se.target), mv$(unwind)});
         }
         TU_ARMA(Call, se) {
             ::MIR::CallTarget tgt;
-            TU_MATCHA((se.fcn), (ste), (Value, tgt = ::MIR::CallTarget::make_Value(this->clone_lval(ste));), (Path, tgt = ::MIR::CallTarget::make_Path(this->monomorph(ste));), (Intrinsic, tgt = ::MIR::CallTarget::make_Intrinsic({ste.name, this->monomorph(ste.params)});))
+            TU_MATCHA((se.fcn), (ste), (Value, tgt = ::MIR::CallTarget::make_Value(this->cloneLval(ste));), (Path, tgt = ::MIR::CallTarget::make_Path(this->monomorph(ste));), (Intrinsic, tgt = ::MIR::CallTarget::make_Intrinsic({ste.name, this->monomorph(ste.params)});))
             UnwindAction unwind;
             TU_MATCHA((se.unwind), (ue), (Continue, unwind = UnwindAction::make_Continue({});), (Cleanup, unwind = UnwindAction::make_Cleanup(map_bb_idx(ue));), (Terminate, unwind = UnwindAction::make_Terminate({});), (Unreachable, unwind = UnwindAction::make_Unreachable({});))
-            return ::MIR::Terminator::make_Call({map_bb_idx(se.ret_block), mv$(unwind), this->clone_lval(se.ret_val), mv$(tgt), this->clone_param_vec(se.args)});
+            return ::MIR::Terminator::make_Call({map_bb_idx(se.ret_block), mv$(unwind), this->cloneLval(se.ret_val), mv$(tgt), this->cloneParamVec(se.args)});
         }
     }
     throw "";
 }
 
-::std::vector<::std::pair<::std::string, ::MIR::LValue>> MIR::Cloner::clone_name_lval_vec(const ::std::vector<::std::pair<::std::string, ::MIR::LValue>>& src) const {
+::std::vector<::std::pair<::std::string, ::MIR::LValue>> MIR::Cloner::cloneNameLvalVec(const ::std::vector<::std::pair<::std::string, ::MIR::LValue>>& src) const {
     ::std::vector<::std::pair<::std::string, ::MIR::LValue>> rv;
     rv.reserve(src.size());
     for (const auto& e : src) {
-        rv.push_back(::std::make_pair(e.first, this->clone_lval(e.second)));
+        rv.push_back(::std::make_pair(e.first, this->cloneLval(e.second)));
     }
     return rv;
 }
 
-::std::vector<::MIR::LValue> MIR::Cloner::clone_lval_vec(const ::std::vector<::MIR::LValue>& src) const {
+::std::vector<::MIR::LValue> MIR::Cloner::cloneLvalVec(const ::std::vector<::MIR::LValue>& src) const {
     ::std::vector<::MIR::LValue> rv;
     rv.reserve(src.size());
     for (const auto& lv : src) {
-        rv.push_back(this->clone_lval(lv));
+        rv.push_back(this->cloneLval(lv));
     }
     return rv;
 }
 
-::std::vector<::MIR::Param> MIR::Cloner::clone_param_vec(const ::std::vector<::MIR::Param>& src) const {
+::std::vector<::MIR::Param> MIR::Cloner::cloneParamVec(const ::std::vector<::MIR::Param>& src) const {
     ::std::vector<::MIR::Param> rv;
     rv.reserve(src.size());
     for (const auto& lv : src) {
-        rv.push_back(this->clone_param(lv));
+        rv.push_back(this->cloneParam(lv));
     }
     return rv;
 }
 
-::MIR::LValue MIR::Cloner::clone_lval(const ::MIR::LValue& src) const {
+::MIR::LValue MIR::Cloner::cloneLval(const ::MIR::LValue& src) const {
     auto wrappers = src.wrappers;
     for (auto& w : wrappers) {
         if (w.is_Index()) {
@@ -693,7 +693,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     throw "";
 }
 
-::MIR::Constant MIR::Cloner::clone_constant(const ::MIR::Constant& src) const {
+::MIR::Constant MIR::Cloner::cloneConstant(const ::MIR::Constant& src) const {
     TU_MATCH_HDRA( (src), {)
     TU_ARMA(Int  , ce) return ::MIR::Constant(ce);
         TU_ARMA(Uint, ce) return ::MIR::Constant(ce);
@@ -765,64 +765,64 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     throw "";
 }
 
-::MIR::Param MIR::Cloner::clone_param(const ::MIR::Param& src) const {
-    TU_MATCHA((src), (se), (LValue, return clone_lval(se);), (Borrow, return ::MIR::Param::make_Borrow({se.type, this->clone_lval(se.val)});), (Constant, return clone_constant(se);))
+::MIR::Param MIR::Cloner::cloneParam(const ::MIR::Param& src) const {
+    TU_MATCHA((src), (se), (LValue, return cloneLval(se);), (Borrow, return ::MIR::Param::make_Borrow({se.type, this->cloneLval(se.val)});), (Constant, return cloneConstant(se);))
     throw "";
 }
 
-::MIR::RValue MIR::Cloner::clone_rval(const ::MIR::RValue& src) const {
+::MIR::RValue MIR::Cloner::cloneRval(const ::MIR::RValue& src) const {
     TU_MATCH_HDRA( (src), {)
     TU_ARMA(Use, se) {
             //if( const auto* ae = se.opt_Argument() )
             //    if( const auto* e = this->te.args.at(ae->idx).opt_Constant() )
             //        return e->clone();
-            return ::MIR::RValue(this->clone_lval(se));
+            return ::MIR::RValue(this->cloneLval(se));
         }
         TU_ARMA(Constant, se) {
-            return this->clone_constant(se);
+            return this->cloneConstant(se);
         }
         TU_ARMA(SizedArray, se) {
             auto count = monomorphiser().monomorph_arraysize(sp, se.count);
             if (const auto* resolver = resolve()) {
                 resolver->evaluate_array_size(sp, count);
             }
-            return ::MIR::RValue::make_SizedArray({this->clone_param(se.val), std::move(count)});
+            return ::MIR::RValue::make_SizedArray({this->cloneParam(se.val), std::move(count)});
         }
         TU_ARMA(Borrow, se) {
-            return ::MIR::RValue::make_Borrow({se.type, se.is_raw, this->clone_lval(se.val)});
+            return ::MIR::RValue::make_Borrow({se.type, se.is_raw, this->cloneLval(se.val)});
         }
         TU_ARMA(Cast, se) {
-            return ::MIR::RValue::make_Cast({this->clone_lval(se.val), this->monomorph(se.type)});
+            return ::MIR::RValue::make_Cast({this->cloneLval(se.val), this->monomorph(se.type)});
         }
         TU_ARMA(BinOp, se) {
-            return ::MIR::RValue::make_BinOp({this->clone_param(se.val_l), se.op, this->clone_param(se.val_r)});
+            return ::MIR::RValue::make_BinOp({this->cloneParam(se.val_l), se.op, this->cloneParam(se.val_r)});
         }
         TU_ARMA(UniOp, se) {
-            return ::MIR::RValue::make_UniOp({this->clone_lval(se.val), se.op});
+            return ::MIR::RValue::make_UniOp({this->cloneLval(se.val), se.op});
         }
         TU_ARMA(DstMeta, se) {
-            return ::MIR::RValue::make_DstMeta({this->clone_lval(se.val)});
+            return ::MIR::RValue::make_DstMeta({this->cloneLval(se.val)});
         }
         TU_ARMA(DstPtr, se) {
-            return ::MIR::RValue::make_DstPtr({this->clone_lval(se.val)});
+            return ::MIR::RValue::make_DstPtr({this->cloneLval(se.val)});
         }
         TU_ARMA(MakeDst, se) {
-            return ::MIR::RValue::make_MakeDst({this->clone_param(se.ptr_val), this->clone_param(se.meta_val)});
+            return ::MIR::RValue::make_MakeDst({this->cloneParam(se.ptr_val), this->cloneParam(se.meta_val)});
         }
         TU_ARMA(Tuple, se) {
-            return ::MIR::RValue::make_Tuple({this->clone_param_vec(se.vals)});
+            return ::MIR::RValue::make_Tuple({this->cloneParamVec(se.vals)});
         }
         TU_ARMA(Array, se) {
-            return ::MIR::RValue::make_Array({this->clone_param_vec(se.vals)});
+            return ::MIR::RValue::make_Array({this->cloneParamVec(se.vals)});
         }
         TU_ARMA(UnionVariant, se) {
-            return ::MIR::RValue::make_UnionVariant({this->monomorph(se.path), se.index, this->clone_param(se.val)});
+            return ::MIR::RValue::make_UnionVariant({this->monomorph(se.path), se.index, this->cloneParam(se.val)});
         }
         TU_ARMA(EnumVariant, se) {
-            return ::MIR::RValue::make_EnumVariant({this->monomorph(se.path), se.index, this->clone_param_vec(se.vals)});
+            return ::MIR::RValue::make_EnumVariant({this->monomorph(se.path), se.index, this->cloneParamVec(se.vals)});
         }
         TU_ARMA(Struct, se) {
-            return ::MIR::RValue::make_Struct({this->monomorph(se.path), this->clone_param_vec(se.vals)});
+            return ::MIR::RValue::make_Struct({this->monomorph(se.path), this->cloneParamVec(se.vals)});
         }
     }
     throw "";
@@ -969,14 +969,14 @@ void LValue::incDowncast() {
     assert(wrappers.size() > 0);
     wrappers.back().incDowncast();
 }
-LValue LValue::clone_wrapped(::std::vector<Wrapper> wrappers) const {
+LValue LValue::cloneWrapped(::std::vector<Wrapper> wrappers) const {
     if (this->wrappers.empty()) {
         return LValue(root.clone(), ::std::move(wrappers));
     } else {
-        return clone_wrapped(wrappers.begin(), wrappers.end());
+        return cloneWrapped(wrappers.begin(), wrappers.end());
     }
 }
-LValue LValue::clone_unwrapped(unsigned count) const {
+LValue LValue::cloneUnwrapped(unsigned count) const {
     assert(count > 0);
     assert(count <= wrappers.size());
     return LValue(root.clone(), ::std::vector<Wrapper>(wrappers.begin(), wrappers.end() - count));

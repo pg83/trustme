@@ -27,7 +27,7 @@ namespace {
         return 64 + __builtin_clzll(static_cast<uint64_t>(v));
     }
 
-    static int bit_length_128(u128 v) {
+    static int bitLength128(u128 v) {
         if (v == 0) {
             return 0;
         }
@@ -110,7 +110,7 @@ namespace {
         return v >> n;
     }
 
-    static Float128 canonical_nan() {
+    static Float128 canonicalNan() {
         return Float128::from_bits(0x7FFF'8000'0000'0000ull, 0);
     }
 
@@ -121,7 +121,7 @@ namespace {
             // A sticky remainder alone is far below half an ulp: rounds to zero
             return pack_zero(negative);
         }
-        const int length = bit_length_128(significand);
+        const int length = bitLength128(significand);
         if (length > significand_bits + 2) {
             significand = shift_right_sticky(significand, static_cast<unsigned>(length - (significand_bits + 2)), sticky);
             exponent += length - (significand_bits + 2);
@@ -283,7 +283,7 @@ namespace {
             trim();
         }
 
-        size_t bit_length() const {
+        size_t bitLength() const {
             if (limbs_.empty()) {
                 return 0;
             }
@@ -294,7 +294,7 @@ namespace {
         // dropped bit was set
         u128 top_bits(size_t bits, bool& sticky) const {
             assert(bits <= 128);
-            const size_t length = bit_length();
+            const size_t length = bitLength();
             BigUint copy = *this;
             if (length > bits) {
                 copy.shift_right_sticky(length - bits, sticky);
@@ -471,7 +471,7 @@ namespace {
         }
     }
 
-    static void append_exponent(std::string& out, int32_t decimal_exponent) {
+    static void appendExponent(std::string& out, int32_t decimal_exponent) {
         out.push_back('e');
         out.push_back(decimal_exponent < 0 ? '-' : '+');
         std::string digits = std::to_string(decimal_exponent < 0 ? -decimal_exponent : decimal_exponent);
@@ -492,7 +492,7 @@ namespace {
                 out.push_back('.');
                 out.append(static_cast<size_t>(precision), '0');
             }
-            append_exponent(out, 0);
+            appendExponent(out, 0);
             return out;
         }
         int32_t decimal_exponent = 0;
@@ -502,7 +502,7 @@ namespace {
             out.push_back('.');
             out.append(digits, 1, std::string::npos);
         }
-        append_exponent(out, decimal_exponent);
+        appendExponent(out, decimal_exponent);
         return out;
     }
 
@@ -555,7 +555,7 @@ namespace {
                 out.push_back('.');
                 out.append(digits, 1, std::string::npos);
             }
-            append_exponent(out, decimal_exponent);
+            appendExponent(out, decimal_exponent);
         } else if (decimal_exponent < 0) {
             out += "0.";
             out.append(static_cast<size_t>(-decimal_exponent - 1), '0');
@@ -587,7 +587,7 @@ Float128::Float128(double value) {
     const uint64_t fraction = bits & 0xF'FFFF'FFFF'FFFFull;
     if (biased == 0x7FF) {
         if (fraction != 0) {
-            *this = canonical_nan();
+            *this = canonicalNan();
             hi |= negative ? 0x8000'0000'0000'0000ull : 0;
         } else {
             *this = infinity(negative);
@@ -621,18 +621,18 @@ Float128 Float128::from_bits(uint64_t hi, uint64_t lo) {
 }
 
 Float128 Float128::quiet_nan() {
-    return canonical_nan();
+    return canonicalNan();
 }
 
 Float128 Float128::infinity(bool negative) {
     return from_bits((negative ? 0x8000'0000'0000'0000ull : 0) | 0x7FFF'0000'0000'0000ull, 0);
 }
 
-uint64_t Float128::bits_hi() const {
+uint64_t Float128::bitsHi() const {
     return hi;
 }
 
-uint64_t Float128::bits_lo() const {
+uint64_t Float128::bitsLo() const {
     return lo;
 }
 
@@ -748,11 +748,11 @@ Float128 Float128::operator+(const Float128& other) const {
     const auto a = unpack(hi, lo);
     const auto b = unpack(other.hi, other.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
-        return canonical_nan();
+        return canonicalNan();
     }
     if (a.kind == Kind::Infinity || b.kind == Kind::Infinity) {
         if (a.kind == Kind::Infinity && b.kind == Kind::Infinity && a.negative != b.negative) {
-            return canonical_nan();
+            return canonicalNan();
         }
         return a.kind == Kind::Infinity ? *this : other;
     }
@@ -775,7 +775,7 @@ Float128 Float128::operator+(const Float128& other) const {
         big = &b;
         small = &a;
     }
-    const u128 big_significand = big->significand << 3;
+    const u128 bigSignificand = big->significand << 3;
     u128 small_significand = small->significand << 3;
     const int32_t diff = big->exponent - small->exponent;
     bool jam = false;
@@ -783,9 +783,9 @@ Float128 Float128::operator+(const Float128& other) const {
     small_significand |= jam ? 1 : 0;
     u128 sum;
     if (big->negative == small->negative) {
-        sum = big_significand + small_significand;
+        sum = bigSignificand + small_significand;
     } else {
-        sum = big_significand - small_significand;
+        sum = bigSignificand - small_significand;
         if (sum == 0) {
             return pack_zero(false);
         }
@@ -802,12 +802,12 @@ Float128 Float128::operator*(const Float128& other) const {
     const auto a = unpack(hi, lo);
     const auto b = unpack(other.hi, other.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
-        return canonical_nan();
+        return canonicalNan();
     }
     const bool negative = a.negative != b.negative;
     if (a.kind == Kind::Infinity || b.kind == Kind::Infinity) {
         if (a.kind == Kind::Zero || b.kind == Kind::Zero) {
-            return canonical_nan();
+            return canonicalNan();
         }
         return infinity(negative);
     }
@@ -821,7 +821,7 @@ Float128 Float128::operator*(const Float128& other) const {
     u128 high = (u128(product[3]) << 64) | product[2];
     const u128 low = (u128(product[1]) << 64) | product[0];
     // high is in [2^96, 2^98): shift the top of `low` in to keep 128 bits
-    const int keep = 128 - bit_length_128(high);
+    const int keep = 128 - bitLength128(high);
     high = (high << keep) | (low >> (128 - keep));
     const bool sticky = (low << keep) != 0;
     // high = floor(product / 2^(128 - keep)), so
@@ -833,12 +833,12 @@ Float128 Float128::operator/(const Float128& other) const {
     const auto a = unpack(hi, lo);
     const auto b = unpack(other.hi, other.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
-        return canonical_nan();
+        return canonicalNan();
     }
     const bool negative = a.negative != b.negative;
     if (a.kind == Kind::Infinity) {
         if (b.kind == Kind::Infinity) {
-            return canonical_nan();
+            return canonicalNan();
         }
         return infinity(negative);
     }
@@ -847,7 +847,7 @@ Float128 Float128::operator/(const Float128& other) const {
     }
     if (b.kind == Kind::Zero) {
         if (a.kind == Kind::Zero) {
-            return canonical_nan();
+            return canonicalNan();
         }
         return infinity(negative);
     }
@@ -1038,10 +1038,10 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
     const auto a = unpack(numerator.hi, numerator.lo);
     const auto b = unpack(denominator.hi, denominator.lo);
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
-        return canonical_nan();
+        return canonicalNan();
     }
     if (a.kind == Kind::Infinity || b.kind == Kind::Zero) {
-        return canonical_nan();
+        return canonicalNan();
     }
     if (a.kind == Kind::Zero || b.kind == Kind::Infinity) {
         return numerator;
@@ -1065,7 +1065,7 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
         return pack_zero(a.negative);
     }
     // value = rem * 2^(b.exponent - 112), |value| < |denominator|
-    const int shortfall = significand_bits + 1 - bit_length_128(rem);
+    const int shortfall = significand_bits + 1 - bitLength128(rem);
     const int32_t exponent = b.exponent - shortfall;
     if (exponent < min_exponent) {
         // Subnormal result: express as fraction * 2^(min_exponent - 112).
@@ -1090,7 +1090,7 @@ Float128 Float128::minimum_number(const Float128& a, const Float128& b) {
     }
     if (a == b) {
         // Prefer -0 over +0
-        return (a.bits_hi() >> 63) != 0 ? a : b;
+        return (a.bitsHi() >> 63) != 0 ? a : b;
     }
     return a < b ? a : b;
 }
@@ -1104,7 +1104,7 @@ Float128 Float128::maximum_number(const Float128& a, const Float128& b) {
     }
     if (a == b) {
         // Prefer +0 over -0
-        return (a.bits_hi() >> 63) != 0 ? b : a;
+        return (a.bitsHi() >> 63) != 0 ? b : a;
     }
     return a < b ? b : a;
 }
@@ -1174,14 +1174,14 @@ Float128 Float128::parse_decimal(const char* text) {
         // bits below the top 114 are meaningful (log2(10) ~ 3.322).
         const uint64_t power = static_cast<uint64_t>(-exponent10);
         const size_t need = 116 + (static_cast<size_t>(power) * 3322 + 999) / 1000 + 1;
-        const size_t have = digits.bit_length();
+        const size_t have = digits.bitLength();
         scaled_up = need > have ? need - have : 0;
         digits.shift_left(scaled_up);
         divide_pow5_sticky(digits, power, sticky);
         digits.shift_right_sticky(static_cast<size_t>(power), sticky);
     }
     // value = digits * 2^-scaled_up
-    const size_t length = digits.bit_length();
+    const size_t length = digits.bitLength();
     const u128 significand = digits.top_bits(114, sticky);
     // significand = floor(digits / 2^max(0, length - 114)), so
     // value = significand * 2^(max(length, 114) - 114 - scaled_up)

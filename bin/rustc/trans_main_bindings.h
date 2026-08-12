@@ -27,7 +27,7 @@ struct TransOptions {
     ::std::string mode = "c";
     OptimizationLevel opt_level = OptimizationLevel::None;
     DebugInfoLevel debug_info = DebugInfoLevel::None;
-    ::std::string build_command_file;
+    ::std::string buildCommandFile;
     ::std::vector<::std::string> linker_args;
 
     ::std::string panic_crate;

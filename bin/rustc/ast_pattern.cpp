@@ -179,11 +179,11 @@ namespace AST {
         }
 
         struct H {
-            static ::std::unique_ptr<Pattern> clone_sp(const ::std::unique_ptr<Pattern>& p) {
+            static ::std::unique_ptr<Pattern> cloneSp(const ::std::unique_ptr<Pattern>& p) {
                 return ::std::make_unique<Pattern>(p->clone());
             }
 
-            static ::std::vector<Pattern> clone_list(const ::std::vector<Pattern>& list) {
+            static ::std::vector<Pattern> cloneList(const ::std::vector<Pattern>& list) {
                 ::std::vector<Pattern> rv;
                 rv.reserve(list.size());
                 for (const auto& p : list) {
@@ -192,11 +192,11 @@ namespace AST {
                 return rv;
             }
 
-            static TuplePat clone_tup(const TuplePat& p) {
-                return TuplePat{H::clone_list(p.start), p.has_wildcard, H::clone_list(p.end)};
+            static TuplePat cloneTup(const TuplePat& p) {
+                return TuplePat{H::cloneList(p.start), p.has_wildcard, H::cloneList(p.end)};
             }
 
-            static AST::Pattern::Value clone_val(const AST::Pattern::Value& v) {
+            static AST::Pattern::Value cloneVal(const AST::Pattern::Value& v) {
                 TU_MATCH(::AST::Pattern::Value, (v), (e), (Invalid, return Value(e);), (Integer, return Value(e);), (Float, return Value(e);), (String, return Value(e);), (ByteString, return Value(e);), (Named, return Value::make_Named(AST::Path(e));))
                 throw "";
             }
@@ -213,22 +213,22 @@ namespace AST {
                 rv.mData = Data::make_Macro({::std::make_unique<AST::MacroInvocation>(e.inv->clone())});
             }
             TU_ARMA(Box, e) {
-                rv.mData = Data::make_Box({H::clone_sp(e.sub)});
+                rv.mData = Data::make_Box({H::cloneSp(e.sub)});
             }
             TU_ARMA(Ref, e) {
-                rv.mData = Data::make_Ref({e.mut, H::clone_sp(e.sub)});
+                rv.mData = Data::make_Ref({e.mut, H::cloneSp(e.sub)});
             }
             TU_ARMA(Value, e) {
-                rv.mData = Data::make_Value({H::clone_val(e.start), H::clone_val(e.end)});
+                rv.mData = Data::make_Value({H::cloneVal(e.start), H::cloneVal(e.end)});
             }
             TU_ARMA(ValueLeftInc, e) {
-                rv.mData = Data::make_ValueLeftInc({H::clone_val(e.start), H::clone_val(e.end)});
+                rv.mData = Data::make_ValueLeftInc({H::cloneVal(e.start), H::cloneVal(e.end)});
             }
             TU_ARMA(Tuple, e) {
-                rv.mData = Data::make_Tuple(H::clone_tup(e));
+                rv.mData = Data::make_Tuple(H::cloneTup(e));
             }
             TU_ARMA(StructTuple, e) {
-                rv.mData = Data::make_StructTuple({::AST::Path(e.path), H::clone_tup(e.tup_pat)});
+                rv.mData = Data::make_StructTuple({::AST::Path(e.path), H::cloneTup(e.tup_pat)});
             }
             TU_ARMA(Struct, e) {
                 ::std::vector<AST::StructPatternEntry> sps;
@@ -238,13 +238,13 @@ namespace AST {
                 rv.mData = Data::make_Struct({::AST::Path(e.path), mv$(sps)});
             }
             TU_ARMA(Slice, e) {
-                rv.mData = Data::make_Slice({H::clone_list(e.sub_pats)});
+                rv.mData = Data::make_Slice({H::cloneList(e.sub_pats)});
             }
             TU_ARMA(SplitSlice, e) {
-                rv.mData = Data::make_SplitSlice({H::clone_list(e.leading), e.extra_bind, H::clone_list(e.trailing)});
+                rv.mData = Data::make_SplitSlice({H::cloneList(e.leading), e.extra_bind, H::cloneList(e.trailing)});
             }
             TU_ARMA(Or, e) {
-                rv.mData = Data::make_Or(H::clone_list(e));
+                rv.mData = Data::make_Or(H::cloneList(e));
             }
     }
 

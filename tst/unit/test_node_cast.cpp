@@ -22,11 +22,11 @@ namespace {
 int main() {
     First first;
     Node* node = &first;
-    const Node* const_node = &first;
+    const Node* constNode = &first;
 
     assert(cast<First>(node) == &first);
     assert(cast<Second>(node) == nullptr);
-    assert(cast<const First>(const_node) == &first);
-    assert(cast<const Second>(const_node) == nullptr);
+    assert(cast<const First>(constNode) == &first);
+    assert(cast<const Second>(constNode) == nullptr);
     assert(cast<First>(static_cast<Node*>(nullptr)) == nullptr);
 }

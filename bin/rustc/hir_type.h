@@ -299,7 +299,7 @@ namespace HIR {
                 return flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER);
             }
 
-            TypeData clone_data() const;
+            TypeData cloneData() const;
             void fmt(::std::ostream& os) const;
 
             // Deliberately semantic relations. Plain TypeRef equality is pointer identity.
@@ -307,7 +307,7 @@ namespace HIR {
             Ordering ord_ignoring_regions(::HIR::TypeRef x) const;
             bool match_test_generics(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
             ::HIR::Compare match_test_generics_fuzz(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
-            Compare compare_with_placeholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const;
+            Compare compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const;
             const ::HIR::SimplePath* get_sort_path() const;
         )
     );
@@ -337,7 +337,7 @@ namespace HIR {
         TypeRef function(TypeDataFunctionPointer ft);
         TypeRef closure(ExprNodeClosure* node);
         TypeRef generator(ExprNodeGenerator* node);
-        TypeRef async_block(ExprNodeAsyncBlock* node);
+        TypeRef asyncBlock(ExprNodeAsyncBlock* node);
     };
 
     inline bool operator==(TypeRef ty, CoreType ct) {

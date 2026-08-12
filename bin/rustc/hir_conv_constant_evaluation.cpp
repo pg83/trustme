@@ -144,7 +144,7 @@ namespace MIR {
         class AllocationPtr final: public EvalPtr<Allocation> {
         public:
             static AllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const ::MIR::TypeResolve& state, const ::HIR::TypeData* ty);
-            static AllocationPtr allocate_ro(stl::ObjPool* pool, const void* data, size_t len);
+            static AllocationPtr allocateRo(stl::ObjPool* pool, const void* data, size_t len);
         };
 
         /// Reference to a `static`
@@ -160,7 +160,7 @@ namespace MIR {
             virtual void fmt(::std::ostream& os, size_t ofs, size_t len) const = 0;
 
             virtual size_t size() const = 0;
-            virtual const uint8_t* get_bytes(size_t ofs, size_t len, bool check_mask) const = 0;
+            virtual const uint8_t* get_bytes(size_t ofs, size_t len, bool checkMask) const = 0;
             virtual void read_mask(uint8_t* dst, size_t dst_ofs, size_t ofs, size_t len) const = 0;
 
             virtual bool is_writable() const = 0;
@@ -224,29 +224,29 @@ namespace MIR {
                 return ptr == x.ptr;
             }
 
-            IValue& as_value() {
-                return *as_value_ptr();
+            IValue& asValue() {
+                return *asValuePtr();
             }
 
-            const IValue& as_value() const {
-                return *as_value_ptr();
+            const IValue& asValue() const {
+                return *asValuePtr();
             }
 
-            Allocation* as_allocation() const {
+            Allocation* asAllocation() const {
                 return (ptr != 0 && (ptr & 3) == TAG_Allocation) ? reinterpret_cast<Allocation*>(ptr - TAG_Allocation) : nullptr;
             }
 
-            Constant* as_constant() const {
+            Constant* asConstant() const {
                 return (ptr != 0 && (ptr & 3) == TAG_Constant) ? reinterpret_cast<Constant*>(ptr - TAG_Constant) : nullptr;
             }
 
-            StaticRef* as_staticref() const {
+            StaticRef* asStaticref() const {
                 return (ptr != 0 && (ptr & 3) == TAG_StaticRef) ? reinterpret_cast<StaticRef*>(ptr - TAG_StaticRef) : nullptr;
             }
 
             friend std::ostream& operator<<(std::ostream& os, const RelocPtr& ptr) {
                 if (ptr.ptr) {
-                    ptr.as_value_ptr()->fmt_ident(os);
+                    ptr.asValuePtr()->fmt_ident(os);
                 } else {
                     os << "NULL";
                 }
@@ -254,7 +254,7 @@ namespace MIR {
             }
 
         private:
-            IValue* as_value_ptr() const;
+            IValue* asValuePtr() const;
 
             void set(uintptr_t ptr, Tag tag) {
                 assert(this->ptr == 0);
@@ -407,12 +407,12 @@ namespace MIR {
                 return length;
             }
 
-            const uint8_t* get_bytes(size_t ofs, size_t len, bool check_mask) const override {
+            const uint8_t* get_bytes(size_t ofs, size_t len, bool checkMask) const override {
                 if (!(ofs <= length) || !(len <= length) || !(ofs + len <= length)) {
                     return nullptr;
                 }
 
-                if (check_mask) {
+                if (checkMask) {
                     const auto* m = this->get_mask();
                     size_t mo = ofs, ml = len;
                     for (; mo % 8 != 0 && ml > 0; mo++, ml--) {
@@ -581,7 +581,7 @@ namespace MIR {
                 return encoded ? encoded->bytes.size() : 0;
             }
 
-            const uint8_t* get_bytes(size_t ofs, size_t len, bool check_mask) const override {
+            const uint8_t* get_bytes(size_t ofs, size_t len, bool checkMask) const override {
                 if (encoded) {
                     assert(ofs <= encoded->bytes.size());
                     assert(len <= encoded->bytes.size());
@@ -635,7 +635,7 @@ namespace MIR {
                                 return RelocPtr(StaticRefPtr::allocate(pool, r.p->clone(), nullptr));
                                 TODO(Span(), "Convert relocation pointer - " << *r.p);
                             } else {
-                                return RelocPtr(AllocationPtr::allocate_ro(pool, r.bytes.data(), r.bytes.size()));
+                                return RelocPtr(AllocationPtr::allocateRo(pool, r.bytes.data(), r.bytes.size()));
                             }
                         }
                     }
@@ -672,8 +672,8 @@ namespace MIR {
                 , len(0)
             {
                 if (alloc) {
-                    assert(ofs <= alloc.as_value().size());
-                    len = alloc.as_value().size() - ofs;
+                    assert(ofs <= alloc.asValue().size());
+                    len = alloc.asValue().size() - ofs;
                 }
             }
 
@@ -719,32 +719,32 @@ namespace MIR {
                     }
                 }
                 // Copy the data (don't check the source mask when getting the source pointer)
-                const auto* src = other.storage.as_value().get_bytes(other.ofs, len, /*check_mask*/ false);
+                const auto* src = other.storage.asValue().get_bytes(other.ofs, len, /*check_mask*/ false);
                 MIR_ASSERT(state, src, "Invalid read " << other.storage << " - " << other.ofs << "+" << len);
-                storage.as_value().write_bytes(this->ofs, src, len);
+                storage.asValue().write_bytes(this->ofs, src, len);
                 // Copy the mask data
-                storage.as_value().write_mask_from(this->ofs, other.storage.as_value(), other.ofs, len);
+                storage.asValue().write_mask_from(this->ofs, other.storage.asValue(), other.ofs, len);
                 // Copy relocations
                 for (size_t i = 0; i < len; i++) {
-                    if (auto r = other.storage.as_value().get_reloc(other.ofs + i)) {
-                        storage.as_value().set_reloc(this->ofs + i, std::move(r));
+                    if (auto r = other.storage.asValue().get_reloc(other.ofs + i)) {
+                        storage.asValue().set_reloc(this->ofs + i, std::move(r));
                     }
                 }
             }
 
             void write_bytes(const MIR::TypeResolve& state, const void* data, size_t len) {
                 MIR_ASSERT(state, storage, "Writing to invalid slot");
-                MIR_ASSERT(state, storage.as_value().is_writable(), "Writing to read-only slot");
+                MIR_ASSERT(state, storage.asValue().is_writable(), "Writing to read-only slot");
                 if (len > 0) {
-                    storage.as_value().write_bytes(ofs, data, len);
+                    storage.asValue().write_bytes(ofs, data, len);
                 }
             }
 
             uint8_t* ext_write_bytes(const MIR::TypeResolve& state, size_t len) {
                 MIR_ASSERT(state, storage, "Writing to invalid slot");
-                MIR_ASSERT(state, storage.as_value().is_writable(), "Writing to read-only slot");
+                MIR_ASSERT(state, storage.asValue().is_writable(), "Writing to read-only slot");
                 if (len > 0) {
-                    return storage.as_value().ext_write_bytes(ofs, len);
+                    return storage.asValue().ext_write_bytes(ofs, len);
                 } else {
                     static uint8_t empty_buf;
                     return &empty_buf;
@@ -803,17 +803,17 @@ namespace MIR {
 
             void write_ptr(const MIR::TypeResolve& state, uint64_t val, RelocPtr reloc) {
                 write_uint(state, TargetGetPointerBits(), U128(val));
-                storage.as_value().set_reloc(ofs, std::move(reloc));
+                storage.asValue().set_reloc(ofs, std::move(reloc));
             }
 
             void set_reloc(RelocPtr reloc) {
-                storage.as_value().set_reloc(ofs, std::move(reloc));
+                storage.asValue().set_reloc(ofs, std::move(reloc));
             }
 
             const uint8_t* ext_read_bytes(const MIR::TypeResolve& state, size_t len) const {
                 MIR_ASSERT(state, storage, "");
                 MIR_ASSERT(state, len >= 1, "");
-                const auto* src = storage.as_value().get_bytes(ofs, len, /*check_mask*/ true);
+                const auto* src = storage.asValue().get_bytes(ofs, len, /*check_mask*/ true);
                 MIR_ASSERT(state, src, "Invalid read: " << ofs << "+" << len << " (in " << *this << ")");
                 return src;
             }
@@ -879,7 +879,7 @@ namespace MIR {
             }
 
             std::pair<uint64_t, RelocPtr> read_ptr(const ::MIR::TypeResolve& state) const {
-                return std::make_pair(read_usize(state), storage.as_value().get_reloc(ofs));
+                return std::make_pair(read_usize(state), storage.asValue().get_reloc(ofs));
             }
 
             friend std::ostream& operator<<(std::ostream& os, const ValueRef& vr);
@@ -890,7 +890,7 @@ namespace MIR {
                 os << "ValueRef(null)";
             } else {
                 os << "ValueRef({" << vr.ofs << "+" << vr.len << "}";
-                vr.storage.as_value().fmt(os, vr.ofs, vr.len);
+                vr.storage.asValue().fmt(os, vr.ofs, vr.len);
                 os << ")";
             }
             return os;
@@ -921,7 +921,7 @@ namespace MIR {
             return rv;
         }
 
-        AllocationPtr AllocationPtr::allocate_ro(stl::ObjPool* pool, const void* data_in, size_t len) {
+        AllocationPtr AllocationPtr::allocateRo(stl::ObjPool* pool, const void* data_in, size_t len) {
             auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len + 7) / 8)));
             AllocationPtr rv;
             rv.ptr = pool->make<Allocation>(data, len, HIR::TypeRef());
@@ -938,18 +938,18 @@ namespace MIR {
         }
 
         // --- RelocPtr ---
-        IValue* RelocPtr::as_value_ptr() const {
+        IValue* RelocPtr::asValuePtr() const {
             assert(ptr);
             switch (ptr & 3) {
                 case TAG_Allocation:
-                    assert(as_allocation());
-                    return as_allocation();
+                    assert(asAllocation());
+                    return asAllocation();
                 case TAG_Constant:
-                    assert(as_constant());
-                    return as_constant();
+                    assert(asConstant());
+                    return asConstant();
                 case TAG_StaticRef:
-                    assert(as_staticref());
-                    return as_staticref();
+                    assert(asStaticref());
+                    return asStaticref();
                 case 3:
                     assert(!"Unexpected tag 3");
             }
@@ -1133,7 +1133,7 @@ namespace MIR {
         public:
             stl::ObjPool* const value_pool;
             const unsigned frame_index;
-            const std::vector<std::pair<HIR::Pattern, HIR::TypeRef>> arg_defs;
+            const std::vector<std::pair<HIR::Pattern, HIR::TypeRef>> argDefs;
             const HIR::TypeRef ret_type;
 
             // MIR Resolve Helper
@@ -1163,7 +1163,7 @@ namespace MIR {
                 ::FmtLambda path_str,
                 // Pre-monomorphised function signature (as this may be a `static`)
                 HIR::TypeRef exp_ty,
-                std::vector<std::pair<HIR::Pattern, HIR::TypeRef>> arg_defs,
+                std::vector<std::pair<HIR::Pattern, HIR::TypeRef>> argDefs,
                 // Function/Body code
                 const MIR::Function& fcn,
                 // Monomorphisation rules
@@ -1174,11 +1174,11 @@ namespace MIR {
             )
                 : value_pool(value_pool)
                 , frame_index(frame_index)
-                , arg_defs(std::move(arg_defs))
+                , argDefs(std::move(argDefs))
                 , ret_type(std::move(exp_ty))
                 , root_resolve(resolve)
                 , resolve(resolve.crate)
-                , state{root_span, this->resolve, std::move(path_str), this->ret_type, this->arg_defs, fcn}
+                , state{root_span, this->resolve, std::move(path_str), this->ret_type, this->argDefs, fcn}
                 , ms(std::move(ms))
                 , retval(AllocationPtr::allocate(value_pool, root_resolve, state, ret_type))
                 , args(args)
@@ -1233,7 +1233,7 @@ namespace MIR {
                 return variant;
             }
 
-            static bool allocation_reachable_from(const Allocation* allocation, const Allocation* target, ::std::set<const Allocation*>& visited) {
+            static bool allocationReachableFrom(const Allocation* allocation, const Allocation* target, ::std::set<const Allocation*>& visited) {
                 if (allocation == target) {
                     return true;
                 }
@@ -1241,8 +1241,8 @@ namespace MIR {
                     return false;
                 }
                 for (const auto& relocation : allocation->get_relocations()) {
-                    if (const auto* child = relocation.ptr.as_allocation()) {
-                        if (allocation_reachable_from(child, target, visited)) {
+                    if (const auto* child = relocation.ptr.asAllocation()) {
+                        if (allocationReachableFrom(child, target, visited)) {
                             return true;
                         }
                     }
@@ -1251,12 +1251,12 @@ namespace MIR {
             }
 
             bool value_reachable_from_return(ValueRef value) const {
-                const auto* target = value.get_storage().as_allocation();
+                const auto* target = value.get_storage().asAllocation();
                 if (!target) {
                     return false;
                 }
                 ::std::set<const Allocation*> visited;
-                return allocation_reachable_from(retval.operator->(), target, visited);
+                return allocationReachableFrom(retval.operator->(), target, visited);
             }
 
             bool value_needs_non_const_drop(const HIR::TypeData* ty, ValueRef value) const {
@@ -1408,10 +1408,10 @@ namespace MIR {
                     DEBUG("Return Literal::Defer for constastatic " << p << " which references a generic parameter");
                     throw Defer();
                 }
-                MonomorphState const_ms(root_resolve.crate.types);
+                MonomorphState constMs(root_resolve.crate.types);
 
                 const HIR::GenericParams* impl_params_def = nullptr;
-                auto ent = get_ent_fullpath(state.sp, root_resolve, p, EntNS::Value, const_ms, &impl_params_def);
+                auto ent = get_ent_fullpath(state.sp, root_resolve, p, EntNS::Value, constMs, &impl_params_def);
                 if (ent.is_Static()) {
                     const auto& s = *ent.as_Static();
 
@@ -1444,7 +1444,7 @@ namespace MIR {
                         DEBUG("- Evaluate " << p);
                         try {
                             item.valueGenerated = true;
-                            item.valueRes = eval.evaluate_constant(::HIR::ItemPath(p), item.mValue, item.mType, std::move(const_ms));
+                            item.valueRes = eval.evaluate_constant(::HIR::ItemPath(p), item.mValue, item.mType, std::move(constMs));
                             item.valueGenerated = true;
                         } catch (const Defer&) {
                             MIR_BUG(state, p << " Defer during value generation");
@@ -1630,9 +1630,9 @@ namespace MIR {
                     DEBUG("Return Literal::Defer for constant " << p << " which references a generic parameter");
                     throw Defer();
                 }
-                MonomorphState const_ms(root_resolve.crate.types);
+                MonomorphState constMs(root_resolve.crate.types);
                 const HIR::GenericParams* impl_params_def = nullptr;
-                auto ent = get_ent_fullpath(state.sp, root_resolve, p, EntNS::Value, const_ms, &impl_params_def);
+                auto ent = get_ent_fullpath(state.sp, root_resolve, p, EntNS::Value, constMs, &impl_params_def);
                 MIR_ASSERT(state, ent.is_Constant(), "MIR Constant::Const(" << p << ") didn't point to a Constant - " << ent.tag_str());
                 const auto& c = *ent.as_Constant();
                 if (c.valueState == HIR::Constant::ValueState::Unknown) {
@@ -1656,7 +1656,7 @@ namespace MIR {
                     }
                 }
                 if (out_ty) {
-                    *out_ty = const_ms.monomorph_type(state.sp, c.mType);
+                    *out_ty = constMs.monomorph_type(state.sp, c.mType);
                 }
                 if (c.valueState == HIR::Constant::ValueState::Generic) {
                     auto it = c.monomorphCache.find(p);
@@ -1669,9 +1669,9 @@ namespace MIR {
                         eval.resolve.set_both_generics_raw(impl_params_def, &c.mParams);
 
                         DEBUG("- Evaluate monomorphed " << p);
-                        DEBUG("> const_ms=" << const_ms);
-                        auto ty = const_ms.monomorph_type(item.mValue.span(), item.mType);
-                        auto val = eval.evaluate_constant(::HIR::ItemPath(p), item.mValue, std::move(ty), std::move(const_ms));
+                        DEBUG("> const_ms=" << constMs);
+                        auto ty = constMs.monomorph_type(item.mValue.span(), item.mType);
+                        auto val = eval.evaluate_constant(::HIR::ItemPath(p), item.mValue, std::move(ty), std::move(constMs));
 
                         auto insert_res = item.monomorphCache.insert(std::make_pair(p.clone(), std::move(val)));
                         it = insert_res.first;
@@ -1693,7 +1693,7 @@ namespace MIR {
                     if (r.p) {
                         reloc = RelocPtr(get_staticref(r.p->clone()));
                     } else {
-                        reloc = RelocPtr(AllocationPtr::allocate_ro(value_pool, r.bytes.data(), r.bytes.size()));
+                        reloc = RelocPtr(AllocationPtr::allocateRo(value_pool, r.bytes.data(), r.bytes.size()));
                     }
                     dst.slice(r.ofs, r.len).set_reloc(std::move(reloc));
                 }
@@ -2264,8 +2264,8 @@ namespace {
                 break;
             }
             case TypeInfo::Other:
-                const auto* borrow_ty = ty->opt_Borrow();
-                if (borrow_ty && ((borrow_ty->inner->is_Slice() && borrow_ty->inner->as_Slice().inner == HIR::CoreType::U8) || borrow_ty->inner == HIR::CoreType::Str)) {
+                const auto* borrowTy = ty->opt_Borrow();
+                if (borrowTy && ((borrowTy->inner->is_Slice() && borrowTy->inner->as_Slice().inner == HIR::CoreType::U8) || borrowTy->inner == HIR::CoreType::Str)) {
                     struct P {
                         ::MIR::eval::RelocPtr reloc;
                         const void* data;
@@ -2275,7 +2275,7 @@ namespace {
                             auto vr = local_state.get_lval(p.as_LValue());
                             auto ptr = vr.read_ptr(local_state.state);
                             this->len = vr.slice(TargetGetPointerBits() / 8).read_usize(local_state.state);
-                            this->data = ptr.second.as_value().get_bytes(ptr.first - EncodedLiteral::PTR_BASE, this->len, true);
+                            this->data = ptr.second.asValue().get_bytes(ptr.first - EncodedLiteral::PTR_BASE, this->len, true);
                             MIR_ASSERT(local_state.state, this->data, "Invalid pointer " << p << " : " << vr << " = " << ptr.second << " @ " << ptr.first << "+" << this->len);
                             this->reloc = std::move(ptr.second);
                         }
@@ -2333,15 +2333,15 @@ namespace HIR {
         }
     }
 
-    void Evaluator::push_stack_entry(::FmtLambda print_path, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::args_t arg_defs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* item_params_def, const ::HIR::GenericParams* impl_params_def) {
-        this->call_stack.push_back(new CallStackEntry(this->value_pool.mutPtr(), this->num_frames, this->root_span, this->resolve, std::move(print_path), std::move(exp), std::move(arg_defs), fcn, std::move(ms), std::move(args), item_params_def, impl_params_def));
+    void Evaluator::push_stack_entry(::FmtLambda print_path, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* item_params_def, const ::HIR::GenericParams* impl_params_def) {
+        this->callStack.push_back(new CallStackEntry(this->value_pool.mutPtr(), this->num_frames, this->root_span, this->resolve, std::move(print_path), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), item_params_def, impl_params_def));
         this->num_frames += 1;
     }
 
     AllocationPtr Evaluator::run_until_stack_empty() {
         const unsigned MAX_BLOCK_COUNT = 4'000'000;
         const unsigned MAX_STMT_COUNT = 8'000'000;
-        assert(!this->call_stack.empty());
+        assert(!this->callStack.empty());
         unsigned int num_stmts_run = 0;
         unsigned int idx;
         for (idx = 0; idx < MAX_BLOCK_COUNT; idx += 1) {
@@ -2349,26 +2349,26 @@ namespace HIR {
                 break;
             }
 
-            auto& state = this->call_stack.back()->state;
+            auto& state = this->callStack.back()->state;
             const auto& bb = state.fcn.blocks[state.get_cur_block()];
             for (const auto& stmt : bb.statements) {
                 state.set_cur_stmt(state.get_cur_block(), &stmt - bb.statements.data());
-                this->run_statement(*this->call_stack.back(), stmt);
+                this->run_statement(*this->callStack.back(), stmt);
                 num_stmts_run += 1;
             }
             state.set_cur_stmt_term(state.get_cur_block());
-            auto next_block = run_terminator(*this->call_stack.back(), bb.terminator);
+            auto next_block = run_terminator(*this->callStack.back(), bb.terminator);
             num_stmts_run += 1;
             switch (next_block) {
                 case TERM_RET_PUSHED:
                     continue;
                 case TERM_RET_RETURN: {
-                    MIR::eval::AllocationPtr rv = std::move(this->call_stack.back()->retval);
-                    this->call_stack.pop_back();
-                    if (this->call_stack.empty() == 1) {
+                    MIR::eval::AllocationPtr rv = std::move(this->callStack.back()->retval);
+                    this->callStack.pop_back();
+                    if (this->callStack.empty() == 1) {
                         return rv;
                     } else {
-                        auto& next_state = *this->call_stack.back();
+                        auto& next_state = *this->callStack.back();
                         const auto& term = next_state.state.fcn.blocks[next_state.state.get_cur_block()].terminator;
                         const auto& te = term.as_Call();
                         auto dst = next_state.get_lval(te.ret_val);
@@ -2604,7 +2604,7 @@ namespace HIR {
                             if (te.binding.is_Struct()) {
                                 const HIR::Struct& str = *te.binding.as_Struct();
                                 if (src_ty->is_Path() && src_ty->as_Path().binding.is_Struct() && src_ty->as_Path().binding.as_Struct() == &str) {
-                                    if (str.structMarkings.coerce_unsized != HIR::StructMarkings::Coerce::None) {
+                                    if (str.structMarkings.coerceUnsized != HIR::StructMarkings::Coerce::None) {
                                         done = true;
                                     }
                                 }
@@ -2818,7 +2818,7 @@ namespace HIR {
             TU_ARMA(If, e) {
                 bool res = U128(0) != local_state.get_lval(e.cond).read_uint(state, 1);
                 DEBUG(state << " IF " << res);
-                return res ? e.bb_true : e.bb_false;
+                return res ? e.bbTrue : e.bbFalse;
             }
             TU_ARMA(Switch, e) {
                 if (e.valid_flag != ~0u && !local_state.drop_flags.at(e.valid_flag)) {
@@ -2887,8 +2887,8 @@ namespace HIR {
                     } else if (te->name == "size_of_val") {
                         auto ty = local_state.monomorph_expand(te->params.types.at(0));
                         size_t size_val;
-                        size_t align_val;
-                        if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, size_val, align_val)) {
+                        size_t alignVal;
+                        if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, size_val, alignVal)) {
                             throw Defer();
                         }
                         if (size_val == SIZE_MAX) {
@@ -2910,18 +2910,18 @@ namespace HIR {
                         dst.write_uint(state, TargetGetPointerBits(), U128(size_val));
                     } else if (te->name == "align_of" || te->name == "min_align_of") {
                         auto ty = local_state.monomorph_expand(te->params.types.at(0));
-                        size_t align_val;
-                        if (TargetGetAlignOf(state.sp, this->resolve, ty, align_val)) {
-                            dst.write_uint(state, TargetGetPointerBits(), U128(align_val));
+                        size_t alignVal;
+                        if (TargetGetAlignOf(state.sp, this->resolve, ty, alignVal)) {
+                            dst.write_uint(state, TargetGetPointerBits(), U128(alignVal));
                         } else {
                             throw Defer();
                         }
                     } else if (te->name == "align_of_val" || te->name == "min_align_of_val") {
                         auto ty = local_state.monomorph_expand(te->params.types.at(0));
                         size_t size_val;
-                        size_t align_val;
-                        if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, size_val, align_val) && align_val > 0) {
-                            dst.write_uint(state, TargetGetPointerBits(), U128(align_val));
+                        size_t alignVal;
+                        if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, size_val, alignVal) && alignVal > 0) {
+                            dst.write_uint(state, TargetGetPointerBits(), U128(alignVal));
                         } else {
                             throw Defer();
                         }
@@ -2932,7 +2932,7 @@ namespace HIR {
                     } else if (te->name == "type_name") {
                         auto ty = local_state.monomorph_expand(te->params.types.at(0));
                         auto name = state.intrinsic_type_name(ty);
-                        dst.write_ptr(state, EncodedLiteral::PTR_BASE, AllocationPtr::allocate_ro(local_state.value_pool, name.data(), name.size()));
+                        dst.write_ptr(state, EncodedLiteral::PTR_BASE, AllocationPtr::allocateRo(local_state.value_pool, name.data(), name.size()));
                         dst.slice(TargetGetPointerBits() / 8).write_uint(state, TargetGetPointerBits(), name.size());
                     } else if (te->name == "type_id") {
                         auto ty = local_state.monomorph_expand(te->params.types.at(0));
@@ -3230,13 +3230,13 @@ namespace HIR {
                     else if (te->name == "const_eval_select") {
                         // "Selects which function to call depending on the context."
                         // `fn const_eval_select<ARG, F, G, RET>(arg: ARG, called_in_const: F, called_at_rt: G ) -> RET`
-                        auto arg_ty = local_state.monomorph_expand(te->params.types.at(0));
-                        MIR_ASSERT(state, arg_ty->is_Tuple(), "`" << te->name << "` requires a tuple for ARG, got " << arg_ty);
-                        auto* repr = TargetGetTypeRepr(state.sp, resolve, arg_ty);
+                        auto argTy = local_state.monomorph_expand(te->params.types.at(0));
+                        MIR_ASSERT(state, argTy->is_Tuple(), "`" << te->name << "` requires a tuple for ARG, got " << argTy);
+                        auto* repr = TargetGetTypeRepr(state.sp, resolve, argTy);
                         if (!repr) {
                             throw Defer();
                         }
-                        auto arg_val = local_state.get_lval(e.args.at(0).as_LValue());
+                        auto argVal = local_state.get_lval(e.args.at(0).as_LValue());
                         const auto& fcn_arg = e.args.at(1);
                         std::shared_ptr<HIR::Path> fcn_path;
 
@@ -3245,7 +3245,7 @@ namespace HIR {
                                 auto fcn_val = local_state.get_lval(e).read_ptr(state);
                                 MIR_ASSERT(state, fcn_val.first == EncodedLiteral::PTR_BASE, "");
 
-                                const auto* fcn_sr = fcn_val.second.as_staticref();
+                                const auto* fcn_sr = fcn_val.second.asStaticref();
                                 MIR_ASSERT(state, fcn_sr, "");
                                 fcn_path = std::make_shared<HIR::Path>(fcn_sr->path().clone());
                             }
@@ -3265,16 +3265,16 @@ namespace HIR {
                     }
 
                     // Argument values
-                    ::std::vector<AllocationPtr>  call_args;
-                    call_args.reserve( repr->fields.size() );
+                    ::std::vector<AllocationPtr>  callArgs;
+                    callArgs.reserve( repr->fields.size() );
                     for(const auto& f : repr->fields) {
                             auto size = local_state.size_of_or_bug(f.ty);
-                            call_args.push_back(AllocationPtr::allocate(local_state.value_pool, resolve, state, f.ty));
-                            auto vr = ValueRef(call_args.back());
-                            vr.copy_from(state, arg_val.slice(f.offset, size));
+                            callArgs.push_back(AllocationPtr::allocate(local_state.value_pool, resolve, state, f.ty));
+                            auto vr = ValueRef(callArgs.back());
+                            vr.copy_from(state, argVal.slice(f.offset, size));
                     }
 
-                    if( this->call_function(local_state, e.ret_val, std::move(fcn_path), std::move(call_args)) ) {
+                    if( this->callFunction(local_state, e.ret_val, std::move(fcn_path), std::move(callArgs)) ) {
                             return TERM_RET_PUSHED;
                     }
                     }
@@ -3415,17 +3415,17 @@ namespace HIR {
                     auto fcnp = std::make_shared<HIR::Path>(ms.monomorph_path(state.sp, fcnp_raw));
 
                     // Argument values
-                    ::std::vector<AllocationPtr> call_args;
-                    call_args.reserve(e.args.size());
+                    ::std::vector<AllocationPtr> callArgs;
+                    callArgs.reserve(e.args.size());
                     for (const auto& a : e.args) {
                         ::HIR::TypeRef tmp;
                         const auto& ty = state.get_param_type(tmp, a);
-                        call_args.push_back(AllocationPtr::allocate(local_state.value_pool, resolve, state, ty));
-                        auto vr = ValueRef(call_args.back());
+                        callArgs.push_back(AllocationPtr::allocate(local_state.value_pool, resolve, state, ty));
+                        auto vr = ValueRef(callArgs.back());
                         local_state.write_param(vr, a);
                     }
 
-                    if (this->call_function(local_state, e.ret_val, std::move(fcnp), std::move(call_args))) {
+                    if (this->callFunction(local_state, e.ret_val, std::move(fcnp), std::move(callArgs))) {
                         return TERM_RET_PUSHED;
                     } else {
                         auto dst = local_state.get_lval(e.ret_val);
@@ -3446,7 +3446,7 @@ namespace HIR {
     /// @param fcn_path
     /// @param call_args
     /// @return `true` is a new stack frame was pushed
-    bool Evaluator::call_function(CallStackEntry& local_state, const MIR::LValue& rv_slot, ::std::shared_ptr<HIR::Path> fcn_path, ::std::vector<AllocationPtr> call_args) {
+    bool Evaluator::callFunction(CallStackEntry& local_state, const MIR::LValue& rv_slot, ::std::shared_ptr<HIR::Path> fcn_path, ::std::vector<AllocationPtr> callArgs) {
         const auto& state = local_state.state;
         MonomorphState fcn_ms(resolve.crate.types);
         const ::HIR::GenericParams* impl_params_def = nullptr;
@@ -3461,17 +3461,17 @@ namespace HIR {
                         MIR_TODO(local_state.state, "Get function from fn-ptr - " << e->type);
                     }
                     // TODO: Convert `call_args` - discard the first and extract tuple from the second
-                    const auto& arg_tuple_ty = e->trait.mParams.types.at(0);
-                    const auto* arg_tuple_repr = TargetGetTypeRepr(state.sp, state.mResolve, arg_tuple_ty);
-                    auto arg_tuple_v = std::move(call_args.at(1));
-                    ValueRef arg_tuple(arg_tuple_v);
-                    call_args.clear();
-                    call_args.reserve(arg_tuple_repr->fields.size());
-                    for (const auto& fld : arg_tuple_repr->fields) {
+                    const auto& argTupleTy = e->trait.mParams.types.at(0);
+                    const auto* argTupleRepr = TargetGetTypeRepr(state.sp, state.mResolve, argTupleTy);
+                    auto argTupleV = std::move(callArgs.at(1));
+                    ValueRef argTuple(argTupleV);
+                    callArgs.clear();
+                    callArgs.reserve(argTupleRepr->fields.size());
+                    for (const auto& fld : argTupleRepr->fields) {
                         auto size = local_state.size_of_or_bug(fld.ty);
-                        call_args.push_back(AllocationPtr::allocate(local_state.value_pool, state.mResolve, state, fld.ty));
-                        auto vr = ValueRef(call_args.back());
-                        vr.copy_from(state, arg_tuple.slice(fld.offset, size));
+                        callArgs.push_back(AllocationPtr::allocate(local_state.value_pool, state.mResolve, state, fld.ty));
+                        auto vr = ValueRef(callArgs.back());
+                        vr.copy_from(state, argTuple.slice(fld.offset, size));
                     }
                 } else {
                     // Ignore: Not a fn trait
@@ -3483,23 +3483,23 @@ namespace HIR {
         if (require_const_calls) if (const auto* e = path.mData.opt_UfcsKnown()) {
             const auto& trait = resolve.crate.get_trait_by_path(state.sp, e->trait.mPath);
             if (trait.isConst) {
-                ImplRef best_impl;
+                ImplRef bestImpl;
                 bool has_const_bound = false;
                 resolve.find_impl(state.sp, e->trait.mPath, e->trait.mParams, e->type, [&](ImplRef impl, bool is_fuzzed) {
                     if (is_fuzzed) {
                         return false;
                     }
                     if (!impl.mData.is_TraitImpl()) {
-                        has_const_bound |= impl.bound_constness() != HIR::BoundConstness::Never;
+                        has_const_bound |= impl.boundConstness() != HIR::BoundConstness::Never;
                         return false;
                     }
-                    if (!best_impl.is_valid() || impl.more_specific_than(resolve.crate.types, best_impl)) {
-                        best_impl = mv$(impl);
+                    if (!bestImpl.is_valid() || impl.more_specific_than(resolve.crate.types, bestImpl)) {
+                        bestImpl = mv$(impl);
                     }
                     return false;
                 });
-                MIR_ASSERT(state, has_const_bound || best_impl.is_valid(), "const trait call did not resolve to an impl: " << path);
-                MIR_ASSERT(state, has_const_bound || best_impl.mData.as_TraitImpl().impl->isConst, "const trait call requires a const impl: " << path);
+                MIR_ASSERT(state, has_const_bound || bestImpl.is_valid(), "const trait call did not resolve to an impl: " << path);
+                MIR_ASSERT(state, has_const_bound || bestImpl.mData.as_TraitImpl().impl->isConst, "const trait call requires a const impl: " << path);
             }
         }
 
@@ -3532,9 +3532,9 @@ namespace HIR {
             MIR_ASSERT(state, mir, "No MIR for function " << *fcn_path);
 
             // Monomorphised argument types
-            ::HIR::Function::args_t arg_defs;
+            ::HIR::Function::argsT argDefs;
             for (const auto& a : fcn.mArgs) {
-                arg_defs.push_back(::std::make_pair(::HIR::Pattern(), this->resolve.monomorph_expand(this->root_span, a.second, fcn_ms)));
+                argDefs.push_back(::std::make_pair(::HIR::Pattern(), this->resolve.monomorph_expand(this->root_span, a.second, fcn_ms)));
             }
             auto ret_ty = this->resolve.monomorph_expand(this->root_span, fcn.returnType, fcn_ms);
 
@@ -3545,8 +3545,8 @@ namespace HIR {
                 *mir,
                 std::move(fcn_ms),
                 std::move(ret_ty),
-                ::std::move(arg_defs),
-                std::move(call_args),
+                ::std::move(argDefs),
+                std::move(callArgs),
                 &fcn.mParams,
                 impl_params_def
             );
@@ -3563,11 +3563,11 @@ namespace HIR {
             if (!repr) {
                 throw Defer();
             }
-            MIR_ASSERT(state, repr->fields.size() == call_args.size(), "");
-            for (size_t i = 0; i < call_args.size(); i++) {
+            MIR_ASSERT(state, repr->fields.size() == callArgs.size(), "");
+            for (size_t i = 0; i < callArgs.size(); i++) {
                 size_t sz = local_state.size_of_or_bug(repr->fields[i].ty);
                 auto local_dst = dst.slice(repr->fields[i].offset, sz);
-                local_dst.copy_from(state, ValueRef(call_args[i]));
+                local_dst.copy_from(state, ValueRef(callArgs[i]));
                 DEBUG("@" << repr->fields[i].offset << " = " << local_dst);
             }
             return false;
@@ -3576,17 +3576,17 @@ namespace HIR {
         }
     }
 
-    EncodedLiteral Evaluator::allocation_to_encoded(const ::HIR::TypeData* ty, const ::MIR::eval::Allocation& a) {
+    EncodedLiteral Evaluator::allocationToEncoded(const ::HIR::TypeData* ty, const ::MIR::eval::Allocation& a) {
         //const auto* a_bytes = a.get_bytes(0, a.size(), true);
-        const auto* a_bytes = a.get_bytes(0, a.size(), false); // NOTE: Read the uninitialised bytes (they _should_ be zeroes)
-        ASSERT_BUG(this->root_span, a_bytes, "Unable to get entire allocation - " << FMT_CB(ss, a.fmt(ss, 0, a.size())));
+        const auto* aBytes = a.get_bytes(0, a.size(), false); // NOTE: Read the uninitialised bytes (they _should_ be zeroes)
+        ASSERT_BUG(this->root_span, aBytes, "Unable to get entire allocation - " << FMT_CB(ss, a.fmt(ss, 0, a.size())));
         EncodedLiteral rv;
-        rv.bytes.insert(rv.bytes.begin(), a_bytes, a_bytes + a.size());
+        rv.bytes.insert(rv.bytes.begin(), aBytes, aBytes + a.size());
         for (const auto& r : a.get_relocations()) {
-            if (const auto* inner_alloc = r.ptr.as_allocation()) {
+            if (const auto* inner_alloc = r.ptr.asAllocation()) {
                 // Create a new static
                 if (inner_alloc->is_writable()) {
-                    auto inner_val = allocation_to_encoded(inner_alloc->get_type(), *inner_alloc);
+                    auto inner_val = allocationToEncoded(inner_alloc->get_type(), *inner_alloc);
 
                     // Clone type with all lifetimes set to `'static`
                     struct M: MonomorphiserNop {
@@ -3606,10 +3606,10 @@ namespace HIR {
                     auto ptr = inner_alloc->get_bytes(0, size, true);
                     rv.relocations.push_back(Reloc::new_bytes(r.offset, TargetGetPointerBits() / 8, ::std::string(ptr, ptr + size)));
                 }
-            } else if (const auto* sr = r.ptr.as_staticref()) {
+            } else if (const auto* sr = r.ptr.asStaticref()) {
                 // Just emit a path
                 rv.relocations.push_back(Reloc::new_named(r.offset, TargetGetPointerBits() / 8, sr->path().clone()));
-            } else if (const auto* c = r.ptr.as_constant()) {
+            } else if (const auto* c = r.ptr.asConstant()) {
                 // string
                 auto size = c->size();
                 auto ptr = c->get_bytes(0, size, true);
@@ -3678,7 +3678,7 @@ namespace HIR {
                 ms.self_ty = resolve.crate.types.self();
             }
 
-            assert(this->call_stack.empty());
+            assert(this->callStack.empty());
             this->num_frames = 0;
             // Note: Since this is the entrypoint, `this->resolve` has the correct GenericParams
             this->push_stack_entry(FMT_CB(os, os << ip), *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenerics, resolve.implGenerics);
@@ -3687,7 +3687,7 @@ namespace HIR {
             ASSERT_BUG(this->root_span, rv_raw, "evaluate_constant_mir returned null allocation");
             DEBUG(ip << " = " << ::MIR::eval::ValueRef(rv_raw));
 
-            return this->allocation_to_encoded(exp, *rv_raw);
+            return this->allocationToEncoded(exp, *rv_raw);
         } else {
             BUG(this->root_span, "Attempting to evaluate constant expression with no associated code");
         }
@@ -3973,7 +3973,7 @@ namespace {
             ::HIR::Visitor::visit_type(ty);
 
             if (ty->is_Array()) {
-                auto data = ty->clone_data();
+                auto data = ty->cloneData();
                 auto& e = data.as_Array();
                 TRACE_FUNCTION_FR(ty, ty);
                 visit_arraysize(e.size, FMT("ty_" << &e << "#"));
@@ -4076,11 +4076,11 @@ namespace {
         void visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) override {
             assert(!implParams);
             implParams = &item.mParams;
-            if (item.const_eval_state != HIR::ConstEvalState::Complete) {
-                ASSERT_BUG(Span(), item.const_eval_state == HIR::ConstEvalState::None, "Constant evaluation loop involving " << p);
-                item.const_eval_state = HIR::ConstEvalState::Active;
+            if (item.constEvalState != HIR::ConstEvalState::Complete) {
+                ASSERT_BUG(Span(), item.constEvalState == HIR::ConstEvalState::None, "Constant evaluation loop involving " << p);
+                item.constEvalState = HIR::ConstEvalState::Active;
                 ::HIR::Visitor::visit_struct(p, item);
-                item.const_eval_state = HIR::ConstEvalState::Complete;
+                item.constEvalState = HIR::ConstEvalState::Complete;
             }
             assert(implParams);
             implParams = nullptr;
@@ -4360,8 +4360,8 @@ void ConvertHIRConstantEvaluateConstant(const ::HIR::Crate& crate, const ::HIR::
 }
 
 void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeData* ty, ::HIR::ConstGeneric& cg) {
-    if (auto* cge_p = cg.opt_Unevaluated()) {
-        const auto& cge = *cge_p;
+    if (auto* cgeP = cg.opt_Unevaluated()) {
+        const auto& cge = *cgeP;
         try {
             cg = HIR::EncodedLiteralPtr(evaluate_constgeneric(sp, crate, ty, *cge));
         } catch (const Defer&) {

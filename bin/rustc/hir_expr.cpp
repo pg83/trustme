@@ -451,7 +451,7 @@ void ::HIR::ExprVisitorDef::visit_pattern(const Span& sp, ::HIR::Pattern& pat) {
 }
 
 void ::HIR::ExprVisitorDef::visit_type(::HIR::TypeRef& ty) {
-    auto data = ty->clone_data();
+    auto data = ty->cloneData();
     TU_MATCH(::HIR::TypeData, (data), (e),
     (Infer,
         ),
@@ -829,7 +829,7 @@ ExprNodeArraySized::ExprNodeArraySized(Span sp, ::HIR::ExprNodeP val, ::HIR::Exp
     , val(mv$(val))
     , mSize(HIR::ConstGeneric(std::make_unique<HIR::ConstGenericUnevaluated>(mv$(size)))) {
 }
-ExprNodeClosure::ExprNodeClosure(Span sp, args_t args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move)
+ExprNodeClosure::ExprNodeClosure(Span sp, argsT args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move)
     : ExprNode(mv$(sp))
     , mArgs(::std::move(args))
     , returnType(::std::move(rv))

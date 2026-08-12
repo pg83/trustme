@@ -257,18 +257,18 @@ namespace MIR {
             return LValue(root.clone(), wrappers);
         }
 
-        LValue clone_wrapped(::std::vector<Wrapper> wrappers) const;
+        LValue cloneWrapped(::std::vector<Wrapper> wrappers) const;
 
         template <typename It>
-        LValue clone_wrapped(It begin_it, It end_it) const {
+        LValue cloneWrapped(It beginIt, It end_it) const {
             ::std::vector<Wrapper> newWrappers;
-            newWrappers.reserve(wrappers.size() + ::std::distance(begin_it, end_it));
+            newWrappers.reserve(wrappers.size() + ::std::distance(beginIt, end_it));
             newWrappers.insert(newWrappers.end(), wrappers.begin(), wrappers.end());
-            newWrappers.insert(newWrappers.end(), begin_it, end_it);
+            newWrappers.insert(newWrappers.end(), beginIt, end_it);
             return LValue(root.clone(), ::std::move(newWrappers));
         }
 
-        LValue clone_unwrapped(unsigned count = 1) const;
+        LValue cloneUnwrapped(unsigned count = 1) const;
 
         // Returns true if this LValue is a subset of the other (e.g. `_1.0` is a subset of `_1.0*`)
         bool is_subset_of(const LValue& other) const {
@@ -682,8 +682,8 @@ namespace MIR {
         (If,
          struct {
              LValue cond;
-             BasicBlockId bb_true;
-             BasicBlockId bb_false;
+             BasicBlockId bbTrue;
+             BasicBlockId bbFalse;
          }),
         (Switch,
          struct {
@@ -768,7 +768,7 @@ namespace MIR {
              /// Destination bit-set, an array of unsigned integers (nominally `u8`)
              LValue slot;
              /// Destination bit v
-             unsigned int bit_index;
+             unsigned int bitIndex;
              /// Source drop flag index
              unsigned int idx;
          }),
@@ -779,7 +779,7 @@ namespace MIR {
              /// Source bit-set, an array of unsigned integers (nominally `u8`)
              LValue slot;
              /// Source bit index
-             unsigned int bit_index;
+             unsigned int bitIndex;
          }),
         (ScopeEnd, struct { ::std::vector<unsigned> slots; })
     );
@@ -863,18 +863,18 @@ namespace MIR {
             return nullptr;
         }
 
-        virtual ::MIR::Statement clone_stmt(const ::MIR::Statement& src) const;
-        virtual ::MIR::Terminator clone_term(const ::MIR::Terminator& src) const;
+        virtual ::MIR::Statement cloneStmt(const ::MIR::Statement& src) const;
+        virtual ::MIR::Terminator cloneTerm(const ::MIR::Terminator& src) const;
 
-        virtual ::MIR::LValue clone_lval(const ::MIR::LValue& src) const;
-        virtual ::MIR::RValue clone_rval(const ::MIR::RValue& src) const;
-        virtual ::MIR::Param clone_param(const ::MIR::Param& src) const;
-        virtual ::MIR::Constant clone_constant(const ::MIR::Constant& src) const;
+        virtual ::MIR::LValue cloneLval(const ::MIR::LValue& src) const;
+        virtual ::MIR::RValue cloneRval(const ::MIR::RValue& src) const;
+        virtual ::MIR::Param cloneParam(const ::MIR::Param& src) const;
+        virtual ::MIR::Constant cloneConstant(const ::MIR::Constant& src) const;
 
-        ::std::vector<MIR::AsmParam> clone_asm_params(const ::std::vector<MIR::AsmParam>& params) const;
-        ::std::vector<::std::pair<::std::string, ::MIR::LValue>> clone_name_lval_vec(const ::std::vector<::std::pair<::std::string, ::MIR::LValue>>& src) const;
-        ::std::vector<::MIR::Param> clone_param_vec(const ::std::vector<::MIR::Param>& src) const;
-        ::std::vector<::MIR::LValue> clone_lval_vec(const ::std::vector<::MIR::LValue>& src) const;
+        ::std::vector<MIR::AsmParam> cloneAsmParams(const ::std::vector<MIR::AsmParam>& params) const;
+        ::std::vector<::std::pair<::std::string, ::MIR::LValue>> cloneNameLvalVec(const ::std::vector<::std::pair<::std::string, ::MIR::LValue>>& src) const;
+        ::std::vector<::MIR::Param> cloneParamVec(const ::std::vector<::MIR::Param>& src) const;
+        ::std::vector<::MIR::LValue> cloneLvalVec(const ::std::vector<::MIR::LValue>& src) const;
 
         // -- Monomorphise various types
         ::HIR::TypeRef monomorph(const ::HIR::TypeData* x) const;

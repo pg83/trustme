@@ -32,8 +32,8 @@ public:
     static Float128 quiet_nan();
     static Float128 infinity(bool negative);
 
-    uint64_t bits_hi() const;
-    uint64_t bits_lo() const;
+    uint64_t bitsHi() const;
+    uint64_t bitsLo() const;
 
     bool is_nan() const;
     bool is_infinite() const;

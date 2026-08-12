@@ -36,7 +36,7 @@
 void ExpandTestHarness(::AST::Crate& crate) {
     ASSERT_BUG(Span(), crate.extCratenameTest != "", "Crate `test` not loaded");
     ASSERT_BUG(Span(), crate.extCratenameStd != "", "Crate `std` not loaded");
-    auto c_test = crate.extCratenameTest;
+    auto cTest = crate.extCratenameTest;
     // Create the following module:
     // ```
     // mod `#test` {
@@ -54,8 +54,8 @@ void ExpandTestHarness(::AST::Crate& crate) {
     // ---- main function ----
     auto main_fn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
-        auto call_node = NEWNODE(CallPath, ::AST::Path(c_test, {::AST::PathNode("test_main_static")}), ::make_vec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("test#"), ::AST::PathNode("TESTS")})))));
-        main_fn.set_code(mv$(call_node));
+        auto callNode = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("test_main_static")}), ::make_vec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("test#"), ::AST::PathNode("TESTS")})))));
+        main_fn.set_code(mv$(callNode));
     }
 
     // ---- test list ----
@@ -64,7 +64,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     for (const auto& test : crate.tests) {
         ::AST::ExprNodeStructLiteral::t_values desc_vals;
         // `name: "foo",`
-        desc_vals.push_back({{}, "name", NEWNODE(CallPath, ::AST::Path(c_test, {::AST::PathNode("StaticTestName")}), ::make_vec1(NEWNODE(String, test.name)))});
+        desc_vals.push_back({{}, "name", NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("StaticTestName")}), ::make_vec1(NEWNODE(String, test.name)))});
         // `ignore: false,`
         desc_vals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
         // `should_panic: ShouldPanic::No,`
@@ -72,13 +72,13 @@ void ExpandTestHarness(::AST::Crate& crate) {
             ::AST::ExprNodeP should_panic_val;
             switch (test.panic_type) {
                 case ::AST::TestDesc::ShouldPanic::No:
-                    should_panic_val = NEWNODE(NamedValue, ::AST::Path(c_test, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("No")}));
+                    should_panic_val = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("No")}));
                     break;
                 case ::AST::TestDesc::ShouldPanic::Yes:
-                    should_panic_val = NEWNODE(NamedValue, ::AST::Path(c_test, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("Yes")}));
+                    should_panic_val = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("Yes")}));
                     break;
                 case ::AST::TestDesc::ShouldPanic::YesWithMessage:
-                    should_panic_val = NEWNODE(CallPath, ::AST::Path(c_test, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), make_vec1(NEWNODE(String, test.expected_panic_message)));
+                    should_panic_val = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), make_vec1(NEWNODE(String, test.expected_panic_message)));
                     break;
             }
             desc_vals.push_back({{}, "should_panic", mv$(should_panic_val)});
@@ -87,7 +87,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
             // TODO: Get this from attributes
             desc_vals.push_back({{}, "compile_fail", NEWNODE(Bool, false)});
             desc_vals.push_back({{}, "no_run", NEWNODE(Bool, false)});
-            desc_vals.push_back({{}, "test_type", NEWNODE(NamedValue, ::AST::Path(c_test, {AST::PathNode("TestType"), AST::PathNode("UnitTest")}))});
+            desc_vals.push_back({{}, "test_type", NEWNODE(NamedValue, ::AST::Path(cTest, {AST::PathNode("TestType"), AST::PathNode("UnitTest")}))});
         }
         {
             desc_vals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ::AST::Path(crate.extCratenameStd, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
@@ -98,7 +98,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
             desc_vals.push_back({{}, "end_line", NEWNODE(Integer, U128(sp.end_line), CORETYPE_UINT)});
             desc_vals.push_back({{}, "end_col", NEWNODE(Integer, U128(sp.end_ofs), CORETYPE_UINT)});
         }
-        auto desc_expr = NEWNODE(StructLiteral, ::AST::Path(c_test, {::AST::PathNode("TestDesc")}), nullptr, mv$(desc_vals));
+        auto desc_expr = NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDesc")}), nullptr, mv$(desc_vals));
 
         ::AST::ExprNodeStructLiteral::t_values descandfn_vals;
         descandfn_vals.push_back({{}, RcString::new_interned("desc"), mv$(desc_expr)});
@@ -107,12 +107,12 @@ void ExpandTestHarness(::AST::Crate& crate) {
         {
             // Convert `fn()` into `fn()->Result<(),String>`
             // Use `|| ::test::assert_test_result( fcn() )`
-            test_fcn_node = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ::AST::Path(c_test, {::AST::PathNode("assert_test_result")}), ::make_vec1(NEWNODE(CallPath, AST::Path(test.path), {}))), false, false);
+            test_fcn_node = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("assert_test_result")}), ::make_vec1(NEWNODE(CallPath, AST::Path(test.path), {}))), false, false);
         }
         auto test_type_var_name = test.is_benchmark ? "StaticBenchFn" : "StaticTestFn";
-        descandfn_vals.push_back({{}, RcString::new_interned("testfn"), NEWNODE(CallPath, ::AST::Path(c_test, {::AST::PathNode(test_type_var_name)}), ::make_vec1(std::move(test_fcn_node)))});
+        descandfn_vals.push_back({{}, RcString::new_interned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(test_type_var_name)}), ::make_vec1(std::move(test_fcn_node)))});
 
-        test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(c_test, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfn_vals)));
+        test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfn_vals)));
         // NOTE: 1.39+ needs &TestDescAndFn here
         {
             test_nodes.back() = NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, mv$(test_nodes.back()));
@@ -121,7 +121,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     auto* tests_array = new ::AST::ExprNodeArray(mv$(test_nodes));
 
     size_t test_count = tests_array->values.size();
-    auto list_item_ty = TypeRef(Span(), ::AST::Path(c_test, {::AST::PathNode("TestDescAndFn")}));
+    auto list_item_ty = TypeRef(Span(), ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}));
     // NOTE: 1.39+ needs &TestDescAndFn here
     {
         list_item_ty = TypeRef(TypeRef::TagReference(), Span(), AST::LifetimeRef::new_static(), false, mv$(list_item_ty));
@@ -136,10 +136,10 @@ void ExpandTestHarness(::AST::Crate& crate) {
     //newmod.add_ext_crate(Span(), false, "std", "std", {});
     //newmod.add_ext_crate(Span(), false, "test", "test", {});
 
-    newmod.add_item(Span(), vis_private, "main", mv$(main_fn), {});
-    newmod.add_item(Span(), vis_private, "TESTS", mv$(tests_list), {});
+    newmod.addItem(Span(), vis_private, "main", mv$(main_fn), {});
+    newmod.addItem(Span(), vis_private, "TESTS", mv$(tests_list), {});
 
-    crate.rootModule.add_item(Span(), vis_private, "test#", mv$(newmod), {});
+    crate.rootModule.addItem(Span(), vis_private, "test#", mv$(newmod), {});
     crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"test#", "main"});
 }
 
@@ -151,7 +151,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     #define __has_feature(x) 0
 #endif
 
-#if __has_feature(address_sanitizer) || __has_feature(undefined_behavior_sanitizer)
+#if __has_feature(addressSanitizer) || __has_feature(undefined_behavior_sanitizer)
     #define MRUSTC_SANITIZER_BUILD 1
 #else
     #define MRUSTC_SANITIZER_BUILD 0
@@ -222,7 +222,7 @@ struct ProgramParams {
     } debug;
 
     struct {
-        ::std::string codegen_type;
+        ::std::string codegenType;
         ::std::string emit_build_command;
         ::std::string panic_type;
         ::std::vector<::std::string> linker_args;
@@ -522,8 +522,8 @@ int main(int argc, char* argv[]) {
         // Allocator and panic strategies
         CompilePhaseV("Implicit Crates", [&]() {
             if (crate.crateType == ::AST::Crate::Type::Executable || params.test_harness || crate.crateType == ::AST::Crate::Type::ProcMacro) {
-                bool allocator_crate_loaded = false;
-                RcString alloc_crate_name;
+                bool allocatorCrateLoaded = false;
+                RcString allocCrateName;
                 bool panic_runtime_loaded = false;
                 RcString panic_crate_name;
                 bool panic_runtime_needed = false;
@@ -534,11 +534,11 @@ int main(int argc, char* argv[]) {
                     }
                     DEBUG("Looking at lang items from " << ec.first << " : " << ss.str());
                     if (ec.second.hir->mLangItems.count("mrustc-allocator")) {
-                        if (allocator_crate_loaded) {
-                            ERROR(Span(), E0000, "Multiple allocator crates loaded - " << alloc_crate_name << " and " << ec.first);
+                        if (allocatorCrateLoaded) {
+                            ERROR(Span(), E0000, "Multiple allocator crates loaded - " << allocCrateName << " and " << ec.first);
                         }
-                        alloc_crate_name = ec.first;
-                        allocator_crate_loaded = true;
+                        allocCrateName = ec.first;
+                        allocatorCrateLoaded = true;
                     }
                     if (ec.second.hir->mLangItems.count("mrustc-panic_runtime")) {
                         if (panic_runtime_loaded) {
@@ -554,8 +554,8 @@ int main(int argc, char* argv[]) {
                     }
                 }
                 // The default (system) allocator is provided by liballoc.
-                allocator_crate_loaded = true;
-                if (!allocator_crate_loaded) {
+                allocatorCrateLoaded = true;
+                if (!allocatorCrateLoaded) {
                     crate.load_extern_crate(Span(), "alloc_system");
                 }
 
@@ -846,8 +846,8 @@ int main(int argc, char* argv[]) {
         // - MIR Exportable (public generic, #[inline], or used by a either of those)
         // - Require codegen (public or used by an exported function)
         TransOptions trans_opt;
-        trans_opt.mode = params.codegen.codegen_type == "" ? "c" : params.codegen.codegen_type;
-        trans_opt.build_command_file = params.codegen.emit_build_command;
+        trans_opt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
+        trans_opt.buildCommandFile = params.codegen.emit_build_command;
         trans_opt.linker_args = params.codegen.linker_args;
         trans_opt.opt_level = params.opt_level;
         trans_opt.panic_crate = "panic_" + params.codegen.panic_type;
@@ -1123,7 +1123,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->codegen.emit_build_command = optval;
                     } else if (optname == "codegen-type") {
                         get_optval();
-                        this->codegen.codegen_type = optval;
+                        this->codegen.codegenType = optval;
                     } else if (optname == "emit-depfile") {
                         get_optval();
                         this->emit_depfile = optval;
@@ -1344,7 +1344,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 }
             }
         } else {
-            auto check_with_arg = [&](const char* name) -> const char* {
+            auto checkWithArg = [&](const char* name) -> const char* {
                 if (strcmp(arg + 2, name) == 0) {
                     if (i == argc - 1) {
                         ::std::cerr << "Flag " << arg << " requires an argument" << ::std::endl;
@@ -1371,7 +1371,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 exit(0);
             }
             // --out-dir <dir>  >> Set the output directory for automatically-named files
-            else if (const char* out_dir = check_with_arg("out-dir")) {
+            else if (const char* out_dir = checkWithArg("out-dir")) {
                 this->output_dir = out_dir;
                 if (this->output_dir != "" && this->output_dir.back() != '/') {
                     this->output_dir += '/';
@@ -1395,15 +1395,15 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 this->crate_overrides.insert(::std::make_pair(mv$(name), mv$(path)));
             }
             // --crate-tag <name>  >> Specify a version/identifier suffix for the crate
-            else if (const auto* name_str = check_with_arg("crate-tag")) {
+            else if (const auto* name_str = checkWithArg("crate-tag")) {
                 this->crate_name_suffix = name_str;
             }
             // --crate-name <name>  >> Specify the crate name (overrides `#![crate_name="<name>"]`)
-            else if (const auto* name_str = check_with_arg("crate-name")) {
+            else if (const auto* name_str = checkWithArg("crate-name")) {
                 this->crate_name = name_str;
             }
             // `--crate-type <name>`    - Specify the crate type (overrides `#![crate_type="<name>"]`)
-            else if (const char* type_str = check_with_arg("crate-type")) {
+            else if (const char* type_str = checkWithArg("crate-type")) {
                 if (strcmp(type_str, "lib") == 0 || strcmp(type_str, "rlib") == 0) {
                     this->crate_type = ::AST::Crate::Type::RustLib;
                 } else if (strcmp(type_str, "dylib") == 0) {
@@ -1419,13 +1419,13 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
             }
             // `--cfg <flag>` / `--cfg=<flag>`
             // `--cfg <var>=<value>` / `--cfg=<var>=<value>`
-            else if (const char* cfg_spec = check_with_arg("cfg")) {
+            else if (const char* cfgSpec = checkWithArg("cfg")) {
                 ::std::string name;
                 ::std::string value;
                 ::std::string error;
                 bool has_value = false;
-                if (!CfgParseOption(cfg_spec, name, has_value, value, error)) {
-                    ::std::cerr << "invalid `--cfg` argument: `" << cfg_spec << "`: " << error << ::std::endl;
+                if (!CfgParseOption(cfgSpec, name, has_value, value, error)) {
+                    ::std::cerr << "invalid `--cfg` argument: `" << cfgSpec << "`: " << error << ::std::endl;
                     exit(1);
                 }
                 if (has_value) {
@@ -1437,19 +1437,19 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 } else {
                     CfgSetFlag(mv$(name));
                 }
-            } else if (const char* check_cfg_spec = check_with_arg("check-cfg")) {
+            } else if (const char* checkCfgSpec = checkWithArg("check-cfg")) {
                 ::std::string error;
-                if (!CfgSetCheckSpec(check_cfg_spec, error)) {
-                    ::std::cerr << "invalid `--check-cfg` argument: `" << check_cfg_spec << "`: " << error << ::std::endl;
+                if (!CfgSetCheckSpec(checkCfgSpec, error)) {
+                    ::std::cerr << "invalid `--check-cfg` argument: `" << checkCfgSpec << "`: " << error << ::std::endl;
                     exit(1);
                 }
-            } else if (const char* force_warn = check_with_arg("force-warn")) {
+            } else if (const char* force_warn = checkWithArg("force-warn")) {
                 if (force_warn[0] == '\0') {
                     ::std::cerr << "Flag --force-warn requires an argument" << ::std::endl;
                     exit(1);
                 }
                 CfgSetLintLevel(force_warn, CfgLintLevel::ForceWarn);
-            } else if (const char* lint_cap = check_with_arg("cap-lints")) {
+            } else if (const char* lint_cap = checkWithArg("cap-lints")) {
                 CfgLintLevel level;
                 if (strcmp(lint_cap, "allow") == 0) {
                     level = CfgLintLevel::Allow;
@@ -1464,11 +1464,11 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     exit(1);
                 }
                 CfgSetLintCap(level);
-            } else if (const char* emit = check_with_arg("emit")) {
+            } else if (const char* emit = checkWithArg("emit")) {
                 ::std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
             }
             // `--target <triple>`  - Override the default compiler target
-            else if (const char* target_name = check_with_arg("target")) {
+            else if (const char* target_name = checkWithArg("target")) {
                 this->target = target_name;
             } else if (strcmp(arg, "--dump-target-spec") == 0) {
                 if (i == argc - 1) {
@@ -1478,7 +1478,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 this->target_saveback = argv[++i];
             } else if (strcmp(arg, "--test") == 0) {
                 this->test_harness = true;
-            } else if (const char* edition_str = check_with_arg("edition")) {
+            } else if (const char* edition_str = checkWithArg("edition")) {
                 if (strcmp(edition_str, "2015") == 0) {
                     this->edition = AST::Edition::Rust2015;
                 } else if (strcmp(edition_str, "2018") == 0) {

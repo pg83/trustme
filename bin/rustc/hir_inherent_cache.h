@@ -51,11 +51,11 @@ namespace HIR {
         /// Callback arguments:
         /// `self_ty`: Type for `Self` within the `impl` block
         /// `impl`: TypeImpl containing this method
-        typedef ::std::function<void(const HIR::TypeData* self_ty, const HIR::TypeImpl& impl)> callback_t;
+        typedef ::std::function<void(const HIR::TypeData* self_ty, const HIR::TypeImpl& impl)> callbackT;
 
         void insert_all(const Span& sp, const HIR::TypeImpl& impl, const HIR::SimplePath& langBox);
         /// Locates methods matching the specifided type
-        void find(const Span& sp, const RcString& name, const HIR::TypeData* ty, t_cb_resolve_type ty_res, callback_t cb) const;
+        void find(const Span& sp, const RcString& name, const HIR::TypeData* ty, t_cb_resolve_type ty_res, callbackT cb) const;
     };
 
 }

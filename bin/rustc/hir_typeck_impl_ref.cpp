@@ -277,19 +277,19 @@ ImplRef::ImplRef()
 ImplRef::ImplRef(HIR::PathParams impl_params, const HIR::Trait& trait_ref, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl)
     : mData(Data::make_TraitImpl({mv$(impl_params), &trait_ref, &trait, &impl})) {
 }
-ImplRef::ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc, ::HIR::BoundConstness constness)
+ImplRef::ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness)
     : mData(Data::make_BoundedPtr({HIR::PathParams(), type, args, assoc, constness})) {
 }
-ImplRef::ImplRef(::HIR::PathParams hrls, const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assoc_list_t* assoc, ::HIR::BoundConstness constness)
+ImplRef::ImplRef(::HIR::PathParams hrls, const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness)
     : mData(Data::make_BoundedPtr({std::move(hrls), type, args, assoc, constness})) {
 }
-ImplRef::ImplRef(::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc, ::HIR::BoundConstness constness)
+ImplRef::ImplRef(::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assocListT assoc, ::HIR::BoundConstness constness)
     : mData(Data::make_Bounded({::HIR::PathParams(), mv$(type), mv$(args), mv$(assoc), constness})) {
 }
-ImplRef::ImplRef(::HIR::PathParams hrls, ::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assoc_list_t assoc, ::HIR::BoundConstness constness)
+ImplRef::ImplRef(::HIR::PathParams hrls, ::HIR::TypeRef type, ::HIR::PathParams args, ::HIR::TraitPath::assocListT assoc, ::HIR::BoundConstness constness)
     : mData(Data::make_Bounded({mv$(hrls), mv$(type), mv$(args), mv$(assoc), constness})) {
 }
-::HIR::BoundConstness ImplRef::bound_constness() const {
+::HIR::BoundConstness ImplRef::boundConstness() const {
     if (const auto* e = mData.opt_BoundedPtr()) {
         return e->constness;
     }

@@ -51,9 +51,9 @@ GenericParams GenericParams::clone() const {
     }
     return rv;
 }
-void GenericParams::add_param(GenericParam gp, size_t bounds_start, size_t bounds_end) {
+void GenericParams::addParam(GenericParam gp, size_t boundsStart, size_t boundsEnd) {
     mParams.push_back(::std::move(gp));
-    mParams.back().bounds_start = bounds_start;
-    mParams.back().bounds_end = bounds_end;
+    mParams.back().boundsStart = boundsStart;
+    mParams.back().boundsEnd = boundsEnd;
 }
 }

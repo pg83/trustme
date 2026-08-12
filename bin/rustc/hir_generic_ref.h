@@ -85,10 +85,10 @@ namespace HIR {
             return binding < 0xFF00;
         }
 
-        GenericRef as_param() const;
+        GenericRef asParam() const;
 
         bool is_hrl() const {
-            return is_param() && as_param().group() == 3;
+            return is_param() && asParam().group() == 3;
         }
 
         Ordering ord(const LifetimeRef& x) const {

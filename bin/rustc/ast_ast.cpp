@@ -43,7 +43,7 @@ namespace AST {
     Impl& Impl::operator=(Impl&&) = default;
 
     namespace {
-        ::std::vector<Attribute> clone_mivec(const ::std::vector<Attribute>& v) {
+        ::std::vector<Attribute> cloneMivec(const ::std::vector<Attribute>& v) {
             ::std::vector<Attribute> ri;
             ri.reserve(v.size());
             for (const auto& i : v) {
@@ -54,7 +54,7 @@ namespace AST {
     }
 
     AttributeList AttributeList::clone() const {
-        return AttributeList(clone_mivec(mItems));
+        return AttributeList(cloneMivec(mItems));
     }
 
     void AttributeList::push_back(Attribute i) {
@@ -279,15 +279,15 @@ namespace AST {
         return rv;
     }
 
-    void Trait::add_type(Span sp, RcString name, AttributeList attrs, TypeRef type) {
+    void Trait::addType(Span sp, RcString name, AttributeList attrs, TypeRef type) {
         mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Type({TypeAlias(GenericParams(), mv$(type))})));
     }
 
-    void Trait::add_function(Span sp, RcString name, AttributeList attrs, Function fcn) {
+    void Trait::addFunction(Span sp, RcString name, AttributeList attrs, Function fcn) {
         mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Function({mv$(fcn)})));
     }
 
-    void Trait::add_static(Span sp, RcString name, AttributeList attrs, Static v) {
+    void Trait::addStatic(Span sp, RcString name, AttributeList attrs, Static v) {
         mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Static({mv$(v)})));
     }
 
@@ -345,19 +345,19 @@ namespace AST {
         return os << "impl " << (impl.isConst ? "const " : "") << "<" << impl.mParams << "> " << impl.mTrait.ent << " for " << impl.mType << "";
     }
 
-    void Impl::add_function(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Function fcn) {
+    void Impl::addFunction(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Function fcn) {
         mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Function(mv$(fcn)))});
     }
 
-    void Impl::add_type(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, GenericParams params, TypeRef type) {
+    void Impl::addType(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, GenericParams params, TypeRef type) {
         mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Type(TypeAlias(mv$(params), mv$(type))))});
     }
 
-    void Impl::add_static(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Static v) {
+    void Impl::addStatic(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Static v) {
         mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Static(mv$(v)))});
     }
 
-    void Impl::add_macro_invocation(MacroInvocation item) {
+    void Impl::addMacroInvocation(MacroInvocation item) {
         mItems.push_back(ImplItem{item.span(), {}, AST::Visibility::make_global(), false, "", box$(Item::make_MacroInv(mv$(item)))});
     }
 
@@ -399,7 +399,7 @@ namespace AST {
     ExternBlock::ExternBlock(ExternBlock&&) = default;
     ExternBlock& ExternBlock::operator=(ExternBlock&&) = default;
 
-    void ExternBlock::add_item(Named<Item> named_item) {
+    void ExternBlock::addItem(Named<Item> named_item) {
         ASSERT_BUG(named_item.span, named_item.data.is_Function() || named_item.data.is_Static() || named_item.data.is_Type() || named_item.data.is_MacroInv(), "Incorrect item type for ExternBlock - " << named_item.data.tag_str());
         mItems.push_back(mv$(named_item));
     }
@@ -419,7 +419,7 @@ namespace AST {
     Module::Module(Module&&) = default;
     Module& Module::operator=(Module&&) = default;
 
-    ::std::shared_ptr<AST::Module> Module::add_anon() {
+    ::std::shared_ptr<AST::Module> Module::addAnon() {
         auto rv = ::std::shared_ptr<AST::Module>(new Module(myPath + RcString::new_interned(FMT("#" << anonModules.size()))));
         DEBUG("New anon " << rv->myPath);
         rv->fileInfo = fileInfo;
@@ -429,7 +429,7 @@ namespace AST {
         return rv;
     }
 
-    void Module::add_item(Named<Item> named_item) {
+    void Module::addItem(Named<Item> named_item) {
         mItems.push_back(box$(named_item));
         const auto& i = mItems.back();
         if (i->name == "") {
@@ -438,19 +438,19 @@ namespace AST {
         }
     }
 
-    void Module::add_item(Span sp, Visibility vis, RcString name, Item it, AttributeList attrs) {
-        add_item(Named<Item>(mv$(sp), mv$(attrs), mv$(vis), mv$(name), mv$(it)));
+    void Module::addItem(Span sp, Visibility vis, RcString name, Item it, AttributeList attrs) {
+        addItem(Named<Item>(mv$(sp), mv$(attrs), mv$(vis), mv$(name), mv$(it)));
     }
 
-    void Module::add_ext_crate(Span sp, AST::Visibility vis, RcString ext_name, RcString imp_name, AttributeList attrs) {
-        this->add_item(mv$(sp), mv$(vis), imp_name, Item::make_Crate({mv$(ext_name)}), mv$(attrs));
+    void Module::addExtCrate(Span sp, AST::Visibility vis, RcString ext_name, RcString imp_name, AttributeList attrs) {
+        this->addItem(mv$(sp), mv$(vis), imp_name, Item::make_Crate({mv$(ext_name)}), mv$(attrs));
     }
 
-    void Module::add_macro_invocation(MacroInvocation item) {
-        this->add_item(item.span(), AST::Visibility::make_global(), "", Item(mv$(item)), ::AST::AttributeList{});
+    void Module::addMacroInvocation(MacroInvocation item) {
+        this->addItem(item.span(), AST::Visibility::make_global(), "", Item(mv$(item)), ::AST::AttributeList{});
     }
 
-    void Module::add_macro(bool is_exported, RcString name, MacroRulesPtr macro) {
+    void Module::addMacro(bool is_exported, RcString name, MacroRulesPtr macro) {
         assert(macro);
         assert(macro->rules.size() > 0);
         mMacros.push_back(

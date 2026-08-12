@@ -169,8 +169,8 @@ public:
 };
 
 // === Prototypes ===
-unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& bound_tts);
-void MacroInvokeRulesCountSubstUses(ParameterMappings& bound_tts, const ::std::vector<MacroExpansionEnt>& contents);
+unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& boundTts);
+void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::vector<MacroExpansionEnt>& contents);
 
 // ------------------------------------
 // ParameterMappings
@@ -602,21 +602,21 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     DEBUG("rules.m_source_crate = " << rules.sourceCrate);
     DEBUG("rules.m_hygiene = " << rules.mHygiene);
 
-    ParameterMappings bound_tts;
-    unsigned int rule_index = MacroInvokeRulesMatchPattern(sp, rules, mv$(input), crate, mod, bound_tts);
+    ParameterMappings boundTts;
+    unsigned int rule_index = MacroInvokeRulesMatchPattern(sp, rules, mv$(input), crate, mod, boundTts);
 
     const auto& rule = rules.rules.at(rule_index);
 
-    DEBUG("Using macro '" << name << "' #" << rule_index << " - " << rule.contents.size() << " rule contents with " << bound_tts.mappings().size() << " bound values");
-    for (unsigned int i = 0; i < ::std::min(bound_tts.mappings().size(), rule.paramNames.size()); i++) {
-        DEBUG("- #" << i << " " << rule.paramNames.at(i) << " = [" << bound_tts.mappings()[i] << "]");
+    DEBUG("Using macro '" << name << "' #" << rule_index << " - " << rule.contents.size() << " rule contents with " << boundTts.mappings().size() << " bound values");
+    for (unsigned int i = 0; i < ::std::min(boundTts.mappings().size(), rule.paramNames.size()); i++) {
+        DEBUG("- #" << i << " " << rule.paramNames.at(i) << " = [" << boundTts.mappings()[i] << "]");
     }
     //bound_tts.dump();
 
     // Run through the expansion counting the number of times each fragment is used
-    MacroInvokeRulesCountSubstUses(bound_tts, rule.contents);
+    MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
 
-    TokenStream* ret_ptr = new MacroExpander(name, sp, crate.edition, rules.isMacroItem, rules.definitionId, rules.mHygiene, rule.contents, mv$(bound_tts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
+    TokenStream* ret_ptr = new MacroExpander(name, sp, crate.edition, rules.isMacroItem, rules.definitionId, rules.mHygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
 
     return ::std::unique_ptr<TokenStream>(ret_ptr);
 }
@@ -725,13 +725,13 @@ namespace {
             }
         }
 
-        void consume_and_push(eTokenType ty) {
+        void consumeAndPush(eTokenType ty) {
             consume();
             fakedNext = Token(ty);
         }
 
         // Consumes if the current token is `ty`, otherwise doesn't and returns false
-        bool consume_if(eTokenType ty) {
+        bool consumeIf(eTokenType ty) {
             if (next() == ty) {
                 consume();
                 return true;
@@ -746,15 +746,15 @@ namespace {
         }
     };
 
-    bool consume_type(TokenStreamRO& lex);
+    bool consumeType(TokenStreamRO& lex);
     enum class ItemConsumeMode {
         ItemFragment,
         StatementFragment,
     };
-    bool consume_item(TokenStreamRO& lex, ItemConsumeMode mode = ItemConsumeMode::ItemFragment);
+    bool consumeItem(TokenStreamRO& lex, ItemConsumeMode mode = ItemConsumeMode::ItemFragment);
 
     // Consume an entire TT
-    bool consume_tt(TokenStreamRO& lex) {
+    bool consumeTt(TokenStreamRO& lex) {
         TRACE_FUNCTION;
         switch (lex.next()) {
             case TOK_EOF:
@@ -765,21 +765,21 @@ namespace {
             case TOK_PAREN_OPEN:
                 lex.consume();
                 while (lex.next() != TOK_PAREN_CLOSE) {
-                    consume_tt(lex);
+                    consumeTt(lex);
                 }
                 lex.consume();
                 break;
             case TOK_SQUARE_OPEN:
                 lex.consume();
                 while (lex.next() != TOK_SQUARE_CLOSE) {
-                    consume_tt(lex);
+                    consumeTt(lex);
                 }
                 lex.consume();
                 break;
             case TOK_BRACE_OPEN:
                 lex.consume();
                 while (lex.next() != TOK_BRACE_CLOSE) {
-                    consume_tt(lex);
+                    consumeTt(lex);
                 }
                 lex.consume();
                 break;
@@ -790,7 +790,7 @@ namespace {
         return true;
     }
 
-    bool consume_tt_angle(TokenStreamRO& lex) {
+    bool consumeTtAngle(TokenStreamRO& lex) {
         TRACE_FUNCTION;
         unsigned int level = (lex.next() == TOK_DOUBLE_LT ? 2 : 1);
         // Seek until enouh matching '>'s are seen
@@ -803,7 +803,7 @@ namespace {
                 assert(level > 0);
                 if (lex.next() == TOK_DOUBLE_GT) {
                     if (level == 1) {
-                        lex.consume_and_push(TOK_GT);
+                        lex.consumeAndPush(TOK_GT);
                         return true;
                     }
                     level -= 2;
@@ -820,7 +820,7 @@ namespace {
 
             // Consume TTs separately
             if (lex.next() == TOK_PAREN_OPEN) {
-                consume_tt(lex);
+                consumeTt(lex);
             } else {
                 lex.consume();
             }
@@ -831,7 +831,7 @@ namespace {
     }
 
     // Consume a path
-    bool consume_path(TokenStreamRO& lex, bool type_mode = false) {
+    bool consumePath(TokenStreamRO& lex, bool type_mode = false) {
         TRACE_FUNCTION;
         switch (lex.next()) {
             case TOK_INTERPOLATED_PATH:
@@ -869,7 +869,7 @@ namespace {
                 break;
             case TOK_LT:
             case TOK_DOUBLE_LT:
-                if (!consume_tt_angle(lex)) {
+                if (!consumeTtAngle(lex)) {
                     return false;
                 }
                 if (lex.next() != TOK_DOUBLE_COLON) {
@@ -881,7 +881,7 @@ namespace {
         }
 
         if (type_mode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
-            if (!consume_tt_angle(lex)) {
+            if (!consumeTtAngle(lex)) {
                 return false;
             }
         }
@@ -891,13 +891,13 @@ namespace {
             if (lex.next() == TOK_STRING) {
                 lex.consume();
             } else if (!type_mode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
-                if (!consume_tt_angle(lex)) {
+                if (!consumeTtAngle(lex)) {
                     return false;
                 }
             } else if (lex.next() == TOK_IDENT) {
                 lex.consume();
                 if (type_mode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
-                    if (!consume_tt_angle(lex)) {
+                    if (!consumeTtAngle(lex)) {
                         return false;
                     }
                 }
@@ -907,11 +907,11 @@ namespace {
         }
         // Handles `Fn()`
         if (type_mode && lex.next() == TOK_PAREN_OPEN) {
-            if (!consume_tt(lex)) {
+            if (!consumeTt(lex)) {
                 return false;
             }
-            if (lex.consume_if(TOK_THINARROW)) {
-                if (!consume_type(lex)) {
+            if (lex.consumeIf(TOK_THINARROW)) {
+                if (!consumeType(lex)) {
                     return false;
                 }
             }
@@ -921,17 +921,17 @@ namespace {
 
     bool consumeTypeTraitList(TokenStreamRO& lex) {
         do {
-            if (lex.consume_if(TOK_LIFETIME)) {
+            if (lex.consumeIf(TOK_LIFETIME)) {
                 continue;
             }
-            if (!consume_path(lex, true)) {
+            if (!consumePath(lex, true)) {
                 return false;
             }
-        } while (lex.consume_if(TOK_PLUS));
+        } while (lex.consumeIf(TOK_PLUS));
         return true;
     }
 
-    bool consume_type(TokenStreamRO& lex) {
+    bool consumeType(TokenStreamRO& lex) {
         TRACE_FUNCTION;
         switch (lex.next()) {
             case TOK_UNDERSCORE:
@@ -942,7 +942,7 @@ namespace {
                 return true;
             case TOK_PAREN_OPEN:
             case TOK_SQUARE_OPEN:
-                return consume_tt(lex);
+                return consumeTt(lex);
             case TOK_RWORD_IMPL:
             case TOK_RWORD_DYN:
                 lex.consume();
@@ -959,15 +959,15 @@ namespace {
             case TOK_INTERPOLATED_PATH:
             case TOK_LT:
             case TOK_DOUBLE_LT:
-                if (!consume_path(lex, true)) {
+                if (!consumePath(lex, true)) {
                     return false;
                 }
                 // Macro invocation?
-                if (lex.consume_if(TOK_EXCLAM)) {
+                if (lex.consumeIf(TOK_EXCLAM)) {
                     if (lex.next() != TOK_PAREN_OPEN && lex.next() != TOK_SQUARE_OPEN && lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
-                    if (!consume_tt(lex)) {
+                    if (!consumeTt(lex)) {
                         return false;
                     }
                 }
@@ -975,19 +975,19 @@ namespace {
             case TOK_AMP:
             case TOK_DOUBLE_AMP:
                 lex.consume();
-                lex.consume_if(TOK_LIFETIME);
-                lex.consume_if(TOK_RWORD_MUT);
-                return consume_type(lex);
+                lex.consumeIf(TOK_LIFETIME);
+                lex.consumeIf(TOK_RWORD_MUT);
+                return consumeType(lex);
             case TOK_STAR:
                 lex.consume();
-                if (lex.consume_if(TOK_RWORD_MUT))
+                if (lex.consumeIf(TOK_RWORD_MUT))
                     ;
-                else if (lex.consume_if(TOK_RWORD_CONST))
+                else if (lex.consumeIf(TOK_RWORD_CONST))
                     ;
                 else {
                     return false;
                 }
-                return consume_type(lex);
+                return consumeType(lex);
             case TOK_EXCLAM:
                 lex.consume();
                 return true;
@@ -997,7 +997,7 @@ namespace {
                 if (lex.next() == TOK_RWORD_EXTERN) {
                     case TOK_RWORD_EXTERN:
                         lex.consume();
-                        lex.consume_if(TOK_STRING);
+                        lex.consumeIf(TOK_STRING);
                 }
                 if (lex.next() != TOK_RWORD_FN) {
                     return false;
@@ -1007,11 +1007,11 @@ namespace {
                 if (lex.next() != TOK_PAREN_OPEN) {
                     return false;
                 }
-                if (!consume_tt(lex)) {
+                if (!consumeTt(lex)) {
                     return false;
                 }
-                if (lex.consume_if(TOK_THINARROW)) {
-                    consume_type(lex);
+                if (lex.consumeIf(TOK_THINARROW)) {
+                    consumeType(lex);
                 }
                 return true;
             default:
@@ -1019,32 +1019,32 @@ namespace {
         }
     }
 
-    bool consume_pat(TokenStreamRO& lex, bool allow_or = true) {
+    bool consumePat(TokenStreamRO& lex, bool allowOr = true) {
         TRACE_FUNCTION;
 
         if (lex.next() == TOK_RWORD_REF || lex.next() == TOK_RWORD_MUT) {
-            lex.consume_if(TOK_RWORD_REF);
-            lex.consume_if(TOK_RWORD_MUT);
-            if (!lex.consume_if(TOK_IDENT)) {
+            lex.consumeIf(TOK_RWORD_REF);
+            lex.consumeIf(TOK_RWORD_MUT);
+            if (!lex.consumeIf(TOK_IDENT)) {
                 return false;
             }
-            if (!lex.consume_if(TOK_AT)) {
+            if (!lex.consumeIf(TOK_AT)) {
                 return true;
             }
         }
 
-        if (lex.consume_if(TOK_INTERPOLATED_PATTERN)) {
+        if (lex.consumeIf(TOK_INTERPOLATED_PATTERN)) {
             return true;
         }
 
-        if (allow_or) {
-            lex.consume_if(TOK_PIPE);
+        if (allowOr) {
+            lex.consumeIf(TOK_PIPE);
         }
         for (;;) {
             switch (lex.next()) {
                 case TOK_UNDERSCORE:
                     lex.consume();
-                    if (allow_or && lex.consume_if(TOK_PIPE)) {
+                    if (allowOr && lex.consumeIf(TOK_PIPE)) {
                         continue;
                     }
                     return true;
@@ -1054,54 +1054,54 @@ namespace {
                 case TOK_RWORD_CRATE:
                 case TOK_DOUBLE_COLON:
                 case TOK_INTERPOLATED_PATH:
-                    consume_path(lex);
+                    consumePath(lex);
                     if (lex.next() == TOK_BRACE_OPEN) {
-                        if (!consume_tt(lex)) {
+                        if (!consumeTt(lex)) {
                             return false;
                         }
                     } else if (lex.next() == TOK_PAREN_OPEN) {
-                        if (!consume_tt(lex)) {
+                        if (!consumeTt(lex)) {
                             return false;
                         }
                     } else if (lex.next() == TOK_EXCLAM) {
                         lex.consume();
-                        if (!consume_tt(lex)) {
+                        if (!consumeTt(lex)) {
                             return false;
                         }
                     } else {
                         // Fall through to the range handling
                         break;
                     }
-                    if (allow_or && lex.consume_if(TOK_PIPE)) {
+                    if (allowOr && lex.consumeIf(TOK_PIPE)) {
                         continue;
                     }
                     return true;
                 case TOK_RWORD_BOX:
                     lex.consume();
-                    if (!consume_pat(lex, allow_or)) {
+                    if (!consumePat(lex, allowOr)) {
                         return false;
                     }
-                    if (allow_or && lex.consume_if(TOK_PIPE)) {
+                    if (allowOr && lex.consumeIf(TOK_PIPE)) {
                         continue;
                     }
                     return true;
                 case TOK_AMP:
                 case TOK_DOUBLE_AMP:
                     lex.consume();
-                    lex.consume_if(TOK_RWORD_MUT);
-                    if (!consume_pat(lex, allow_or)) {
+                    lex.consumeIf(TOK_RWORD_MUT);
+                    if (!consumePat(lex, allowOr)) {
                         return false;
                     }
-                    if (allow_or && lex.consume_if(TOK_PIPE)) {
+                    if (allowOr && lex.consumeIf(TOK_PIPE)) {
                         continue;
                     }
                     return true;
                 case TOK_PAREN_OPEN:
                 case TOK_SQUARE_OPEN:
-                    if (!consume_tt(lex)) {
+                    if (!consumeTt(lex)) {
                         return false;
                     }
-                    if (allow_or && lex.consume_if(TOK_PIPE)) {
+                    if (allowOr && lex.consumeIf(TOK_PIPE)) {
                         continue;
                     }
                     return true;
@@ -1114,18 +1114,18 @@ namespace {
                 default:
                     return false;
             }
-            if (lex.consume_if(TOK_AT)) {
+            if (lex.consumeIf(TOK_AT)) {
                 continue;
             }
             // ... or ..=
-            if (lex.consume_if(TOK_TRIPLE_DOT) || lex.consume_if(TOK_DOUBLE_DOT_EQUAL)) {
+            if (lex.consumeIf(TOK_TRIPLE_DOT) || lex.consumeIf(TOK_DOUBLE_DOT_EQUAL)) {
                 switch (lex.next()) {
                     case TOK_IDENT:
                     case TOK_RWORD_SUPER:
                     case TOK_RWORD_SELF:
                     case TOK_DOUBLE_COLON:
                     case TOK_INTERPOLATED_PATH:
-                        consume_path(lex);
+                        consumePath(lex);
                         break;
                     case TOK_STRING:
                     case TOK_INTEGER:
@@ -1136,7 +1136,7 @@ namespace {
                         return false;
                 }
             }
-            if (allow_or && lex.consume_if(TOK_PIPE)) {
+            if (allowOr && lex.consumeIf(TOK_PIPE)) {
                 continue;
             }
             return true;
@@ -1144,41 +1144,41 @@ namespace {
     }
 
     // Consume an expression
-    bool consume_expr(TokenStreamRO& lex, bool no_struct_lit = false) {
+    bool consumeExpr(TokenStreamRO& lex, bool no_struct_lit = false) {
         TRACE_FUNCTION;
         bool cont;
 
         while (lex.next() == TOK_HASH) {
             lex.consume();
-            lex.consume_if(TOK_EXCLAM);
-            consume_tt(lex);
+            lex.consumeIf(TOK_EXCLAM);
+            consumeTt(lex);
         }
 
         // Closures
         if (lex.next() == TOK_RWORD_MOVE || lex.next() == TOK_PIPE || lex.next() == TOK_DOUBLE_PIPE) {
-            lex.consume_if(TOK_RWORD_MOVE);
-            if (lex.consume_if(TOK_PIPE)) {
+            lex.consumeIf(TOK_RWORD_MOVE);
+            if (lex.consumeIf(TOK_PIPE)) {
                 do {
                     if (lex.next() == TOK_PIPE) {
                         break;
                     }
-                    consume_pat(lex, /*allow_or=*/false);
-                    if (lex.consume_if(TOK_COLON)) {
-                        consume_type(lex);
+                    consumePat(lex, /*allow_or=*/false);
+                    if (lex.consumeIf(TOK_COLON)) {
+                        consumeType(lex);
                     }
-                } while (lex.consume_if(TOK_COMMA));
-                if (!lex.consume_if(TOK_PIPE)) {
+                } while (lex.consumeIf(TOK_COMMA));
+                if (!lex.consumeIf(TOK_PIPE)) {
                     return false;
                 }
             } else {
                 lex.consume();
             }
-            if (lex.consume_if(TOK_THINARROW)) {
-                if (!consume_type(lex)) {
+            if (lex.consumeIf(TOK_THINARROW)) {
+                if (!consumeType(lex)) {
                     return false;
                 }
             }
-            return consume_expr(lex);
+            return consumeExpr(lex);
         }
 
         do {
@@ -1195,7 +1195,7 @@ namespace {
                     case TOK_DOUBLE_AMP:
                     case TOK_AMP:
                         lex.consume();
-                        lex.consume_if(TOK_RWORD_MUT);
+                        lex.consumeIf(TOK_RWORD_MUT);
                         break;
                     default:
                         inner_cont = false;
@@ -1212,7 +1212,7 @@ namespace {
                 case TOK_RWORD_CONTINUE:
                 case TOK_RWORD_BREAK:
                     lex.consume();
-                    lex.consume_if(TOK_LIFETIME);
+                    lex.consumeIf(TOK_LIFETIME);
                     if (0) {
                         case TOK_RWORD_RETURN:
                             lex.consume();
@@ -1226,7 +1226,7 @@ namespace {
                         case TOK_SQUARE_CLOSE:
                             break;
                         default:
-                            if (!consume_expr(lex)) {
+                            if (!consumeExpr(lex)) {
                                 return false;
                             }
                             break;
@@ -1240,16 +1240,16 @@ namespace {
                 case TOK_RWORD_CRATE:
                 case TOK_LT:
                 case TOK_DOUBLE_LT:
-                    if (!consume_path(lex)) {
+                    if (!consumePath(lex)) {
                         return false;
                     }
                     if (lex.next() == TOK_BRACE_OPEN && !no_struct_lit) {
-                        consume_tt(lex);
-                    } else if (lex.consume_if(TOK_EXCLAM)) {
-                        if (lex.consume_if(TOK_IDENT)) {
+                        consumeTt(lex);
+                    } else if (lex.consumeIf(TOK_EXCLAM)) {
+                        if (lex.consumeIf(TOK_IDENT)) {
                             // yay?
                         }
-                        consume_tt(lex);
+                        consumeTt(lex);
                     }
                     break;
 
@@ -1275,8 +1275,8 @@ namespace {
 
                 case TOK_RWORD_ASYNC:
                     lex.consume();
-                    lex.consume_if(TOK_RWORD_MOVE);
-                    return consume_expr(lex, no_struct_lit);
+                    lex.consumeIf(TOK_RWORD_MOVE);
+                    return consumeExpr(lex, no_struct_lit);
 
                 case TOK_RWORD_UNSAFE:
                     lex.consume();
@@ -1286,50 +1286,50 @@ namespace {
                 case TOK_PAREN_OPEN:
                 case TOK_SQUARE_OPEN:
                 case TOK_BRACE_OPEN:
-                    consume_tt(lex);
+                    consumeTt(lex);
                     break;
 
                 // TODO: Do these count for "expr"?
                 case TOK_RWORD_FOR:
                     lex.consume();
-                    if (!consume_pat(lex)) {
+                    if (!consumePat(lex)) {
                         return false;
                     }
-                    if (!lex.consume_if(TOK_RWORD_IN)) {
+                    if (!lex.consumeIf(TOK_RWORD_IN)) {
                         return false;
                     }
-                    if (!consume_expr(lex, true)) {
+                    if (!consumeExpr(lex, true)) {
                         return false;
                     }
                     if (lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
-                    if (!consume_tt(lex)) {
+                    if (!consumeTt(lex)) {
                         return false;
                     }
                     break;
                 case TOK_RWORD_MATCH:
                     lex.consume();
                     // TODO: Parse _without_ consuming a struct literal
-                    if (!consume_expr(lex, true)) {
+                    if (!consumeExpr(lex, true)) {
                         return false;
                     }
                     if (lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
-                    if (!consume_tt(lex)) {
+                    if (!consumeTt(lex)) {
                         return false;
                     }
                     break;
                 case TOK_RWORD_WHILE:
                     lex.consume();
-                    if (!consume_expr(lex, true)) {
+                    if (!consumeExpr(lex, true)) {
                         return false;
                     }
                     if (lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
-                    if (!consume_tt(lex)) {
+                    if (!consumeTt(lex)) {
                         return false;
                     }
                     break;
@@ -1338,7 +1338,7 @@ namespace {
                     if (lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
-                    consume_tt(lex);
+                    consumeTt(lex);
                     break;
                 case TOK_RWORD_IF:
                     while (1) {
@@ -1346,7 +1346,7 @@ namespace {
                         lex.consume();
                         if (lex.next() == TOK_RWORD_LET) {
                             lex.consume();
-                            if (!consume_pat(lex)) {
+                            if (!consumePat(lex)) {
                                 return false;
                             }
                             if (lex.next() != TOK_EQUAL) {
@@ -1354,13 +1354,13 @@ namespace {
                             }
                             lex.consume();
                         }
-                        if (!consume_expr(lex, true)) {
+                        if (!consumeExpr(lex, true)) {
                             return false;
                         }
                         if (lex.next() != TOK_BRACE_OPEN) {
                             return false;
                         }
-                        consume_tt(lex);
+                        consumeTt(lex);
                         if (lex.next() != TOK_RWORD_ELSE) {
                             break;
                         }
@@ -1370,7 +1370,7 @@ namespace {
                             if (lex.next() != TOK_BRACE_OPEN) {
                                 return false;
                             }
-                            consume_tt(lex);
+                            consumeTt(lex);
                             break;
                         }
                     }
@@ -1388,16 +1388,16 @@ namespace {
                         break;
                     case TOK_DOT:
                         lex.consume();
-                        if (lex.consume_if(TOK_IDENT)) {
-                            if (lex.consume_if(TOK_DOUBLE_COLON)) {
+                        if (lex.consumeIf(TOK_IDENT)) {
+                            if (lex.consumeIf(TOK_DOUBLE_COLON)) {
                                 if (!(lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
                                     return false;
                                 }
-                                if (!consume_tt_angle(lex)) {
+                                if (!consumeTtAngle(lex)) {
                                     return false;
                                 }
                             }
-                        } else if (lex.consume_if(TOK_INTEGER))
+                        } else if (lex.consumeIf(TOK_INTEGER))
                             ;
                         else {
                             return false;
@@ -1407,7 +1407,7 @@ namespace {
                     case TOK_SQUARE_OPEN:
                     // '(' -> tt
                     case TOK_PAREN_OPEN:
-                        consume_tt(lex);
+                        consumeTt(lex);
                         break;
                     default:
                         inner_cont = false;
@@ -1415,12 +1415,12 @@ namespace {
                 }
             } while (inner_cont);
 
-            if (lex.consume_if(TOK_COLON)) {
-                consume_type(lex);
+            if (lex.consumeIf(TOK_COLON)) {
+                consumeType(lex);
             }
 
-            while (lex.consume_if(TOK_RWORD_AS)) {
-                consume_type(lex);
+            while (lex.consumeIf(TOK_RWORD_AS)) {
+                consumeType(lex);
             }
 
             cont = true;
@@ -1482,15 +1482,15 @@ namespace {
         return true;
     }
 
-    bool consume_stmt(TokenStreamRO& lex, bool* out_is_item = nullptr) {
+    bool consumeStmt(TokenStreamRO& lex, bool* out_is_item = nullptr) {
         TRACE_FUNCTION;
         if (out_is_item) {
             *out_is_item = false;
         }
-        if (lex.consume_if(TOK_INTERPOLATED_STMT)) {
+        if (lex.consumeIf(TOK_INTERPOLATED_STMT)) {
             return true;
         }
-        if (lex.consume_if(TOK_INTERPOLATED_STMT_ITEM)) {
+        if (lex.consumeIf(TOK_INTERPOLATED_STMT_ITEM)) {
             if (out_is_item) {
                 *out_is_item = true;
             }
@@ -1502,7 +1502,7 @@ namespace {
         // the complete item matched, so expression statements retain their
         // normal interpretation.
         auto item_lex = lex.clone();
-        if (consume_item(item_lex, ItemConsumeMode::StatementFragment)) {
+        if (consumeItem(item_lex, ItemConsumeMode::StatementFragment)) {
             while (lex.position() < item_lex.position()) {
                 lex.consume();
             }
@@ -1512,36 +1512,36 @@ namespace {
             return true;
         }
 
-        if (lex.consume_if(TOK_RWORD_LET)) {
-            if (!consume_pat(lex)) {
+        if (lex.consumeIf(TOK_RWORD_LET)) {
+            if (!consumePat(lex)) {
                 return false;
             }
-            if (lex.consume_if(TOK_COLON)) {
-                if (!consume_type(lex)) {
+            if (lex.consumeIf(TOK_COLON)) {
+                if (!consumeType(lex)) {
                     return false;
                 }
             }
-            if (lex.consume_if(TOK_EQUAL)) {
-                if (!consume_expr(lex)) {
+            if (lex.consumeIf(TOK_EQUAL)) {
+                if (!consumeExpr(lex)) {
                     return false;
                 }
             }
             return true;
         } else {
-            if (!consume_expr(lex)) {
+            if (!consumeExpr(lex)) {
                 return false;
             }
             return true;
         }
     }
 
-    bool consume_vis(TokenStreamRO& lex) {
+    bool consumeVis(TokenStreamRO& lex) {
         TRACE_FUNCTION;
-        if (lex.consume_if(TOK_INTERPOLATED_VIS) || lex.consume_if(TOK_RWORD_CRATE)) {
+        if (lex.consumeIf(TOK_INTERPOLATED_VIS) || lex.consumeIf(TOK_RWORD_CRATE)) {
             return true;
-        } else if (lex.consume_if(TOK_RWORD_PUB)) {
+        } else if (lex.consumeIf(TOK_RWORD_PUB)) {
             if (lex.next() == TOK_PAREN_OPEN) {
-                return consume_tt(lex);
+                return consumeTt(lex);
             }
             return true;
         } else {
@@ -1555,13 +1555,13 @@ namespace {
         }
     }
 
-    bool consume_item(TokenStreamRO& lex, ItemConsumeMode mode) {
+    bool consumeItem(TokenStreamRO& lex, ItemConsumeMode mode) {
         TRACE_FUNCTION;
 
         struct H {
             static bool maybe_generics(TokenStreamRO& lex) {
                 if (lex.next() == TOK_LT) {
-                    if (!consume_tt_angle(lex)) {
+                    if (!consumeTtAngle(lex)) {
                         return false;
                     }
                 }
@@ -1569,37 +1569,37 @@ namespace {
             }
 
             static bool maybe_where(TokenStreamRO& lex) {
-                if (lex.consume_if(TOK_RWORD_WHERE)) {
+                if (lex.consumeIf(TOK_RWORD_WHERE)) {
                     do {
                         if (lex.next() == TOK_BRACE_OPEN || lex.next() == TOK_SEMICOLON) {
                             break;
                         }
-                        if (lex.consume_if(TOK_LIFETIME)) {
-                            if (!lex.consume_if(TOK_COLON)) {
+                        if (lex.consumeIf(TOK_LIFETIME)) {
+                            if (!lex.consumeIf(TOK_COLON)) {
                                 return false;
                             }
 
-                            if (!lex.consume_if(TOK_LIFETIME)) {
+                            if (!lex.consumeIf(TOK_LIFETIME)) {
                                 return false;
                             }
                         } else {
-                            if (!consume_type(lex)) {
+                            if (!consumeType(lex)) {
                                 return false;
                             }
-                            if (!lex.consume_if(TOK_COLON)) {
+                            if (!lex.consumeIf(TOK_COLON)) {
                                 return false;
                             }
                             do {
-                                if (lex.consume_if(TOK_LIFETIME)) {
+                                if (lex.consumeIf(TOK_LIFETIME)) {
                                 } else {
-                                    lex.consume_if(TOK_QMARK);
-                                    if (!consume_path(lex, true)) {
+                                    lex.consumeIf(TOK_QMARK);
+                                    if (!consumePath(lex, true)) {
                                         return false;
                                     }
                                 }
-                            } while (lex.consume_if(TOK_PLUS));
+                            } while (lex.consumeIf(TOK_PLUS));
                         }
-                    } while (lex.consume_if(TOK_COMMA));
+                    } while (lex.consumeIf(TOK_COMMA));
                 }
                 return true;
             }
@@ -1607,8 +1607,8 @@ namespace {
 
         while (lex.next() == TOK_HASH) {
             lex.consume();
-            lex.consume_if(TOK_EXCLAM);
-            consume_tt(lex);
+            lex.consumeIf(TOK_EXCLAM);
+            consumeTt(lex);
         }
         // Interpolated items
         if (lex.next() == TOK_INTERPOLATED_ITEM) {
@@ -1621,24 +1621,24 @@ namespace {
         // Macro invocation
         // TODO: What about `union!` as a macro? Needs to be handled below
         if (mode == ItemConsumeMode::ItemFragment && ((lex.next() == TOK_IDENT && lex.next_tok().ident().name != "union") || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_DOUBLE_COLON)) {
-            if (!consume_path(lex)) {
+            if (!consumePath(lex)) {
                 return false;
             }
-            if (!lex.consume_if(TOK_EXCLAM)) {
+            if (!lex.consumeIf(TOK_EXCLAM)) {
                 return false;
             }
-            lex.consume_if(TOK_IDENT);
+            lex.consumeIf(TOK_IDENT);
             bool need_semicolon = (lex.next() != TOK_BRACE_OPEN);
-            consume_tt(lex);
+            consumeTt(lex);
             if (need_semicolon) {
-                if (!lex.consume_if(TOK_SEMICOLON)) {
+                if (!lex.consumeIf(TOK_SEMICOLON)) {
                     return false;
                 }
             }
             return true;
         }
         // Normal items
-        if (!consume_vis(lex)) {
+        if (!consumeVis(lex)) {
             return false;
         }
         if (lex.next() == TOK_RWORD_UNSAFE) {
@@ -1655,13 +1655,13 @@ namespace {
                 break;
             case TOK_RWORD_MOD:
                 lex.consume();
-                if (!lex.consume_if(TOK_IDENT)) {
+                if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
-                if (lex.consume_if(TOK_SEMICOLON))
+                if (lex.consumeIf(TOK_SEMICOLON))
                     ;
                 else if (lex.next() == TOK_BRACE_OPEN) {
-                    if (!consume_tt(lex)) {
+                    if (!consumeTt(lex)) {
                         return false;
                     }
                 } else {
@@ -1674,11 +1674,11 @@ namespace {
                 if (!H::maybe_generics(lex)) {
                     return false;
                 }
-                if (!consume_type(lex)) {
+                if (!consumeType(lex)) {
                     return false;
                 }
-                if (lex.consume_if(TOK_RWORD_FOR)) {
-                    if (!consume_type(lex)) {
+                if (lex.consumeIf(TOK_RWORD_FOR)) {
+                    if (!consumeType(lex)) {
                         return false;
                     }
                 }
@@ -1688,24 +1688,24 @@ namespace {
                 if (lex.next() != TOK_BRACE_OPEN) {
                     return false;
                 }
-                return consume_tt(lex);
+                return consumeTt(lex);
             // type Foo
             case TOK_RWORD_TYPE:
                 lex.consume();
-                if (!lex.consume_if(TOK_IDENT)) {
+                if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
                 if (!H::maybe_generics(lex)) {
                     return false;
                 }
 
-                if (!lex.consume_if(TOK_EQUAL)) {
+                if (!lex.consumeIf(TOK_EQUAL)) {
                     return false;
                 }
-                if (!consume_type(lex)) {
+                if (!consumeType(lex)) {
                     return false;
                 }
-                if (!lex.consume_if(TOK_SEMICOLON)) {
+                if (!lex.consumeIf(TOK_SEMICOLON)) {
                     return false;
                 }
 
@@ -1713,28 +1713,28 @@ namespace {
             // static FOO
             case TOK_RWORD_STATIC:
                 lex.consume();
-                if (!lex.consume_if(TOK_IDENT)) {
+                if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
-                if (!lex.consume_if(TOK_COLON)) {
+                if (!lex.consumeIf(TOK_COLON)) {
                     return false;
                 }
-                if (!consume_type(lex)) {
+                if (!consumeType(lex)) {
                     return false;
                 }
-                if (!lex.consume_if(TOK_EQUAL)) {
+                if (!lex.consumeIf(TOK_EQUAL)) {
                     return false;
                 }
-                if (!consume_expr(lex)) {
+                if (!consumeExpr(lex)) {
                     return false;
                 }
-                if (!lex.consume_if(TOK_SEMICOLON)) {
+                if (!lex.consumeIf(TOK_SEMICOLON)) {
                     return false;
                 }
                 break;
             case TOK_RWORD_STRUCT:
                 lex.consume();
-                if (!lex.consume_if(TOK_IDENT)) {
+                if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
                 if (!H::maybe_generics(lex)) {
@@ -1743,17 +1743,17 @@ namespace {
                 if (!H::maybe_where(lex)) {
                     return false;
                 }
-                if (lex.consume_if(TOK_SEMICOLON))
+                if (lex.consumeIf(TOK_SEMICOLON))
                     ;
                 else if (lex.next() == TOK_PAREN_OPEN) {
-                    if (!consume_tt(lex)) {
+                    if (!consumeTt(lex)) {
                         return false;
                     }
-                    if (!lex.consume_if(TOK_SEMICOLON)) {
+                    if (!lex.consumeIf(TOK_SEMICOLON)) {
                         return false;
                     }
                 } else if (lex.next() == TOK_BRACE_OPEN) {
-                    if (!consume_tt(lex)) {
+                    if (!consumeTt(lex)) {
                         return false;
                     }
                 } else {
@@ -1762,7 +1762,7 @@ namespace {
                 break;
             case TOK_RWORD_ENUM:
                 lex.consume();
-                if (!lex.consume_if(TOK_IDENT)) {
+                if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
                 if (!H::maybe_generics(lex)) {
@@ -1774,7 +1774,7 @@ namespace {
                 if (lex.next() != TOK_BRACE_OPEN) {
                     return false;
                 }
-                return consume_tt(lex);
+                return consumeTt(lex);
             case TOK_IDENT:
                 if (lex.next_tok().ident().name == "union") {
                     lex.consume();
@@ -1783,15 +1783,15 @@ namespace {
                             return false;
                         }
                         bool need_semicolon = (lex.next() != TOK_BRACE_OPEN);
-                        consume_tt(lex);
+                        consumeTt(lex);
                         if (need_semicolon) {
-                            if (!lex.consume_if(TOK_SEMICOLON)) {
+                            if (!lex.consumeIf(TOK_SEMICOLON)) {
                                 return false;
                             }
                         }
                         return true;
                     } else {
-                        if (!lex.consume_if(TOK_IDENT)) {
+                        if (!lex.consumeIf(TOK_IDENT)) {
                             return false;
                         }
                         if (!H::maybe_generics(lex)) {
@@ -1803,11 +1803,11 @@ namespace {
                         if (lex.next() != TOK_BRACE_OPEN) {
                             return false;
                         }
-                        return consume_tt(lex);
+                        return consumeTt(lex);
                     }
                 } else if (lex.next_tok().ident().name == "auto") {
                     lex.consume();
-                    if (lex.consume_if(TOK_RWORD_TRAIT)) {
+                    if (lex.consumeIf(TOK_RWORD_TRAIT)) {
                         goto trait;
                     } else {
                         return false;
@@ -1826,21 +1826,21 @@ namespace {
                 if (lex.next() == TOK_RWORD_EXTERN) {
                     lex.consume();
                 }
-                if (lex.consume_if(TOK_RWORD_FN)) {
+                if (lex.consumeIf(TOK_RWORD_FN)) {
                     goto fn;
                 } else {
-                    if (!lex.consume_if(TOK_IDENT)) {
+                    if (!lex.consumeIf(TOK_IDENT)) {
                         return false;
                     }
-                    if (!lex.consume_if(TOK_COLON)) {
+                    if (!lex.consumeIf(TOK_COLON)) {
                         return false;
                     }
-                    consume_type(lex);
-                    if (!lex.consume_if(TOK_EQUAL)) {
+                    consumeType(lex);
+                    if (!lex.consumeIf(TOK_EQUAL)) {
                         return false;
                     }
-                    consume_expr(lex);
-                    if (!lex.consume_if(TOK_SEMICOLON)) {
+                    consumeExpr(lex);
+                    if (!lex.consumeIf(TOK_SEMICOLON)) {
                         return false;
                     }
                 }
@@ -1848,59 +1848,59 @@ namespace {
             case TOK_RWORD_TRAIT:
                 lex.consume();
             trait:
-                if (!lex.consume_if(TOK_IDENT)) {
+                if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
 
                 if (!H::maybe_generics(lex)) {
                     return false;
                 }
-                if (lex.consume_if(TOK_COLON)) {
+                if (lex.consumeIf(TOK_COLON)) {
                     do {
-                        if (lex.consume_if(TOK_LIFETIME)) {
+                        if (lex.consumeIf(TOK_LIFETIME)) {
                         } else {
-                            if (!consume_path(lex, true)) {
+                            if (!consumePath(lex, true)) {
                                 return false;
                             }
                         }
-                    } while (lex.consume_if(TOK_PLUS));
+                    } while (lex.consumeIf(TOK_PLUS));
                 }
                 if (lex.next() != TOK_BRACE_OPEN) {
                     return false;
                 }
-                if (!consume_tt(lex)) {
+                if (!consumeTt(lex)) {
                     return false;
                 }
                 break;
             case TOK_RWORD_EXTERN:
                 lex.consume();
-                if (lex.consume_if(TOK_RWORD_CRATE)) {
-                    if (!lex.consume_if(TOK_IDENT)) {
+                if (lex.consumeIf(TOK_RWORD_CRATE)) {
+                    if (!lex.consumeIf(TOK_IDENT)) {
                         return false;
                     }
-                    if (lex.consume_if(TOK_RWORD_AS)) {
-                        if (!lex.consume_if(TOK_IDENT)) {
+                    if (lex.consumeIf(TOK_RWORD_AS)) {
+                        if (!lex.consumeIf(TOK_IDENT)) {
                             return false;
                         }
                     }
-                    if (!lex.consume_if(TOK_SEMICOLON)) {
+                    if (!lex.consumeIf(TOK_SEMICOLON)) {
                         return false;
                     }
                     break;
                 }
 
-                lex.consume_if(TOK_STRING);
+                lex.consumeIf(TOK_STRING);
                 if (lex.next() == TOK_BRACE_OPEN) {
-                    return consume_tt(lex);
+                    return consumeTt(lex);
                 }
-                if (!lex.consume_if(TOK_RWORD_FN)) {
+                if (!lex.consumeIf(TOK_RWORD_FN)) {
                     return false;
                 }
                 goto fn;
             case TOK_RWORD_FN:
                 lex.consume();
             fn:
-                if (!lex.consume_if(TOK_IDENT)) {
+                if (!lex.consumeIf(TOK_IDENT)) {
                     return false;
                 }
 
@@ -1910,12 +1910,12 @@ namespace {
                 if (lex.next() != TOK_PAREN_OPEN) {
                     return false;
                 }
-                if (!consume_tt(lex)) {
+                if (!consumeTt(lex)) {
                     return false;
                 }
 
-                if (lex.consume_if(TOK_THINARROW)) {
-                    if (!consume_type(lex)) {
+                if (lex.consumeIf(TOK_THINARROW)) {
+                    if (!consumeType(lex)) {
                         return false;
                     }
                 }
@@ -1924,11 +1924,11 @@ namespace {
                     return false;
                 }
 
-                if (lex.consume_if(TOK_SEMICOLON)) {
+                if (lex.consumeIf(TOK_SEMICOLON)) {
                     // TODO: Is this actually valid?
                     break;
                 } else if (lex.next() == TOK_BRACE_OPEN) {
-                    if (!consume_tt(lex)) {
+                    if (!consumeTt(lex)) {
                         return false;
                     }
                 } else {
@@ -1941,7 +1941,7 @@ namespace {
         return true;
     }
 
-    bool consume_from_frag(TokenStreamRO& lex, MacroPatEnt::Type type, bool* out_stmt_is_item = nullptr) {
+    bool consumeFromFrag(TokenStreamRO& lex, MacroPatEnt::Type type, bool* out_stmt_is_item = nullptr) {
         TRACE_FUNCTION_F(type);
         switch (type) {
             case MacroPatEnt::PAT_TOKEN:
@@ -1950,7 +1950,7 @@ namespace {
                 ;
             case MacroPatEnt::PAT_BLOCK:
                 if (lex.next() == TOK_BRACE_OPEN) {
-                    return consume_tt(lex);
+                    return consumeTt(lex);
                 } else if (lex.next() == TOK_INTERPOLATED_BLOCK) {
                     lex.consume();
                 } else {
@@ -1965,18 +1965,18 @@ namespace {
                 }
                 break;
             case MacroPatEnt::PAT_TT:
-                return consume_tt(lex);
+                return consumeTt(lex);
             case MacroPatEnt::PAT_PATH:
-                return consume_path(lex, true);
+                return consumePath(lex, true);
             case MacroPatEnt::PAT_TYPE:
-                return consume_type(lex);
+                return consumeType(lex);
             case MacroPatEnt::PAT_EXPR:
-                return consume_expr(lex);
+                return consumeExpr(lex);
             case MacroPatEnt::PAT_STMT:
-                return consume_stmt(lex, out_stmt_is_item);
+                return consumeStmt(lex, out_stmt_is_item);
             case MacroPatEnt::PAT_PAT:
                 //return consume_pat(lex, lex.edition_after(AST::Edition::Rust2021));
-                return consume_pat(lex, true);
+                return consumePat(lex, true);
             case MacroPatEnt::PAT_META:
                 if (lex.next() == TOK_INTERPOLATED_META) {
                     lex.consume();
@@ -1984,10 +1984,10 @@ namespace {
                     lex.consume();
                     switch (lex.next()) {
                         case TOK_PAREN_OPEN:
-                            return consume_tt(lex);
+                            return consumeTt(lex);
                         case TOK_EQUAL:
                             lex.consume();
-                            return consume_expr(lex);
+                            return consumeExpr(lex);
                         default:
                             break;
                     }
@@ -1996,11 +1996,11 @@ namespace {
                 }
                 break;
             case MacroPatEnt::PAT_ITEM:
-                return consume_item(lex);
+                return consumeItem(lex);
             case MacroPatEnt::PAT_VIS:
-                return consume_vis(lex);
+                return consumeVis(lex);
             case MacroPatEnt::PAT_LIFETIME:
-                return lex.consume_if(TOK_LIFETIME);
+                return lex.consumeIf(TOK_LIFETIME);
             case MacroPatEnt::PAT_LITERAL:
                 switch (lex.next()) {
                     case TOK_DASH: {
@@ -2033,12 +2033,12 @@ namespace {
     }
 }
 
-unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& bound_tts) {
+unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const AST::Crate& crate, AST::Module& mod, ParameterMappings& boundTts) {
     TRACE_FUNCTION_F(rules.rules.size() << " options");
     ASSERT_BUG(sp, rules.rules.size() > 0, "Empty macro_rules set");
 
     struct Match {
-        size_t arm_index;
+        size_t armIndex;
         ::std::vector<bool> condition_history;
         ::std::vector<bool> stmt_is_item_history;
     };
@@ -2046,13 +2046,13 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
     ::std::vector<std::pair<size_t, eTokenType>> fail_pos;
     for (size_t i = 0; i < rules.rules.size(); i++) {
         auto lex = TokenStreamRO(input);
-        auto arm_stream = MacroPatternStream(rules.rules[i].pattern);
+        auto armStream = MacroPatternStream(rules.rules[i].pattern);
         ::std::vector<bool> stmt_is_item_history;
 
         bool fail = false;
         for (;;) {
-            const auto pos = arm_stream.cur_pos();
-            const auto& pat = arm_stream.next();
+            const auto pos = armStream.cur_pos();
+            const auto& pat = armStream.next();
             // NOTE: The positions seen by this aren't fully sequential, as `next` steps over jumps/loop control ops
             DEBUG("Arm " << i << " @" << pos << " " << pat);
             if (pat.is_End()) {
@@ -2066,7 +2066,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
                 bool rv = true;
                 for (const auto& check : e->ents) {
                     if (check.ty != MacroPatEnt::PAT_TOKEN) {
-                        if (!consume_from_frag(lc, check.ty)) {
+                        if (!consumeFromFrag(lc, check.ty)) {
                             rv = false;
                             break;
                         }
@@ -2082,7 +2082,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
                 }
                 if (rv == e->is_equal) {
                     DEBUG("- Succeeded");
-                    arm_stream.if_succeeded();
+                    armStream.if_succeeded();
                 }
             } else if (const auto* e = pat.opt_ExpectTok()) {
                 const auto& tok = lex.next_tok();
@@ -2095,7 +2095,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
             } else if (const auto* e = pat.opt_ExpectPat()) {
                 DEBUG("Arm " << i << " @" << pos << " ExpectPat(" << e->type << " => $" << e->idx << ")");
                 bool stmt_is_item = false;
-                if (!consume_from_frag(lex, e->type, &stmt_is_item)) {
+                if (!consumeFromFrag(lex, e->type, &stmt_is_item)) {
                     fail = true;
                     break;
                 }
@@ -2108,7 +2108,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
         }
 
         if (!fail) {
-            matches.push_back(Match{i, arm_stream.take_history(), mv$(stmt_is_item_history)});
+            matches.push_back(Match{i, armStream.take_history(), mv$(stmt_is_item_history)});
             DEBUG(i << " MATCHED");
         } else {
             DEBUG(i << " FAILED");
@@ -2124,7 +2124,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
         // yay!
 
         // NOTE: There can be multiple arms active, take the first.
-        auto i = matches[0].arm_index;
+        auto i = matches[0].armIndex;
         const auto& history = matches[0].condition_history;
         const auto& stmt_is_item_history = matches[0].stmt_is_item_history;
         DEBUG("Evalulating arm " << i);
@@ -2132,20 +2132,20 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
         auto lex = TTStreamO(sp, ParseState(), mv$(input));
         lex.parse_state().crate = &crate;
         SET_MODULE(lex, mod);
-        auto arm_stream = MacroPatternStream(rules.rules[i].pattern, &history);
+        auto armStream = MacroPatternStream(rules.rules[i].pattern, &history);
 
         struct Capture {
-            unsigned int binding_idx;
+            unsigned int bindingIdx;
             ::std::vector<unsigned int> iterations;
-            unsigned int cap_idx;
+            unsigned int capIdx;
         };
 
         ::std::vector<InterpolatedFragment> captures;
-        ::std::vector<Capture> capture_info;
+        ::std::vector<Capture> captureInfo;
         size_t stmt_capture_index = 0;
 
         for (;;) {
-            const auto& pat = arm_stream.next();
+            const auto& pat = armStream.next();
             DEBUG(i << " " << pat);
             if (pat.is_End()) {
                 break;
@@ -2168,26 +2168,26 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
                 }
                 auto cap = MacroHandlePatternCap(lex, e->type, stmt_is_item);
 
-                unsigned int cap_idx = captures.size();
+                unsigned int capIdx = captures.size();
                 captures.push_back(mv$(cap));
-                capture_info.push_back(Capture{e->idx, arm_stream.get_loop_iters(), cap_idx});
+                captureInfo.push_back(Capture{e->idx, armStream.get_loop_iters(), capIdx});
             } else {
                 // Unreachable.
             }
         }
         ASSERT_BUG(sp, stmt_capture_index == stmt_is_item_history.size(), "Unused statement fragment classification");
 
-        for (const auto& cap : capture_info) {
-            bound_tts.insert(cap.binding_idx, cap.iterations, mv$(captures[cap.cap_idx]));
+        for (const auto& cap : captureInfo) {
+            boundTts.insert(cap.bindingIdx, cap.iterations, mv$(captures[cap.capIdx]));
         }
-        bound_tts.set_loop_counts(arm_stream.take_loop_counts());
+        boundTts.set_loop_counts(armStream.take_loop_counts());
         return i;
     }
 }
 
-void MacroInvokeRulesCountSubstUses(ParameterMappings& bound_tts, const ::std::vector<MacroExpansionEnt>& contents) {
+void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::vector<MacroExpansionEnt>& contents) {
     TRACE_FUNCTION;
-    MacroExpandState state(contents, bound_tts);
+    MacroExpandState state(contents, boundTts);
 
     while (const auto* ent_ptr = state.next_ent()) {
         DEBUG(*ent_ptr);
@@ -2201,16 +2201,16 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& bound_tts, const ::std::v
                     case 0:
                     case NAMEDVALUE_TY_IGNORE:
                         // Increment a counter in `bound_tts`
-                        bound_tts.inc_count(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
+                        boundTts.inc_count(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
                         break;
                     case NAMEDVALUE_TY_MAGIC:
                     default:
                         break;
                 }
             }
-            TU_ARMA(Concat, cc_ents) {
-                for (const auto& cc_ent : cc_ents) {
-                TU_MATCH_HDRA((cc_ent), {)
+            TU_ARMA(Concat, ccEnts) {
+                for (const auto& ccEnt : ccEnts) {
+                TU_MATCH_HDRA((ccEnt), {)
                 TU_ARMA(Ident, e) {
                         }
                         TU_ARMA(Named, e) {
@@ -2218,7 +2218,7 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& bound_tts, const ::std::v
                                 case 0:
                                 case NAMEDVALUE_TY_IGNORE:
                                     // Increment a counter in `bound_tts`
-                                    bound_tts.inc_count(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
+                                    boundTts.inc_count(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
                                     break;
                                 case NAMEDVALUE_TY_MAGIC:
                                 default:
@@ -2340,14 +2340,14 @@ Token MacroExpander::realGetToken() {
                         auto* frag = mMappings.get(this->point_span(), state.iterations(), e);
                         ASSERT_BUG(this->point_span(), frag, "Cannot find '" << e << "' for " << state.iterations());
 
-                        bool can_steal = (mMappings.dec_count(this->point_span(), state.iterations(), e) == false);
+                        bool canSteal = (mMappings.dec_count(this->point_span(), state.iterations(), e) == false);
                         DEBUG("[" << logIndex << "] Insert replacement #" << e << " = " << *frag);
                         if (frag->mType == InterpolatedFragment::TT) {
-                            auto res_tt = can_steal ? mv$(frag->as_tt()) : frag->as_tt().clone();
+                            auto res_tt = canSteal ? mv$(frag->asTt()) : frag->asTt().clone();
                             ttstream.reset(new TTStreamO(this->outerSpan(), ParseState(), mv$(res_tt)));
                             return ttstream->getToken();
                         } else {
-                            if (can_steal) {
+                            if (canSteal) {
                                 return Token(Token::TagTakeIP(), mv$(*frag));
                             } else {
                                 // Clones
@@ -2362,17 +2362,17 @@ Token MacroExpander::realGetToken() {
                 for (const auto& ent : e) {
                 TU_MATCH_HDRA( (ent), { )
                 TU_ARMA(Named, v) {
-                            bool can_steal = (mMappings.dec_count(this->point_span(), state.iterations(), v) == false);
+                            bool canSteal = (mMappings.dec_count(this->point_span(), state.iterations(), v) == false);
                             auto* frag = mMappings.get(this->point_span(), state.iterations(), v);
                             ASSERT_BUG(this->point_span(), frag, "Cannot find '" << v << "' for " << state.iterations());
                             Token tok;
                             if (frag->mType == InterpolatedFragment::TT) {
-                                auto res_tt = can_steal ? mv$(frag->as_tt()) : frag->as_tt().clone();
+                                auto res_tt = canSteal ? mv$(frag->asTt()) : frag->asTt().clone();
                                 TTStreamO tts(this->outerSpan(), ParseState(), std::move(res_tt));
                                 tok = tts.getToken();
                                 tts.getTokenCheck(TOK_EOF);
                             } else {
-                                tok = can_steal ? Token(Token::TagTakeIP(), mv$(*frag)) : Token(*frag);
+                                tok = canSteal ? Token(Token::TagTakeIP(), mv$(*frag)) : Token(*frag);
                             }
                             if (tok != TOK_IDENT) {
                                 ERROR(this->point_span(), E0000, "concat with non-ident: " << tok);
@@ -2905,7 +2905,7 @@ public:
     {
     }
 
-    unsigned add_name(const RcString& name) {
+    unsigned addName(const RcString& name) {
         unsigned idx = this->names.size();
         assert(this->names.count(name) == 0);
         DEBUG(name << " #" << idx << " @ [" << loop_stack << "]");
@@ -2929,7 +2929,7 @@ public:
         return rv;
     }
 
-    void close_loop() {
+    void closeLoop() {
         assert(!loop_stack.empty()); // Impossible given that `()` must be matched in a token tree
         loop_stack.pop_back();
     }
@@ -2977,7 +2977,7 @@ public:
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
                         RcString type = tok.ident().name;
 
-                        auto idx = state.add_name(name);
+                        auto idx = state.addName(name);
 
                         auto sp = lex.end_span(ps);
                         MacroPatEnt::Type ty;
@@ -3020,7 +3020,7 @@ public:
                     case TOK_PAREN_OPEN: {
                         auto loop_idx = state.open_loop();
                         auto subpat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
-                        state.close_loop();
+                        state.closeLoop();
 
                         enum eTokenType joiner = TOK_NULL;
 
@@ -3474,14 +3474,14 @@ MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex) {
 
     auto ps = lex.start_span();
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-    auto arm_pat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
+    auto armPat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
     auto pat_span = lex.end_span(ps);
     GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
     // TODO: Pass a flag that annotates all idents with the current module?
     auto body = ParseMacroRulesCont(lex, TOK_BRACE_OPEN, TOK_BRACE_CLOSE, state);
 
     auto rv = make_mr_ptr(lex);
-    rv->rules.push_back(ParseMacroRulesMakeArm(pat_span, ::std::move(arm_pat), ::std::move(body)));
+    rv->rules.push_back(ParseMacroRulesMakeArm(pat_span, ::std::move(armPat), ::std::move(body)));
     return rv;
 }
 
@@ -3646,11 +3646,11 @@ namespace {
                     DEBUG("Skip = [" << skip_pats1 << "]");
 
                     // TODO: If EOF is in both entry and skip, then remove from entry
-                    bool body_skippable = false;
+                    bool bodySkippable = false;
                     if (::std::find(entry_pats1.begin(), entry_pats1.end(), TOK_EOF) != entry_pats1.end()) {
                         if (::std::find(skip_pats1.begin(), skip_pats1.end(), TOK_EOF) != entry_pats1.end()) {
                             entry_pats1.erase(::std::find(entry_pats1.begin(), entry_pats1.end(), TOK_EOF));
-                            body_skippable = true;
+                            bodySkippable = true;
                         }
                     }
 
@@ -3738,7 +3738,7 @@ namespace {
                             repeat_conds.push_back(mv$(v));
                         }
                         // TODO: If entry indicates that it's optional (it had TOK_EOF in it) then push the skip too
-                        if (body_skippable) {
+                        if (bodySkippable) {
                             for (const auto& p : skip_conds) {
                                 auto v = ::make_vec1<SimplePatIfCheck>({MacroPatEnt::PAT_TOKEN, ent.tok});
                                 v.insert(v.end(), p.begin(), p.end());
@@ -3837,13 +3837,13 @@ namespace {
                                     DEBUG("Loop* - Multi-option repeat");
                                     // Multiple repeat conditions
                                     // - If any repeat condition matches, then jump to a consume
-                                    auto check_pos = rv.size() + repeat_conds.size() + 1;
+                                    auto checkPos = rv.size() + repeat_conds.size() + 1;
                                     for (const auto& ee : repeat_conds) {
-                                        push_ifv(/*is_equal*/ true, ee, check_pos);
+                                        push_ifv(/*is_equal*/ true, ee, checkPos);
                                     }
                                     // - If none of the above matched, then jump out of the loop
                                     push(SimplePatEnt::make_Jump({~0u}));
-                                    assert(rv.size() == check_pos);
+                                    assert(rv.size() == checkPos);
                                     push(SimplePatEnt::make_ExpectTok(ent.tok));
                                 }
                             }

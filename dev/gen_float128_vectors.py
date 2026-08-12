@@ -142,7 +142,7 @@ def main() -> None:
     ops = operands()
     values = [(bits, f128_value(bits)) for bits in ops]
 
-    print("static const BinaryOpVector binary_op_vectors[] = {")
+    print("static const BinaryOpVector binaryOpVectors[] = {")
     count = 0
     for i, (abits, a) in enumerate(values):
         for j in range(i, len(values)):
@@ -164,7 +164,7 @@ def main() -> None:
     print("};")
     print()
 
-    print("static const ConvertVector convert_vectors[] = {")
+    print("static const ConvertVector convertVectors[] = {")
     for bits, v in values:
         d = f64_bits(v, v < 0)
         f = f32_bits(v, v < 0)
@@ -187,7 +187,7 @@ def main() -> None:
         "1.18973149535723176508575932662800702e4932",
         "6.475175119438025110924438958227646552e-4966",
     ]
-    print("static const ParseVector parse_vectors[] = {")
+    print("static const ParseVector parseVectors[] = {")
     for text in parse_cases:
         if "e" in text:
             mant, _, exp = text.partition("e")
@@ -198,7 +198,7 @@ def main() -> None:
     print("};")
     print()
 
-    print("static const RoundingVector rounding_vectors[] = {")
+    print("static const RoundingVector roundingVectors[] = {")
     for bits, v in values:
         floor_v = trunc_fraction(v) if v >= 0 or trunc_fraction(v) == v else trunc_fraction(v) - 1
         ceil_v = trunc_fraction(v) if v <= 0 or trunc_fraction(v) == v else trunc_fraction(v) + 1
@@ -252,7 +252,7 @@ def main() -> None:
             return f"{out}{text}{'0' * (e10 + 1 - len(text))}"
         return f"{out}{text[: e10 + 1]}.{text[e10 + 1:]}"
 
-    print("static const FormatVector format_vectors[] = {")
+    print("static const FormatVector formatVectors[] = {")
     for bits, v in values:
         print(f'    {{{hi_lo(bits)}, "{format_g(v, 6)}"}},')
     print("};")

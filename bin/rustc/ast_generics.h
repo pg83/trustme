@@ -125,9 +125,9 @@ namespace AST {
         (),
         None,
         ((None, struct {}), (Lifetime, LifetimeParam), (Type, TypeParam), (Value, ValueParam)),
-        (, bounds_start(x.bounds_start), bounds_end(x.bounds_end)),
-        (bounds_start = x.bounds_start; bounds_end = x.bounds_end;),
-        (size_t bounds_start = 0; size_t bounds_end = 0; GenericParam clone() const;
+        (, boundsStart(x.boundsStart), boundsEnd(x.boundsEnd)),
+        (boundsStart = x.boundsStart; boundsEnd = x.boundsEnd;),
+        (size_t boundsStart = 0; size_t boundsEnd = 0; GenericParam clone() const;
 
          friend std::ostream & operator<<(std::ostream & os, const GenericParam & x);)
     );
@@ -207,29 +207,29 @@ namespace AST {
 
         GenericParams clone() const;
 
-        void add_param(GenericParam gp, size_t bounds_start, size_t bounds_end);
+        void addParam(GenericParam gp, size_t boundsStart, size_t boundsEnd);
 
-        void add_lft_param(LifetimeParam lft) {
-            add_param(::std::move(lft), SIZE_MAX, SIZE_MAX);
+        void addLftParam(LifetimeParam lft) {
+            addParam(::std::move(lft), SIZE_MAX, SIZE_MAX);
         }
 
-        void add_lft_param(LifetimeParam lft, size_t bounds_start, size_t bounds_end) {
-            add_param(::std::move(lft), bounds_start, bounds_end);
+        void addLftParam(LifetimeParam lft, size_t boundsStart, size_t boundsEnd) {
+            addParam(::std::move(lft), boundsStart, boundsEnd);
         }
 
-        void add_ty_param(TypeParam param) {
-            add_param(::std::move(param), SIZE_MAX, SIZE_MAX);
+        void addTyParam(TypeParam param) {
+            addParam(::std::move(param), SIZE_MAX, SIZE_MAX);
         }
 
-        void add_ty_param(TypeParam param, size_t bounds_start, size_t bounds_end) {
-            add_param(::std::move(param), bounds_start, bounds_end);
+        void addTyParam(TypeParam param, size_t boundsStart, size_t boundsEnd) {
+            addParam(::std::move(param), boundsStart, boundsEnd);
         }
 
-        void add_value_param(Span sp, AttributeList attrs, Ident name, TypeRef ty, Expr val) {
+        void addValueParam(Span sp, AttributeList attrs, Ident name, TypeRef ty, Expr val) {
             mParams.push_back(ValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), mv$(val)));
         }
 
-        void add_bound(GenericBound bound) {
+        void addBound(GenericBound bound) {
             bounds.push_back(::std::move(bound));
         }
 

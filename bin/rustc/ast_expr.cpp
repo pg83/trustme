@@ -418,7 +418,7 @@ namespace AST {
             }
         }
 
-        ::std::vector<AST::IfLetCondition> clone_iflet_conditions(const ::std::vector<AST::IfLetCondition>& conditions) {
+        ::std::vector<AST::IfLetCondition> cloneIfletConditions(const ::std::vector<AST::IfLetCondition>& conditions) {
             ::std::vector<AST::IfLetCondition> new_conds;
             new_conds.reserve(conditions.size());
             for (const auto& cond : conditions) {
@@ -444,7 +444,7 @@ namespace AST {
             os << " { " << *mCode << " }";
         },
         {
-            auto new_conds = clone_iflet_conditions(conditions);
+            auto new_conds = cloneIfletConditions(conditions);
             return NEWNODE(ExprNodeWhile, label, mv$(new_conds), mCode->clone());
         }
     )
@@ -473,7 +473,7 @@ namespace AST {
                 for (const auto& pat : arm.patterns) {
                     patterns.push_back(pat.clone());
                 }
-                newArms.push_back(ExprNodeMatchArm(mv$(patterns), clone_iflet_conditions(arm.guard), arm.mCode->clone()));
+                newArms.push_back(ExprNodeMatchArm(mv$(patterns), cloneIfletConditions(arm.guard), arm.mCode->clone()));
                 newArms.back().mAttrs = arm.mAttrs.clone();
             }
             return NEWNODE(ExprNodeMatch, val->clone(), mv$(newArms));
@@ -499,7 +499,7 @@ namespace AST {
             std::vector<Arm> newArms;
             newArms.reserve(arms.size());
             for (const auto& arm : arms) {
-                newArms.push_back(ExprNodeIf::Arm{clone_iflet_conditions(arm.conditions), arm.body->clone()});
+                newArms.push_back(ExprNodeIf::Arm{cloneIfletConditions(arm.conditions), arm.body->clone()});
             }
             return NEWNODE(ExprNodeIf, std::move(newArms), OPT_CLONE(elseNode));
         }
@@ -546,7 +546,7 @@ namespace AST {
             os << " " << *mCode;
         },
         {
-            ExprNodeClosure::args_t args;
+            ExprNodeClosure::argsT args;
             for (const auto& a : mArgs) {
                 args.push_back(::std::make_pair(a.first.clone(), a.second.clone()));
             }

@@ -8,7 +8,7 @@ void MIR::OuterVisitor::visit_expr(::HIR::ExprPtr& exp) {
 
 void MIR::OuterVisitor::visit_type(::HIR::TypeRef& ty) {
     if (ty->is_Array()) {
-        auto data = ty->clone_data();
+        auto data = ty->cloneData();
         auto* e = data.opt_Array();
         this->visit_type(e->inner);
         DEBUG("Array size " << ty);
@@ -104,7 +104,7 @@ void MIR::OuterVisitor::visit_trait_impl(const ::HIR::SimplePath& trait_path, ::
 
 namespace MIR {
 
-OuterVisitor::OuterVisitor(const ::HIR::Crate& crate, cb_t cb)
+OuterVisitor::OuterVisitor(const ::HIR::Crate& crate, cbT cb)
     : HIR::Visitor(nullptr, crate.types)
     , mResolve(crate)
     , cb(cb) {

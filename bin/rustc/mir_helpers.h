@@ -58,7 +58,7 @@ namespace MIR {
 
     class TypeResolve {
     public:
-        typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> args_t;
+        typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> argsT;
 
     private:
         const unsigned int STMT_TERM = ~0u;
@@ -73,7 +73,7 @@ namespace MIR {
 
     public:
         const ::HIR::TypeData* retType;
-        const args_t& mArgs;
+        const argsT& mArgs;
         const ::MIR::Function& fcn;
 
         // If set, these override the list in `m_fcn`
@@ -83,24 +83,24 @@ namespace MIR {
     private:
         const ::HIR::SimplePath* mLangBox = nullptr;
 
-        unsigned int bb_idx = 0;
+        unsigned int bbIdx = 0;
         unsigned int stmt_idx = 0;
 
     public:
-        TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* ret_type, const args_t& args, const ::MIR::Function& fcn);
+        TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* ret_type, const argsT& args, const ::MIR::Function& fcn);
 
         void set_cur_stmt(const ::MIR::BasicBlock& bb, const ::MIR::Statement& stmt);
 
         void set_cur_stmt(const ::MIR::BasicBlock& bb, unsigned int stmt_idx);
 
-        void set_cur_stmt(unsigned int bb_idx, unsigned int stmt_idx);
+        void set_cur_stmt(unsigned int bbIdx, unsigned int stmt_idx);
 
         void set_cur_stmt_term(const ::MIR::BasicBlock& bb);
 
-        void set_cur_stmt_term(unsigned int bb_idx);
+        void set_cur_stmt_term(unsigned int bbIdx);
 
         unsigned int get_cur_block() const {
-            return bb_idx;
+            return bbIdx;
         }
 
         unsigned int get_cur_stmt_ofs() const;
@@ -176,8 +176,8 @@ namespace MIR {
         ::std::vector<size_t> blockOffsets;
         ::std::vector<ValueLifetime> slots;
 
-        bool slot_valid(unsigned idx, unsigned bb_idx, unsigned stmt_idx) const {
-            return slots.at(idx).valid_at(blockOffsets[bb_idx] + stmt_idx);
+        bool slot_valid(unsigned idx, unsigned bbIdx, unsigned stmt_idx) const {
+            return slots.at(idx).valid_at(blockOffsets[bbIdx] + stmt_idx);
         }
     };
 
@@ -401,7 +401,7 @@ namespace MIR {
             return rv;
             }
 
-            virtual bool visit_block_id(typename Dec<::MIR::BasicBlockId>::Type& bb_id) {
+            virtual bool visit_block_id(typename Dec<::MIR::BasicBlockId>::Type& bbId) {
                 return false;
             }
 
@@ -423,8 +423,8 @@ namespace MIR {
                     }
                     TU_ARMA(If, e) {
                         rv |= visit_lvalue(e.cond, ValUsage::Read);
-                        rv |= visit_block_id(e.bb_true);
-                        rv |= visit_block_id(e.bb_false);
+                        rv |= visit_block_id(e.bbTrue);
+                        rv |= visit_block_id(e.bbFalse);
                     }
                     TU_ARMA(Switch, e) {
                         rv |= visit_lvalue(e.val, ValUsage::Read);
@@ -474,16 +474,16 @@ namespace MIR {
                     visit_type(t);
                 }
 
-                for (unsigned int block_idx = 0; block_idx < fcn.blocks.size(); block_idx++) {
-                    auto& block = fcn.blocks[block_idx];
+                for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
+                    auto& block = fcn.blocks[blockIdx];
                     for (auto& stmt : block.statements) {
-                        state.set_cur_stmt(block_idx, (&stmt - &block.statements.front()));
+                        state.set_cur_stmt(blockIdx, (&stmt - &block.statements.front()));
                         visit_stmt(stmt);
                     }
                     if (block.terminator.tag() == ::MIR::Terminator::TAGDEAD) {
                         continue;
                     }
-                    state.set_cur_stmt_term(block_idx);
+                    state.set_cur_stmt_term(blockIdx);
                     visit_terminator(block.terminator);
                 }
             }

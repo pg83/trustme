@@ -20,10 +20,10 @@ typedef ::std::function<bool(const ::HIR::TypeData*, ::HIR::TypeRef&)> t_cb_clon
 /// Clones a type, calling the provided callback on every type (optionally providing a replacement)
 ///
 /// Closure should return `true` if the passed output slot was populated.
-extern ::HIR::TypeRef clone_ty_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeData* tpl, t_cb_clone_ty callback);
-extern ::HIR::PathParams clone_path_params_with(::HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& tpl, t_cb_clone_ty callback);
+extern ::HIR::TypeRef cloneTyWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeData* tpl, t_cb_clone_ty callback);
+extern ::HIR::PathParams clonePathParamsWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& tpl, t_cb_clone_ty callback);
 
-extern void check_type_class_primitive(const Span& sp, const ::HIR::TypeData* type, ::HIR::InferClass ic, ::HIR::CoreType ct);
+extern void checkTypeClassPrimitive(const Span& sp, const ::HIR::TypeData* type, ::HIR::InferClass ic, ::HIR::CoreType ct);
 
 namespace typeck {
     // The primitive operation is a language candidate, separate from an

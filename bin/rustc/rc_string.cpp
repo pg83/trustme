@@ -33,9 +33,9 @@ RcString::~RcString() {
 }
 
 Ordering RcString::ord(const char* s, size_t len) const {
-    auto cmp_len = ::std::min(len, this->size());
-    if (cmp_len > 0) {
-        int cmp = memcmp(this->c_str(), s, cmp_len);
+    auto cmpLen = ::std::min(len, this->size());
+    if (cmpLen > 0) {
+        int cmp = memcmp(this->c_str(), s, cmpLen);
         if (cmp != 0) {
             return ::ord(cmp, 0);
         }
@@ -147,22 +147,22 @@ namespace {
         }
 
         struct It {
-            std::vector<Block>::iterator block, block_e;
+            std::vector<Block>::iterator block, blockE;
             std::vector<RcString>::iterator slot;
 
             RcString& operator*() {
-                assert(block != block_e);
+                assert(block != blockE);
                 assert(slot != block->ents.end());
                 return *slot;
             }
 
             It& operator++() {
-                assert(block != block_e);
+                assert(block != blockE);
                 assert(slot != block->ents.end());
                 ++slot;
                 if (slot == block->ents.end()) {
                     ++block;
-                    if (block != block_e) {
+                    if (block != blockE) {
                         slot = block->ents.begin();
                     }
                 }

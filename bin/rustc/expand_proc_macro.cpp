@@ -125,8 +125,8 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
     // ---- main function ----
     auto main_fn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
-        auto call_node = NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("main")}), ::make_vec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("proc_macro#"), ::AST::PathNode("MACROS")})))));
-        main_fn.set_code(mv$(call_node));
+        auto callNode = NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("main")}), ::make_vec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("proc_macro#"), ::AST::PathNode("MACROS")})))));
+        main_fn.set_code(mv$(callNode));
     }
 
     // ---- test list ----
@@ -159,12 +159,12 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
     // - TODO: These need to be loaded too.
     //  > They don't actually need to exist here, just be loaded (and use absolute paths)
     auto vis_private = AST::Visibility::make_restricted(AST::Visibility::Ty::Private, newmod.path());
-    newmod.add_ext_crate(Span(), vis_private, crate.extCratenameProcmacro, "proc_macro", {});
+    newmod.addExtCrate(Span(), vis_private, crate.extCratenameProcmacro, "proc_macro", {});
 
-    newmod.add_item(Span(), vis_private, "main", mv$(main_fn), {});
-    newmod.add_item(Span(), vis_private, "MACROS", mv$(tests_list), {});
+    newmod.addItem(Span(), vis_private, "main", mv$(main_fn), {});
+    newmod.addItem(Span(), vis_private, "MACROS", mv$(tests_list), {});
 
-    crate.rootModule.add_item(Span(), vis_private, "proc_macro#", mv$(newmod), {});
+    crate.rootModule.addItem(Span(), vis_private, "proc_macro#", mv$(newmod), {});
     crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"proc_macro#", "main"});
 }
 
@@ -218,9 +218,9 @@ struct ProcMacroInv: public TokenStream {
         Handles(const Handles&) = delete;
         Handles& operator=(Handles&&) = delete;
         Handles& operator=(const Handles&) = delete;
-        pid_t child_pid = 0; // Questionably needed
-        int child_stdin = -1;
-        int child_stdout = -1;
+        pid_t childPid = 0; // Questionably needed
+        int childStdin = -1;
+        int childStdout = -1;
         // NOTE: stderr stays as our stderr
     } handles;
 
@@ -234,7 +234,7 @@ public:
     ProcMacroInv& operator=(ProcMacroInv&&) = delete;
     ~ProcMacroInv();
 
-    bool check_good();
+    bool checkGood();
 
     void send_done() {
         this->send_u8(static_cast<uint8_t>(TokenClass::EndOfStream));
@@ -398,7 +398,7 @@ public:
         }
     }
 
-    bool attr_is_used(const RcString& n) const {
+    bool attrIsUsed(const RcString& n) const {
         if (n == "repr") {
             return true;
         }
@@ -1212,7 +1212,7 @@ namespace {
                         TU_ARMA(Lifetime, p) {
                             pmi.send_lifetime(p.name().name.c_str());
                             bool first = true;
-                            for (size_t i = param.bounds_start; i < param.bounds_end; i++) {
+                            for (size_t i = param.boundsStart; i < param.boundsEnd; i++) {
                                 if (!params.bounds[i].is_None()) {
                                     if (first) {
                                         pmi.send_symbol(":");
@@ -1236,7 +1236,7 @@ namespace {
                             this->visit_attrs(p.attrs());
                             pmi.send_ident(p.name().c_str());
                             bool first = true;
-                            for (size_t i = param.bounds_start; i < param.bounds_end; i++) {
+                            for (size_t i = param.boundsStart; i < param.boundsEnd; i++) {
                                 if (!params.bounds[i].is_None()) {
                                     if (first) {
                                         pmi.send_symbol(":");
@@ -1278,7 +1278,7 @@ namespace {
                             pmi.send_ident(p.name().name.c_str());
                             pmi.send_symbol(":");
                             visit_type(p.type());
-                            assert(param.bounds_start == param.bounds_end);
+                            assert(param.boundsStart == param.boundsEnd);
                         }
                     }
                     is_first = false;
@@ -1305,16 +1305,16 @@ namespace {
 
                 for (const auto& e : params.bounds) {
                     size_t i = &e - params.bounds.data();
-                    bool already_emitted = false;
+                    bool alreadyEmitted = false;
                     for (const auto& p : params.mParams) {
                         if (p.is_None()) {
                             continue;
                         }
-                        if (p.bounds_start <= i && i < p.bounds_end) {
-                            already_emitted = true;
+                        if (p.boundsStart <= i && i < p.boundsEnd) {
+                            alreadyEmitted = true;
                         }
                     }
-                    if (already_emitted || e.is_None()) {
+                    if (alreadyEmitted || e.is_None()) {
                         continue;
                     }
 
@@ -1409,16 +1409,16 @@ namespace {
 
         void visit_attr(const ::AST::Attribute& a) {
             if (a.name() == "cfg_attr") {
-                auto new_attrs = check_cfg_attr(a);
+                auto new_attrs = checkCfgAttr(a);
                 for (const auto& na : new_attrs) {
                     this->visit_attr(na);
                 }
             }
-            if (this->skip_derive_attrs && a.name().is_trivial() && (a.name().as_trivial() == "derive" || a.name().as_trivial() == "derive_const")) {
+            if (this->skip_derive_attrs && a.name().is_trivial() && (a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
                 DEBUG("Skip " << a << " (derive input)");
                 return;
             }
-            auto is_local = (a.name().is_trivial() && pmi.attr_is_used(a.name().as_trivial()));
+            auto is_local = (a.name().is_trivial() && pmi.attrIsUsed(a.name().asTrivial()));
             if (this->emit_all_attrs || is_local) {
                 if (is_local) {
                     a.mark_inert();
@@ -1799,22 +1799,22 @@ namespace {
     };
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree* attr_input, std::function<void(Visitor& v)> cb) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree* attrInput, std::function<void(Visitor& v)> cb) {
     // 1. Create ProcMacroInv instance
     auto pmi = ProcMacroInvokeInt(sp, crate, mac_path);
-    if (!pmi.check_good()) {
+    if (!pmi.checkGood()) {
         return ::std::unique_ptr<TokenStream>();
     }
-    if (attr_input) {
+    if (attrInput) {
         // TODO: Assert that this is a `#[proc_macro_attribute]` macro
-        if (attr_input->size() != 0) {
+        if (attrInput->size() != 0) {
             // If the input is non-empty, then it must be a parenthesised token tree
-            ASSERT_BUG(sp, attr_input->size() >= 2, "");
-            ASSERT_BUG(sp, (*attr_input)[0].tok() == TOK_PAREN_OPEN || (*attr_input)[0].tok() == TOK_SQUARE_OPEN, "");
+            ASSERT_BUG(sp, attrInput->size() >= 2, "");
+            ASSERT_BUG(sp, (*attrInput)[0].tok() == TOK_PAREN_OPEN || (*attrInput)[0].tok() == TOK_SQUARE_OPEN, "");
             Visitor v(sp, pmi);
             // - Strip the parens when sending
-            for (size_t i = 1; i < attr_input->size() - 1; i++) {
-                v.visit_tokentree((*attr_input)[i]);
+            for (size_t i = 1; i < attrInput->size() - 1; i++) {
+                v.visit_tokentree((*attrInput)[i]);
             }
         }
         pmi.send_done();
@@ -1894,12 +1894,12 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
     if (pipe(stdin_pipes) != 0) {
         BUG(sp, "Unable to create stdin pipe pair for proc macro, " << strerror(errno));
     }
-    this->handles.child_stdin = stdin_pipes[1]; // Write end
+    this->handles.childStdin = stdin_pipes[1]; // Write end
     int stdout_pipes[2];
     if (pipe(stdout_pipes) != 0) {
         BUG(sp, "Unable to create stdout pipe pair for proc macro, " << strerror(errno));
     }
-    this->handles.child_stdout = stdout_pipes[0]; // Read end
+    this->handles.childStdout = stdout_pipes[0]; // Read end
 
     posix_spawn_file_actions_t file_actions;
     posix_spawn_file_actions_init(&file_actions);
@@ -1913,7 +1913,7 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
     char* argv[3] = {const_cast<char*>(executable), const_cast<char*>(proc_macro_desc.name.c_str()), nullptr};
     DEBUG(argv[0] << " " << argv[1]);
     //char*   envp[] = { nullptr };
-    int rv = posix_spawn(&this->handles.child_pid, executable, &file_actions, nullptr, argv, environ);
+    int rv = posix_spawn(&this->handles.childPid, executable, &file_actions, nullptr, argv, environ);
     if (rv != 0) {
         BUG(sp, "Error in posix_spawn - " << rv << " - can't start `" << executable << "`");
     }
@@ -1928,29 +1928,29 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
 }
 
 ProcMacroInv::Handles::Handles(Handles&& x)
-    : child_pid(x.child_pid)
-    , child_stdin(x.child_stdin)
-    , child_stdout(x.child_stdout)
+    : childPid(x.childPid)
+    , childStdin(x.childStdin)
+    , childStdout(x.childStdout)
 {
-    x.child_pid = 0;
-    x.child_stdin = -1;
-    x.child_stdout = -1;
+    x.childPid = 0;
+    x.childStdin = -1;
+    x.childStdout = -1;
     DEBUG("");
 }
 ProcMacroInv::~ProcMacroInv()
 {
-    if (this->handles.child_pid != 0) {
-        DEBUG("Waiting for child " << this->handles.child_pid << " to terminate");
+    if (this->handles.childPid != 0) {
+        DEBUG("Waiting for child " << this->handles.childPid << " to terminate");
         int status;
-        waitpid(this->handles.child_pid, &status, 0);
-        close(this->handles.child_stdout);
-        close(this->handles.child_stdin);
+        waitpid(this->handles.childPid, &status, 0);
+        close(this->handles.childStdout);
+        close(this->handles.childStdin);
     }
 }
 
-bool ProcMacroInv::check_good() {
+bool ProcMacroInv::checkGood() {
     char v;
-    int rv = read(this->handles.child_stdout, &v, 1);
+    int rv = read(this->handles.childStdout, &v, 1);
     if (rv == 0) {
         DEBUG("Unexpected EOF from child");
         return false;
@@ -1979,7 +1979,7 @@ void ProcMacroInv::send_bytes_raw(const void* val, size_t size) {
     if (dumpFileOut.is_open()) {
         dumpFileOut.write(reinterpret_cast<const char*>(val), size);
     }
-    if (write(this->handles.child_stdin, val, size) != static_cast<ssize_t>(size)) {
+    if (write(this->handles.childStdin, val, size) != static_cast<ssize_t>(size)) {
         BUG(parentSpan, "Error writing to child, " << strerror(errno));
     }
 }
@@ -2021,7 +2021,7 @@ void ProcMacroInv::recv_bytes_raw(void* out_void, size_t len) {
     uint8_t* val = reinterpret_cast<uint8_t*>(out_void);
     size_t ofs = 0, rem = len;
     while (rem > 0) {
-        auto n = read(this->handles.child_stdout, &val[ofs], rem);
+        auto n = read(this->handles.childStdout, &val[ofs], rem);
         if (n == 0) {
             BUG(this->thisSpan, "Unexpected EOF while reading from child process");
         }

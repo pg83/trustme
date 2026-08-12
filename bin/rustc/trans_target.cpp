@@ -69,7 +69,7 @@ namespace {
             assert(key_val.path.size() > 1);
             DEBUG(key_val.path << " = " << key_val.value);
 
-            auto check_path_length = [&](const TomlKeyValue& kv, unsigned len) {
+            auto checkPathLength = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() != len) {
                     if (kv.path.size() > len) {
                         ::std::cerr << "ERROR: Unexpected sub-node to  " << kv.path << " in " << filename << ::std::endl;
@@ -79,7 +79,7 @@ namespace {
                     exit(1);
                 }
             };
-            auto check_path_length_min = [&](const TomlKeyValue& kv, unsigned len) {
+            auto checkPathLengthMin = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() < len) {
                     ::std::cerr << "ERROR: Expected sub-nodes in " << kv.path << " in " << filename << ::std::endl;
                 }
@@ -87,39 +87,39 @@ namespace {
 
             try {
                 if (key_val.path[0] == "target") {
-                    check_path_length_min(key_val, 2);
+                    checkPathLengthMin(key_val, 2);
                     if (key_val.path[1] == "family") {
-                        check_path_length(key_val, 2);
-                        rv.family = key_val.value.as_string();
+                        checkPathLength(key_val, 2);
+                        rv.family = key_val.value.asString();
                     } else if (key_val.path[1] == "os-name") {
-                        check_path_length(key_val, 2);
-                        rv.osName = key_val.value.as_string();
+                        checkPathLength(key_val, 2);
+                        rv.osName = key_val.value.asString();
                     } else if (key_val.path[1] == "env-name") {
-                        check_path_length(key_val, 2);
-                        rv.envName = key_val.value.as_string();
+                        checkPathLength(key_val, 2);
+                        rv.envName = key_val.value.asString();
                     } else if (key_val.path[1] == "arch") {
-                        check_path_length(key_val, 2);
-                        if (key_val.value.as_string() == ARCH_ARM32.mName) {
+                        checkPathLength(key_val, 2);
+                        if (key_val.value.asString() == ARCH_ARM32.mName) {
                             rv.arch = ARCH_ARM32;
-                        } else if (key_val.value.as_string() == ARCH_ARM64.mName) {
+                        } else if (key_val.value.asString() == ARCH_ARM64.mName) {
                             rv.arch = ARCH_ARM64;
-                        } else if (key_val.value.as_string() == ARCH_X86.mName) {
+                        } else if (key_val.value.asString() == ARCH_X86.mName) {
                             rv.arch = ARCH_X86;
-                        } else if (key_val.value.as_string() == ARCH_X86_64.mName) {
+                        } else if (key_val.value.asString() == ARCH_X86_64.mName) {
                             rv.arch = ARCH_X86_64;
-                        } else if (key_val.value.as_string() == ARCH_M68K.mName) {
+                        } else if (key_val.value.asString() == ARCH_M68K.mName) {
                             rv.arch = ARCH_M68K;
-                        } else if (key_val.value.as_string() == ARCH_POWERPC.mName) {
+                        } else if (key_val.value.asString() == ARCH_POWERPC.mName) {
                             rv.arch = ARCH_POWERPC;
-                        } else if (key_val.value.as_string() == ARCH_POWERPC64.mName) {
+                        } else if (key_val.value.asString() == ARCH_POWERPC64.mName) {
                             rv.arch = ARCH_POWERPC64;
-                        } else if (key_val.value.as_string() == ARCH_POWERPC64LE.mName) {
+                        } else if (key_val.value.asString() == ARCH_POWERPC64LE.mName) {
                             rv.arch = ARCH_POWERPC64LE;
-                        } else if (key_val.value.as_string() == ARCH_RISCV64.mName) {
+                        } else if (key_val.value.asString() == ARCH_RISCV64.mName) {
                             rv.arch = ARCH_RISCV64;
                         } else {
                             // Error.
-                            ::std::cerr << "ERROR: Unknown architecture name '" << key_val.value.as_string() << "' in " << filename << ::std::endl;
+                            ::std::cerr << "ERROR: Unknown architecture name '" << key_val.value.asString() << "' in " << filename << ::std::endl;
                             exit(1);
                         }
                     } else {
@@ -127,36 +127,36 @@ namespace {
                         ::std::cerr << "Warning: Unknown configuration item " << key_val.path[0] << "." << key_val.path[1] << " in " << filename << ::std::endl;
                     }
                 } else if (key_val.path[0] == "backend") {
-                    check_path_length_min(key_val, 2);
+                    checkPathLengthMin(key_val, 2);
                     if (key_val.path[1] == "c") {
-                        check_path_length_min(key_val, 3);
+                        checkPathLengthMin(key_val, 3);
 
                         if (key_val.path[2] == "variant") {
-                            check_path_length(key_val, 3);
-                            if (key_val.value.as_string() != "gnu") {
-                                ::std::cerr << "ERROR: Unknown C variant name '" << key_val.value.as_string() << "' in " << filename << ::std::endl;
+                            checkPathLength(key_val, 3);
+                            if (key_val.value.asString() != "gnu") {
+                                ::std::cerr << "ERROR: Unknown C variant name '" << key_val.value.asString() << "' in " << filename << ::std::endl;
                                 exit(1);
                             }
                         } else if (key_val.path[2] == "target") {
-                            check_path_length(key_val, 3);
-                            rv.backendC.cCompiler = key_val.value.as_string();
+                            checkPathLength(key_val, 3);
+                            rv.backendC.cCompiler = key_val.value.asString();
                         } else if (key_val.path[2] == "emulate-i128") {
-                            check_path_length(key_val, 3);
-                            rv.backendC.emulatedI128 = key_val.value.as_bool();
+                            checkPathLength(key_val, 3);
+                            rv.backendC.emulatedI128 = key_val.value.asBool();
                         } else if (key_val.path[2] == "compiler-opts") {
-                            check_path_length(key_val, 3);
-                            for (const auto& v : key_val.value.as_list()) {
-                                rv.backendC.compilerOpts.push_back(v.as_string());
+                            checkPathLength(key_val, 3);
+                            for (const auto& v : key_val.value.asList()) {
+                                rv.backendC.compilerOpts.push_back(v.asString());
                             }
                         } else if (key_val.path[2] == "linker-opts-pre") {
-                            check_path_length(key_val, 3);
-                            for (const auto& v : key_val.value.as_list()) {
-                                rv.backendC.linkerOptsPre.push_back(v.as_string());
+                            checkPathLength(key_val, 3);
+                            for (const auto& v : key_val.value.asList()) {
+                                rv.backendC.linkerOptsPre.push_back(v.asString());
                             }
                         } else if (key_val.path[2] == "linker-opts" || key_val.path[2] == "linker-opts-post") {
-                            check_path_length(key_val, 3);
-                            for (const auto& v : key_val.value.as_list()) {
-                                rv.backendC.linkerOptsPost.push_back(v.as_string());
+                            checkPathLength(key_val, 3);
+                            for (const auto& v : key_val.value.asList()) {
+                                rv.backendC.linkerOptsPost.push_back(v.asString());
                             }
                         } else {
                             ::std::cerr << "WARNING: Unknown field backend.c." << key_val.path[2] << " in " << filename << ::std::endl;
@@ -167,51 +167,51 @@ namespace {
                         ::std::cerr << "WARNING: Unknown configuration item backend." << key_val.path[1] << " in " << filename << ::std::endl;
                     }
                 } else if (key_val.path[0] == "arch") {
-                    check_path_length_min(key_val, 2);
+                    checkPathLengthMin(key_val, 2);
                     if (key_val.path[1] == "name") {
-                        check_path_length(key_val, 2);
+                        checkPathLength(key_val, 2);
                         if (rv.arch.mName != "") {
                             ::std::cerr << "ERROR: Architecture already specified to be '" << rv.arch.mName << "'" << ::std::endl;
                             exit(1);
                         }
-                        rv.arch.mName = key_val.value.as_string();
+                        rv.arch.mName = key_val.value.asString();
                     } else if (key_val.path[1] == "pointer-bits") {
-                        check_path_length(key_val, 2);
-                        rv.arch.pointerBits = key_val.value.as_int();
+                        checkPathLength(key_val, 2);
+                        rv.arch.pointerBits = key_val.value.asInt();
                     } else if (key_val.path[1] == "is-big-endian") {
-                        check_path_length(key_val, 2);
-                        rv.arch.bigEndian = key_val.value.as_bool();
+                        checkPathLength(key_val, 2);
+                        rv.arch.bigEndian = key_val.value.asBool();
                     } else if (key_val.path[1] == "has-atomic-u8") {
-                        check_path_length(key_val, 2);
-                        rv.arch.atomics.u8 = key_val.value.as_bool();
+                        checkPathLength(key_val, 2);
+                        rv.arch.atomics.u8 = key_val.value.asBool();
                     } else if (key_val.path[1] == "has-atomic-u16") {
-                        check_path_length(key_val, 2);
-                        rv.arch.atomics.u16 = key_val.value.as_bool();
+                        checkPathLength(key_val, 2);
+                        rv.arch.atomics.u16 = key_val.value.asBool();
                     } else if (key_val.path[1] == "has-atomic-u32") {
-                        check_path_length(key_val, 2);
-                        rv.arch.atomics.u32 = key_val.value.as_bool();
+                        checkPathLength(key_val, 2);
+                        rv.arch.atomics.u32 = key_val.value.asBool();
                     } else if (key_val.path[1] == "has-atomic-u64") {
-                        check_path_length(key_val, 2);
-                        rv.arch.atomics.u64 = key_val.value.as_bool();
+                        checkPathLength(key_val, 2);
+                        rv.arch.atomics.u64 = key_val.value.asBool();
                     } else if (key_val.path[1] == "has-atomic-ptr") {
-                        check_path_length(key_val, 2);
-                        rv.arch.atomics.ptr = key_val.value.as_bool();
+                        checkPathLength(key_val, 2);
+                        rv.arch.atomics.ptr = key_val.value.asBool();
                     } else if (key_val.path[1] == "alignments") {
-                        check_path_length(key_val, 3);
+                        checkPathLength(key_val, 3);
                         if (key_val.path[2] == "u16") {
-                            rv.arch.alignments.u16 = key_val.value.as_int();
+                            rv.arch.alignments.u16 = key_val.value.asInt();
                         } else if (key_val.path[2] == "u32") {
-                            rv.arch.alignments.u32 = key_val.value.as_int();
+                            rv.arch.alignments.u32 = key_val.value.asInt();
                         } else if (key_val.path[2] == "u64") {
-                            rv.arch.alignments.u64 = key_val.value.as_int();
+                            rv.arch.alignments.u64 = key_val.value.asInt();
                         } else if (key_val.path[2] == "u128") {
-                            rv.arch.alignments.u128 = key_val.value.as_int();
+                            rv.arch.alignments.u128 = key_val.value.asInt();
                         } else if (key_val.path[2] == "f32") {
-                            rv.arch.alignments.f32 = key_val.value.as_int();
+                            rv.arch.alignments.f32 = key_val.value.asInt();
                         } else if (key_val.path[2] == "f64") {
-                            rv.arch.alignments.f64 = key_val.value.as_int();
+                            rv.arch.alignments.f64 = key_val.value.asInt();
                         } else if (key_val.path[2] == "ptr") {
-                            rv.arch.alignments.ptr = key_val.value.as_int();
+                            rv.arch.alignments.ptr = key_val.value.asInt();
                         } else {
                             ::std::cerr << "WARNING: Unknown field arch.alignments." << key_val.path[1] << " in " << filename << ::std::endl;
                         }
@@ -944,33 +944,33 @@ namespace {
         return makeTypeReprStructInner(sp, ty, ents, sorting, forced_alignment, max_alignment);
     }
 
-    bool bounded_max_is_full_range(const ::HIR::TypeData* ty, U128 bounded_max) {
+    bool boundedMaxIsFullRange(const ::HIR::TypeData* ty, U128 boundedMax) {
         if (const auto* primitive = ty->opt_Primitive()) {
             switch (*primitive) {
                 case ::HIR::CoreType::U8:
                 case ::HIR::CoreType::I8:
-                    return bounded_max == U128(UINT8_MAX);
+                    return boundedMax == U128(UINT8_MAX);
                 case ::HIR::CoreType::U16:
                 case ::HIR::CoreType::I16:
-                    return bounded_max == U128(UINT16_MAX);
+                    return boundedMax == U128(UINT16_MAX);
                 case ::HIR::CoreType::U32:
                 case ::HIR::CoreType::I32:
-                    return bounded_max == U128(UINT32_MAX);
+                    return boundedMax == U128(UINT32_MAX);
                 case ::HIR::CoreType::U64:
                 case ::HIR::CoreType::I64:
-                    return bounded_max == U128(UINT64_MAX);
+                    return boundedMax == U128(UINT64_MAX);
                 case ::HIR::CoreType::U128:
                 case ::HIR::CoreType::I128:
-                    return bounded_max == U128(UINT64_MAX, UINT64_MAX);
+                    return boundedMax == U128(UINT64_MAX, UINT64_MAX);
                 case ::HIR::CoreType::Usize:
                 case ::HIR::CoreType::Isize:
-                    return bounded_max == (TargetGetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
+                    return boundedMax == (TargetGetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
                 default:
                     return false;
             }
         }
         if (ty->is_Pointer()) {
-            return bounded_max == (TargetGetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
+            return boundedMax == (TargetGetPointerBits() == 64 ? U128(UINT64_MAX) : U128(UINT32_MAX));
         }
         return false;
     }
@@ -1006,7 +1006,7 @@ namespace {
                     }
                     // Preserve the full invalid range for the general niche
                     // layout instead of collapsing it to the zero value.
-                    if (str->structMarkings.bounded_max && (r->fields.size() != 1 || !bounded_max_is_full_range(r->fields[0].ty, str->structMarkings.bounded_max_value))) {
+                    if (str->structMarkings.boundedMax && (r->fields.size() != 1 || !boundedMaxIsFullRange(r->fields[0].ty, str->structMarkings.boundedMaxValue))) {
                         return false;
                     }
                     for (size_t i = 0; i < r->fields.size(); i++) {
@@ -1125,8 +1125,8 @@ namespace {
                     }
 
                     // Handle bounded
-                    if (str->structMarkings.bounded_max) {
-                        if (str->structMarkings.bounded_max_value >= UINT_MAX) {
+                    if (str->structMarkings.boundedMax) {
+                        if (str->structMarkings.boundedMaxValue >= UINT_MAX) {
                             return 0;
                         }
                         if (min_offset != 0) {
@@ -1141,7 +1141,7 @@ namespace {
                         }
                         out_path.sub_fields.push_back(0);
                         out_path.size = size;
-                        return str->structMarkings.bounded_max_value.truncate_u64() + 1;
+                        return str->structMarkings.boundedMaxValue.truncate_u64() + 1;
                     }
 
                     for (size_t i = 0; i < r->fields.size(); i++) {
@@ -1403,7 +1403,7 @@ namespace {
                                 // Find the largest variant
                                 // - Also get the next-largest size to use as the minimum tag offset
                                 unsigned n_match = 0;
-                                size_t biggest_var = variants.size();
+                                size_t biggestVar = variants.size();
                                 size_t max_var_size = 0;
                                 size_t min_offset = 0;
                                 size_t max_align = 1;
@@ -1416,7 +1416,7 @@ namespace {
                                     if (var_size > max_var_size) {
                                         min_offset = max_var_size; // Downgrade the previous to min_offset
                                         max_var_size = var_size;
-                                        biggest_var = i;
+                                        biggestVar = i;
                                         n_match = 1;
                                     }
                                     // If equal to current max, increment count
@@ -1428,11 +1428,11 @@ namespace {
                                         min_offset = std::max(min_offset, var_size);
                                     }
                                 }
-                                DEBUG("Niche optimisation: max_var_size=" << max_var_size << " n_match=" << n_match << " biggest_var=" << biggest_var << " min_offset=" << min_offset);
+                                DEBUG("Niche optimisation: max_var_size=" << max_var_size << " n_match=" << n_match << " biggest_var=" << biggestVar << " min_offset=" << min_offset);
 
                                 if (n_match == 1) {
-                                    for (size_t i = 0; i < reprs[biggest_var]->fields.size(); i++) {
-                                        const auto& fld = reprs[biggest_var]->fields[i];
+                                    for (size_t i = 0; i < reprs[biggestVar]->fields.size(); i++) {
+                                        const auto& fld = reprs[biggestVar]->fields[i];
 
                                         // 1. Look for a tag at the end
                                         // - Prefer the end-of-struct version, as it avoids adding fields to the other variants
@@ -1458,11 +1458,11 @@ namespace {
                                                 // TODO: Get the niche offset, store so structure updating can add it...
                                                 nz_path.index = i;
                                                 ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
-                                                niche_offset = get_offset(sp, resolve, &*reprs[biggest_var], nz_path);
+                                                niche_offset = get_offset(sp, resolve, &*reprs[biggestVar], nz_path);
                                                 ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
 
                                                 nz_path.sub_fields.push_back(i);
-                                                nz_path.index = biggest_var;
+                                                nz_path.index = biggestVar;
                                                 ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
                                                 DEBUG("Niche optimisation (trailing): value offset=" << offset << " path=" << nz_path << " (@" << niche_offset << ")");
 
@@ -1472,7 +1472,7 @@ namespace {
                                             } else {
                                                 if (debug_enabled()) {
                                                     nz_path.sub_fields.push_back(i);
-                                                    nz_path.index = biggest_var;
+                                                    nz_path.index = biggestVar;
                                                 }
                                                 DEBUG("Out of space in this niche: " << (offset + e.size()) << " > " << max_var << " (path=" << nz_path << ")");
                                             }
@@ -1505,7 +1505,7 @@ namespace {
                                                     // TODO: Get the niche offset, store so structure updating can add it...
                                                     nz_path.index = i;
                                                     ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
-                                                    niche_offset = get_offset(sp, resolve, &*reprs[biggest_var], nz_path);
+                                                    niche_offset = get_offset(sp, resolve, &*reprs[biggestVar], nz_path);
                                                     if (niche_offset != 0) {
                                                         // - For now, only accept zero offsets
                                                         DEBUG("Ignore niche not at the start of the struture");
@@ -1514,7 +1514,7 @@ namespace {
                                                     ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
 
                                                     nz_path.sub_fields.push_back(i);
-                                                    nz_path.index = biggest_var;
+                                                    nz_path.index = biggestVar;
                                                     ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
                                                     DEBUG("Niche optimisation (leading): linear offset=" << offset << " path=" << nz_path << " @byte " << niche_offset);
 
@@ -1567,7 +1567,7 @@ namespace {
                                     for (size_t i = 0; i < reprs.size(); i++) {
                                         if (e[i].type != resolve.crate.types.unit()) {
                                             // If the tag is leading, then add to all other variants and update reprs
-                                            if (i == biggest_var) {
+                                            if (i == biggestVar) {
                                             } else if (niche_before_data) {
                                                 // Add padding (if needed)
                                                 if (niche_offset > 0) {

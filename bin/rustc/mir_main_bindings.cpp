@@ -111,10 +111,10 @@ namespace {
                             os << ";\n";
                         }
                         TU_ARMA(SaveDropFlag, e) {
-                            os << "SaveDropFlag(" << FMT_M(e.slot) << " BIT " << e.bit_index << " = df$" << e.idx << ")";
+                            os << "SaveDropFlag(" << FMT_M(e.slot) << " BIT " << e.bitIndex << " = df$" << e.idx << ")";
                         }
                         TU_ARMA(LoadDropFlag, e) {
-                            os << "LoadDropFlag(df$" << e.idx << " = " << FMT_M(e.slot) << " BIT " << e.bit_index << ")";
+                            os << "LoadDropFlag(df$" << e.idx << " = " << FMT_M(e.slot) << " BIT " << e.bitIndex << ")";
                         }
                         TU_ARMA(ScopeEnd, e) {
                             os << "// Scope End: ";
@@ -144,7 +144,7 @@ namespace {
                     (UnwindTerminate, os << "unwind terminate;\n";),
                     (Unreachable, os << "unreachable;\n";),
                     (Goto, os << "goto bb" << e << ";\n";),
-                    (If, os << "if " << FMT_M(e.cond) << " { goto bb" << e.bb_true << "; } else { goto bb" << e.bb_false << "; }\n";),
+                    (If, os << "if " << FMT_M(e.cond) << " { goto bb" << e.bbTrue << "; } else { goto bb" << e.bbFalse << "; }\n";),
                     (Switch, os << "switch " << FMT_M(e.val) << " {"; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << "}\n";),
                     (SwitchValue, os << "switch " << FMT_M(e.val) << " {"; TU_MATCHA(
                                                                                  (e.values),

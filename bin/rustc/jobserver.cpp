@@ -193,12 +193,12 @@ public:
     if (jobserver_auth) {
         const auto* p = std::strchr(jobserver_auth, ' ');
         auto len = p ? p - jobserver_auth : strlen(jobserver_auth);
-        std::string auth_str(jobserver_auth, len);
+        std::string authStr(jobserver_auth, len);
 
         // Found a valid jobserver string!
         // - Named pipe: `fifo:PATH`
-        if (std::strncmp(auth_str.c_str(), "fifo:", 5) == 0) {
-            auto fd = open(auth_str.c_str() + 5, O_RDWR | O_CLOEXEC);
+        if (std::strncmp(authStr.c_str(), "fifo:", 5) == 0) {
+            auto fd = open(authStr.c_str() + 5, O_RDWR | O_CLOEXEC);
             if (fd > 0) {
                 return ::std::make_unique<JobServerClient>(fd);
             }
@@ -206,7 +206,7 @@ public:
         // - Unix pipe pair: `<fd_r>,<fd_w>`
         else {
             int fd_r = -1, fd_w = -1;
-            if (::std::sscanf(auth_str.c_str(), "%d,%d", &fd_r, &fd_w) == 2) {
+            if (::std::sscanf(authStr.c_str(), "%d,%d", &fd_r, &fd_w) == 2) {
                 if (fd_r >= 0 && fd_w >= 0) {
                     if (fcntl(fd_r, F_GETFL) == -1 || fcntl(fd_w, F_GETFL) == -1) {
                         ::std::cerr << "JobServer: Pipe FDs aren't open, likely missing `+` in makefile" << std::endl;

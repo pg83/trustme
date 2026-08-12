@@ -33,7 +33,7 @@ namespace {
             }
         };
 
-        ::std::vector<RetTarget> closure_ret_types;
+        ::std::vector<RetTarget> closureRetTypes;
         ::std::vector<const ::HIR::ExprNodeLoop*> loops;
         //const ::HIR::ExprPtr* m_cur_expr;
 
@@ -56,7 +56,7 @@ namespace {
             const auto& sp = node_ptr->span();
 
             // Monomorphise erased type
-            ret_type = clone_ty_with(mResolve.crate.types, sp, real_ret_type, [&](const auto& tpl, auto& rv) -> bool {
+            ret_type = cloneTyWith(mResolve.crate.types, sp, real_ret_type, [&](const auto& tpl, auto& rv) -> bool {
                 if (const auto* e = tpl->opt_ErasedType()) {
                     if (const auto* ee = e->inner.opt_Fcn()) {
                         ASSERT_BUG(sp, ee->index < node_ptr.erasedTypes.size(), "Erased type index OOB - " << ee->origin << " " << ee->index << " >= " << node_ptr.erasedTypes.size());
@@ -71,7 +71,7 @@ namespace {
 
             node_ptr->visit(*this);
 
-            check_types_equal(sp, ret_type, node_ptr->resType);
+            checkTypesEqual(sp, ret_type, node_ptr->resType);
         }
 
         void visit(::HIR::ExprNodeBlock& node) override {
@@ -81,14 +81,14 @@ namespace {
             }
             if (node.valueNode) {
                 node.valueNode->visit(*this);
-                check_types_equal(node.span(), node.resType, node.valueNode->resType);
+                checkTypesEqual(node.span(), node.resType, node.valueNode->resType);
             }
         }
 
         void visit(::HIR::ExprNodeConstBlock& node) override {
             TRACE_FUNCTION_F(&node << " const { ... }");
             node.inner->visit(*this);
-            check_types_equal(node.span(), node.resType, node.inner->resType);
+            checkTypesEqual(node.span(), node.resType, node.inner->resType);
         }
 
         void visit(::HIR::ExprNodeAsm& node) override {
@@ -132,16 +132,16 @@ namespace {
         void visit(::HIR::ExprNodeReturn& node) override {
             TRACE_FUNCTION_F(&node << " return ...");
             // Check against return type
-            const auto* ret_ty = (this->closure_ret_types.size() > 0 ? this->closure_ret_types.back().ret_type : this->ret_type);
-            check_types_equal(ret_ty, node.mValue);
+            const auto* ret_ty = (this->closureRetTypes.size() > 0 ? this->closureRetTypes.back().ret_type : this->ret_type);
+            checkTypesEqual(ret_ty, node.mValue);
             node.mValue->visit(*this);
         }
 
         void visit(::HIR::ExprNodeYield& node) override {
             TRACE_FUNCTION_F(&node << " yield ...");
-            ASSERT_BUG(node.span(), !this->closure_ret_types.empty(), "Yield outside a generator closure");
-            ASSERT_BUG(node.span(), this->closure_ret_types.back().yield_type, "Yield outside a generator closure");
-            check_types_equal(this->closure_ret_types.back().yield_type, node.mValue);
+            ASSERT_BUG(node.span(), !this->closureRetTypes.empty(), "Yield outside a generator closure");
+            ASSERT_BUG(node.span(), this->closureRetTypes.back().yield_type, "Yield outside a generator closure");
+            checkTypesEqual(this->closureRetTypes.back().yield_type, node.mValue);
             node.mValue->visit(*this);
         }
 
@@ -149,7 +149,7 @@ namespace {
             node.mValue->visit(*this);
             auto t = mResolve.crate.types.path(::HIR::Path(node.mValue->resType, mResolve.mLangFuture, "Output"), {});
             mResolve.expand_associated_types(node.span(), t);
-            check_types_equal(node.span(), node.resType, t);
+            checkTypesEqual(node.span(), node.resType, t);
         }
 
         void visit(::HIR::ExprNodeLoop& node) override {
@@ -174,15 +174,15 @@ namespace {
                 ASSERT_BUG(node.span(), it != this->loops.rend(), "Loop target node not found in the loop stack");
 
                 DEBUG("Breaking to " << node.targetNode << ", type " << node.targetNode->resType);
-                check_types_equal(node.span(), node.targetNode->resType, ty);
+                checkTypesEqual(node.span(), node.targetNode->resType, ty);
             }
         }
 
         void visit(::HIR::ExprNodeLet& node) override {
             TRACE_FUNCTION_F(&node << " let " << node.pattern << ": " << node.mType);
             if (node.mValue) {
-                check_pattern(node.pattern, node.mValue->resType);
-                check_types_equal(node.span(), node.mType, node.mValue->resType);
+                checkPattern(node.pattern, node.mValue->resType);
+                checkTypesEqual(node.span(), node.mType, node.mValue->resType);
                 node.mValue->visit(*this);
             }
         }
@@ -192,9 +192,9 @@ namespace {
             node.mValue->visit(*this);
             for (auto& arm : node.arms) {
                 for (const auto& pat : arm.patterns) {
-                    check_pattern(pat, node.mValue->resType);
+                    checkPattern(pat, node.mValue->resType);
                 }
-                check_types_equal(node.span(), node.resType, arm.mCode->resType);
+                checkTypesEqual(node.span(), node.resType, arm.mCode->resType);
                 arm.mCode->visit(*this);
             }
         }
@@ -203,7 +203,7 @@ namespace {
             TRACE_FUNCTION_F(&node << "... ?= ...");
 
             if (node.op == ::HIR::ExprNodeAssign::Op::None) {
-                check_types_equal(node.span(), node.slot->resType, node.mValue->resType);
+                checkTypesEqual(node.span(), node.slot->resType, node.mValue->resType);
             } else {
                 // Type inferrence using the +=
                 // - "" as type name to indicate that it's just using the trait magic?
@@ -256,7 +256,7 @@ namespace {
                 assert(lang_item);
                 if (!typeck::primitive_operator_has_builtin(operator_kind, node.slot->resType, node.mValue->resType)) {
                     const auto& trait_path = this->get_lang_item_path(node.span(), lang_item);
-                    check_trait_bound(node.span(), trait_path, {node.mValue->resType}, node.slot->resType);
+                    checkTraitBound(node.span(), trait_path, {node.mValue->resType}, node.slot->resType);
                 }
             }
 
@@ -274,7 +274,7 @@ namespace {
                 case ::HIR::ExprNodeBinOp::Op::CmpLtE:
                 case ::HIR::ExprNodeBinOp::Op::CmpGt:
                 case ::HIR::ExprNodeBinOp::Op::CmpGtE: {
-                    check_types_equal(node.span(), mResolve.crate.types.primitive(::HIR::CoreType::Bool), node.resType);
+                    checkTypesEqual(node.span(), mResolve.crate.types.primitive(::HIR::CoreType::Bool), node.resType);
 
                     const char* item_name = nullptr;
                     switch (node.op) {
@@ -305,7 +305,7 @@ namespace {
                         : typeck::PrimitiveOperator::Order;
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.left->resType, node.right->resType)) {
                         const auto& op_trait = this->get_lang_item_path(node.span(), item_name);
-                        check_trait_bound(node.span(), op_trait, {node.right->resType}, node.left->resType);
+                        checkTraitBound(node.span(), op_trait, {node.right->resType}, node.left->resType);
                     }
                     break;
                 }
@@ -381,7 +381,7 @@ namespace {
                     assert(item_name);
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.left->resType, node.right->resType)) {
                         const auto& op_trait = this->get_lang_item_path(node.span(), item_name);
-                        check_associated_type(node.span(), node.resType, op_trait, {node.right->resType}, node.left->resType, "Output");
+                        checkAssociatedType(node.span(), node.resType, op_trait, {node.right->resType}, node.left->resType, "Output");
                     }
                     break;
                 }
@@ -398,13 +398,13 @@ namespace {
                 case ::HIR::ExprNodeUniOp::Op::Invert:
                     operator_kind = typeck::PrimitiveOperator::Not;
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.mValue->resType)) {
-                        check_associated_type(node.span(), node.resType, this->get_lang_item_path(node.span(), "not"), {}, node.mValue->resType, "Output");
+                        checkAssociatedType(node.span(), node.resType, this->get_lang_item_path(node.span(), "not"), {}, node.mValue->resType, "Output");
                     }
                     break;
                 case ::HIR::ExprNodeUniOp::Op::Negate:
                     operator_kind = typeck::PrimitiveOperator::Neg;
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.mValue->resType)) {
-                        check_associated_type(node.span(), node.resType, this->get_lang_item_path(node.span(), "neg"), {}, node.mValue->resType, "Output");
+                        checkAssociatedType(node.span(), node.resType, this->get_lang_item_path(node.span(), "neg"), {}, node.mValue->resType, "Output");
                     }
                     break;
             }
@@ -413,19 +413,19 @@ namespace {
 
         void visit(::HIR::ExprNodeBorrow& node) override {
             TRACE_FUNCTION_F(&node << " &_ ...");
-            check_types_equal(node.span(), node.resType, mResolve.crate.types.borrow(node.mType, node.mValue->resType));
+            checkTypesEqual(node.span(), node.resType, mResolve.crate.types.borrow(node.mType, node.mValue->resType));
             node.mValue->visit(*this);
         }
 
         void visit(::HIR::ExprNodeRawBorrow& node) override {
             TRACE_FUNCTION_F(&node << " &raw _ ...");
-            check_types_equal(node.span(), node.resType, mResolve.crate.types.pointer(node.mType, node.mValue->resType));
+            checkTypesEqual(node.span(), node.resType, mResolve.crate.types.pointer(node.mType, node.mValue->resType));
             node.mValue->visit(*this);
         }
 
         void visit(::HIR::ExprNodeIndex& node) override {
             TRACE_FUNCTION_F(&node << " ... [ ... ]");
-            check_associated_type(node.span(), node.resType, mLangIndex, {node.index->resType}, node.mValue->resType, "Output");
+            checkAssociatedType(node.span(), node.resType, mLangIndex, {node.index->resType}, node.mValue->resType, "Output");
 
             node.mValue->visit(*this);
             node.index->visit(*this);
@@ -484,7 +484,7 @@ namespace {
                                 ERROR(sp, E0000, "Invalid cast to " << dst_ty << " from " << src_ty);
                             }
                             TU_ARMA(Borrow, se) {
-                                this->check_types_equal(sp, de.inner, se.inner);
+                                this->checkTypesEqual(sp, de.inner, se.inner);
                             }
                 }
                 }
@@ -558,8 +558,8 @@ namespace {
                 const auto& langUnsize = mResolve.crate.get_lang_item_path_opt("unsize");
                 if (!langUnsize.components().empty()) {
                     // _ == < `src_ty` as Unsize< `dst_ty` >::""
-                    check_trait_bound(sp, langUnsize, {dst_ty}, src_ty);
-                } else if (!mResolve.can_unsize(sp, dst_ty, src_ty)) {
+                    checkTraitBound(sp, langUnsize, {dst_ty}, src_ty);
+                } else if (!mResolve.canUnsize(sp, dst_ty, src_ty)) {
                     ERROR(sp, E0000, "Invalid unsizing operation to " << dst_ty << " from " << src_ty);
                 }
             } else if (src_ty->is_Borrow() || dst_ty->is_Borrow()) {
@@ -567,7 +567,7 @@ namespace {
             } else {
                 const auto& langCoerceUnsized = this->get_lang_item_path(node.span(), "coerce_unsized");
                 // _ == < `src_ty` as CoerceUnsized< `dst_ty` >::""
-                check_trait_bound(sp, langCoerceUnsized, {dst_ty}, src_ty);
+                checkTraitBound(sp, langCoerceUnsized, {dst_ty}, src_ty);
             }
 
             node.mValue->visit(*this);
@@ -581,11 +581,11 @@ namespace {
                 || (node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Unknown
                     && typeck::primitive_operator_has_builtin(typeck::PrimitiveOperator::Deref, ty));
             if (builtin && ty->is_Pointer()) {
-                check_types_equal(node.span(), node.resType, ty->as_Pointer().inner);
+                checkTypesEqual(node.span(), node.resType, ty->as_Pointer().inner);
             } else if (builtin && ty->is_Borrow()) {
-                check_types_equal(node.span(), node.resType, ty->as_Borrow().inner);
+                checkTypesEqual(node.span(), node.resType, ty->as_Borrow().inner);
             } else {
-                check_associated_type(node.span(), node.resType, this->get_lang_item_path(node.span(), "deref"), {}, node.mValue->resType, "Target");
+                checkAssociatedType(node.span(), node.resType, this->get_lang_item_path(node.span(), "deref"), {}, node.mValue->resType, "Target");
             }
 
             node.mValue->visit(*this);
@@ -596,7 +596,7 @@ namespace {
                 case ::HIR::ExprNodeEmplace::Type::Noop:
                     assert(!node.place);
 
-                    check_types_equal(node.span(), node.resType, node.mValue->resType);
+                    checkTypesEqual(node.span(), node.resType, node.mValue->resType);
                     break;
                 case ::HIR::ExprNodeEmplace::Type::Boxer:
                     // TODO: Check trait and associated type
@@ -636,7 +636,7 @@ namespace {
                     des_ty = &node.argTypes[i];
                 }
 
-                check_types_equal(*des_ty, node.mArgs[i]);
+                checkTypesEqual(*des_ty, node.mArgs[i]);
             }
 
             for (auto& val : node.mArgs) {
@@ -648,7 +648,7 @@ namespace {
             TRACE_FUNCTION_F(&node << " " << node.realPath << "{...} [" << (node.isStruct ? "struct" : "enum") << "]");
             const auto& sp = node.span();
             if (node.baseValue) {
-                check_types_equal(node.baseValue->span(), node.resType, node.baseValue->resType);
+                checkTypesEqual(node.baseValue->span(), node.resType, node.baseValue->resType);
             }
             const auto& ty_path = node.realPath;
 
@@ -722,7 +722,7 @@ namespace {
                     des_ty = &des_ty_cache;
                 }
                 DEBUG("." << name << " : " << *des_ty);
-                check_types_equal(*des_ty, val.second);
+                checkTypesEqual(*des_ty, val.second);
             }
 
             for( auto& val : node.values ) {
@@ -758,7 +758,7 @@ namespace {
             )
         }
 
-        void check_function(const Span& sp, const ::HIR::Path& path, HIR::ExprCallCache& cache) {
+        void checkFunction(const Span& sp, const ::HIR::Path& path, HIR::ExprCallCache& cache) {
             // Do function resolution again, this time with concrete types.
             const ::HIR::Function* fcn_ptr = nullptr;
             MonomorphStatePtr monomorph_cb(mResolve.crate.types);
@@ -787,7 +787,7 @@ namespace {
                     cache.topParams = &trait.mParams;
 
                     // Add a bound requiring the Self type impl the trait
-                    check_trait_bound(sp, e.trait.mPath, e.trait.mParams, e.type);
+                    checkTraitBound(sp, e.trait.mPath, e.trait.mParams, e.type);
 
                     fcn_ptr = &fcn;
 
@@ -883,7 +883,7 @@ namespace {
                         const auto& trait_params = real_trait.mPath.mParams;
 
                         const auto& trait_path = be.trait.mPath.mPath;
-                        check_trait_bound(sp, trait_path, trait_params, real_type);
+                        checkTraitBound(sp, trait_path, trait_params, real_type);
 
                         // TODO: Either - Don't include the above impl bound, or change the below trait to the one that has that type
                         for (auto& assoc : real_trait.typeBounds) {
@@ -891,7 +891,7 @@ namespace {
                             bool has_ty = mResolve.trait_contains_type(sp, real_trait.mPath, *be.trait.traitPtr, assoc.first.c_str(), type_trait_path);
                             ASSERT_BUG(sp, has_ty, "Type " << assoc.first << " not found in chain of " << real_trait.mPath);
 
-                            check_associated_type(sp, assoc.second.type, type_trait_path.mPath, type_trait_path.mParams, real_type, assoc.first.c_str());
+                            checkAssociatedType(sp, assoc.second.type, type_trait_path.mPath, type_trait_path.mParams, real_type, assoc.first.c_str());
                         }
                     }
                     TU_ARMA(TypeEquality, be) {
@@ -899,7 +899,7 @@ namespace {
                         auto real_type_right = cache.monomorph->monomorph_type(sp, be.other_type);
                         mResolve.expand_associated_types(sp, real_type_left);
                         mResolve.expand_associated_types(sp, real_type_right);
-                        check_types_equal(sp, real_type_left, real_type_right);
+                        checkTypesEqual(sp, real_type_left, real_type_right);
                     }
                 }
             }
@@ -913,19 +913,19 @@ namespace {
                 val->visit(*this);
             }
 
-            check_function(sp, node.mPath, node.cache);
+            checkFunction(sp, node.mPath, node.cache);
 
             // Check types
             for (unsigned int i = 0; i < node.cache.argTypes.size() - 1; i++) {
                 DEBUG("CHECK ARG " << i << " " << node.cache.argTypes[i] << " == " << node.mArgs[i]->resType);
-                check_types_equal(sp, node.cache.argTypes[i], node.mArgs[i]->resType);
+                checkTypesEqual(sp, node.cache.argTypes[i], node.mArgs[i]->resType);
             }
             for (unsigned int i = node.cache.argTypes.size() - 1; i < node.mArgs.size(); i++) {
                 DEBUG("CHECK ARG " << i << " *  == " << node.mArgs[i]->resType);
                 // TODO: Check that the types here are valid.
             }
             DEBUG("CHECK RV " << node.resType << " == " << node.cache.argTypes.back());
-            check_types_equal(sp, node.resType, node.cache.argTypes.back());
+            checkTypesEqual(sp, node.resType, node.cache.argTypes.back());
         }
 
         void visit(::HIR::ExprNodeCallValue& node) override {
@@ -948,9 +948,9 @@ namespace {
                     ERROR(node.span(), E0000, "Incorrect number of arguments to call via " << val_ty);
                 }
                 for (unsigned int i = 0; i < e->argTypes.size(); i++) {
-                    check_types_equal(node.mArgs[i]->span(), m.monomorph_type(node.span(), e->argTypes[i]), node.mArgs[i]->resType);
+                    checkTypesEqual(node.mArgs[i]->span(), m.monomorph_type(node.span(), e->argTypes[i]), node.mArgs[i]->resType);
                 }
-                check_types_equal(node.span(), node.resType, m.monomorph_type(node.span(), e->mRettype));
+                checkTypesEqual(node.span(), node.resType, m.monomorph_type(node.span(), e->mRettype));
             } else if (node.traitUsed == ::HIR::ExprNodeCallValue::TraitUsed::Unknown) {
             } else {
                 // 1. Look up the encoded trait
@@ -986,7 +986,7 @@ namespace {
                 }
                 auto exp_ret = mResolve.crate.types.path(::HIR::Path(node.mValue->resType, {mResolve.crate.get_lang_item_path(node.span(), "fn_once"), mv$(params)}, "Output", {}), {});
                 mResolve.expand_associated_types(node.span(), exp_ret);
-                check_types_equal(node.span(), node.resType, exp_ret);
+                checkTypesEqual(node.span(), node.resType, exp_ret);
             }
 
             node.mValue->visit(*this);
@@ -1004,19 +1004,19 @@ namespace {
             }
 
             const Span& sp = node.span();
-            check_function(sp, node.methodPath, node.cache);
+            checkFunction(sp, node.methodPath, node.cache);
 
             // Check types
             for (unsigned int i = 0; i < node.cache.argTypes.size() - 2; i++) {
                 DEBUG("CHECK ARG " << i << " " << node.cache.argTypes[1 + i] << " == " << node.mArgs[i]->resType);
-                check_types_equal(sp, node.cache.argTypes[1 + i], node.mArgs[i]->resType);
+                checkTypesEqual(sp, node.cache.argTypes[1 + i], node.mArgs[i]->resType);
             }
             for (unsigned int i = node.cache.argTypes.size() - 1; i < node.mArgs.size(); i++) {
                 DEBUG("CHECK ARG " << i << " *  == " << node.mArgs[i]->resType);
                 // TODO: Check that the types here are valid.
             }
             DEBUG("CHECK RV " << node.resType << " == " << node.cache.argTypes.back());
-            check_types_equal(sp, node.resType, node.cache.argTypes.back());
+            checkTypesEqual(sp, node.resType, node.cache.argTypes.back());
         }
 
         void visit(::HIR::ExprNodeField& node) override {
@@ -1051,7 +1051,7 @@ namespace {
 
             ASSERT_BUG(node.span(), tys.size() == node.vals.size(), "Bad element count in tuple literal - " << tys.size() << " != " << node.vals.size());
             for (unsigned int i = 0; i < node.vals.size(); i++) {
-                check_types_equal(node.span(), tys[i], node.vals[i]->resType);
+                checkTypesEqual(node.span(), tys[i], node.vals[i]->resType);
             }
 
             for (auto& val : node.vals) {
@@ -1064,7 +1064,7 @@ namespace {
             // Cleanly equate into array (with coercions)
             const auto& inner_ty = node.resType->as_Array().inner;
             for (auto& val : node.vals) {
-                check_types_equal(val->span(), inner_ty, val->resType);
+                checkTypesEqual(val->span(), inner_ty, val->resType);
             }
 
             for (auto& val : node.vals) {
@@ -1077,7 +1077,7 @@ namespace {
 
             //check_types_equal(node.m_size->span(), ::HIR::TypeRef(::HIR::Primitive::Usize), node.m_size->m_res_type);
             const auto& inner_ty = node.resType->as_Array().inner;
-            check_types_equal(node.val->span(), inner_ty, node.val->resType);
+            checkTypesEqual(node.val->span(), inner_ty, node.val->resType);
 
             node.val->visit(*this);
             //if(node.m_size.is_Unevaluated() && node.m_size.as_Unevaluated().is_Unevaluated())
@@ -1131,7 +1131,7 @@ namespace {
                 }
             }
             if( ty != HIR::TypeRef() ) {
-                check_types_equal(sp, node.resType, ty);
+                checkTypesEqual(sp, node.resType, ty);
             }
         }
 
@@ -1147,13 +1147,13 @@ namespace {
             TRACE_FUNCTION_F(&node << " |...| ...");
 
             if (node.mCode) {
-                check_types_equal(node.mCode->span(), node.returnType, node.mCode->resType);
+                checkTypesEqual(node.mCode->span(), node.returnType, node.mCode->resType);
 
                 auto loops = ::std::move(this->loops);
 
-                this->closure_ret_types.push_back(RetTarget(node.returnType));
+                this->closureRetTypes.push_back(RetTarget(node.returnType));
                 node.mCode->visit(*this);
-                this->closure_ret_types.pop_back();
+                this->closureRetTypes.pop_back();
 
                 this->loops = ::std::move(loops);
             }
@@ -1165,10 +1165,10 @@ namespace {
             if (node.mCode) {
                 auto loops = ::std::move(this->loops);
 
-                check_types_equal(node.mCode->span(), node.returnType, node.mCode->resType);
-                this->closure_ret_types.push_back(RetTarget(node.returnType, node.yieldTy));
+                checkTypesEqual(node.mCode->span(), node.returnType, node.mCode->resType);
+                this->closureRetTypes.push_back(RetTarget(node.returnType, node.yieldTy));
                 node.mCode->visit(*this);
-                this->closure_ret_types.pop_back();
+                this->closureRetTypes.pop_back();
 
                 this->loops = ::std::move(loops);
             }
@@ -1180,10 +1180,10 @@ namespace {
             if (node.mCode) {
                 auto loops = ::std::move(this->loops);
 
-                check_types_equal(node.mCode->span(), node.returnType, node.mCode->resType);
-                this->closure_ret_types.push_back(RetTarget(node.returnType, node.yieldTy));
+                checkTypesEqual(node.mCode->span(), node.returnType, node.mCode->resType);
+                this->closureRetTypes.push_back(RetTarget(node.returnType, node.yieldTy));
                 node.mCode->visit(*this);
-                this->closure_ret_types.pop_back();
+                this->closureRetTypes.pop_back();
 
                 this->loops = ::std::move(loops);
             }
@@ -1195,19 +1195,19 @@ namespace {
             // Can be null after generation
             if (node.mCode) {
                 auto loops = ::std::move(this->loops);
-                this->closure_ret_types.push_back(RetTarget(node.mCode->resType));
+                this->closureRetTypes.push_back(RetTarget(node.mCode->resType));
                 node.mCode->visit(*this);
-                this->closure_ret_types.pop_back();
+                this->closureRetTypes.pop_back();
                 this->loops = ::std::move(loops);
             }
         }
 
     private:
-        void check_types_equal(const ::HIR::TypeData* l, const ::HIR::ExprNodeP& node) const {
-            check_types_equal(node->span(), l, node->resType);
+        void checkTypesEqual(const ::HIR::TypeData* l, const ::HIR::ExprNodeP& node) const {
+            checkTypesEqual(node->span(), l, node->resType);
         }
 
-        void check_types_equal(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r) const {
+        void checkTypesEqual(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r) const {
             struct Resolve: HIR::ResolvePlaceholders {
                 HIR::TypeInterner& types;
                 mutable ::HIR::TypeRef tmp;
@@ -1246,14 +1246,14 @@ namespace {
             if (/*l->is_Diverge() ||*/ r->is_Diverge()) {
                 // Diverge, matches everything.
                 // TODO: Is this always true?
-            } else if (l->compare_with_placeholders(sp, r, get_types) != HIR::Compare::Equal) {
+            } else if (l->compareWithPlaceholders(sp, r, get_types) != HIR::Compare::Equal) {
                 ERROR(sp, E0000, "Type mismatch\n - " << l << "\n!= " << r);
             } else {
                 // All good
             }
         }
 
-        void check_trait_bound(
+        void checkTraitBound(
             const Span& sp,
             const ::HIR::SimplePath& trait,
             const ::HIR::PathParams& params,
@@ -1280,7 +1280,7 @@ namespace {
             }
         }
 
-        void check_associated_type(
+        void checkAssociatedType(
             const Span& sp,
             const ::HIR::TypeData* res, // Expected result
             const ::HIR::SimplePath& trait,
@@ -1309,7 +1309,7 @@ namespace {
             }
         }
 
-        void check_pattern(const ::HIR::Pattern& pat, const ::HIR::TypeData* top_ty) const {
+        void checkPattern(const ::HIR::Pattern& pat, const ::HIR::TypeData* top_ty) const {
             Span sp;
             TRACE_FUNCTION_F("pat=" << pat << " ty=" << top_ty);
             const ::HIR::TypeData* typ = top_ty;
@@ -1346,14 +1346,14 @@ namespace {
                 }
 
                 TU_ARMA(Value, pe) {
-                    this->check_pattern_value(sp, pe.val, ty);
+                    this->checkPatternValue(sp, pe.val, ty);
                 }
                 TU_ARMA(Range, pe) {
                     if (pe.start) {
-                        this->check_pattern_value(sp, *pe.start, ty);
+                        this->checkPatternValue(sp, *pe.start, ty);
                     }
                     if (pe.end) {
-                        this->check_pattern_value(sp, *pe.end, ty);
+                        this->checkPatternValue(sp, *pe.end, ty);
                     }
                 }
                 TU_ARMA(Slice, e) {
@@ -1367,28 +1367,28 @@ namespace {
 
                 TU_ARMA(Or, e) {
                     for (auto& subpat : e) {
-                        check_pattern(subpat, ty);
+                        checkPattern(subpat, ty);
                     }
                 }
             }
         }
 
-        void check_pattern_value(const Span& sp, const ::HIR::Pattern::Value& pv, const ::HIR::TypeData* ty) const {
+        void checkPatternValue(const Span& sp, const ::HIR::Pattern::Value& pv, const ::HIR::TypeData* ty) const {
             TU_MATCH_HDRA( (pv), { )
             TU_ARMA(Integer, e) {
                     if (e.type == ::HIR::CoreType::Str) {
                     } else {
-                        check_types_equal(sp, ty, mResolve.crate.types.primitive(e.type));
+                        checkTypesEqual(sp, ty, mResolve.crate.types.primitive(e.type));
                     }
                 }
                 TU_ARMA(Float, e) {
                     if (e.type == ::HIR::CoreType::Str) {
                     } else {
-                        check_types_equal(sp, ty, mResolve.crate.types.primitive(e.type));
+                        checkTypesEqual(sp, ty, mResolve.crate.types.primitive(e.type));
                     }
                 }
                 TU_ARMA(String, e) {
-                    check_types_equal(sp, ty, mResolve.crate.types.borrow(::HIR::BorrowType::Shared, mResolve.crate.types.primitive(::HIR::CoreType::Str)));
+                    checkTypesEqual(sp, ty, mResolve.crate.types.borrow(::HIR::BorrowType::Shared, mResolve.crate.types.primitive(::HIR::CoreType::Str)));
                 }
                 TU_ARMA(ByteString, e) {
                     // Can either be a slice or an array
@@ -1401,8 +1401,8 @@ namespace {
                         BUG(sp, "Pattern::Value::Named not a const - " << e.path);
                     }
                     HIR::TypeRef tmp;
-                    const auto& const_ty = ms.maybe_monomorph_type(sp, tmp, v.as_Constant()->mType);
-                    check_types_equal(sp, ty, const_ty);
+                    const auto& constTy = ms.maybe_monomorph_type(sp, tmp, v.as_Constant()->mType);
+                    checkTypesEqual(sp, ty, constTy);
                 }
             }
         }
@@ -1429,7 +1429,7 @@ namespace {
 
         void visit_type(::HIR::TypeRef& ty) override {
             if (ty->is_Array()) {
-                auto data = ty->clone_data();
+                auto data = ty->cloneData();
                 auto& e = data.as_Array();
                 this->visit_type(e.inner);
                 DEBUG("Array size " << ty);
@@ -1629,7 +1629,7 @@ namespace {
             return rv;
         }
 
-        void check_parameters(const Span& sp, const ::HIR::GenericParams& param_def, ::HIR::PathParams& param_vals) {
+        void checkParameters(const Span& sp, const ::HIR::GenericParams& param_def, ::HIR::PathParams& param_vals) {
             MonomorphStatePtr ms(crate.types, selfTypes.empty() ? nullptr : selfTypes.back(), &param_vals, nullptr);
 
             if (param_vals.mLifetimes.size() == 0) {
@@ -1734,7 +1734,7 @@ namespace {
             const Span& sp = _sp;
 
             assert(ty);
-            auto data = ty->clone_data();
+            auto data = ty->cloneData();
 
             // Lifetime elision logic!
             if (auto* e = data.opt_Borrow()) {
@@ -1815,7 +1815,7 @@ namespace {
             const auto& params = get_params_for_item(sp, crate, p.mPath, pc);
             auto& args = p.mParams;
 
-            check_parameters(sp, params, args);
+            checkParameters(sp, params, args);
             DEBUG("p = " << p);
 
             ::HIR::Visitor::visit_generic_path(p, pc);
@@ -2132,7 +2132,7 @@ namespace {
             curParamsLevel = saved_params.second;
         }
 
-        void add_lifetime_bounds_for_impl_type(const Span& sp, HIR::GenericParams& dst, const ::HIR::TypeData* ty) {
+        void addLifetimeBoundsForImplType(const Span& sp, HIR::GenericParams& dst, const ::HIR::TypeData* ty) {
             // REF: rustc-1.29.0-src/src/vendor/clap/src/args/arg.rs:54 - Omitted lifetime bounds
 
             // https://rust-lang.github.io/rfcs/2089-implied-bounds.html ?
@@ -2177,7 +2177,7 @@ namespace {
             }
 
             // Propagate bounds from the type
-            add_lifetime_bounds_for_impl_type(Span(), impl.mParams, impl.mType);
+            addLifetimeBoundsForImplType(Span(), impl.mParams, impl.mType);
 
             ::HIR::Visitor::visit_type_impl(impl);
             // TODO: Check that the type is valid
@@ -2201,7 +2201,7 @@ namespace {
             }
 
             // Propagate bounds from the type
-            add_lifetime_bounds_for_impl_type(Span(), impl.mParams, impl.mType);
+            addLifetimeBoundsForImplType(Span(), impl.mParams, impl.mType);
 
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
             selfTypes.pop_back();
@@ -2279,7 +2279,7 @@ namespace {
                     struct MCB: public ::HIR::MatchGenerics {
                         ::std::map<RcString, const ::HIR::TypeData*> mapping;
 
-                        ::HIR::Compare cmp_type(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, HIR::t_cb_resolve_type resolve_cb) override {
+                        ::HIR::Compare cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, HIR::t_cb_resolve_type resolve_cb) override {
                             // If the LHS is an ATY that starts with `erased#` then just accept it?
                             // - Also record the mapping
                             if (const auto* ty_p = ty_l->opt_Path()) {
@@ -2290,7 +2290,7 @@ namespace {
                                     }
                                 }
                             }
-                            return ::HIR::MatchGenerics::cmp_type(sp, ty_l, ty_r, resolve_cb);
+                            return ::HIR::MatchGenerics::cmpType(sp, ty_l, ty_r, resolve_cb);
                         }
 
                         ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, HIR::t_cb_resolve_type resolve_cb) override {
@@ -2311,7 +2311,7 @@ namespace {
                         );
                     }
                     HIR::TypeRef exp_ret_ty_real;
-                    const auto& exp_ret_ty = match_cb.mapping.empty() ? exp_ret_ty1 : (exp_ret_ty_real = clone_ty_with(crate.types, sp, exp_ret_ty1, [&](const ::HIR::TypeData* ref, ::HIR::TypeRef& out) -> bool {
+                    const auto& exp_ret_ty = match_cb.mapping.empty() ? exp_ret_ty1 : (exp_ret_ty_real = cloneTyWith(crate.types, sp, exp_ret_ty1, [&](const ::HIR::TypeData* ref, ::HIR::TypeRef& out) -> bool {
                         if (const auto* ty_p = ref->opt_Path()) {
                             if (const auto* path_p = ty_p->path.mData.opt_UfcsKnown()) {
                                 auto it = match_cb.mapping.find(path_p->item);
@@ -2460,7 +2460,7 @@ namespace {
             }
 
             // Propagate bounds from the type/trait
-            add_lifetime_bounds_for_impl_type(Span(), impl.mParams, impl.mType);
+            addLifetimeBoundsForImplType(Span(), impl.mParams, impl.mType);
 
             ::HIR::Visitor::visit_marker_impl(trait_path, impl);
             // TODO: Check that the type+trait is valid

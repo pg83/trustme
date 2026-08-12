@@ -69,20 +69,20 @@ namespace {
             switch (stmt.tag()) {
                 // LAZY: These _should_ be in `clone_stmt`, but they're not needed in optimising and MIR cloning
                 TU_ARM(stmt, SaveDropFlag, e) {
-                    statements.push_back(::MIR::Statement::make_SaveDropFlag({e.slot.clone(), e.bit_index, e.idx}));
+                    statements.push_back(::MIR::Statement::make_SaveDropFlag({e.slot.clone(), e.bitIndex, e.idx}));
                 }
                 break;
                 TU_ARM(stmt, LoadDropFlag, e) {
-                    statements.push_back(::MIR::Statement::make_LoadDropFlag({e.idx, e.slot.clone(), e.bit_index}));
+                    statements.push_back(::MIR::Statement::make_LoadDropFlag({e.idx, e.slot.clone(), e.bitIndex}));
                 }
                 break;
                 default:
-                    statements.push_back(c.clone_stmt(stmt));
+                    statements.push_back(c.cloneStmt(stmt));
                     break;
             }
         }
 
-        ::MIR::Terminator terminator = c.clone_term(block.terminator);
+        ::MIR::Terminator terminator = c.cloneTerm(block.terminator);
         output.blocks.push_back(::MIR::BasicBlock{mv$(statements), mv$(terminator)});
     }
 
@@ -108,7 +108,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
 
         ::HIR::Path new_static(::HIR::TypeRef type, EncodedLiteral value) override {
             // Ensure that the type is in enumeration (it should have been, but maybe not?)
-            out.add_type(type, false);
+            out.addType(type, false);
             auto name = RcString::new_interned(FMT("ConstEvalMonomorph#" << count));
             count++;
             auto p = ::HIR::SimplePath(crate.crateName, {name});
@@ -205,7 +205,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
 
             // TODO: Should these be moved to their own pass? Potentially not, the extra pass should just be an inlining optimise pass
             auto ret_type = pp.monomorph(resolve, fcn.returnType);
-            ::HIR::Function::args_t args;
+            ::HIR::Function::argsT args;
             for (const auto& a : fcn.mArgs) {
                 args.push_back(::std::make_pair(::HIR::Pattern{}, pp.monomorph(resolve, a.second)));
             }
@@ -222,16 +222,16 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
             MIRValidate(resolve, ip, *mir, args, ret_type);
 
             fcn_ent.second->monomorphised.ret_ty = ::std::move(ret_type);
-            fcn_ent.second->monomorphised.arg_tys = ::std::move(args);
+            fcn_ent.second->monomorphised.argTys = ::std::move(args);
             fcn_ent.second->monomorphised.code = ::std::move(mir);
-            resolve.clear_both_generics();
+            resolve.clearBothGenerics();
         } else {
             DEBUG("Non-generic: FUNCTION " << fcn_ent.first);
         }
     }
 
     for (auto& v : nvs.added) {
-        auto* o = list.add_static(crate.types, HIR::Path(v.first));
+        auto* o = list.addStatic(crate.types, HIR::Path(v.first));
         ASSERT_BUG(Span(), o, "Generated static " << v.first << " already in TransList?");
         o->ptr = v.second;
     }

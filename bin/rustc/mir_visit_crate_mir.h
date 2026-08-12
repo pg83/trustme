@@ -7,14 +7,14 @@ namespace MIR {
 
     class OuterVisitor: public ::HIR::Visitor {
     public:
-        typedef ::std::function<void(const StaticTraitResolve& resolve, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr, const ::HIR::Function::args_t& args, const ::HIR::TypeData* ret_type)> cb_t;
+        typedef ::std::function<void(const StaticTraitResolve& resolve, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type)> cbT;
 
     private:
         StaticTraitResolve mResolve;
-        cb_t cb;
+        cbT cb;
 
     public:
-        OuterVisitor(const ::HIR::Crate& crate, cb_t cb);
+        OuterVisitor(const ::HIR::Crate& crate, cbT cb);
 
         void visit_expr(::HIR::ExprPtr& exp) override;
 

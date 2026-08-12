@@ -19,8 +19,8 @@ protected:
     HIR::TypeInterner& types;
 
 private:
-    const HIR::Crate* consteval_crate;
-    HIR::ItemPath consteval_path;
+    const HIR::Crate* constevalCrate;
+    HIR::ItemPath constevalPath;
 
 public:
     explicit Monomorphiser(HIR::TypeInterner& types);
@@ -35,18 +35,18 @@ public:
     virtual ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& g) const = 0;
     virtual ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const = 0;
 
-    virtual ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeData* ty, bool allow_infer = true) const;
+    virtual ::HIR::TypeRef monomorph_type(const Span& sp, const ::HIR::TypeData* ty, bool allowInfer = true) const;
     virtual ::HIR::LifetimeRef monomorph_lifetime(const Span& sp, const ::HIR::LifetimeRef& tpl) const;
-    ::HIR::Path monomorph_path(const Span& sp, const ::HIR::Path& tpl, bool allow_infer = true) const;
-    ::HIR::TraitPath monomorph_traitpath(const Span& sp, const ::HIR::TraitPath& tpl, bool allow_infer, bool ignore_hrls = false) const;
-    ::HIR::TraitPath::AtyEqual monomorph_tp_aty_equal(const Span& sp, const ::HIR::TraitPath::AtyEqual& tpl, bool allow_infer) const;
-    ::HIR::PathParams monomorph_path_params(const Span& sp, const ::HIR::PathParams& tpl, bool allow_infer) const;
-    virtual ::HIR::GenericPath monomorph_genericpath(const Span& sp, const ::HIR::GenericPath& tpl, bool allow_infer = true, bool ignore_hrls = false) const;
+    ::HIR::Path monomorph_path(const Span& sp, const ::HIR::Path& tpl, bool allowInfer = true) const;
+    ::HIR::TraitPath monomorph_traitpath(const Span& sp, const ::HIR::TraitPath& tpl, bool allowInfer, bool ignore_hrls = false) const;
+    ::HIR::TraitPath::AtyEqual monomorph_tp_aty_equal(const Span& sp, const ::HIR::TraitPath::AtyEqual& tpl, bool allowInfer) const;
+    ::HIR::PathParams monomorph_path_params(const Span& sp, const ::HIR::PathParams& tpl, bool allowInfer) const;
+    virtual ::HIR::GenericPath monomorph_genericpath(const Span& sp, const ::HIR::GenericPath& tpl, bool allowInfer = true, bool ignore_hrls = false) const;
 
-    ::HIR::ConstGeneric monomorph_constgeneric(const Span& sp, const ::HIR::ConstGeneric& val, bool allow_infer) const;
+    ::HIR::ConstGeneric monomorph_constgeneric(const Span& sp, const ::HIR::ConstGeneric& val, bool allowInfer) const;
     ::HIR::ArraySize monomorph_arraysize(const Span& sp, const ::HIR::ArraySize& tpl) const;
 
-    const ::HIR::TypeData* maybe_monomorph_type(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* ty, bool allow_infer = true) const;
+    const ::HIR::TypeData* maybe_monomorph_type(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* ty, bool allowInfer = true) const;
 };
 
 class MonomorphiserPP: public Monomorphiser {
@@ -81,24 +81,24 @@ public:
 };
 
 // Wrappers to only monomorphise if required
-static inline const ::HIR::TypeData* monomorphise_type_with_opt(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* tpl, const Monomorphiser& mono, bool allow_infer = true) {
-    return (monomorphise_type_needed(tpl) ? tmp = mono.monomorph_type(sp, tpl, allow_infer) : tpl);
+static inline const ::HIR::TypeData* monomorphise_type_with_opt(const Span& sp, ::HIR::TypeRef& tmp, const ::HIR::TypeData* tpl, const Monomorphiser& mono, bool allowInfer = true) {
+    return (monomorphise_type_needed(tpl) ? tmp = mono.monomorph_type(sp, tpl, allowInfer) : tpl);
 }
 
-static inline const ::HIR::Path& monomorphise_path_with_opt(const Span& sp, ::HIR::Path& tmp, const ::HIR::Path& tpl, const Monomorphiser& mono, bool allow_infer = true) {
-    return (monomorphise_path_needed(tpl) ? tmp = mono.monomorph_path(sp, tpl, allow_infer) : tpl);
+static inline const ::HIR::Path& monomorphise_path_with_opt(const Span& sp, ::HIR::Path& tmp, const ::HIR::Path& tpl, const Monomorphiser& mono, bool allowInfer = true) {
+    return (monomorphise_path_needed(tpl) ? tmp = mono.monomorph_path(sp, tpl, allowInfer) : tpl);
 }
 
-static inline const ::HIR::GenericPath& monomorphise_genericpath_with_opt(const Span& sp, ::HIR::GenericPath& tmp, const ::HIR::GenericPath& tpl, const Monomorphiser& mono, bool allow_infer = true) {
-    return (monomorphise_genericpath_needed(tpl) ? tmp = mono.monomorph_genericpath(sp, tpl, allow_infer, false) : tpl);
+static inline const ::HIR::GenericPath& monomorphise_genericpath_with_opt(const Span& sp, ::HIR::GenericPath& tmp, const ::HIR::GenericPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
+    return (monomorphise_genericpath_needed(tpl) ? tmp = mono.monomorph_genericpath(sp, tpl, allowInfer, false) : tpl);
 }
 
-static inline const ::HIR::TraitPath& monomorphise_traitpath_with_opt(const Span& sp, ::HIR::TraitPath& tmp, const ::HIR::TraitPath& tpl, const Monomorphiser& mono, bool allow_infer = true) {
-    return (monomorphise_traitpath_needed(tpl) ? tmp = mono.monomorph_traitpath(sp, tpl, allow_infer, false) : tpl);
+static inline const ::HIR::TraitPath& monomorphise_traitpath_with_opt(const Span& sp, ::HIR::TraitPath& tmp, const ::HIR::TraitPath& tpl, const Monomorphiser& mono, bool allowInfer = true) {
+    return (monomorphise_traitpath_needed(tpl) ? tmp = mono.monomorph_traitpath(sp, tpl, allowInfer, false) : tpl);
 }
 
-static inline const ::HIR::PathParams& monomorphise_pathparams_with_opt(const Span& sp, ::HIR::PathParams& tmp, const ::HIR::PathParams& tpl, const Monomorphiser& mono, bool allow_infer = true) {
-    return (monomorphise_pathparams_needed(tpl) ? tmp = mono.monomorph_path_params(sp, tpl, allow_infer) : tpl);
+static inline const ::HIR::PathParams& monomorphise_pathparams_with_opt(const Span& sp, ::HIR::PathParams& tmp, const ::HIR::PathParams& tpl, const Monomorphiser& mono, bool allowInfer = true) {
+    return (monomorphise_pathparams_needed(tpl) ? tmp = mono.monomorph_path_params(sp, tpl, allowInfer) : tpl);
 }
 
 // Helper for passing a group of params around

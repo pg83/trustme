@@ -50,7 +50,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
             codegen->emit_type(ty.first);
         }
     }
-    list.clear_types();
+    list.clearTypes();
     for (const auto& ty : list.typeids) {
         codegen->emit_type_id(ty);
     }
@@ -443,8 +443,8 @@ namespace {
             if (out_ty == CodegenOutput::Executable) {
                 if (!crate.noMain) {
                     of << "fn main#(isize, *const *const i8): isize {\n";
-                    auto c_start_path = mResolve.crate.get_lang_item_path_opt("mrustc-start");
-                    if (c_start_path == ::HIR::SimplePath()) {
+                    auto cStartPath = mResolve.crate.get_lang_item_path_opt("mrustc-start");
+                    if (cStartPath == ::HIR::SimplePath()) {
                         auto main_path = mResolve.crate.get_lang_item_path(Span(), "mrustc-main");
                         const auto& start_path = mResolve.crate.get_lang_item_path_opt("start");
                         if (crate.isNoCore && start_path == ::HIR::SimplePath()) {
@@ -460,7 +460,7 @@ namespace {
                         }
                     } else {
                         of << "\t0: {\n";
-                        of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(c_start_path)) << "(arg0, arg1) goto 1 else 1;\n";
+                        of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(cStartPath)) << "(arg0, arg1) goto 1 else 1;\n";
                     }
                     of << "\t}\n";
                     of << "\t1: {\n";
@@ -909,7 +909,7 @@ namespace {
         void emit_function_code(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
-            ::MIR::TypeResolve::args_t arg_types;
+            ::MIR::TypeResolve::argsT arg_types;
             for (const auto& ent : item.mArgs) {
                 arg_types.push_back(::std::make_pair(::HIR::Pattern{}, params.monomorph(mResolve, ent.second)));
             }
@@ -1126,11 +1126,11 @@ namespace {
                             }
                             break;
                             TU_ARM(stmt, LoadDropFlag, se) {
-                                of << "LOADFLAG df" << se.idx << " = " << fmt(se.slot) << " BIT " << se.bit_index;
+                                of << "LOADFLAG df" << se.idx << " = " << fmt(se.slot) << " BIT " << se.bitIndex;
                             }
                             break;
                             TU_ARM(stmt, SaveDropFlag, se) {
-                                of << "SAVEFLAG " << fmt(se.slot) << " BIT " << se.bit_index << " = df" << se.idx;
+                                of << "SAVEFLAG " << fmt(se.slot) << " BIT " << se.bitIndex << " = df" << se.idx;
                             }
                             break;
                             TU_ARM(stmt, Asm, se) {
@@ -1218,7 +1218,7 @@ namespace {
                         of << "GOTO " << e << "\n";
                         break;
                         TU_ARM(term, If, e)
-                        of << "IF " << fmt(e.cond) << " goto " << e.bb_true << " else " << e.bb_false << "\n";
+                        of << "IF " << fmt(e.cond) << " goto " << e.bbTrue << " else " << e.bbFalse << "\n";
                         break;
                         TU_ARM(term, Switch, e) {
                             of << "SWITCH " << fmt(e.val) << " { ";
@@ -1348,7 +1348,7 @@ namespace {
             if (has_erased || monomorphise_type_needed(item.returnType)) {
                 // If there's an erased type, make a copy with the erased type expanded
                 if (has_erased) {
-                    tmp = clone_ty_with(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
+                    tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
                         if (const auto* te = x->opt_ErasedType()) {
                             if (const auto* e = te->inner.opt_Fcn()) {
                                 out = item.mCode.erasedTypes.at(e->index);

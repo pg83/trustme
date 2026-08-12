@@ -235,7 +235,7 @@ public:
             auto attrs = ParseItemAttrs(lex);
             auto text = get_string(sp, lex, crate, mod);
             auto sp = lex.end_span(ps);
-            if (check_cfg_attrs(attrs)) {
+            if (checkCfgAttrs(attrs)) {
                 raw_lines.push_back(std::make_pair(sp, std::move(text)));
             }
 
@@ -255,7 +255,7 @@ public:
                 break;
             }
 
-            RcString binding_name;
+            RcString bindingName;
             auto v = get_tok_ident_rword(lex);
             if (v == "options") {
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
@@ -293,11 +293,11 @@ public:
                         }
                         options.nostack = 1;
                     } else if (tok.ident().name == "att_syntax") {
-                        if (options.att_syntax) {
+                        if (options.attSyntax) {
                             ERROR(lex.point_span(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
                         }
                         // TODO: x86(-64) only
-                        options.att_syntax = 1;
+                        options.attSyntax = 1;
                     } else {
                         ERROR(lex.point_span(), E0000, "Unknown asm option - " << tok.ident().name);
                     }
@@ -315,7 +315,7 @@ public:
 
             if (lex.lookahead(0) == TOK_EQUAL) {
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-                binding_name = v;
+                bindingName = v;
                 v = get_tok_ident_rword(lex);
             }
 
@@ -393,7 +393,7 @@ public:
                 }
             }
 
-            names.push_back(binding_name);
+            names.push_back(bindingName);
             params.push_back(std::move(param_spec));
 
             GET_TOK(tok, lex);
@@ -867,7 +867,7 @@ namespace {
         };
 
         Align align = Align::Unspec;
-        uint32_t align_char = ' ';
+        uint32_t alignChar = ' ';
 
         Sign sign = Sign::Unspec;
         bool alternate = false;
@@ -890,7 +890,7 @@ namespace {
     if (f != x.f) \
     return true
             CMP(align);
-            CMP(align_char);
+            CMP(alignChar);
             CMP(sign);
             CMP(alternate);
             CMP(zero_pad);
@@ -917,7 +917,7 @@ namespace {
                     os << ">";
                     break;
             }
-            os << "'" << x.align_char << "'";
+            os << "'" << x.alignChar << "'";
             os << ")";
             os << "Sign(";
             switch (x.sign) {
@@ -950,7 +950,7 @@ namespace {
         ::std::string leading_text;
 
         /// Argument index used
-        unsigned int arg_index;
+        unsigned int argIndex;
 
         /// Trait to use for formatting
         const char* trait_name;
@@ -1081,16 +1081,16 @@ namespace {
                 if (*s != ':' && *s != '}') {
                     // Parse either an integer or an identifer
                     if (isdigit(*s)) {
-                        unsigned int arg_idx = 0;
+                        unsigned int argIdx = 0;
                         do {
-                            arg_idx *= 10;
-                            arg_idx += *s - '0';
+                            argIdx *= 10;
+                            argIdx += *s - '0';
                             s++;
                         } while (isdigit(*s));
-                        if (arg_idx >= n_free) {
-                            ERROR(sp, E0000, "Positional argument " << arg_idx << " out of range in \"" << format_string << "\"");
+                        if (argIdx >= n_free) {
+                            ERROR(sp, E0000, "Positional argument " << argIdx << " out of range in \"" << format_string << "\"");
                         }
-                        index = arg_idx;
+                        index = argIdx;
                     } else {
                         const char* start = s;
                         while (isalnum(*s) || *s == '_' || (*s < 0 || *s > 127)) {
@@ -1115,7 +1115,7 @@ namespace {
                         uint32_t ch = parse_utf8(s, next_c_i);
                         char next_c = s[next_c_i];
                         if (s + next_c_i <= s_end && ch != '}' && (next_c == '<' || next_c == '^' || next_c == '>')) {
-                            args.align_char = ch;
+                            args.alignChar = ch;
                             s += next_c_i;
                         }
                     }
@@ -1371,7 +1371,7 @@ namespace {
         toks.push_back(mv$(t4));
     }
 
-    ::std::unique_ptr<TokenStream> expand_format_args(const Span& sp, const ::AST::Crate& crate, TTStream& lex, bool add_newline) {
+    ::std::unique_ptr<TokenStream> expand_format_args(const Span& sp, const ::AST::Crate& crate, TTStream& lex, bool addNewline) {
         Token tok;
 
         auto format_string_node = ParseExprVal(lex);
@@ -1426,13 +1426,13 @@ namespace {
         ::std::vector<FmtFrag> fragments;
         ::std::string tail;
         ::std::tie(fragments, tail) = parse_format_string(format_string_sp, format_string, named_args_index, free_args.size(), named_args, h);
-        if (add_newline) {
+        if (addNewline) {
             tail += "\n";
         }
 
         bool is_simple = true;
         for (unsigned int i = 0; i < fragments.size(); i++) {
-            if (fragments[i].arg_index != i) {
+            if (fragments[i].argIndex != i) {
                 DEBUG(i << "Ordering mismach");
                 is_simple = false;
             }
@@ -1498,7 +1498,7 @@ namespace {
         }
 
         struct H {
-            static void argument_list(::std::vector<TokenTree>& toks, const ::std::vector<FmtFrag>& fragments, const AST::Crate& crate) {
+            static void argumentList(::std::vector<TokenTree>& toks, const ::std::vector<FmtFrag>& fragments, const AST::Crate& crate) {
                 toks.push_back(TokenTree(TOK_AMP));
                 toks.push_back(TokenTree(TOK_SQUARE_OPEN));
                 for (const auto& frag : fragments) {
@@ -1515,7 +1515,7 @@ namespace {
                     }
                     push_path(toks, crate, {"fmt", "rt", "Argument", new_fn_ss.str().c_str()});
                     toks.push_back(Token(TOK_PAREN_OPEN));
-                    toks.push_back(ident(FMT("a" << frag.arg_index).c_str()));
+                    toks.push_back(ident(FMT("a" << frag.argIndex).c_str()));
                     toks.push_back(Token(TOK_PAREN_CLOSE));
                     toks.push_back(TokenTree(TOK_COMMA));
                 }
@@ -1533,7 +1533,7 @@ namespace {
                 toks.push_back(ident("FRAGMENTS"));
                 toks.push_back(TokenTree(TOK_COMMA));
 
-                H::argument_list(toks, fragments, crate);
+                H::argumentList(toks, fragments, crate);
             }
             // )
             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
@@ -1554,7 +1554,7 @@ namespace {
 
                 // TODO: Fragments to format
                 // - The format stored by mrustc doesn't quite work with how rustc (and fmt::rt::v1) works
-                H::argument_list(toks, fragments, crate);
+                H::argumentList(toks, fragments, crate);
                 toks.push_back(TokenTree(TOK_COMMA));
 
                 toks.push_back(TokenTree(TOK_AMP));
@@ -1614,7 +1614,7 @@ namespace {
                         // See `rustc-1.90.0-src/library/core/src/fmt/mod.rs` `mod flags`
                         flags <<= 21;
                         // NOTE: The fill character is in the low 21 bits (max size of a codepoint)
-                        flags |= frag.args.align_char & 0x1FFFFF;
+                        flags |= frag.args.alignChar & 0x1FFFFF;
 
                         // Width and precision flags
                         if (frag.args.width_is_arg || frag.args.width != 0) {
@@ -1756,18 +1756,18 @@ namespace {
         return mv$(string_np->mValue);
     }
 
-    ::std::string get_path_relative_to(const ::std::string& base_path, ::std::string path) {
-        DEBUG(base_path << ", " << path);
+    ::std::string get_path_relative_to(const ::std::string& basePath, ::std::string path) {
+        DEBUG(basePath << ", " << path);
         // Absolute
         if (path[0] == '/') {
             return path;
         }
-        if (base_path.size() == 0) {
+        if (basePath.size() == 0) {
             return path;
-        } else if (base_path.back() == '/') {
-            return base_path + path;
+        } else if (basePath.back() == '/') {
+            return basePath + path;
         } else {
-            auto slash = base_path.find_last_of('/');
+            auto slash = basePath.find_last_of('/');
             if (slash == ::std::string::npos) {
                 return path;
             } else {
@@ -1775,7 +1775,7 @@ namespace {
                 slash += 1;
                 ::std::string rv;
                 rv.reserve(slash + path.size());
-                rv.append(base_path.begin(), base_path.begin() + slash);
+                rv.append(basePath.begin(), basePath.begin() + slash);
                 rv.append(path.begin(), path.end());
                 return rv;
             }

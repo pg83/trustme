@@ -12,9 +12,9 @@
 ::std::map<RcString, RcString> AST::g_implicit_crates;
 
 namespace {
-    bool check_item_cfg(const ::AST::AttributeList& attrs) {
+    bool checkItemCfg(const ::AST::AttributeList& attrs) {
         for (const auto& at : attrs.mItems) {
-            if (at.name() == "cfg" && !check_cfg(at.span(), at)) {
+            if (at.name() == "cfg" && !checkCfg(at.span(), at)) {
                 return false;
             }
         }
@@ -25,7 +25,7 @@ namespace {
         fcn(mod);
         for (auto& sm : mod.mItems) {
             if (auto* e = sm->data.opt_Module()) {
-                if (check_item_cfg(sm->attrs)) {
+                if (checkItemCfg(sm->attrs)) {
                     iterate_module(*e, fcn);
                 }
             }
@@ -52,7 +52,7 @@ namespace AST {
         auto cb = [this](Module& mod) {
             for (/*const*/ auto& it : mod.mItems) {
                 if (auto* c = it->data.opt_Crate()) {
-                    if (check_item_cfg(it->attrs)) {
+                    if (checkItemCfg(it->attrs)) {
                         if (c->name == "") {
                             // Leave for now
                         } else {
@@ -78,7 +78,7 @@ namespace AST {
                 no_core = true;
             }
             if (a.name() == "cfg_attr") {
-                for (const auto& a2 : check_cfg_attr(a)) {
+                for (const auto& a2 : checkCfgAttr(a)) {
                     if (a2.name() == "no_std") {
                         no_std = true;
                     }

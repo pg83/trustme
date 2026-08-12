@@ -266,7 +266,7 @@ void ExpandAttrsCfgAttr(AST::AttributeList& attrs) {
         auto& a = *it;
         static const RcString rcstring_cfg_attr = RcString::new_interned("cfg_attr");
         if (a.name() == rcstring_cfg_attr) {
-            auto new_attrs = check_cfg_attr(a);
+            auto new_attrs = checkCfgAttr(a);
             it = attrs.mItems.erase(it);
             it = attrs.mItems.insert(it, std::make_move_iterator(new_attrs.begin()), std::make_move_iterator(new_attrs.end()));
         } else {
@@ -287,8 +287,8 @@ void ExpandAttrs(const ExpandState& es, const ::AST::AttributeList& attrs, AttrS
     ExpandAttrs(es, attrs, stage, [&](const Span& sp, const ExpandDecorator& d, const AST::Attribute& a) {
         if (!item.is_None()) {
             // Pass attributes _after_ this attribute (or all of them, if the decorator asks)
-            auto attrs_slice = d.wants_all_attrs() ? slice<const AST::Attribute>(attrs.mItems.data(), attrs.mItems.size()) : get_attrs_after(attrs, a);
-            d.handle(sp, a, es.crate, path, mod, mod_idx, attrs_slice, vis, item);
+            auto attrsSlice = d.wants_all_attrs() ? slice<const AST::Attribute>(attrs.mItems.data(), attrs.mItems.size()) : get_attrs_after(attrs, a);
+            d.handle(sp, a, es.crate, path, mod, mod_idx, attrsSlice, vis, item);
         }
     });
 }
@@ -318,7 +318,7 @@ bool ExpandAttrsCfgOnly(const ExpandState& es, AST::AttributeList& attrs) {
     ExpandAttrsCfgAttr(attrs);
     ExpandAttrs(es, attrs, AttrStage::Pre, [&](const Span& sp, const ExpandDecorator& d, const AST::Attribute& a) {
         if (a.name() == "cfg") {
-            if (!check_cfg(sp, a)) {
+            if (!checkCfg(sp, a)) {
                 remove = true;
             }
             return;
@@ -343,7 +343,7 @@ MacroRef ExpandLookupMacro(const Span& mi_span, const ::AST::Crate& crate, LList
     ASSERT_BUG(mi_span, path.size() > 0, "Path should have nodes: " << path);
 
     if (path.is_trivial()) {
-        const auto& name = path.as_trivial();
+        const auto& name = path.asTrivial();
 
         // Iterate up the module tree, using the first located macro
         for (const auto* ll = &modstack; ll; ll = ll->prev) {
@@ -441,7 +441,7 @@ MacroRef ExpandLookupMacro(const Span& mi_span, const ::AST::Crate& crate, LList
             }
 
             DEBUG("Invoking macro_rules " << path << " " << mr_ptr);
-            rv = MacroInvokeRules(path.is_trivial() ? path.as_trivial() : RcString::new_interned(FMT(path).c_str()), *mr_ptr, mi_span, mv$(input_tt), crate, mod);
+            rv = MacroInvokeRules(path.is_trivial() ? path.asTrivial() : RcString::new_interned(FMT(path).c_str()), *mr_ptr, mi_span, mv$(input_tt), crate, mod);
             input_tt = TokenTree();
         }
     }
@@ -813,7 +813,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             return ::AST::ExprNodeP();
         }
 
-        const bool defines_macro = node.mPath.is_trivial() && node.mPath.as_trivial() == "macro_rules";
+        const bool defines_macro = node.mPath.is_trivial() && node.mPath.asTrivial() == "macro_rules";
 
         ::AST::ExprNodeP rv;
         auto& mod = this->cur_mod();
@@ -842,11 +842,11 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                 SET_MODULE((*ttl), mod);
 
                 // Reparse as expression / item
-                bool add_silence_if_end = false;
+                bool addSilenceIfEnd = false;
                 ::std::shared_ptr<AST::Module> tmp_local_mod;
                 auto& local_mod_ptr = (this->current_block ? this->current_block->localMod : tmp_local_mod);
                 DEBUG("-- Parsing as expression line");
-                auto newexpr = ParseExprBlockLineWithItems(*ttl, local_mod_ptr, add_silence_if_end);
+                auto newexpr = ParseExprBlockLineWithItems(*ttl, local_mod_ptr, addSilenceIfEnd);
 
                 if (tmp_local_mod) {
                     TODO(node.span(), "Handle edge case where a macro expansion outside of a _Block creates an item");
@@ -854,7 +854,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
 
                 if (newexpr) {
                     if (nodes_out) {
-                        nodes_out->push_back({add_silence_if_end, mv$(newexpr)});
+                        nodes_out->push_back({addSilenceIfEnd, mv$(newexpr)});
                     } else {
                         assert(!rv);
                         rv = mv$(newexpr);
@@ -997,8 +997,8 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         auto pathTry = get_path(core_crate, "ops", "Try");
         auto pathTryFromOutput = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), pathTry, {::AST::PathNode(RcString::new_interned("from_output"))});
         auto ok_node = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(mv$(pathTryFromOutput), ::make_vec1(mv$(node.inner))));
-        auto break_node = AST::ExprNodeP(new AST::ExprNodeFlow(AST::ExprNodeFlow::BREAK, loop_name, mv$(ok_node)));
-        this->replacement = AST::ExprNodeP(new AST::ExprNodeLoop(loop_name, mv$(break_node)));
+        auto breakNode = AST::ExprNodeP(new AST::ExprNodeFlow(AST::ExprNodeFlow::BREAK, loop_name, mv$(ok_node)));
+        this->replacement = AST::ExprNodeP(new AST::ExprNodeLoop(loop_name, mv$(breakNode)));
     }
 
     void visit(::AST::ExprNodeAsm& node) override {
@@ -1950,7 +1950,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
         if (es.crate.preludePath != AST::Path()) {
             if (mod.insertPrelude && !mod.is_anon()) {
                 DEBUG("> Adding custom prelude " << es.crate.preludePath);
-                mod.add_item(Span(), AST::Visibility::make_restricted(AST::Visibility::Ty::Private, mod.path()), "", ::AST::UseItem{Span(), ::make_vec1(::AST::UseItem::Ent{Span(), es.crate.preludePath, ""})}, {});
+                mod.addItem(Span(), AST::Visibility::make_restricted(AST::Visibility::Ty::Private, mod.path()), "", ::AST::UseItem{Span(), ::make_vec1(::AST::UseItem::Ent{Span(), es.crate.preludePath, ""})}, {});
             } else {
                 DEBUG("> Not inserting custom prelude (anon or disabled)");
             }
@@ -1976,7 +1976,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
         auto path = modpath + i.name;
 
         if (const auto* mi = i.data.opt_MacroInv()) {
-            if (mi->path().is_trivial() && mi->path().as_trivial() == "macro_rules") {
+            if (mi->path().is_trivial() && mi->path().asTrivial() == "macro_rules") {
                 i.vis = AST::Visibility::make_global();
                 DEBUG("macro_rules made pub");
             }
@@ -1987,7 +1987,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
             struct H {
                 static void filter_cfg(::std::vector<AST::StructItem>& lst) {
                     auto new_end = ::std::remove_if(lst.begin(), lst.end(), [&](const AST::StructItem& v) {
-                        return !check_cfg_attrs(v.mAttrs);
+                        return !checkCfgAttrs(v.mAttrs);
                     });
                     DEBUG(lst.size() << " -> " << new_end - lst.begin());
                     lst.erase(new_end, lst.end());
@@ -1995,7 +1995,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
 
                 static void filter_cfg(::std::vector<AST::TupleItem>& lst) {
                     auto new_end = ::std::remove_if(lst.begin(), lst.end(), [&](const AST::TupleItem& v) {
-                        return !check_cfg_attrs(v.mAttrs);
+                        return !checkCfgAttrs(v.mAttrs);
                     });
                     DEBUG(lst.size() << " -> " << new_end - lst.begin());
                     lst.erase(new_end, lst.end());
@@ -2022,7 +2022,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
                 }
                 TU_ARMA(Enum, enm) {
                     for (auto it = enm.variants().begin(); it != enm.variants().end();) {
-                        if (!check_cfg_attrs(it->mAttrs)) {
+                        if (!checkCfgAttrs(it->mAttrs)) {
                             it = enm.variants().erase(it);
                         } else {
                         TU_MATCH_HDRA( (it->mData), { )
@@ -2107,7 +2107,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
             }
             TU_ARMA(Macro, e) {
                 ASSERT_BUG(i.span, e, "Null macro - " << i.name);
-                mod.add_macro(i.vis.is_global(), i.name, mv$(e));
+                mod.addMacro(i.vis.is_global(), i.name, mv$(e));
                 dat = AST::Item::make_None({});
             }
             TU_ARMA(Use, e) {
@@ -2419,7 +2419,7 @@ void Expand_Mod_IndexAnon(::AST::Crate& crate, ::AST::Module& mod) {
         }
     }
 
-    for (auto& mp : mod.anon_mods()) {
+    for (auto& mp : mod.anonMods()) {
         if (mp.use_count() == 1) {
             DEBUG("- " << mp->path() << " dropped due to node destruction");
             mp.reset();
@@ -2436,7 +2436,7 @@ void Expand_Mod_Early(::AST::Crate& crate, ::AST::Module& mod, std::vector<std::
     TRACE_FUNCTION_F(mod.path());
     for (auto& i : mod.mItems) {
         if (const auto* mi = i->data.opt_MacroInv()) {
-            if (mi->path().is_trivial() && mi->path().as_trivial() == "macro_rules") {
+            if (mi->path().is_trivial() && mi->path().asTrivial() == "macro_rules") {
                 i->vis = AST::Visibility::make_global();
                 DEBUG("macro_rules made pub");
             }
@@ -2444,21 +2444,21 @@ void Expand_Mod_Early(::AST::Crate& crate, ::AST::Module& mod, std::vector<std::
 
         ExpandAttrsCfgAttr(i->attrs);
         bool is_macro_export = false;
-        bool cfg_failed = false;
+        bool cfgFailed = false;
         for (auto& a : i->attrs.mItems) {
             if (a.name() == "cfg") {
-                if (!check_cfg(i->span, a)) {
-                    cfg_failed = true;
+                if (!checkCfg(i->span, a)) {
+                    cfgFailed = true;
                 }
             } else if (a.name() == "macro_export") {
                 is_macro_export = true;
             } else {
             }
         }
-        if (cfg_failed) {
+        if (cfgFailed) {
             i->data = ::AST::Item::make_None({});
         } else if (is_macro_export) {
-            if (i->data.is_MacroInv() && i->data.as_MacroInv().path().is_trivial() && i->data.as_MacroInv().path().as_trivial() == "macro_rules") {
+            if (i->data.is_MacroInv() && i->data.as_MacroInv().path().is_trivial() && i->data.as_MacroInv().path().asTrivial() == "macro_rules") {
                 const auto& mac_inv = i->data.as_MacroInv();
                 DEBUG("macro_rules marked with #[macro_export] moved to the crate root - " << mac_inv.input_ident());
                 new_root_items.push_back(box$(*i));
@@ -2483,7 +2483,7 @@ void Expand_Mod_Early(::AST::Crate& crate, ::AST::Module& mod, std::vector<std::
         auto& i = *mod.mItems[idx];
         if (auto* mi = i.data.opt_MacroInv()) {
             // 1.74 HACK - Parse `macro_rules` during the first pass, so they're present for `use` to refer to
-            if (mi->path().is_trivial() && mi->path().as_trivial() == "macro_rules") {
+            if (mi->path().is_trivial() && mi->path().asTrivial() == "macro_rules") {
                 // A #[rustc_builtin_macro] declaration only supplies the
                 // public signature of a compiler-provided macro.  Its
                 // macro_rules body is a placeholder and must never enter the

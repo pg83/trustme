@@ -40,13 +40,13 @@ namespace HIR {
     ::std::ostream& operator<<(::std::ostream& os, const ::HIR::GenericParams::PrintBounds& x) {
         if (x.gp.bounds.size() > 0) {
             os << " where ";
-            bool comma_needed = false;
+            bool commaNeeded = false;
             for (const auto& b : x.gp.bounds) {
-                if (comma_needed) {
+                if (commaNeeded) {
                     os << ", ";
                 }
                 os << b;
-                comma_needed = true;
+                commaNeeded = true;
             }
         }
         return os;

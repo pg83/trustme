@@ -62,7 +62,7 @@ namespace HIR {
         unsigned int num_frames;
         bool require_const_calls;
         // Note: Pointer is needed to maintain internal reference stability
-        ::std::vector<CsePtr> call_stack;
+        ::std::vector<CsePtr> callStack;
 
         static unsigned s_next_eval_index;
 
@@ -84,15 +84,15 @@ namespace HIR {
         }
 
     private:
-        void push_stack_entry(::FmtLambda print_path, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::args_t arg_defs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* item_params_def, const ::HIR::GenericParams* impl_params_def);
+        void push_stack_entry(::FmtLambda print_path, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* item_params_def, const ::HIR::GenericParams* impl_params_def);
 
         ::MIR::eval::AllocationPtr run_until_stack_empty();
         void run_statement(::MIR::eval::CallStackEntry& local_state, const ::MIR::Statement& stmt);
         // Returns UINT_MAX on return
         unsigned run_terminator(::MIR::eval::CallStackEntry& local_state, const ::MIR::Terminator& stmt);
-        bool call_function(::MIR::eval::CallStackEntry& local_state, const MIR::LValue& rv_slot, ::std::shared_ptr<::HIR::Path> path, ::std::vector<::MIR::eval::AllocationPtr> call_args);
+        bool callFunction(::MIR::eval::CallStackEntry& local_state, const MIR::LValue& rv_slot, ::std::shared_ptr<::HIR::Path> path, ::std::vector<::MIR::eval::AllocationPtr> callArgs);
 
-        EncodedLiteral allocation_to_encoded(const ::HIR::TypeData* ty, const ::MIR::eval::Allocation& a);
+        EncodedLiteral allocationToEncoded(const ::HIR::TypeData* ty, const ::MIR::eval::Allocation& a);
     };
 
 } // namespace HIR

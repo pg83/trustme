@@ -115,7 +115,7 @@ namespace HIR {
             return members.empty() ? std::span<const RcString>() : std::span<const RcString>(members.begin() + 1, members.end());
         }
 
-        ::std::vector<RcString> components_vec() const;
+        ::std::vector<RcString> componentsVec() const;
 
         SimplePath operator+(const RcString& s) const;
 
@@ -159,7 +159,7 @@ namespace HIR {
         PathParams(PathParams&&) = default;
         PathParams& operator=(PathParams&&) = default;
 
-        Compare compare_with_placeholders(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder) const;
+        Compare compareWithPlaceholders(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder) const;
         Compare match_test_generics_fuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& match) const;
         bool equals_ignoring_regions(const PathParams& x) const;
 
@@ -198,7 +198,7 @@ namespace HIR {
         GenericPath(::HIR::GenericParams hrls, ::HIR::SimplePath sp, ::HIR::PathParams params);
 
         GenericPath clone() const;
-        Compare compare_with_placeholders(const Span& sp, const GenericPath& x, t_cb_resolve_type resolve_placeholder) const;
+        Compare compareWithPlaceholders(const Span& sp, const GenericPath& x, t_cb_resolve_type resolve_placeholder) const;
         bool equals_ignoring_regions(const GenericPath& x) const;
 
         bool operator==(const GenericPath& x) const {
@@ -223,13 +223,13 @@ namespace HIR {
         // TODO: Each bound should list its origin trait
         struct AtyEqual {
             ::HIR::GenericPath source_trait;
-            ::HIR::PathParams aty_params;
+            ::HIR::PathParams atyParams;
             ::HIR::TypeRef type;
 
             Ordering ord(const AtyEqual& x) const;
 
             AtyEqual clone() const {
-                return AtyEqual{source_trait.clone(), aty_params.clone(), type};
+                return AtyEqual{source_trait.clone(), atyParams.clone(), type};
             }
 
             friend ::std::ostream& operator<<(::std::ostream& os, const AtyEqual& x);
@@ -238,7 +238,7 @@ namespace HIR {
         /// Associated type trait bounds (`Type: Trait`)
         struct AtyBound {
             ::HIR::GenericPath source_trait;
-            ::HIR::PathParams aty_params;
+            ::HIR::PathParams atyParams;
             std::vector<::HIR::TraitPath> traits;
 
             Ordering ord(const AtyBound& x) const;
@@ -246,11 +246,11 @@ namespace HIR {
             AtyBound clone() const;
         };
 
-        typedef ::std::map<RcString, AtyEqual> assoc_list_t;
+        typedef ::std::map<RcString, AtyEqual> assocListT;
 
         ::std::unique_ptr<GenericParams> hrtbs;
         GenericPath mPath;
-        assoc_list_t typeBounds;
+        assocListT typeBounds;
         ::std::map<RcString, AtyBound> traitBounds;
         BoundConstness constness = BoundConstness::Never;
         // Parenthesised Fn-trait syntax uses function lifetime-elision rules.
@@ -261,13 +261,13 @@ namespace HIR {
 
         TraitPath();
         TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path);
-        TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assoc_list_t type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr = nullptr, BoundConstness constness = BoundConstness::Never);
+        TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assocListT type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr = nullptr, BoundConstness constness = BoundConstness::Never);
         ~TraitPath();
         TraitPath(TraitPath&&);
         TraitPath& operator=(TraitPath&&);
 
         TraitPath clone() const;
-        Compare compare_with_placeholders(const Span& sp, const TraitPath& x, t_cb_resolve_type resolve_placeholder) const;
+        Compare compareWithPlaceholders(const Span& sp, const TraitPath& x, t_cb_resolve_type resolve_placeholder) const;
         bool equals_ignoring_regions(const TraitPath& x) const;
 
         bool operator==(const TraitPath& x) const {
@@ -331,7 +331,7 @@ namespace HIR {
         Path(TypeRef ty, GenericParams hrtbs, GenericPath trait, RcString item, PathParams item_params = PathParams());
 
         Path clone() const;
-        Compare compare_with_placeholders(const Span& sp, const Path& x, t_cb_resolve_type resolve_placeholder) const;
+        Compare compareWithPlaceholders(const Span& sp, const Path& x, t_cb_resolve_type resolve_placeholder) const;
         bool equals_ignoring_regions(const Path& x) const;
 
         Ordering ord(const Path& x) const;
@@ -358,7 +358,7 @@ namespace HIR {
 
         ConstGenericUnevaluated(HIR::ExprPtr ep);
         ConstGenericUnevaluated clone() const;
-        ConstGenericUnevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allow_infer = true) const;
+        ConstGenericUnevaluated monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer = true) const;
         bool equivalent(const ConstGenericUnevaluated& x) const;
         Ordering ord(const ConstGenericUnevaluated& x) const;
         void fmt(::std::ostream& os) const;
