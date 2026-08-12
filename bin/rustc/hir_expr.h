@@ -703,7 +703,7 @@ namespace HIR {
 
             struct Capture {
                 // Variable binding index
-                unsigned int root_slot;
+                unsigned int rootSlot;
                 // Fields used to access that variable
                 std::vector<RcString> fields;
                 ::HIR::ValueUsage usage;

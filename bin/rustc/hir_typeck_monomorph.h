@@ -104,14 +104,14 @@ static inline const ::HIR::PathParams& monomorphisePathparamsWithOpt(const Span&
 // Helper for passing a group of params around
 struct MonomorphStatePtr: public MonomorphiserPP {
     const ::HIR::TypeData* self_ty;
-    const ::HIR::PathParams* pp_impl;
-    const ::HIR::PathParams* pp_method;
+    const ::HIR::PathParams* ppImpl;
+    const ::HIR::PathParams* ppMethod;
     //const ::HIR::PathParams*    pp_placeholder;
-    const ::HIR::PathParams* pp_hrb;
+    const ::HIR::PathParams* ppHrb;
 
     explicit MonomorphStatePtr(HIR::TypeInterner& types);
 
-    MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeData* self_ty, const ::HIR::PathParams* params_i, const ::HIR::PathParams* params_m, const ::HIR::PathParams* params_p = nullptr, const ::HIR::PathParams* params_h = nullptr);
+    MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeData* self_ty, const ::HIR::PathParams* paramsI, const ::HIR::PathParams* paramsM, const ::HIR::PathParams* paramsP = nullptr, const ::HIR::PathParams* paramsH = nullptr);
 
     MonomorphStatePtr(MonomorphStatePtr&& x);
 
@@ -124,24 +124,24 @@ struct MonomorphStatePtr: public MonomorphiserPP {
     }
 
     const ::HIR::PathParams* getImplParams() const override {
-        return pp_impl;
+        return ppImpl;
     }
 
     const ::HIR::PathParams* getMethodParams() const override {
-        return pp_method;
+        return ppMethod;
     }
 
     const ::HIR::PathParams* getHrbParams() const override {
-        return pp_hrb;
+        return ppHrb;
     }
 };
 
 //extern ::std::ostream& operator<<(::std::ostream& os, const MonomorphStatePtr& ms);
 
 struct MonomorphHrlsOnly: public Monomorphiser {
-    const ::HIR::PathParams* pp_hrb;
+    const ::HIR::PathParams* ppHrb;
 
-    MonomorphHrlsOnly(HIR::TypeInterner& types, const ::HIR::PathParams& params_h);
+    MonomorphHrlsOnly(HIR::TypeInterner& types, const ::HIR::PathParams& paramsH);
 
     ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& ty) const override;
 
@@ -153,10 +153,10 @@ struct MonomorphHrlsOnly: public Monomorphiser {
 // Helper for passing a group of params around
 struct MonomorphState: public MonomorphiserPP {
     ::HIR::TypeRef self_ty;
-    const ::HIR::PathParams* pp_impl;
-    const ::HIR::PathParams* pp_method;
+    const ::HIR::PathParams* ppImpl;
+    const ::HIR::PathParams* ppMethod;
 
-    ::HIR::PathParams pp_impl_data;
+    ::HIR::PathParams ppImplData;
 
     explicit MonomorphState(HIR::TypeInterner& types);
 
@@ -169,7 +169,7 @@ struct MonomorphState: public MonomorphiserPP {
     void set_impl_params(HIR::PathParams pp);
 
     bool hasTypes() const {
-        return (pp_method && pp_method->hasParams()) || (pp_impl && pp_impl->hasParams());
+        return (ppMethod && ppMethod->hasParams()) || (ppImpl && ppImpl->hasParams());
     }
 
     const ::HIR::TypeData* getSelfType() const override {
@@ -177,11 +177,11 @@ struct MonomorphState: public MonomorphiserPP {
     }
 
     const ::HIR::PathParams* getImplParams() const override {
-        return pp_impl;
+        return ppImpl;
     }
 
     const ::HIR::PathParams* getMethodParams() const override {
-        return pp_method;
+        return ppMethod;
     }
 
     const ::HIR::PathParams* getHrbParams() const override {

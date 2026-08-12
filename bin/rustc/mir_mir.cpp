@@ -209,7 +209,7 @@ namespace MIR {
             ),
             (DstMeta, os << "DstMeta(" << e.val << ")";),
             (DstPtr, os << "DstPtr(" << e.val << ")";),
-            (MakeDst, os << "MakeDst(" << e.ptr_val << ", " << e.metaVal << ")";),
+            (MakeDst, os << "MakeDst(" << e.ptrVal << ", " << e.metaVal << ")";),
             (Tuple, os << "Tuple(" << e.vals << ")";),
             (Array, os << "Array(" << e.vals << ")";),
             (UnionVariant, os << "UnionVariant(" << e.path << " #" << e.index << ", " << e.val << ")";),
@@ -223,7 +223,7 @@ namespace MIR {
         if (a.tag() != b.tag()) {
             return false;
         }
-        TU_MATCHA((a, b), (are, bre), (Use, return are == bre;), (Constant, return are == bre;), (SizedArray, if (are.val != bre.val) return false; if (are.count != bre.count) return false; return true;), (Borrow, if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;), (Cast, if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;), (BinOp, if (are.val_l != bre.val_l) return false; if (are.op != bre.op) return false; if (are.val_r != bre.val_r) return false; return true;), (UniOp, if (are.op != bre.op) return false; if (are.val != bre.val) return false; return true;), (DstPtr, return are.val == bre.val;), (DstMeta, return are.val == bre.val;), (MakeDst, if (are.metaVal != bre.metaVal) return false; if (are.ptr_val != bre.ptr_val) return false; return true;), (Tuple, return are.vals == bre.vals;), (Array, return are.vals == bre.vals;), (UnionVariant, if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.val == bre.val;), (EnumVariant, if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.vals == bre.vals;), (Struct, if (are.path != bre.path) return false; return are.vals == bre.vals;))
+        TU_MATCHA((a, b), (are, bre), (Use, return are == bre;), (Constant, return are == bre;), (SizedArray, if (are.val != bre.val) return false; if (are.count != bre.count) return false; return true;), (Borrow, if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;), (Cast, if (are.type != bre.type) return false; if (are.val != bre.val) return false; return true;), (BinOp, if (are.val_l != bre.val_l) return false; if (are.op != bre.op) return false; if (are.val_r != bre.val_r) return false; return true;), (UniOp, if (are.op != bre.op) return false; if (are.val != bre.val) return false; return true;), (DstPtr, return are.val == bre.val;), (DstMeta, return are.val == bre.val;), (MakeDst, if (are.metaVal != bre.metaVal) return false; if (are.ptrVal != bre.ptrVal) return false; return true;), (Tuple, return are.vals == bre.vals;), (Array, return are.vals == bre.vals;), (UnionVariant, if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.val == bre.val;), (EnumVariant, if (are.path != bre.path) return false; if (are.index != bre.index) return false; return are.vals == bre.vals;), (Struct, if (are.path != bre.path) return false; return are.vals == bre.vals;))
         throw "";
     }
 
@@ -247,7 +247,7 @@ namespace MIR {
             (Switch, os << "Switch( "; if (e.valid_flag != ~0u) os << "IF df$" << e.valid_flag << " ELSE bb" << e.invalidTarget << ", "; os << e.val << " : "; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << ")";),
             (SwitchValue, os << "SwitchValue( " << e.val << " : "; TU_MATCHA((e.values), (ve), (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";), (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";), (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";), (ByteString, for (unsigned int j = 0; j < e.targets.size(); j++) os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";)) os << "else bb" << e.defTarget << ")";),
             (Drop, os << "Drop(" << e.slot; if (e.kind == eDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") -> bb" << e.target << " unwind "; fmtUnwind(e.unwind);),
-            (Call, os << "Call( " << e.ret_val << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << e2 << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << "), bb" << e.ret_block << ", "; fmtUnwind(e.unwind); os << ")";)
+            (Call, os << "Call( " << e.retVal << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << e2 << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << "), bb" << e.retBlock << ", "; fmtUnwind(e.unwind); os << ")";)
         )
 
         return os;
@@ -262,7 +262,7 @@ namespace MIR {
             TU_MATCHA((lhs, rhs), (le, re), (Continue, return true;), (Cleanup, return le == re;), (Terminate, return true;), (Unreachable, return true;))
             return false;
         };
-        TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, if (ae != be) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bbTrue != be.bbTrue) return false; if (ae.bbFalse != be.bbFalse) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.valid_flag != be.valid_flag) return false; if (ae.invalidTarget != be.invalidTarget) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.defTarget != be.defTarget) return false; if (ae.values != be.values) return false;), (Drop, if (ae.kind != be.kind || ae.slot != be.slot || ae.flagIdx != be.flagIdx || ae.target != be.target || !unwind_equal(ae.unwind, be.unwind)) return false;), (Call, if (ae.ret_val != be.ret_val) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.ret_block != be.ret_block) return false; if (!unwind_equal(ae.unwind, be.unwind)) return false;))
+        TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, if (ae != be) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bbTrue != be.bbTrue) return false; if (ae.bbFalse != be.bbFalse) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.valid_flag != be.valid_flag) return false; if (ae.invalidTarget != be.invalidTarget) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.defTarget != be.defTarget) return false; if (ae.values != be.values) return false;), (Drop, if (ae.kind != be.kind || ae.slot != be.slot || ae.flagIdx != be.flagIdx || ae.target != be.target || !unwind_equal(ae.unwind, be.unwind)) return false;), (Call, if (ae.retVal != be.retVal) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.retBlock != be.retBlock) return false; if (!unwind_equal(ae.unwind, be.unwind)) return false;))
         return true;
     }
 
@@ -445,7 +445,7 @@ namespace MIR {
         (DstMeta, return ::MIR::RValue::make_DstMeta({e.val.clone()});),
         (DstPtr, return ::MIR::RValue::make_DstPtr({e.val.clone()});),
         // Construct a DST pointer from a thin pointer and metadata
-        (MakeDst, return ::MIR::RValue::make_MakeDst({e.ptr_val.clone(), e.metaVal.clone()});),
+        (MakeDst, return ::MIR::RValue::make_MakeDst({e.ptrVal.clone(), e.metaVal.clone()});),
         (Tuple, decltype(e.vals) ret; ret.reserve(e.vals.size()); for (const auto& v : e.vals) ret.push_back(v.clone()); return ::MIR::RValue::make_Tuple({mv$(ret)});),
         // Array literal
         (Array, decltype(e.vals) ret; ret.reserve(e.vals.size()); for (const auto& v : e.vals) ret.push_back(v.clone()); return ::MIR::RValue::make_Array({mv$(ret)});),
@@ -636,7 +636,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             TU_MATCHA((se.fcn), (ste), (Value, tgt = ::MIR::CallTarget::make_Value(this->cloneLval(ste));), (Path, tgt = ::MIR::CallTarget::make_Path(this->monomorph(ste));), (Intrinsic, tgt = ::MIR::CallTarget::make_Intrinsic({ste.name, this->monomorph(ste.params)});))
             UnwindAction unwind;
             TU_MATCHA((se.unwind), (ue), (Continue, unwind = UnwindAction::make_Continue({});), (Cleanup, unwind = UnwindAction::make_Cleanup(mapBbIdx(ue));), (Terminate, unwind = UnwindAction::make_Terminate({});), (Unreachable, unwind = UnwindAction::make_Unreachable({});))
-            return ::MIR::Terminator::make_Call({mapBbIdx(se.ret_block), mv$(unwind), this->cloneLval(se.ret_val), mv$(tgt), this->cloneParamVec(se.args)});
+            return ::MIR::Terminator::make_Call({mapBbIdx(se.retBlock), mv$(unwind), this->cloneLval(se.retVal), mv$(tgt), this->cloneParamVec(se.args)});
         }
     }
     throw "";
@@ -722,30 +722,30 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
                     // TODO: This is duplicated in `mir/from_hir_match.cpp` - De-duplicate?
                     switch (ty->as_Primitive()) {
                         case ::HIR::CoreType::Bool:
-                            return ::MIR::Constant::make_Bool({v.read_uint(1) != 0});
+                            return ::MIR::Constant::make_Bool({v.readUint(1) != 0});
                         case ::HIR::CoreType::U8:
                         case ::HIR::CoreType::U16:
                         case ::HIR::CoreType::U32:
                         case ::HIR::CoreType::U64:
                         case ::HIR::CoreType::U128:
-                            return ::MIR::Constant::make_Uint({v.read_uint(ve->bytes.size()), ty->as_Primitive()});
+                            return ::MIR::Constant::make_Uint({v.readUint(ve->bytes.size()), ty->as_Primitive()});
                         case ::HIR::CoreType::Usize:
-                            return ::MIR::Constant::make_Uint({v.read_uint(TargetGetPointerBits() / 8), ty->as_Primitive()});
+                            return ::MIR::Constant::make_Uint({v.readUint(TargetGetPointerBits() / 8), ty->as_Primitive()});
                         case ::HIR::CoreType::I8:
                         case ::HIR::CoreType::I16:
                         case ::HIR::CoreType::I32:
                         case ::HIR::CoreType::I64:
                         case ::HIR::CoreType::I128:
-                            return ::MIR::Constant::make_Int({v.read_sint(ve->bytes.size()), ty->as_Primitive()});
+                            return ::MIR::Constant::make_Int({v.readSint(ve->bytes.size()), ty->as_Primitive()});
                         case ::HIR::CoreType::Isize:
-                            return ::MIR::Constant::make_Int({v.read_sint(TargetGetPointerBits() / 8), ty->as_Primitive()});
+                            return ::MIR::Constant::make_Int({v.readSint(TargetGetPointerBits() / 8), ty->as_Primitive()});
                         case ::HIR::CoreType::F16:
                         case ::HIR::CoreType::F32:
                         case ::HIR::CoreType::F64:
                         case ::HIR::CoreType::F128:
-                            return ::MIR::Constant::make_Float({v.read_float(ve->bytes.size()), ty->as_Primitive()});
+                            return ::MIR::Constant::make_Float({v.readFloat(ve->bytes.size()), ty->as_Primitive()});
                         case ::HIR::CoreType::Char:
-                            return ::MIR::Constant::make_Uint({v.read_uint(4), ty->as_Primitive()});
+                            return ::MIR::Constant::make_Uint({v.readUint(4), ty->as_Primitive()});
                         case ::HIR::CoreType::Str:
                             BUG(sp, "`str` const generic");
                     }
@@ -807,7 +807,7 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
             return ::MIR::RValue::make_DstPtr({this->cloneLval(se.val)});
         }
         TU_ARMA(MakeDst, se) {
-            return ::MIR::RValue::make_MakeDst({this->cloneParam(se.ptr_val), this->cloneParam(se.metaVal)});
+            return ::MIR::RValue::make_MakeDst({this->cloneParam(se.ptrVal), this->cloneParam(se.metaVal)});
         }
         TU_ARMA(Tuple, se) {
             return ::MIR::RValue::make_Tuple({this->cloneParamVec(se.vals)});

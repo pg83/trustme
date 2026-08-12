@@ -16,7 +16,7 @@
     do {                                                                \
         auto& _v = *(uniq_ptr);                                         \
         if (IS(_v, class1) CC_ITERATE(WRAPIF_CMD, (_v), __VA_ARGS__)) { \
-            paren_wrap(uniq_ptr);                                       \
+            parenWrap(uniq_ptr);                                       \
         } else {                                                        \
             AST::NodeVisitor::visit(uniq_ptr);                          \
         }                                                               \
@@ -69,7 +69,7 @@ public:
         for (auto& child : n.nodes) {
             os << "\n";
             if (child.node) {
-                this->print_attrs(child.node->attrs());
+                this->printAttrs(child.node->attrs());
             }
             os << indent();
             exprRoot = true;
@@ -229,9 +229,9 @@ public:
     virtual void visit(AST::ExprNodeLetBinding& n) override {
         exprRoot = false;
         os << "let ";
-        print_pattern(n.pat, false);
+        printPattern(n.pat, false);
         os << ": ";
-        print_type(n.mType);
+        printType(n.mType);
         if (n.mValue) {
             os << " = ";
             AST::NodeVisitor::visit(n.mValue);
@@ -362,7 +362,7 @@ public:
             os << "'" << n.label << ": ";
         }
         os << "for ";
-        print_pattern(n.pattern, true);
+        printPattern(n.pattern, true);
         os << " in ";
         AST::NodeVisitor::visit(n.mValue);
 
@@ -383,7 +383,7 @@ public:
             }
             if (conds[i].optPat) {
                 os << "let ";
-                print_pattern(*conds[i].optPat, true);
+                printPattern(*conds[i].optPat, true);
                 os << " = ";
             }
             os << "(";
@@ -434,7 +434,7 @@ public:
                     os << "|";
                 }
                 isFirst = false;
-                print_pattern(pat, true);
+                printPattern(pat, true);
             }
             if (!arm.guard.empty()) {
                 os << " if ";
@@ -510,12 +510,12 @@ public:
                 os << ", ";
             }
             isFirst = false;
-            print_pattern(arg.first, false);
+            printPattern(arg.first, false);
             os << ": ";
-            print_type(arg.second);
+            printType(arg.second);
         }
         os << "| ->";
-        print_type(n.returnType);
+        printType(n.returnType);
         os << " { ";
         AST::NodeVisitor::visit(n.mCode);
         os << " }";
@@ -637,7 +637,7 @@ public:
         os << n.mPath << " {\n";
         incIndent();
         for (auto& i : n.values) {
-            print_attrs(i.attrs);
+            printAttrs(i.attrs);
             os << indent() << "r#" << i.name << ": ";
             AST::NodeVisitor::visit(i.value);
             os << ",\n";
@@ -656,7 +656,7 @@ public:
         os << n.mPath << " {\n";
         incIndent();
         for (auto& i : n.values) {
-            print_attrs(i.attrs);
+            printAttrs(i.attrs);
             os << indent() << "r#" << i.name << ": ";
             AST::NodeVisitor::visit(i.value);
             os << ",\n";
@@ -809,11 +809,11 @@ public:
                 break;
         }
         os << " ";
-        auto* right_binop = cast<AST::ExprNodeBinOp>(n.right.get());
+        auto* rightBinop = cast<AST::ExprNodeBinOp>(n.right.get());
         if (!n.right) {
             os << "/*null*/";
-        } else if (right_binop && right_binop->mType != n.mType) {
-            paren_wrap(n.right);
+        } else if (rightBinop && rightBinop->mType != n.mType) {
+            parenWrap(n.right);
         } else {
             AST::NodeVisitor::visit(n.right);
         }
@@ -874,25 +874,25 @@ public:
     }
 
 private:
-    void paren_wrap(::AST::ExprNodeP& node) {
+    void parenWrap(::AST::ExprNodeP& node) {
         os << "(";
         AST::NodeVisitor::visit(node);
         os << ")";
     }
 
-    void print_attrs(const AST::AttributeList& attrs);
-    void print_params(const AST::GenericParams& params);
-    void print_bounds(const AST::GenericParams& params);
-    void print_pattern_tuple(const AST::Pattern::TuplePat& v, bool isRefutable);
-    void print_pattern(const AST::Pattern& p, bool isRefutable);
-    void print_type(const TypeRef& t);
+    void printAttrs(const AST::AttributeList& attrs);
+    void printParams(const AST::GenericParams& params);
+    void printBounds(const AST::GenericParams& params);
+    void printPatternTuple(const AST::Pattern::TuplePat& v, bool isRefutable);
+    void printPattern(const AST::Pattern& p, bool isRefutable);
+    void printType(const TypeRef& t);
 
     void incIndent();
     RepeatLitStr indent();
     void decIndent();
 };
 
-void RustPrinter::print_attrs(const AST::AttributeList& attrs) {
+void RustPrinter::printAttrs(const AST::AttributeList& attrs) {
     for (const auto& a : attrs.mItems) {
         os << indent() << "#[" << a << "]\n";
     }
@@ -944,7 +944,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         }
         const auto& e = item.data.as_Crate();
 
-        print_attrs(item.attrs);
+        printAttrs(item.attrs);
         os << indent() << "extern crate \"" << e.name << "\" as " << item.name << ";\n";
     }
 
@@ -955,7 +955,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         }
         const auto& e = item.data.as_ExternBlock();
 
-        print_attrs(item.attrs);
+        printAttrs(item.attrs);
         os << indent() << "extern \"" << e.abi() << "\" {}\n";
     }
 
@@ -987,11 +987,11 @@ void RustPrinter::handleModule(const AST::Module& mod) {
             os << "\n";
             needNl = false;
         }
-        print_attrs(item.attrs);
+        printAttrs(item.attrs);
         os << indent() << item.vis << "type " << item.name;
-        print_params(e.params());
+        printParams(e.params());
         os << " = " << e.type();
-        print_bounds(e.params());
+        printBounds(e.params());
         os << ";\n";
     }
     needNl = true;
@@ -1004,7 +1004,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         const auto& e = item.data.as_Struct();
 
         os << "\n";
-        print_attrs(item.attrs);
+        printAttrs(item.attrs);
         os << indent() << item.vis << "struct " << item.name;
         handleStruct(e);
     }
@@ -1017,7 +1017,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         const auto& e = item.data.as_Enum();
 
         os << "\n";
-        print_attrs(item.attrs);
+        printAttrs(item.attrs);
         os << indent() << item.vis << "enum " << item.name;
         handleEnum(e);
     }
@@ -1030,7 +1030,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         const auto& e = item.data.as_Trait();
 
         os << "\n";
-        print_attrs(item.attrs);
+        printAttrs(item.attrs);
         os << indent() << item.vis << "trait " << item.name;
         handleTrait(e);
     }
@@ -1046,9 +1046,9 @@ void RustPrinter::handleModule(const AST::Module& mod) {
             os << "\n";
             needNl = false;
         }
-        print_attrs(item.attrs);
+        printAttrs(item.attrs);
         os << indent() << item.vis;
-        switch (e.s_class()) {
+        switch (e.sClass()) {
             case AST::Static::CONST:
                 os << "const ";
                 break;
@@ -1072,7 +1072,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         const auto& e = item.data.as_Function();
 
         os << "\n";
-        print_attrs(item.attrs);
+        printAttrs(item.attrs);
         handleFunction(item.vis, item.name, e);
     }
 
@@ -1088,13 +1088,13 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         if (i.def().is_const()) {
             os << " const";
         }
-        print_params(i.def().params());
+        printParams(i.def().params());
         if (i.def().trait().ent != AST::Path()) {
             os << " " << i.def().trait().ent << " for";
         }
         os << " " << i.def().type() << "\n";
 
-        print_bounds(i.def().params());
+        printBounds(i.def().params());
         os << indent() << "{\n";
         incIndent();
         for (const auto& it : i.items()) {
@@ -1112,7 +1112,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
                     // TODO: Dump macro invocations
                 ),
                 (
-                    Static, os << indent(); switch (e.s_class()) {
+                    Static, os << indent(); switch (e.sClass()) {
                         case ::AST::Static::CONST:
                             os << "const ";
                             break;
@@ -1137,7 +1137,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
 
 }
 
-void RustPrinter::print_params(const AST::GenericParams& params) {
+void RustPrinter::printParams(const AST::GenericParams& params) {
     if (!params.mParams.empty()) {
         bool isFirst = true;
         os << "<";
@@ -1170,7 +1170,7 @@ void RustPrinter::print_params(const AST::GenericParams& params) {
     }
 }
 
-void RustPrinter::print_bounds(const AST::GenericParams& params) {
+void RustPrinter::printBounds(const AST::GenericParams& params) {
     if (!params.bounds.empty()) {
         incIndent();
         bool isFirst = true;
@@ -1188,7 +1188,7 @@ void RustPrinter::print_bounds(const AST::GenericParams& params) {
             isFirst = false;
 
             os << indent();
-            TU_MATCH(AST::GenericBound, (b), (ent), (None, os << "/*-*/";), (Lifetime, os << ent.test << ": " << ent.bound;), (TypeLifetime, os << ent.type << ": " << ent.bound;), (IsTrait, os << ent.outer_hrbs << ent.type << ": "; if (ent.constness == AST::BoundConstness::Always) os << "const "; else if (ent.constness == AST::BoundConstness::Maybe) os << "[const] "; os << ent.innerHrbs << ent.trait;), (MaybeTrait, os << ent.type << ": ?" << ent.trait;), (NotTrait, os << ent.type << ": !" << ent.trait;), (Equality, os << ent.type << ": =" << ent.replacement;))
+            TU_MATCH(AST::GenericBound, (b), (ent), (None, os << "/*-*/";), (Lifetime, os << ent.test << ": " << ent.bound;), (TypeLifetime, os << ent.type << ": " << ent.bound;), (IsTrait, os << ent.outerHrbs << ent.type << ": "; if (ent.constness == AST::BoundConstness::Always) os << "const "; else if (ent.constness == AST::BoundConstness::Maybe) os << "[const] "; os << ent.innerHrbs << ent.trait;), (MaybeTrait, os << ent.type << ": ?" << ent.trait;), (NotTrait, os << ent.type << ": !" << ent.trait;), (Equality, os << ent.type << ": =" << ent.replacement;))
         }
         os << "\n";
 
@@ -1196,21 +1196,21 @@ void RustPrinter::print_bounds(const AST::GenericParams& params) {
     }
 }
 
-void RustPrinter::print_pattern_tuple(const AST::Pattern::TuplePat& v, bool isRefutable) {
+void RustPrinter::printPatternTuple(const AST::Pattern::TuplePat& v, bool isRefutable) {
     for (const auto& sp : v.start) {
-        print_pattern(sp, isRefutable);
+        printPattern(sp, isRefutable);
         os << ", ";
     }
     if (v.hasWildcard) {
         os << ".., ";
         for (const auto& sp : v.end) {
-            print_pattern(sp, isRefutable);
+            printPattern(sp, isRefutable);
             os << ", ";
         }
     }
 }
 
-void RustPrinter::print_pattern(const AST::Pattern& p, bool isRefutable) {
+void RustPrinter::printPattern(const AST::Pattern& p, bool isRefutable) {
     for (const auto& pb : p.bindings()) {
         if (pb.isMutable) {
             os << "mut ";
@@ -1243,7 +1243,7 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool isRefutable) {
          {
              const auto& v = p.data().as_Box();
              os << "box ";
-             print_pattern(*v.sub, isRefutable);
+             printPattern(*v.sub, isRefutable);
          }),
         (Ref,
          {
@@ -1255,19 +1255,19 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool isRefutable) {
              }
              // Just in case the inner binds as mut
              os << "(";
-             print_pattern(*v.sub, isRefutable);
+             printPattern(*v.sub, isRefutable);
              os << ")";
          }),
         (Value, os << v.start; if (!v.end.is_Invalid()) { os << " ..= " << v.end; }),
         (ValueLeftInc, os << v.start << " .. " << v.end;),
-        (StructTuple, os << v.path << "("; this->print_pattern_tuple(v.tup_pat, isRefutable); os << ")";),
+        (StructTuple, os << v.path << "("; this->printPatternTuple(v.tup_pat, isRefutable); os << ")";),
         (Struct,
          {
              const auto& v = p.data().as_Struct();
              os << v.path << "{";
              for (const auto& sp : v.sub_patterns) {
                  os << sp.name << ": ";
-                 print_pattern(sp.pat, isRefutable);
+                 printPattern(sp.pat, isRefutable);
                  os << ",";
              }
              if (!v.isExhaustive) {
@@ -1275,16 +1275,16 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool isRefutable) {
              }
              os << "}";
          }),
-        (Tuple, os << "("; this->print_pattern_tuple(v, isRefutable); os << ")";),
+        (Tuple, os << "("; this->printPatternTuple(v, isRefutable); os << ")";),
         (
             Slice, os << "["; for (const auto& sp : v.sub_pats) {
-                print_pattern(sp, isRefutable);
+                printPattern(sp, isRefutable);
                 os << ", ";
             } os << "]";
         ),
         (
             SplitSlice, os << "["; bool needsComma = false; for (const auto& sp : v.leading) {
-                print_pattern(sp, isRefutable);
+                printPattern(sp, isRefutable);
                 os << ", ";
             }
 
@@ -1313,7 +1313,7 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool isRefutable) {
                     os << ", ";
                 }
                 for (const auto& sp : v.trailing) {
-                    print_pattern(sp, isRefutable);
+                    printPattern(sp, isRefutable);
                     os << ", ";
                 }
             } os
@@ -1321,45 +1321,45 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool isRefutable) {
         ),
         (Or, os << "("; for (const auto& e : v) {
             os << (&e == &v.front() ? "" : " | ");
-            print_pattern(e, isRefutable);
+            printPattern(e, isRefutable);
         } os << ")";)
     )
 }
 
-void RustPrinter::print_type(const TypeRef& t) {
+void RustPrinter::printType(const TypeRef& t) {
     os << t;
 }
 
 void RustPrinter::handleStruct(const AST::Struct& s) {
-    print_params(s.params());
+    printParams(s.params());
 
     TU_MATCH(
         AST::StructData,
         (s.mData),
         (e),
-        (Unit, os << " /* unit-like */\n"; print_bounds(s.params()); os << indent() << ";\n";),
-        (Tuple, os << "("; for (const auto& i : e.ents) { os << i.vis << i.mType << ", "; } os << ")\n"; print_bounds(s.params()); os << indent() << ";\n";),
-        (Struct, os << "\n"; print_bounds(s.params());
+        (Unit, os << " /* unit-like */\n"; printBounds(s.params()); os << indent() << ";\n";),
+        (Tuple, os << "("; for (const auto& i : e.ents) { os << i.vis << i.mType << ", "; } os << ")\n"; printBounds(s.params()); os << indent() << ";\n";),
+        (Struct, os << "\n"; printBounds(s.params());
 
          os << indent() << "{\n";
          incIndent();
-         for (const auto& i : e.ents) { os << indent() << i.vis << i.mName << ": " << i.mType.print_pretty() << ",\n"; } decIndent();
+         for (const auto& i : e.ents) { os << indent() << i.vis << i.mName << ": " << i.mType.printPretty() << ",\n"; } decIndent();
          os << indent() << "}\n";)
     )
     os << "\n";
 }
 
 void RustPrinter::handleEnum(const AST::Enum& s) {
-    print_params(s.params());
+    printParams(s.params());
     os << "\n";
-    print_bounds(s.params());
+    printBounds(s.params());
 
     os << indent() << "{\n";
     incIndent();
     unsigned int idx = 0;
     for (const auto& i : s.variants()) {
         os << indent() << "/*" << idx << "*/" << i.mName;
-        TU_MATCH(AST::EnumVariantData, (i.mData), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.mItems) os << t.mType.print_pretty() << ", "; os << ")";), (Struct, os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.mName << ": " << i.mType.print_pretty() << ",\n"; } decIndent(); os << indent() << "}";))
+        TU_MATCH(AST::EnumVariantData, (i.mData), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.mItems) os << t.mType.printPretty() << ", "; os << ")";), (Struct, os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.mName << ": " << i.mType.printPretty() << ",\n"; } decIndent(); os << indent() << "}";))
         if (i.discriminantValue) {
             os << " = " << i.discriminantValue;
         }
@@ -1372,7 +1372,7 @@ void RustPrinter::handleEnum(const AST::Enum& s) {
 }
 
 void RustPrinter::handleTrait(const AST::Trait& s) {
-    print_params(s.params());
+    printParams(s.params());
     {
         char c = ':';
         for (const auto& lft : s.lifetimes()) {
@@ -1385,7 +1385,7 @@ void RustPrinter::handleTrait(const AST::Trait& s) {
         }
     }
     os << "\n";
-    print_bounds(s.params());
+    printBounds(s.params());
 
     os << indent() << "{\n";
     incIndent();
@@ -1415,33 +1415,33 @@ void RustPrinter::handleFunction(const AST::Visibility& vis, const RcString& nam
         os << "extern \"" << f.abi() << "\" ";
     }
     os << "fn " << name;
-    print_params(f.params());
+    printParams(f.params());
     os << "(";
     bool isFirst = true;
     for (const auto& a : f.args()) {
         if (!isFirst) {
             os << ", ";
         }
-        print_attrs(a.attrs);
-        print_pattern(a.pat, false);
-        os << ": " << a.ty.print_pretty();
+        printAttrs(a.attrs);
+        printPattern(a.pat, false);
+        os << ": " << a.ty.printPretty();
         isFirst = false;
     }
     os << ")";
     if (!f.rettype().isUnit()) {
-        os << " -> " << f.rettype().print_pretty();
+        os << " -> " << f.rettype().printPretty();
     }
 
     if (f.code().isValid()) {
         os << "\n";
-        print_bounds(f.params());
+        printBounds(f.params());
 
         os << indent();
         f.code().visit_nodes(*this);
         os << "\n";
         //m_os << indent() << f.data.code() << "\n";
     } else {
-        print_bounds(f.params());
+        printBounds(f.params());
         os << ";\n";
     }
 }

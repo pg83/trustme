@@ -46,12 +46,12 @@ TAGGED_UNION_EX(
         (Partial,
          struct {
              ::std::vector<VarState> innerStates;
-             unsigned int outer_flag; // If ~0u, the outer discriminant is always valid.
+             unsigned int outerFlag; // If ~0u, the outer discriminant is always valid.
          }),
         (MovedOut,
          struct {
              ::std::unique_ptr<VarState> innerState;
-             unsigned int outer_flag; // If ~0u, the outer is always valid. If set, then the outer may have been moved (but inner state still maybe valid)
+             unsigned int outerFlag; // If ~0u, the outer is always valid. If set, then the outer may have been moved (but inner state still maybe valid)
          }),
         // Optionally valid (integer indicates the drop flag index)
         (Optional, unsigned int),
@@ -257,9 +257,9 @@ public:
     };
 
     /// Save the current state of aliases (see add_variable_alias)
-    SavedAliases save_aliases() const;
+    SavedAliases saveAliases() const;
 
-    void restore_aliases(SavedAliases a);
+    void restoreAliases(SavedAliases a);
 
     // Variable aliases (used for match guards)
     void addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv);
@@ -300,19 +300,19 @@ public:
 
     // - Statements
     // Push an assignment. NOTE: This also marks the rvalue as moved
-    void push_stmt_assign(const Span& sp, ::MIR::LValue dst, ::MIR::RValue val, bool update_dest_state = true);
+    void pushStmtAssign(const Span& sp, ::MIR::LValue dst, ::MIR::RValue val, bool update_dest_state = true);
     // Push a drop (likely only used by scope cleanup)
-    void push_stmt_drop(const Span& sp, ::MIR::LValue val, unsigned int dropFlag = ~0u);
+    void pushStmtDrop(const Span& sp, ::MIR::LValue val, unsigned int dropFlag = ~0u);
     // Push a shallow drop (for Box)
-    void push_stmt_drop_shallow(const Span& sp, ::MIR::LValue val, unsigned int dropFlag = ~0u);
+    void pushStmtDropShallow(const Span& sp, ::MIR::LValue val, unsigned int dropFlag = ~0u);
     // Push an inline assembly statement (NOTE: inputs aren't marked as moved)
-    void push_stmt_asm(const Span& sp, ::MIR::Statement::Data_Asm data);
+    void pushStmtAsm(const Span& sp, ::MIR::Statement::Data_Asm data);
     // Push a setting/clearing of a drop flag
-    void push_stmt_set_dropflag_val(const Span& sp, unsigned int index, bool value);
-    void push_stmt_set_dropflag_other(const Span& sp, unsigned int index, unsigned int other);
-    void push_stmt_set_dropflag_default(const Span& sp, unsigned int index);
+    void pushStmtSetDropflagVal(const Span& sp, unsigned int index, bool value);
+    void pushStmtSetDropflagOther(const Span& sp, unsigned int index, unsigned int other);
+    void pushStmtSetDropflagDefault(const Span& sp, unsigned int index);
 
-    void push_stmt(const Span& sp, ::MIR::Statement stmt);
+    void pushStmt(const Span& sp, ::MIR::Statement stmt);
 
     // - Block management
     bool block_active() const {
@@ -323,8 +323,8 @@ public:
     void markValueAssigned(const Span& sp, const ::MIR::LValue& val);
 
     // Moves control of temporaries up to the specified scope (or to above it)
-    void raise_temporaries(const Span& sp, const ::MIR::LValue& val, const ScopeHandle& scope, bool to_above = false);
-    void raise_temporaries(const Span& sp, const ::MIR::RValue& rval, const ScopeHandle& scope, bool to_above = false);
+    void raiseTemporaries(const Span& sp, const ::MIR::LValue& val, const ScopeHandle& scope, bool to_above = false);
+    void raiseTemporaries(const Span& sp, const ::MIR::RValue& rval, const ScopeHandle& scope, bool to_above = false);
 
     class SaveCodeProto {
         friend class MirBuilder;
@@ -363,7 +363,7 @@ private:
 
 public:
     void set_cur_block(unsigned int newBlock);
-    ::MIR::BasicBlockId pause_cur_block();
+    ::MIR::BasicBlockId pauseCurBlock();
 
     void endBlock(::MIR::Terminator term);
 
@@ -389,7 +389,7 @@ public:
     ScopeHandle newScopeFreeze(const Span& sp);
 
     /// Raises every variable defined in the source scope into the target scope
-    void raise_all(const Span& sp, ScopeHandle src, const ScopeHandle& target);
+    void raiseAll(const Span& sp, ScopeHandle src, const ScopeHandle& target);
     /// Drop all defined values in the scope (emits the drops if `cleanup` is set)
     void terminate_scope(const Span& sp, ScopeHandle, bool cleanup = true);
     /// Terminates a scope early (e.g. via return/break/...)
@@ -408,13 +408,13 @@ public:
     }
 
     /// Schedule a local's value drop in the current variable scope.
-    void schedule_variable_drop(unsigned int idx);
+    void scheduleVariableDrop(unsigned int idx);
     /// Register a local's state in the current variable scope without scheduling its drop.
-    void register_variable_state(unsigned int idx);
+    void registerVariableState(unsigned int idx);
     /// Schedule the drop of a local whose state is already registered.
-    void schedule_registered_variable_drop(unsigned int idx);
+    void scheduleRegisteredVariableDrop(unsigned int idx);
     /// Schedule an argument's value drop in the current variable scope.
-    void schedule_argument_drop(unsigned int idx);
+    void scheduleArgumentDrop(unsigned int idx);
     /// Move a temporary's drop entry from `source` into the nearest variable scope.
     void moveTemporaryDropToVariableScope(const Span& sp, const ::MIR::LValue& value, const ScopeHandle& source);
     /// Move a local binding from its lexical block into the scope selected for a `super let`.
@@ -438,12 +438,12 @@ private:
 
     void mergeSplitLists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type);
 
-    void terminate_loop_early(const Span& sp, ScopeType::Data_Loop& sd_loop);
+    void terminate_loop_early(const Span& sp, ScopeType::Data_Loop& sdLoop);
 
     void dropValueFromState(const Span& sp, VarState& vs, ::MIR::LValue lv);
     void dropScopeValues(ScopeDef& sd);
     ::MIR::UnwindAction makeUnwindAction(const Span& sp, const ::MIR::LValue* consumedValue = nullptr);
-    void push_drop_terminator(const Span& sp, ::MIR::eDropKind kind, ::MIR::LValue val, unsigned int dropFlag);
+    void pushDropTerminator(const Span& sp, ::MIR::eDropKind kind, ::MIR::LValue val, unsigned int dropFlag);
     /// Finalise a scope before it's fully destroyed. Doesn't emit destructors (already done by `drop_scope_values`)
     void completeScope(ScopeDef& sd);
 
@@ -467,7 +467,7 @@ public:
         }
     };
 
-    std::map<unsigned, SavedActiveLocal> getActiveLocals(const Span& sp, std::set<unsigned>& saved_drop_flags) const;
+    std::map<unsigned, SavedActiveLocal> getActiveLocals(const Span& sp, std::set<unsigned>& savedDropFlags) const;
 
     // Calls `drop_value_from_state` on the value
     void dropActveLocal(const Span& sp, ::MIR::LValue lv, const SavedActiveLocal& loc);
@@ -495,7 +495,7 @@ struct SaveAndEditVal {
 };
 
 template <typename T>
-SaveAndEditVal<T> save_and_edit(T& dst, typename ::std::remove_reference<T&>::type newval) {
+SaveAndEditVal<T> saveAndEdit(T& dst, typename ::std::remove_reference<T&>::type newval) {
     return SaveAndEditVal<T>{dst, mv$(newval)};
 }
 
@@ -505,12 +505,12 @@ using PatternDropOrder = ::HIR::PatternBindingOrder;
 class MirConverter: public ::HIR::ExprVisitor {
 public:
     //virtual void destructure_from(const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue lval, bool allow_refutable=false) = 0;
-    virtual void schedule_pattern_drops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
-    virtual void register_pattern_variables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
-    virtual void schedule_registered_pattern_drops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
+    virtual void schedulePatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
+    virtual void registerPatternVariables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
+    virtual void scheduleRegisteredPatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
 
     virtual void destructureFromList(const Span& sp, const ::HIR::TypeData* ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states = true) = 0;
-    virtual MIR::LValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) = 0;
+    virtual MIR::LValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outerLval, const PatternBinding& b) = 0;
     virtual const HIR::TypeData* getBindingType(const Span& sp, unsigned index) const = 0;
 
     virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
@@ -526,5 +526,5 @@ extern void MIRLowerHIRGetTypeValueForPath(
     const ::MIR::LValue& top_val,
     const fieldPathT& field_path, // unsigned int field_path_ofs,
     /*Out ->*/ ::HIR::TypeRef& outTy,
-    ::MIR::LValue& out_val
+    ::MIR::LValue& outVal
 );

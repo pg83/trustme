@@ -11,7 +11,7 @@ TrackHrbStack::PopOnDrop::~PopOnDrop() {
     }
 }
 TrackHrbStack::PopOnDrop::PopOnDrop(PopOnDrop&& x): v(x.v) { x.v = nullptr; }
-TrackHrbStack::PopOnDrop TrackHrbStack::push_hrb(const HIR::GenericParams& params) const {
+TrackHrbStack::PopOnDrop TrackHrbStack::pushHrb(const HIR::GenericParams& params) const {
     hrbStack.push_back(&params);
     return PopOnDrop(hrbStack);
 }

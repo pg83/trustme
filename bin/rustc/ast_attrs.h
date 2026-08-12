@@ -123,11 +123,11 @@ namespace AST {
         }
 
         /// Parses the data as a `="string"` and returns the string
-        std::string parse_equals_string(const AST::Crate& crate, const AST::Module& mod) const;
+        std::string parseEqualsString(const AST::Crate& crate, const AST::Module& mod) const;
         /// Parses the data as a `("string")` and returns the string
-        std::string parse_paren_string() const;
+        std::string parseParenString() const;
 
-        void parse_paren_ident_list(std::function<void(const Span& sp, RcString ident)> itemCb) const;
+        void parseParenIdentList(std::function<void(const Span& sp, RcString ident)> itemCb) const;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Attribute& x);
     };

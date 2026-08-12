@@ -106,8 +106,8 @@ public:
 STATIC_DECORATOR("proc_macro", DecoratorProcMacro)
 
 void ExpandProcMacroHarness(::AST::Crate& crate) {
-    auto pm_crate_name = RcString::newInterned("proc_macro");
-    AST::gImplicitCrates.insert(std::make_pair(pm_crate_name, crate.loadExternCrate(Span(), pm_crate_name)));
+    auto pmCrateName = RcString::newInterned("proc_macro");
+    AST::gImplicitCrates.insert(std::make_pair(pmCrateName, crate.loadExternCrate(Span(), pmCrateName)));
 
     // Create the following module:
     // ```
@@ -422,11 +422,11 @@ private:
     void send_v128u(uint64_t val);
     void send_v128u(U128 val);
 
-    uint8_t recv_u8();
-    ::std::string recv_bytes();
-    void recv_bytes_raw(void* out_void, size_t len);
-    uint64_t recv_v128u();
-    U128 recv_v128u_u128();
+    uint8_t recvU8();
+    ::std::string recvBytes();
+    void recvBytesRaw(void* outVoid, size_t len);
+    uint64_t recvV128u();
+    U128 recvV128uU128();
 };
 
 ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath) {
@@ -459,10 +459,10 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const
     }
 
     // 2. Get executable and macro name
-    ::std::string proc_macro_exe_name = ext_crate.filename;
+    ::std::string procMacroExeName = ext_crate.filename;
 
     // 3. Create ProcMacroInv
-    auto rv = ProcMacroInv(sp, ext_crate.hir->edition, proc_macro_exe_name.c_str(), *pmp);
+    auto rv = ProcMacroInv(sp, ext_crate.hir->edition, procMacroExeName.c_str(), *pmp);
     rv.parse_state().crate = &crate;
 
     return rv;
@@ -998,7 +998,7 @@ namespace {
                 (Primitive, TODO(sp, "proc_macro send primitive - " << ty);),
                 (Function, ::std::stringstream ss; ss << ty << " "; DEBUG("STRING: " << ss.str());
 
-                 parse_string(ss.str());),
+                 parseString(ss.str());),
                 (
                     Tuple, pmi.send_symbol("("); for (const auto& st : te.innerTypes) {
                         this->visit_type(st);
@@ -1254,7 +1254,7 @@ namespace {
                                         pmi.send_lifetime(be.bound.name().name.c_str());
                                     }
                                     TU_ARMA(IsTrait, be) {
-                                        assert(be.outer_hrbs.empty()); // Shouldn't be possible in this position
+                                        assert(be.outerHrbs.empty()); // Shouldn't be possible in this position
                                         if (!be.innerHrbs.empty()) {
                                             TODO(sp, "be.inner_hrbs");
                                         }
@@ -1335,7 +1335,7 @@ namespace {
                             pmi.send_lifetime(be.bound.name().name.c_str());
                         }
                         TU_ARMA(IsTrait, be) {
-                            visit_hrbs(be.outer_hrbs);
+                            visit_hrbs(be.outerHrbs);
                             visit_type(be.type);
                             pmi.send_symbol(":");
                             visit_hrbs(be.innerHrbs);
@@ -1375,10 +1375,10 @@ namespace {
             DEBUG("STRING: " << ss.str());
 
             //const_cast<::AST::ExprNode&>(e).visit(*this);
-            parse_string(ss.str());
+            parseString(ss.str());
         }
 
-        void parse_string(const ::std::string& s) {
+        void parseString(const ::std::string& s) {
             ::std::istringstream iss{s};
             Lexer l{iss, AST::Edition::Rust2021, {}};
             for (;;) {
@@ -1623,7 +1623,7 @@ namespace {
 
         void visit_static(const RcString& name, const AST::Visibility& vis, const ::AST::Static& i) {
             this->visit_vis(vis);
-            switch (i.s_class()) {
+            switch (i.sClass()) {
                 case ::AST::Static::CONST:
                     pmi.send_rword("const");
                     break;
@@ -2000,25 +2000,25 @@ void ProcMacroInv::send_v128u(U128 val) {
     this->send_u8(static_cast<uint8_t>(val.truncate_u64() & 0x7F));
 }
 
-uint8_t ProcMacroInv::recv_u8() {
+uint8_t ProcMacroInv::recvU8() {
     uint8_t v;
-    this->recv_bytes_raw(&v, 1);
+    this->recvBytesRaw(&v, 1);
     return v;
 }
 
-::std::string ProcMacroInv::recv_bytes() {
-    auto len = this->recv_v128u();
+::std::string ProcMacroInv::recvBytes() {
+    auto len = this->recvV128u();
     ASSERT_BUG(this->parentSpan, len < SIZE_MAX, "Oversized string from child process");
     ::std::string val;
     val.resize(len);
 
-    recv_bytes_raw(&val[0], len);
+    recvBytesRaw(&val[0], len);
 
     return val;
 }
 
-void ProcMacroInv::recv_bytes_raw(void* out_void, size_t len) {
-    uint8_t* val = reinterpret_cast<uint8_t*>(out_void);
+void ProcMacroInv::recvBytesRaw(void* outVoid, size_t len) {
+    uint8_t* val = reinterpret_cast<uint8_t*>(outVoid);
     size_t ofs = 0, rem = len;
     while (rem > 0) {
         auto n = read(this->handles.childStdout, &val[ofs], rem);
@@ -2034,16 +2034,16 @@ void ProcMacroInv::recv_bytes_raw(void* out_void, size_t len) {
     }
 
     if (dumpFileRes.is_open()) {
-        dumpFileRes.write(reinterpret_cast<const char*>(out_void), len);
+        dumpFileRes.write(reinterpret_cast<const char*>(outVoid), len);
         dumpFileRes.flush();
     }
 }
 
-uint64_t ProcMacroInv::recv_v128u() {
+uint64_t ProcMacroInv::recvV128u() {
     uint64_t v = 0;
     unsigned ofs = 0;
     for (;;) {
-        auto b = recv_u8();
+        auto b = recvU8();
         v |= static_cast<uint64_t>(b & 0x7F) << ofs;
         if ((b & 0x80) == 0) {
             break;
@@ -2053,11 +2053,11 @@ uint64_t ProcMacroInv::recv_v128u() {
     return v;
 }
 
-U128 ProcMacroInv::recv_v128u_u128() {
+U128 ProcMacroInv::recvV128uU128() {
     U128 v(0);
     unsigned ofs = 0;
     for (;;) {
-        auto b = recv_u8();
+        auto b = recvU8();
         v |= U128(b & 0x7F) << ofs;
         if ((b & 0x80) == 0) {
             break;
@@ -2083,7 +2083,7 @@ Token ProcMacroInv::realGetToken_() {
     if (eofHit) {
         return Token(TOK_EOF);
     }
-    uint8_t v = this->recv_u8();
+    uint8_t v = this->recvU8();
 
     switch (static_cast<TokenClass>(v)) {
         case TokenClass::EndOfStream:
@@ -2094,7 +2094,7 @@ Token ProcMacroInv::realGetToken_() {
             TODO(this->parentSpan, "SpanDef");
             break;
         case TokenClass::Symbol: {
-            auto val = this->recv_bytes();
+            auto val = this->recvBytes();
             if (val == "") {
                 eofHit = true;
                 return Token(TOK_EOF);
@@ -2104,7 +2104,7 @@ Token ProcMacroInv::realGetToken_() {
             return t;
         }
         case TokenClass::Ident: {
-            auto val = this->recv_bytes();
+            auto val = this->recvBytes();
             if (val == "_" || val == "r#_") {
                 return TOK_UNDERSCORE;
             }
@@ -2118,24 +2118,24 @@ Token ProcMacroInv::realGetToken_() {
             return Token(TOK_IDENT, RcString::newInterned(val));
         }
         case TokenClass::Lifetime: {
-            auto val = this->recv_bytes();
+            auto val = this->recvBytes();
             return Token(TOK_LIFETIME, RcString::newInterned(val));
         }
         case TokenClass::String: {
-            auto val = this->recv_bytes();
+            auto val = this->recvBytes();
             return Token(TOK_STRING, mv$(val), this->getHygiene());
         }
         case TokenClass::ByteString: {
-            auto val = this->recv_bytes();
+            auto val = this->recvBytes();
             return Token(TOK_BYTESTRING, mv$(val), this->getHygiene());
         }
         case TokenClass::CharLit: {
-            auto val = this->recv_v128u();
+            auto val = this->recvV128u();
             return Token(U128(val), CORETYPE_CHAR);
         }
         case TokenClass::UnsignedInt: {
             ::eCoreType ty;
-            switch (this->recv_u8()) {
+            switch (this->recvU8()) {
                 case 0:
                     ty = CORETYPE_ANY;
                     break;
@@ -2160,12 +2160,12 @@ Token ProcMacroInv::realGetToken_() {
                 default:
                     BUG(this->parentSpan, "Invalid integer size from child process");
             }
-            auto val = this->recv_v128u_u128();
+            auto val = this->recvV128uU128();
             return Token(val, ty);
         }
         case TokenClass::SignedInt: {
             ::eCoreType ty;
-            switch (this->recv_u8()) {
+            switch (this->recvU8()) {
                 case 0:
                     ty = CORETYPE_ANY;
                     break;
@@ -2190,7 +2190,7 @@ Token ProcMacroInv::realGetToken_() {
                 default:
                     BUG(this->parentSpan, "Invalid integer size from child process");
             }
-            auto val = this->recv_v128u_u128();
+            auto val = this->recvV128uU128();
             if (val.truncate_u64() & 1) {
                 val = ~(val >> 1) + 1; // Negative (Is this even possible?)
                 TODO(this->parentSpan, "Negative literal from proc macro, what?");
@@ -2201,7 +2201,7 @@ Token ProcMacroInv::realGetToken_() {
         }
         case TokenClass::Float: {
             ::eCoreType ty;
-            switch (this->recv_u8()) {
+            switch (this->recvU8()) {
                 case 0:
                     ty = CORETYPE_ANY;
                     break;
@@ -2215,7 +2215,7 @@ Token ProcMacroInv::realGetToken_() {
                     BUG(this->parentSpan, "Invalid float size from child process");
             }
             double val;
-            this->recv_bytes_raw(&val, sizeof(val));
+            this->recvBytesRaw(&val, sizeof(val));
             return Token::makeFloat(val, ty);
         }
             //case TokenClass::Fragment:

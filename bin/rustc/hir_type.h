@@ -305,9 +305,9 @@ namespace HIR {
             // Deliberately semantic relations. Plain TypeRef equality is pointer identity.
             bool equalsIgnoringRegions(::HIR::TypeRef x) const;
             Ordering ordIgnoringRegions(::HIR::TypeRef x) const;
-            bool matchTestGenerics(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
-            ::HIR::Compare matchTestGenericsFuzz(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
-            Compare compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const;
+            bool matchTestGenerics(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolvePlaceholder, MatchGenerics& callback) const;
+            ::HIR::Compare matchTestGenericsFuzz(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolvePlaceholder, MatchGenerics& callback) const;
+            Compare compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolvePlaceholder) const;
             const ::HIR::SimplePath* getSortPath() const;
         )
     );

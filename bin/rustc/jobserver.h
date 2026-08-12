@@ -21,5 +21,5 @@ public:
     static ::std::unique_ptr<JobServer> create(size_t server_jobs);
 
     virtual bool take_one(unsigned long timeout_ms) = 0;
-    virtual void return_one() = 0;
+    virtual void returnOne() = 0;
 };

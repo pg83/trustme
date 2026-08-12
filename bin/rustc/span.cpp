@@ -23,14 +23,14 @@ Span::Span(const Span& x)
     : ptr(x.ptr)
 {
     if (ptr) {
-        ptr->reference_count += 1;
+        ptr->referenceCount += 1;
     }
 }
 
 Span::~Span() {
     if (ptr) {
-        ptr->reference_count--;
-        if (ptr->reference_count == 0) {
+        ptr->referenceCount--;
+        if (ptr->referenceCount == 0) {
             delete ptr;
         }
         ptr = nullptr;
@@ -48,7 +48,7 @@ const SpanInnerSource& Span::getTopFileSpan() const {
     TODO(*this, "Top span isn't source?");
 }
 
-void Span::print_span_message(::std::function<void(::std::ostream&)> tag, ::std::function<void(::std::ostream&)> msg) const {
+void Span::printSpanMessage(::std::function<void(::std::ostream&)> tag, ::std::function<void(::std::ostream&)> msg) const {
     const Span& sp = *this;
     auto& sink = ::std::cerr;
     sink << sp << " ";
@@ -68,27 +68,27 @@ void Span::print_span_message(::std::function<void(::std::ostream&)> tag, ::std:
 }
 
 void Span::bug(::std::function<void(::std::ostream&)> msg) const {
-    print_span_message([](auto& os) {
+    printSpanMessage([](auto& os) {
         os << "BUG";
     }, msg);
     abort();
 }
 
 void Span::error(ErrorType tag, ::std::function<void(::std::ostream&)> msg) const {
-    print_span_message([&](auto& os) {
+    printSpanMessage([&](auto& os) {
         os << "error:" << tag;
     }, msg);
     abort();
 }
 
 void Span::warning(WarningType tag, ::std::function<void(::std::ostream&)> msg) const {
-    print_span_message([&](auto& os) {
+    printSpanMessage([&](auto& os) {
         os << "warn:" << tag;
     }, msg);
 }
 
 void Span::note(::std::function<void(::std::ostream&)> msg) const {
-    print_span_message([](auto& os) {
+    printSpanMessage([](auto& os) {
         os << "note";
     }, msg);
 }
@@ -127,7 +127,7 @@ void SpanInnerMacro::fmt(::std::ostream& os) const {
 
 /*static*/ SpanInner* SpanInnerMacro::alloc(Span parent, RcString crate, RcString macro) {
     auto rv = new SpanInnerMacro;
-    rv->reference_count = 1;
+    rv->referenceCount = 1;
     rv->parent_span = std::move(parent);
     rv->crate = std::move(crate);
     rv->macro = std::move(macro);
@@ -163,7 +163,7 @@ Span& Span::operator=(Span&& x) {
 }
 SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs) {
     auto* rv = new SpanInnerSource();
-    rv->reference_count = 1;
+    rv->referenceCount = 1;
     rv->parent_span = parent;
     rv->filename = ::std::move(filename);
     rv->start_line = start_line;

@@ -328,7 +328,7 @@ DEF_VISIT_H(ExprNodeClosure, node) {
 
 namespace HIR {
     ::std::ostream& operator<<(::std::ostream& os, const ExprNodeClosure::AvuCache::Capture& x) {
-        os << "#" << x.root_slot;
+        os << "#" << x.rootSlot;
         for (const auto& n : x.fields) {
             if (n == RcString()) {
                 os << ".*";

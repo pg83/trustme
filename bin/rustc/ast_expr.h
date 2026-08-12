@@ -67,11 +67,11 @@ namespace AST {
 
         ExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> local_mod);
 
-        void push_stmt(AST::ExprNodeP node) {
+        void pushStmt(AST::ExprNodeP node) {
             nodes.push_back({true, std::move(node)});
         }
 
-        void push_tail_expr(AST::ExprNodeP node) {
+        void pushTailExpr(AST::ExprNodeP node) {
             nodes.push_back({false, std::move(node)});
         }
 

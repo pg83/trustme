@@ -313,7 +313,7 @@ public:
 
     void print(::std::ostream& os, bool isDebug = false) const;
 
-    PrettyPrintType print_pretty() const {
+    PrettyPrintType printPretty() const {
         return PrettyPrintType(*this);
     }
 

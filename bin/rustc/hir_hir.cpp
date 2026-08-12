@@ -102,16 +102,16 @@ namespace HIR {
 
     ConstGenericUnevaluated ConstGenericUnevaluated::clone() const {
         ConstGenericUnevaluated rv;
-        rv.params_impl = params_impl.clone();
-        rv.params_item = params_item.clone();
+        rv.paramsImpl = paramsImpl.clone();
+        rv.paramsItem = paramsItem.clone();
         rv.expr = expr;
         return rv;
     }
 
     ConstGenericUnevaluated ConstGenericUnevaluated::monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer /*=true*/) const {
         ConstGenericUnevaluated rv;
-        rv.params_impl = ms.monomorphPathParams(sp, params_impl, allowInfer);
-        rv.params_item = ms.monomorphPathParams(sp, params_item, allowInfer);
+        rv.paramsImpl = ms.monomorphPathParams(sp, paramsImpl, allowInfer);
+        rv.paramsItem = ms.monomorphPathParams(sp, paramsItem, allowInfer);
         rv.expr = this->expr;
         return rv;
     }
@@ -121,10 +121,10 @@ namespace HIR {
             const ::HIR::PathParams* params = nullptr;
             switch (binding >> 8) {
                 case ::HIR::GENERICImpl:
-                    params = &value.params_impl;
+                    params = &value.paramsImpl;
                     break;
                 case ::HIR::GENERICItem:
-                    params = &value.params_item;
+                    params = &value.paramsItem;
                     break;
                 default:
                     return nullptr;
@@ -148,15 +148,15 @@ namespace HIR {
             throw "";
         }
 
-        bool constExprNodesEqual(const ::HIR::ConstGenericUnevaluated& leftValue, const ::HIR::ExprNode& left, const ::HIR::ConstGenericUnevaluated& right_value, const ::HIR::ExprNode& right) {
+        bool constExprNodesEqual(const ::HIR::ConstGenericUnevaluated& leftValue, const ::HIR::ExprNode& left, const ::HIR::ConstGenericUnevaluated& rightValue, const ::HIR::ExprNode& right) {
             if (const auto* l = cast<const ::HIR::ExprNodeConstParam>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeConstParam>(&right);
                 if (!r) {
                     return false;
                 }
                 const auto* lParam = getUnevaluatedParam(leftValue, l->mBinding);
-                const auto* r_param = getUnevaluatedParam(right_value, r->mBinding);
-                return lParam && r_param ? *lParam == *r_param : l->mBinding == r->mBinding;
+                const auto* rParam = getUnevaluatedParam(rightValue, r->mBinding);
+                return lParam && rParam ? *lParam == *rParam : l->mBinding == r->mBinding;
             }
             if (const auto* l = cast<const ::HIR::ExprNodeLiteral>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeLiteral>(&right);
@@ -164,19 +164,19 @@ namespace HIR {
             }
             if (const auto* l = cast<const ::HIR::ExprNodeBinOp>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeBinOp>(&right);
-                return r && l->op == r->op && constExprNodesEqual(leftValue, *l->left, right_value, *r->left) && constExprNodesEqual(leftValue, *l->right, right_value, *r->right);
+                return r && l->op == r->op && constExprNodesEqual(leftValue, *l->left, rightValue, *r->left) && constExprNodesEqual(leftValue, *l->right, rightValue, *r->right);
             }
             if (const auto* l = cast<const ::HIR::ExprNodeUniOp>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeUniOp>(&right);
-                return r && l->op == r->op && constExprNodesEqual(leftValue, *l->mValue, right_value, *r->mValue);
+                return r && l->op == r->op && constExprNodesEqual(leftValue, *l->mValue, rightValue, *r->mValue);
             }
             if (const auto* l = cast<const ::HIR::ExprNodeCast>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeCast>(&right);
-                return r && l->dstType == r->dstType && constExprNodesEqual(leftValue, *l->mValue, right_value, *r->mValue);
+                return r && l->dstType == r->dstType && constExprNodesEqual(leftValue, *l->mValue, rightValue, *r->mValue);
             }
             if (const auto* l = cast<const ::HIR::ExprNodeConstBlock>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeConstBlock>(&right);
-                return r && constExprNodesEqual(leftValue, *l->inner, right_value, *r->inner);
+                return r && constExprNodesEqual(leftValue, *l->inner, rightValue, *r->inner);
             }
             if (const auto* l = cast<const ::HIR::ExprNodeCallPath>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeCallPath>(&right);
@@ -184,7 +184,7 @@ namespace HIR {
                     return false;
                 }
                 for (unsigned int i = 0; i < l->mArgs.size(); i++) {
-                    if (!constExprNodesEqual(leftValue, *l->mArgs[i], right_value, *r->mArgs[i])) {
+                    if (!constExprNodesEqual(leftValue, *l->mArgs[i], rightValue, *r->mArgs[i])) {
                         return false;
                     }
                 }
@@ -196,11 +196,11 @@ namespace HIR {
                     return false;
                 }
                 for (unsigned int i = 0; i < l->nodes.size(); i++) {
-                    if (!constExprNodesEqual(leftValue, *l->nodes[i], right_value, *r->nodes[i])) {
+                    if (!constExprNodesEqual(leftValue, *l->nodes[i], rightValue, *r->nodes[i])) {
                         return false;
                     }
                 }
-                return !l->valueNode || constExprNodesEqual(leftValue, *l->valueNode, right_value, *r->valueNode);
+                return !l->valueNode || constExprNodesEqual(leftValue, *l->valueNode, rightValue, *r->valueNode);
             }
             return false;
         }
@@ -233,10 +233,10 @@ namespace HIR {
             auto v_x = FMT(x);
             return ::ord(v_t, v_x);
         }
-        if (auto cmp = this->params_impl.ord(x.params_impl)) {
+        if (auto cmp = this->paramsImpl.ord(x.paramsImpl)) {
             return cmp;
         }
-        if (auto cmp = this->params_item.ord(x.params_item)) {
+        if (auto cmp = this->paramsItem.ord(x.paramsItem)) {
             return cmp;
         }
         return OrdEqual;
@@ -244,8 +244,8 @@ namespace HIR {
 
     void ConstGenericUnevaluated::fmt(::std::ostream& os) const {
         os << "{";
-        os << "0=" << this->params_impl;
-        os << "1=" << this->params_item;
+        os << "0=" << this->paramsImpl;
+        os << "1=" << this->paramsItem;
         os << "}";
         if (expr->mir) {
             for (const auto& b : expr->mir->blocks) {
@@ -668,7 +668,7 @@ const ::HIR::Static& ::HIR::Crate::getStaticByPath(const Span& sp, const ::HIR::
 }
 
 
-void HIR::Crate::post_load_update(const RcString& name) {
+void HIR::Crate::postLoadUpdate(const RcString& name) {
     // TODO: Do a pass across m_hir that
     // 1. Updates all absolute paths with the crate name
     // 2. Sets binding pointers where required
@@ -694,10 +694,10 @@ namespace {
         {
         }
 
-        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type resolve_cb) override {
+        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type resolveCb) override {
             assert(g.binding < implTypes.size());
             if (implTypes[g.binding]) {
-                return (*implTypes[g.binding])->compareWithPlaceholders(Span(), ty, resolve_cb);
+                return (*implTypes[g.binding])->compareWithPlaceholders(Span(), ty, resolveCb);
             }
             implTypes[g.binding] = ty;
             return ::HIR::Compare::Equal;
@@ -768,8 +768,8 @@ namespace {
             return ::OrdEqual;
         }
         const bool leftOpen = left.is_Unevaluated();
-        const bool right_open = right.is_Unevaluated();
-        if (leftOpen != right_open) {
+        const bool rightOpen = right.is_Unevaluated();
+        if (leftOpen != rightOpen) {
             return leftOpen ? ::OrdLess : ::OrdGreater;
         }
         if (leftOpen) {
@@ -1050,9 +1050,9 @@ bool ::HIR::TraitImpl::moreSpecificThan(HIR::TypeInterner& types, const ::HIR::T
             const auto& bO = itO->as_TraitBound();
             // Check if the type is equal
             if (bT.type == bO.type && bT.trait.mPath.mPath == bO.trait.mPath.mPath) {
-                const auto& params_t = bT.trait.mPath.mParams;
-                const auto& params_o = bO.trait.mPath.mParams;
-                switch (typelist_ord_specific(sp, params_t.types, params_o.types)) {
+                const auto& paramsT = bT.trait.mPath.mParams;
+                const auto& paramsO = bO.trait.mPath.mParams;
+                switch (typelist_ord_specific(sp, paramsT.types, paramsO.types)) {
                     case ::OrdLess:
                         return false;
                     case ::OrdGreater:
@@ -1061,8 +1061,8 @@ bool ::HIR::TraitImpl::moreSpecificThan(HIR::TypeInterner& types, const ::HIR::T
                         break;
                 }
                 // TODO: Find cases where there's `T: Foo<T>` and `T: Foo<U>`
-                for (unsigned int i = 0; i < params_t.types.size(); i++) {
-                    if (params_t.types[i] != params_o.types[i] && params_t.types[i] == bT.type) {
+                for (unsigned int i = 0; i < paramsT.types.size(); i++) {
+                    if (paramsT.types[i] != paramsO.types[i] && paramsT.types[i] == bT.type) {
                         return true;
                     }
                 }
@@ -1199,7 +1199,7 @@ namespace {
 }
 
 // Returns `true` if the two impls overlap in the types they will accept
-bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl& other) const {
+bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& other) const {
     // TODO: Pre-calculate impl trees (with pointers to parent impls)
     struct H {
         static bool types_overlap(const ::HIR::PathParams& a, const ::HIR::PathParams& b) {
@@ -1829,12 +1829,12 @@ const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const 
 
     const auto& vtable_ty_spath = this->vtablePath;
     const auto& vtable_ref = crate.getStructByPath(sp, vtable_ty_spath);
-    HIR::PathParams pp_hrls;
+    HIR::PathParams ppHrls;
     if (te.mTrait.hrtbs) {
-        pp_hrls = te.mTrait.hrtbs->makeEmptyParams(true);
+        ppHrls = te.mTrait.hrtbs->makeEmptyParams(true);
     }
     // Copy the param set from the trait in the trait object
-    ::HIR::PathParams vtable_params = MonomorphHrlsOnly(crate.types, pp_hrls).monomorphPathParams(sp, te.mTrait.mPath.mParams, false);
+    ::HIR::PathParams vtable_params = MonomorphHrlsOnly(crate.types, ppHrls).monomorphPathParams(sp, te.mTrait.mPath.mParams, false);
     vtable_params.types.resize(te.mTrait.mPath.mParams.types.size() + this->typeIndexes.size());
     // - Include associated types on bound
     for (const auto& ty_b : te.mTrait.typeBounds) {
@@ -1843,7 +1843,7 @@ const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const 
             continue;
         }
         auto idx = this->typeIndexes.at(ty_b.first);
-        vtable_params.types.at(idx) = MonomorphHrlsOnly(crate.types, pp_hrls).monomorphType(sp, ty_b.second.type);
+        vtable_params.types.at(idx) = MonomorphHrlsOnly(crate.types, ppHrls).monomorphType(sp, ty_b.second.type);
     }
     return crate.types.path(::HIR::GenericPath(vtable_ty_spath, mv$(vtable_params)), &vtable_ref);
 }
@@ -1888,7 +1888,7 @@ unsigned HIR::Trait::getVtableParentIndex(HIR::TypeInterner& types, const Span& 
 }
 
 /// Helper for getting the struct associated with a pattern path
-const ::HIR::Struct& HIR::pattern_get_struct(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding, bool isTuple) {
+const ::HIR::Struct& HIR::patternGetStruct(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding, bool isTuple) {
     const ::HIR::Struct* str_p = nullptr;
     TU_MATCH_HDRA( (binding), { )
     TU_ARMA(Unbound, be)
@@ -1927,15 +1927,15 @@ const ::HIR::Struct& HIR::pattern_get_struct(const Span& sp, const ::HIR::Path& 
     return str;
 }
 
-const ::HIR::t_tuple_fields& HIR::pattern_get_tuple(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding) {
-    return pattern_get_struct(sp, path, binding, true).mData.as_Tuple();
+const ::HIR::t_tuple_fields& HIR::patternGetTuple(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding) {
+    return patternGetStruct(sp, path, binding, true).mData.as_Tuple();
 }
 
-const ::HIR::t_struct_fields& HIR::pattern_get_named(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding) {
+const ::HIR::t_struct_fields& HIR::patternGetNamed(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding) {
     if (binding.is_Union()) {
         return binding.as_Union()->mVariants;
     }
-    return pattern_get_struct(sp, path, binding, false).mData.as_Named();
+    return patternGetStruct(sp, path, binding, false).mData.as_Named();
 }
 
 namespace HIR {
@@ -1988,11 +1988,11 @@ void EncodedLiteral::write_usize(size_t ofs, uint64_t v) {
     this->write_uint(ofs, TargetGetPointerBits() / 8, v);
 }
 
-uint64_t EncodedLiteral::read_usize(size_t ofs) const {
-    return EncodedLiteralSlice(*this).slice(ofs).read_uint(TargetGetPointerBits() / 8).truncate_u64();
+uint64_t EncodedLiteral::readUsize(size_t ofs) const {
+    return EncodedLiteralSlice(*this).slice(ofs).readUint(TargetGetPointerBits() / 8).truncate_u64();
 }
 
-U128 EncodedLiteralSlice::read_uint(size_t size /*=0*/) const {
+U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {
     if (size == 0) {
         size = mSize;
     }
@@ -2008,11 +2008,11 @@ U128 EncodedLiteralSlice::read_uint(size_t size /*=0*/) const {
     return v;
 }
 
-S128 EncodedLiteralSlice::read_sint(size_t size /*=0*/) const {
+S128 EncodedLiteralSlice::readSint(size_t size /*=0*/) const {
     if (size == 0) {
         size = mSize;
     }
-    auto v = read_uint(size);
+    auto v = readUint(size);
     if (size < 128 / 8 && ((v >> (8 * size - 1)) != 0)) {
         // Sign extend
         v |= U128(UINT64_MAX, UINT64_MAX) << (8 * size);
@@ -2021,7 +2021,7 @@ S128 EncodedLiteralSlice::read_sint(size_t size /*=0*/) const {
     return S128(v);
 }
 
-FloatValue EncodedLiteralSlice::read_float(size_t size /*=0*/) const {
+FloatValue EncodedLiteralSlice::readFloat(size_t size /*=0*/) const {
     if (size == 0) {
         size = mSize;
     }
@@ -2263,7 +2263,7 @@ const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR
     return getOrGenMir(ip, fcn.mCode, fcn.mArgs, ty);
 }
 const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const {
-    static ::HIR::Function::argsT s_args;
-    return getOrGenMir(ip, ep, s_args, expTy);
+    static ::HIR::Function::argsT sArgs;
+    return getOrGenMir(ip, ep, sArgs, expTy);
 }
 }

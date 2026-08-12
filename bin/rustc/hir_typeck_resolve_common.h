@@ -31,8 +31,8 @@ struct TraitResolveCommon {
 
     struct CachedBoundCmp {
         typedef std::pair<::HIR::TypeRef, ::HIR::GenericPath> key_t;
-        typedef std::pair<const ::HIR::TypeData*, const ::HIR::GenericPath&> ref_t;
-        typedef std::pair<const ::HIR::TypeData*, const ::HIR::SimplePath&> ref_sp_t;
+        typedef std::pair<const ::HIR::TypeData*, const ::HIR::GenericPath&> refT;
+        typedef std::pair<const ::HIR::TypeData*, const ::HIR::SimplePath&> refSpT;
 
         Ordering ord(const key_t& a, const key_t& b) const {
             return ::ord(a, b);
@@ -42,23 +42,23 @@ struct TraitResolveCommon {
             return ord(a, b) == OrdLess;
         }
 
-        Ordering ord(const key_t& a, const ref_t& b) const;
+        Ordering ord(const key_t& a, const refT& b) const;
 
-        bool operator()(const key_t& a, const ref_t& b) const {
+        bool operator()(const key_t& a, const refT& b) const {
             return ord(a, b) == OrdLess;
         }
 
-        bool operator()(const ref_t& a, const key_t& b) const {
+        bool operator()(const refT& a, const key_t& b) const {
             return ord(b, a) == OrdGreater;
         }
 
-        Ordering ord(const key_t& a, const ref_sp_t& b) const;
+        Ordering ord(const key_t& a, const refSpT& b) const;
 
-        bool operator()(const key_t& a, const ref_sp_t& b) const {
+        bool operator()(const key_t& a, const refSpT& b) const {
             return ord(a, b) == OrdLess;
         }
 
-        bool operator()(const ref_sp_t& a, const key_t& b) const {
+        bool operator()(const refSpT& a, const key_t& b) const {
             return ord(b, a) == OrdGreater;
         }
     };
@@ -100,7 +100,7 @@ struct TraitResolveCommon {
     /// </summary>
     const ::HIR::TypeData* getConstParamType(const Span& sp, unsigned binding) const;
 
-    void prep_indexes(const Span& sp);
+    void prepIndexes(const Span& sp);
 
 protected:
     void prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef longTy, ::HIR::TypeRef short_ty);

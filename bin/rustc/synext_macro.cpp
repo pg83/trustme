@@ -199,10 +199,10 @@ namespace {
 
     AsmCommon::RegisterClass getRegClassRiscv(const Span& sp, const RcString& str) {
         if (str == "reg") {
-            return AsmCommon::RegisterClass::riscv_reg;
+            return AsmCommon::RegisterClass::riscvReg;
         }
         if (str == "freg") {
-            return AsmCommon::RegisterClass::riscv_freg;
+            return AsmCommon::RegisterClass::riscvFreg;
         }
         ERROR(sp, E0000, "Unknown register for riscv64 - `" << str << "`");
     }
@@ -229,14 +229,14 @@ public:
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
-        std::vector<std::pair<Span, std::string>> raw_lines;
+        std::vector<std::pair<Span, std::string>> rawLines;
         do {
             auto ps = lex.start_span();
             auto attrs = ParseItemAttrs(lex);
             auto text = getString(sp, lex, crate, mod);
             auto sp = lex.endSpan(ps);
             if (checkCfgAttrs(attrs)) {
-                raw_lines.push_back(std::make_pair(sp, std::move(text)));
+                rawLines.push_back(std::make_pair(sp, std::move(text)));
             }
 
             if (lex.lookahead(0) == TOK_EOF) {
@@ -264,42 +264,42 @@ public:
 
                     if (tok.ident().name == "pure") {
                         if (options.pure) {
-                            ERROR(lex.point_span(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
                         }
                         options.pure = 1;
                     } else if (tok.ident().name == "nomem") {
                         if (options.nomem) {
-                            ERROR(lex.point_span(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
                         }
                         options.nomem = 1;
                     } else if (tok.ident().name == "readonly") {
                         if (options.readonly) {
-                            ERROR(lex.point_span(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
                         }
                         options.readonly = 1;
                     } else if (tok.ident().name == "preserves_flags") {
-                        if (options.preserves_flags) {
-                            ERROR(lex.point_span(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        if (options.preservesFlags) {
+                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
                         }
-                        options.preserves_flags = 1;
+                        options.preservesFlags = 1;
                     } else if (tok.ident().name == "noreturn") {
                         if (options.noreturn) {
-                            ERROR(lex.point_span(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
                         }
                         options.noreturn = 1;
                     } else if (tok.ident().name == "nostack") {
                         if (options.nostack) {
-                            ERROR(lex.point_span(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
                         }
                         options.nostack = 1;
                     } else if (tok.ident().name == "att_syntax") {
                         if (options.attSyntax) {
-                            ERROR(lex.point_span(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
                         }
                         // TODO: x86(-64) only
                         options.attSyntax = 1;
                     } else {
-                        ERROR(lex.point_span(), E0000, "Unknown asm option - " << tok.ident().name);
+                        ERROR(lex.pointSpan(), E0000, "Unknown asm option - " << tok.ident().name);
                     }
 
                     if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
@@ -319,13 +319,13 @@ public:
                 v = getTokIdentRword(lex);
             }
 
-            AST::ExprNodeAsm2::Param param_spec;
+            AST::ExprNodeAsm2::Param paramSpec;
             if (v == "const") {
                 auto e = ParseExpr0(lex);
-                param_spec = AST::ExprNodeAsm2::Param::make_Const(std::move(e));
+                paramSpec = AST::ExprNodeAsm2::Param::make_Const(std::move(e));
             } else if (v == "sym") {
                 auto p = ParsePath(lex, PATH_GENERIC_EXPR);
-                param_spec = AST::ExprNodeAsm2::Param::make_Sym(std::move(p));
+                paramSpec = AST::ExprNodeAsm2::Param::make_Sym(std::move(p));
             } else {
                 AsmCommon::Direction dir;
                 if (v == "inlateout") {
@@ -344,12 +344,12 @@ public:
 
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
                 GET_TOK(tok, lex);
-                AsmCommon::RegisterSpec reg_spec;
+                AsmCommon::RegisterSpec regSpec;
                 if (tok.type() == TOK_IDENT) {
                     //Target_GetCurSpec().m_arch
-                    reg_spec = AsmCommon::RegisterSpec::make_Class(getRegClass(lex.point_span(), tok.ident().name));
+                    regSpec = AsmCommon::RegisterSpec::make_Class(getRegClass(lex.pointSpan(), tok.ident().name));
                 } else if (tok.type() == TOK_STRING) {
-                    reg_spec = AsmCommon::RegisterSpec::make_Explicit(tok.str());
+                    regSpec = AsmCommon::RegisterSpec::make_Explicit(tok.str());
                 } else {
                     throw ParseError::Unexpected(lex, tok, {TOK_IDENT, TOK_STRING});
                 }
@@ -365,7 +365,7 @@ public:
                         default:
                             ERROR(sp, E0000, "Invalid use of _ in asm!");
                     }
-                    param_spec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(reg_spec), nullptr, nullptr});
+                    paramSpec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), nullptr, nullptr});
                 } else {
                     auto e = ParseExpr0(lex);
 
@@ -381,20 +381,20 @@ public:
                         GET_TOK(tok, lex);
                         if (lex.lookahead(0) == TOK_UNDERSCORE) {
                             GET_TOK(tok, lex);
-                            param_spec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(reg_spec), mv$(e), nullptr});
+                            paramSpec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), nullptr});
                         } else {
                             auto e2 = ParseExpr0(lex);
-                            param_spec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(reg_spec), mv$(e), mv$(e2)});
+                            paramSpec = AST::ExprNodeAsm2::Param::make_Reg({dir, std::move(regSpec), mv$(e), mv$(e2)});
                         }
                     } else {
                         // Note: Different variant to handle `inout(reg) foo` without duplicating
-                        param_spec = AST::ExprNodeAsm2::Param::make_RegSingle({dir, std::move(reg_spec), mv$(e)});
+                        paramSpec = AST::ExprNodeAsm2::Param::make_RegSingle({dir, std::move(regSpec), mv$(e)});
                     }
                 }
             }
 
             names.push_back(bindingName);
-            params.push_back(std::move(param_spec));
+            params.push_back(std::move(paramSpec));
 
             GET_TOK(tok, lex);
         }
@@ -414,7 +414,7 @@ public:
 
         unsigned nextIndex = 0;
         std::vector<AsmCommon::Line> lines;
-        for (const auto& e : raw_lines) {
+        for (const auto& e : rawLines) {
             const auto& sp = e.first;
             const auto& text = e.second;
 
@@ -828,13 +828,13 @@ class CExpanderUnstableColumn: public ExpandProcMacro {
 
 class CExpanderModulePath: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
-        ::std::string path_str;
-        path_str += crate.crateNameSet;
+        ::std::string pathStr;
+        pathStr += crate.crateNameSet;
         for (const auto& comp : mod.path().nodes) {
-            path_str += "::";
-            path_str += comp.c_str();
+            pathStr += "::";
+            pathStr += comp.c_str();
         }
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(path_str), {}))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(pathStr), {}))));
     }
 };
 
@@ -878,7 +878,7 @@ namespace {
         bool width_is_arg = false;
         unsigned int width = 0;
 
-        bool prec_is_arg = false;
+        bool precIsArg = false;
         unsigned int prec = 0;
 
         bool operator==(const FmtArgs& x) const {
@@ -896,7 +896,7 @@ namespace {
             CMP(zero_pad);
             CMP(width_is_arg);
             CMP(width);
-            CMP(prec_is_arg);
+            CMP(precIsArg);
             CMP(prec);
             return false;
         }
@@ -939,7 +939,7 @@ namespace {
             }
             os << ")";
             os << "Width(" << (x.width_is_arg ? "$" : "") << x.width << ")";
-            os << "Prec(" << (x.prec_is_arg ? "$" : "") << x.prec << ")";
+            os << "Prec(" << (x.precIsArg ? "$" : "") << x.prec << ")";
             return os;
         }
     };
@@ -960,7 +960,7 @@ namespace {
         FmtArgs args;
     };
 
-    uint32_t parse_utf8(const char* s, int& outLen) {
+    uint32_t parseUtf8(const char* s, int& outLen) {
         uint8_t v1 = s[0];
         if (v1 < 0x80) {
             outLen = 1;
@@ -1020,7 +1020,7 @@ namespace {
     /// Parse a format string into a sequence of fragments.
     ///
     /// Returns a list of fragments, and the remaining free text after the last format sequence
-    ::std::tuple<::std::vector<FmtFrag>, ::std::string> parse_format_string(const Span& sp, const ::std::string& format_string, ::std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
+    ::std::tuple<::std::vector<FmtFrag>, ::std::string> parseFormatString(const Span& sp, const ::std::string& format_string, ::std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
         //unsigned int n_named = named.size();
         unsigned int nextFree = 0;
 
@@ -1044,8 +1044,8 @@ namespace {
         };
 
         const char* s = format_string.c_str();
-        const char* const s_end = s + format_string.length();
-        for (; s < s_end; s++) {
+        const char* const sEnd = s + format_string.length();
+        for (; s < sEnd; s++) {
             if (*s != '{') {
                 if (*s == '}') {
                     s++;
@@ -1068,7 +1068,7 @@ namespace {
 
                 // Debugging: A view of the formatting fragment
                 const char* s2 = s;
-                while (s2 < s_end && *s2 != '}') {
+                while (s2 < sEnd && *s2 != '}') {
                     s2++;
                 }
                 auto fmtFragStr = ::std::string_view{s, s2};
@@ -1112,9 +1112,9 @@ namespace {
                     // - Padding character, a single unicode codepoint followed by '<'/'^'/'>'
                     {
                         int nextCI;
-                        uint32_t ch = parse_utf8(s, nextCI);
+                        uint32_t ch = parseUtf8(s, nextCI);
                         char nextC = s[nextCI];
-                        if (s + nextCI <= s_end && ch != '}' && (nextC == '<' || nextC == '^' || nextC == '>')) {
+                        if (s + nextCI <= sEnd && ch != '}' && (nextC == '<' || nextC == '^' || nextC == '>')) {
                             args.alignChar = ch;
                             s += nextCI;
                         }
@@ -1196,7 +1196,7 @@ namespace {
                         s++;
                         // '*' - Use next argument
                         if (*s == '*') {
-                            args.prec_is_arg = true;
+                            args.precIsArg = true;
                             if (nextFree == nFree) {
                                 ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nFree + 1);
                             }
@@ -1212,7 +1212,7 @@ namespace {
                             args.prec = val;
 
                             if (*s == '$') {
-                                args.prec_is_arg = true;
+                                args.precIsArg = true;
                                 s++;
                             } else {
                                 //args.prec_is_arg = false;
@@ -1222,12 +1222,12 @@ namespace {
                             // - Otherwise keep the ident around for the formatter
 
                             const char* start = s;
-                            while (s != s_end && (isalnum(*s) || *s == '_' || (*s < 0 || *s > 127))) {
+                            while (s != sEnd && (isalnum(*s) || *s == '_' || (*s < 0 || *s > 127))) {
                                 s++;
                             }
                             if (*s == '$') {
                                 args.prec = getNamed(RcString::newInterned(start, s - start));
-                                args.prec_is_arg = true;
+                                args.precIsArg = true;
 
                                 s++;
                             } else {
@@ -1240,7 +1240,7 @@ namespace {
                         }
                     }
 
-                    if (s == s_end) {
+                    if (s == sEnd) {
                         ERROR(sp, E0000, "Unexpected end of formatting string");
                     }
 
@@ -1327,7 +1327,7 @@ namespace {
         return Token(TOK_IDENT, RcString::newInterned(s));
     }
 
-    void push_path(::std::vector<TokenTree>& toks, const AST::Crate& crate, ::std::initializer_list<const char*> il) {
+    void pushPath(::std::vector<TokenTree>& toks, const AST::Crate& crate, ::std::initializer_list<const char*> il) {
         AST::AbsolutePath ap;
         // TODO: Inject a path fragment (interpolated path), to avoid edition parsing quirks
         switch (crate.loadStd) {
@@ -1350,11 +1350,11 @@ namespace {
         toks.push_back(Token(InterpolatedFragment(std::move(ap))));
     }
 
-    void push_toks(::std::vector<TokenTree>& toks, Token t1) {
+    void pushToks(::std::vector<TokenTree>& toks, Token t1) {
         toks.push_back(mv$(t1));
     }
 
-    void push_toks(::std::vector<TokenTree>& toks, Token t1, Token t2) {
+    void pushToks(::std::vector<TokenTree>& toks, Token t1, Token t2) {
         toks.push_back(mv$(t1));
         toks.push_back(mv$(t2));
     }
@@ -1364,7 +1364,7 @@ namespace {
     //    toks.push_back( mv$(t2) );
     //    toks.push_back( mv$(t3) );
     //}
-    void push_toks(::std::vector<TokenTree>& toks, Token t1, Token t2, Token t3, Token t4) {
+    void pushToks(::std::vector<TokenTree>& toks, Token t1, Token t2, Token t3, Token t4) {
         toks.push_back(mv$(t1));
         toks.push_back(mv$(t2));
         toks.push_back(mv$(t3));
@@ -1425,7 +1425,7 @@ namespace {
         // - Parse the format string
         ::std::vector<FmtFrag> fragments;
         ::std::string tail;
-        ::std::tie(fragments, tail) = parse_format_string(formatStringSp, format_string, namedArgsIndex, freeArgs.size(), namedArgs, h);
+        ::std::tie(fragments, tail) = parseFormatString(formatStringSp, format_string, namedArgsIndex, freeArgs.size(), namedArgs, h);
         if (addNewline) {
             tail += "\n";
         }
@@ -1513,7 +1513,7 @@ namespace {
                             newFnSs << *s;
                         }
                     }
-                    push_path(toks, crate, {"fmt", "rt", "Argument", newFnSs.str().c_str()});
+                    pushPath(toks, crate, {"fmt", "rt", "Argument", newFnSs.str().c_str()});
                     toks.push_back(Token(TOK_PAREN_OPEN));
                     toks.push_back(ident(FMT("a" << frag.argIndex).c_str()));
                     toks.push_back(Token(TOK_PAREN_CLOSE));
@@ -1525,7 +1525,7 @@ namespace {
 
         if (isSimple) {
             // ::fmt::Arguments::new_v1
-            push_path(toks, crate, {"fmt", "Arguments", "new_v1"});
+            pushPath(toks, crate, {"fmt", "Arguments", "new_v1"});
             // (
             toks.push_back(TokenTree(TOK_PAREN_OPEN));
             {
@@ -1544,7 +1544,7 @@ namespace {
 
             // Use new_v1_formatted
             // - requires creating more entries in the `args` list to cover multiple formatters for one value
-            push_path(toks, crate, {"fmt", "Arguments", "new_v1_formatted"});
+            pushPath(toks, crate, {"fmt", "Arguments", "new_v1_formatted"});
             // (
             toks.push_back(TokenTree(TOK_PAREN_OPEN));
             {
@@ -1560,16 +1560,16 @@ namespace {
                 toks.push_back(TokenTree(TOK_AMP));
                 toks.push_back(TokenTree(TOK_SQUARE_OPEN));
                 for (const auto& frag : fragments) {
-                    push_path(toks, crate, {"fmt", "rt", "Placeholder"});
+                    pushPath(toks, crate, {"fmt", "rt", "Placeholder"});
                     toks.push_back(TokenTree(TOK_BRACE_OPEN));
 
-                    push_toks(toks, ident("position"), TOK_COLON);
-                    push_toks(toks, Token(U128(&frag - fragments.data()), CORETYPE_UINT));
-                    push_toks(toks, TOK_COMMA);
+                    pushToks(toks, ident("position"), TOK_COLON);
+                    pushToks(toks, Token(U128(&frag - fragments.data()), CORETYPE_UINT));
+                    pushToks(toks, TOK_COMMA);
 
                     // Flags
                     {
-                        push_toks(toks, ident("flags"), TOK_COLON);
+                        pushToks(toks, ident("flags"), TOK_COLON);
 
                         struct Flag {
                             enum V {
@@ -1620,7 +1620,7 @@ namespace {
                         if (frag.args.width_is_arg || frag.args.width != 0) {
                             flags |= 1 << 27;
                         }
-                        if (frag.args.prec_is_arg || frag.args.prec != 0) {
+                        if (frag.args.precIsArg || frag.args.prec != 0) {
                             flags |= 1 << 28;
                         }
 
@@ -1641,44 +1641,44 @@ namespace {
                         }
 
                         flags |= 1 << 31;
-                        push_toks(toks, Token(U128(flags), CORETYPE_U32));
-                        push_toks(toks, TOK_COMMA);
+                        pushToks(toks, Token(U128(flags), CORETYPE_U32));
+                        pushToks(toks, TOK_COMMA);
                     }
                     // Counts (precision and width)
                     {
-                        auto push_path_count = [&](const char* variant) {
-                            push_path(toks, crate, {"fmt", "rt", "Count", variant});
+                        auto pushPathCount = [&](const char* variant) {
+                            pushPath(toks, crate, {"fmt", "rt", "Count", variant});
                         };
 
-                        push_toks(toks, ident("precision"), TOK_COLON);
-                        if (frag.args.prec_is_arg || frag.args.prec != 0) {
-                            push_path_count("Is");
-                            push_toks(toks, TOK_PAREN_OPEN);
-                            if (frag.args.prec_is_arg) {
-                                push_toks(toks, TOK_STAR, ident(FMT("a" << frag.args.prec).c_str()));
-                                push_toks(toks, TOK_RWORD_AS, ident("u16"));
+                        pushToks(toks, ident("precision"), TOK_COLON);
+                        if (frag.args.precIsArg || frag.args.prec != 0) {
+                            pushPathCount("Is");
+                            pushToks(toks, TOK_PAREN_OPEN);
+                            if (frag.args.precIsArg) {
+                                pushToks(toks, TOK_STAR, ident(FMT("a" << frag.args.prec).c_str()));
+                                pushToks(toks, TOK_RWORD_AS, ident("u16"));
                             } else {
-                                push_toks(toks, Token(U128(frag.args.prec), CORETYPE_U16));
+                                pushToks(toks, Token(U128(frag.args.prec), CORETYPE_U16));
                             }
                             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
                         } else {
-                            push_path_count("Implied");
+                            pushPathCount("Implied");
                         }
                         toks.push_back(TokenTree(TOK_COMMA));
 
-                        push_toks(toks, ident("width"), TOK_COLON);
+                        pushToks(toks, ident("width"), TOK_COLON);
                         if (frag.args.width_is_arg || frag.args.width != 0) {
-                            push_path_count("Is");
-                            push_toks(toks, TOK_PAREN_OPEN);
+                            pushPathCount("Is");
+                            pushToks(toks, TOK_PAREN_OPEN);
                             if (frag.args.width_is_arg) {
-                                push_toks(toks, TOK_STAR, ident(FMT("a" << frag.args.width).c_str()));
-                                push_toks(toks, TOK_RWORD_AS, ident("u16"));
+                                pushToks(toks, TOK_STAR, ident(FMT("a" << frag.args.width).c_str()));
+                                pushToks(toks, TOK_RWORD_AS, ident("u16"));
                             } else {
-                                push_toks(toks, Token(U128(frag.args.width), CORETYPE_U16));
+                                pushToks(toks, Token(U128(frag.args.width), CORETYPE_U16));
                             }
                             toks.push_back(TokenTree(TOK_PAREN_CLOSE));
                         } else {
-                            push_path_count("Implied");
+                            pushPathCount("Implied");
                         }
                         toks.push_back(TokenTree(TOK_COMMA));
                     }

@@ -201,7 +201,7 @@ namespace AST {
         return OrdEqual;
     }
 
-    void PathNode::print_pretty(::std::ostream& os, bool isTypeContext) const {
+    void PathNode::printPretty(::std::ostream& os, bool isTypeContext) const {
         os << mName;
         if (!mParams.is_empty()) {
             if (!isTypeContext) {
@@ -212,7 +212,7 @@ namespace AST {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const PathNode& pn) {
-        pn.print_pretty(os, false);
+        pn.printPretty(os, false);
         return os;
     }
 
@@ -293,7 +293,7 @@ namespace AST {
         return OrdEqual;
     }
 
-    void Path::print_pretty(::std::ostream& os, bool isTypeContext, bool isDebug) const {
+    void Path::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) const {
     TU_MATCH_HDRA( (cls), {)
     TU_ARMA(Invalid, ent) {
                 os << "/*inv*/";
@@ -319,21 +319,21 @@ namespace AST {
                     if (&n != &ent.nodes[0]) {
                         os << "::";
                     }
-                    n.print_pretty(os, isTypeContext);
+                    n.printPretty(os, isTypeContext);
                 }
             }
             TU_ARMA(Self, ent) {
                 os << "self";
                 for (const auto& n : ent.nodes) {
                     os << "::";
-                    n.print_pretty(os, isTypeContext);
+                    n.printPretty(os, isTypeContext);
                 }
             }
             TU_ARMA(Super, ent) {
                 os << "super";
                 for (const auto& n : ent.nodes) {
                     os << "::";
-                    n.print_pretty(os, isTypeContext);
+                    n.printPretty(os, isTypeContext);
                 }
             }
             TU_ARMA(Absolute, ent) {
@@ -347,7 +347,7 @@ namespace AST {
                 }
                 for (const auto& n : ent.nodes) {
                     os << "::";
-                    n.print_pretty(os, isTypeContext);
+                    n.printPretty(os, isTypeContext);
                 }
             }
             TU_ARMA(UFCS, ent) {
@@ -365,7 +365,7 @@ namespace AST {
                 }
                 for (const auto& n : ent.nodes) {
                     os << "::";
-                    n.print_pretty(os, isTypeContext);
+                    n.printPretty(os, isTypeContext);
                 }
             }
     }
@@ -401,7 +401,7 @@ namespace AST {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Path& path) {
-        path.print_pretty(os, false, true);
+        path.printPretty(os, false, true);
         return os;
     }
 

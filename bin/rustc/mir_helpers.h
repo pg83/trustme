@@ -32,7 +32,7 @@ namespace MIR {
 #define MIR_BUG(state, ...)                      \
     do {                                         \
         const char* __fcn = __FUNCTION__;        \
-        (state).print_bug([&](auto& _os) {       \
+        (state).printBug([&](auto& _os) {       \
             _os << __fcn << ": " << __VA_ARGS__; \
         });                                      \
         throw "";                                \
@@ -40,13 +40,13 @@ namespace MIR {
 #define MIR_ASSERT(state, cnd, ...)                                                                \
     do {                                                                                           \
         if (!(cnd))                                                                                \
-            (state).print_bug([&](auto& _os) {                                                     \
+            (state).printBug([&](auto& _os) {                                                     \
                 _os << __FILE__ << ":" << __LINE__ << " ASSERT " #cnd " failed - " << __VA_ARGS__; \
             });                                                                                    \
     } while (0)
 #define MIR_TODO(state, ...)                                           \
     do {                                                               \
-        (state).print_todo([&](auto& _os) {                            \
+        (state).printTodo([&](auto& _os) {                            \
             _os << __FILE__ << ":" << __LINE__ << ": " << __VA_ARGS__; \
         });                                                            \
         throw "";                                                      \
@@ -107,15 +107,15 @@ namespace MIR {
 
         void fmtPos(::std::ostream& os, bool includePath = false) const;
 
-        void print_bug(::std::function<void(::std::ostream& os)> cb) const {
-            print_msg("ERROR", cb);
+        void printBug(::std::function<void(::std::ostream& os)> cb) const {
+            printMsg("ERROR", cb);
         }
 
-        void print_todo(::std::function<void(::std::ostream& os)> cb) const {
-            print_msg("TODO", cb);
+        void printTodo(::std::function<void(::std::ostream& os)> cb) const {
+            printMsg("TODO", cb);
         }
 
-        void print_msg(const char* tag, ::std::function<void(::std::ostream& os)> cb) const;
+        void printMsg(const char* tag, ::std::function<void(::std::ostream& os)> cb) const;
 
         const ::MIR::BasicBlock& getBlock(::MIR::BasicBlockId id) const;
 
@@ -318,7 +318,7 @@ namespace MIR {
                         rv |= visit_lvalue(se.val, ValUsage::Read);
                     }
                     TU_ARMA(MakeDst, se) {
-                        rv |= visit_param(se.ptr_val, ValUsage::Move);
+                        rv |= visit_param(se.ptrVal, ValUsage::Move);
                         if (TU_TEST2(se.metaVal, Constant, , ItemAddr, .get() == nullptr)) {
                         } else {
                             rv |= visit_param(se.metaVal, ValUsage::Move);
@@ -461,8 +461,8 @@ namespace MIR {
                 }
                 for(auto& v : e.args)
                     rv |= visit_param(v, ValUsage::Read);
-                rv |= visit_lvalue(e.ret_val, ValUsage::Write);
-                rv |= visit_block_id(e.ret_block);
+                rv |= visit_lvalue(e.retVal, ValUsage::Write);
+                rv |= visit_block_id(e.retBlock);
                 TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, rv |= visit_block_id(target);)
                     }
             }

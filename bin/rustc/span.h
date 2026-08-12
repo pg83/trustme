@@ -67,7 +67,7 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const Span& sp);
 
 private:
-    void print_span_message(::std::function<void(::std::ostream&)> tag, ::std::function<void(::std::ostream&)> msg) const;
+    void printSpanMessage(::std::function<void(::std::ostream&)> tag, ::std::function<void(::std::ostream&)> msg) const;
 };
 
 struct ProtoSpan {
@@ -83,7 +83,7 @@ struct SpanInner {
     friend struct Span;
 
 protected:
-    size_t reference_count;
+    size_t referenceCount;
 
 public:
     Span parent_span;

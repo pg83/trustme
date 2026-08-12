@@ -35,7 +35,7 @@ public:
 };
 
 template <typename T>
-PopOnDrop<T> push_and_pop_at_end(std::vector<T>& stack, T ent) {
+PopOnDrop<T> pushAndPopAtEnd(std::vector<T>& stack, T ent) {
     stack.push_back(std::move(ent));
     return PopOnDrop<T>(stack);
 }

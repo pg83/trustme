@@ -10,7 +10,7 @@ Options::Options()
     : pure(0)
     , nomem(0)
     , readonly(0)
-    , preserves_flags(0)
+    , preservesFlags(0)
     , noreturn(0)
     , nostack(0)
     , attSyntax(0) {
@@ -22,7 +22,7 @@ bool Options::any() const {
     _(pure);
     _(nomem);
     _(readonly);
-    _(preserves_flags);
+    _(preservesFlags);
     _(noreturn);
     _(nostack);
     _(attSyntax);
@@ -38,7 +38,7 @@ void Options::fmt(std::ostream& os) const {
     _(pure);
     _(nomem);
     _(readonly);
-    _(preserves_flags);
+    _(preservesFlags);
     _(noreturn);
     _(nostack);
     _(attSyntax);
@@ -53,7 +53,7 @@ bool Options::operator==(const Options& x) const {
     _(pure);
     _(nomem);
     _(readonly);
-    _(preserves_flags);
+    _(preservesFlags);
     _(noreturn);
     _(nostack);
     _(attSyntax);
@@ -108,9 +108,9 @@ const char* to_string(const RegisterClass& c) {
             return "zmm_reg";
         case RegisterClass::x86_kreg:
             return "kreg";
-        case RegisterClass::riscv_reg:
+        case RegisterClass::riscvReg:
             return "reg";
-        case RegisterClass::riscv_freg:
+        case RegisterClass::riscvFreg:
             return "freg";
     }
     throw "";

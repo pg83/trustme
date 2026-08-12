@@ -19,7 +19,7 @@ void ::MIR::TypeResolve::fmtPos(::std::ostream& os, bool includePath /*=false*/)
     os << ": ";
 }
 
-void ::MIR::TypeResolve::print_msg(const char* tag, ::std::function<void(::std::ostream& os)> cb) const {
+void ::MIR::TypeResolve::printMsg(const char* tag, ::std::function<void(::std::ostream& os)> cb) const {
     auto& os = ::std::cerr;
     os << "MIR " << tag << ": ";
     fmtPos(os, true);
@@ -627,7 +627,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(::MIR::TypeResolve& state, cons
         state.set_cur_stmt_term(bbIdx);
 
         // Only Call can assign a value
-        TU_IFLET(::MIR::Terminator, bb.terminator, Call, te, assignedLvalue(te.ret_block, 0, te.ret_val);)
+        TU_IFLET(::MIR::Terminator, bb.terminator, Call, te, assignedLvalue(te.retBlock, 0, te.retVal);)
     }
 
     // Dump out variable lifetimes.
@@ -805,7 +805,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             isCopy = mirRes.mResolve.type_is_copy(mir_res.sp, mirRes.getLvalueType(tmp, lv));
         }
 
-        void run_block(size_t bbIdx, size_t stmt_idx, State state) {
+        void runBlock(size_t bbIdx, size_t stmt_idx, State state) {
             const auto& bb = fcn.blocks.at(bbIdx);
             assert(stmt_idx <= bb.statements.size());
 
@@ -996,7 +996,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     statesToDo.push_back(::std::make_pair(te.target, mv$(state)));
                 }
                 TU_ARMA(Call, te) {
-                    if (te.ret_val == mLv) {
+                    if (te.retVal == mLv) {
                         DEBUG(mirRes << "Assigned (Call), return");
                         // Value assigned, just apply
                         state.finalise(stmt_idx);
@@ -1005,20 +1005,20 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     TU_IFLET(::MIR::UnwindAction, te.unwind, Cleanup, target,
                         statesToDo.push_back(::std::make_pair(target, state.clone()));
                     )
-                    statesToDo.push_back(::std::make_pair(te.ret_block, mv$(state)));
+                    statesToDo.push_back(::std::make_pair(te.retBlock, mv$(state)));
                 }
             }
         }
     };
 
     Runner runner(mir_res, fcn, bbIdx, stmt_idx, lv, block_offsets, vl);
-    ::std::vector<::std::pair<size_t, State>> post_check_list;
+    ::std::vector<::std::pair<size_t, State>> postCheckList;
 
     // TODO: Have a bitmap of visited statements. If a visted statement is hit, stop the current state
     // - Use the same rules as loopback.
 
     // Fill the first statement, to ensure that there is at least one bit set.
-    runner.run_block(bbIdx, stmt_idx, State(block_offsets, vl, bbIdx, stmt_idx));
+    runner.runBlock(bbIdx, stmt_idx, State(block_offsets, vl, bbIdx, stmt_idx));
 
     while (!runner.statesToDo.empty()) {
         auto bbIdx = runner.statesToDo.back().first;
@@ -1042,7 +1042,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             } else {
                 // Put this state elsewhere and check if the variable is known valid at that point.
                 DEBUG("Looped (after last read), push for later");
-                post_check_list.push_back(::std::make_pair(bbIdx, mv$(state)));
+                postCheckList.push_back(::std::make_pair(bbIdx, mv$(state)));
                 continue;
             }
         }
@@ -1056,13 +1056,13 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             continue;
         }
 
-        runner.run_block(bbIdx, 0, mv$(state));
+        runner.runBlock(bbIdx, 0, mv$(state));
     }
 
     // Iterate while there are items in the post_check list
-    while (!post_check_list.empty()) {
+    while (!postCheckList.empty()) {
         bool change = false;
-        for (auto it = post_check_list.begin(); it != post_check_list.end();) {
+        for (auto it = postCheckList.begin(); it != postCheckList.end();) {
             auto bbIdx = it->first;
             auto& state = it->second;
             // If the target of this loopback is valid, then the entire route to the loopback must have been valid
@@ -1072,7 +1072,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 state.markRead(0);
                 state.finalise(0);
 
-                it = post_check_list.erase(it);
+                it = postCheckList.erase(it);
             } else {
                 ++it;
             }
@@ -1110,11 +1110,11 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
     //  > Changes are noticed by recording in the state structure when it triggers a change in the lifetime
     //    map.
     struct Position {
-        size_t path_index = 0; // index into the block path.
+        size_t pathIndex = 0; // index into the block path.
         unsigned int stmt_idx = 0;
 
         bool operator==(const Position& x) const {
-            return path_index == x.path_index && stmt_idx == x.stmt_idx;
+            return pathIndex == x.pathIndex && stmt_idx == x.stmt_idx;
         }
     };
 
@@ -1198,7 +1198,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 if (lft.is_borrowed()) {
                     return false;
                 }
-                auto endIdx = block_offsets.at(val_state.blockPath.at(lft.end.path_index)) + lft.end.stmt_idx;
+                auto endIdx = block_offsets.at(val_state.blockPath.at(lft.end.pathIndex)) + lft.end.stmt_idx;
 
                 auto it = ::std::find(seen.begin(), seen.end(), endIdx);
                 return (it == seen.end());
@@ -1226,7 +1226,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 if (lft.end == Position{~0u, ~0u}) {
                     return false;
                 }
-                auto endIdx = block_offsets.at(val_state.blockPath.at(lft.end.path_index)) + lft.end.stmt_idx;
+                auto endIdx = block_offsets.at(val_state.blockPath.at(lft.end.pathIndex)) + lft.end.stmt_idx;
 
                 auto it = ::std::find(seen.begin(), seen.end(), endIdx);
                 if (it == seen.end()) {
@@ -1263,12 +1263,12 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         // Fill alive time in the bitmap
         // TODO: Maybe also store the range (as a sequence of {block,start,end})
         auto addLifetimeS = [&](State& val_state, const ::MIR::LValue& lv, const Position& start, const Position& end) {
-            assert(start.path_index <= end.path_index);
-            assert(start.path_index < end.path_index || start.stmt_idx <= end.stmt_idx);
-            if (start.path_index == end.path_index && start.stmt_idx == end.stmt_idx) {
+            assert(start.pathIndex <= end.pathIndex);
+            assert(start.pathIndex < end.pathIndex || start.stmt_idx <= end.stmt_idx);
+            if (start.pathIndex == end.pathIndex && start.stmt_idx == end.stmt_idx) {
                 return;
             }
-            DEBUG("[add_lifetime] " << lv << " (" << start.path_index << "," << start.stmt_idx << ") -- (" << end.path_index << "," << end.stmt_idx << ")");
+            DEBUG("[add_lifetime] " << lv << " (" << start.pathIndex << "," << start.stmt_idx << ") -- (" << end.pathIndex << "," << end.stmt_idx << ")");
             ValueLifetime* lft;
             if (const auto* e = lv.opt_Temporary()) {
                 lft = &temporary_lifetimes[e->idx];
@@ -1282,8 +1282,8 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             // Fill lifetime map for this temporary in the indicated range
             bool didSet = false;
             unsigned int j = start.stmt_idx;
-            unsigned int i = start.path_index;
-            while (i <= end.path_index && i < val_state.blockPath.size()) {
+            unsigned int i = start.pathIndex;
+            while (i <= end.pathIndex && i < val_state.blockPath.size()) {
                 auto bbIdx = val_state.blockPath.at(i);
                 const auto& bb = fcn.blocks[bbIdx];
                 MIR_ASSERT(state, j <= bb.statements.size(), "");
@@ -1296,7 +1296,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     didSet = true;
                 }
 
-                if (i == end.path_index && j == (end.stmt_idx != ~0u ? end.stmt_idx : bb.statements.size())) {
+                if (i == end.pathIndex && j == (end.stmt_idx != ~0u ? end.stmt_idx : bb.statements.size())) {
                     break;
                 }
 
@@ -1311,7 +1311,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
             // - If the above set a new bit, increment `val_state.cur_change_idx`
             if (didSet) {
-                DEBUG("[add_lifetime] " << lv << " (" << start.path_index << "," << start.stmt_idx << ") -- (" << end.path_index << "," << end.stmt_idx << ") - New information");
+                DEBUG("[add_lifetime] " << lv << " (" << start.pathIndex << "," << start.stmt_idx << ") -- (" << end.pathIndex << "," << end.stmt_idx << ") - New information");
                 val_state.curChangeIdx += 1;
             }
         };
@@ -1344,7 +1344,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 // - If so, mark as valid at the end of the current block
                 auto bmIdx = block_offsets[newBbIdx];
                 Position cur_pos;
-                cur_pos.path_index = val_state.blockPath.size() - 1;
+                cur_pos.pathIndex = val_state.blockPath.size() - 1;
                 cur_pos.stmt_idx = fcn.blocks[bbIdx].statements.size();
                 for (unsigned i = 0; i < fcn.temporaries.size(); i++) {
                     if (!newState.tmp_ends[i].is_empty() && temporary_lifetimes[i].stmt_bitmap[bmIdx]) {
@@ -1400,7 +1400,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         }
 
         Position cur_pos;
-        cur_pos.path_index = val_state.blockPath.size() - 1;
+        cur_pos.pathIndex = val_state.blockPath.size() - 1;
         cur_pos.stmt_idx = 0;
         auto lvalueRead = [&](const ::MIR::LValue& lv) {
             ProtoLifetime* slot;
@@ -1513,8 +1513,8 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
              TU_IFLET(::MIR::UnwindAction, e.unwind, Cleanup, target, addToVisit(target, val_state.clone());)
 
              // TODO: If the function returns !, don't follow the ret_block
-             lvalueSet(e.ret_val);
-             addToVisit(e.ret_block, mv$(val_state));)
+             lvalueSet(e.retVal);
+             addToVisit(e.retBlock, mv$(val_state));)
         )
     }
 

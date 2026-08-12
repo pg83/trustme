@@ -1,7 +1,7 @@
 #include "floats.h"
 
-FloatValue parse_float_value(const char* text) {
-    return Float128::parse_decimal(text);
+FloatValue parseFloatValue(const char* text) {
+    return Float128::parseDecimal(text);
 }
 
 bool floatValueIsNan(FloatValue value) {
@@ -33,7 +33,7 @@ FloatValue floatValueRound(FloatValue value) {
 }
 
 FloatValue floatValueRoundEven(FloatValue value) {
-    return value.round_even();
+    return value.roundEven();
 }
 
 FloatValue floatValueRemainder(FloatValue lhs, FloatValue rhs) {
@@ -48,8 +48,8 @@ FloatValue floatValueMaximumNumber(FloatValue lhs, FloatValue rhs) {
     return Float128::maximumNumber(lhs, rhs);
 }
 
-FloatValue positive_nan_float_value() {
-    return Float128::quiet_nan();
+FloatValue positiveNanFloatValue() {
+    return Float128::quietNan();
 }
 
 std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value) {

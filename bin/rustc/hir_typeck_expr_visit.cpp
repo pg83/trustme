@@ -13,7 +13,7 @@ void TypecheckCode(const typeck::ModuleState& ms, t_args& args, const ::HIR::Typ
 }
 
 namespace typeck {
-    void ModuleState::prepare_from_path(const ::HIR::ItemPath& ip) {
+    void ModuleState::prepareFromPath(const ::HIR::ItemPath& ip) {
         static Span sp;
         ASSERT_BUG(sp, ip.parent, "prepare_from_path with too-short path - " << ip);
 
@@ -99,9 +99,9 @@ namespace {
 
     public:
         void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
-            ms.push_traits(p, mod);
+            ms.pushTraits(p, mod);
             ::HIR::Visitor::visit_module(p, mod);
-            ms.pop_traits(mod);
+            ms.popTraits(mod);
         }
 
         // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
@@ -131,9 +131,9 @@ namespace {
             auto _ = this->ms.set_impl_generics(impl.mParams);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
-            ms.push_traits(impl.srcModule, mod);
+            ms.pushTraits(impl.srcModule, mod);
             ::HIR::Visitor::visit_type_impl(impl);
-            ms.pop_traits(mod);
+            ms.popTraits(mod);
         }
 
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
@@ -144,11 +144,11 @@ namespace {
             auto _ = this->ms.set_impl_generics(impl.mParams);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
-            ms.push_traits(impl.srcModule, mod);
+            ms.pushTraits(impl.srcModule, mod);
             ms.traits.push_back(::std::make_pair(&trait_path, &this->ms.crate.getTraitByPath(Span(), trait_path)));
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
             ms.traits.pop_back();
-            ms.pop_traits(mod);
+            ms.popTraits(mod);
         }
 
         void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
@@ -156,9 +156,9 @@ namespace {
             auto _ = this->ms.set_impl_generics(impl.mParams);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
-            ms.push_traits(impl.srcModule, mod);
+            ms.pushTraits(impl.srcModule, mod);
             ::HIR::Visitor::visit_marker_impl(trait_path, impl);
-            ms.pop_traits(mod);
+            ms.popTraits(mod);
         }
 
         void visit_type(::HIR::TypeRef& ty) override {
@@ -262,7 +262,7 @@ ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::set_item_generi
     itemGenerics = &gps;
     return NullOnDrop<const ::HIR::GenericParams>(itemGenerics);
 }
-void ModuleState::push_traits(::HIR::ItemPath p, const ::HIR::Module& mod) {
+void ModuleState::pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod) {
     auto sp = Span();
     modPaths.push_back(p.getSimplePath());
     DEBUG("Module has " << mod.traits.size() << " in-scope traits");
@@ -273,7 +273,7 @@ void ModuleState::push_traits(::HIR::ItemPath p, const ::HIR::Module& mod) {
         traits.push_back(::std::make_pair(&trait_path, &this->crate.getTraitByPath(sp, trait_path)));
     }
 }
-void ModuleState::pop_traits(const ::HIR::Module& mod) {
+void ModuleState::popTraits(const ::HIR::Module& mod) {
     DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     for (unsigned int i = 0; i < mod.traits.size(); i++) {
         traits.pop_back();

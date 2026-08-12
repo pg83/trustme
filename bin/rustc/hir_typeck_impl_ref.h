@@ -67,7 +67,7 @@ struct ImplRef {
     ::HIR::BoundConstness boundConstness() const;
 
     bool moreSpecificThan(HIR::TypeInterner& types, const ImplRef& other) const;
-    bool overlaps_with(const ::HIR::Crate& crate, const ImplRef& other) const;
+    bool overlapsWith(const ::HIR::Crate& crate, const ImplRef& other) const;
 
     bool hasMagicParams() const;
 

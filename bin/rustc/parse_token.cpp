@@ -370,7 +370,7 @@ struct EscapedString {
             reinterpret_cast<const ::TypeRef*>(mData.as_Fragment())->print(ss, false);
             return ss.str();
         case TOK_INTERPOLATED_PATH:
-            reinterpret_cast<const ::AST::Path*>(mData.as_Fragment())->print_pretty(ss, true);
+            reinterpret_cast<const ::AST::Path*>(mData.as_Fragment())->printPretty(ss, true);
             return ss.str();
         case TOK_INTERPOLATED_PATTERN:
             // TODO: Use a pretty printer too?
@@ -803,6 +803,6 @@ bool Token::operator==(const Token& r) const {
     if (type() != r.type()) {
         return false;
     }
-    TU_MATCH(Data, (mData, r.mData), (e, re), (None, return true;), (Ident, return e.same_name(re);), (String, return e == re;), (Integer, return e.datatype == re.datatype && e.intval == re.intval;), (Float, return e.datatype == re.datatype && e.floatval == re.floatval;), (Fragment, assert(!"Token equality on Fragment");))
+    TU_MATCH(Data, (mData, r.mData), (e, re), (None, return true;), (Ident, return e.sameName(re);), (String, return e == re;), (Integer, return e.datatype == re.datatype && e.intval == re.intval;), (Float, return e.datatype == re.datatype && e.floatval == re.floatval;), (Fragment, assert(!"Token equality on Fragment");))
     throw "";
 }

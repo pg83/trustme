@@ -60,7 +60,7 @@ public:
         return true;
     }
 
-    void return_one() override {
+    void returnOne() override {
         assert(!heldTokens.empty());
         auto t = heldTokens.back();
         heldTokens.pop_back();
@@ -98,12 +98,12 @@ class JobServerServer: public JobServer {
     #else
             // TODO: For `pipe` it would be nice to propagate it to child processes, but that needs minicargo's `os`
             // support to be happy.
-            int pipe_fds[2] = {-1, -1};
-            if (pipe(pipe_fds) != 0) {
+            int pipeFds[2] = {-1, -1};
+            if (pipe(pipeFds) != 0) {
                 throw std::runtime_error("pipe failed");
             }
-            rdFd = pipe_fds[0];
-            wrFd = pipe_fds[1];
+            rdFd = pipeFds[0];
+            wrFd = pipeFds[1];
     #endif
             for (size_t i = 0; i < maxJobs; i++) {
                 uint8_t t = 100;
@@ -169,8 +169,8 @@ public:
         return client.take_one(timeout_ms);
     }
 
-    void return_one() override {
-        return client.return_one();
+    void returnOne() override {
+        return client.returnOne();
     }
 };
 

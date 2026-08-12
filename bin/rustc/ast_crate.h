@@ -30,7 +30,7 @@ namespace AST {
             No,
             Yes,
             YesWithMessage,
-        } panic_type = ShouldPanic::No;
+        } panicType = ShouldPanic::No;
 
         ::std::string expectedPanicMessage;
     };

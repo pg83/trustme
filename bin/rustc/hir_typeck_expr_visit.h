@@ -44,11 +44,11 @@ namespace typeck {
 
         NullOnDrop<const ::HIR::GenericParams> set_item_generics(const ::HIR::GenericParams& gps);
 
-        void prepare_from_path(const ::HIR::ItemPath& ip);
+        void prepareFromPath(const ::HIR::ItemPath& ip);
 
-        void push_traits(::HIR::ItemPath p, const ::HIR::Module& mod);
+        void pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod);
 
-        void pop_traits(const ::HIR::Module& mod);
+        void popTraits(const ::HIR::Module& mod);
     };
 }
 

@@ -28,7 +28,7 @@ public:
 
     const ::AST::Crate* crate = nullptr; // TODO: Remove this (needed for MetaItem)
     ::AST::Module* module = nullptr;
-    ::AST::AttributeList* parent_attrs = nullptr;
+    ::AST::AttributeList* parentAttrs = nullptr;
 
     ::AST::Module& getCurrentMod();
 
@@ -70,10 +70,10 @@ public:
 
     Ident::Hygiene getHygiene() const;
 
-    virtual void push_hygine() {
+    virtual void pushHygine() {
     }
 
-    virtual void pop_hygine() {
+    virtual void popHygine() {
     }
 
     ParseState& parse_state() {
@@ -94,7 +94,7 @@ public:
 
     ProtoSpan start_span() const;
     Span endSpan(ProtoSpan ps) const;
-    Span point_span() const;
+    Span pointSpan() const;
 
     Span sub_span(const Position& p) const {
         return Span(outerSpan(), p);
@@ -130,7 +130,7 @@ public:
     lex.parse_state().module = &(mod)
 #define SET_ATTRS(lex, attrs)                     \
     SavedParseState _sps(lex, lex.parse_state()); \
-    lex.parse_state().parent_attrs = &(attrs)
+    lex.parse_state().parentAttrs = &(attrs)
 #define SET_PARSE_FLAG(lex, flag)                 \
     SavedParseState _sps(lex, lex.parse_state()); \
     lex.parse_state().flag = true

@@ -181,7 +181,7 @@ namespace HIR {
         ExprPtr mCode;
 
         struct Markings {
-            std::vector<unsigned> rustc_legacy_const_generics;
+            std::vector<unsigned> rustcLegacyConstGenerics;
             bool track_caller = false;
             bool isNaked = false;
 
@@ -600,7 +600,7 @@ namespace HIR {
         }
 
         bool moreSpecificThan(TypeInterner& types, const TraitImpl& x) const;
-        bool overlaps_with(const Crate& crate, const TraitImpl& other) const;
+        bool overlapsWith(const Crate& crate, const TraitImpl& other) const;
     };
 
     class MarkerImpl {
@@ -734,7 +734,7 @@ namespace HIR {
 
         /// Method called to populate runtime state after deserialisation
         /// See hir/crate_post_load.cpp
-        void post_load_update(const RcString& loadedName);
+        void postLoadUpdate(const RcString& loadedName);
 
         const ::HIR::SimplePath& getLangItemPath(const Span& sp, const char* name) const;
         const ::HIR::SimplePath& getLangItemPathOpt(const char* name) const;
@@ -773,8 +773,8 @@ namespace HIR {
     };
 
     /// Helper for obtaining the matching target for PathTuple/PathNamed
-    const ::HIR::Struct& pattern_get_struct(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding, bool isTuple);
-    const ::HIR::t_tuple_fields& pattern_get_tuple(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding);
-    const ::HIR::t_struct_fields& pattern_get_named(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding);
+    const ::HIR::Struct& patternGetStruct(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding, bool isTuple);
+    const ::HIR::t_tuple_fields& patternGetTuple(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding);
+    const ::HIR::t_struct_fields& patternGetNamed(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding);
 
 } // namespace HIR

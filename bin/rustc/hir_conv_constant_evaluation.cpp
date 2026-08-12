@@ -48,8 +48,8 @@ namespace {
         eval.resolve.set_both_generics_raw(state.implGenerics, state.itemGenerics);
 
         MonomorphState ms(crate.types);
-        ms.pp_impl = &value.params_impl;
-        ms.pp_method = &value.params_item;
+        ms.ppImpl = &value.paramsImpl;
+        ms.ppMethod = &value.paramsItem;
         return eval.evaluateConstant(::HIR::ItemPath(state.modPath, name.c_str()), expr, type, std::move(ms));
     }
 
@@ -161,7 +161,7 @@ namespace MIR {
 
             virtual size_t size() const = 0;
             virtual const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const = 0;
-            virtual void read_mask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const = 0;
+            virtual void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const = 0;
 
             virtual bool isWritable() const = 0;
             virtual uint8_t* extWriteBytes(size_t ofs, size_t len) = 0;
@@ -265,7 +265,7 @@ namespace MIR {
         };
 
         /// Helper: Print a 2-digit hex value (without updating the stream state)
-        void putb_hex(std::ostream& os, uint8_t v) {
+        void putbHex(std::ostream& os, uint8_t v) {
             char tmp[3];
             tmp[0] = "0123456789ABCDEF"[v >> 4];
             tmp[1] = "0123456789ABCDEF"[v & 0xF];
@@ -298,7 +298,7 @@ namespace MIR {
                     if (i != 0 && (ofs + i) % 8 == 0) {
                         os << " ";
                     }
-                    putb_hex(os, this->data[ofs + i]);
+                    putbHex(os, this->data[ofs + i]);
                 }
             }
 
@@ -313,7 +313,7 @@ namespace MIR {
                 return data + ofs;
             }
 
-            void read_mask(uint8_t* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const {
+            void readMask(uint8_t* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const {
                 dst += dstOfs / 8;
                 dstOfs %= 8;
                 if (dstOfs != 0) {
@@ -396,7 +396,7 @@ namespace MIR {
                         }
                     }
                     if (getMask()[j / 8] & (1 << j % 8)) {
-                        putb_hex(os, data[j]);
+                        putbHex(os, data[j]);
                     } else {
                         os << "--";
                     }
@@ -435,7 +435,7 @@ namespace MIR {
                 return this->data + ofs;
             }
 
-            void read_mask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const {
+            void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const {
                 assert(ofs <= length);
                 assert(len <= length);
                 assert(ofs + len <= length);
@@ -499,7 +499,7 @@ namespace MIR {
                 assert(ofs <= length);
                 assert(len <= length);
                 assert(ofs + len <= length);
-                src.read_mask(getMask(), ofs, src_ofs, len);
+                src.readMask(getMask(), ofs, src_ofs, len);
             }
 
             RelocPtr getReloc(size_t ofs) const override {
@@ -600,7 +600,7 @@ namespace MIR {
                 }
             }
 
-            void read_mask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const override {
+            void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const override {
                 dst += dstOfs / 8;
                 dstOfs %= 8;
                 if (dstOfs != 0) {
@@ -818,32 +818,32 @@ namespace MIR {
                 return src;
             }
 
-            void read_bytes(const MIR::TypeResolve& state, void* data, size_t len) const {
+            void readBytes(const MIR::TypeResolve& state, void* data, size_t len) const {
                 const auto* src = extReadBytes(state, len);
                 assert(src);
                 memcpy(data, src, len);
             }
 
-            FloatValue read_float(const ::MIR::TypeResolve& state, unsigned bits) const {
+            FloatValue readFloat(const ::MIR::TypeResolve& state, unsigned bits) const {
                 switch (bits) {
                     case 16: {
                         F16 v_f16;
-                        read_bytes(state, &v_f16, sizeof(v_f16));
+                        readBytes(state, &v_f16, sizeof(v_f16));
                         return FloatValue(static_cast<float>(v_f16));
                     } break;
                     case 32: {
                         float v_f32 = 0;
-                        read_bytes(state, &v_f32, sizeof(v_f32));
+                        readBytes(state, &v_f32, sizeof(v_f32));
                         return v_f32;
                     } break;
                     case 64: {
                         double v_f64 = 0;
-                        read_bytes(state, &v_f64, sizeof(v_f64));
+                        readBytes(state, &v_f64, sizeof(v_f64));
                         return v_f64;
                     } break;
                     case 128: {
                         F128 v_f;
-                        read_bytes(state, &v_f, sizeof(v_f));
+                        readBytes(state, &v_f, sizeof(v_f));
                         return v_f;
                     } break;
                     default:
@@ -851,7 +851,7 @@ namespace MIR {
                 }
             }
 
-            U128 read_uint(const ::MIR::TypeResolve& state, unsigned bits) const {
+            U128 readUint(const ::MIR::TypeResolve& state, unsigned bits) const {
                 assert(bits <= 128);
                 auto nBytes = (bits + 7) / 8;
                 U128 rv;
@@ -863,7 +863,7 @@ namespace MIR {
                 return rv;
             }
 
-            S128 read_sint(const ::MIR::TypeResolve& state, unsigned bits) const {
+            S128 readSint(const ::MIR::TypeResolve& state, unsigned bits) const {
                 auto nBytes = (bits + 7) / 8;
                 S128 rv;
                 if (TargetGetCurSpec().arch.bigEndian) {
@@ -874,12 +874,12 @@ namespace MIR {
                 return rv;
             }
 
-            uint64_t read_usize(const ::MIR::TypeResolve& state) const {
-                return read_uint(state, TargetGetPointerBits()).truncate_u64();
+            uint64_t readUsize(const ::MIR::TypeResolve& state) const {
+                return readUint(state, TargetGetPointerBits()).truncate_u64();
             }
 
-            std::pair<uint64_t, RelocPtr> read_ptr(const ::MIR::TypeResolve& state) const {
-                return std::make_pair(read_usize(state), storage.asValue().getReloc(ofs));
+            std::pair<uint64_t, RelocPtr> readPtr(const ::MIR::TypeResolve& state) const {
+                return std::make_pair(readUsize(state), storage.asValue().getReloc(ofs));
             }
 
             friend std::ostream& operator<<(std::ostream& os, const ValueRef& vr);
@@ -1137,7 +1137,7 @@ namespace MIR {
             const HIR::TypeRef ret_type;
 
             // MIR Resolve Helper
-            const StaticTraitResolve& root_resolve;
+            const StaticTraitResolve& rootResolve;
             StaticTraitResolve resolve;
             ::MIR::TypeResolve state;
             // Monomorphiser from the function
@@ -1160,7 +1160,7 @@ namespace MIR {
                 unsigned frameIndex,
                 const Span& root_span,
                 const StaticTraitResolve& resolve,
-                ::FmtLambda path_str,
+                ::FmtLambda pathStr,
                 // Pre-monomorphised function signature (as this may be a `static`)
                 HIR::TypeRef expTy,
                 std::vector<std::pair<HIR::Pattern, HIR::TypeRef>> argDefs,
@@ -1176,11 +1176,11 @@ namespace MIR {
                 , frameIndex(frameIndex)
                 , argDefs(std::move(argDefs))
                 , ret_type(std::move(expTy))
-                , root_resolve(resolve)
+                , rootResolve(resolve)
                 , resolve(resolve.crate)
-                , state{root_span, this->resolve, std::move(path_str), this->ret_type, this->argDefs, fcn}
+                , state{root_span, this->resolve, std::move(pathStr), this->ret_type, this->argDefs, fcn}
                 , ms(std::move(ms))
-                , retval(AllocationPtr::allocate(value_pool, root_resolve, state, ret_type))
+                , retval(AllocationPtr::allocate(value_pool, rootResolve, state, ret_type))
                 , args(args)
                 , dropFlags(fcn.dropFlags)
             {
@@ -1189,7 +1189,7 @@ namespace MIR {
                 locals.reserve(state.fcn.locals.size());
                 for (size_t i = 0; i < state.fcn.locals.size(); i++) {
                     localTypes.push_back(state.mResolve.monomorphExpand(state.sp, state.fcn.locals[i], this->ms));
-                    locals.push_back(AllocationPtr::allocate(value_pool, root_resolve, state, localTypes.back()));
+                    locals.push_back(AllocationPtr::allocate(value_pool, rootResolve, state, localTypes.back()));
                 }
 
                 state.monomorphedRettype = ret_type;
@@ -1200,8 +1200,8 @@ namespace MIR {
                 return this->resolve.monomorphExpand(this->state.sp, ty, this->ms);
             }
 
-            unsigned read_enum_variant(const HIR::TypeData* ty, ValueRef value) const {
-                auto* repr = TargetGetTypeRepr(state.sp, root_resolve, ty);
+            unsigned readEnumVariant(const HIR::TypeData* ty, ValueRef value) const {
+                auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                 MIR_ASSERT(state, repr, "No representation for enum " << ty);
 
                 unsigned variant = 0;
@@ -1209,20 +1209,20 @@ namespace MIR {
                 TU_ARMA(None, ve) {
                     }
                     TU_ARMA(Linear, ve) {
-                        auto tag = value.slice(repr->getOffset(state.sp, root_resolve, ve.field), ve.field.size).read_uint(state, 8 * ve.field.size);
+                        auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size);
                         variant = tag < U128(ve.offset) ? ve.field.index : (tag - U128(ve.offset)).truncate_u64();
                     }
                     TU_ARMA(Values, ve) {
-                        auto tag = value.slice(repr->getOffset(state.sp, root_resolve, ve.field), ve.field.size).read_uint(state, 8 * ve.field.size).truncate_u64();
+                        auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size).truncate_u64();
                         auto it = std::find(ve.values.begin(), ve.values.end(), tag);
                         MIR_ASSERT(state, it != ve.values.end(), "Invalid enum tag " << tag << " for " << ty);
                         variant = it - ve.values.begin();
                     }
                     TU_ARMA(NonZero, ve) {
-                        size_t offset = repr->getOffset(state.sp, root_resolve, ve.field);
+                        size_t offset = repr->getOffset(state.sp, rootResolve, ve.field);
                         bool isNonzero = false;
                         for (size_t i = 0; i < ve.field.size; i++) {
-                            if (value.slice(offset + i, 1).read_uint(state, 8) != U128(0)) {
+                            if (value.slice(offset + i, 1).readUint(state, 8) != U128(0)) {
                                 isNonzero = true;
                                 break;
                             }
@@ -1260,7 +1260,7 @@ namespace MIR {
             }
 
             bool value_needs_non_const_drop(const HIR::TypeData* ty, ValueRef value) const {
-                if (!root_resolve.type_needs_drop_glue(state.sp, ty)) {
+                if (!rootResolve.type_needs_drop_glue(state.sp, ty)) {
                     return false;
                 }
 
@@ -1275,7 +1275,7 @@ namespace MIR {
                         return true;
                     }
                     TU_ARMA(NodeType, te) {
-                        auto* repr = TargetGetTypeRepr(state.sp, root_resolve, ty);
+                        auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                         MIR_ASSERT(state, repr, "No representation for " << ty);
                         for (const auto& field : repr->fields) {
                             auto size = size_of_or_bug(field.ty);
@@ -1304,7 +1304,7 @@ namespace MIR {
                         if (te.type != HIR::BorrowType::Owned) {
                             return false;
                         }
-                        auto pointer = value.read_ptr(state);
+                        auto pointer = value.readPtr(state);
                         MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid owned pointer while checking a constant drop");
                         auto size = size_of_or_bug(te.inner);
                         auto inner = ValueRef(pointer.second, pointer.first - EncodedLiteral::PTR_BASE).slice(0, size);
@@ -1333,7 +1333,7 @@ namespace MIR {
                                 return false;
                             }
                             TU_ARMA(Struct, pbe) {
-                                auto* repr = TargetGetTypeRepr(state.sp, root_resolve, ty);
+                                auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                                 MIR_ASSERT(state, repr, "No representation for struct " << ty);
                                 for (const auto& field : repr->fields) {
                                     auto size = size_of_or_bug(field.ty);
@@ -1348,10 +1348,10 @@ namespace MIR {
                                 if (!variants) {
                                     return false;
                                 }
-                                auto variant = read_enum_variant(ty, value);
+                                auto variant = readEnumVariant(ty, value);
                                 MIR_ASSERT(state, variant < variants->size(), "Enum variant " << variant << " out of range for " << ty);
 
-                                auto* repr = TargetGetTypeRepr(state.sp, root_resolve, ty);
+                                auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                                 MIR_ASSERT(state, repr, "No representation for enum " << ty);
                                 MIR_ASSERT(state, variant < repr->fields.size(), "Enum representation has no variant " << variant << " for " << ty);
                                 const auto& field = repr->fields[variant];
@@ -1381,7 +1381,7 @@ namespace MIR {
                         return true;
                     }
                     TU_ARMA(Tuple, te) {
-                        auto* repr = TargetGetTypeRepr(state.sp, root_resolve, ty);
+                        auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                         MIR_ASSERT(state, repr, "No representation for tuple " << ty);
                         for (const auto& field : repr->fields) {
                             auto size = size_of_or_bug(field.ty);
@@ -1408,10 +1408,10 @@ namespace MIR {
                     DEBUG("Return Literal::Defer for constastatic " << p << " which references a generic parameter");
                     throw Defer();
                 }
-                MonomorphState constMs(root_resolve.crate.types);
+                MonomorphState constMs(rootResolve.crate.types);
 
                 const HIR::GenericParams* implParamsDef = nullptr;
-                auto ent = getEntFullpath(state.sp, root_resolve, p, EntNS::Value, constMs, &implParamsDef);
+                auto ent = getEntFullpath(state.sp, rootResolve, p, EntNS::Value, constMs, &implParamsDef);
                 if (ent.is_Static()) {
                     const auto& s = *ent.as_Static();
 
@@ -1424,11 +1424,11 @@ namespace MIR {
 
                         auto& item = const_cast<::HIR::Static&>(s);
 
-                        static ::std::set<::HIR::Static*> s_non_recurse;
-                        if (s_non_recurse.count(&item) == 0) {
-                            s_non_recurse.insert(&item);
+                        static ::std::set<::HIR::Static*> sNonRecurse;
+                        if (sNonRecurse.count(&item) == 0) {
+                            sNonRecurse.insert(&item);
                             ConvertHIRConstantEvaluateStatic(resolve.crate, implParamsDef, p, item);
-                            s_non_recurse.erase(s_non_recurse.find(&item));
+                            sNonRecurse.erase(sNonRecurse.find(&item));
                         } else {
                             DEBUG("Recursion detected");
                         }
@@ -1440,7 +1440,7 @@ namespace MIR {
                         // Challenge: Adding items to the module might invalidate an iterator.
                         ::HIR::ItemPath modIp{item.mValue.state->modPath};
                         auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("static" << &item << "#"));
-                        auto eval = ::HIR::Evaluator(item.mValue.span(), root_resolve.crate, nvs);
+                        auto eval = ::HIR::Evaluator(item.mValue.span(), rootResolve.crate, nvs);
                         DEBUG("- Evaluate " << p);
                         try {
                             item.valueGenerated = true;
@@ -1510,13 +1510,13 @@ namespace MIR {
                                 } else if (const auto* te = typ->opt_Slice()) {
                                     typ = te->inner;
                                     // Get metadata
-                                    size = metadata.read_usize(state);
+                                    size = metadata.readUsize(state);
                                 } else {
                                     throw "";
                                 }
                                 metadata = ValueRef();
                                 size_t sz, al;
-                                if (!TargetGetSizeAndAlignOf(state.sp, root_resolve, typ, sz, al)) {
+                                if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
                                     throw Defer();
                                 }
                                 MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
@@ -1530,7 +1530,7 @@ namespace MIR {
                                 }
                                 continue;
                             }
-                            auto* repr = TargetGetTypeRepr(state.sp, this->root_resolve, typ);
+                            auto* repr = TargetGetTypeRepr(state.sp, this->rootResolve, typ);
                             MIR_ASSERT(state, repr, "No repr for " << typ);
                             MIR_ASSERT(state, e < repr->fields.size(), "LValue::Field index out of range");
                             if (repr->size != SIZE_MAX) {
@@ -1540,7 +1540,7 @@ namespace MIR {
                             typ = repr->fields[e].ty;
 
                             size_t sz, al;
-                            if (!TargetGetSizeAndAlignOf(state.sp, root_resolve, typ, sz, al)) {
+                            if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
                                 throw Defer();
                             }
                             if (sz == SIZE_MAX) {
@@ -1560,7 +1560,7 @@ namespace MIR {
                             }
                             // If the inner type is unsized
                             size_t sz, al;
-                            if (!TargetGetSizeAndAlignOf(state.sp, root_resolve, typ, sz, al)) {
+                            if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
                                 throw Defer();
                             }
                             if (sz == SIZE_MAX) {
@@ -1568,7 +1568,7 @@ namespace MIR {
                                 DEBUG("Reading metadata");
                                 metadata = val.slice(TargetGetPointerBits() / 8);
                             }
-                            auto p = val.read_ptr(state);
+                            auto p = val.readPtr(state);
                             MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE, "Null (<PTR_BASE) pointer deref");
                             MIR_ASSERT(state, p.first % al == 0, "Unaligned pointer deref");
                             DEBUG("> " << ValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
@@ -1588,23 +1588,23 @@ namespace MIR {
                             } else if (const auto* te = typ->opt_Slice()) {
                                 typ = te->inner;
                                 // Get metadata
-                                size = metadata.read_usize(state);
+                                size = metadata.readUsize(state);
                             } else {
                                 MIR_BUG(state, "Index of unsupported type - " << typ);
                             }
                             metadata = ValueRef();
                             size_t sz, al;
-                            if (!TargetGetSizeAndAlignOf(state.sp, root_resolve, typ, sz, al)) {
+                            if (!TargetGetSizeAndAlignOf(state.sp, rootResolve, typ, sz, al)) {
                                 throw Defer();
                             }
                             MIR_ASSERT(state, sz < SIZE_MAX, "Unsized type on index output - " << typ);
                             MIR_ASSERT(state, e < locals.size(), "LValue::Index index local out of range");
-                            size_t index = ValueRef(locals[e]).read_usize(state);
+                            size_t index = ValueRef(locals[e]).readUsize(state);
                             MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
                             val = val.slice(index * sz, sz);
                         }
                         TU_ARMA(Downcast, e) {
-                            auto* repr = TargetGetTypeRepr(state.sp, this->root_resolve, typ);
+                            auto* repr = TargetGetTypeRepr(state.sp, this->rootResolve, typ);
                             MIR_ASSERT(state, repr, "No repr for " << typ);
                             MIR_ASSERT(state, e < repr->fields.size(), "LValue::Downcast index out of range");
                             if (repr->size != SIZE_MAX) {
@@ -1622,7 +1622,7 @@ namespace MIR {
 
             const EncodedLiteral& getConst(const ::HIR::Path& inP, ::HIR::TypeRef* outTy) const {
                 auto p = ms.monomorphPath(state.sp, inP);
-                root_resolve.expandAssociatedTypesPath(state.sp, p);
+                rootResolve.expandAssociatedTypesPath(state.sp, p);
                 // If there's any mention of generics in this path, then return Literal::Defer
                 if (visit_path_tys_with(p, [&](const auto& ty) -> bool {
                     return ty->is_Generic();
@@ -1630,9 +1630,9 @@ namespace MIR {
                     DEBUG("Return Literal::Defer for constant " << p << " which references a generic parameter");
                     throw Defer();
                 }
-                MonomorphState constMs(root_resolve.crate.types);
+                MonomorphState constMs(rootResolve.crate.types);
                 const HIR::GenericParams* implParamsDef = nullptr;
-                auto ent = getEntFullpath(state.sp, root_resolve, p, EntNS::Value, constMs, &implParamsDef);
+                auto ent = getEntFullpath(state.sp, rootResolve, p, EntNS::Value, constMs, &implParamsDef);
                 MIR_ASSERT(state, ent.is_Constant(), "MIR Constant::Const(" << p << ") didn't point to a Constant - " << ent.tag_str());
                 const auto& c = *ent.as_Constant();
                 if (c.valueState == HIR::Constant::ValueState::Unknown) {
@@ -1640,13 +1640,13 @@ namespace MIR {
                     // Challenge: Adding items to the module might invalidate an iterator.
                     ::HIR::ItemPath modIp{item.mValue.state->modPath};
                     auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("const" << &c << "#"));
-                    auto eval = ::HIR::Evaluator(item.mValue.span(), root_resolve.crate, nvs);
+                    auto eval = ::HIR::Evaluator(item.mValue.span(), rootResolve.crate, nvs);
                     eval.resolve.set_both_generics_raw(implParamsDef, &c.mParams);
-                    auto temp_pp_impl = implParamsDef ? implParamsDef->makeNopParams(root_resolve.crate.types, 0) : HIR::PathParams();
-                    auto temp_pp_method = c.mParams.makeNopParams(root_resolve.crate.types, 1);
-                    MonomorphState temp_ms(root_resolve.crate.types);
-                    temp_ms.pp_impl = &temp_pp_impl;
-                    temp_ms.pp_method = &temp_pp_method;
+                    auto temp_pp_impl = implParamsDef ? implParamsDef->makeNopParams(rootResolve.crate.types, 0) : HIR::PathParams();
+                    auto temp_pp_method = c.mParams.makeNopParams(rootResolve.crate.types, 1);
+                    MonomorphState temp_ms(rootResolve.crate.types);
+                    temp_ms.ppImpl = &temp_pp_impl;
+                    temp_ms.ppMethod = &temp_pp_method;
                     DEBUG("- Evaluate " << p);
                     try {
                         item.valueRes = eval.evaluateConstant(::HIR::ItemPath(p), item.mValue, item.mType, std::move(temp_ms));
@@ -1665,7 +1665,7 @@ namespace MIR {
                         // Challenge: Adding items to the module might invalidate an iterator.
                         ::HIR::ItemPath modIp{item.mValue.state->modPath};
                         auto nvs = NewvalState(item.mValue.state->mModule, modIp, FMT("const" << &c << "#"));
-                        auto eval = ::HIR::Evaluator(item.mValue.span(), root_resolve.crate, nvs);
+                        auto eval = ::HIR::Evaluator(item.mValue.span(), rootResolve.crate, nvs);
                         eval.resolve.set_both_generics_raw(implParamsDef, &c.mParams);
 
                         DEBUG("- Evaluate monomorphed " << p);
@@ -1758,8 +1758,8 @@ namespace MIR {
                 auto val = this->getLval(lv, &meta);
                 dst.write_ptr(state, EncodedLiteral::PTR_BASE + val.getOfs(), val.getStorage());
                 if (meta.isValid()) {
-                    auto ptr_size = TargetGetPointerBits() / 8;
-                    dst.slice(ptr_size).copyFrom(state, meta);
+                    auto ptrSize = TargetGetPointerBits() / 8;
+                    dst.slice(ptrSize).copyFrom(state, meta);
                 }
             }
 
@@ -1785,11 +1785,11 @@ namespace MIR {
                     TU_ARMA(Unevaluated, ve) {
                         auto value = ve->monomorph(state.sp, ms, false);
                         const auto& expr = *value.expr;
-                        MonomorphState value_ms(root_resolve.crate.types);
-                        value_ms.pp_impl = &value.params_impl;
-                        value_ms.pp_method = &value.params_item;
+                        MonomorphState value_ms(rootResolve.crate.types);
+                        value_ms.ppImpl = &value.paramsImpl;
+                        value_ms.ppMethod = &value.paramsItem;
                         auto type = value_ms.monomorphType(state.sp, expr->resType);
-                        tmp = evaluateConstgeneric(state.sp, root_resolve.crate, type, value);
+                        tmp = evaluateConstgeneric(state.sp, rootResolve.crate, type, value);
                         return tmp;
                     }
                     TU_ARMA(Evaluated, ve) {
@@ -1800,23 +1800,23 @@ namespace MIR {
             }
 
             /// Read a floating point value from a MIR::Param
-            FloatValue read_param_float(unsigned bits, const ::MIR::Param& p) const {
+            FloatValue readParamFloat(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e)
-                return const_cast<CallStackEntry*>(this)->getLval(e).read_float(state, bits);
+                return const_cast<CallStackEntry*>(this)->getLval(e).readFloat(state, bits);
                     TU_ARMA(Borrow, e)
                     MIR_BUG(state, "Expected a float, got a MIR::Param::Borrow");
                     TU_ARMA(Constant, e) {
                         if (e.is_Const()) {
                             const auto& val = getConst(*e.as_Const().p, nullptr);
                             // TODO: Check the type from get_const
-                            return EncodedLiteralSlice(val).read_float();
+                            return EncodedLiteralSlice(val).readFloat();
                         }
                         if (e.is_Generic()) {
                             auto ve = ms.getValue(state.sp, e.as_Generic());
                             EncodedLiteral elTmp;
                             const auto& el = getConst(ve, elTmp);
-                            return EncodedLiteralSlice(el).read_float();
+                            return EncodedLiteralSlice(el).readFloat();
                         }
                         MIR_ASSERT(state, e.is_Float(), "Expected a float, got " << e);
                         return e.as_Float().v;
@@ -1825,23 +1825,23 @@ namespace MIR {
             abort();
             }
 
-            U128 read_param_uint(unsigned bits, const ::MIR::Param& p) const {
+            U128 readParamUint(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), { )
             TU_ARMA(LValue, e)
-                return const_cast<CallStackEntry*>(this)->getLval(e).read_uint(state, bits);
+                return const_cast<CallStackEntry*>(this)->getLval(e).readUint(state, bits);
                     TU_ARMA(Borrow, e)
                     MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
                     TU_ARMA(Constant, e) {
                         if (e.is_Const()) {
                             const auto& val = getConst(*e.as_Const().p, nullptr);
                             // TODO: Check the type from get_const
-                            return EncodedLiteralSlice(val).read_uint();
+                            return EncodedLiteralSlice(val).readUint();
                         }
                         if (e.is_Generic()) {
                             auto ve = ms.getValue(state.sp, e.as_Generic());
                             EncodedLiteral elTmp;
                             const auto& el = getConst(ve, elTmp);
-                            return EncodedLiteralSlice(el).read_uint();
+                            return EncodedLiteralSlice(el).readUint();
                         }
                         if (e.is_Int()) {
                             return e.as_Int().v.getInner();
@@ -1856,23 +1856,23 @@ namespace MIR {
             abort();
             }
 
-            S128 read_param_sint(unsigned bits, const ::MIR::Param& p) const {
+            S128 readParamSint(unsigned bits, const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), { )
             TU_ARMA(LValue, e)
-                return const_cast<CallStackEntry*>(this)->getLval(e).read_sint(state, bits);
+                return const_cast<CallStackEntry*>(this)->getLval(e).readSint(state, bits);
                     TU_ARMA(Borrow, e)
                     MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
                     TU_ARMA(Constant, e) {
                         if (e.is_Const()) {
                             const auto& val = getConst(*e.as_Const().p, nullptr);
                             // TODO: Check the type from get_const
-                            return EncodedLiteralSlice(val).read_sint();
+                            return EncodedLiteralSlice(val).readSint();
                         }
                         if (e.is_Generic()) {
                             auto ve = ms.getValue(state.sp, e.as_Generic());
                             EncodedLiteral elTmp;
                             const auto& el = getConst(ve, elTmp);
-                            return EncodedLiteralSlice(el).read_sint();
+                            return EncodedLiteralSlice(el).readSint();
                         }
                         MIR_ASSERT(state, e.is_Int(), "Expected an integer, got " << e.tag_str() << " " << e);
                         return S128(e.as_Int().v);
@@ -1881,10 +1881,10 @@ namespace MIR {
             abort();
             }
 
-            std::pair<uint64_t, RelocPtr> read_param_ptr(const ::MIR::Param& p) const {
+            std::pair<uint64_t, RelocPtr> readParamPtr(const ::MIR::Param& p) const {
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(LValue, e) {
-                        return const_cast<CallStackEntry*>(this)->getLval(e).read_ptr(state);
+                        return const_cast<CallStackEntry*>(this)->getLval(e).readPtr(state);
                     }
                     TU_ARMA(Borrow, e) {
                         MIR_TODO(state, "read_param_ptr - " << p);
@@ -1903,7 +1903,7 @@ namespace MIR {
 
             size_t size_of_or_bug(const ::HIR::TypeData* ty) const {
                 size_t rv;
-                if (!TargetGetSizeOf(state.sp, root_resolve, ty, /*out*/ rv)) {
+                if (!TargetGetSizeOf(state.sp, rootResolve, ty, /*out*/ rv)) {
                     MIR_BUG(state, "No size for " << ty);
                 }
                 return rv;
@@ -1915,8 +1915,8 @@ namespace MIR {
 
 namespace {
     ::std::pair<::MIR::eval::ValueRef, ::MIR::eval::ValueRef> getTupleTBool(const ::MIR::eval::CallStackEntry& localState, ::MIR::eval::ValueRef& src, const HIR::TypeData* t) {
-        auto tuple_t = localState.root_resolve.crate.types.tuple({t, localState.root_resolve.crate.types.primitive(::HIR::CoreType::Bool)});
-        auto* repr = TargetGetTypeRepr(localState.state.sp, localState.root_resolve, tuple_t);
+        auto tuple_t = localState.rootResolve.crate.types.tuple({t, localState.rootResolve.crate.types.primitive(::HIR::CoreType::Bool)});
+        auto* repr = TargetGetTypeRepr(localState.state.sp, localState.rootResolve, tuple_t);
         MIR_ASSERT(localState.state, repr, "No repr for " << tuple_t);
         auto s = localState.size_of_or_bug(t);
         return std::make_pair(src.slice(repr->fields[0].offset, s), src.slice(repr->fields[1].offset, 1));
@@ -1942,7 +1942,7 @@ namespace {
             const auto& ty_r = localState.state.getParamType(tmp_r, val_r);
             auto ti_r = TypeInfo::forType(ty_r);
 
-            auto r = ti_r.ty == TypeInfo::Unsigned ? localState.read_param_uint(ti_r.bits, val_r) : localState.read_param_sint(ti_r.bits, val_r).getInner();
+            auto r = ti_r.ty == TypeInfo::Unsigned ? localState.readParamUint(ti_r.bits, val_r) : localState.readParamSint(ti_r.bits, val_r).getInner();
             auto amt = r.truncate_u64();
             if (amt > ti.bits) {
                 DEBUG("Shift out of range - " << r << " > " << ti.bits);
@@ -1951,7 +1951,7 @@ namespace {
             }
             switch (ti.ty) {
                 case TypeInfo::Unsigned: {
-                    auto l = localState.read_param_uint(ti.bits, val_l);
+                    auto l = localState.readParamUint(ti.bits, val_l);
                     switch (op) {
                         case ::MIR::eBinOp::BIT_SHL:
                             dst.write_uint(state, ti.bits, ti.mask(l << amt));
@@ -1965,7 +1965,7 @@ namespace {
                     break;
                 }
                 case TypeInfo::Signed: {
-                    auto l = localState.read_param_sint(ti.bits, val_l);
+                    auto l = localState.readParamSint(ti.bits, val_l);
                     switch (op) {
                         case ::MIR::eBinOp::BIT_SHL:
                             dst.write_uint(state, ti.bits, ti.mask(l << amt));
@@ -1990,8 +1990,8 @@ namespace {
 
         switch (ti.ty) {
             case TypeInfo::Float: {
-                auto l = localState.read_param_float(ti.bits, val_l);
-                auto r = localState.read_param_float(ti.bits, val_r);
+                auto l = localState.readParamFloat(ti.bits, val_l);
+                auto r = localState.readParamFloat(ti.bits, val_r);
                 auto write_result = [&](FloatValue value) {
                     if (!floatValueIsNan(value)) {
                         dst.write_float(state, ti.bits, value);
@@ -2066,8 +2066,8 @@ namespace {
                 break;
             };
             case TypeInfo::Unsigned: {
-                auto l = localState.read_param_uint(ti.bits, val_l);
-                auto r = localState.read_param_uint(ti.bits, val_r);
+                auto l = localState.readParamUint(ti.bits, val_l);
+                auto r = localState.readParamUint(ti.bits, val_r);
                 switch (op) {
                     case ::MIR::eBinOp::ADD: {
                         auto res = ti.mask(l + r);
@@ -2155,9 +2155,9 @@ namespace {
                 break;
             }
             case TypeInfo::Signed: {
-                auto l = localState.read_param_sint(ti.bits, val_l);
+                auto l = localState.readParamSint(ti.bits, val_l);
                 DEBUG(l << " from " << val_l);
-                auto r = localState.read_param_sint(ti.bits, val_r);
+                auto r = localState.readParamSint(ti.bits, val_r);
                 DEBUG(r << " from " << val_r);
                 DEBUG(l << " " << int(op) << " " << r);
                 switch (op) {
@@ -2175,12 +2175,12 @@ namespace {
                         // - Equal has the same sign
                         // - V2 negative is negative if |v2| > |v1|
                         // - V1 negative is negative if |v2| < |v1|
-                        bool res_sign = (v1s == v2s) ? v1s : (v2s ? v1a < v2a : v1a > v2a);
+                        bool resSign = (v1s == v2s) ? v1s : (v2s ? v1a < v2a : v1a > v2a);
                         auto res = S128(v1u + v2u);
-                        didOverflow = ((res < 0) != res_sign);
+                        didOverflow = ((res < 0) != resSign);
                         if (didOverflow && saturate) {
                             auto v = U128(0) << (ti.bits - 1);
-                            res = res_sign ? S128(v) : S128(v - 1);
+                            res = resSign ? S128(v) : S128(v - 1);
                         }
                         dst.write_sint(state, ti.bits, res);
                         break;
@@ -2273,20 +2273,20 @@ namespace {
 
                         P(::MIR::eval::CallStackEntry& localState, const ::MIR::Param& p) {
                             auto vr = localState.getLval(p.as_LValue());
-                            auto ptr = vr.read_ptr(localState.state);
-                            this->len = vr.slice(TargetGetPointerBits() / 8).read_usize(localState.state);
+                            auto ptr = vr.readPtr(localState.state);
+                            this->len = vr.slice(TargetGetPointerBits() / 8).readUsize(localState.state);
                             this->data = ptr.second.asValue().getBytes(ptr.first - EncodedLiteral::PTR_BASE, this->len, true);
                             MIR_ASSERT(localState.state, this->data, "Invalid pointer " << p << " : " << vr << " = " << ptr.second << " @ " << ptr.first << "+" << this->len);
                             this->reloc = std::move(ptr.second);
                         }
                     };
 
-                    auto ptr_l = P(localState, val_l);
-                    auto ptr_r = P(localState, val_r);
-                    int cmp = memcmp(ptr_l.data, ptr_r.data, std::min(ptr_l.len, ptr_l.len));
+                    auto ptrL = P(localState, val_l);
+                    auto ptrR = P(localState, val_r);
+                    int cmp = memcmp(ptrL.data, ptrR.data, std::min(ptrL.len, ptrL.len));
                     if (cmp == 0) {
-                        if (ptr_l.len != ptr_r.len) {
-                            cmp = ptr_l.len < ptr_r.len ? -1 : 1;
+                        if (ptrL.len != ptrR.len) {
+                            cmp = ptrL.len < ptrR.len ? -1 : 1;
                         }
                     }
                     switch (op) {
@@ -2324,7 +2324,7 @@ namespace HIR {
 
     using namespace ::MIR::eval;
 
-    unsigned int Evaluator::s_next_eval_index = 0;
+    unsigned int Evaluator::sNextEvalIndex = 0;
 
     Evaluator::CsePtr::~CsePtr() {
         if (inner) {
@@ -2333,12 +2333,12 @@ namespace HIR {
         }
     }
 
-    void Evaluator::push_stack_entry(::FmtLambda print_path, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* itemParamsDef, const ::HIR::GenericParams* implParamsDef) {
-        this->callStack.push_back(new CallStackEntry(this->value_pool.mutPtr(), this->numFrames, this->root_span, this->resolve, std::move(print_path), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef));
+    void Evaluator::pushStackEntry(::FmtLambda printPath, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* itemParamsDef, const ::HIR::GenericParams* implParamsDef) {
+        this->callStack.push_back(new CallStackEntry(this->value_pool.mutPtr(), this->numFrames, this->root_span, this->resolve, std::move(printPath), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef));
         this->numFrames += 1;
     }
 
-    AllocationPtr Evaluator::run_until_stack_empty() {
+    AllocationPtr Evaluator::runUntilStackEmpty() {
         const unsigned MAX_BLOCK_COUNT = 4'000'000;
         const unsigned MAX_STMT_COUNT = 8'000'000;
         assert(!this->callStack.empty());
@@ -2353,11 +2353,11 @@ namespace HIR {
             const auto& bb = state.fcn.blocks[state.getCurBlock()];
             for (const auto& stmt : bb.statements) {
                 state.set_cur_stmt(state.getCurBlock(), &stmt - bb.statements.data());
-                this->run_statement(*this->callStack.back(), stmt);
+                this->runStatement(*this->callStack.back(), stmt);
                 numStmtsRun += 1;
             }
             state.set_cur_stmt_term(state.getCurBlock());
-            auto nextBlock = run_terminator(*this->callStack.back(), bb.terminator);
+            auto nextBlock = runTerminator(*this->callStack.back(), bb.terminator);
             numStmtsRun += 1;
             switch (nextBlock) {
                 case TERM_RET_PUSHED:
@@ -2371,9 +2371,9 @@ namespace HIR {
                         auto& nextState = *this->callStack.back();
                         const auto& term = nextState.state.fcn.blocks[nextState.state.getCurBlock()].terminator;
                         const auto& te = term.as_Call();
-                        auto dst = nextState.getLval(te.ret_val);
+                        auto dst = nextState.getLval(te.retVal);
                         dst.copyFrom(nextState.state, ValueRef(rv));
-                        nextState.state.set_cur_stmt(te.ret_block, 0);
+                        nextState.state.set_cur_stmt(te.retBlock, 0);
                     }
                     break;
                 }
@@ -2384,7 +2384,7 @@ namespace HIR {
         ERROR(this->root_span, E0000, "Constant evaluation ran for too long - " << numStmtsRun << " statements, " << idx << " blocks");
     }
 
-    void Evaluator::run_statement(::MIR::eval::CallStackEntry& localState, const ::MIR::Statement& stmt) {
+    void Evaluator::runStatement(::MIR::eval::CallStackEntry& localState, const ::MIR::Statement& stmt) {
         const auto& state = localState.state;
         DEBUG("E" << this->evalIndex << " F" << localState.frameIndex << " " << state << stmt);
 
@@ -2452,18 +2452,18 @@ namespace HIR {
                             case TypeInfo::Unsigned:
                                 switch (src_ti.ty) {
                                     case TypeInfo::Signed: {
-                                        auto v = inval.read_sint(state, src_ti.bits);
+                                        auto v = inval.readSint(state, src_ti.bits);
                                         dst.write_uint(state, ti.bits, v.getInner());
                                     } break;
                                     case TypeInfo::Unsigned:
                                         MIR_ASSERT(state, !src_ty->is_NamedFunction(), "");
-                                        dst.write_uint(state, ti.bits, inval.read_uint(state, src_ti.bits));
+                                        dst.write_uint(state, ti.bits, inval.readUint(state, src_ti.bits));
                                         break;
                                     case TypeInfo::Float:
                                         if (ti.ty == TypeInfo::Signed) {
-                                            dst.write_uint(state, ti.bits, static_cast<int64_t>(inval.read_float(state, src_ti.bits)));
+                                            dst.write_uint(state, ti.bits, static_cast<int64_t>(inval.readFloat(state, src_ti.bits)));
                                         } else {
-                                            dst.write_uint(state, ti.bits, static_cast<uint64_t>(inval.read_float(state, src_ti.bits)));
+                                            dst.write_uint(state, ti.bits, static_cast<uint64_t>(inval.readFloat(state, src_ti.bits)));
                                         }
                                         break;
                                     case TypeInfo::Other: {
@@ -2477,7 +2477,7 @@ namespace HIR {
                                         }
                                         auto& ve = repr->variants.as_Values();
 
-                                        auto v = inval.slice(repr->getOffset(state.sp, resolve, ve.field), ve.field.size).read_uint(state, ve.field.size * 8);
+                                        auto v = inval.slice(repr->getOffset(state.sp, resolve, ve.field), ve.field.size).readUint(state, ve.field.size * 8);
                                         // TODO: Ensure that this is a valid variant?
                                         dst.write_uint(state, ti.bits, v);
                                     } break;
@@ -2487,17 +2487,17 @@ namespace HIR {
                                 switch (src_ti.ty) {
                                     // NOTE: Subtle rounding differences between f32 and f64
                                     case TypeInfo::Signed: {
-                                        auto v = S128(inval.read_uint(state, src_ti.bits));
+                                        auto v = S128(inval.readUint(state, src_ti.bits));
                                         dst.write_float(state, ti.bits, ti.bits == 32 ? v.to_float() : v.to_double());
                                         break;
                                     }
                                     case TypeInfo::Unsigned: {
-                                        auto v = inval.read_uint(state, src_ti.bits);
+                                        auto v = inval.readUint(state, src_ti.bits);
                                         dst.write_float(state, ti.bits, ti.bits == 32 ? v.to_float() : v.to_double());
                                         break;
                                     }
                                     case TypeInfo::Float:
-                                        dst.write_float(state, ti.bits, inval.read_float(state, src_ti.bits));
+                                        dst.write_float(state, ti.bits, inval.readFloat(state, src_ti.bits));
                                         break;
                                     case TypeInfo::Other:
                                         MIR_TODO(state, "Cast " << src_ty << " to float");
@@ -2549,7 +2549,7 @@ namespace HIR {
                 switch (ti.ty) {
                     case TypeInfo::Unsigned:
                     case TypeInfo::Signed: {
-                        auto i = localState.getLval(e.val).read_uint(state, ti.bits);
+                        auto i = localState.getLval(e.val).readUint(state, ti.bits);
                         switch (e.op) {
                             case ::MIR::eUniOp::INV:
                                 i = ti.mask(~i);
@@ -2562,7 +2562,7 @@ namespace HIR {
                         break;
                     }
                     case TypeInfo::Float: {
-                        auto v = localState.getLval(e.val).read_float(state, ti.bits);
+                        auto v = localState.getLval(e.val).readFloat(state, ti.bits);
                         switch (e.op) {
                             case ::MIR::eUniOp::INV:
                                 MIR_BUG(state, "Invalid invert of Float");
@@ -2579,18 +2579,18 @@ namespace HIR {
             }
             TU_ARMA(DstMeta, e) {
                 auto v = localState.getLval(e.val);
-                size_t ptr_size = TargetGetPointerBits() / 8;
-                dst.copyFrom(state, v.slice(ptr_size));
+                size_t ptrSize = TargetGetPointerBits() / 8;
+                dst.copyFrom(state, v.slice(ptrSize));
             }
             TU_ARMA(DstPtr, e) {
                 auto v = localState.getLval(e.val);
-                size_t ptr_size = TargetGetPointerBits() / 8;
-                dst.copyFrom(state, v.slice(0, ptr_size));
+                size_t ptrSize = TargetGetPointerBits() / 8;
+                dst.copyFrom(state, v.slice(0, ptrSize));
             }
             TU_ARMA(MakeDst, e) {
                 if (TU_TEST2(e.metaVal, Constant, , ItemAddr, .get() == nullptr)) {
                     ::HIR::TypeRef tmp;
-                    const auto& src_ty = state.getParamType(tmp, e.ptr_val);
+                    const auto& src_ty = state.getParamType(tmp, e.ptrVal);
                     ::HIR::TypeRef tmp2;
                     const auto& dstTy = state.getLvalueType(tmp2, sa.dst);
 
@@ -2629,8 +2629,8 @@ namespace HIR {
                             // TODO: What can cast TO a borrow? - Non-converted dyn unsizes .. but they require vtables,
                             // which aren't available yet!
                             if (const auto* tep = (*dynamicTypeD)->opt_TraitObject()) {
-                                static const RcString rcstring_vtable = RcString::newInterned("vtable#");
-                                auto vtable_path = ::HIR::Path(*dynamicTypeS, tep->mTrait.mPath.clone(), rcstring_vtable);
+                                static const RcString rcstringVtable = RcString::newInterned("vtable#");
+                                auto vtable_path = ::HIR::Path(*dynamicTypeS, tep->mTrait.mPath.clone(), rcstringVtable);
                                 dst.slice(TargetGetPointerBits() / 8).write_ptr(state, EncodedLiteral::PTR_BASE, localState.getStaticref(std::move(vtable_path)));
                             } else if (/*const auto* tep =*/(*dynamicTypeD)->opt_Slice()) {
                                 auto size = (*dynamicTypeS)->as_Array().size.as_Known();
@@ -2641,20 +2641,20 @@ namespace HIR {
                         }
                 }
 
-                if( const auto* p = e.ptr_val.opt_Borrow() ) {
+                if( const auto* p = e.ptrVal.opt_Borrow() ) {
                         localState.write_borrow(dst, p->type, p->val);
                 }
-                else if( const auto* c = e.ptr_val.opt_Constant() ) {
+                else if( const auto* c = e.ptrVal.opt_Constant() ) {
                         localState.write_const(dst, *c);
                 }
                 else {
-                        auto inval = localState.getLval(e.ptr_val.as_LValue());
+                        auto inval = localState.getLval(e.ptrVal.as_LValue());
                         dst.slice(0, TargetGetPointerBits() / 8).copyFrom(state, inval);
                 }
                 } else {
-                    size_t ptr_size = TargetGetPointerBits() / 8;
-                    localState.write_param(dst.slice(0, ptr_size), e.ptr_val);
-                    localState.write_param(dst.slice(ptr_size), e.metaVal);
+                    size_t ptrSize = TargetGetPointerBits() / 8;
+                    localState.write_param(dst.slice(0, ptrSize), e.ptrVal);
+                    localState.write_param(dst.slice(ptrSize), e.metaVal);
                 }
             }
             TU_ARMA(Tuple, e) {
@@ -2698,7 +2698,7 @@ namespace HIR {
                             vp = &(tmp_v = localState.ms.getValue(state.sp, *ve));
                         }
                         EncodedLiteral tmp_val;
-                        count = localState.getConst(*vp, tmp_val).read_usize(0);
+                        count = localState.getConst(*vp, tmp_val).readUsize(0);
                     }
             }
 
@@ -2762,7 +2762,7 @@ namespace HIR {
                         // No tag to write, just leave as zeroes
                         if (e.index == ve.zero_variant) {
                             auto ofs = getOffset(state.sp, resolve, enmRepr, ve.field);
-                            auto saved_ofs = ofs;
+                            auto savedOfs = ofs;
                             for (size_t i = 0; i + 8 <= ve.field.size; i += 8) {
                                 dst.slice(ofs, 8).write_uint(state, 64, 0);
                                 ofs += 8;
@@ -2770,7 +2770,7 @@ namespace HIR {
                             if (ve.field.size % 8 > 0) {
                                 dst.slice(ofs, ve.field.size % 8).write_uint(state, (ve.field.size % 8) * 8, 0);
                             }
-                            DEBUG("@" << ofs << " = " << dst.slice(saved_ofs, ve.field.size) << " NonZero");
+                            DEBUG("@" << ofs << " = " << dst.slice(savedOfs, ve.field.size) << " NonZero");
                         } else {
                             // No tag, already filled
                         }
@@ -2802,7 +2802,7 @@ namespace HIR {
         DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << sa.dst << " := " << dst);
     }
 
-    unsigned Evaluator::run_terminator(::MIR::eval::CallStackEntry& localState, const ::MIR::Terminator& terminator) {
+    unsigned Evaluator::runTerminator(::MIR::eval::CallStackEntry& localState, const ::MIR::Terminator& terminator) {
         const auto& state = localState.state;
         DEBUG("E" << this->evalIndex << " F" << localState.frameIndex << " " << state << terminator);
 
@@ -2816,7 +2816,7 @@ namespace HIR {
                 return TERM_RET_RETURN;
             }
             TU_ARMA(If, e) {
-                bool res = U128(0) != localState.getLval(e.cond).read_uint(state, 1);
+                bool res = U128(0) != localState.getLval(e.cond).readUint(state, 1);
                 DEBUG(state << " IF " << res);
                 return res ? e.bbTrue : e.bbFalse;
             }
@@ -2827,7 +2827,7 @@ namespace HIR {
                 HIR::TypeRef tmp;
                 const auto& ty = state.getLvalueType(tmp, e.val);
                 auto lit = localState.getLval(e.val);
-                auto var_idx = localState.read_enum_variant(ty, lit);
+                auto var_idx = localState.readEnumVariant(ty, lit);
                 DEBUG(state << " = " << var_idx);
                 MIR_ASSERT(state, var_idx < e.targets.size(), "Switch " << var_idx << " out of range in target list (" << e.targets.size() << ")");
                 return e.targets[var_idx];
@@ -2843,7 +2843,7 @@ namespace HIR {
             default:
                 MIR_TODO(state, "SwitchValue - " << e.values.tag_str());
                     TU_ARMA(Unsigned, vals) {
-                        auto v = lit.read_uint(state, ti.bits);
+                        auto v = lit.readUint(state, ti.bits);
                         for (size_t i = 0; i < vals.size(); i++) {
                             if (v == U128(vals[i])) {
                                 target_idx = i;
@@ -2875,7 +2875,7 @@ namespace HIR {
             TU_ARMA(Call, e) {
                 const auto& ms = localState.ms;
                 if (const auto* te = e.fcn.opt_Intrinsic()) {
-                    auto dst = localState.getLval(e.ret_val);
+                    auto dst = localState.getLval(e.retVal);
                     if (te->name == "size_of") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t size_val;
@@ -2903,7 +2903,7 @@ namespace HIR {
                                 throw Defer();
                             }
                             auto arg = localState.getLval(e.args.at(0).as_LValue());
-                            const auto len = arg.slice(TargetGetPointerBits() / 8).read_usize(state);
+                            const auto len = arg.slice(TargetGetPointerBits() / 8).readUsize(state);
                             MIR_ASSERT(state, itemSize == 0 || len <= SIZE_MAX / itemSize, "`size_of_val` overflow for " << ty);
                             size_val = len * itemSize;
                         }
@@ -2969,7 +2969,7 @@ namespace HIR {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "ctpop with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
-                        auto val = ti.mask(localState.read_param_uint(ti.bits, e.args.at(0)));
+                        auto val = ti.mask(localState.readParamUint(ti.bits, e.args.at(0)));
                         unsigned rv = __builtin_popcountll(val.getLo()) + __builtin_popcountll(val.getHi());
                         dst.write_uint(state, 32, U128(rv));
                     }
@@ -2978,7 +2978,7 @@ namespace HIR {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`cttz` with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
-                        auto val = ti.mask(localState.read_param_uint(ti.bits, e.args.at(0)));
+                        auto val = ti.mask(localState.readParamUint(ti.bits, e.args.at(0)));
                         unsigned rv = 0;
                         if (val == U128(0)) {
                             rv = ti.bits;
@@ -2995,7 +2995,7 @@ namespace HIR {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "`ctlz` with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
-                        auto val = ti.mask(localState.read_param_uint(ti.bits, e.args.at(0)));
+                        auto val = ti.mask(localState.readParamUint(ti.bits, e.args.at(0)));
                         unsigned rv = 0;
                         // Count how many shifts needed to remove the MSB
                         while (val != U128(0)) {
@@ -3008,7 +3008,7 @@ namespace HIR {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         MIR_ASSERT(state, ty->is_Primitive(), "bswap with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
-                        auto val = localState.read_param_uint(ti.bits, e.args.at(0));
+                        auto val = localState.readParamUint(ti.bits, e.args.at(0));
                         struct H {
                             static uint16_t bswap16(uint16_t v) {
                                 return (v >> 8) | (v << 8);
@@ -3054,7 +3054,7 @@ namespace HIR {
                         MIR_ASSERT(state, ty->is_Primitive(), "bswap with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
 
-                        auto val = localState.read_param_uint(ti.bits, e.args.at(0));
+                        auto val = localState.readParamUint(ti.bits, e.args.at(0));
                         U128 rv;
                         for (size_t i = 0; i < ti.bits; i++) {
                             // Shift before inserting - shifting after leaks the first bit out of
@@ -3072,8 +3072,8 @@ namespace HIR {
                         MIR_ASSERT(state, ty->is_Primitive(), te->name << " with non-primitive " << ty);
                         auto ti = TypeInfo::forType(ty);
 
-                        auto val = localState.read_param_uint(ti.bits, e.args.at(0));
-                        auto count = localState.read_param_uint(32, e.args.at(1));
+                        auto val = localState.readParamUint(ti.bits, e.args.at(0));
+                        auto count = localState.readParamUint(32, e.args.at(1));
                         unsigned countI = (count % ti.bits).truncate_u64();
 
                         U128 rv;
@@ -3172,53 +3172,53 @@ namespace HIR {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        auto bits = localState.read_param_uint(ti.bits, e.args.at(0));
+                        auto bits = localState.readParamUint(ti.bits, e.args.at(0));
                         bits &= ~(U128(1) << (ti.bits - 1));
                         dst.write_uint(state, ti.bits, bits);
                     } else if (te->name == "copysignf16" || te->name == "copysignf32" || te->name == "copysignf64" || te->name == "copysignf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        auto value = localState.read_param_uint(ti.bits, e.args.at(0));
-                        auto sign = localState.read_param_uint(ti.bits, e.args.at(1));
+                        auto value = localState.readParamUint(ti.bits, e.args.at(0));
+                        auto sign = localState.readParamUint(ti.bits, e.args.at(1));
                         auto sign_mask = U128(1) << (ti.bits - 1);
                         dst.write_uint(state, ti.bits, (value & ~sign_mask) | (sign & sign_mask));
                     } else if (te->name == "floorf16" || te->name == "floorf32" || te->name == "floorf64" || te->name == "floorf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, floatValueFloor(localState.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, floatValueFloor(localState.readParamFloat(ti.bits, e.args.at(0))));
                     } else if (te->name == "ceilf16" || te->name == "ceilf32" || te->name == "ceilf64" || te->name == "ceilf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, floatValueCeil(localState.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, floatValueCeil(localState.readParamFloat(ti.bits, e.args.at(0))));
                     } else if (te->name == "roundf16" || te->name == "roundf32" || te->name == "roundf64" || te->name == "roundf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, floatValueRound(localState.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, floatValueRound(localState.readParamFloat(ti.bits, e.args.at(0))));
                     } else if (te->name == "round_ties_even_f16" || te->name == "round_ties_even_f32" || te->name == "round_ties_even_f64" || te->name == "round_ties_even_f128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, floatValueRoundEven(localState.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, floatValueRoundEven(localState.readParamFloat(ti.bits, e.args.at(0))));
                     } else if (te->name == "truncf16" || te->name == "truncf32" || te->name == "truncf64" || te->name == "truncf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, floatValueTrunc(localState.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, floatValueTrunc(localState.readParamFloat(ti.bits, e.args.at(0))));
                     } else if (te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128" || te->name == "maxnumf16" || te->name == "maxnumf32" || te->name == "maxnumf64" || te->name == "maxnumf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        auto lhs = localState.read_param_float(ti.bits, e.args.at(0));
-                        auto rhs = localState.read_param_float(ti.bits, e.args.at(1));
+                        auto lhs = localState.readParamFloat(ti.bits, e.args.at(0));
+                        auto rhs = localState.readParamFloat(ti.bits, e.args.at(1));
                         bool isMin = te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128";
                         auto value = isMin ? floatValueMinimumNumber(lhs, rhs) : floatValueMaximumNumber(lhs, rhs);
                         dst.write_float(state, ti.bits, value);
                     } else if (te->name == "assume") {
-                        auto val = localState.read_param_uint(8, e.args.at(0));
+                        auto val = localState.readParamUint(8, e.args.at(0));
                         MIR_ASSERT(state, val != 0, "`assume` failed");
                     } else if (te->name == "assert_inhabited") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -3242,7 +3242,7 @@ namespace HIR {
 
                     TU_MATCH_HDRA( (fcnArg), {)
                     TU_ARMA(LValue, e) {
-                                auto fcnVal = localState.getLval(e).read_ptr(state);
+                                auto fcnVal = localState.getLval(e).readPtr(state);
                                 MIR_ASSERT(state, fcnVal.first == EncodedLiteral::PTR_BASE, "");
 
                                 const auto* fcnSr = fcnVal.second.asStaticref();
@@ -3274,7 +3274,7 @@ namespace HIR {
                             vr.copyFrom(state, argVal.slice(f.offset, size));
                     }
 
-                    if( this->callFunction(localState, e.ret_val, std::move(fcn_path), std::move(callArgs)) ) {
+                    if( this->callFunction(localState, e.retVal, std::move(fcn_path), std::move(callArgs)) ) {
                             return TERM_RET_PUSHED;
                     }
                     }
@@ -3284,25 +3284,25 @@ namespace HIR {
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
                             throw Defer();
-                        auto ptr_src = localState.getLval(e.args.at(0).as_LValue()).read_ptr(state);
-                        auto ptr_dst = localState.getLval(e.args.at(1).as_LValue()).read_ptr(state);
-                        U128 count = localState.read_param_uint(TargetGetPointerBits(), e.args.at(2));
+                        auto ptrSrc = localState.getLval(e.args.at(0).as_LValue()).readPtr(state);
+                        auto ptrDst = localState.getLval(e.args.at(1).as_LValue()).readPtr(state);
+                        U128 count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
                         MIR_ASSERT(state, count.isU64(), "Excessive count in `" << te->name << "`");
                         MIR_ASSERT(state, count * elementSize < U128(SIZE_MAX), "Excessive size in `" << te->name << "`");
                         size_t nbytes = elementSize * count.truncate_u64();
-                        MIR_ASSERT(state, ptr_src.first >= EncodedLiteral::PTR_BASE, "");
-                        MIR_ASSERT(state, ptr_dst.first >= EncodedLiteral::PTR_BASE, "");
-                        auto vr_src = ValueRef(ptr_src.second, ptr_src.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
-                        auto vr_dst = ValueRef(ptr_dst.second, ptr_dst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
+                        MIR_ASSERT(state, ptrSrc.first >= EncodedLiteral::PTR_BASE, "");
+                        MIR_ASSERT(state, ptrDst.first >= EncodedLiteral::PTR_BASE, "");
+                        auto vr_src = ValueRef(ptrSrc.second, ptrSrc.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
+                        auto vr_dst = ValueRef(ptrDst.second, ptrDst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
                         vr_dst.copyFrom(state, vr_src);
                     } else if (te->name == "offset") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0)->as_Pointer().inner);
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
                             throw Defer();
-                        auto ptr_pair = localState.read_param_ptr(e.args.at(0));
-                        auto ofs = localState.read_param_uint(TargetGetPointerBits(), e.args.at(1));
-                        dst.write_ptr(state, ptr_pair.first + ofs.truncate_u64() * elementSize, ptr_pair.second);
+                        auto ptrPair = localState.readParamPtr(e.args.at(0));
+                        auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
+                        dst.write_ptr(state, ptrPair.first + ofs.truncate_u64() * elementSize, ptrPair.second);
                     }
                     // `arith_offset` is the wrapping form of `offset`; identical arithmetic here, and the type parameter is the *pointee*.
                     else if (te->name == "arith_offset") {
@@ -3310,14 +3310,14 @@ namespace HIR {
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
                             throw Defer();
-                        auto ptr_pair = localState.read_param_ptr(e.args.at(0));
-                        auto ofs = localState.read_param_uint(TargetGetPointerBits(), e.args.at(1));
-                        dst.write_ptr(state, ptr_pair.first + ofs.truncate_u64() * elementSize, ptr_pair.second);
+                        auto ptrPair = localState.readParamPtr(e.args.at(0));
+                        auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
+                        dst.write_ptr(state, ptrPair.first + ofs.truncate_u64() * elementSize, ptrPair.second);
                     }
                     // Returns 1/0/2 (equal / not equal / unknown). Only answer definitively for pointers sharing a relocation; different allocations report 2.
                     else if (te->name == "ptr_guaranteed_cmp") {
-                        auto a = localState.read_param_ptr(e.args.at(0));
-                        auto b = localState.read_param_ptr(e.args.at(1));
+                        auto a = localState.readParamPtr(e.args.at(0));
+                        auto b = localState.readParamPtr(e.args.at(1));
                         uint8_t rv = (a.second == b.second) ? (a.first == b.first ? 1 : 0) : 2;
                         dst.write_uint(state, 8, rv);
                     } else if (te->name == "write_bytes") {
@@ -3325,20 +3325,20 @@ namespace HIR {
                         size_t elementSize;
                         if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
                             throw Defer();
-                        auto ptr_dst = localState.getLval(e.args.at(0).as_LValue()).read_ptr(state);
-                        auto val = localState.read_param_uint(8, e.args.at(1));
-                        U128 count = localState.read_param_uint(TargetGetPointerBits(), e.args.at(2));
+                        auto ptrDst = localState.getLval(e.args.at(0).as_LValue()).readPtr(state);
+                        auto val = localState.readParamUint(8, e.args.at(1));
+                        U128 count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
                         MIR_ASSERT(state, count.isU64(), "Excessive count in `" << te->name << "`");
                         MIR_ASSERT(state, count * elementSize < U128(SIZE_MAX), "Excessive size in `" << te->name << "`");
                         size_t nbytes = elementSize * count.truncate_u64();
-                        MIR_ASSERT(state, ptr_dst.first >= EncodedLiteral::PTR_BASE, "");
-                        ValueRef vr_dst = ValueRef(ptr_dst.second, ptr_dst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
+                        MIR_ASSERT(state, ptrDst.first >= EncodedLiteral::PTR_BASE, "");
+                        ValueRef vr_dst = ValueRef(ptrDst.second, ptrDst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
                         memset(vr_dst.extWriteBytes(state, nbytes), val.truncate_u64(), nbytes);
                     }
                     // Innards of `core::ptr::read` (on 1.90+)
                     else if (te->name == "read_via_copy") {
-                        auto ptr_src = localState.read_param_ptr(e.args.at(0));
-                        auto vr_src = ValueRef(ptr_src.second, ptr_src.first - EncodedLiteral::PTR_BASE);
+                        auto ptrSrc = localState.readParamPtr(e.args.at(0));
+                        auto vr_src = ValueRef(ptrSrc.second, ptrSrc.first - EncodedLiteral::PTR_BASE);
                         dst.copyFrom(state, vr_src);
                     } else if (te->name == "discriminant_value") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
@@ -3354,7 +3354,7 @@ namespace HIR {
                             if (const auto* arg = e.args.at(0).opt_Borrow()) {
                                 value = localState.getLval(arg->val);
                             } else {
-                                auto ptr = localState.read_param_ptr(e.args.at(0));
+                                auto ptr = localState.readParamPtr(e.args.at(0));
                                 MIR_ASSERT(state, ptr.first >= EncodedLiteral::PTR_BASE, "Null pointer passed to `discriminant_value`");
                                 value = ValueRef(ptr.second, ptr.first - EncodedLiteral::PTR_BASE);
                             }
@@ -3365,7 +3365,7 @@ namespace HIR {
                                 }
                                 TU_ARMA(Linear, ve) {
                                     const auto ofs = repr->getOffset(state.sp, resolve, ve.field);
-                                    auto tag = value.slice(ofs, ve.field.size).read_uint(state, ve.field.size * 8);
+                                    auto tag = value.slice(ofs, ve.field.size).readUint(state, ve.field.size * 8);
                                     const auto variant = tag < U128(ve.offset) ? ve.field.index : (tag - U128(ve.offset)).truncate_u64();
                                     dst.write_uint(state, dst.getLen() * 8, U128(variant));
                                 }
@@ -3376,16 +3376,16 @@ namespace HIR {
                                     MIR_ASSERT(state, tag_info.ty == TypeInfo::Signed || tag_info.ty == TypeInfo::Unsigned, "Non-integer enum tag " << tag_ty);
                                     auto tag = value.slice(ofs, ve.field.size);
                                     if (tag_info.ty == TypeInfo::Signed) {
-                                        dst.write_sint(state, dst.getLen() * 8, tag.read_sint(state, tag_info.bits));
+                                        dst.write_sint(state, dst.getLen() * 8, tag.readSint(state, tag_info.bits));
                                     } else {
-                                        dst.write_uint(state, dst.getLen() * 8, tag.read_uint(state, tag_info.bits));
+                                        dst.write_uint(state, dst.getLen() * 8, tag.readUint(state, tag_info.bits));
                                     }
                                 }
                                 TU_ARMA(NonZero, ve) {
                                     const auto ofs = repr->getOffset(state.sp, resolve, ve.field);
                                     bool isNonzero = false;
                                     for (size_t i = 0; i < ve.field.size; i++) {
-                                        isNonzero |= value.slice(ofs + i, 1).read_uint(state, 8) != U128(0);
+                                        isNonzero |= value.slice(ofs + i, 1).readUint(state, 8) != U128(0);
                                     }
                                     const auto variant = isNonzero ? 1 - ve.zero_variant : ve.zero_variant;
                                     dst.write_uint(state, dst.getLen() * 8, U128(variant));
@@ -3407,8 +3407,8 @@ namespace HIR {
                     } else {
                         MIR_TODO(state, "Call intrinsic \"" << te->name << "\" - " << terminator);
                     }
-                    DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.ret_val << " := " << dst);
-                    return e.ret_block;
+                    DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                    return e.retBlock;
                 } else if (const auto* te = e.fcn.opt_Path()) {
                     const auto& fcnpRaw = *te;
                     DEBUG("ms=" << ms);
@@ -3425,12 +3425,12 @@ namespace HIR {
                         localState.write_param(vr, a);
                     }
 
-                    if (this->callFunction(localState, e.ret_val, std::move(fcnp), std::move(callArgs))) {
+                    if (this->callFunction(localState, e.retVal, std::move(fcnp), std::move(callArgs))) {
                         return TERM_RET_PUSHED;
                     } else {
-                        auto dst = localState.getLval(e.ret_val);
-                        DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.ret_val << " := " << dst);
-                        return e.ret_block;
+                        auto dst = localState.getLval(e.retVal);
+                        DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                        return e.retBlock;
                     }
                 } else {
                     MIR_BUG(state, "Unexpected terminator - " << terminator);
@@ -3446,17 +3446,17 @@ namespace HIR {
     /// @param fcn_path
     /// @param call_args
     /// @return `true` is a new stack frame was pushed
-    bool Evaluator::callFunction(CallStackEntry& localState, const MIR::LValue& rv_slot, ::std::shared_ptr<HIR::Path> fcn_path, ::std::vector<AllocationPtr> callArgs) {
+    bool Evaluator::callFunction(CallStackEntry& localState, const MIR::LValue& rvSlot, ::std::shared_ptr<HIR::Path> fcn_path, ::std::vector<AllocationPtr> callArgs) {
         const auto& state = localState.state;
         MonomorphState fcnMs(resolve.crate.types);
         const ::HIR::GenericParams* implParamsDef = nullptr;
 
-        const auto* path_p = fcn_path.get();
-        if (const auto* e = path_p->mData.opt_UfcsKnown()) {
+        const auto* pathP = fcn_path.get();
+        if (const auto* e = pathP->mData.opt_UfcsKnown()) {
             if (e->type->is_Function() || e->type->is_NamedFunction()) {
                 if (e->trait.mPath == resolve.mLangFn || e->trait.mPath == resolve.mLangFnMut || e->trait.mPath == resolve.mLangFnOnce) {
                     if (const auto* nf = e->type->opt_NamedFunction()) {
-                        path_p = &nf->path;
+                        pathP = &nf->path;
                     } else {
                         MIR_TODO(localState.state, "Get function from fn-ptr - " << e->type);
                     }
@@ -3478,9 +3478,9 @@ namespace HIR {
                 }
             }
         }
-        const auto& path = *path_p;
+        const auto& path = *pathP;
 
-        if (require_const_calls) if (const auto* e = path.mData.opt_UfcsKnown()) {
+        if (requireConstCalls) if (const auto* e = path.mData.opt_UfcsKnown()) {
             const auto& trait = resolve.crate.getTraitByPath(state.sp, e->trait.mPath);
             if (trait.isConst) {
                 ImplRef bestImpl;
@@ -3538,7 +3538,7 @@ namespace HIR {
             }
             auto ret_ty = this->resolve.monomorphExpand(this->root_span, fcn.returnType, fcnMs);
 
-            push_stack_entry(
+            pushStackEntry(
                 ::FmtLambda([=](std::ostream& os) {
                 os << *fcn_path;
             }),
@@ -3555,10 +3555,10 @@ namespace HIR {
             throw Defer();
         } else if (rv.is_Struct()) {
             // Set destination, same way as `RValue::Struct` does
-            auto dst = localState.getLval(rv_slot);
+            auto dst = localState.getLval(rvSlot);
 
             ::HIR::TypeRef tmp;
-            const auto& ty = state.getLvalueType(tmp, rv_slot);
+            const auto& ty = state.getLvalueType(tmp, rvSlot);
             auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
             if (!repr) {
                 throw Defer();
@@ -3660,12 +3660,12 @@ namespace HIR {
         // - This is a lazy hack, isntead of doing this creation in the caller
         ::HIR::PathParams nopParamsImpl;
         ::HIR::PathParams nopParamsMethod;
-        if (!ms.pp_impl && !ms.pp_method) {
+        if (!ms.ppImpl && !ms.ppMethod) {
             if (resolve.itemGenerics) {
-                ms.pp_method = &(nopParamsMethod = resolve.itemGenerics->makeNopParams(resolve.crate.types, 1));
+                ms.ppMethod = &(nopParamsMethod = resolve.itemGenerics->makeNopParams(resolve.crate.types, 1));
             }
             if (resolve.implGenerics) {
-                ms.pp_impl = &(nopParamsImpl = resolve.implGenerics->makeNopParams(resolve.crate.types, 0));
+                ms.ppImpl = &(nopParamsImpl = resolve.implGenerics->makeNopParams(resolve.crate.types, 0));
             }
             DEBUG("(was empty) ms = " << ms);
         }
@@ -3681,13 +3681,13 @@ namespace HIR {
             assert(this->callStack.empty());
             this->numFrames = 0;
             // Note: Since this is the entrypoint, `this->resolve` has the correct GenericParams
-            this->push_stack_entry(FMT_CB(os, os << ip), *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenerics, resolve.implGenerics);
-            auto rv_raw = this->run_until_stack_empty();
+            this->pushStackEntry(FMT_CB(os, os << ip), *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenerics, resolve.implGenerics);
+            auto rvRaw = this->runUntilStackEmpty();
 
-            ASSERT_BUG(this->root_span, rv_raw, "evaluate_constant_mir returned null allocation");
-            DEBUG(ip << " = " << ::MIR::eval::ValueRef(rv_raw));
+            ASSERT_BUG(this->root_span, rvRaw, "evaluate_constant_mir returned null allocation");
+            DEBUG(ip << " = " << ::MIR::eval::ValueRef(rvRaw));
 
-            return this->allocationToEncoded(exp, *rv_raw);
+            return this->allocationToEncoded(exp, *rvRaw);
         } else {
             BUG(this->root_span, "Attempting to evaluate constant expression with no associated code");
         }
@@ -3737,26 +3737,26 @@ namespace {
         }
 
         void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
-            auto saved_mp = modPath;
-            auto saved_m = mMod;
+            auto savedMp = modPath;
+            auto savedM = mMod;
             mMod = &mod;
             modPath = &p;
 
             ::HIR::Visitor::visit_module(p, mod);
 
-            mMod = saved_m;
-            modPath = saved_mp;
+            mMod = savedM;
+            modPath = savedMp;
         }
 
         void visit_function(::HIR::ItemPath p, ::HIR::Function& f) override {
             TRACE_FUNCTION_F(p);
 
-            auto pp_fcn = getParamsForDef(f.mParams, true);
-            monomorphState.pp_method = &pp_fcn;
+            auto ppFcn = getParamsForDef(f.mParams, true);
+            monomorphState.ppMethod = &ppFcn;
             itemParams = &f.mParams;
             ::HIR::Visitor::visit_function(p, f);
             itemParams = nullptr;
-            monomorphState.pp_method = nullptr;
+            monomorphState.ppMethod = nullptr;
         }
 
         void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
@@ -3767,15 +3767,15 @@ namespace {
             modPath = &mp;
             mMod = &crate.getModByPath(sp, impl.srcModule);
 
-            auto pp_impl = getParamsForDef(impl.mParams);
-            monomorphState.pp_impl = &pp_impl;
+            auto ppImpl = getParamsForDef(impl.mParams);
+            monomorphState.ppImpl = &ppImpl;
             implParams = &impl.mParams;
 
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
 
             assert(implParams);
             implParams = nullptr;
-            monomorphState.pp_impl = nullptr;
+            monomorphState.ppImpl = nullptr;
 
             mMod = nullptr;
             modPath = nullptr;
@@ -3789,40 +3789,40 @@ namespace {
             modPath = &mp;
             mMod = &crate.getModByPath(sp, impl.srcModule);
 
-            auto pp_impl = getParamsForDef(impl.mParams);
-            monomorphState.pp_impl = &pp_impl;
+            auto ppImpl = getParamsForDef(impl.mParams);
+            monomorphState.ppImpl = &ppImpl;
             implParams = &impl.mParams;
 
             ::HIR::Visitor::visit_type_impl(impl);
 
             assert(implParams);
             implParams = nullptr;
-            monomorphState.pp_impl = nullptr;
+            monomorphState.ppImpl = nullptr;
 
             mMod = nullptr;
             modPath = nullptr;
         }
 
         void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
-            auto pp_item = getParamsForDef(item.mParams, true);
-            monomorphState.pp_method = &pp_item;
+            auto ppItem = getParamsForDef(item.mParams, true);
+            monomorphState.ppMethod = &ppItem;
             itemParams = &item.mParams;
             ::HIR::Visitor::visit_inherent_type(p, item);
             itemParams = nullptr;
-            monomorphState.pp_method = nullptr;
+            monomorphState.ppMethod = nullptr;
         }
 
         void visit_trait(::HIR::ItemPath ip, ::HIR::Trait& trait) override {
-            auto pp_impl = getParamsForDef(trait.mParams);
+            auto ppImpl = getParamsForDef(trait.mParams);
             monomorphState.self_ty = crate.types.self();
-            monomorphState.pp_impl = &pp_impl;
+            monomorphState.ppImpl = &ppImpl;
             implParams = &trait.mParams;
 
             ::HIR::Visitor::visit_trait(ip, trait);
 
             assert(implParams);
             implParams = nullptr;
-            monomorphState.pp_impl = nullptr;
+            monomorphState.ppImpl = nullptr;
         }
 
         void evalulateConstGeneric(const Span& sp, const ::HIR::TypeData* ty, ::HIR::ConstGeneric& v) {
@@ -3840,10 +3840,10 @@ namespace {
             for (auto& v : p.values) {
                 if (v.is_Unevaluated()) {
                     try {
-                        const auto& params_def = getParams(sp);
+                        const auto& paramsDef = getParams(sp);
                         auto idx = static_cast<size_t>(&v - &p.values.front());
-                        ASSERT_BUG(sp, idx < params_def.values.size(), "");
-                        const auto& ty = params_def.values[idx].mType;
+                        ASSERT_BUG(sp, idx < paramsDef.values.size(), "");
+                        const auto& ty = paramsDef.values[idx].mType;
                         ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
                         evalulateConstGeneric(sp, ty, v);
                     } catch (const Defer&) {
@@ -3954,7 +3954,7 @@ namespace {
                 auto eval = getEval(expr_ptr->span(), nvs);
                 try {
                     auto val = eval.evaluateConstant(*modPath + name, expr_ptr, crate.types.primitive(::HIR::CoreType::Usize), monomorphState.clone());
-                    as = val.read_usize(0);
+                    as = val.readUsize(0);
                     //DEBUG("Array size = " << as);
                 } catch (const Defer&) {
                     const auto* tn = cast<const HIR::ExprNodeConstParam>(&*expr_ptr);
@@ -3990,10 +3990,10 @@ namespace {
                         }
                         TU_ARMA(Struct, pbe) {
                             // If this struct hasn't been visited already, visit it
-                            auto saved_ip = implParams;
+                            auto savedIp = implParams;
                             implParams = nullptr;
                             this->visit_struct(te->path.mData.as_Generic().mPath, const_cast<::HIR::Struct&>(*pbe));
-                            implParams = saved_ip;
+                            implParams = savedIp;
                         }
                         TU_ARMA(Union, pbe) {
                         }
@@ -4186,9 +4186,9 @@ namespace {
                                 auto val = eval.evaluateConstant(p, var.expr, crate.types.primitive(ty));
                                 DEBUG("enum variant: " << p << "::" << var.name << " = " << val);
                                 if (is_signed) {
-                                    i = EncodedLiteralSlice(val).read_sint().getInner();
+                                    i = EncodedLiteralSlice(val).readSint().getInner();
                                 } else {
-                                    i = EncodedLiteralSlice(val).read_uint();
+                                    i = EncodedLiteralSlice(val).readUint();
                                 }
                             } catch (const Defer&) {
                                 BUG(var.expr->span(), "`Defer` thrown during evaluation of enum discriminant");
@@ -4212,9 +4212,9 @@ namespace {
                                 auto val = eval.evaluateConstant(p, var.discriminantExpr, crate.types.primitive(ty));
                                 DEBUG("enum variant: " << p << "::" << var.name << " = " << val);
                                 if (is_signed) {
-                                    i = EncodedLiteralSlice(val).read_sint().getInner();
+                                    i = EncodedLiteralSlice(val).readSint().getInner();
                                 } else {
-                                    i = EncodedLiteralSlice(val).read_uint();
+                                    i = EncodedLiteralSlice(val).readUint();
                                 }
                             } catch (const Defer&) {
                                 BUG(var.discriminantExpr->span(), "`Defer` thrown during evaluation of enum discriminant");
@@ -4283,15 +4283,15 @@ namespace {
         }
 
         void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
-            auto saved_mp = modPath;
-            auto saved_m = mMod;
+            auto savedMp = modPath;
+            auto savedM = mMod;
             mMod = &mod;
             modPath = &p;
-            mTypeck.push_traits(p, mod);
+            mTypeck.pushTraits(p, mod);
             ::HIR::Visitor::visit_module(p, mod);
-            mTypeck.pop_traits(mod);
-            mMod = saved_m;
-            modPath = saved_mp;
+            mTypeck.popTraits(mod);
+            mMod = savedM;
+            modPath = savedMp;
         }
 
         void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
@@ -4344,7 +4344,7 @@ void ConvertHIRConstantEvaluateExpr(const ::HIR::Crate& crate, const ::HIR::Item
 
 void ConvertHIRConstantEvaluateEnum(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const ::HIR::Enum& enm) {
     auto mod_path = ip.getSimplePath();
-    auto itemName = mod_path.pop_component();
+    auto itemName = mod_path.popComponent();
     const auto& mod = crate.getModByPath(Span(), mod_path);
 
     auto& item = const_cast<::HIR::Enum&>(enm);
@@ -4374,8 +4374,8 @@ void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const ::HIR::Crate& 
     if (const auto* value = cg.opt_Unevaluated()) {
         const auto& expr = *(*value)->expr;
         MonomorphState ms(crate.types);
-        ms.pp_impl = &(*value)->params_impl;
-        ms.pp_method = &(*value)->params_item;
+        ms.ppImpl = &(*value)->paramsImpl;
+        ms.ppMethod = &(*value)->paramsItem;
         auto type = ms.monomorphType(sp, expr->resType);
         if (visit_ty_with(type, [](const HIR::TypeData* t) {
             return t->is_Infer();
@@ -4392,13 +4392,13 @@ void ConvertHIRConstantEvaluateArraySize(const Span& sp, const ::HIR::Crate& cra
             ConvertHIRConstantEvaluateConstGeneric(sp, crate, crate.types.primitive(HIR::CoreType::Usize), *se);
         }
         if (const auto* e = se->opt_Evaluated()) {
-            size = (*e)->read_usize(0);
+            size = (*e)->readUsize(0);
         }
     }
 }
 
 namespace {
-    bool params_contain_ivars(const ::HIR::PathParams& params) {
+    bool paramsContainIvars(const ::HIR::PathParams& params) {
         for (const auto& t : params.types) {
             if (visit_ty_with(t, [](const HIR::TypeData* t) {
                 return t->is_Infer();
@@ -4415,7 +4415,7 @@ namespace {
     }
 }
 
-void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const ::HIR::Crate& crate, const HIR::SimplePath& mod_path, const ::HIR::GenericParams* impl_generics, const ::HIR::GenericParams* item_generics, const ::HIR::GenericParams* params_def, ::HIR::PathParams& params) {
+void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const ::HIR::Crate& crate, const HIR::SimplePath& mod_path, const ::HIR::GenericParams* impl_generics, const ::HIR::GenericParams* item_generics, const ::HIR::GenericParams* paramsDef, ::HIR::PathParams& params) {
     for (auto& v : params.values) {
         if (v.is_Unevaluated()) {
             const auto& ue = *v.as_Unevaluated();
@@ -4431,18 +4431,18 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const ::HIR::Crate& 
             try {
                 // TODO: if there's an ivar in the param list, then throw defer
                 // - Caller should ensure that known ivars are expanded.
-                if (params_contain_ivars(ue.params_impl) || params_contain_ivars(ue.params_item)) {
+                if (paramsContainIvars(ue.paramsImpl) || paramsContainIvars(ue.paramsItem)) {
                     throw Defer();
                 }
 
-                ASSERT_BUG(sp, params_def, "Missing generic parameter definitions for " << params);
+                ASSERT_BUG(sp, paramsDef, "Missing generic parameter definitions for " << params);
                 auto idx = static_cast<size_t>(&v - &params.values.front());
-                ASSERT_BUG(sp, idx < params_def->values.size(), "");
-                const auto& ty = params_def->values[idx].mType;
+                ASSERT_BUG(sp, idx < paramsDef->values.size(), "");
+                const auto& ty = paramsDef->values[idx].mType;
                 ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
                 MonomorphState ms(crate.types);
-                ms.pp_impl = &ue.params_impl;
-                ms.pp_method = &ue.params_item;
+                ms.ppImpl = &ue.paramsImpl;
+                ms.ppMethod = &ue.paramsItem;
 
                 auto val = eval.evaluateConstant(::HIR::ItemPath(mod_path, name.c_str()), e, ty, std::move(ms));
                 v = ::HIR::ConstGeneric::make_Evaluated(std::move(val));
@@ -4473,8 +4473,8 @@ Evaluator::Evaluator(const Span& sp, const ::HIR::Crate& crate, Newval& nvs)
     , value_pool(stl::ObjPool::fromMemory())
     , resolve(crate)
     , nvs(nvs)
-    , evalIndex(s_next_eval_index++)
+    , evalIndex(sNextEvalIndex++)
     , numFrames(0)
-    , require_const_calls(false) {
+    , requireConstCalls(false) {
 }
 }

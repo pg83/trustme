@@ -107,8 +107,8 @@ namespace AST {
         DEBUG("Load from --crate");
         for (const auto& c : gCrateOverrides) {
             auto n = RcString::newInterned(c.first);
-            auto real_name = this->loadExternCrate(Span(), n);
-            gImplicitCrates.insert(std::make_pair(n, real_name));
+            auto realName = this->loadExternCrate(Span(), n);
+            gImplicitCrates.insert(std::make_pair(n, realName));
         }
         if (this->extCratenameCore != "") {
             gImplicitCrates.insert(std::make_pair(RcString::newInterned("core"), this->extCratenameCore));
@@ -214,13 +214,13 @@ namespace AST {
 
         // NOTE: Creating `ExternCrate` loads the crate from the specified path
         auto ec = ExternCrate{pool, types, name, path};
-        auto real_name = ec.hir->crateName;
-        assert(real_name != "");
-        auto res = externCrates.insert(::std::make_pair(real_name, mv$(ec)));
+        auto realName = ec.hir->crateName;
+        assert(realName != "");
+        auto res = externCrates.insert(::std::make_pair(realName, mv$(ec)));
         if (!res.second) {
             // Crate already loaded?
-            DEBUG("Duplicate load of '" << real_name);
-            return real_name;
+            DEBUG("Duplicate load of '" << realName);
+            return realName;
         } else {
         }
         auto& ext_crate = res.first->second;
@@ -239,7 +239,7 @@ namespace AST {
             }
         }
         // NOTE: Add the crate to the ordered list AFTER its dependencies
-        externCratesOrd.push_back(real_name);
+        externCratesOrd.push_back(realName);
 
         if (ext_crate.shortName == "core") {
             if (this->extCratenameCore == "") {
@@ -262,8 +262,8 @@ namespace AST {
             }
         }
 
-        DEBUG("Loaded '" << name << "' from '" << basename << "' (actual name is '" << real_name << "' aka `" << ext_crate.shortName << "`)");
-        return real_name;
+        DEBUG("Loaded '" << name << "' from '" << basename << "' (actual name is '" << realName << "' aka `" << ext_crate.shortName << "`)");
+        return realName;
     }
 
     ExternCrate::ExternCrate(stl::ObjPool* pool, HIR::TypeInterner& types, const RcString& name, const ::std::string& path)
@@ -274,7 +274,7 @@ namespace AST {
         TRACE_FUNCTION_F("name=" << name << ", path='" << path << "'");
         hir = HIRDeserialise(pool, types, path);
 
-        hir->post_load_update(name);
+        hir->postLoadUpdate(name);
         mName = hir->crateName;
         if (const auto* e = strchr(mName.c_str(), '-')) {
             shortName = RcString::newInterned(mName.c_str(), e - mName.c_str());

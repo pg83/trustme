@@ -49,8 +49,8 @@ namespace AsmCommon {
         //nvptx_reg32,
         //nvptx_reg64,
 
-        riscv_reg,
-        riscv_freg,
+        riscvReg,
+        riscvFreg,
 
         //hexagon_reg,
 
@@ -110,7 +110,7 @@ namespace AsmCommon {
         unsigned pure : 1;
         unsigned nomem : 1;
         unsigned readonly : 1;
-        unsigned preserves_flags : 1;
+        unsigned preservesFlags : 1;
         unsigned noreturn : 1;
         unsigned nostack : 1;
         unsigned attSyntax : 1;

@@ -218,11 +218,11 @@ namespace HIR {
             , buffer(1024)
             , pos(0)
         {
-            size_t nStrings = read_count();
+            size_t nStrings = readCount();
             strings.reserve(nStrings);
             DEBUG("n_strings = " << nStrings);
             for (size_t i = 0; i < nStrings; i++) {
-                auto s = read_string();
+                auto s = readString();
                 strings.push_back(RcString::newInterned(s));
             }
         }
@@ -414,7 +414,7 @@ void Writer::write_bool(bool v) {
     write_u8(v ? 0xFF : 0x00);
 }
 // Core protocol
-void Writer::raw_write_uint(uint64_t val) {
+void Writer::rawWriteUint(uint64_t val) {
     if (val < 0xC0) {
         write_u8(static_cast<uint8_t>(val));
     } else {
@@ -430,16 +430,16 @@ void Writer::raw_write_uint(uint64_t val) {
         this->write(bytes, len);
     }
 }
-void Writer::raw_write_len(size_t len) {
+void Writer::rawWriteLen(size_t len) {
     if (len < (0xFC - 0xC0)) {
         write_u8(0xC0 + len);
     } else {
         write_u8(0xFC);
-        raw_write_uint(len);
+        rawWriteUint(len);
     }
 }
-void Writer::raw_write_bytes(size_t len, const void* data) {
-    raw_write_len(len);
+void Writer::rawWriteBytes(size_t len, const void* data) {
+    rawWriteLen(len);
     this->write(data, len);
 }
 Writer::CloseOnDrop::CloseOnDrop(Writer& r)
@@ -458,9 +458,9 @@ Writer::CloseOnDrop::~CloseOnDrop() {
 Writer::CloseOnDrop Writer::openObject(const char* name) {
     write_u8(0xFD);
     auto iv = objnameCache.insert(std::make_pair(name, static_cast<unsigned>(objnameCache.size())));
-    raw_write_uint(iv.first->second);
+    rawWriteUint(iv.first->second);
     if (iv.second) {
-        raw_write_bytes(strlen(name), name);
+        rawWriteBytes(strlen(name), name);
     }
     return CloseOnDrop(*this);
 }
@@ -468,54 +468,54 @@ Writer::CloseOnDrop Writer::openAnonObject() {
     write_u8(0xFE);
     return CloseOnDrop(*this);
 }
-uint8_t Reader::read_u8() {
+uint8_t Reader::readU8() {
     uint8_t v;
     read(&v, sizeof v);
     return v;
 }
-uint16_t Reader::read_u16() {
+uint16_t Reader::readU16() {
     uint8_t buf[2];
     read(buf, sizeof buf);
     return static_cast<uint16_t>(buf[0]) | (static_cast<uint16_t>(buf[1]) << 8);
 }
-uint32_t Reader::read_u32() {
+uint32_t Reader::readU32() {
     uint8_t buf[4];
     read(buf, sizeof buf);
     return static_cast<uint32_t>(buf[0]) | (static_cast<uint32_t>(buf[1]) << 8) | (static_cast<uint32_t>(buf[2]) << 16) | (static_cast<uint32_t>(buf[3]) << 24);
 }
-uint64_t Reader::read_u64() {
+uint64_t Reader::readU64() {
     uint8_t buf[8];
     read(buf, sizeof buf);
     return static_cast<uint64_t>(buf[0]) | (static_cast<uint64_t>(buf[1]) << 8) | (static_cast<uint64_t>(buf[2]) << 16) | (static_cast<uint64_t>(buf[3]) << 24) | (static_cast<uint64_t>(buf[4]) << 32) | (static_cast<uint64_t>(buf[5]) << 40) | (static_cast<uint64_t>(buf[6]) << 48) | (static_cast<uint64_t>(buf[7]) << 56);
 }
-U128 Reader::read_u128() {
-    auto lo = read_u64();
-    auto hi = read_u64();
+U128 Reader::readU128() {
+    auto lo = readU64();
+    auto hi = readU64();
     return U128(lo, hi);
 }
 // Variable-length encoded u64 (for array sizes)
-uint64_t Reader::read_u64c() {
-    auto v = read_u8();
+uint64_t Reader::readU64c() {
+    auto v = readU8();
     if (v < (1 << 7)) {
         return static_cast<uint64_t>(v);
     } else if (v < 0xC0) {
         uint64_t rv = static_cast<uint64_t>(v & 0x3F) << 16;
-        rv |= static_cast<uint64_t>(read_u8()) << 8;
-        rv |= static_cast<uint64_t>(read_u8());
+        rv |= static_cast<uint64_t>(readU8()) << 8;
+        rv |= static_cast<uint64_t>(readU8());
         return rv;
     } else if (v < 0xFF) {
         uint64_t rv = static_cast<uint64_t>(v & 0x3F) << 32;
-        rv |= static_cast<uint64_t>(read_u8()) << 24;
-        rv |= static_cast<uint64_t>(read_u8()) << 16;
-        rv |= static_cast<uint64_t>(read_u8()) << 8;
-        rv |= static_cast<uint64_t>(read_u8());
+        rv |= static_cast<uint64_t>(readU8()) << 24;
+        rv |= static_cast<uint64_t>(readU8()) << 16;
+        rv |= static_cast<uint64_t>(readU8()) << 8;
+        rv |= static_cast<uint64_t>(readU8());
         return rv;
     } else {
-        return read_u64();
+        return readU64();
     }
 }
-int64_t Reader::read_i64c() {
-    uint64_t va = read_u64c();
+int64_t Reader::readI64c() {
+    uint64_t va = readU64c();
     bool sign = (va & 0x1) != 0;
     va >>= 1;
 
@@ -527,49 +527,49 @@ int64_t Reader::read_i64c() {
         return static_cast<int64_t>(va);
     }
 }
-double Reader::read_double() {
+double Reader::readDouble() {
     double v;
     read(reinterpret_cast<char*>(&v), sizeof v);
     return v;
 }
-FloatValue Reader::read_float_value() {
+FloatValue Reader::readFloatValue() {
     F128 encoded;
-    encoded.lo = read_u64();
-    encoded.hi = read_u64();
+    encoded.lo = readU64();
+    encoded.hi = readU64();
     return encoded;
 }
-size_t Reader::read_count() {
+size_t Reader::readCount() {
     size_t rv;
-    auto v = read_u8();
+    auto v = readU8();
     if (v < 0xFD) {
         rv = v;
     } else if (v == 0xFD) {
-        rv = read_u16();
+        rv = readU16();
     } else if (v == 0xFE) {
-        rv = read_u32();
+        rv = readU32();
     } else /*if( v == 0xFF )*/ {
         rv = ~0u;
     }
     DEBUG(rv);
     return rv;
 }
-RcString Reader::read_istring() {
-    size_t idx = read_count();
+RcString Reader::readIstring() {
+    size_t idx = readCount();
     return strings.at(idx);
 }
-::std::string Reader::read_string() {
-    size_t len = read_u8();
+::std::string Reader::readString() {
+    size_t len = readU8();
     if (len < 128) {
     } else {
         len = (len & 0x7F) << 16;
-        len |= read_u16();
+        len |= readU16();
     }
     ::std::string rv(len, '\0');
     read(const_cast<char*>(rv.data()), len);
     return rv;
 }
-bool Reader::read_bool() {
-    auto v = read_u8();
+bool Reader::readBool() {
+    auto v = readU8();
     switch (v) {
         case 0:
             return false;
@@ -581,8 +581,8 @@ bool Reader::read_bool() {
     }
 }
 // Core protocol
-uint64_t Reader::raw_read_uint() {
-    auto v = read_u8();
+uint64_t Reader::rawReadUint() {
+    auto v = readU8();
     assert(v <= 0xC0 + 8);
     if (v < 0xC0) {
         return v;
@@ -590,27 +590,27 @@ uint64_t Reader::raw_read_uint() {
         size_t len = v - 0xC0;
         uint64_t rv = 0;
         for (size_t p = 0; p < len; p++) {
-            rv |= static_cast<uint64_t>(read_u8()) << (8 * p);
+            rv |= static_cast<uint64_t>(readU8()) << (8 * p);
         }
         return rv;
     }
 }
-size_t Reader::raw_read_len() {
-    auto v = read_u8();
+size_t Reader::rawReadLen() {
+    auto v = readU8();
     if (v < 0xC0) {
         std::cerr << "Expected length, got literal integer " << unsigned(v) << ::std::endl;
         abort();
     } else if (v < 0xFC) {
         return v - 0xC0;
     } else if (v == 0xFC) {
-        return raw_read_uint();
+        return rawReadUint();
     } else {
         std::cerr << "Expected length, got tag " << unsigned(v) << ::std::endl;
         abort();
     }
 }
-std::string Reader::raw_read_bytes_stdstring() {
-    auto len = raw_read_len();
+std::string Reader::rawReadBytesStdstring() {
+    auto len = rawReadLen();
     std::string rv(len, '\0');
     read(const_cast<char*>(rv.data()), len);
     return rv;
@@ -629,15 +629,15 @@ Reader::CloseOnDrop::~CloseOnDrop() {
     r = nullptr;
 }
 Reader::CloseOnDrop Reader::openObject(const char* name) {
-    auto v = read_u8();
+    auto v = readU8();
     if (v != 0xFD) {
         std::cerr << "Expected OpenNamed(" << name << "), got " << unsigned(v) << "u8" << ::std::endl;
         abort();
     }
-    auto key = raw_read_uint();
+    auto key = rawReadUint();
     //std::cout << key << " = " << "..." << std::endl;
     if (key == objnameCache.size()) {
-        objnameCache.push_back(raw_read_bytes_stdstring());
+        objnameCache.push_back(rawReadBytesStdstring());
     }
     assert(key < objnameCache.size());
     //std::cout << key << " = " << m_objname_cache[key] << std::endl;
@@ -648,7 +648,7 @@ Reader::CloseOnDrop Reader::openObject(const char* name) {
     return CloseOnDrop(*this);
 }
 Reader::CloseOnDrop Reader::openAnonObject() {
-    auto v = read_u8();
+    auto v = readU8();
     if (v != 0xFE) {
         std::cerr << "Expected OpenAnon, got " << unsigned(v) << ::std::endl;
         abort();
@@ -656,7 +656,7 @@ Reader::CloseOnDrop Reader::openAnonObject() {
     return CloseOnDrop(*this);
 }
 void Reader::closeObject() {
-    auto v = read_u8();
+    auto v = readU8();
     if (v != 0xFF) {
         std::cerr << "Expected CloseObject(0xFF), got " << unsigned(v) << ::std::endl;
         abort();

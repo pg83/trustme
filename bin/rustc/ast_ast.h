@@ -141,9 +141,9 @@ namespace AST {
             Linkage linkage = Linkage::Default;
         } markings;
 
-        Static(Class s_class, TypeRef type, Expr value);
+        Static(Class sClass, TypeRef type, Expr value);
 
-        const Class& s_class() const {
+        const Class& sClass() const {
             return cls;
         }
 
@@ -218,7 +218,7 @@ namespace AST {
 
             bool isCold = false;
             bool isNaked = false;
-            std::vector<unsigned> rustc_legacy_const_generics;
+            std::vector<unsigned> rustcLegacyConstGenerics;
 
             std::string linkName;
             std::string linkSection;
@@ -460,10 +460,10 @@ namespace AST {
             uint64_t maxFieldAlign = 0;
 
             // 1.39 nonzero etc
-            bool scalar_valid_start_set = false;
-            U128 scalar_valid_start;
-            bool scalar_valid_end_set = false;
-            U128 scalar_valid_end;
+            bool scalarValidStartSet = false;
+            U128 scalarValidStart;
+            bool scalarValidEndSet = false;
+            U128 scalarValidEnd;
         } markings;
 
         Struct();

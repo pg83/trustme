@@ -13,10 +13,10 @@
 #include <sstream>
 
 typedef ::std::function<void(::std::ostream& os)> dbgCbT;
-extern void DebugSetPhase(const char* phase_name);
+extern void DebugSetPhase(const char* phaseName);
 extern void DebugProcessEnable(const char* enableString);
-extern void DebugDisablePhase(const char* phase_name);
-extern void DebugEnablePhase(const char* phase_name);
+extern void DebugDisablePhase(const char* phaseName);
+extern void DebugEnablePhase(const char* phaseName);
 extern bool DebugIsEnabled();
 extern void DebugEnterScope(const char* name, dbgCbT);
 extern void DebugLeaveScope(const char* name, dbgCbT);

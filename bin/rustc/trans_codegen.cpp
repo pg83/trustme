@@ -303,7 +303,7 @@ namespace {
         TU_MATCHA((x.e.root), (e), (Return, os << "RETURN";), (Local, os << "var" << e;), (Argument, os << "arg" << e;), (Static, os << fmt(e);))
         bool was_num = false;
         for (const auto& w : x.e.wrappers) {
-            bool prev_was_num = was_num;
+            bool prevWasNum = was_num;
             was_num = false;
             switch (w.tag()) {
                 case ::MIR::LValue::Wrapper::TAGDEAD:
@@ -313,7 +313,7 @@ namespace {
                     break;
                     TU_ARM(w, Field, fieldIndex) {
                         // Add a space to prevent accidental float literals
-                        if (prev_was_num) {
+                        if (prevWasNum) {
                             os << " ";
                         }
                         os << "." << fieldIndex;
@@ -470,11 +470,11 @@ namespace {
                 }
 
                 // Bind `panic_impl` lang item to the item tagged with `panic_implementation`.
-                const auto& panic_impl_path = crate.getLangItemPathOpt("mrustc-panic_implementation");
-                if (panic_impl_path != ::HIR::SimplePath()) {
+                const auto& panicImplPath = crate.getLangItemPathOpt("mrustc-panic_implementation");
+                if (panicImplPath != ::HIR::SimplePath()) {
                     of << "fn panic_impl#(usize): u32 = \"panic_impl\":\"Rust\" {\n";
                     of << "\t0: {\n";
-                    of << "\t\tCALL RETURN = " << fmt(panic_impl_path) << "(arg0) goto 1 else 2\n";
+                    of << "\t\tCALL RETURN = " << fmt(panicImplPath) << "(arg0) goto 1 else 2\n";
                     of << "\t}\n";
                     of << "\t1: { RETURN }\n";
                     of << "\t2: { DIVERGE }\n";
@@ -645,7 +645,7 @@ namespace {
             };
 
             auto enumPath = var_path.clone();
-            enumPath.mPath.pop_component();
+            enumPath.mPath.popComponent();
 
             // Create constructor function
             const auto& var_ty = item.mData.as_Data().at(var_idx).type;
@@ -889,8 +889,8 @@ namespace {
 
             // If the function is a C external, emit as such
             if (item.linkage.name != "") {
-                ::HIR::TypeRef ret_type_tmp;
-                const auto& ret_type = monomorphiseFcnReturn(ret_type_tmp, item, params);
+                ::HIR::TypeRef retTypeTmp;
+                const auto& ret_type = monomorphiseFcnReturn(retTypeTmp, item, params);
 
                 of << "/* " << p << " */\n";
                 of << "fn " << fmt(p) << "(";
@@ -914,8 +914,8 @@ namespace {
                 arg_types.push_back(::std::make_pair(::HIR::Pattern{}, params.monomorph(mResolve, ent.second)));
             }
 
-            ::HIR::TypeRef ret_type_tmp;
-            const auto& ret_type = monomorphiseFcnReturn(ret_type_tmp, item, params);
+            ::HIR::TypeRef retTypeTmp;
+            const auto& ret_type = monomorphiseFcnReturn(retTypeTmp, item, params);
 
             ::MIR::TypeResolve mir_res {
                 sp, mResolve, FMT_CB(ss, ss << p;), ret_type, arg_types, *code
@@ -1076,7 +1076,7 @@ namespace {
                                         of << "DSTPTR " << fmt(e.val);
                                         break;
                                         TU_ARM(se.src, MakeDst, e)
-                                        of << "MAKEDST " << fmt(e.ptr_val) << ", " << fmt(e.metaVal);
+                                        of << "MAKEDST " << fmt(e.ptrVal) << ", " << fmt(e.metaVal);
                                         break;
                                         TU_ARM(se.src, UnionVariant, e)
                                         of << "UNION " << fmt(e.path) << " " << e.index << " " << fmt(e.val);
@@ -1294,12 +1294,12 @@ namespace {
                             if (const auto* fP = e.fcn.opt_Intrinsic()) {
                                 if (fP->name == "offset_of") {
                                     size_t val = mir_res.intrinsicOffsetOf(fP->params.types.at(0), e.args);
-                                    of << fmt(e.ret_val) << " = " << val << " usize;\n";
-                                    of << "\t\tGOTO " << e.ret_block;
+                                    of << fmt(e.retVal) << " = " << val << " usize;\n";
+                                    of << "\t\tGOTO " << e.retBlock;
                                     break;
                                 }
                             }
-                            of << "CALL " << fmt(e.ret_val) << " = ";
+                            of << "CALL " << fmt(e.retVal) << " = ";
                             switch (e.fcn.tag()) {
                                 case ::MIR::CallTarget::TAGDEAD:
                                     throw "";
@@ -1323,7 +1323,7 @@ namespace {
                             for (const auto& a : e.args) {
                                 of << fmt(a) << ", ";
                             }
-                            of << ") goto " << e.ret_block << " unwind " << e.unwind.tag_str() << "\n";
+                            of << ") goto " << e.retBlock << " unwind " << e.unwind.tag_str() << "\n";
                         }
                         break;
                 }

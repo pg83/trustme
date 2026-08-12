@@ -7,7 +7,7 @@ bool ImplRef::moreSpecificThan(HIR::TypeInterner& types, const ImplRef& other) c
     throw "";
 }
 
-bool ImplRef::overlaps_with(const ::HIR::Crate& crate, const ImplRef& other) const {
+bool ImplRef::overlapsWith(const ::HIR::Crate& crate, const ImplRef& other) const {
     if (this->mData.tag() != other.mData.tag()) {
         return false;
     }
@@ -15,7 +15,7 @@ bool ImplRef::overlaps_with(const ::HIR::Crate& crate, const ImplRef& other) con
         Data,
         (this->mData, other.mData),
         (te, oe),
-        (TraitImpl, if (te.impl != nullptr && oe.impl != nullptr) return te.impl->overlaps_with(crate, *oe.impl);),
+        (TraitImpl, if (te.impl != nullptr && oe.impl != nullptr) return te.impl->overlapsWith(crate, *oe.impl);),
         (BoundedPtr,
          // TODO: Bounded and BoundedPtr are compatible
          if (te.type != oe.type) return false;

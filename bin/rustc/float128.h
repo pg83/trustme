@@ -28,8 +28,8 @@ public:
 
     static Float128 fromBits(uint64_t hi, uint64_t lo);
     // Parse `digits[.digits][(e|E)[+|-]digits]`, correctly rounded
-    static Float128 parse_decimal(const char* text);
-    static Float128 quiet_nan();
+    static Float128 parseDecimal(const char* text);
+    static Float128 quietNan();
     static Float128 infinity(bool negative);
 
     uint64_t bitsHi() const;
@@ -64,7 +64,7 @@ public:
     Float128 floor() const;
     Float128 ceil() const;
     Float128 round() const;       // ties away from zero
-    Float128 round_even() const;  // ties to even
+    Float128 roundEven() const;  // ties to even
 
     // C `fmod` semantics: exact, result has the dividend's sign
     static Float128 remainder(const Float128& numerator, const Float128& denominator);

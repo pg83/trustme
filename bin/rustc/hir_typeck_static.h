@@ -39,7 +39,7 @@ public:
     explicit StaticTraitResolve(const ::HIR::Crate& crate);
 
 private:
-    void prep_indexes();
+    void prepIndexes();
 
 public:
     /// \brief State manipulation
@@ -67,8 +67,8 @@ public:
     void clearBothGenerics();
 
     // Used by ResolveUFCS to regenerate
-    void prep_indexes(const Span& sp) {
-        TraitResolveCommon::prep_indexes(sp);
+    void prepIndexes(const Span& sp) {
+        TraitResolveCommon::prepIndexes(sp);
     }
 
     /// \}
@@ -87,7 +87,7 @@ private:
     bool findImplBounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb) const;
     bool findImplCheckCrate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb, const ::HIR::TraitImpl& impl) const;
     bool findImplCheckCrateRaw(const Span& sp, const ::HIR::SimplePath& desTraitPath, const ::HIR::PathParams* desTraitParams, const ::HIR::TypeData* desType, const ::HIR::GenericParams& implParamsDef, const ::HIR::PathParams& implTraitParams, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
-    ::HIR::Compare checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeData* type) const;
+    ::HIR::Compare checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* paramsPtr, const ::HIR::TypeData* type) const;
 
 public:
     const ::HIR::TypeData* fixTraitDefaultReturn(const Span& sp, const HIR::ItemPath& p, const ::HIR::TypeData* tpl, ::HIR::TypeRef& tmp) const;
@@ -114,7 +114,7 @@ private:
     bool expandAssociatedTypesUfcsKnown(const Span& sp, ::HIR::TypeRef& input, bool recurse = true) const;
 
 protected:
-    virtual bool replace_equalities(::HIR::TypeRef& input) const;
+    virtual bool replaceEqualities(::HIR::TypeRef& input) const;
 
 public:
     /// \}

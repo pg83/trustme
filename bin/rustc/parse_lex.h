@@ -72,7 +72,7 @@ private:
 
     signed int getSymbol();
     Token getTokenIntRawString(bool isByte);
-    Token getTokenIntIdentifier(Codepoint ch, Codepoint ch2 = '\0', bool parse_reserved_word = true);
+    Token getTokenIntIdentifier(Codepoint ch, Codepoint ch2 = '\0', bool parseReservedWord = true);
     enum class NumMode {
         BIN,
         OCT,
@@ -83,9 +83,9 @@ private:
     FloatValue parseFloat(U128 whole);
     uint32_t parseEscape(char enclosing, bool* isByteEscape = nullptr);
 
-    void push_hygine() override;
+    void pushHygine() override;
 
-    void pop_hygine() override;
+    void popHygine() override;
 
     void ungetc();
     Codepoint getcNum();

@@ -100,7 +100,7 @@ public:
 
         // If there's a hash, then encode such that it's removed
         if (hashPos != nullptr) {
-            auto pre_hash_len = static_cast<int>(hashPos - name);
+            auto preHashLen = static_cast<int>(hashPos - name);
             // If the hash is at the start, and is followed by either a digit (expected) or an underscore (unlikely) - then encode with a leading underscore
             if (hashPos == name && (isdigit(static_cast<unsigned char>(hashPos[1])) || hashPos[1] == '_')) {
                 // <len:base26> '_' <body2>
@@ -111,7 +111,7 @@ public:
                 os << hashPos + 1;
             } else {
                 // <pos:base26> <len:int> <body1> <body2>
-                fmtBase26Int(pre_hash_len);
+                fmtBase26Int(preHashLen);
                 bool needsLeadingEscape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
                 os << size - 1 + (needsLeadingEscape ? 1 : 0);
                 // If the string starts with a digit or underscrore, then escape it with another underscore.

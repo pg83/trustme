@@ -362,7 +362,7 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
             _(Array, os << "["; ent.inner->print(os, isDebug); os << "; "; if (ent.size.get()) { os << *ent.size; } else { os << "_"; } os << "]";)
             _(Slice, os << "["; ent.inner->print(os, isDebug); os << "]";)
             _(Generic, if (isDebug) os << "/* arg */ "; os << ent.name; if (isDebug) os << "/*" << ent.index << "*/";)
-            _(Path, ent->print_pretty(os, true, isDebug);)
+            _(Path, ent->printPretty(os, true, isDebug);)
             _(TraitObject, os << "("; bool needsPlus = false; for (const auto& it : ent.traits) {
                 if (needsPlus) {
                     os << "+";
@@ -370,7 +370,7 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
                 needsPlus = true;
                 os << it.hrbs;
                 if (it.constness == AST::BoundConstness::Always) os << "const "; else if (it.constness == AST::BoundConstness::Maybe) os << "[const] ";
-                it.path->print_pretty(os, true, isDebug);
+                it.path->printPretty(os, true, isDebug);
             } for (const auto& it : ent.lifetimes) {
                 if (it.binding() != AST::LifetimeRef::BINDING_UNSPECIFIED) {
                     if (needsPlus) {
@@ -387,14 +387,14 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
                 needsPlus = true;
                 os << it.hrbs;
                 if (it.constness == AST::BoundConstness::Always) os << "const "; else if (it.constness == AST::BoundConstness::Maybe) os << "[const] ";
-                it.path->print_pretty(os, true, isDebug);
+                it.path->printPretty(os, true, isDebug);
             } for (const auto& it : ent->maybeTraits) {
                 if (needsPlus) {
                     os << "+";
                 }
                 needsPlus = true;
                 os << it.hrbs;
-                it.path->print_pretty(os, true, isDebug);
+                it.path->printPretty(os, true, isDebug);
             } for (const auto& it : ent->lifetimes) {
                 if (needsPlus) {
                     os << "+";

@@ -11,8 +11,8 @@
 
 void memoryDump(const char* phase) {
     if (getenv("MRUSTC_DUMPMEM")) {
-        static unsigned s_count;
-        auto idx = s_count++;
+        static unsigned sCount;
+        auto idx = sCount++;
         char filename[256];
         sprintf(filename, "mrustc-%i-%s.dmp", idx, phase);
 #if defined(__linux__) && defined(__x86_64__)
@@ -36,7 +36,7 @@ void memoryDump(const char* phase) {
         };
 
         size_t chunkSize = 1 << 20;
-        ::std::vector<RangeEnt> range_ents;
+        ::std::vector<RangeEnt> rangeEnts;
         size_t chunkCount = 0;
         // - Open `/proc/self/maps`, parse `<start>-<end> <flags> <ofs> <maj>:<minor> <inode> <file_name>`
         {
@@ -94,7 +94,7 @@ void memoryDump(const char* phase) {
                 }
                 lastVaddr = e.v_end;
                 // Add entry
-                range_ents.push_back(std::move(e));
+                rangeEnts.push_back(std::move(e));
             }
             // Account for last chunk's count
             if (lastVaddr % chunkSize != 0) {
@@ -120,7 +120,7 @@ void memoryDump(const char* phase) {
         } fileHdr;
 
         strcpy(fileHdr.magic, "FullDump\x97\r\n");
-        fileHdr.nRanges = range_ents.size();
+        fileHdr.nRanges = rangeEnts.size();
         fileHdr.nChunks = chunkCount;
         fileHdr.chunkSize = chunkSize;
         fwrite(&fileHdr, sizeof(fileHdr), 1, outFp);
@@ -136,7 +136,7 @@ void memoryDump(const char* phase) {
             uint16_t _pad[2];
         };
 
-        for (const auto& r : range_ents) {
+        for (const auto& r : rangeEnts) {
             DumpRangeHdr hdr;
             hdr.v_start = r.v_start;
             hdr.size = r.v_end - r.v_start;
@@ -214,7 +214,7 @@ void memoryDump(const char* phase) {
             memset(buf.data(), 0, buf.size());
         };
         uint64_t lastVaddr = 0;
-        for (const auto& r : range_ents) {
+        for (const auto& r : rangeEnts) {
             if (r.flagsStr[0] == 'r') {
                 if (lastVaddr / chunkSize != r.v_start / chunkSize) {
                     // Flush chunk, if the last end was not aligned

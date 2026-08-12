@@ -58,7 +58,7 @@ namespace helpers {
         /// Add an arbitary string to the final component
         path operator+(const char* o) const;
 
-        bool pop_component();
+        bool popComponent();
 
         path parent() const;
 

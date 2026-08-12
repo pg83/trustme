@@ -12,7 +12,7 @@
 // Project-wide shorthand retained for the pervasive move idiom.
 #define mv$(...) ::std::move(__VA_ARGS__)
 #define box$(...) ::makeUniquePtr(::std::move(__VA_ARGS__))
-#define rc_new$(...) ::makeSharedPtr(::std::move(__VA_ARGS__))
+#define rcNew$(...) ::makeSharedPtr(::std::move(__VA_ARGS__))
 
 #include "debug.h"
 #include "compile_error.h"
@@ -168,16 +168,16 @@ Ordering ord(const ::std::vector<T>& l, const ::std::vector<T>& r) {
 
 template <typename T, typename U>
 Ordering ord(const ::std::map<T, U>& l, const ::std::map<T, U>& r) {
-    auto r_it = r.begin();
+    auto rIt = r.begin();
     for (const auto& le : l) {
-        if (r_it == r.end()) {
+        if (rIt == r.end()) {
             return OrdGreater;
         }
-        auto rv = ::ord(le, *r_it);
+        auto rv = ::ord(le, *rIt);
         if (rv != OrdEqual) {
             return rv;
         }
-        ++r_it;
+        ++rIt;
     }
     return OrdEqual;
 }
@@ -356,24 +356,24 @@ public:
 // -------------------------------------------------------------------
 // --- Reversed iterable
 template <typename T>
-struct reversion_wrapper {
+struct reversionWrapper {
     T& iterable;
 };
 
 template <typename T>
 //auto begin (reversion_wrapper<T> w) { return ::std::rbegin(w.iterable); }
-auto begin(reversion_wrapper<T> w) {
+auto begin(reversionWrapper<T> w) {
     return w.iterable.rbegin();
 }
 
 template <typename T>
 //auto end (reversion_wrapper<T> w) { return ::std::rend(w.iterable); }
-auto end(reversion_wrapper<T> w) {
+auto end(reversionWrapper<T> w) {
     return w.iterable.rend();
 }
 
 template <typename T>
-reversion_wrapper<T> reverse(T&& iterable) {
+reversionWrapper<T> reverse(T&& iterable) {
     return {iterable};
 }
 
@@ -489,7 +489,7 @@ public:
         : ptr(nullptr)
     {
         if (len > 0) {
-            this->reserve_init(len);
+            this->reserveInit(len);
             auto* meta = this->meta();
             for (size_t i = 0; i < len; i++) {
                 new (&ptr[i]) T;
@@ -502,7 +502,7 @@ public:
         : ptr(nullptr)
     {
         if (begin != end) {
-            this->reserve_init(end - begin);
+            this->reserveInit(end - begin);
             auto* meta = this->meta();
             for (auto it = begin; it != end; ++it) {
                 new (&ptr[meta->len]) T(*it);
@@ -543,7 +543,7 @@ public:
     void reserve(size_t newCap) {
         if (newCap > this->capacity()) {
             auto saved = std::move(*this);
-            this->reserve_init(newCap);
+            this->reserveInit(newCap);
             for (auto& v : saved) {
                 this->push_back(std::move(v));
             }
@@ -565,7 +565,7 @@ public:
         }
     }
 
-    void reserve_init(size_t cap) {
+    void reserveInit(size_t cap) {
         if (ptr) {
             throw std::runtime_error("Initialising an initialised ThinVector");
         }

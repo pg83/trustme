@@ -84,11 +84,11 @@ namespace HIR {
             void write_bool(bool v);
 
             // Core protocol
-            void raw_write_uint(uint64_t val);
+            void rawWriteUint(uint64_t val);
 
-            void raw_write_len(size_t len);
+            void rawWriteLen(size_t len);
 
-            void raw_write_bytes(size_t len, const void* data);
+            void rawWriteBytes(size_t len, const void* data);
 
             class CloseOnDrop {
                 friend class Writer;
@@ -146,51 +146,51 @@ namespace HIR {
 
             void read(void* dst, size_t count);
 
-            uint8_t read_u8();
+            uint8_t readU8();
 
-            uint16_t read_u16();
+            uint16_t readU16();
 
-            uint32_t read_u32();
+            uint32_t readU32();
 
-            uint64_t read_u64();
+            uint64_t readU64();
 
-            int64_t read_i64() {
-                return static_cast<int64_t>(read_u64());
+            int64_t readI64() {
+                return static_cast<int64_t>(readU64());
             }
 
-            U128 read_u128();
+            U128 readU128();
 
-            S128 read_i128() {
-                return S128(read_u128());
+            S128 readI128() {
+                return S128(readU128());
             }
 
             // Variable-length encoded u64 (for array sizes)
-            uint64_t read_u64c();
+            uint64_t readU64c();
 
-            int64_t read_i64c();
+            int64_t readI64c();
 
-            double read_double();
+            double readDouble();
 
-            FloatValue read_float_value();
+            FloatValue readFloatValue();
 
-            unsigned int read_tag() {
-                return static_cast<unsigned int>(read_u8());
+            unsigned int readTag() {
+                return static_cast<unsigned int>(readU8());
             }
 
-            size_t read_count();
+            size_t readCount();
 
-            RcString read_istring();
+            RcString readIstring();
 
-            ::std::string read_string();
+            ::std::string readString();
 
-            bool read_bool();
+            bool readBool();
 
             // Core protocol
-            uint64_t raw_read_uint();
+            uint64_t rawReadUint();
 
-            size_t raw_read_len();
+            size_t rawReadLen();
 
-            std::string raw_read_bytes_stdstring();
+            std::string rawReadBytesStdstring();
 
             class CloseOnDrop {
                 friend class Reader;

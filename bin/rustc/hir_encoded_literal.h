@@ -43,7 +43,7 @@ struct EncodedLiteral {
     void write_uint(size_t ofs, size_t size, uint64_t v);
 
     void write_usize(size_t ofs, uint64_t v);
-    uint64_t read_usize(size_t ofs) const;
+    uint64_t readUsize(size_t ofs) const;
 
     friend ::std::ostream& operator<<(std::ostream& os, const EncodedLiteral& x);
 
@@ -68,9 +68,9 @@ struct EncodedLiteralSlice {
 
     EncodedLiteralSlice slice(size_t ofs, size_t len) const;
 
-    U128 read_uint(size_t size = 0) const;
-    S128 read_sint(size_t size = 0) const;
-    FloatValue read_float(size_t size = 0) const;
+    U128 readUint(size_t size = 0) const;
+    S128 readSint(size_t size = 0) const;
+    FloatValue readFloat(size_t size = 0) const;
     const Reloc* getReloc() const;
 
     bool operator==(const EncodedLiteralSlice& x) const;

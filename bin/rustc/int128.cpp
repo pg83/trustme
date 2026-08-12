@@ -295,19 +295,19 @@ void S128::fromBeBytes(const uint8_t* src, size_t maxLen) {
     sign_extend(maxLen);
 }
 S128 S128::operator*(S128 x) const {
-    auto ret_neg = isNeg() != x.isNeg();
-    auto rv_u = u_abs() * x.u_abs();
-    return ret_neg ? -S128(rv_u) : S128(rv_u);
+    auto retNeg = isNeg() != x.isNeg();
+    auto rvU = u_abs() * x.u_abs();
+    return retNeg ? -S128(rvU) : S128(rvU);
 }
 S128 S128::operator/(S128 x) const {
-    auto ret_neg = isNeg() != x.isNeg();
-    auto rv_u = u_abs() / x.u_abs();
-    return ret_neg ? -S128(rv_u) : S128(rv_u);
+    auto retNeg = isNeg() != x.isNeg();
+    auto rvU = u_abs() / x.u_abs();
+    return retNeg ? -S128(rvU) : S128(rvU);
 }
 S128 S128::operator%(S128 x) const {
-    auto ret_neg = isNeg() != x.isNeg();
-    auto rv_u = u_abs() % x.u_abs();
-    return ret_neg ? -S128(rv_u) : S128(rv_u);
+    auto retNeg = isNeg() != x.isNeg();
+    auto rvU = u_abs() % x.u_abs();
+    return retNeg ? -S128(rvU) : S128(rvU);
 }
 /// Unsigned absolute value (handles MIN correctly)
 U128 S128::u_abs() const {

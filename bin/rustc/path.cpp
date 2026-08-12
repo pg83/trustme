@@ -50,7 +50,7 @@ helpers::path helpers::path::to_absolute() const {
         if (comp == ".")
             ;
         else if (comp == "..") {
-            rv.pop_component();
+            rv.popComponent();
         } else {
             rv /= comp;
         }
@@ -163,7 +163,7 @@ path path::operator+(const char* o) const {
     rv.mStr.append(o);
     return rv;
 }
-bool path::pop_component() {
+bool path::popComponent() {
     if (!this->isValid()) {
         throw ::std::runtime_error("Calling pop_component() on an invalid path");
     }

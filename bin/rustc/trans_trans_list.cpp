@@ -183,8 +183,8 @@ TransParams::TransParams(TransParams&& x)
 TransParams& TransParams::operator=(TransParams&& x) {
     sp = ::std::move(x.sp);
     gdefImpl = x.gdefImpl;
-    pp_method = ::std::move(x.pp_method);
-    pp_impl = ::std::move(x.pp_impl);
+    ppMethod = ::std::move(x.ppMethod);
+    ppImpl = ::std::move(x.ppImpl);
     self_type = x.self_type;
     forceMonomorphisation = x.forceMonomorphisation;
     return *this;
@@ -192,7 +192,7 @@ TransParams& TransParams::operator=(TransParams&& x) {
 TransParams TransParams::newImpl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params) {
     TransParams tp(types, sp);
     tp.self_type = std::move(ty);
-    tp.pp_impl = std::move(impl_params);
+    tp.ppImpl = std::move(impl_params);
     return tp;
 }
 const ::HIR::TypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const {

@@ -38,11 +38,11 @@ void DebugProcessEnable(const char* e) {
     }
 }
 
-void DebugSetPhase(const char* phase_name) {
-    gsDebugPhase = phase_name;
+void DebugSetPhase(const char* phaseName) {
+    gsDebugPhase = phaseName;
     gbDebugPhaseEnabled = gmDisabledDebug.find(gsDebugPhase) == gmDisabledDebug.end();
     if (gbEnableHeaders) {
-        ::std::cout << phase_name << ": BEGIN" << ::std::endl;
+        ::std::cout << phaseName << ": BEGIN" << ::std::endl;
     }
 }
 
@@ -50,16 +50,16 @@ bool DebugIsEnabled() {
     return gbDebugPhaseEnabled;
 }
 
-void DebugDisablePhase(const char* phase_name) {
-    gmDisabledDebug.insert(::std::string(phase_name));
+void DebugDisablePhase(const char* phaseName) {
+    gmDisabledDebug.insert(::std::string(phaseName));
 }
 
-void DebugEnablePhase(const char* phase_name) {
-    auto it = gmDisabledDebug.find(phase_name);
+void DebugEnablePhase(const char* phaseName) {
+    auto it = gmDisabledDebug.find(phaseName);
     if (it != gmDisabledDebug.end()) {
         gmDisabledDebug.erase(it);
     } else {
-        ::std::cerr << "Unknown debug phase: " << phase_name << ::std::endl;
+        ::std::cerr << "Unknown debug phase: " << phaseName << ::std::endl;
     }
 }
 

@@ -30,7 +30,7 @@ class CMacroUseHandler: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    bool run_during_iter() const override {
+    bool runDuringIter() const override {
         return true;
     }
 
@@ -39,7 +39,7 @@ class CMacroUseHandler: public ExpandDecorator {
 
         std::vector<RcString> filter;
         if (mi.data().size() > 0) {
-            mi.parse_paren_ident_list([&](const Span& sp, RcString ident) {
+            mi.parseParenIdentList([&](const Span& sp, RcString ident) {
                 filter.push_back(ident);
             });
         }
@@ -196,7 +196,7 @@ class CMacroExportHandler: public ExpandDecorator {
         //   > Strictly speaking, not the same as `macro`-style macros?
         bool localInnerMacros = false;
         if (mi.data().size() > 0) {
-            mi.parse_paren_ident_list([&](const Span& sp, RcString ident) {
+            mi.parseParenIdentList([&](const Span& sp, RcString ident) {
                 if (ident == "local_inner_macros") {
                     localInnerMacros = true;
                 } else {
@@ -278,7 +278,7 @@ class CMacroReexportHandler: public ExpandDecorator {
         const auto& crate_name = i.as_Crate().name;
         auto& ext_crate = *crate.externCrates.at(crate_name).hir;
 
-        mi.parse_paren_ident_list([&](const Span& sp, RcString name) {
+        mi.parseParenIdentList([&](const Span& sp, RcString name) {
             auto it = ::std::find(ext_crate.exportedMacroNames.begin(), ext_crate.exportedMacroNames.end(), name);
             if (it == ext_crate.exportedMacroNames.end()) {
                 ERROR(sp, E0000, "Could not find macro " << name << "! in crate " << crate_name);

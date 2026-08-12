@@ -139,8 +139,8 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         eval.resolve.set_both_generics_raw(pp.gdefImpl, &c.mParams);
         MonomorphState ms(crate.types);
         ms.self_ty = pp.self_type;
-        ms.pp_impl = &pp.pp_impl;
-        ms.pp_method = &pp.pp_method;
+        ms.ppImpl = &pp.ppImpl;
+        ms.ppMethod = &pp.ppMethod;
         DEBUG("ms = " << ms);
         try {
             auto newLit = eval.evaluateConstant(path, c.mValue, ::std::move(ty), ::std::move(ms));
@@ -168,8 +168,8 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         eval.resolve.set_both_generics_raw(pp.gdefImpl, &s.mParams);
         MonomorphState ms(crate.types);
         ms.self_ty = pp.self_type;
-        ms.pp_impl = &pp.pp_impl;
-        ms.pp_method = &pp.pp_method;
+        ms.ppImpl = &pp.ppImpl;
+        ms.ppMethod = &pp.ppMethod;
         DEBUG("ms = " << ms);
         try {
             auto newLit = eval.evaluateConstant(path, s.mValue, ::std::move(ty), ::std::move(ms));
@@ -196,7 +196,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
             ASSERT_BUG(Span(), fcn.mCode.mir, "No code for " << path);
 
             // TODO: Get the item params too
-            if (fcnEnt.second->pp.pp_impl.hasParams()) {
+            if (fcnEnt.second->pp.ppImpl.hasParams()) {
                 assert(pp.gdefImpl);
             }
             resolve.set_both_generics_raw(pp.gdefImpl, &fcn.mParams);

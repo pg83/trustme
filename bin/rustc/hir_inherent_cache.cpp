@@ -205,8 +205,8 @@ void HIR::InherentCache::insertAll(const Span& sp, const HIR::TypeImpl& impl, co
 void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::TypeData* ty, t_cb_resolve_type ty_res, callbackT cb) const {
     TRACE_FUNCTION_F(name << ", " << ty);
     // Callback that ensures that a potential impl fully matches the required receiver type
-    innerCallbackT innerCb = [&](const HIR::TypeData* rough_self_ty, const HIR::TypeImpl& impl) {
-        DEBUG("- " << rough_self_ty);
+    innerCallbackT innerCb = [&](const HIR::TypeData* roughSelfTy, const HIR::TypeImpl& impl) {
+        DEBUG("- " << roughSelfTy);
         const HIR::Function& fcn = impl.methods.at(name).data;
         struct GetSelf: public ::HIR::MatchGenerics {
             ::std::optional<::HIR::TypeRef> detectedSelfTy;
@@ -229,7 +229,7 @@ void HIR::InherentCache::find(const Span& sp, const RcString& name, const HIR::T
             }
         } else {
             // No extra checks required?
-            cb(rough_self_ty, impl);
+            cb(roughSelfTy, impl);
         }
     };
     auto it = items.find(name);

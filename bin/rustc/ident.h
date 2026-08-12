@@ -116,7 +116,7 @@ struct Ident {
         return this->name == s;
     }
 
-    bool same_name(const Ident& x) const {
+    bool sameName(const Ident& x) const {
         return this->name == x.name;
     }
 

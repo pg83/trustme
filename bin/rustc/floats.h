@@ -10,7 +10,7 @@
 // semantics are exact, and no host float128 toolchain support is needed.
 using FloatValue = Float128;
 
-FloatValue parse_float_value(const char* text);
+FloatValue parseFloatValue(const char* text);
 bool floatValueIsNan(FloatValue value);
 bool floatValueIsInfinite(FloatValue value);
 FloatValue floatValueAbs(FloatValue value);
@@ -22,7 +22,7 @@ FloatValue floatValueRoundEven(FloatValue value);
 FloatValue floatValueRemainder(FloatValue lhs, FloatValue rhs);
 FloatValue floatValueMinimumNumber(FloatValue lhs, FloatValue rhs);
 FloatValue floatValueMaximumNumber(FloatValue lhs, FloatValue rhs);
-FloatValue positive_nan_float_value();
+FloatValue positiveNanFloatValue();
 
 std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value);
 

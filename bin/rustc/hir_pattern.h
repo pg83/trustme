@@ -187,6 +187,6 @@ namespace HIR {
         friend ::std::ostream& operator<<(::std::ostream& os, const Pattern& x);
     };
 
-    std::vector<unsigned> pattern_binding_slots(const Pattern& pattern, PatternBindingOrder order);
+    std::vector<unsigned> patternBindingSlots(const Pattern& pattern, PatternBindingOrder order);
 
 }

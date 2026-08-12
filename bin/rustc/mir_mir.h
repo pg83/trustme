@@ -611,7 +611,7 @@ namespace MIR {
             // OR: (if `meta_val` is `Constant::ItemAddr(nullptr)`) A still-to-be-resolved unsizing coercion
             (MakeDst,
              struct {
-                 Param ptr_val;
+                 Param ptrVal;
                  Param metaVal;
              }),
             (Tuple, struct { ::std::vector<Param> vals; }),
@@ -707,9 +707,9 @@ namespace MIR {
             UnwindAction unwind;
         }),
         (Call, struct {
-            BasicBlockId ret_block;
+            BasicBlockId retBlock;
             UnwindAction unwind;
-            LValue ret_val;
+            LValue retVal;
             CallTarget fcn;
             ::std::vector<Param> args;
         })

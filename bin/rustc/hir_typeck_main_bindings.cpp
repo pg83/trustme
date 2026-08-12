@@ -254,7 +254,7 @@ namespace {
                         break;
                 }
                 assert(langItem);
-                if (!typeck::primitive_operator_has_builtin(operatorKind, node.slot->resType, node.mValue->resType)) {
+                if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.slot->resType, node.mValue->resType)) {
                     const auto& trait_path = this->getLangItemPath(node.span(), langItem);
                     checkTraitBound(node.span(), trait_path, {node.mValue->resType}, node.slot->resType);
                 }
@@ -303,7 +303,7 @@ namespace {
                     auto operatorKind = node.op == ::HIR::ExprNodeBinOp::Op::CmpEqu || node.op == ::HIR::ExprNodeBinOp::Op::CmpNEqu
                         ? typeck::PrimitiveOperator::Equal
                         : typeck::PrimitiveOperator::Order;
-                    if (!typeck::primitive_operator_has_builtin(operatorKind, node.left->resType, node.right->resType)) {
+                    if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.left->resType, node.right->resType)) {
                         const auto& opTrait = this->getLangItemPath(node.span(), itemName);
                         checkTraitBound(node.span(), opTrait, {node.right->resType}, node.left->resType);
                     }
@@ -379,7 +379,7 @@ namespace {
                             break;
                     }
                     assert(itemName);
-                    if (!typeck::primitive_operator_has_builtin(operatorKind, node.left->resType, node.right->resType)) {
+                    if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.left->resType, node.right->resType)) {
                         const auto& opTrait = this->getLangItemPath(node.span(), itemName);
                         checkAssociatedType(node.span(), node.resType, opTrait, {node.right->resType}, node.left->resType, "Output");
                     }
@@ -397,13 +397,13 @@ namespace {
             switch (node.op) {
                 case ::HIR::ExprNodeUniOp::Op::Invert:
                     operatorKind = typeck::PrimitiveOperator::Not;
-                    if (!typeck::primitive_operator_has_builtin(operatorKind, node.mValue->resType)) {
+                    if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.mValue->resType)) {
                         checkAssociatedType(node.span(), node.resType, this->getLangItemPath(node.span(), "not"), {}, node.mValue->resType, "Output");
                     }
                     break;
                 case ::HIR::ExprNodeUniOp::Op::Negate:
                     operatorKind = typeck::PrimitiveOperator::Neg;
-                    if (!typeck::primitive_operator_has_builtin(operatorKind, node.mValue->resType)) {
+                    if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.mValue->resType)) {
                         checkAssociatedType(node.span(), node.resType, this->getLangItemPath(node.span(), "neg"), {}, node.mValue->resType, "Output");
                     }
                     break;
@@ -579,7 +579,7 @@ namespace {
 
             const bool builtin = node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Builtin
                 || (node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Unknown
-                    && typeck::primitive_operator_has_builtin(typeck::PrimitiveOperator::Deref, ty));
+                    && typeck::primitiveOperatorHasBuiltin(typeck::PrimitiveOperator::Deref, ty));
             if (builtin && ty->is_Pointer()) {
                 checkTypesEqual(node.span(), node.resType, ty->as_Pointer().inner);
             } else if (builtin && ty->is_Borrow()) {
@@ -765,17 +765,17 @@ namespace {
 
             TU_MATCH_HDRA( (path.mData), {)
             TU_ARMA(Generic, e) {
-                    const auto& path_params = e.mParams;
+                    const auto& pathParams = e.mParams;
 
                     const auto& fcn = mResolve.crate.getFunctionByPath(sp, e.mPath);
                     fcn_ptr = &fcn;
                     cache.fcnParams = &fcn.mParams;
 
-                    monomorphCb = MonomorphStatePtr(mResolve.crate.types, nullptr, nullptr, &path_params);
+                    monomorphCb = MonomorphStatePtr(mResolve.crate.types, nullptr, nullptr, &pathParams);
                 }
                 TU_ARMA(UfcsKnown, e) {
                     const auto& trait_params = e.trait.mParams;
-                    const auto& path_params = e.params;
+                    const auto& pathParams = e.params;
 
                     const auto& trait = mResolve.crate.getTraitByPath(sp, e.trait.mPath);
                     if (trait.values.count(e.item) == 0) {
@@ -791,7 +791,7 @@ namespace {
 
                     fcn_ptr = &fcn;
 
-                    monomorphCb = MonomorphStatePtr(mResolve.crate.types, e.type, &trait_params, &path_params);
+                    monomorphCb = MonomorphStatePtr(mResolve.crate.types, e.type, &trait_params, &pathParams);
                 }
                 TU_ARMA(UfcsUnknown, e) {
                     TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");
@@ -841,7 +841,7 @@ namespace {
             DEBUG("Ret " << fcn.returnType);
             // Replace ErasedType and monomorphise
             cache.argTypes.push_back( monomorphCb.monomorphType(sp, fcn.returnType, false) );
-            rewrite_ty_with(mResolve.crate.types, cache.argTypes.back(), [&](HIR::TypeRef& ty, HIR::TypeData&)->bool {
+            rewriteTyWith(mResolve.crate.types, cache.argTypes.back(), [&](HIR::TypeRef& ty, HIR::TypeData&)->bool {
                 if (this->expandErasedTypes && ty->is_ErasedType() && ty->as_ErasedType().inner.is_Fcn()) {
                     const auto& e = ty->as_ErasedType().inner.as_Fcn();
 
@@ -873,33 +873,33 @@ namespace {
                     }
                     TU_ARMA(TraitBound, be) {
                         HIR::GenericParams emptyHrtb;
-                        auto _ = cache.monomorph->push_hrb(be.hrtbs ? *be.hrtbs : emptyHrtb);
+                        auto _ = cache.monomorph->pushHrb(be.hrtbs ? *be.hrtbs : emptyHrtb);
                         DEBUG("Bound " << be.type << ":  " << be.trait);
-                        auto real_type = cache.monomorph->monomorphType(sp, be.type);
-                        mResolve.expandAssociatedTypes(sp, real_type);
-                        auto real_trait = cache.monomorph->monomorphTraitpath(sp, be.trait, false);
-                        mResolve.expandAssociatedTypesTp(sp, real_trait);
-                        DEBUG("= (" << real_type << ": " << real_trait << ")");
-                        const auto& trait_params = real_trait.mPath.mParams;
+                        auto realType = cache.monomorph->monomorphType(sp, be.type);
+                        mResolve.expandAssociatedTypes(sp, realType);
+                        auto realTrait = cache.monomorph->monomorphTraitpath(sp, be.trait, false);
+                        mResolve.expandAssociatedTypesTp(sp, realTrait);
+                        DEBUG("= (" << realType << ": " << realTrait << ")");
+                        const auto& trait_params = realTrait.mPath.mParams;
 
                         const auto& trait_path = be.trait.mPath.mPath;
-                        checkTraitBound(sp, trait_path, trait_params, real_type);
+                        checkTraitBound(sp, trait_path, trait_params, realType);
 
                         // TODO: Either - Don't include the above impl bound, or change the below trait to the one that has that type
-                        for (auto& assoc : real_trait.typeBounds) {
+                        for (auto& assoc : realTrait.typeBounds) {
                             ::HIR::GenericPath type_trait_path;
-                            bool hasTy = mResolve.trait_contains_type(sp, real_trait.mPath, *be.trait.traitPtr, assoc.first.c_str(), type_trait_path);
-                            ASSERT_BUG(sp, hasTy, "Type " << assoc.first << " not found in chain of " << real_trait.mPath);
+                            bool hasTy = mResolve.trait_contains_type(sp, realTrait.mPath, *be.trait.traitPtr, assoc.first.c_str(), type_trait_path);
+                            ASSERT_BUG(sp, hasTy, "Type " << assoc.first << " not found in chain of " << realTrait.mPath);
 
-                            checkAssociatedType(sp, assoc.second.type, type_trait_path.mPath, type_trait_path.mParams, real_type, assoc.first.c_str());
+                            checkAssociatedType(sp, assoc.second.type, type_trait_path.mPath, type_trait_path.mParams, realType, assoc.first.c_str());
                         }
                     }
                     TU_ARMA(TypeEquality, be) {
-                        auto real_type_left = cache.monomorph->monomorphType(sp, be.type);
-                        auto real_type_right = cache.monomorph->monomorphType(sp, be.otherType);
-                        mResolve.expandAssociatedTypes(sp, real_type_left);
-                        mResolve.expandAssociatedTypes(sp, real_type_right);
-                        checkTypesEqual(sp, real_type_left, real_type_right);
+                        auto realTypeLeft = cache.monomorph->monomorphType(sp, be.type);
+                        auto realTypeRight = cache.monomorph->monomorphType(sp, be.otherType);
+                        mResolve.expandAssociatedTypes(sp, realTypeLeft);
+                        mResolve.expandAssociatedTypes(sp, realTypeRight);
+                        checkTypesEqual(sp, realTypeLeft, realTypeRight);
                     }
                 }
             }
@@ -1618,7 +1618,7 @@ namespace {
             }
         };
 
-        ModTraitsGuard push_mod_traits(const ::HIR::Module& mod) {
+        ModTraitsGuard pushModTraits(const ::HIR::Module& mod) {
             static Span sp;
             DEBUG("");
             auto rv = ModTraitsGuard{this, mv$(this->traits)};
@@ -1629,46 +1629,46 @@ namespace {
             return rv;
         }
 
-        void checkParameters(const Span& sp, const ::HIR::GenericParams& param_def, ::HIR::PathParams& param_vals) {
-            MonomorphStatePtr ms(crate.types, selfTypes.empty() ? nullptr : selfTypes.back(), &param_vals, nullptr);
+        void checkParameters(const Span& sp, const ::HIR::GenericParams& paramDef, ::HIR::PathParams& paramVals) {
+            MonomorphStatePtr ms(crate.types, selfTypes.empty() ? nullptr : selfTypes.back(), &paramVals, nullptr);
 
-            if (param_vals.mLifetimes.size() == 0) {
-                param_vals.mLifetimes.resize(param_def.mLifetimes.size());
+            if (paramVals.mLifetimes.size() == 0) {
+                paramVals.mLifetimes.resize(paramDef.mLifetimes.size());
             }
-            if (param_vals.mLifetimes.size() != param_def.mLifetimes.size()) {
-                ERROR(sp, E0000, "Incorrect lifetime param count, expected " << param_def.mLifetimes.size() << ", got " << param_vals.mLifetimes.size());
+            if (paramVals.mLifetimes.size() != paramDef.mLifetimes.size()) {
+                ERROR(sp, E0000, "Incorrect lifetime param count, expected " << paramDef.mLifetimes.size() << ", got " << paramVals.mLifetimes.size());
             }
 
-            while (param_vals.types.size() < param_def.types.size()) {
-                unsigned int i = param_vals.types.size();
-                const auto& ty_def = param_def.types[i];
+            while (paramVals.types.size() < paramDef.types.size()) {
+                unsigned int i = paramVals.types.size();
+                const auto& ty_def = paramDef.types[i];
                 if (ty_def.defaultValue->is_Infer()) {
-                    ERROR(sp, E0000, "Unspecified parameter with no default - " << param_def.fmtArgs() << " with " << param_vals);
+                    ERROR(sp, E0000, "Unspecified parameter with no default - " << paramDef.fmtArgs() << " with " << paramVals);
                 }
 
                 // Replace and expand
-                param_vals.types.push_back(ms.monomorphType(sp, ty_def.defaultValue));
-                DEBUG("Add missing param (using default): " << param_vals.types.back());
+                paramVals.types.push_back(ms.monomorphType(sp, ty_def.defaultValue));
+                DEBUG("Add missing param (using default): " << paramVals.types.back());
             }
 
-            if (param_vals.types.size() != param_def.types.size()) {
-                ERROR(sp, E0000, "Incorrect number of parameters - expected " << param_def.types.size() << ", got " << param_vals.types.size());
+            if (paramVals.types.size() != paramDef.types.size()) {
+                ERROR(sp, E0000, "Incorrect number of parameters - expected " << paramDef.types.size() << ", got " << paramVals.types.size());
             }
 
-            for (unsigned int i = 0; i < param_vals.types.size(); i++) {
-                if (param_vals.types[i] == ::HIR::TypeRef()) {
+            for (unsigned int i = 0; i < paramVals.types.size(); i++) {
+                if (paramVals.types[i] == ::HIR::TypeRef()) {
                     // TODO: Why is this pulling in the default? Why not just leave it as-is
 
                     //if( param_def.m_types[i].m_default == ::HIR::TypeRef() )
                     //    ERROR(sp, E0000, "Unspecified parameter with no default");
                     // TODO: Monomorphise?
-                    param_vals.types[i] = ms.monomorphType(sp, param_def.types[i].defaultValue);
-                    DEBUG("Update `_` param (using default): " << param_def.types[i].defaultValue << " -> " << param_vals.types[i]);
+                    paramVals.types[i] = ms.monomorphType(sp, paramDef.types[i].defaultValue);
+                    DEBUG("Update `_` param (using default): " << paramDef.types[i].defaultValue << " -> " << paramVals.types[i]);
                 }
             }
 
             // TODO: Check generic bounds
-            for (const auto& bound : param_def.bounds) {
+            for (const auto& bound : paramDef.bounds) {
                 TU_MATCH(
                     ::HIR::GenericBound,
                     (bound),
@@ -1747,7 +1747,7 @@ namespace {
                 selfTypes.push_back(self);
             }
 
-            auto saved_params = std::make_pair(curParams, curParamsLevel);
+            auto savedParams = std::make_pair(curParams, curParamsLevel);
             if (auto* e = data.opt_Function()) {
                 curParams = &e->hrls;
                 curParamsLevel = 3;
@@ -1782,8 +1782,8 @@ namespace {
             TU_ARMA(NodeType, e) {}
             }
 
-            curParams = saved_params.first;
-            curParamsLevel = saved_params.second;
+            curParams = savedParams.first;
+            curParamsLevel = savedParams.second;
 
             if (data.is_ErasedType()) {
                 selfTypes.pop_back();
@@ -2075,7 +2075,7 @@ namespace {
         }
 
         void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
-            auto _ = this->push_mod_traits(mod);
+            auto _ = this->pushModTraits(mod);
             ::HIR::Visitor::visit_module(p, mod);
         }
 
@@ -2109,8 +2109,8 @@ namespace {
 
         void visit_associatedtype(::HIR::ItemPath p, ::HIR::AssociatedType& item) override {
             // Push `Self = <Self as CurTrait>::Type` for processing defaults in the bounds.
-            auto path_aty = ::HIR::Path(crate.types.self(), this->getCurrentTraitGp(), p.getName());
-            auto ty_aty = crate.types.path(mv$(path_aty), ::HIR::TypePathBinding::make_Opaque({}));
+            auto pathAty = ::HIR::Path(crate.types.self(), this->getCurrentTraitGp(), p.getName());
+            auto ty_aty = crate.types.path(mv$(pathAty), ::HIR::TypePathBinding::make_Opaque({}));
             selfTypes.push_back(ty_aty);
 
             ::HIR::Visitor::visit_associatedtype(p, item);
@@ -2124,12 +2124,12 @@ namespace {
 
         void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
             auto _ = mResolve.set_item_generics(item.mParams);
-            auto saved_params = std::make_pair(curParams, curParamsLevel);
+            auto savedParams = std::make_pair(curParams, curParamsLevel);
             curParams = &item.mParams;
             curParamsLevel = 1;
             ::HIR::Visitor::visit_inherent_type(p, item);
-            curParams = saved_params.first;
-            curParamsLevel = saved_params.second;
+            curParams = savedParams.first;
+            curParamsLevel = savedParams.second;
         }
 
         void addLifetimeBoundsForImplType(const Span& sp, HIR::GenericParams& dst, const ::HIR::TypeData* ty) {
@@ -2279,21 +2279,21 @@ namespace {
                     struct MCB: public ::HIR::MatchGenerics {
                         ::std::map<RcString, const ::HIR::TypeData*> mapping;
 
-                        ::HIR::Compare cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, HIR::t_cb_resolve_type resolve_cb) override {
+                        ::HIR::Compare cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, HIR::t_cb_resolve_type resolveCb) override {
                             // If the LHS is an ATY that starts with `erased#` then just accept it?
                             // - Also record the mapping
                             if (const auto* ty_p = ty_l->opt_Path()) {
-                                if (const auto* path_p = ty_p->path.mData.opt_UfcsKnown()) {
-                                    if (path_p->item.compare(0, strlen(ATY_PREFIX_ERASED), ATY_PREFIX_ERASED) == 0) {
-                                        mapping.insert(std::make_pair(path_p->item, ty_r));
+                                if (const auto* pathP = ty_p->path.mData.opt_UfcsKnown()) {
+                                    if (pathP->item.compare(0, strlen(ATY_PREFIX_ERASED), ATY_PREFIX_ERASED) == 0) {
+                                        mapping.insert(std::make_pair(pathP->item, ty_r));
                                         return ::HIR::Compare::Equal;
                                     }
                                 }
                             }
-                            return ::HIR::MatchGenerics::cmpType(sp, ty_l, ty_r, resolve_cb);
+                            return ::HIR::MatchGenerics::cmpType(sp, ty_l, ty_r, resolveCb);
                         }
 
-                        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, HIR::t_cb_resolve_type resolve_cb) override {
+                        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, HIR::t_cb_resolve_type resolveCb) override {
                             return (!ty->is_Generic() || ty->as_Generic() != g) ? ::HIR::Compare::Unequal : ::HIR::Compare::Equal;
                         }
 
@@ -2313,8 +2313,8 @@ namespace {
                     HIR::TypeRef expRetTyReal;
                     const auto& expRetTy = matchCb.mapping.empty() ? expRetTy1 : (expRetTyReal = cloneTyWith(crate.types, sp, expRetTy1, [&](const ::HIR::TypeData* ref, ::HIR::TypeRef& out) -> bool {
                         if (const auto* ty_p = ref->opt_Path()) {
-                            if (const auto* path_p = ty_p->path.mData.opt_UfcsKnown()) {
-                                auto it = matchCb.mapping.find(path_p->item);
+                            if (const auto* pathP = ty_p->path.mData.opt_UfcsKnown()) {
+                                auto it = matchCb.mapping.find(pathP->item);
                                 if (it != matchCb.mapping.end()) {
                                     out = it->second;
                                     return true;

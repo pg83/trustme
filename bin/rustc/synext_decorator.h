@@ -41,7 +41,7 @@ public:
     virtual ~ExpandDecorator() = default;
     virtual AttrStage stage() const = 0;
 
-    virtual bool run_during_iter() const {
+    virtual bool runDuringIter() const {
         return false;
     }
 

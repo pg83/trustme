@@ -169,7 +169,7 @@ namespace {
             return pos == input.size();
         }
 
-        ::std::pair<::std::string, ::std::optional<::std::string>> parse_cfg_option() {
+        ::std::pair<::std::string, ::std::optional<::std::string>> parseCfgOption() {
             auto name = ident();
             ::std::optional<::std::string> value;
             if (take('=')) {
@@ -181,14 +181,14 @@ namespace {
             return {::std::move(name), ::std::move(value)};
         }
 
-        CheckSpec parse_check_spec() {
+        CheckSpec parseCheckSpec() {
             if (ident() != "cfg") {
                 fail("expected `cfg(...)`");
             }
             expect('(', "`(` after `cfg`");
 
             CheckSpec rv;
-            bool saw_values = false;
+            bool sawValues = false;
             if (take(')')) {
                 if (!atEnd()) {
                     fail("unexpected input after `cfg(...)`");
@@ -200,7 +200,7 @@ namespace {
                 auto word = ident();
                 if (take('(')) {
                     if (word == "any") {
-                        if (!rv.names.empty() || saw_values || rv.anyNames) {
+                        if (!rv.names.empty() || sawValues || rv.anyNames) {
                             fail("`cfg(any())` can only be provided in isolation");
                         }
                         expect(')', "`)` after `any(`");
@@ -209,16 +209,16 @@ namespace {
                         if (rv.names.empty()) {
                             fail("`values()` cannot be specified before the names");
                         }
-                        if (saw_values) {
+                        if (sawValues) {
                             fail("`values()` cannot be specified multiple times");
                         }
-                        saw_values = true;
-                        bool saw_any = false;
+                        sawValues = true;
+                        bool sawAny = false;
                         if (!take(')')) {
                             for (;;) {
                                 skip_ws();
                                 if (pos < input.size() && input[pos] == '"') {
-                                    if (saw_any) {
+                                    if (sawAny) {
                                         fail("`values()` cannot combine string literals with `any()`");
                                     }
                                     rv.values.values.insert(string_literal());
@@ -227,15 +227,15 @@ namespace {
                                     expect('(', "`(` in `values()` special value");
                                     expect(')', "`)` in `values()` special value");
                                     if (value_kind == "none") {
-                                        if (saw_any) {
+                                        if (sawAny) {
                                             fail("`values()` cannot combine `none()` with `any()`");
                                         }
                                         rv.values.none = true;
                                     } else if (value_kind == "any") {
-                                        if (saw_any || rv.values.none || !rv.values.values.empty()) {
+                                        if (sawAny || rv.values.none || !rv.values.values.empty()) {
                                             fail("`values()` cannot combine `any()` with other values");
                                         }
-                                        saw_any = true;
+                                        sawAny = true;
                                         rv.values.any = true;
                                     } else {
                                         fail("`values()` arguments must be string literals, `none()` or `any()`");
@@ -254,7 +254,7 @@ namespace {
                         fail("`cfg()` arguments must be identifiers, `any()` or `values(...)`");
                     }
                 } else {
-                    if (saw_values) {
+                    if (sawValues) {
                         fail("`cfg()` names cannot be after values");
                     }
                     rv.names.push_back(::std::move(word));
@@ -271,10 +271,10 @@ namespace {
             if (!atEnd()) {
                 fail("unexpected input after `cfg(...)`");
             }
-            if (rv.anyNames && (!rv.names.empty() || saw_values)) {
+            if (rv.anyNames && (!rv.names.empty() || sawValues)) {
                 fail("`cfg(any())` can only be provided in isolation");
             }
-            if (!saw_values && !rv.anyNames) {
+            if (!sawValues && !rv.anyNames) {
                 rv.values.none = true;
             }
             return rv;
@@ -352,7 +352,7 @@ namespace {
         return BuiltinExpectation::UnknownName;
     }
 
-    void report_unexpected_cfg(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value, bool badValue) {
+    void reportUnexpectedCfg(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value, bool badValue) {
         const auto level = unexpected_cfg_level();
         if (level == CfgLintLevel::Allow) {
             return;
@@ -377,7 +377,7 @@ namespace {
             const auto& expected = it->second;
             const auto valid = expected.any || (value ? expected.values.count(*value) != 0 : expected.none);
             if (!valid) {
-                report_unexpected_cfg(span, name, value, true);
+                reportUnexpectedCfg(span, name, value, true);
             }
             return;
         }
@@ -385,18 +385,18 @@ namespace {
             case BuiltinExpectation::Expected:
                 return;
             case BuiltinExpectation::UnexpectedValue:
-                report_unexpected_cfg(span, name, value, true);
+                reportUnexpectedCfg(span, name, value, true);
                 return;
             case BuiltinExpectation::UnknownName:
                 if (gCheckCfg.exhaustiveNames) {
-                    report_unexpected_cfg(span, name, value, false);
+                    reportUnexpectedCfg(span, name, value, false);
                 }
                 return;
         }
     }
 }
 
-static const RcString rcstring_cfg = RcString::newInterned("cfg");
+static const RcString rcstringCfg = RcString::newInterned("cfg");
 
 void CfgDump(::std::ostream& os) {
     for (const auto& v : gCfgValues) {
@@ -422,7 +422,7 @@ void CfgSetValueCb(::std::string name, ::std::function<bool(const ::std::string&
 
 bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& has_value, ::std::string& value, ::std::string& error) {
     try {
-        auto parsed = CfgSpecParser(spec).parse_cfg_option();
+        auto parsed = CfgSpecParser(spec).parseCfgOption();
         name = ::std::move(parsed.first);
         has_value = parsed.second.has_value();
         value = parsed.second ? ::std::move(*parsed.second) : ::std::string();
@@ -435,7 +435,7 @@ bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& has_va
 
 bool CfgSetCheckSpec(const ::std::string& spec, ::std::string& error) {
     try {
-        auto parsed = CfgSpecParser(spec).parse_check_spec();
+        auto parsed = CfgSpecParser(spec).parseCheckSpec();
         gCheckCfg.active = true;
         if (parsed.anyNames) {
             gCheckCfg.exhaustiveNames = false;
@@ -500,7 +500,7 @@ namespace {
     bool checkCfgInner1(const RcString& name, TokenStream& lex) {
         // Some compiler-generated cfg streams have no source parent.  They do
         // not need a diagnostic span unless check-cfg is actually enabled.
-        const auto conditionSpan = gCheckCfg.active ? lex.point_span() : Span();
+        const auto conditionSpan = gCheckCfg.active ? lex.pointSpan() : Span();
         Token tok;
         switch (lex.lookahead(0)) {
             case TOK_EQUAL: {
@@ -540,11 +540,11 @@ namespace {
             case TOK_PAREN_OPEN:
                 GET_TOK(tok, lex);
 
-                static const RcString rcstring_any = RcString::newInterned("any");
-                static const RcString rcstring_not = RcString::newInterned("not");
-                static const RcString rcstring_all = RcString::newInterned("all");
-                static const RcString rcstring_target = RcString::newInterned("target");
-                if (name == rcstring_any || name == rcstring_cfg) {
+                static const RcString rcstringAny = RcString::newInterned("any");
+                static const RcString rcstringNot = RcString::newInterned("not");
+                static const RcString rcstringAll = RcString::newInterned("all");
+                static const RcString rcstringTarget = RcString::newInterned("target");
+                if (name == rcstringAny || name == rcstringCfg) {
                     bool rv = false;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         rv |= checkCfgInner(lex);
@@ -555,13 +555,13 @@ namespace {
                     }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
-                } else if (name == rcstring_not) {
+                } else if (name == rcstringNot) {
                     bool rv = checkCfgInner(lex);
                     // Allow a trailing comma
                     lex.getTokenIf(TOK_COMMA);
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return !rv;
-                } else if (name == rcstring_all) {
+                } else if (name == rcstringAll) {
                     bool rv = true;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         rv &= checkCfgInner(lex);
@@ -572,7 +572,7 @@ namespace {
                     }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
-                } else if (name == rcstring_target) {
+                } else if (name == rcstringTarget) {
                     // `target(os = "linux", arch = "x86_64")` is the compact
                     // spelling of `all(target_os = "linux", target_arch =
                     // "x86_64")`.  Keep evaluation in the ordinary cfg path
@@ -591,7 +591,7 @@ namespace {
                     return rv;
                 } else {
                     // oops
-                    ERROR(lex.point_span(), E0000, "Unknown cfg() function - " << name);
+                    ERROR(lex.pointSpan(), E0000, "Unknown cfg() function - " << name);
                 }
 
                 break;
@@ -630,7 +630,7 @@ bool checkCfg(const Span& sp, const ::AST::Attribute& mi) {
 
 bool checkCfgAttrs(const ::AST::AttributeList& attrs) {
     for (auto& a : attrs.mItems) {
-        if (a.name() == rcstring_cfg) {
+        if (a.name() == rcstringCfg) {
             if (!checkCfg(a.span(), a)) {
                 return false;
             }

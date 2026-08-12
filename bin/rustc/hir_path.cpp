@@ -151,7 +151,7 @@ void HIR::SimplePath::operator+=(const RcString& s) {
     }
 }
 
-RcString HIR::SimplePath::pop_component() {
+RcString HIR::SimplePath::popComponent() {
     if (members.size() <= 1) {
         return RcString();
     } else {
@@ -297,11 +297,11 @@ bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
     }
 
     auto lhsType = typeBounds.begin();
-    auto rhs_type = x.typeBounds.begin();
-    for (; lhsType != typeBounds.end(); ++lhsType, ++rhs_type) {
+    auto rhsType = x.typeBounds.begin();
+    for (; lhsType != typeBounds.end(); ++lhsType, ++rhsType) {
         const auto& lhs = lhsType->second;
-        const auto& rhs = rhs_type->second;
-        if (lhsType->first != rhs_type->first
+        const auto& rhs = rhsType->second;
+        if (lhsType->first != rhsType->first
             || !lhs.source_trait.equalsIgnoringRegions(rhs.source_trait)
             || !lhs.atyParams.equalsIgnoringRegions(rhs.atyParams)
             || (lhs.type != rhs.type && !lhs.type->equalsIgnoringRegions(rhs.type))) {
@@ -310,11 +310,11 @@ bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
     }
 
     auto lhsBound = traitBounds.begin();
-    auto rhs_bound = x.traitBounds.begin();
-    for (; lhsBound != traitBounds.end(); ++lhsBound, ++rhs_bound) {
+    auto rhsBound = x.traitBounds.begin();
+    for (; lhsBound != traitBounds.end(); ++lhsBound, ++rhsBound) {
         const auto& lhs = lhsBound->second;
-        const auto& rhs = rhs_bound->second;
-        if (lhsBound->first != rhs_bound->first
+        const auto& rhs = rhsBound->second;
+        if (lhsBound->first != rhsBound->first
             || !lhs.source_trait.equalsIgnoringRegions(rhs.source_trait)
             || !lhs.atyParams.equalsIgnoringRegions(rhs.atyParams)
             || lhs.traits.size() != rhs.traits.size()) {
@@ -396,7 +396,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     throw "";
 }
 
-::HIR::Compare HIR::PathParams::compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& x, ::HIR::t_cb_resolve_type resolve_placeholder) const {
+::HIR::Compare HIR::PathParams::compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& x, ::HIR::t_cb_resolve_type resolvePlaceholder) const {
     using ::HIR::Compare;
 
     auto rv = Compare::Equal;
@@ -405,7 +405,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             return Compare::Unequal;
         }
         for (unsigned int i = 0; i < x.types.size(); i++) {
-            auto rv2 = this->types[i]->compareWithPlaceholders(sp, x.types[i], resolve_placeholder);
+            auto rv2 = this->types[i]->compareWithPlaceholders(sp, x.types[i], resolvePlaceholder);
             if (rv2 == Compare::Unequal) {
                 return Compare::Unequal;
             }
@@ -420,8 +420,8 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             return Compare::Unequal;
         }
         for (unsigned int i = 0; i < x.values.size(); i++) {
-            const auto& val_t = resolve_placeholder.getVal(sp, this->values[i]);
-            const auto& val_x = resolve_placeholder.getVal(sp, x.values[i]);
+            const auto& val_t = resolvePlaceholder.getVal(sp, this->values[i]);
+            const auto& val_x = resolvePlaceholder.getVal(sp, x.values[i]);
             /*if( const auto* ge = val_t.opt_Generic() ) {
                 rv &= match.match_val(*ge, val_x);
                 if(rv == Compare::Unequal)
@@ -448,7 +448,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     return rv;
 }
 
-::HIR::Compare HIR::PathParams::matchTestGenericsFuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& match) const {
+::HIR::Compare HIR::PathParams::matchTestGenericsFuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolvePlaceholder, ::HIR::MatchGenerics& match) const {
     using ::HIR::Compare;
     auto rv = Compare::Equal;
     TRACE_FUNCTION_F("(PathParams) " << *this << " with " << x);
@@ -457,7 +457,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
         return Compare::Unequal;
     }
     for (unsigned int i = 0; i < x.types.size(); i++) {
-        rv &= this->types[i]->matchTestGenericsFuzz(sp, x.types[i], resolve_placeholder, match);
+        rv &= this->types[i]->matchTestGenericsFuzz(sp, x.types[i], resolvePlaceholder, match);
         if (rv == Compare::Unequal) {
             return Compare::Unequal;
         }
@@ -467,8 +467,8 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
         return Compare::Unequal;
     }
     for (unsigned int i = 0; i < x.values.size(); i++) {
-        const auto& val_t = resolve_placeholder.getVal(sp, this->values[i]);
-        const auto& val_x = resolve_placeholder.getVal(sp, x.values[i]);
+        const auto& val_t = resolvePlaceholder.getVal(sp, this->values[i]);
+        const auto& val_x = resolvePlaceholder.getVal(sp, x.values[i]);
         if (const auto* ge = val_t.opt_Generic()) {
             rv &= match.matchVal(*ge, val_x);
             if (rv == Compare::Unequal) {
@@ -490,7 +490,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
                         if (sl.mSize == 0 || sl.mSize > 16) {
                             return false;
                         }
-                        out = sl.read_uint(sl.mSize);
+                        out = sl.readUint(sl.mSize);
                         return true;
                     }
                     if (const auto* uev = v.opt_Unevaluated()) {
@@ -545,21 +545,21 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     return rv;
 }
 
-::HIR::Compare HIR::GenericPath::compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& x, ::HIR::t_cb_resolve_type resolve_placeholder) const {
+::HIR::Compare HIR::GenericPath::compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& x, ::HIR::t_cb_resolve_type resolvePlaceholder) const {
     if (this->mPath != x.mPath) {
         return ::HIR::Compare::Unequal;
     }
 
-    return this->mParams.compareWithPlaceholders(sp, x.mParams, resolve_placeholder);
+    return this->mParams.compareWithPlaceholders(sp, x.mParams, resolvePlaceholder);
 }
 
 namespace {
-    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& l, const ::HIR::PathParams& r, ::HIR::t_cb_resolve_type resolve_placeholder) {
-        return l.compareWithPlaceholders(sp, r, resolve_placeholder);
+    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& l, const ::HIR::PathParams& r, ::HIR::t_cb_resolve_type resolvePlaceholder) {
+        return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
     }
 
-    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& l, const ::HIR::GenericPath& r, ::HIR::t_cb_resolve_type resolve_placeholder) {
-        return l.compareWithPlaceholders(sp, r, resolve_placeholder);
+    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& l, const ::HIR::GenericPath& r, ::HIR::t_cb_resolve_type resolvePlaceholder) {
+        return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
     }
 }
 
@@ -576,8 +576,8 @@ namespace {
         }                                       \
     } while (0)
 
-::HIR::Compare HIR::TraitPath::compareWithPlaceholders(const Span& sp, const TraitPath& x, t_cb_resolve_type resolve_placeholder) const {
-    auto rv = mPath.compareWithPlaceholders(sp, x.mPath, resolve_placeholder);
+::HIR::Compare HIR::TraitPath::compareWithPlaceholders(const Span& sp, const TraitPath& x, t_cb_resolve_type resolvePlaceholder) const {
+    auto rv = mPath.compareWithPlaceholders(sp, x.mPath, resolvePlaceholder);
     if (rv == Compare::Unequal) {
         return rv;
     }
@@ -603,7 +603,7 @@ namespace {
         if (itL->first != itR->first) {
             return Compare::Unequal;
         }
-        CMP(rv, itL->second.type->compareWithPlaceholders(sp, itR->second.type, resolve_placeholder));
+        CMP(rv, itL->second.type->compareWithPlaceholders(sp, itR->second.type, resolvePlaceholder));
         ++itL;
         ++itR;
     }
@@ -615,13 +615,13 @@ namespace {
     return rv;
 }
 
-::HIR::Compare HIR::Path::compareWithPlaceholders(const Span& sp, const Path& x, t_cb_resolve_type resolve_placeholder) const {
+::HIR::Compare HIR::Path::compareWithPlaceholders(const Span& sp, const Path& x, t_cb_resolve_type resolvePlaceholder) const {
     if (this->mData.tag() != x.mData.tag()) {
         return Compare::Unequal;
     }
     TU_MATCH_HDRA( (this->mData, x.mData), {)
     TU_ARMA(Generic, ple, pre) {
-            return ::compareWithPlaceholders(sp, ple, pre, resolve_placeholder);
+            return ::compareWithPlaceholders(sp, ple, pre, resolvePlaceholder);
         }
         TU_ARMA(UfcsUnknown, ple, pre) {
             if (ple.item != pre.item) {
@@ -635,8 +635,8 @@ namespace {
                 return Compare::Unequal;
             }
             ::HIR::Compare rv = ::HIR::Compare::Equal;
-            CMP(rv, ple.type->compareWithPlaceholders(sp, pre.type, resolve_placeholder));
-            CMP(rv, ::compareWithPlaceholders(sp, ple.params, pre.params, resolve_placeholder));
+            CMP(rv, ple.type->compareWithPlaceholders(sp, pre.type, resolvePlaceholder));
+            CMP(rv, ::compareWithPlaceholders(sp, ple.params, pre.params, resolvePlaceholder));
             return rv;
         }
         TU_ARMA(UfcsKnown, ple, pre) {
@@ -645,9 +645,9 @@ namespace {
             }
 
             ::HIR::Compare rv = ::HIR::Compare::Equal;
-            CMP(rv, ple.type->compareWithPlaceholders(sp, pre.type, resolve_placeholder));
-            CMP(rv, ::compareWithPlaceholders(sp, ple.trait, pre.trait, resolve_placeholder));
-            CMP(rv, ::compareWithPlaceholders(sp, ple.params, pre.params, resolve_placeholder));
+            CMP(rv, ple.type->compareWithPlaceholders(sp, pre.type, resolvePlaceholder));
+            CMP(rv, ::compareWithPlaceholders(sp, ple.trait, pre.trait, resolvePlaceholder));
+            CMP(rv, ::compareWithPlaceholders(sp, ple.params, pre.params, resolvePlaceholder));
             return rv;
         }
     }

@@ -30,7 +30,7 @@ struct TransOptions {
     ::std::string buildCommandFile;
     ::std::vector<::std::string> linkerArgs;
 
-    ::std::string panic_crate;
+    ::std::string panicCrate;
 
     ::std::vector<::std::string> librarySearchDirs;
     ::std::vector<::std::string> libraries;

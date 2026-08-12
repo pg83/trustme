@@ -125,8 +125,8 @@ namespace {
                         const auto& start_mod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
 
                         // Find the top of the path in that namespace
-                        auto real_mod = as_Namespace(this->findItem(start_mod, name, ResolveNamespace::Namespace, outPath));
-                    TU_MATCH_HDRA( (real_mod), {)
+                        auto realMod = as_Namespace(this->findItem(start_mod, name, ResolveNamespace::Namespace, outPath));
+                    TU_MATCH_HDRA( (realMod), {)
                     TU_ARMA(Ast, iData) {
                                 // TODO: What about an enum?
                         TU_MATCH_HDRA( (*iData), {)

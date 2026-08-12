@@ -27,9 +27,9 @@ struct Context {
 
     /// Inferrence variable equalities
     struct Coercion {
-        unsigned rule_idx;
+        unsigned ruleIdx;
         ::HIR::TypeRef leftTy;
-        ::HIR::ExprNodeP* right_node_ptr;
+        ::HIR::ExprNodeP* rightNodePtr;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Coercion& v);
     };
@@ -86,7 +86,7 @@ struct Context {
             IVarPossible possibilities;
         };
 
-        unsigned rule_idx;
+        unsigned ruleIdx;
         Span span;
         ::HIR::TypeRef leftTy;
 
@@ -129,7 +129,7 @@ struct Context {
     // Keep track of if an ivar is used in a context where it has to be Sized
     // - If it is, then we can discount any unsized possibilities
     ::std::vector<bool> ivarsSized;
-    ::std::vector<IVarPossible> possible_ivar_vals;
+    ::std::vector<IVarPossible> possibleIvarVals;
     ::std::vector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
 
     IVarPossible* getPossibleIvarSink(unsigned index);
@@ -168,7 +168,7 @@ struct Context {
     void equateTypesInner(const Span& sp, const ::HIR::TypeData* l, const ::HIR::TypeData* r);
     // - Equate two types, allowing inferrence
     void equateTypesCoerce(const Span& sp, const ::HIR::TypeData* l, ::HIR::ExprNodeP& nodePtr);
-    void record_coercion_hint(const ::HIR::TypeData* type, ::HIR::ExprNodeP& nodePtr);
+    void recordCoercionHint(const ::HIR::TypeData* type, ::HIR::ExprNodeP& nodePtr);
 
     const ::HIR::TypeData* coercionHint(const ::HIR::ExprNode& node) const;
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
@@ -185,7 +185,7 @@ struct Context {
     void equateValues(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr);
 
     /// Adds a `ty: Sized` bound to the contained ivars.
-    void require_sized(const Span& sp, const ::HIR::TypeData* ty);
+    void requireSized(const Span& sp, const ::HIR::TypeData* ty);
 
     // - Add a trait bound (gets encoded as an associated type bound)
     void addTraitBound(const Span& sp, const ::HIR::TypeData* implTy, const ::HIR::SimplePath& trait, ::HIR::PathParams params) {
@@ -205,9 +205,9 @@ struct Context {
         Bound,
     };
     /// Type is unknown (e.g. no used/results from a trait impl that can't be looked up)
-    void possible_equate_type_unknown(const Span& sp, const ::HIR::TypeData* ty, IvarUnknownType src_ty);
+    void possibleEquateTypeUnknown(const Span& sp, const ::HIR::TypeData* ty, IvarUnknownType src_ty);
     /// Type must be one of the provided set
-    void possible_equate_type_bounds(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<::HIR::TypeRef> t);
+    void possibleEquateTypeBounds(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<::HIR::TypeRef> t);
 
     // ----
     // IVar possibilties
@@ -224,11 +224,11 @@ struct Context {
     //void possible_equate_ivar_def(unsigned int ivar_index, const ::HIR::TypeData* t);
 
     /// Record that the IVar may be this type (and what the source is)
-    void possible_equate_ivar(const Span& sp, unsigned int ivarIndex, const ::HIR::TypeData* t, PossibleTypeSource src_ty);
+    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const ::HIR::TypeData* t, PossibleTypeSource src_ty);
     /// Add a possible type for an ivar (which is used if only one possibility meets available bounds)
-    void possible_equate_ivar_bounds(const Span& sp, unsigned int ivarIndex, ::std::vector<::HIR::TypeRef> t);
+    void possibleEquateIvarBounds(const Span& sp, unsigned int ivarIndex, ::std::vector<::HIR::TypeRef> t);
     /// Record that the IVar is equated to an unknown type
-    void possible_equate_ivar_unknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType src_ty);
+    void possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType src_ty);
 
     // ----
     // Patterns and bindings
@@ -263,4 +263,4 @@ namespace typecheck {
     extern bool visit_call_populate_cache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warn_unused_result));
 }
 
-extern void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& root_ptr);
+extern void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);

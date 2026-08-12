@@ -24,7 +24,7 @@ namespace HIR {
 };
 
 extern void ConvertHIRLifetimeElision(::HIR::Crate& crate);
-extern ::HIR::PathParams ConvertHIRCompleteAliasParams(::HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool isExpr);
+extern ::HIR::PathParams ConvertHIRCompleteAliasParams(::HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams& paramsDef, const ::HIR::GenericPath& path, bool isExpr);
 extern void ConvertHIRExpandAliases(::HIR::Crate& crate);
 extern void ConvertHIRExpandAliasesSelf(::HIR::Crate& crate);
 extern void ConvertHIRExpandAliasesSelfExpr(
@@ -45,7 +45,7 @@ extern void ConvertHIRResolveUFCSExpr(const ::HIR::Crate& crate, const ::HIR::It
 extern void ConvertHIRConstantEvaluateExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);
 extern void ConvertHIRConstantEvaluateEnum(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const ::HIR::Enum& enm);
 extern void ConvertHIRConstantEvaluateConstant(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::ItemPath& ip, ::HIR::Constant& e);
-extern void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const ::HIR::Crate& crate, const HIR::SimplePath& mod_path, const ::HIR::GenericParams* impl_generics, const ::HIR::GenericParams* item_generics, const ::HIR::GenericParams* params_def, ::HIR::PathParams& params);
+extern void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const ::HIR::Crate& crate, const HIR::SimplePath& mod_path, const ::HIR::GenericParams* impl_generics, const ::HIR::GenericParams* item_generics, const ::HIR::GenericParams* paramsDef, ::HIR::PathParams& params);
 extern void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const ::HIR::Crate& crate, const HIR::TypeData* ty, ::HIR::ConstGeneric& cg);
 extern void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const ::HIR::Crate& crate, ::HIR::ConstGeneric& cg);
 extern void ConvertHIRConstantEvaluateArraySize(const Span& sp, const ::HIR::Crate& crate, const ::HIR::SimplePath& path, ::HIR::ArraySize& size);

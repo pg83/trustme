@@ -429,7 +429,7 @@ Token Lexer::getTokenInt() {
                         }
                     }
                     if (numMode != NumMode::DEC) {
-                        TODO(this->point_span(), "Non-decimal floats");
+                        TODO(this->pointSpan(), "Non-decimal floats");
                     }
 
                     this->ungetc();
@@ -459,7 +459,7 @@ Token Lexer::getTokenInt() {
                         } else if (suffix == "f128") {
                             numType = CORETYPE_F128;
                         } else {
-                            ERROR(this->point_span(), E0000, "Unknown float suffix " << suffix);
+                            ERROR(this->pointSpan(), E0000, "Unknown float suffix " << suffix);
                         }
                     } else {
                         this->ungetc();
@@ -700,11 +700,11 @@ Token Lexer::getTokenInt() {
                         // Character constant with an escape code
                         uint32_t val = this->parseEscape('\'');
                         if (this->getc() != '\'') {
-                            TODO(this->point_span(), "Proper error for lex failures - multi-char const?");
+                            TODO(this->pointSpan(), "Proper error for lex failures - multi-char const?");
                         }
                         return Token(U128(val), CORETYPE_CHAR);
                     } else if (firstchar.v == '\'') {
-                        TODO(this->point_span(), "Proper error for empty char literals");
+                        TODO(this->pointSpan(), "Proper error for empty char literals");
                     } else {
                         ch = this->getc();
                         if (ch == '\'') {
@@ -721,7 +721,7 @@ Token Lexer::getTokenInt() {
                             this->ungetc();
                             return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::newInterned(str)));
                         } else {
-                            TODO(this->point_span(), "Lex Fail - Expected ' after character constant");
+                            TODO(this->pointSpan(), "Lex Fail - Expected ' after character constant");
                         }
                     }
                     break;
@@ -818,7 +818,7 @@ Token Lexer::getTokenIntRawString(bool isByte) {
     return Token(isByte ? TOK_BYTESTRING : TOK_STRING, mv$(val), realGetHygiene());
 }
 
-Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool parse_reserved_word) {
+Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool parseReservedWord) {
     ::std::string str;
     if (leader2 != '\0') {
         str += leader;
@@ -852,7 +852,7 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
     }
 
     this->ungetc();
-    if (parse_reserved_word) {
+    if (parseReservedWord) {
         auto v = LexFindReservedWord(str, this->edition);
         if (v != TOK_NULL) {
             return Token(v);
@@ -950,7 +950,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
         PUTC(ch);
         ch = this->getcNum();
     }
-    auto queue_tuple_indices = [&](Codepoint first) {
+    auto queueTupleIndices = [&](Codepoint first) {
         DEBUG("Detected tuple index chain after float-shaped token - " << sbuf);
         const char* buf = sbuf.data();
         auto cit = std::find(buf, buf + sbuf.size(), '.');
@@ -994,8 +994,8 @@ FloatValue Lexer::parseFloat(U128 whole) {
             }
         }
     };
-    auto queue_float = [&]() {
-        nextTokens.push_back(Token::makeFloat(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
+    auto queueFloat = [&]() {
+        nextTokens.push_back(Token::makeFloat(parseFloatValue(sbuf.c_str()), CORETYPE_ANY));
         return std::numeric_limits<double>::quiet_NaN();
     };
     // If the current char is a `.`
@@ -1019,7 +1019,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
             }
             //buf[ofs] = 0;
             //m_next_tokens.push_back(Token::make_float(::std::strtod(buf, NULL), CORETYPE_ANY));
-            nextTokens.push_back(Token::makeFloat(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
+            nextTokens.push_back(Token::makeFloat(parseFloatValue(sbuf.c_str()), CORETYPE_ANY));
 
             return std::numeric_limits<double>::quiet_NaN();
         } else {
@@ -1027,11 +1027,11 @@ FloatValue Lexer::parseFloat(U128 whole) {
                 ch = this->getc();
             }
             if (ch.isdigit()) {
-                queue_tuple_indices(ch);
+                queueTupleIndices(ch);
             } else {
                 this->ungetc();
                 nextTokens.push_back(TOK_DOT);
-                queue_float();
+                queueFloat();
             }
             return std::numeric_limits<double>::quiet_NaN();
         }
@@ -1041,7 +1041,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
         }
         if (ch != '.') {
             this->ungetc();
-            return queue_float();
+            return queueFloat();
         }
 
         ch = this->getc();
@@ -1049,11 +1049,11 @@ FloatValue Lexer::parseFloat(U128 whole) {
             ch = this->getc();
         }
         if (ch.isdigit()) {
-            queue_tuple_indices(ch);
+            queueTupleIndices(ch);
         } else {
             this->ungetc();
             nextTokens.push_back(TOK_DOT);
-            queue_float();
+            queueFloat();
         }
         return std::numeric_limits<double>::quiet_NaN();
     } else {
@@ -1078,7 +1078,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
         DEBUG("buf = " << sbuf << ", ch = '" << ch << "'");
 
         //return ::std::strtod(buf, NULL);
-        return parse_float_value(sbuf.c_str());
+        return parseFloatValue(sbuf.c_str());
     }
 }
 
@@ -1108,9 +1108,9 @@ uint32_t Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             // Unicode (up to six hex digits)
             uint32_t val = 0;
             ch = this->getc();
-            bool req_close_brace = false;
+            bool reqCloseBrace = false;
             if (ch == '{') {
-                req_close_brace = true;
+                reqCloseBrace = true;
                 ch = this->getc();
             }
             if (!ch.isxdigit()) {
@@ -1122,7 +1122,7 @@ uint32_t Lexer::parseEscape(char enclosing, bool* isByteEscape) {
                 val += ::std::strtol(tmp, NULL, 16);
                 ch = this->getc();
             }
-            if (!req_close_brace) {
+            if (!reqCloseBrace) {
                 this->ungetc();
             } else if (ch != '}') {
                 throw ParseError::Generic(*this, "Expected terminating } in \\u sequence");
@@ -1392,11 +1392,11 @@ Codepoint::Codepoint()
 Codepoint::Codepoint(uint32_t v)
     : v(v) {
 }
-void Lexer::push_hygine() {
+void Lexer::pushHygine() {
     mHygiene = Ident::Hygiene::newScopeChained(mHygiene);
     DEBUG(">> " << mHygiene);
 }
-void Lexer::pop_hygine() {
+void Lexer::popHygine() {
     DEBUG("<< " << mHygiene << " -> " << mHygiene.getParent());
     mHygiene = mHygiene.getParent();
 }

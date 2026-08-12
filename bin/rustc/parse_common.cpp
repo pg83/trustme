@@ -23,7 +23,7 @@ using AST::ExprNodeP;
 
 // TODO: Use a ProtoSpan instead of a point span?
 static inline ExprNodeP mkExprnodep(const TokenStream& lex, AST::ExprNode* en) {
-    en->set_span(lex.point_span());
+    en->set_span(lex.pointSpan());
     return ExprNodeP(en);
 }
 
@@ -98,9 +98,9 @@ ExprNodeP ParseExprBlockNode(TokenStream& lex, AST::ExprNodeBlock::Type ty /*=Ba
         DEBUG("Restore module from " << lex.parse_state().module->path() << " to " << origModule->path());
         lex.parse_state().module = origModule;
     }
-    auto* rv_blk = new ::AST::ExprNodeBlock(ty, mv$(lines), mv$(local_mod));
-    rv_blk->label = label;
-    auto rv = ExprNodeP(rv_blk);
+    auto* rvBlk = new ::AST::ExprNodeBlock(ty, mv$(lines), mv$(local_mod));
+    rvBlk->label = label;
+    auto rv = ExprNodeP(rvBlk);
     rv->set_attrs(mv$(attrs));
     return rv;
 }
@@ -463,7 +463,7 @@ std::vector<AST::IfLetCondition> ParseIfLetChain(TokenStream& lex) {
 
     if (lex.lookahead(0) == TOK_DOUBLE_PIPE) {
         if (hadPat) {
-            TODO(lex.point_span(), "lazy boolean or in let chains not yet implemented (not yet valid rust, at 1.75)");
+            TODO(lex.pointSpan(), "lazy boolean or in let chains not yet implemented (not yet valid rust, at 1.75)");
         } else {
             // Fall back to parsing as a standard expression
             auto prev = ::std::move(conditions[0].value);
@@ -686,7 +686,7 @@ ExprNodeP ParseStmt(TokenStream& lex) {
 ExprNodeP ParseStmtLet(TokenStream& lex, bool is_super) {
     Token tok;
     AST::Pattern pat = ParsePattern(lex, AllowOrPattern::Yes); // irrefutable
-    TypeRef type{lex.point_span()};
+    TypeRef type{lex.pointSpan()};
     if (lex.getTokenIf(TOK_COLON)) {
         type = ParseType(lex);
     }
@@ -1070,7 +1070,7 @@ ExprNodeP ParseExprValStructLiteral(TokenStream& lex, AST::Path path) {
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             ExprNodeP val = ParseStmt(lex);
             if (!nodes.insert(::std::make_pair(ofs, mv$(val))).second) {
-                ERROR(lex.point_span(), E0000, "Duplicate index");
+                ERROR(lex.pointSpan(), E0000, "Duplicate index");
             }
 
             if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
@@ -1084,7 +1084,7 @@ ExprNodeP ParseExprValStructLiteral(TokenStream& lex, AST::Path path) {
         unsigned int i = 0;
         for (auto& p : nodes) {
             if (p.first != i) {
-                ERROR(lex.point_span(), E0000, "Missing index " << i);
+                ERROR(lex.pointSpan(), E0000, "Missing index " << i);
             }
             items.push_back(mv$(p.second));
             i++;
@@ -1166,7 +1166,7 @@ ExprNodeP ParseExprValClosure(TokenStream& lex) {
             // Irrefutable pattern
             AST::Pattern pat = ParsePattern(lex, AllowOrPattern::No);
 
-            TypeRef type{lex.point_span()};
+            TypeRef type{lex.pointSpan()};
             if (lex.getTokenIf(TOK_COLON)) {
                 type = ParseType(lex);
             }
@@ -1183,7 +1183,7 @@ ExprNodeP ParseExprValClosure(TokenStream& lex) {
         throw ParseError::Unexpected(lex, tok, {TOK_PIPE, TOK_DOUBLE_PIPE, TOK_RWORD_MOVE, TOK_RWORD_STATIC});
     }
 
-    auto rt = TypeRef(lex.point_span());
+    auto rt = TypeRef(lex.pointSpan());
     if (lex.getTokenIf(TOK_THINARROW)) {
         rt = ParseType(lex);
     }
@@ -1324,19 +1324,19 @@ ExprNodeP ParseExprValInner(TokenStream& lex) {
                                         } else if (const auto* n = cast<const AST::ExprNodeFloat>(expr)) {
                                             const auto value = n->mValue;
                                             if (value < FloatValue() || floatValueIsNan(value) || floatValueIsInfinite(value)) {
-                                                TODO(lex.point_span(), "offset_of - invalid tuple indices " << *expr);
+                                                TODO(lex.pointSpan(), "offset_of - invalid tuple indices " << *expr);
                                             }
                                             // An integer index fits iff it is below SIZE_MAX + 1 = 2^64
                                             const auto indexLimit = FloatValue(18446744073709551616.0);
                                             const auto whole = floatValueTrunc(value);
                                             if (whole >= indexLimit) {
-                                                TODO(lex.point_span(), "offset_of - tuple index is too large " << *expr);
+                                                TODO(lex.pointSpan(), "offset_of - tuple index is too large " << *expr);
                                             }
 
                                             const auto fraction = value - whole;
                                             auto scale = FloatValue(1.0);
                                             FloatValue fractionalIndex;
-                                            const auto tolerance_per_unit = parse_float_value("1e-32");
+                                            const auto tolerance_per_unit = parseFloatValue("1e-32");
                                             bool foundFractionalIndex = false;
                                             for (unsigned digits = 0; digits < 20; digits++) {
                                                 scale = scale * FloatValue(10.0);
@@ -1348,7 +1348,7 @@ ExprNodeP ParseExprValInner(TokenStream& lex) {
                                                 }
                                             }
                                             if (!foundFractionalIndex || fractionalIndex >= indexLimit) {
-                                                TODO(lex.point_span(), "offset_of - invalid tuple indices " << *expr);
+                                                TODO(lex.pointSpan(), "offset_of - invalid tuple indices " << *expr);
                                             }
                                             exprArgs.push_back(NEWNODE(AST::ExprNodeInteger, U128(static_cast<uint64_t>(fractionalIndex)), CORETYPE_ANY));
                                             exprArgs.push_back(NEWNODE(AST::ExprNodeInteger, U128(static_cast<uint64_t>(whole)), CORETYPE_ANY));
@@ -1357,7 +1357,7 @@ ExprNodeP ParseExprValInner(TokenStream& lex) {
                                             exprArgs.push_back(NEWNODE(AST::ExprNodeString, n->mName.c_str(), {}));
                                             expr = &*n->obj;
                                         } else {
-                                            TODO(lex.point_span(), "offset_of - " << *expr);
+                                            TODO(lex.pointSpan(), "offset_of - " << *expr);
                                         }
                                     }
                                     while (!exprArgs.empty()) {
@@ -1381,7 +1381,7 @@ ExprNodeP ParseExprValInner(TokenStream& lex) {
                             path.nodes().back().args().entries.push_back(std::move(ty));
                             return NEWNODE(AST::ExprNodeCallPath, std::move(path), std::move(args));
                         } else {
-                            TODO(lex.point_span(), "`builtin #` support - " << tok.ident());
+                            TODO(lex.pointSpan(), "`builtin #` support - " << tok.ident());
                         }
                     }
                 default:
@@ -1490,14 +1490,14 @@ ExprNodeP ParseExprMacro(TokenStream& lex, AST::Path path) {
     bool is_braced = lex.lookahead(0) == TOK_BRACE_OPEN;
 
     if (isMacro) {
-        lex.push_hygine();
+        lex.pushHygine();
     }
     TokenTree tt = ParseTT(lex, true);
     if (tt.isToken()) {
         throw ParseError::Unexpected(lex, tt.tok());
     }
     if (isMacro) {
-        lex.pop_hygine();
+        lex.popHygine();
     }
 
     DEBUG("name=" << path << ", ident=" << ident << ", tt=" << tt);
@@ -1710,7 +1710,7 @@ AST::Path ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericM
                 } while (GET_TOK(tok, lex) == TOK_COMMA);
                 CHECK_TOK(tok, TOK_PAREN_CLOSE);
 
-                TypeRef ret_type = TypeRef(TypeRef::TagUnit(), lex.point_span());
+                TypeRef ret_type = TypeRef(TypeRef::TagUnit(), lex.pointSpan());
                 if (lex.lookahead(0) == TOK_THINARROW) {
                     GET_TOK(tok, lex);
                     ret_type = ParseType(lex, false);
@@ -1785,7 +1785,7 @@ AST::Path ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericM
                 PUTBACK(tok, lex);
                 rv.entries.push_back(ParseType(lex));
                 if (lex.lookahead(0) == TOK_EQUAL || lex.lookahead(0) == TOK_COLON) {
-                    auto sp = lex.point_span();
+                    auto sp = lex.pointSpan();
                     // Uh-oh, the previously-parsed type was actually an ATY name (with generics, probably)
                     // - Decode the above type into the name
                     auto& ty = rv.entries.back().as_Type();
@@ -1998,8 +1998,8 @@ AST::Pattern ParsePatternReal(TokenStream& lex, AllowOrPattern allowOr) {
         if (!ret.data().is_Value()) {
             throw ParseError::Generic(lex, "Using '...' with a non-value on left");
         }
-        auto& ret_v = ret.data().as_Value();
-        auto leftval = std::move(ret_v.start);
+        auto& retV = ret.data().as_Value();
+        auto leftval = std::move(retV.start);
 
         auto rightval = ParsePatternValue(lex);
         if (rightval.is_Invalid()) {
@@ -2011,8 +2011,8 @@ AST::Pattern ParsePatternReal(TokenStream& lex, AllowOrPattern allowOr) {
         if (!ret.data().is_Value()) {
             throw ParseError::Generic(lex, "Using `..` with a non-value on left");
         }
-        auto& ret_v = ret.data().as_Value();
-        auto leftval = std::move(ret_v.start);
+        auto& retV = ret.data().as_Value();
+        auto leftval = std::move(retV.start);
 
         auto rightval = ParsePatternValue(lex);
         if (rightval.is_Invalid()) {
@@ -2079,7 +2079,7 @@ AST::Pattern::Value ParsePatternValue(TokenStream& lex) {
             } else if (auto* n = cast<AST::ExprNodeFloat>(e.get())) {
                 return AST::Pattern::Value::make_Float({n->datatype, n->mValue});
             } else {
-                TODO(lex.point_span(), "Convert :expr into a pattern value - " << *e);
+                TODO(lex.pointSpan(), "Convert :expr into a pattern value - " << *e);
             }
         } break;
         default:
@@ -2306,7 +2306,7 @@ AST::Pattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, AST::Path path) 
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             auto val = ParsePattern(lex);
             if (!pats.insert(::std::make_pair(ofs, mv$(val))).second) {
-                ERROR(lex.point_span(), E0000, "Duplicate index");
+                ERROR(lex.pointSpan(), E0000, "Duplicate index");
             }
 
             if (GET_TOK(tok, lex) == TOK_BRACE_CLOSE) {
@@ -2327,7 +2327,7 @@ AST::Pattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, AST::Path path) 
         for (auto& p : pats) {
             if (p.first != i) {
                 if (hasSplit || !split_allowed) {
-                    ERROR(lex.point_span(), E0000, "Missing index " << i);
+                    ERROR(lex.pointSpan(), E0000, "Missing index " << i);
                 }
                 hasSplit = true;
                 i = p.first;
@@ -2557,7 +2557,7 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv);
 
         switch (GET_TOK(tok, lex)) {
             case TOK_LIFETIME:
-                rv.mLifetimes.push_back(::AST::LifetimeParam(lex.point_span(), ::std::move(attrs), tok.ident()));
+                rv.mLifetimes.push_back(::AST::LifetimeParam(lex.pointSpan(), ::std::move(attrs), tok.ident()));
                 break;
             default:
                 throw ParseError::Unexpected(lex, tok, Token(TOK_LIFETIME));
@@ -2604,7 +2604,7 @@ namespace {
 }
 
 /// Parse type parameters in a definition
-void ParseTypeBound(TokenStream& lex, AST::GenericParams& ret, TypeRef checkedType, AST::HigherRankedBounds outer_hrbs = {}) {
+void ParseTypeBound(TokenStream& lex, AST::GenericParams& ret, TypeRef checkedType, AST::HigherRankedBounds outerHrbs = {}) {
     TRACE_FUNCTION;
     Token tok;
 
@@ -2634,13 +2634,13 @@ void ParseTypeBound(TokenStream& lex, AST::GenericParams& ret, TypeRef checkedTy
             if (lex.getTokenIf(TOK_RWORD_FOR)) {
                 innerHrls = ParseHRB(lex);
             }
-            auto post_hrb_constness = ParseBoundConstness(lex);
-            if (post_hrb_constness != AST::BoundConstness::Never) {
-                constness = post_hrb_constness;
+            auto postHrbConstness = ParseBoundConstness(lex);
+            if (postHrbConstness != AST::BoundConstness::Never) {
+                constness = postHrbConstness;
             }
             auto trait_path = ParsePath(lex, PATH_GENERIC_TYPE);
 
-            auto this_outer_hrbs = (lex.lookahead(0) == TOK_PLUS ? AST::HigherRankedBounds(outer_hrbs) : mv$(outer_hrbs));
+            auto this_outer_hrbs = (lex.lookahead(0) == TOK_PLUS ? AST::HigherRankedBounds(outerHrbs) : mv$(outerHrbs));
             ret.addBound(AST::GenericBound::make_IsTrait({lex.endSpan(ps), mv$(this_outer_hrbs), checkedType.clone(), mv$(innerHrls), mv$(trait_path), constness}));
         }
     } while (lex.getTokenIf(TOK_PLUS));
@@ -2662,29 +2662,29 @@ AST::GenericParams ParseGenericParams(TokenStream& lex) {
 
         GET_TOK(tok, lex);
         if (tok.type() == TOK_IDENT) {
-            auto param_name = tok.ident().name;
-            auto param_def = AST::TypeParam(lex.point_span(), ::std::move(attrs), param_name);
+            auto paramName = tok.ident().name;
+            auto paramDef = AST::TypeParam(lex.pointSpan(), ::std::move(attrs), paramName);
 
             size_t boundStart = SIZE_MAX;
             size_t boundEnd = SIZE_MAX;
-            auto param_ty = TypeRef(lex.point_span(), param_name);
+            auto paramTy = TypeRef(lex.pointSpan(), paramName);
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 boundStart = ret.bounds.size();
-                ParseTypeBound(lex, ret, mv$(param_ty));
+                ParseTypeBound(lex, ret, mv$(paramTy));
                 boundEnd = ret.bounds.size();
 
                 GET_TOK(tok, lex);
             }
 
             if (tok.type() == TOK_EQUAL) {
-                param_def.setDefault(ParseType(lex));
+                paramDef.setDefault(ParseType(lex));
                 GET_TOK(tok, lex);
             }
-            ret.addTyParam(mv$(param_def), boundStart, boundEnd);
+            ret.addTyParam(mv$(paramDef), boundStart, boundEnd);
         } else if (tok.type() == TOK_LIFETIME) {
             size_t boundStart = SIZE_MAX;
             size_t boundEnd = SIZE_MAX;
-            auto param_name = tok.ident();
+            auto paramName = tok.ident();
             auto ref = getLifetimeRef(lex, mv$(tok));
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 boundStart = ret.bounds.size();
@@ -2698,10 +2698,10 @@ AST::GenericParams ParseGenericParams(TokenStream& lex) {
                 }
                 boundEnd = ret.bounds.size();
             }
-            ret.addLftParam(::AST::LifetimeParam(lex.point_span(), ::std::move(attrs), param_name), boundStart, boundEnd);
+            ret.addLftParam(::AST::LifetimeParam(lex.pointSpan(), ::std::move(attrs), paramName), boundStart, boundEnd);
         } else if (tok.type() == TOK_RWORD_CONST) {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            auto param_name = tok.ident();
+            auto paramName = tok.ident();
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             auto ty = ParseType(lex);
 
@@ -2715,7 +2715,7 @@ AST::GenericParams ParseGenericParams(TokenStream& lex) {
                 GET_TOK(tok, lex);
             }
 
-            ret.addValueParam(lex.point_span(), mv$(attrs), mv$(param_name), mv$(ty), mv$(val));
+            ret.addValueParam(lex.pointSpan(), mv$(attrs), mv$(paramName), mv$(ty), mv$(val));
         } else {
             throw ParseError::Unexpected(lex, tok, {TOK_IDENT, TOK_LIFETIME});
         }
@@ -2853,7 +2853,7 @@ AST::Function ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBeProto
             //if( allow_self == false )
             //    throw ParseError::Generic(lex, "Self binding not expected");
             auto bindingSp = lex.endSpan(ps);
-            TypeRef ty = TypeRef(lex.point_span(), rcstringSelf, 0xFFFF);
+            TypeRef ty = TypeRef(lex.pointSpan(), rcstringSelf, 0xFFFF);
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 // Typed mut self
                 ty = ParseType(lex);
@@ -2868,7 +2868,7 @@ AST::Function ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBeProto
         //if( allow_self == false )
         //    throw ParseError::Generic(lex, "Self binding not expected");
         auto bindingSp = lex.endSpan(ps);
-        TypeRef ty = TypeRef(lex.point_span(), rcstringSelf, 0xFFFF);
+        TypeRef ty = TypeRef(lex.pointSpan(), rcstringSelf, 0xFFFF);
         if (GET_TOK(tok, lex) == TOK_COLON) {
             // Typed mut self
             ty = ParseType(lex);
@@ -2924,7 +2924,7 @@ AST::Function ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBeProto
     }
 
     // Return type
-    TypeRef ret_type = lex.getTokenIf(TOK_THINARROW) ? ParseType(lex) : TypeRef(TypeRef::TagUnit(), lex.point_span());
+    TypeRef ret_type = lex.getTokenIf(TOK_THINARROW) ? ParseType(lex) : TypeRef(TypeRef::TagUnit(), lex.pointSpan());
 
     // Bounds
     if (lex.getTokenIf(TOK_RWORD_WHERE)) {
@@ -2947,10 +2947,10 @@ AST::Function ParseFunctionDefWithCode(TokenStream& lex, bool allowSelf, std::st
         throw ParseError::Unexpected(lex, tok, {TOK_BRACE_OPEN, TOK_INTERPOLATED_BLOCK});
     }
     // Enter a new hygine scope for the function (TODO: Should this be in Parse_ExprBlock?)
-    lex.push_hygine();
+    lex.pushHygine();
     PUTBACK(tok, lex);
     ret.set_code(ParseExprBlock(lex));
-    lex.pop_hygine();
+    lex.popHygine();
     return ret;
 }
 
@@ -3075,7 +3075,7 @@ AST::Named<AST::Item> ParseTraitItem(TokenStream& lex) {
         // Only the kinds a trait body can hold; anything else is a loud TODO rather than silently accepted.
         TU_MATCH_HDRA((item.data), {)
         default:
-            TODO(lex.point_span(), "Interpolated item into trait: " << item.data.tag_str());
+            TODO(lex.pointSpan(), "Interpolated item into trait: " << item.data.tag_str());
             TU_ARMA(Function, e) {
                 (void)e;
             }
@@ -3162,11 +3162,11 @@ AST::Named<AST::Item> ParseTraitItem(TokenStream& lex) {
             AST::GenericParams bounds;
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 // Bounded associated type
-                ParseTypeBound(lex, bounds, TypeRef(lex.point_span(), RcString::newInterned("Self"), 0xFFFF));
+                ParseTypeBound(lex, bounds, TypeRef(lex.pointSpan(), RcString::newInterned("Self"), 0xFFFF));
                 GET_TOK(tok, lex);
             }
 
-            TypeRef defaultType = TypeRef(lex.point_span());
+            TypeRef defaultType = TypeRef(lex.pointSpan());
             if (tok.type() == TOK_EQUAL) {
                 defaultType = ParseType(lex);
                 GET_TOK(tok, lex);
@@ -3189,9 +3189,9 @@ AST::Named<AST::Item> ParseTraitItem(TokenStream& lex) {
             auto fcn = ParseFunctionDef(lex, /*allow_self*/ true, /*can_be_proto*/ true, std::move(abi), fnFlags);
             if (lex.lookahead(0) == TOK_BRACE_OPEN) {
                 // Enter a new hygine scope for the function body. (TODO: Should this be in Parse_ExprBlock?)
-                lex.push_hygine();
+                lex.pushHygine();
                 fcn.set_code(ParseExprBlock(lex));
-                lex.pop_hygine();
+                lex.popHygine();
             } else if (lex.getTokenIf(TOK_SEMICOLON)) {
                 // Accept it
             } else {
@@ -3228,9 +3228,9 @@ AST::Trait ParseTraitDef(TokenStream& lex, const AST::AttributeList& metaItems, 
                 PUTBACK(tok, lex);
                 auto constness = ParseBoundConstness(lex);
                 auto hrbs = ParseHRBOpt(lex);
-                auto post_hrb_constness = ParseBoundConstness(lex);
-                if (post_hrb_constness != AST::BoundConstness::Never) {
-                    constness = post_hrb_constness;
+                auto postHrbConstness = ParseBoundConstness(lex);
+                if (postHrbConstness != AST::BoundConstness::Never) {
+                    constness = postHrbConstness;
                 }
                 supertraits.push_back(GET_SPANNED(TypeTraitPath, lex, (TypeTraitPath(mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness))));
             }
@@ -3515,7 +3515,7 @@ AST::Attribute ParseMetaItem(TokenStream& lex) {
         // Implementing a trait for another type, get the target type
         if (GET_TOK(tok, lex) == TOK_DOUBLE_DOT) {
             // Default impl
-            impl_type = TypeRef(TypeRef::TagInvalid(), lex.point_span());
+            impl_type = TypeRef(TypeRef::TagInvalid(), lex.pointSpan());
         } else {
             PUTBACK(tok, lex);
             impl_type = ParseType(lex, true);
@@ -3573,7 +3573,7 @@ void ParseImplItem(TokenStream& lex, AST::Impl& impl) {
             }
             TU_MATCH_HDRA((item.data), {)
             default:
-                TODO(lex.point_span(), "Interpolated item into impl: " << item.data.tag_str());
+                TODO(lex.pointSpan(), "Interpolated item into impl: " << item.data.tag_str());
                 TU_ARMA(Function, e) {
                     impl.addFunction(item.span, std::move(item.attrs), item.vis, false, item.name, std::move(e));
                 }
@@ -3779,7 +3779,7 @@ void ParseUseInner(TokenStream& lex, ::std::vector<AST::UseItem::Ent>& entries, 
                 p->nodes.pop_back();
             }
         } else {
-            ASSERT_BUG(lex.point_span(), path.nodes().size() > 0, "super in empty path");
+            ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "super in empty path");
             path.nodes().pop_back();
         }
     }
@@ -3807,23 +3807,23 @@ void ParseUseInner(TokenStream& lex, ::std::vector<AST::UseItem::Ent>& entries, 
                             name = getOptionalIdent(lex);
                         } else {
                             if (path.nodes().size() == 0) {
-                                ERROR(lex.point_span(), E0000, "`self` with no path, use `as` to give it a name");
+                                ERROR(lex.pointSpan(), E0000, "`self` with no path, use `as` to give it a name");
                             }
                             name = path.nodes().back().name();
                         }
-                        entries.push_back({lex.point_span(), AST::Path(path), ::std::move(name)});
+                        entries.push_back({lex.pointSpan(), AST::Path(path), ::std::move(name)});
                     } else {
-                        auto saved_path = AST::Path(path);
+                        auto savedPath = AST::Path(path);
 
                         ParseUseInner(lex, entries, path);
 
-                        path = std::move(saved_path);
+                        path = std::move(savedPath);
                     }
                 } while (GET_TOK(tok, lex) == TOK_COMMA);
                 CHECK_TOK(tok, TOK_BRACE_CLOSE);
                 return;
             case TOK_STAR:
-                entries.push_back({lex.point_span(), AST::Path(path), ""});
+                entries.push_back({lex.pointSpan(), AST::Path(path), ""});
                 return;
             default:
                 throw ParseError::Unexpected(lex, tok);
@@ -3837,12 +3837,12 @@ void ParseUseInner(TokenStream& lex, ::std::vector<AST::UseItem::Ent>& entries, 
         name = getOptionalIdent(lex);
     } else {
         PUTBACK(tok, lex);
-        ASSERT_BUG(lex.point_span(), path.nodes().size() > 0, "`use` with no path");
+        ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "`use` with no path");
         name = path.nodes().back().name();
     }
 
     // TODO: Get a span covering the final node.
-    entries.push_back({lex.point_span(), AST::Path(path), ::std::move(name)});
+    entries.push_back({lex.pointSpan(), AST::Path(path), ::std::move(name)});
 }
 
 void ParseUseRoot(TokenStream& lex, ::std::vector<AST::UseItem::Ent>& entries) {
@@ -3868,7 +3868,7 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<AST::UseItem::Ent>& entries) {
             if (lex.lookahead(0) == TOK_RWORD_AS) {
                 GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);
                 auto name = getOptionalIdent(lex);
-                entries.push_back({lex.point_span(), AST::Path(path), ::std::move(name)});
+                entries.push_back({lex.pointSpan(), AST::Path(path), ::std::move(name)});
                 return;
             }
             // 1.29 absolute path
@@ -3896,7 +3896,7 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<AST::UseItem::Ent>& entries) {
                     }
 
                     // TODO: Get a span covering the final node.
-                    entries.push_back({lex.point_span(), AST::Path(path), ::std::move(name)});
+                    entries.push_back({lex.pointSpan(), AST::Path(path), ::std::move(name)});
                     return;
                 }
             } else {
@@ -3967,14 +3967,14 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<AST::UseItem::Ent>& entries) {
     bool isMacro = (name.is_trivial() && name.asTrivial() == "macro_rules");
 
     if (isMacro) {
-        lex.push_hygine();
+        lex.pushHygine();
     }
     TokenTree tt = ParseTT(lex, true);
     if (tt.isToken()) {
         throw ParseError::Unexpected(lex, tt.tok());
     }
     if (isMacro) {
-        lex.pop_hygine();
+        lex.popHygine();
     }
     DEBUG("name=" << name << ", ident=" << ident << ", tt=" << tt);
     return ::AST::MacroInvocation(lex.endSpan(span_start), mv$(name), mv$(ident), mv$(tt));
@@ -4270,7 +4270,7 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv) {
                     } else if (impl.is_NegImpl()) {
                         impl.as_NegImpl().set_is_unsafe();
                     } else {
-                        BUG(lex.point_span(), "Parse_Impl returned a variant other than Impl or NegImpl");
+                        BUG(lex.pointSpan(), "Parse_Impl returned a variant other than Impl or NegImpl");
                     }
                     return ::AST::Named<::AST::Item>{Span(), mv$(metaItems), AST::Visibility::makeGlobal(), "", mv$(impl)};
                 }
@@ -4435,42 +4435,42 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv) {
             // - IF a #[path] attribute was passed, allow
             // - IF in crate root or mod.rs, allow (input flag)
             // - else, disallow and set flag
-            ::std::string path_attr;
+            ::std::string pathAttr;
             for (const auto& a : metaItems.mItems) {
                 DEBUG("[mod path_attr] " << a);
                 if (a.name() == "path") {
-                    path_attr = a.parse_equals_string(*lex.parse_state().crate, *lex.parse_state().module);
+                    pathAttr = a.parseEqualsString(*lex.parse_state().crate, *lex.parse_state().module);
                 } else if (a.name() == "cfg_attr") {
                     for (const auto& a2 : checkCfgAttr(a)) {
                         DEBUG("[mod path_attr cfg_attr] " << a2);
                         if (a2.name() == "path") {
-                            path_attr = a2.parse_equals_string(*lex.parse_state().crate, *lex.parse_state().module);
+                            pathAttr = a2.parseEqualsString(*lex.parse_state().crate, *lex.parse_state().module);
                         }
                     }
                 } else {
                 }
             }
-            DEBUG("path_attr = \"" << path_attr << "\"");
+            DEBUG("path_attr = \"" << pathAttr << "\"");
 
             //submod.m_file_info = get_submod_file(lex.end_span(ps), mod_fileinfo,  name, path_attr, LOOK_AHEAD(lex) == TOK_SEMICOLON, H::check_item_cfg(meta_items));
 
             ::helpers::path sub_path;
             bool sub_file_controls_dir = true;
             if (modFileinfo.path == "-") {
-                if (path_attr.size()) {
-                    ERROR(lex.point_span(), E0000, "Cannot load module from file when reading stdin");
+                if (pathAttr.size()) {
+                    ERROR(lex.pointSpan(), E0000, "Cannot load module from file when reading stdin");
                 }
                 sub_path = "-";
-            } else if (path_attr.size() > 0) {
+            } else if (pathAttr.size() > 0) {
                 // If in a local mod, then use this arm
                 bool inSubmod = modFileinfo.path[modFileinfo.path.size() - 1] == '/';
                 if (modFileinfo.inModBlock) {
                     // REF: `rustc-1.90.0-src/vendor/hashbrown-0.14.5/src/lib.rs:63`
-                    sub_path = dirname(modFileinfo.path) / path_attr.c_str();
+                    sub_path = dirname(modFileinfo.path) / pathAttr.c_str();
                 } else {
                     // Otherwise use this:
                     // REF: `rustc-1.90.0-src/vendor/icu_list_data-1.5.1/data/macros.rs:30`
-                    sub_path = dirname(lex.point_span().getTopFileSpan().filename.c_str()) / path_attr.c_str();
+                    sub_path = dirname(lex.pointSpan().getTopFileSpan().filename.c_str()) / pathAttr.c_str();
                 }
             } else if (modFileinfo.controlsDir) {
                 sub_path = dirname(modFileinfo.path) / name.c_str();
@@ -4497,14 +4497,14 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv) {
                 case TOK_SEMICOLON:
                     if (modFileinfo.isDisabled) {
                     } else if (sub_path.str() == "-") {
-                        ERROR(lex.point_span(), E0000, "Cannot load module from file when reading stdin");
+                        ERROR(lex.pointSpan(), E0000, "Cannot load module from file when reading stdin");
                     } else if (!H::checkItemCfg(metaItems)) {
                         // Ignore - emit Item::None
                         itemName = mv$(name);
                         itemData = ::AST::Item();
                         break;
-                    } else if (path_attr.size() == 0 && !modFileinfo.controlsDir) {
-                        ASSERT_BUG(lex.point_span(), mod_path.nodes.size() >= 1, "Crate root should control its directory?");
+                    } else if (pathAttr.size() == 0 && !modFileinfo.controlsDir) {
+                        ASSERT_BUG(lex.pointSpan(), mod_path.nodes.size() >= 1, "Crate root should control its directory?");
                         // Look for `curdir/curmod/submod.rs` or `curdir/curmod/submod/mod.rs`
                         ::std::string newpathFileDirect = dirname(modFileinfo.path) / mod_path.nodes.back().c_str() / name.c_str() + ".rs";
                         ::std::string newpathFileMod = dirname(modFileinfo.path) / mod_path.nodes.back().c_str() / name.c_str() / "mod.rs";
@@ -4517,7 +4517,7 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv) {
 
                         if (ifsDir.is_open() && ifsFile.is_open()) {
                             // Collision
-                            ERROR(lex.point_span(), E0000, "Both modname.rs and modname/mod.rs exist");
+                            ERROR(lex.pointSpan(), E0000, "Both modname.rs and modname/mod.rs exist");
                         } else if (ifsDir.is_open()) {
                             // Load from dir
                             submod.fileInfo.path = newpathFileMod;
@@ -4527,7 +4527,7 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv) {
                             submod.fileInfo.controlsDir = false;
                         } else {
                             // Can't find file
-                            ERROR(lex.point_span(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
+                            ERROR(lex.pointSpan(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
                         }
                         DEBUG("- path = " << submod.fileInfo.path);
                         Lexer sub_lex(submod.fileInfo.path, lex.getEdition(), lex.parse_state());
@@ -4535,26 +4535,26 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv) {
                         GET_CHECK_TOK(tok, sub_lex, TOK_EOF);
                     } else {
                         ::std::string newpathDir = sub_path.str() + "/";
-                        ::std::string newpathFile = path_attr.size() > 0 ? sub_path : sub_path + ".rs";
+                        ::std::string newpathFile = pathAttr.size() > 0 ? sub_path : sub_path + ".rs";
                         DEBUG("newpath_dir = '" << newpathDir << "', newpath_file = '" << newpathFile << "'");
                         ::std::ifstream ifsDir(newpathDir + "mod.rs");
                         ::std::ifstream ifsFile(newpathFile);
                         if (ifsDir.is_open() && ifsFile.is_open()) {
                             // Collision
-                            ERROR(lex.point_span(), E0000, "Both modname.rs and modname/mod.rs exist");
+                            ERROR(lex.pointSpan(), E0000, "Both modname.rs and modname/mod.rs exist");
                         } else if (ifsDir.is_open()) {
                             // Load from dir
                             submod.fileInfo.path = newpathDir + "mod.rs";
                         } else if (ifsFile.is_open()) {
                             submod.fileInfo.path = newpathFile;
-                            if (path_attr == "") {
+                            if (pathAttr == "") {
                                 submod.fileInfo.controlsDir = false;
                             }
                         }
                         // TODO: If this is not a controlling file, look in `modname/` for the new module
                         else {
                             // Can't find file
-                            ERROR(lex.point_span(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
+                            ERROR(lex.pointSpan(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
                         }
                         DEBUG("- path = " << submod.fileInfo.path);
                         Lexer sub_lex(submod.fileInfo.path, lex.getEdition(), lex.parse_state());
@@ -4580,7 +4580,7 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv) {
 void ParseModItem(TokenStream& lex, AST::Module& mod, AST::AttributeList metaItems) {
     SET_MODULE(lex, mod);
     lex.parse_state().module = &mod;
-    lex.parse_state().parent_attrs = &metaItems;
+    lex.parse_state().parentAttrs = &metaItems;
 
     mod.addItem(ParseModItemS(lex, mod.fileInfo, mod.path(), mv$(metaItems)));
 }
@@ -4611,13 +4611,13 @@ void ParseModRootItems(TokenStream& lex, AST::Module& mod) {
 void ParseModRoot(TokenStream& lex, AST::Module& mod, AST::AttributeList& modAttrs) {
     TRACE_FUNCTION;
 
-    auto prev_mod = lex.parse_state().module;
+    auto prevMod = lex.parse_state().module;
     lex.parse_state().module = &mod;
     // Attributes on module/crate (will continue loop)
     ParseParentAttrs(lex, modAttrs);
 
     ParseModRootItems(lex, mod);
-    lex.parse_state().module = prev_mod;
+    lex.parse_state().module = prevMod;
 }
 
 AST::Crate* ParseCrate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::string mainfile, AST::Edition edition) {
@@ -4852,7 +4852,7 @@ TypeRef ParseTypeFn(TokenStream& lex, ::AST::HigherRankedBounds hrbs) {
         if (GET_TOK(tok, lex) == TOK_STRING) {
             abi = tok.str();
             if (abi == "") {
-                ERROR(lex.point_span(), E0000, "Empty ABI");
+                ERROR(lex.pointSpan(), E0000, "Empty ABI");
             }
             GET_TOK(tok, lex);
         } else {
@@ -4885,7 +4885,7 @@ TypeRef ParseTypeFn(TokenStream& lex, ::AST::HigherRankedBounds hrbs) {
     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
     // `-> RetType`
-    TypeRef ret_type = TypeRef(TypeRef::TagUnit(), lex.point_span());
+    TypeRef ret_type = TypeRef(TypeRef::TagUnit(), lex.pointSpan());
     if (GET_TOK(tok, lex) == TOK_THINARROW) {
         ret_type = ParseType(lex, false);
     } else {
@@ -4959,9 +4959,9 @@ TypeRef ParseTypeTraitObject(TokenStream& lex, ::AST::HigherRankedBounds hrbs) {
                 hrbs = ParseHRB(lex);
             } else {
             }
-            auto post_hrb_constness = ParseBoundConstness(lex);
-            if (post_hrb_constness != AST::BoundConstness::Never) {
-                constness = post_hrb_constness;
+            auto postHrbConstness = ParseBoundConstness(lex);
+            if (postHrbConstness != AST::BoundConstness::Never) {
+                constness = postHrbConstness;
             }
 
             bool is_paren = lex.getTokenIf(TOK_PAREN_OPEN);
@@ -4988,34 +4988,34 @@ TypeRef ParseTypeErasedType(TokenStream& lex, bool allowTraitList) {
     Token tok;
 
     auto ps = lex.start_span();
-    TypeErasedType rv_data;
-    rv_data.isEdition2024OrLater = lex.editionAfter(AST::Edition::Rust2024);
+    TypeErasedType rvData;
+    rvData.isEdition2024OrLater = lex.editionAfter(AST::Edition::Rust2024);
     do {
         if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-            rv_data.lifetimes.push_back(AST::LifetimeRef(/*lex.point_span(),*/ tok.ident()));
+            rvData.lifetimes.push_back(AST::LifetimeRef(/*lex.point_span(),*/ tok.ident()));
         } else if (lex.getTokenIf(TOK_QMARK)) {
             AST::HigherRankedBounds hrbs = ParseHRBOpt(lex);
-            rv_data.maybeTraits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
+            rvData.maybeTraits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
         } else if (lex.getTokenIf(TOK_PAREN_OPEN)) {
             AST::HigherRankedBounds hrbs = ParseHRBOpt(lex);
-            rv_data.traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
+            rvData.traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)});
             lex.getTokenCheck(TOK_PAREN_CLOSE);
         } else if (lex.getTokenIf(TOK_RWORD_USE)) {
             lex.getTokenCheck(TOK_LT);
-            if (rv_data.use) {
-                ERROR(lex.point_span(), E0000, "Multiple `use` seen in erased type");
+            if (rvData.use) {
+                ERROR(lex.pointSpan(), E0000, "Multiple `use` seen in erased type");
             }
-            rv_data.use.reset(new ::AST::PathParams(ParsePathGenericList(lex)));
+            rvData.use.reset(new ::AST::PathParams(ParsePathGenericList(lex)));
         } else {
             auto constness = ParseBoundConstness(lex);
             AST::HigherRankedBounds hrbs = ParseHRBOpt(lex);
-            auto post_hrb_constness = ParseBoundConstness(lex);
-            if (post_hrb_constness != AST::BoundConstness::Never) {
-                constness = post_hrb_constness;
+            auto postHrbConstness = ParseBoundConstness(lex);
+            if (postHrbConstness != AST::BoundConstness::Never) {
+                constness = postHrbConstness;
             }
-            rv_data.traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness});
+            rvData.traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness});
         }
     } while (lex.getTokenIf(TOK_PLUS));
 
-    return TypeRef(lex.endSpan(ps), box$(rv_data));
+    return TypeRef(lex.endSpan(ps), box$(rvData));
 }

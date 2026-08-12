@@ -120,7 +120,7 @@ namespace HIR {
         SimplePath operator+(const RcString& s) const;
 
         void operator+=(const RcString& s);
-        RcString pop_component();
+        RcString popComponent();
 
         void update_crate_name(RcString v);
         void update_last_component(RcString v);
@@ -159,8 +159,8 @@ namespace HIR {
         PathParams(PathParams&&) = default;
         PathParams& operator=(PathParams&&) = default;
 
-        Compare compareWithPlaceholders(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder) const;
-        Compare matchTestGenericsFuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& match) const;
+        Compare compareWithPlaceholders(const Span& sp, const PathParams& x, t_cb_resolve_type resolvePlaceholder) const;
+        Compare matchTestGenericsFuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolvePlaceholder, ::HIR::MatchGenerics& match) const;
         bool equalsIgnoringRegions(const PathParams& x) const;
 
         /// Indicates that params exist (and thus the target requires monomorphisation)
@@ -198,7 +198,7 @@ namespace HIR {
         GenericPath(::HIR::GenericParams hrls, ::HIR::SimplePath sp, ::HIR::PathParams params);
 
         GenericPath clone() const;
-        Compare compareWithPlaceholders(const Span& sp, const GenericPath& x, t_cb_resolve_type resolve_placeholder) const;
+        Compare compareWithPlaceholders(const Span& sp, const GenericPath& x, t_cb_resolve_type resolvePlaceholder) const;
         bool equalsIgnoringRegions(const GenericPath& x) const;
 
         bool operator==(const GenericPath& x) const {
@@ -267,7 +267,7 @@ namespace HIR {
         TraitPath& operator=(TraitPath&&);
 
         TraitPath clone() const;
-        Compare compareWithPlaceholders(const Span& sp, const TraitPath& x, t_cb_resolve_type resolve_placeholder) const;
+        Compare compareWithPlaceholders(const Span& sp, const TraitPath& x, t_cb_resolve_type resolvePlaceholder) const;
         bool equalsIgnoringRegions(const TraitPath& x) const;
 
         bool operator==(const TraitPath& x) const {
@@ -331,7 +331,7 @@ namespace HIR {
         Path(TypeRef ty, GenericParams hrtbs, GenericPath trait, RcString item, PathParams item_params = PathParams());
 
         Path clone() const;
-        Compare compareWithPlaceholders(const Span& sp, const Path& x, t_cb_resolve_type resolve_placeholder) const;
+        Compare compareWithPlaceholders(const Span& sp, const Path& x, t_cb_resolve_type resolvePlaceholder) const;
         bool equalsIgnoringRegions(const Path& x) const;
 
         Ordering ord(const Path& x) const;
@@ -351,8 +351,8 @@ namespace HIR {
 
     struct ConstGenericUnevaluated {
         /// Impl-level parameters to the expression
-        HIR::PathParams params_impl;
-        HIR::PathParams params_item;
+        HIR::PathParams paramsImpl;
+        HIR::PathParams paramsItem;
         /// HIR/MIR for this unevaluated parameter
         std::shared_ptr<HIR::ExprPtr> expr;
 

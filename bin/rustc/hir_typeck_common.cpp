@@ -216,41 +216,41 @@ namespace {
         t_cb_rewrite_ty callback;
         ::std::vector<HIR::TypeRef> stack;
 
-        bool rewrite_path_params(HIR::PathParams& params) {
+        bool rewritePathParams(HIR::PathParams& params) {
             for (auto& type : params.types) {
-                if (rewrite_type(type)) return true;
+                if (rewriteType(type)) return true;
             }
             return false;
         }
 
-        bool rewrite_trait_path(HIR::TraitPath& trait) {
-            if (rewrite_path_params(trait.mPath.mParams)) return true;
+        bool rewriteTraitPath(HIR::TraitPath& trait) {
+            if (rewritePathParams(trait.mPath.mParams)) return true;
             for (auto& assoc : trait.typeBounds) {
-                if (rewrite_path_params(assoc.second.source_trait.mParams)
-                    || rewrite_path_params(assoc.second.atyParams)
-                    || rewrite_type(assoc.second.type)) return true;
+                if (rewritePathParams(assoc.second.source_trait.mParams)
+                    || rewritePathParams(assoc.second.atyParams)
+                    || rewriteType(assoc.second.type)) return true;
             }
             for (auto& assoc : trait.traitBounds) {
-                if (rewrite_path_params(assoc.second.source_trait.mParams)
-                    || rewrite_path_params(assoc.second.atyParams)) return true;
+                if (rewritePathParams(assoc.second.source_trait.mParams)
+                    || rewritePathParams(assoc.second.atyParams)) return true;
                 for (auto& bound : assoc.second.traits) {
-                    if (rewrite_trait_path(bound)) return true;
+                    if (rewriteTraitPath(bound)) return true;
                 }
             }
             return false;
         }
 
-        bool rewrite_path(HIR::Path& path) {
+        bool rewritePath(HIR::Path& path) {
             TU_MATCH_HDRA((path.mData), {)
-            TU_ARMA(Generic, e) return rewrite_path_params(e.mParams);
-            TU_ARMA(UfcsInherent, e) return rewrite_type(e.type) || rewrite_path_params(e.params) || rewrite_path_params(e.impl_params);
-            TU_ARMA(UfcsKnown, e) return rewrite_type(e.type) || rewrite_path_params(e.trait.mParams) || rewrite_path_params(e.params);
-            TU_ARMA(UfcsUnknown, e) return rewrite_type(e.type) || rewrite_path_params(e.params);
+            TU_ARMA(Generic, e) return rewritePathParams(e.mParams);
+            TU_ARMA(UfcsInherent, e) return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.impl_params);
+            TU_ARMA(UfcsKnown, e) return rewriteType(e.type) || rewritePathParams(e.trait.mParams) || rewritePathParams(e.params);
+            TU_ARMA(UfcsUnknown, e) return rewriteType(e.type) || rewritePathParams(e.params);
             }
             throw "";
         }
 
-        bool rewrite_type(HIR::TypeRef& type) {
+        bool rewriteType(HIR::TypeRef& type) {
             if (!type || ::std::find(stack.begin(), stack.end(), type) != stack.end()) return false;
             const auto original = type;
             auto data = original->cloneData();
@@ -269,31 +269,31 @@ namespace {
                 TU_ARMA(Diverge, e) {}
                 TU_ARMA(Primitive, e) {}
                 TU_ARMA(Generic, e) {}
-                TU_ARMA(Path, e) childStop = rewrite_path(e.path);
+                TU_ARMA(Path, e) childStop = rewritePath(e.path);
                 TU_ARMA(TraitObject, e) {
-                    childStop = rewrite_trait_path(e.mTrait);
-                    for (auto& marker : e.markers) if (!childStop) childStop = rewrite_path_params(marker.mParams);
+                    childStop = rewriteTraitPath(e.mTrait);
+                    for (auto& marker : e.markers) if (!childStop) childStop = rewritePathParams(marker.mParams);
                 }
                 TU_ARMA(ErasedType, e) {
-                    for (auto& trait : e.traits) if (!childStop) childStop = rewrite_trait_path(trait);
-                    if (!childStop) childStop = rewrite_path_params(e.use);
+                    for (auto& trait : e.traits) if (!childStop) childStop = rewriteTraitPath(trait);
+                    if (!childStop) childStop = rewritePathParams(e.use);
                     if (!childStop) {
                         TU_MATCH_HDRA((e.inner), {)
-                        TU_ARMA(Fcn, inner) childStop = rewrite_path(inner.origin);
-                        TU_ARMA(Known, inner) childStop = rewrite_type(inner);
-                        TU_ARMA(Alias, inner) childStop = rewrite_path_params(inner.params);
+                        TU_ARMA(Fcn, inner) childStop = rewritePath(inner.origin);
+                        TU_ARMA(Known, inner) childStop = rewriteType(inner);
+                        TU_ARMA(Alias, inner) childStop = rewritePathParams(inner.params);
                         }
                     }
                 }
-                TU_ARMA(Array, e) childStop = rewrite_type(e.inner);
-                TU_ARMA(Slice, e) childStop = rewrite_type(e.inner);
-                TU_ARMA(Tuple, e) for (auto& inner : e) if (!childStop) childStop = rewrite_type(inner);
-                TU_ARMA(Borrow, e) childStop = rewrite_type(e.inner);
-                TU_ARMA(Pointer, e) childStop = rewrite_type(e.inner);
-                TU_ARMA(NamedFunction, e) childStop = rewrite_path(e.path);
+                TU_ARMA(Array, e) childStop = rewriteType(e.inner);
+                TU_ARMA(Slice, e) childStop = rewriteType(e.inner);
+                TU_ARMA(Tuple, e) for (auto& inner : e) if (!childStop) childStop = rewriteType(inner);
+                TU_ARMA(Borrow, e) childStop = rewriteType(e.inner);
+                TU_ARMA(Pointer, e) childStop = rewriteType(e.inner);
+                TU_ARMA(NamedFunction, e) childStop = rewritePath(e.path);
                 TU_ARMA(Function, e) {
-                    for (auto& arg : e.argTypes) if (!childStop) childStop = rewrite_type(arg);
-                    if (!childStop) childStop = rewrite_type(e.mRettype);
+                    for (auto& arg : e.argTypes) if (!childStop) childStop = rewriteType(arg);
+                    if (!childStop) childStop = rewriteType(e.mRettype);
                 }
                 TU_ARMA(NodeType, e) {}
                 }
@@ -305,14 +305,14 @@ namespace {
     };
 }
 
-bool rewrite_ty_with(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, t_cb_rewrite_ty callback) {
+bool rewriteTyWith(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, t_cb_rewrite_ty callback) {
     TyRewriter rewriter{types, mv$(callback), {}};
-    return rewriter.rewrite_type(ty);
+    return rewriter.rewriteType(ty);
 }
 
-bool rewrite_path_tys_with(::HIR::TypeInterner& types, ::HIR::Path& path, t_cb_rewrite_ty callback) {
+bool rewritePathTysWith(::HIR::TypeInterner& types, ::HIR::Path& path, t_cb_rewrite_ty callback) {
     TyRewriter rewriter{types, mv$(callback), {}};
-    return rewriter.rewrite_path(path);
+    return rewriter.rewritePath(path);
 }
 
 struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
@@ -418,7 +418,7 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
                 to.mTrait.hrtbs = box$(e.mTrait.hrtbs->clone());
             }
             {
-                auto _ = push_hrb(e.mTrait.hrtbs);
+                auto _ = pushHrb(e.mTrait.hrtbs);
                 to.mTrait = this->monomorphTraitpath(sp, e.mTrait, allowInfer, false);
                 for (const auto& trait : e.markers) {
                     to.markers.push_back(this->monomorphGenericpath(sp, trait, allowInfer, false));
@@ -488,7 +488,7 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
             ));
         }
         TU_ARMA(Function, e) {
-            auto _ = push_hrb(e.hrls);
+            auto _ = pushHrb(e.hrls);
             ::HIR::TypeDataFunctionPointer ft;
             ft.hrls = e.hrls.clone();
             ft.is_unsafe = e.is_unsafe;
@@ -534,7 +534,7 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
             return ::HIR::Path(this->monomorphGenericpath(sp, e2, allowInfer, false));
         }
         TU_ARMA(UfcsKnown, e2) {
-            auto _ = push_hrb(e2.hrtbs);
+            auto _ = pushHrb(e2.hrtbs);
             auto rv = ::HIR::Path(::HIR::Path::Data::make_UfcsKnown({this->monomorphType(sp, e2.type, allowInfer), this->monomorphGenericpath(sp, e2.trait, allowInfer, false), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer), e2.hrtbs ? box$(e2.hrtbs->clone()) : nullptr}));
             return rv;
         }
@@ -551,7 +551,7 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
 ::HIR::TraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const ::HIR::TraitPath& tpl, bool allowInfer, bool ignoreHrls) const {
     ::std::unique_ptr<PopOnDrop> _;
     if (tpl.hrtbs && !ignoreHrls) {
-        _ = std::make_unique<PopOnDrop>(push_hrb(*tpl.hrtbs));
+        _ = std::make_unique<PopOnDrop>(pushHrb(*tpl.hrtbs));
     }
 
     ::HIR::TraitPath rv{tpl.hrtbs ? box$(tpl.hrtbs->clone()) : nullptr, this->monomorphGenericpath(sp, tpl.mPath, allowInfer, true), {}, {}, tpl.traitPtr, tpl.constness};
@@ -636,7 +636,7 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
         }
 
         if (const auto* e = se->opt_Evaluated()) {
-            return (*e)->read_usize(0);
+            return (*e)->readUsize(0);
         }
         return sz;
     } else {
@@ -814,11 +814,11 @@ struct CloneTyWithMonomorph: Monomorphiser {
     if (ms.self_ty != HIR::TypeRef()) {
         os << " self=" << ms.self_ty;
     }
-    if (ms.pp_impl) {
-        os << " I=" << *ms.pp_impl;
+    if (ms.ppImpl) {
+        os << " I=" << *ms.ppImpl;
     }
-    if (ms.pp_method) {
-        os << " M=" << *ms.pp_method;
+    if (ms.ppMethod) {
+        os << " M=" << *ms.ppMethod;
     }
     //if(ms.pp_hrb)
     //    os << " H=" << *ms.pp_hrb;
@@ -865,18 +865,18 @@ void checkTypeClassPrimitive(const Span& sp, const ::HIR::TypeData* type, ::HIR:
 
 namespace typeck {
 
-bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
+bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
     const auto* leftPrimitive = left->opt_Primitive();
-    const auto* right_primitive = right->opt_Primitive();
+    const auto* rightPrimitive = right->opt_Primitive();
 
-    const auto same_numeric = [&]() {
+    const auto sameNumeric = [&]() {
         return left == right && leftPrimitive && (::HIR::is_integer(*leftPrimitive) || ::HIR::isFloat(*leftPrimitive));
     };
-    const auto same_bitwise = [&]() {
+    const auto sameBitwise = [&]() {
         return left == right && leftPrimitive && (::HIR::is_integer(*leftPrimitive) || *leftPrimitive == ::HIR::CoreType::Bool);
     };
     const auto shift = [&]() {
-        return leftPrimitive && right_primitive && ::HIR::is_integer(*leftPrimitive) && ::HIR::is_integer(*right_primitive);
+        return leftPrimitive && rightPrimitive && ::HIR::is_integer(*leftPrimitive) && ::HIR::is_integer(*rightPrimitive);
     };
     const auto comparison = [&]() {
         if (left != right) {
@@ -896,7 +896,7 @@ bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData*
         case PrimitiveOperator::MulAssign:
         case PrimitiveOperator::DivAssign:
         case PrimitiveOperator::RemAssign:
-            return same_numeric();
+            return sameNumeric();
 
         case PrimitiveOperator::BitAnd:
         case PrimitiveOperator::BitOr:
@@ -904,7 +904,7 @@ bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData*
         case PrimitiveOperator::BitAndAssign:
         case PrimitiveOperator::BitOrAssign:
         case PrimitiveOperator::BitXorAssign:
-            return same_bitwise();
+            return sameBitwise();
 
         case PrimitiveOperator::Shl:
         case PrimitiveOperator::Shr:
@@ -928,7 +928,7 @@ bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData*
 // it also fixes an otherwise untyped right-hand operand. Shifts are
 // deliberately excluded: their right-hand side need only be an integer
 // and may have a different type.
-bool primitive_operator_lhs_determines_rhs(PrimitiveOperator op, const ::HIR::TypeData* left) {
+bool primitiveOperatorLhsDeterminesRhs(PrimitiveOperator op, const ::HIR::TypeData* left) {
     const auto* primitive = left->opt_Primitive();
     const auto numeric = primitive && (::HIR::is_integer(*primitive) || ::HIR::isFloat(*primitive));
     const auto bitwise = primitive && (::HIR::is_integer(*primitive) || *primitive == ::HIR::CoreType::Bool);
@@ -974,11 +974,11 @@ bool primitive_operator_lhs_determines_rhs(PrimitiveOperator op, const ::HIR::Ty
 // A binary language candidate is available either when both operands are
 // already known to be valid primitive inputs, or when the known lhs
 // determines the still-inferred rhs.
-bool primitive_operator_has_language_candidate(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
-    return primitive_operator_has_builtin(op, left, right)
-        || (right->is_Infer() && primitive_operator_lhs_determines_rhs(op, left));
+bool primitiveOperatorHasLanguageCandidate(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
+    return primitiveOperatorHasBuiltin(op, left, right)
+        || (right->is_Infer() && primitiveOperatorLhsDeterminesRhs(op, left));
 }
-bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData* value) {
+bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* value) {
     if (op == PrimitiveOperator::Deref) {
         return value->is_Borrow() || value->is_Pointer();
     }

@@ -77,12 +77,12 @@ namespace {
         return r;
     }
 
-    static Float128 pack_zero(bool negative) {
+    static Float128 packZero(bool negative) {
         return Float128::fromBits(negative ? 0x8000'0000'0000'0000ull : 0, 0);
     }
 
     // significand in [0, 2^113); below 2^112 only with exponent == min_exponent
-    static Float128 pack_finite(bool negative, int32_t exponent, u128 significand) {
+    static Float128 packFinite(bool negative, int32_t exponent, u128 significand) {
         uint64_t biased;
         if (significand >= implicitBit) {
             assert(min_exponent <= exponent && exponent <= max_exponent);
@@ -116,10 +116,10 @@ namespace {
 
     // Round to nearest, ties to even. Value = significand * 2^(exponent - 113)
     // for any nonzero significand (normalization happens here).
-    static Float128 round_pack(bool negative, int32_t exponent, u128 significand, bool sticky) {
+    static Float128 roundPack(bool negative, int32_t exponent, u128 significand, bool sticky) {
         if (significand == 0) {
             // A sticky remainder alone is far below half an ulp: rounds to zero
-            return pack_zero(negative);
+            return packZero(negative);
         }
         const int length = bitLength128(significand);
         if (length > significand_bits + 2) {
@@ -135,9 +135,9 @@ namespace {
             significand = shift_right_sticky(significand, shift > 128 ? 128 : static_cast<unsigned>(shift), sticky);
             exponent = min_exponent;
         }
-        const bool round_bit = (significand & 1) != 0;
+        const bool roundBit = (significand & 1) != 0;
         u128 result = significand >> 1;
-        if (round_bit && (sticky || (result & 1) != 0)) {
+        if (roundBit && (sticky || (result & 1) != 0)) {
             result += 1;
         }
         if ((result >> (significand_bits + 1)) != 0) {
@@ -145,12 +145,12 @@ namespace {
             exponent += 1;
         }
         if (result == 0) {
-            return pack_zero(negative);
+            return packZero(negative);
         }
         if (exponent > max_exponent) {
             return Float128::infinity(negative);
         }
-        return pack_finite(negative, exponent, result);
+        return packFinite(negative, exponent, result);
     }
 
     // 128x128 -> 256 bit product as four 64-bit limbs (little-endian)
@@ -359,7 +359,7 @@ namespace {
     // Round the value significand * 2^(exponent - 112) (significand
     // normalized to [2^112, 2^113)) into a float/double-shaped format and
     // return the raw target bits (without the sign bit).
-    static uint64_t round_to_narrow(int32_t exponent, u128 significand, int target_mantissa_bits, int32_t target_min_exponent, int32_t target_max_exponent) {
+    static uint64_t roundToNarrow(int32_t exponent, u128 significand, int target_mantissa_bits, int32_t target_min_exponent, int32_t target_max_exponent) {
         bool sticky = false;
         // Keep target_mantissa_bits + 2 bits: the result plus a round bit
         u128 sig = shift_right_sticky(significand, static_cast<unsigned>(significand_bits - (target_mantissa_bits + 1)), sticky);
@@ -368,9 +368,9 @@ namespace {
             sig = shift_right_sticky(sig, shift > 128 ? 128 : static_cast<unsigned>(shift), sticky);
             exponent = target_min_exponent;
         }
-        const bool round_bit = (sig & 1) != 0;
+        const bool roundBit = (sig & 1) != 0;
         uint64_t result = static_cast<uint64_t>(sig >> 1);
-        if (round_bit && (sticky || (result & 1) != 0)) {
+        if (roundBit && (sticky || (result & 1) != 0)) {
             result += 1;
         }
         const uint64_t target_implicit = uint64_t(1) << target_mantissa_bits;
@@ -425,18 +425,18 @@ namespace {
         while (!wide.empty() && wide.front() == '0') {
             wide.erase(wide.begin());
         }
-        bool round_up;
+        bool roundUp;
         if (extra > '5') {
-            round_up = true;
+            roundUp = true;
         } else if (extra < '5') {
-            round_up = false;
+            roundUp = false;
         } else if (sticky) {
-            round_up = true;
+            roundUp = true;
         } else {
             // True tie: to even ("" acts as the even digit zero)
-            round_up = !wide.empty() && ((wide.back() - '0') % 2) != 0;
+            roundUp = !wide.empty() && ((wide.back() - '0') % 2) != 0;
         }
-        if (round_up) {
+        if (roundUp) {
             int i = static_cast<int>(wide.size()) - 1;
             for (; i >= 0; i--) {
                 if (wide[i] != '9') {
@@ -595,7 +595,7 @@ Float128::Float128(double value) {
         return;
     }
     if (biased == 0 && fraction == 0) {
-        *this = pack_zero(negative);
+        *this = packZero(negative);
         return;
     }
     int32_t exponent;
@@ -610,7 +610,7 @@ Float128::Float128(double value) {
         exponent = static_cast<int32_t>(biased) - 1023;
     }
     // Exact: widen 53 significant bits to 113
-    *this = pack_finite(negative, exponent, u128(significand) << (significand_bits - 52));
+    *this = packFinite(negative, exponent, u128(significand) << (significand_bits - 52));
 }
 
 Float128 Float128::fromBits(uint64_t hi, uint64_t lo) {
@@ -620,7 +620,7 @@ Float128 Float128::fromBits(uint64_t hi, uint64_t lo) {
     return r;
 }
 
-Float128 Float128::quiet_nan() {
+Float128 Float128::quietNan() {
     return canonicalNan();
 }
 
@@ -658,7 +658,7 @@ Float128::operator float() const {
             bits = 0x7FC0'0000;
             break;
         case Kind::Finite:
-            bits = static_cast<uint32_t>(round_to_narrow(value.exponent, value.significand, 23, -126, 127));
+            bits = static_cast<uint32_t>(roundToNarrow(value.exponent, value.significand, 23, -126, 127));
             break;
     }
     if (value.negative) {
@@ -684,7 +684,7 @@ Float128::operator double() const {
             bits = 0x7FF8'0000'0000'0000ull;
             break;
         case Kind::Finite:
-            bits = round_to_narrow(value.exponent, value.significand, 52, -1022, 1023);
+            bits = roundToNarrow(value.exponent, value.significand, 52, -1022, 1023);
             break;
     }
     if (value.negative) {
@@ -757,7 +757,7 @@ Float128 Float128::operator+(const Float128& other) const {
         return a.kind == Kind::Infinity ? *this : other;
     }
     if (a.kind == Kind::Zero && b.kind == Kind::Zero) {
-        return pack_zero(a.negative && b.negative);
+        return packZero(a.negative && b.negative);
     }
     if (a.kind == Kind::Zero) {
         return other;
@@ -787,11 +787,11 @@ Float128 Float128::operator+(const Float128& other) const {
     } else {
         sum = bigSignificand - small_significand;
         if (sum == 0) {
-            return pack_zero(false);
+            return packZero(false);
         }
     }
     // value = sum * 2^(big->exponent - 115)
-    return round_pack(big->negative, big->exponent - 2, sum, false);
+    return roundPack(big->negative, big->exponent - 2, sum, false);
 }
 
 Float128 Float128::operator-(const Float128& other) const {
@@ -812,7 +812,7 @@ Float128 Float128::operator*(const Float128& other) const {
         return infinity(negative);
     }
     if (a.kind == Kind::Zero || b.kind == Kind::Zero) {
-        return pack_zero(negative);
+        return packZero(negative);
     }
     uint64_t product[4];
     multiplyFull(a.significand, b.significand, product);
@@ -826,7 +826,7 @@ Float128 Float128::operator*(const Float128& other) const {
     const bool sticky = (low << keep) != 0;
     // high = floor(product / 2^(128 - keep)), so
     // value = high * 2^(ea + eb - 96 - keep)
-    return round_pack(negative, a.exponent + b.exponent - 96 - keep + 113, high, sticky);
+    return roundPack(negative, a.exponent + b.exponent - 96 - keep + 113, high, sticky);
 }
 
 Float128 Float128::operator/(const Float128& other) const {
@@ -843,7 +843,7 @@ Float128 Float128::operator/(const Float128& other) const {
         return infinity(negative);
     }
     if (b.kind == Kind::Infinity) {
-        return pack_zero(negative);
+        return packZero(negative);
     }
     if (b.kind == Kind::Zero) {
         if (a.kind == Kind::Zero) {
@@ -852,7 +852,7 @@ Float128 Float128::operator/(const Float128& other) const {
         return infinity(negative);
     }
     if (a.kind == Kind::Zero) {
-        return pack_zero(negative);
+        return packZero(negative);
     }
     // Bitwise long division: after n rounds the quotient is
     // floor(sig_a * 2^(n-1) / sig_b), so 115 rounds give 113 result bits
@@ -868,7 +868,7 @@ Float128 Float128::operator/(const Float128& other) const {
         remainder <<= 1;
     }
     // value = quotient * 2^(ea - eb - 114)
-    return round_pack(negative, a.exponent - b.exponent - 1, quotient, remainder != 0);
+    return roundPack(negative, a.exponent - b.exponent - 1, quotient, remainder != 0);
 }
 
 bool Float128::operator==(const Float128& other) const {
@@ -951,10 +951,10 @@ Float128 Float128::trunc() const {
         return *this;
     }
     if (value.exponent < 0) {
-        return pack_zero(value.negative);
+        return packZero(value.negative);
     }
     const u128 mask = (u128(1) << (significand_bits - value.exponent)) - 1;
-    return pack_finite(value.negative, value.exponent, value.significand & ~mask);
+    return packFinite(value.negative, value.exponent, value.significand & ~mask);
 }
 
 Float128 Float128::floor() const {
@@ -987,7 +987,7 @@ Float128 Float128::round() const {
         return *this;
     }
     if (value.exponent < -1) {
-        return pack_zero(value.negative);
+        return packZero(value.negative);
     }
     if (value.exponent == -1) {
         // Magnitude in [0.5, 1): ties away from zero
@@ -1002,33 +1002,33 @@ Float128 Float128::round() const {
     return value.negative ? truncated - Float128(1.0) : truncated + Float128(1.0);
 }
 
-Float128 Float128::round_even() const {
+Float128 Float128::roundEven() const {
     const auto value = unpack(hi, lo);
     if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
         return *this;
     }
     if (value.exponent < -1) {
-        return pack_zero(value.negative);
+        return packZero(value.negative);
     }
     if (value.exponent == -1) {
         // Magnitude in [0.5, 1): only exactly one half ties, to zero
         if (value.significand == implicitBit) {
-            return pack_zero(value.negative);
+            return packZero(value.negative);
         }
         return value.negative ? Float128(-1.0) : Float128(1.0);
     }
     const u128 half = u128(1) << (significand_bits - value.exponent - 1);
     const u128 fraction = value.significand & (half * 2 - 1);
     const Float128 truncated = trunc();
-    bool round_away;
+    bool roundAway;
     if (fraction < half) {
-        round_away = false;
+        roundAway = false;
     } else if (fraction > half) {
-        round_away = true;
+        roundAway = true;
     } else {
-        round_away = (value.significand & (half * 2)) != 0;
+        roundAway = (value.significand & (half * 2)) != 0;
     }
-    if (!round_away) {
+    if (!roundAway) {
         return truncated;
     }
     return value.negative ? truncated - Float128(1.0) : truncated + Float128(1.0);
@@ -1062,7 +1062,7 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
         rem -= b.significand;
     }
     if (rem == 0) {
-        return pack_zero(a.negative);
+        return packZero(a.negative);
     }
     // value = rem * 2^(b.exponent - 112), |value| < |denominator|
     const int shortfall = significand_bits + 1 - bitLength128(rem);
@@ -1072,13 +1072,13 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
         // fmod of two ulp multiples is an ulp multiple, so a right shift
         // here drops only zero bits.
         if (b.exponent >= min_exponent) {
-            return pack_finite(a.negative, min_exponent, rem << (b.exponent - min_exponent));
+            return packFinite(a.negative, min_exponent, rem << (b.exponent - min_exponent));
         }
         const int32_t shift = min_exponent - b.exponent;
         assert(shift >= 128 || (rem & ((u128(1) << shift) - 1)) == 0);
-        return pack_finite(a.negative, min_exponent, rem >> shift);
+        return packFinite(a.negative, min_exponent, rem >> shift);
     }
-    return pack_finite(a.negative, exponent, rem << shortfall);
+    return packFinite(a.negative, exponent, rem << shortfall);
 }
 
 Float128 Float128::minimumNumber(const Float128& a, const Float128& b) {
@@ -1109,7 +1109,7 @@ Float128 Float128::maximumNumber(const Float128& a, const Float128& b) {
     return a < b ? b : a;
 }
 
-Float128 Float128::parse_decimal(const char* text) {
+Float128 Float128::parseDecimal(const char* text) {
     const char* cursor = text;
     BigUint digits;
     int64_t fractionDigits = 0;
@@ -1151,7 +1151,7 @@ Float128 Float128::parse_decimal(const char* text) {
     }
     assert(*cursor == '\0');
     if (digits.isZero()) {
-        return pack_zero(false);
+        return packZero(false);
     }
     // Magnitude guards: beyond these the value is certainly out of range
     // (max f128 ~ 1.19e4932, half the smallest subnormal ~ 3.2e-4966)
@@ -1160,10 +1160,10 @@ Float128 Float128::parse_decimal(const char* text) {
         return infinity(false);
     }
     if (top_weight < -4975) {
-        return pack_zero(false);
+        return packZero(false);
     }
     bool sticky = false;
-    size_t scaled_up = 0;
+    size_t scaledUp = 0;
     if (exponent10 >= 0) {
         // digits * 10^e = digits * 5^e << e: exact
         multiplyPow5(digits, static_cast<uint64_t>(exponent10));
@@ -1175,8 +1175,8 @@ Float128 Float128::parse_decimal(const char* text) {
         const uint64_t power = static_cast<uint64_t>(-exponent10);
         const size_t need = 116 + (static_cast<size_t>(power) * 3322 + 999) / 1000 + 1;
         const size_t have = digits.bitLength();
-        scaled_up = need > have ? need - have : 0;
-        digits.shift_left(scaled_up);
+        scaledUp = need > have ? need - have : 0;
+        digits.shift_left(scaledUp);
         dividePow5Sticky(digits, power, sticky);
         digits.shift_right_sticky(static_cast<size_t>(power), sticky);
     }
@@ -1185,8 +1185,8 @@ Float128 Float128::parse_decimal(const char* text) {
     const u128 significand = digits.top_bits(114, sticky);
     // significand = floor(digits / 2^max(0, length - 114)), so
     // value = significand * 2^(max(length, 114) - 114 - scaled_up)
-    const int64_t exponent2 = static_cast<int64_t>(length < 114 ? 114 : length) - 1 - static_cast<int64_t>(scaled_up);
-    return round_pack(false, static_cast<int32_t>(exponent2), significand, sticky);
+    const int64_t exponent2 = static_cast<int64_t>(length < 114 ? 114 : length) - 1 - static_cast<int64_t>(scaledUp);
+    return roundPack(false, static_cast<int32_t>(exponent2), significand, sticky);
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Float128& value) {

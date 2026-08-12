@@ -70,7 +70,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
         // `should_panic: ShouldPanic::No,`
         {
             ::AST::ExprNodeP should_panic_val;
-            switch (test.panic_type) {
+            switch (test.panicType) {
                 case ::AST::TestDesc::ShouldPanic::No:
                     should_panic_val = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("No")}));
                     break;
@@ -171,7 +171,7 @@ struct ProgramParams {
 
     ::std::string infile;
     ::std::string outfile;
-    ::std::string output_dir = "";
+    ::std::string outputDir = "";
     ::std::string target = DEFAULT_TARGET_NAME;
 
     ::std::string emitDepfile;
@@ -196,10 +196,10 @@ struct ProgramParams {
     // NOTE: If populated, nothing happens except for loading the target
     ::std::string target_saveback;
     // NOTE: if true, no parse/compilation performed (target is loaded though)
-    bool print_cfgs = false;
+    bool printCfgs = false;
 
     //
-    bool run_borrowcheck = false;
+    bool runBorrowcheck = false;
 
     TraitSolverConfig trait_solver;
 
@@ -224,7 +224,7 @@ struct ProgramParams {
     struct {
         ::std::string codegenType;
         ::std::string emitBuildCommand;
-        ::std::string panic_type;
+        ::std::string panicType;
         ::std::vector<::std::string> linkerArgs;
     } codegen;
 
@@ -327,8 +327,8 @@ int main(int argc, char* argv[]) {
     gTraitSolverConfig = params.trait_solver;
     const auto mirOptLevel = params.effectiveMirOptLevel();
     const auto enableMirInlining = params.enableMirInlining();
-    if (params.codegen.panic_type.empty()) {
-        params.codegen.panic_type = "unwind";
+    if (params.codegen.panicType.empty()) {
+        params.codegen.panicType = "unwind";
     }
 
     if (params.debug.pause) {
@@ -340,7 +340,7 @@ int main(int argc, char* argv[]) {
     // Set up cfg values
     CompilePhaseV("Setup", [&]() {
         CfgSetValue("rust_compiler", "mrustc");
-        CfgSetValue("panic", params.codegen.panic_type);
+        CfgSetValue("panic", params.codegen.panicType);
         if (params.debugAssertionsEnabled()) {
             CfgSetFlag("debug_assertions");
         }
@@ -352,7 +352,7 @@ int main(int argc, char* argv[]) {
         TargetSetCfg(params.target);
     });
 
-    if (params.print_cfgs) {
+    if (params.printCfgs) {
         CfgDump(std::cout);
         return 0;
     }
@@ -374,8 +374,8 @@ int main(int argc, char* argv[]) {
 #if MRUSTC_SANITIZER_BUILD
     // Keep teardown out of production, but make sanitizer builds destroy every
     // pooled object so ASan/LSan can distinguish real leaks from arena lifetime.
-    auto pool_owner = stl::ObjPool::fromMemory();
-    auto* pool = pool_owner.mutPtr();
+    auto poolOwner = stl::ObjPool::fromMemory();
+    auto* pool = poolOwner.mutPtr();
 #else
     auto* pool = stl::ObjPool::fromMemoryRaw();
 #endif
@@ -493,16 +493,16 @@ int main(int argc, char* argv[]) {
         if (params.outfile == "") {
             switch (crate.crateType) {
                 case ::AST::Crate::Type::RustLib:
-                    params.outfile = FMT(params.output_dir << "lib" << crate.crateNameSet << ".rlib");
+                    params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << ".rlib");
                     break;
                 case ::AST::Crate::Type::Executable:
-                    params.outfile = FMT(params.output_dir << crate.crateNameSet);
+                    params.outfile = FMT(params.outputDir << crate.crateNameSet);
                     break;
                 case ::AST::Crate::Type::ProcMacro:
-                    params.outfile = FMT(params.output_dir << "lib" << crate.crateNameSet << "-plugin");
+                    params.outfile = FMT(params.outputDir << "lib" << crate.crateNameSet << "-plugin");
                     break;
                 default:
-                    params.outfile = FMT(params.output_dir << crate.crateNameSet << ".o");
+                    params.outfile = FMT(params.outputDir << crate.crateNameSet << ".o");
                     break;
             }
             DEBUG("params.outfile = " << params.outfile);
@@ -524,9 +524,9 @@ int main(int argc, char* argv[]) {
             if (crate.crateType == ::AST::Crate::Type::Executable || params.test_harness || crate.crateType == ::AST::Crate::Type::ProcMacro) {
                 bool allocatorCrateLoaded = false;
                 RcString allocCrateName;
-                bool panic_runtime_loaded = false;
-                RcString panic_crate_name;
-                bool panic_runtime_needed = false;
+                bool panicRuntimeLoaded = false;
+                RcString panicCrateName;
+                bool panicRuntimeNeeded = false;
                 for (const auto& ec : crate.externCrates) {
                     ::std::ostringstream ss;
                     for (const auto& e : ec.second.hir->mLangItems) {
@@ -541,16 +541,16 @@ int main(int argc, char* argv[]) {
                         allocatorCrateLoaded = true;
                     }
                     if (ec.second.hir->mLangItems.count("mrustc-panic_runtime")) {
-                        if (panic_runtime_loaded) {
+                        if (panicRuntimeLoaded) {
                             //ERROR(Span(), E0000, "Multiple panic_runtime crates loaded - " << panic_crate_name << " and " << ec.first);
-                            WARNING(Span(), W0000, "Multiple panic_runtime crates loaded - " << panic_crate_name << " and " << ec.first);
+                            WARNING(Span(), W0000, "Multiple panic_runtime crates loaded - " << panicCrateName << " and " << ec.first);
                         } else {
-                            panic_crate_name = ec.first;
-                            panic_runtime_loaded = true;
+                            panicCrateName = ec.first;
+                            panicRuntimeLoaded = true;
                         }
                     }
                     if (ec.second.hir->mLangItems.count("mrustc-needs_panic_runtime")) {
-                        panic_runtime_needed = true;
+                        panicRuntimeNeeded = true;
                     }
                 }
                 // The default (system) allocator is provided by liballoc.
@@ -559,9 +559,9 @@ int main(int argc, char* argv[]) {
                     crate.loadExternCrate(Span(), "alloc_system");
                 }
 
-                if (panic_runtime_needed /*&& !panic_runtime_loaded*/) {
-                    auto panic_crate = "panic_" + params.codegen.panic_type;
-                    crate.loadExternCrate(Span(), panic_crate.c_str());
+                if (panicRuntimeNeeded /*&& !panic_runtime_loaded*/) {
+                    auto panicCrate = "panic_" + params.codegen.panicType;
+                    crate.loadExternCrate(Span(), panicCrate.c_str());
                 }
 
                 // - `mrustc-main` lang item default
@@ -807,7 +807,7 @@ int main(int argc, char* argv[]) {
         }
 
         // Optional for now
-        if (params.run_borrowcheck) {
+        if (params.runBorrowcheck) {
             CompilePhaseV("MIR Borrowcheck", [&]() {
                 MIRBorrowCheckCrate(*hirCrate);
             });
@@ -850,7 +850,7 @@ int main(int argc, char* argv[]) {
         trans_opt.buildCommandFile = params.codegen.emitBuildCommand;
         trans_opt.linkerArgs = params.codegen.linkerArgs;
         trans_opt.optLevel = params.optLevel;
-        trans_opt.panic_crate = "panic_" + params.codegen.panic_type;
+        trans_opt.panicCrate = "panic_" + params.codegen.panicType;
         for (const char* libdir : params.libSearchDirs) {
             // Store these paths for use in final linking.
             hirCrate->linkPaths.push_back(libdir);
@@ -1016,15 +1016,15 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
         // The following imitates rustc's version output (which the crate `rustc_version` tries to parse)
         // Report the emulated rustc release together with the native compiler version.
         if (strcmp(arg, "-vV") == 0) {
-            const char* rustc_target = RUSTC_TARGET_VERSION;
+            const char* rustcTarget = RUSTC_TARGET_VERSION;
 
-            ::std::cout << "rustc " << rustc_target << ".100 (mrustc " << VersionGetString() << ")" << ::std::endl;
+            ::std::cout << "rustc " << rustcTarget << ".100 (mrustc " << VersionGetString() << ")" << ::std::endl;
             ::std::cout << "binary: rustc" << ::std::endl;
             ::std::cout << "commit-hash: " << gsVersionGitHash << ::std::endl;
             ::std::cout << "commit-date: UNKNOWN" << ::std::endl;
             ::std::cout << "build-date: " << gsVersionBuildTime << ::std::endl;
             ::std::cout << "host: UNKNOWN" << ::std::endl;
-            ::std::cout << "release: " << rustc_target << ".100" << ::std::endl;
+            ::std::cout << "release: " << rustcTarget << ".100" << ::std::endl;
 
             exit(0);
         }
@@ -1129,7 +1129,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->emitDepfile = optval;
                     } else if (optname == "panic") {
                         getOptval();
-                        this->codegen.panic_type = optval;
+                        this->codegen.panicType = optval;
                     } else if (optname == "link-arg") {
                         getOptval();
                         this->codegen.linkerArgs.push_back(optval);
@@ -1301,7 +1301,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->debug.pause = true;
                     } else if (optname == "print-cfgs") {
                         noOptval();
-                        this->print_cfgs = true;
+                        this->printCfgs = true;
                     } else if (optname == "check-cfg-all-expected") {
                         // This only controls how many expected cfg values rustc
                         // prints in diagnostics.  mrustc emits a compact
@@ -1309,7 +1309,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         noOptval();
                     } else if (optname == "borrowcheck") {
                         noOptval();
-                        this->run_borrowcheck = true;
+                        this->runBorrowcheck = true;
                     } else {
                         ::std::cerr << "Unknown -Z flag: '" << optname << "'" << ::std::endl;
                         exit(1);
@@ -1362,19 +1362,19 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 this->show_help();
                 exit(0);
             } else if (strcmp(arg, "--version") == 0) {
-                const char* rustc_target = RUSTC_TARGET_VERSION;
+                const char* rustcTarget = RUSTC_TARGET_VERSION;
                 // NOTE: Starts the version with "rustc 1.29.100" so build scripts don't get confused
-                ::std::cout << "rustc " << rustc_target << ".100 (mrustc " << VersionGetString() << ")" << ::std::endl;
-                ::std::cout << "release: " << rustc_target << ".100" << ::std::endl; // `autoconfig` looks for this line
+                ::std::cout << "rustc " << rustcTarget << ".100 (mrustc " << VersionGetString() << ")" << ::std::endl;
+                ::std::cout << "release: " << rustcTarget << ".100" << ::std::endl; // `autoconfig` looks for this line
                 ::std::cout << "- Build time: " << gsVersionBuildTime << ::std::endl;
                 ::std::cout << "- Commit: " << gsVersionGitHash << (gbVersionGitDirty ? " (dirty tree)" : "") << ::std::endl;
                 exit(0);
             }
             // --out-dir <dir>  >> Set the output directory for automatically-named files
             else if (const char* outDir = checkWithArg("out-dir")) {
-                this->output_dir = outDir;
-                if (this->output_dir != "" && this->output_dir.back() != '/') {
-                    this->output_dir += '/';
+                this->outputDir = outDir;
+                if (this->outputDir != "" && this->outputDir.back() != '/') {
+                    this->outputDir += '/';
                 }
             }
             // --extern <name>=<path>   >> Override the file to load for `extern crate <name>;`

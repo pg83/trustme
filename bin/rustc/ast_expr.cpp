@@ -201,7 +201,7 @@ namespace AST {
 }
 
 namespace {
-    void print_fmt_string(std::ostream& os, const std::string& s) {
+    void printFmtString(std::ostream& os, const std::string& s) {
         static const char* hex = "0123456789ABCDEF";
         for (auto c : s) {
             if (c == '{') {
@@ -222,14 +222,14 @@ namespace {
 void AsmCommon::Line::fmt(std::ostream& os) const {
     os << "\"";
     for (const auto& f : this->frags) {
-        print_fmt_string(os, f.before);
+        printFmtString(os, f.before);
         os << "{" << f.index;
         if (f.modifier) {
             os << ":" << f.modifier;
         }
         os << "}";
     }
-    print_fmt_string(os, this->trailing);
+    printFmtString(os, this->trailing);
     os << "\"";
 }
 
@@ -643,7 +643,7 @@ namespace AST {
     NODE(
         ExprNodeNamedValue,
         {
-            mPath.print_pretty(os, false);
+            mPath.printPretty(os, false);
             //os << m_path;
         },
         { return NEWNODE(ExprNodeNamedValue, AST::Path(mPath)); }

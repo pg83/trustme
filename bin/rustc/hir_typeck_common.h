@@ -13,8 +13,8 @@ extern bool visit_trait_path_tys_with(const ::HIR::TraitPath&, t_cb_visit_ty cal
 extern bool visit_path_tys_with(const ::HIR::Path&, t_cb_visit_ty callback);
 
 typedef ::std::function<bool(::HIR::TypeRef& rewritten, ::HIR::TypeData& data)> t_cb_rewrite_ty;
-extern bool rewrite_ty_with(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, t_cb_rewrite_ty callback);
-extern bool rewrite_path_tys_with(::HIR::TypeInterner& types, ::HIR::Path& path, t_cb_rewrite_ty callback);
+extern bool rewriteTyWith(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, t_cb_rewrite_ty callback);
+extern bool rewritePathTysWith(::HIR::TypeInterner& types, ::HIR::Path& path, t_cb_rewrite_ty callback);
 
 typedef ::std::function<bool(const ::HIR::TypeData*, ::HIR::TypeRef&)> t_cb_clone_ty;
 /// Clones a type, calling the provided callback on every type (optionally providing a replacement)
@@ -61,20 +61,20 @@ namespace typeck {
         ShrAssign,
     };
 
-    bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right);
+    bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right);
 
     // For these binary language operations, once the left-hand type is known
     // it also fixes an otherwise untyped right-hand operand. Shifts are
     // deliberately excluded: their right-hand side need only be an integer
     // and may have a different type.
-    bool primitive_operator_lhs_determines_rhs(PrimitiveOperator op, const ::HIR::TypeData* left);
+    bool primitiveOperatorLhsDeterminesRhs(PrimitiveOperator op, const ::HIR::TypeData* left);
 
     // A binary language candidate is available either when both operands are
     // already known to be valid primitive inputs, or when the known lhs
     // determines the still-inferred rhs.
-    bool primitive_operator_has_language_candidate(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right);
+    bool primitiveOperatorHasLanguageCandidate(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right);
 
-    bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData* value);
+    bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* value);
 }
 
 class StaticTraitResolve;

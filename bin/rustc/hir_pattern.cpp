@@ -230,7 +230,7 @@ namespace {
     }
 }
 
-std::vector<unsigned> HIR::pattern_binding_slots(const Pattern& pattern, PatternBindingOrder order) {
+std::vector<unsigned> HIR::patternBindingSlots(const Pattern& pattern, PatternBindingOrder order) {
     std::vector<unsigned> slots;
     switch (order) {
         case PatternBindingOrder::Declaration:
@@ -256,10 +256,10 @@ namespace {
         return rv;
     }
 
-    typedef ::std::vector<::std::pair<RcString, ::HIR::Pattern>> pat_fields_t;
+    typedef ::std::vector<::std::pair<RcString, ::HIR::Pattern>> patFieldsT;
 
-    pat_fields_t clonePatFields(const pat_fields_t& pats) {
-        pat_fields_t rv;
+    patFieldsT clonePatFields(const patFieldsT& pats) {
+        patFieldsT rv;
         rv.reserve(pats.size());
         for (const auto& field : pats) {
             rv.push_back(::std::make_pair(field.first, field.second.clone()));

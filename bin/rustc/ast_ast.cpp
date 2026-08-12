@@ -109,7 +109,7 @@ namespace AST {
         os << mData;
     }
 
-    std::string Attribute::parse_equals_string(const AST::Crate& crate, const AST::Module& mod) const {
+    std::string Attribute::parseEqualsString(const AST::Crate& crate, const AST::Module& mod) const {
         TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_EQUAL);
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
@@ -124,7 +124,7 @@ namespace AST {
         return rv;
     }
 
-    std::string Attribute::parse_paren_string() const {
+    std::string Attribute::parseParenString() const {
         TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
         auto rv = lex.getTokenCheck(TOK_STRING).str();
@@ -132,11 +132,11 @@ namespace AST {
         return rv;
     }
 
-    void Attribute::parse_paren_ident_list(std::function<void(const Span& sp, RcString ident)> itemCb) const {
+    void Attribute::parseParenIdentList(std::function<void(const Span& sp, RcString ident)> itemCb) const {
         TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
         while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-            itemCb(lex.point_span(), lex.getTokenCheck(TOK_IDENT).ident().name);
+            itemCb(lex.pointSpan(), lex.getTokenCheck(TOK_IDENT).ident().name);
             if (lex.lookahead(0) != TOK_COMMA) {
                 break;
             }
@@ -561,7 +561,7 @@ namespace AST {
                 os << ent.type << ": " << ent.bound;
             }
             TU_ARMA(IsTrait, ent) {
-                os << ent.outer_hrbs << ent.type << ": ";
+                os << ent.outerHrbs << ent.type << ": ";
                 if (ent.constness == BoundConstness::Always) {
                     os << "const ";
                 } else if (ent.constness == BoundConstness::Maybe) {
@@ -646,8 +646,8 @@ TraitAlias TraitAlias::clone() const {
     }
     return rv;
 }
-Static::Static(Class s_class, TypeRef type, Expr value)
-    : cls(s_class)
+Static::Static(Class sClass, TypeRef type, Expr value)
+    : cls(sClass)
     , mType(std::move(type))
     , mValue(std::move(value)) {
 }

@@ -17,8 +17,8 @@ namespace HIR {
 struct TransParams: public MonomorphiserPP {
     Span sp;
     const ::HIR::GenericParams* gdefImpl;
-    ::HIR::PathParams pp_method;
-    ::HIR::PathParams pp_impl;
+    ::HIR::PathParams ppMethod;
+    ::HIR::PathParams ppImpl;
     ::HIR::TypeRef self_type;
     bool forceMonomorphisation;
 
@@ -43,7 +43,7 @@ struct TransParams: public MonomorphiserPP {
     ::HIR::PathParams monomorph(const ::StaticTraitResolve& resolve, const ::HIR::PathParams& p) const;
 
     bool hasTypes() const {
-        return forceMonomorphisation || pp_method.hasParams() || pp_impl.hasParams();
+        return forceMonomorphisation || ppMethod.hasParams() || ppImpl.hasParams();
     }
 
     const ::HIR::TypeData* getSelfType() const override {
@@ -51,11 +51,11 @@ struct TransParams: public MonomorphiserPP {
     }
 
     const ::HIR::PathParams* getImplParams() const override {
-        return &pp_impl;
+        return &ppImpl;
     }
 
     const ::HIR::PathParams* getMethodParams() const override {
-        return &pp_method;
+        return &ppMethod;
     }
 
     const ::HIR::PathParams* getHrbParams() const override {

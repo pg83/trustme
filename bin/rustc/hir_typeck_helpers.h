@@ -62,7 +62,7 @@ public: // ?? - Needed once, anymore?
 public:
     explicit HMTypeInferrence(HIR::TypeInterner& types);
 
-    bool peek_changed() const {
+    bool peekChanged() const {
         return hasChanged;
     }
 
@@ -75,9 +75,9 @@ public:
 
     void dump() const;
 
-    void print_type(::std::ostream& os, const ::HIR::TypeData* tr, LList<const ::HIR::TypeData*> stack = {}) const;
-    void print_genericpath(::std::ostream& os, const ::HIR::GenericPath& pps, LList<const ::HIR::TypeData*> stack) const;
-    void print_pathparams(::std::ostream& os, const ::HIR::PathParams& pps, LList<const ::HIR::TypeData*> stack = {}) const;
+    void printType(::std::ostream& os, const ::HIR::TypeData* tr, LList<const ::HIR::TypeData*> stack = {}) const;
+    void printGenericpath(::std::ostream& os, const ::HIR::GenericPath& pps, LList<const ::HIR::TypeData*> stack) const;
+    void printPathparams(::std::ostream& os, const ::HIR::PathParams& pps, LList<const ::HIR::TypeData*> stack = {}) const;
 
     FmtType fmtType(const ::HIR::TypeData* tr) const {
         return FmtType(*this, tr);
@@ -111,12 +111,12 @@ public:
     unsigned int newIvar(HIR::InferClass ic = HIR::InferClass::None);
     ::HIR::TypeRef newIvarTr(HIR::InferClass ic = HIR::InferClass::None);
     void set_ivar_to(unsigned int slot, ::HIR::TypeRef type);
-    void ivarUnify(unsigned int leftSlot, unsigned int right_slot);
+    void ivarUnify(unsigned int leftSlot, unsigned int rightSlot);
 
     //
     unsigned int newIvarVal();
     void set_ivar_val_to(unsigned int slot, ::HIR::ConstGeneric val);
-    void ivarValUnify(unsigned int leftSlot, unsigned int right_slot);
+    void ivarValUnify(unsigned int leftSlot, unsigned int rightSlot);
 
     ::HIR::ConstGeneric newValIvar();
     void set_val_ivar_to(unsigned int slot, ::HIR::ConstGeneric val);
@@ -135,9 +135,9 @@ public:
     void expandIvarsParams(::HIR::PathParams& params);
 
     // Helpers
-    bool pathparams_contain_ivars(const ::HIR::PathParams& pps, bool onlyUnbound) const;
+    bool pathparamsContainIvars(const ::HIR::PathParams& pps, bool onlyUnbound) const;
     bool type_contains_ivars(const ::HIR::TypeData* ty, bool onlyUnbound = false) const;
-    bool pathparams_equal(const ::HIR::PathParams& pps_l, const ::HIR::PathParams& pps_r) const;
+    bool pathparamsEqual(const ::HIR::PathParams& ppsL, const ::HIR::PathParams& ppsR) const;
     bool types_equal(const ::HIR::TypeData* l, const ::HIR::TypeData* r) const;
 
 private:
@@ -210,7 +210,7 @@ public:
 
     ::HIR::Compare comparePp(const Span& sp, const ::HIR::PathParams& left, const ::HIR::PathParams& right) const;
 
-    const ::HIR::TypeData* resolve_type(const ::HIR::TypeData* type) const {
+    const ::HIR::TypeData* resolveType(const ::HIR::TypeData* type) const {
         return ivars.getType(type);
     }
 
@@ -222,8 +222,8 @@ public:
         return ivars.type_contains_ivars(type, false);
     }
 
-    bool params_contain_ivars(const ::HIR::PathParams& params) const {
-        return ivars.pathparams_contain_ivars(params, false);
+    bool paramsContainIvars(const ::HIR::PathParams& params) const {
+        return ivars.pathparamsContainIvars(params, false);
     }
 
     void compactIvars(HMTypeInferrence& ivars);
@@ -252,7 +252,7 @@ public:
     /// Candidate lookup used by the legacy selector and by next-solver
     /// candidate assembly.  Callers performing trait selection must use
     /// `find_trait_impls`, not this assembly primitive.
-    bool findTraitImplsLegacy(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeData* type, t_cb_trait_impl_r callback, bool magicTraitImpls = true, bool search_crate = true, bool search_bounds = true) const;
+    bool findTraitImplsLegacy(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeData* type, t_cb_trait_impl_r callback, bool magicTraitImpls = true, bool search_crate = true, bool searchBounds = true) const;
 
     /// Evaluate a trait goal using the next-solver candidate model.  Candidate
     /// assembly is exhaustive, impl where-clauses are evaluated recursively,
@@ -299,7 +299,7 @@ private:
 
     ::HIR::PathParams makeFreshImplParams(const ::HIR::GenericParams& params) const;
 
-    ::HIR::Compare checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeData* type) const;
+    ::HIR::Compare checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* paramsPtr, const ::HIR::TypeData* type) const;
     ::HIR::Compare fticCheckParams(
         const Span& sp,
         const ::HIR::SimplePath& trait,

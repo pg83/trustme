@@ -240,7 +240,7 @@ namespace {
         return rv;
     }
 
-    void save_spec_to_file(const ::std::string& filename, const TargetSpec& spec) {
+    void saveSpecToFile(const ::std::string& filename, const TargetSpec& spec) {
         // TODO: Have a round-trip unit test
         ::std::ofstream of(filename);
 
@@ -382,7 +382,7 @@ const TargetSpec& TargetGetCurSpec() {
 }
 
 void TargetExportCurSpec(const ::std::string& filename) {
-    save_spec_to_file(filename, gTarget);
+    saveSpecToFile(filename, gTarget);
 }
 
 void TargetSetCfg(const ::std::string& target_name) {
@@ -1602,11 +1602,11 @@ namespace {
                                                 assert(nicheOffset % nichePath.size == 0);
                                                 assert(maxOfs % nichePath.size == 0);
                                                 ASSERT_BUG(sp, nicheOffset >= maxOfs, "Niche offset (" << nicheOffset << ") overlaps with variant data (" << maxOfs << ")");
-                                                auto req_padding = nicheOffset - maxOfs;
-                                                if (req_padding > 0) {
+                                                auto reqPadding = nicheOffset - maxOfs;
+                                                if (reqPadding > 0) {
                                                     variants[i].ents.push_back(Ent());
                                                     variants[i].ents.back().align = 1;
-                                                    variants[i].ents.back().size = req_padding;
+                                                    variants[i].ents.back().size = reqPadding;
                                                     variants[i].ents.back().field = ~0u;
                                                 }
                                                 variants[i].ents.push_back(Ent());
@@ -1916,9 +1916,9 @@ namespace {
     // Layout is a codegen property: regions are erased before rustc asks its
     // layout engine too. Keep one representation per emitted type, with an
     // exact-pointer alias so repeated queries stay O(1).
-    static ::std::unordered_map<::std::string, CachedTypeRepr> s_cache;
-    static ::std::unordered_map<::HIR::TypeRef, ::std::unique_ptr<TypeRepr>> s_unencoded_cache;
-    static ::std::unordered_map<::HIR::TypeRef, const TypeRepr*> s_cache_exact;
+    static ::std::unordered_map<::std::string, CachedTypeRepr> sCache;
+    static ::std::unordered_map<::HIR::TypeRef, ::std::unique_ptr<TypeRepr>> sUnencodedCache;
+    static ::std::unordered_map<::HIR::TypeRef, const TypeRepr*> sCacheExact;
 
     bool hasAbiIdentity(::HIR::TypeRef ty) {
         return !monomorphiseTypeNeeded(ty, /*ignore_lifetimes=*/true)
@@ -1929,17 +1929,17 @@ namespace {
 
     void set_type_repr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
         if (!hasAbiIdentity(ty)) {
-            const auto* repr_ptr = repr.get();
-            auto ires = s_unencoded_cache.emplace(ty, mv$(repr));
+            const auto* reprPtr = repr.get();
+            auto ires = sUnencodedCache.emplace(ty, mv$(repr));
             ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
-            s_cache_exact.emplace(ty, repr_ptr);
+            sCacheExact.emplace(ty, reprPtr);
             DEBUG("Set temporary repr for " << ty);
             return;
         }
         auto symbol = FMT(TransMangle(ty));
-        auto ires = s_cache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
+        auto ires = sCache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
         ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
-        s_cache_exact.emplace(ty, ires.first->second.repr.get());
+        sCacheExact.emplace(ty, ires.first->second.repr.get());
         DEBUG("Set repr for " << ty);
     }
 }
@@ -1969,36 +1969,36 @@ bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolv
 }
 
 const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
-    auto exact = s_cache_exact.find(ty);
-    if (exact != s_cache_exact.end()) {
+    auto exact = sCacheExact.find(ty);
+    if (exact != sCacheExact.end()) {
         return exact->second;
     }
 
     if (!hasAbiIdentity(ty)) {
         auto repr = makeTypeRepr(sp, resolve, ty);
         const auto* rv = repr.get();
-        auto ires = s_unencoded_cache.emplace(ty, mv$(repr));
+        auto ires = sUnencodedCache.emplace(ty, mv$(repr));
         ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
-        s_cache_exact.emplace(ty, rv);
+        sCacheExact.emplace(ty, rv);
         DEBUG("Created temporary repr for " << ty);
         return rv;
     }
 
     auto symbol = FMT(TransMangle(ty));
-    auto existing = s_cache.find(symbol);
-    if (existing != s_cache.end()) {
+    auto existing = sCache.find(symbol);
+    if (existing != sCache.end()) {
         ASSERT_BUG(sp, existing->second.canonical == ty || existing->second.canonical->equalsIgnoringRegions(ty),
             "Distinct types have the same mangled name: " << existing->second.canonical << " and " << ty);
         const auto* repr = existing->second.repr.get();
-        s_cache_exact.emplace(ty, repr);
+        sCacheExact.emplace(ty, repr);
         return repr;
     }
 
     auto repr = makeTypeRepr(sp, resolve, ty);
     const auto* rv = repr.get();
-    auto ires = s_cache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
+    auto ires = sCache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
     ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
-    s_cache_exact.emplace(ty, rv);
+    sCacheExact.emplace(ty, rv);
     DEBUG("Created repr for " << ty);
     return rv;
 }
@@ -2050,7 +2050,7 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
     TU_ARMA(None, ve) {
         }
         TU_ARMA(Linear, ve) {
-            auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).read_uint(ve.field.size);
+            auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
             if (v < ve.offset) {
                 var_idx = ve.field.index;
                 sub_has_tag = false; // TODO: is this correct?
@@ -2062,7 +2062,7 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             }
         }
         TU_ARMA(Values, ve) {
-            auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).read_uint(ve.field.size);
+            auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
             auto it = std::find(ve.values.begin(), ve.values.end(), v);
             ASSERT_BUG(sp, it != ve.values.end(), "Invalid enum tag: " << v);
             var_idx = it - ve.values.begin();
@@ -2072,7 +2072,7 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             size_t ofs = this->getOffset(sp, resolve, ve.field);
             bool isNonzero = false;
             for (size_t i = 0; i < ve.field.size; i++) {
-                if (lit.slice(ofs + i, 1).read_uint(1) != 0) {
+                if (lit.slice(ofs + i, 1).readUint(1) != 0) {
                     isNonzero = true;
                     break;
                 }
