@@ -42,7 +42,6 @@ class HIRResolvePlaceholdersNop: public HIRResolvePlaceholders {
 
 using tCbResolveType = const HIRResolvePlaceholders&;
 
-
 class HIRMatchGenerics {
 public:
     HIRCompare cmpPath(const Span& sp, const HIRPath& tyL, const HIRPath& tyR, tCbResolveType resolveCb);
@@ -50,7 +49,6 @@ public:
 
     virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) = 0;
     virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) = 0;
-
 };
 
 enum class HIRInferClass {

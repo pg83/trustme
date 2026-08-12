@@ -700,7 +700,6 @@ HIRConstGeneric MonomorphiserPP::getValue(const Span& sp, const HIRGenericRef& v
     }
 }
 
-
 //t_cb_generic MonomorphState::get_cb(const Span& sp) const
 //{
 //}

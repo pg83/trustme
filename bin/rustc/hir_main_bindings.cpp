@@ -1228,10 +1228,7 @@ HIRTrait HirDeserialiser::deserialiseTrait() {
     TRACE_FUNCTION;
     auto _ = in.openObject("HIR::Trait");
 
-    HIRTrait rv{
-        deserialiseGenericparams(),
-        {}
-    };
+    HIRTrait rv{deserialiseGenericparams(), {}};
     const auto traitFlags = in.readU8();
     rv.mIsMarker = traitFlags & 1;
     rv.isFundamental = traitFlags & 2;
@@ -1550,7 +1547,6 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
 
     rv.extLibs = deserialiseVec<HIRExternLibrary>();
     rv.linkPaths = deserialiseVec<::std::string>();
-
 }
 
 //}

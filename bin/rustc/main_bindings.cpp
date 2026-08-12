@@ -193,7 +193,6 @@ struct ProgramParams {
     // NOTE: if true, no parse/compilation performed (target is loaded though)
     bool printCfgs = false;
 
-
     TraitSolverConfig traitSolver;
 
     ::std::vector<const char*> libSearchDirs;

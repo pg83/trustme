@@ -571,13 +571,7 @@ HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTP
 
 HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds /*=false*/, ASTBoundConstness constness /*=Never*/) {
     DEBUG(hrbs << " " << path);
-    HIRTraitPath rv{
-        LowerHIRGenericPath(sp, path, FromASTPathClass::Type, /*allow_assoc=*/true),
-        {},
-        {},
-        nullptr,
-        LowerHIRBoundConstness(constness)
-    };
+    HIRTraitPath rv{LowerHIRGenericPath(sp, path, FromASTPathClass::Type, /*allow_assoc=*/true), {}, {}, nullptr, LowerHIRBoundConstness(constness)};
 
     struct H {
         static HIRGenericPath findSourceTraitHir(const Span& sp, const HIRGenericPath& path, const HIRTrait& trait, const RcString& name, const Monomorphiser& ms) {
@@ -781,7 +775,6 @@ namespace {
         const Span& mSpan;
         HIRTypeData::Data_TraitObject& out;
         ::std::unordered_set<const void*> activeAliases;
-
 
         bool hasPrincipal() const {
             return !out.mTrait.mPath.mPath.components().empty();

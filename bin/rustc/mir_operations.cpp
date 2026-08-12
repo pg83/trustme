@@ -19,7 +19,6 @@
 #include <unordered_map>
 #include <unordered_set>
 
-
 namespace {
     HIRTypeRef getMetadataType(const MIRTypeResolve& state, const HIRTypeData* unsizedTy) {
         static Span sp;

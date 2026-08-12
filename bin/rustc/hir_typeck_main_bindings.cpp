@@ -2042,7 +2042,6 @@ namespace {
             curParamsLevel = savedParams.second;
         }
 
-
         void visitTypeImpl(HIRTypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.mType);
             auto _ = mResolve.setImplGenerics(impl.mType, impl.mParams);
@@ -2055,7 +2054,6 @@ namespace {
                 this->visitType(impl.mType);
                 curParams = nullptr;
             }
-
 
             HIRVisitor::visitTypeImpl(impl);
             // TODO: Check that the type is valid
@@ -2077,7 +2075,6 @@ namespace {
                 this->visitPathParams(impl.traitArgs);
                 curParams = nullptr;
             }
-
 
             HIRVisitor::visitTraitImpl(traitPath, impl);
             selfTypes.pop_back();
@@ -2302,7 +2299,6 @@ namespace {
                 this->visitPathParams(impl.traitArgs);
                 curParams = nullptr;
             }
-
 
             HIRVisitor::visitMarkerImpl(traitPath, impl);
             // TODO: Check that the type+trait is valid

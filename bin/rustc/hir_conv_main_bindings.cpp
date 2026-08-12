@@ -1880,7 +1880,6 @@ void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* i
     exp.visitExpr(expr);
 }
 
-
 namespace {
 
     class MarkingsVisitor: public HIRVisitor {

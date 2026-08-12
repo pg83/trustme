@@ -44,7 +44,6 @@ struct ImplRef {
 
     ImplRef(HIRTypeRef type, HIRPathParams args, HIRTraitPath::assocListT assoc, HIRBoundConstness constness = HIRBoundConstness::Never);
 
-
     bool isValid() const {
         return !(mData.is_TraitImpl() && mData.as_TraitImpl().impl == nullptr);
     }

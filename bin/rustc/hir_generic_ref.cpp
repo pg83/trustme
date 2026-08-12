@@ -28,4 +28,3 @@ Ordering HIRGenericRef::ord(const HIRGenericRef& x) const {
     x.fmt(os);
     return os;
 }
-

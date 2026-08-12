@@ -3265,7 +3265,6 @@ void HIRExpandClosures(const WireBoard& wb, HIRCrate& crate) {
 
 namespace {
 
-
     void expandErasedType(const Span& sp, const StaticTraitResolve& mResolve, HIRTypeRef& ty) {
         const auto& e = ty->as_ErasedType();
 
@@ -3431,7 +3430,6 @@ void HIRExpandErasedType(const WireBoard& wb, HIRCrate& crate) {
     ErasedOuterVisitorFixup ovFix(wb);
     ovFix.visitCrate(crate);
 }
-
 
 namespace {
     inline HIRExprNodeP reborrowMkExprnodep(HIRExprNode* en, HIRTypeRef ty) {
@@ -4328,7 +4326,6 @@ public:
             ASSERT_BUG(sp, i < params.values.size(), "Item generic value binding OOR - " << ge << " (" << i << " !< " << params.values.size() << ")");
             return HIRGenericRef(params.values[i].mName, 256 + i);
         }
-
     };
 
     Monomorph createParams(const Span& sp, HIRGenericParams& params, HIRPathParams& constructorPathParams) const {
@@ -4520,7 +4517,6 @@ public:
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
             return g;
         }
-
     };
 
     void visit(HIRExprNodeBorrow& node) override {
@@ -5729,17 +5725,7 @@ namespace {
                         for (const auto& t : e->traits) {
                             traits.push_back(t.clone());
                         }
-                        targetTrait->types.insert(
-                            std::make_pair(
-                                tyName,
-                                HIRAssociatedType{
-                                    methodParams->clone(),
-                                    e->isSized,
-                                    std::move(traits),
-                                    typeInterner().infer()
-                                }
-                            )
-                        );
+                        targetTrait->types.insert(std::make_pair(tyName, HIRAssociatedType{methodParams->clone(), e->isSized, std::move(traits), typeInterner().infer()}));
                         const auto& f = e->inner.as_Fcn();
                         assert(methodName == f.origin.mData.as_UfcsKnown().item);
                         const auto& fcn = targetTrait->values.at(f.origin.mData.as_UfcsKnown().item);

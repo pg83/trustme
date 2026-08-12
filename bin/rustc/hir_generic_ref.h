@@ -63,4 +63,3 @@ struct HIRGenericRef {
 
     friend ::std::ostream& operator<<(::std::ostream& os, const HIRGenericRef& x);
 };
-

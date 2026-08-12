@@ -14,5 +14,4 @@ extern void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& pa
 extern void MIROptimiseMin(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType);
 extern void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn);
 
-
 extern void MIRDumpFcn(::std::ostream& sink, const MIRFunction& fcn, unsigned int il = 0);

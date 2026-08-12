@@ -71,7 +71,6 @@ public:
     HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
 
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
-
 };
 
 // Wrappers to only monomorphise if required
@@ -121,7 +120,6 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     const HIRPathParams* getHrbParams() const override;
 };
-
 
 // Helper for passing a group of params around
 struct MonomorphState: public MonomorphiserPP {

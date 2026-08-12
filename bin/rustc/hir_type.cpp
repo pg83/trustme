@@ -198,13 +198,7 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
             const auto& str = *varTy->as_Path().binding.as_Struct();
             const auto& varData = str.mData.as_Tuple();
 
-            HIRTypeDataFunctionPointer ft{
-                false,
-                false,
-                RcString::newInterned(ABI_RUST),
-                types.path(HIRPath(HIRGenericPath(mv$(enumPath), e.mParams.clone())), HIRTypePathBinding::make_Enum(&enm)),
-                {}
-            };
+            HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(HIRPath(HIRGenericPath(mv$(enumPath), e.mParams.clone())), HIRTypePathBinding::make_Enum(&enm)), {}};
             for (const auto& arg : varData) {
                 ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
             }
@@ -213,13 +207,7 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
         TU_ARMA(StructConstructor, p) {
             const auto& e = this->path.mData.as_Generic();
             MonomorphStatePtr ms{types, nullptr, &e.mParams, nullptr};
-            HIRTypeDataFunctionPointer ft{
-                false,
-                false,
-                RcString::newInterned(ABI_RUST),
-                types.path(this->path.clone(), HIRTypePathBinding::make_Struct(p)),
-                {}
-            };
+            HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(this->path.clone(), HIRTypePathBinding::make_Struct(p)), {}};
             for (const auto& arg : p->mData.as_Tuple()) {
                 ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
             }
@@ -1226,14 +1214,9 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         (Diverge, return OrdEqual;),
         (Primitive, return ::ord(static_cast<unsigned>(te), static_cast<unsigned>(xe));),
         (Path, return ::ord(te.path, xe.path);),
-        (Generic,
-         if ((rv = ::ord(te.binding, xe.binding)) != OrdEqual) return rv;
-         return OrdEqual;),
-        (TraitObject, ORD(te.mTrait, xe.mTrait); ORD(te.markers, xe.markers);
-         return OrdEqual;),
-        (ErasedType,
-         ORD(te.inner, xe.inner);
-         return OrdEqual;),
+        (Generic, if ((rv = ::ord(te.binding, xe.binding)) != OrdEqual) return rv; return OrdEqual;),
+        (TraitObject, ORD(te.mTrait, xe.mTrait); ORD(te.markers, xe.markers); return OrdEqual;),
+        (ErasedType, ORD(te.inner, xe.inner); return OrdEqual;),
         (Array, ORD(te.inner, xe.inner); ORD(te.size, xe.size); return OrdEqual;),
         (Slice, return ::ord(te.inner, xe.inner);),
         (Tuple, return ::ord(te, xe);),
@@ -1298,7 +1281,6 @@ HIRCompare HIRTypeData::matchTestGenericsFuzz(const Span& sp, HIRTypeRef xIn, tC
     const HIRTypeRef self = this;
     return callback.cmpType(sp, self, xIn, resolvePlaceholder);
 }
-
 
 HIRCompare HIRMatchGenerics::cmpPath(const Span& sp, const HIRPath& pathL, const HIRPath& pathR, tCbResolveType resolvePlaceholder) {
     HIRCompare rv = HIRCompare::Unequal;

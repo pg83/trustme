@@ -62,7 +62,6 @@ MonomorphStatePtr& MonomorphStatePtr::operator=(MonomorphStatePtr&& x) {
     return *this;
 }
 
-
 MonomorphState::MonomorphState(HIRTypeInterner& types)
     : MonomorphiserPP(types)
     , selfTy()
@@ -98,8 +97,6 @@ void MonomorphState::setImplParams(HIRPathParams pp) {
     ppImpl = &ppImplData;
     ppImplData = std::move(pp);
 }
-
-
 
 HIRTypeRef MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
     return types.generic(ty.name, ty.binding);

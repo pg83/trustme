@@ -48,7 +48,6 @@ namespace {
             return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(canonicalPlaceholderName(generic.name), generic.binding) : generic);
         }
 
-
         const ::std::vector<::std::pair<RcString, RcString>>& placeholderNames() const {
             return mPlaceholderNames;
         }
@@ -90,7 +89,6 @@ namespace {
         HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
             return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(instantiatePlaceholderName(generic.name), generic.binding) : generic);
         }
-
     };
 
     // Canonical query variables created while evaluating a goal are
@@ -148,7 +146,6 @@ namespace {
             values.push_back({generic, fresh.clone()});
             return fresh;
         }
-
     };
 
 }
@@ -830,7 +827,6 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
             HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
                 return g;
             }
-
         };
 
         type = MonomorphAddLifetimes(types).monomorphType(sp, type, true);
@@ -1629,7 +1625,7 @@ TU_ARMA(Alias, ee) {
                 pp.types.push_back(crate.types.tuple(mv$(args)));
                 HIRTraitPath::assocListT types;
                 types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
-                        return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
+                return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
             }
         }
         // Magic Fn* trait impls for function pointers
@@ -1673,7 +1669,7 @@ TU_ARMA(Alias, ee) {
                 pp.types.push_back(crate.types.tuple(mv$(args)));
                 HIRTraitPath::assocListT types;
                 types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
-                        return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
+                return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
             }
         }
         // Magic index and unsize impls for Arrays
@@ -1721,7 +1717,7 @@ TU_ARMA(Alias, ee) {
                 auto cmp = comparePp(sp, e.mTrait.mPath.mParams, params);
                 if (cmp != HIRCompare::Unequal) {
                     DEBUG("TraitObject impl params" << e.mTrait.mPath.mParams);
-                                return callback(ImplRef(type, &e.mTrait.mPath.mParams, &e.mTrait.typeBounds, e.mTrait.constness), cmp);
+                    return callback(ImplRef(type, &e.mTrait.mPath.mParams, &e.mTrait.typeBounds, e.mTrait.constness), cmp);
                 }
             }
             // Markers too
@@ -1773,7 +1769,7 @@ TU_ARMA(Alias, ee) {
                     auto cmp = comparePp(sp, traitPath.mPath.mParams, params);
                     if (cmp != HIRCompare::Unequal) {
                         DEBUG("TraitObject impl params" << traitPath.mPath.mParams);
-                                        return callback(ImplRef(type, &traitPath.mPath.mParams, &traitPath.typeBounds, traitPath.constness), cmp);
+                        return callback(ImplRef(type, &traitPath.mPath.mParams, &traitPath.typeBounds, traitPath.constness), cmp);
                     }
                 }
 
@@ -1875,7 +1871,7 @@ TU_ARMA(Alias, ee) {
                                     return true;
                                 }
                             } else {
-                                                        if (callback(ImplRef(type, &bound.mPath.mParams, &nullAssoc, bound.constness), cmp)) {
+                                if (callback(ImplRef(type, &bound.mPath.mParams, &nullAssoc, bound.constness), cmp)) {
                                     return true;
                                 }
                             }
@@ -5287,7 +5283,7 @@ TU_ARMA(Alias, ee) {
                     DEBUG("[find_trait_impls_bound] Match " << boundTy << " : " << boundTrait);
                     // Hand off to the closure, and return true if it does
                     // TODO: The type bounds are only the types that are specified.
-                                if (callback(ImplRef(boundTy, &boundTrait.mParams, &boundInfo.assoc, boundInfo.constness), ord)) {
+                    if (callback(ImplRef(boundTy, &boundTrait.mParams, &boundInfo.assoc, boundInfo.constness), ord)) {
                         return true;
                     }
 
@@ -5800,7 +5796,6 @@ TU_ARMA(Alias, ee) {
                         TODO(Span(), "PtrImplMatcher::match_val " << g << "(" << outImplParams.values[g.binding] << ") with " << sz);
                     }
                 }
-
             };
 
             GetParams getParams{sp, outImplParams};
@@ -5998,7 +5993,6 @@ TU_ARMA(Alias, ee) {
                     ASSERT_BUG(sp, placeholders.values.size() == implParams.values.size(), "Placeholder size mismatch: " << placeholders.values.size() << " != " << implParams.values.size());
                     return placeholders.values.at(val.binding).clone();
                 }
-
             };
 
             Matcher matcher{crate.types, sp, outImplParams, placeholderName, placeholders};
@@ -7300,7 +7294,6 @@ TU_ARMA(Alias, ee) {
                             }
                             return HIRConstGeneric(val);
                         }
-
                     };
 
                     finalTraitPath = MonomorphEraseHrls(crate.types).monomorphGenericpath(sp, finalTraitPath, true);

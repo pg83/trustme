@@ -86,7 +86,6 @@ namespace {
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
             return g;
         }
-
     };
 }
 
@@ -8696,7 +8695,6 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
 
     const HIRFunction* fcnPtr = nullptr;
 
-
     struct Monomorph: public Monomorphiser {
         Context& context;
         const HIRTypeData* selfTy;
@@ -8752,7 +8750,6 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                 BUG(sp, "Generic value bounding out of total range (" << e << ")");
             }
         }
-
     };
 
     cache.topParams = nullptr;
@@ -10657,7 +10654,6 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const override {
             return g;
         }
-
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer = true) const override {
             if (const auto* e = tpl->opt_ErasedType()) {

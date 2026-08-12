@@ -7,4 +7,3 @@ const HIRTypeData* HIRResolvePlaceholdersNop::getType(const Span&, const HIRType
 const HIRConstGeneric& HIRResolvePlaceholdersNop::getVal(const Span&, const HIRConstGeneric& v) const {
     return v;
 }
-

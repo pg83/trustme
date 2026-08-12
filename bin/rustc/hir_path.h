@@ -2,11 +2,12 @@
 
 #include "span.h"
 #include "common.h"
-#include <span>
 #include "hir_expr_ptr.h"
 #include "hir_type_ref.h"
 #include "tagged_union.h"
 #include "hir_generic_ref.h"
+
+#include <span>
 
 struct EncodedLiteral;
 class Monomorphiser;
