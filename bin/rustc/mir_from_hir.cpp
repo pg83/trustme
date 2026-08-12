@@ -97,13 +97,13 @@ namespace {
         // Get a LValue pointing at the state index
         ::MIR::LValue generator_state_lv() const {
             // (*self.ptr(?0)).state(0).value(?#1).idx(0)
-            auto rv = ::MIR::LValue::new_Argument(0);
-            rv = ::MIR::LValue::new_Field(mv$(rv), 0);    // .ptr (From Pin)
-            rv = ::MIR::LValue::new_Deref(mv$(rv));       // .*
-            rv = ::MIR::LValue::new_Field(mv$(rv), 0);    // .state
-            rv = ::MIR::LValue::new_Downcast(mv$(rv), 1); // .value (From MaybeUninit)
-            rv = ::MIR::LValue::new_Field(mv$(rv), 0);    // .value (From ManuallyDrop)
-            rv = ::MIR::LValue::new_Field(mv$(rv), 0);    // .idx
+            auto rv = ::MIR::LValue::newArgument(0);
+            rv = ::MIR::LValue::newField(mv$(rv), 0);    // .ptr (From Pin)
+            rv = ::MIR::LValue::newDeref(mv$(rv));       // .*
+            rv = ::MIR::LValue::newField(mv$(rv), 0);    // .state
+            rv = ::MIR::LValue::newDowncast(mv$(rv), 1); // .value (From MaybeUninit)
+            rv = ::MIR::LValue::newField(mv$(rv), 0);    // .value (From ManuallyDrop)
+            rv = ::MIR::LValue::newField(mv$(rv), 0);    // .idx
             return rv;
         }
 
@@ -146,7 +146,7 @@ namespace {
         }
 
         void generator_make_drop(const Span& sp, MirBuilder& out_builder, size_t n_captures, const ::std::map<unsigned, std::vector<MIR::LValue::Wrapper>>& mappings, unsigned drop_state_field_idx, const std::map<unsigned, unsigned>& drop_flag_mapping) const {
-            ::MIR::LValue self = ::MIR::LValue::new_Deref(::MIR::LValue::new_Argument(0));
+            ::MIR::LValue self = ::MIR::LValue::newDeref(::MIR::LValue::newArgument(0));
 
             assert(m_generator_state.states.size() > 0);
             std::vector<::MIR::BasicBlockId> arms;
@@ -154,12 +154,12 @@ namespace {
 
             // Set all drop flags from input
             if (!drop_flag_mapping.empty()) {
-                auto slot = ::MIR::LValue::new_Argument(0);
-                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Deref());                     // Deref `&mut Self`
-                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));                    // Get state field
-                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Downcast(1));                 // .value (From MaybeUninit)
-                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));                    // .value (From ManuallyDrop)
-                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(drop_state_field_idx)); // drop flag bitset
+                auto slot = ::MIR::LValue::newArgument(0);
+                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newDeref());                     // Deref `&mut Self`
+                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                    // Get state field
+                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newDowncast(1));                 // .value (From MaybeUninit)
+                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                    // .value (From ManuallyDrop)
+                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(drop_state_field_idx)); // drop flag bitset
                 for (const auto& flag_mapping : drop_flag_mapping) {
                     auto i = out_builder.new_drop_flag(false);
                     assert(i == flag_mapping.second); // Should hold, as the map was created in-order
@@ -182,7 +182,7 @@ namespace {
             for (size_t i = 0; i < n_captures; i++) {
                 // TODO: State tracking on captures, what if a by-value capture is moved?
                 if (mappings.count(arg_count + i) == 0) {
-                    out_builder.push_stmt_drop(sp, ::MIR::LValue::new_Field(self.clone(), 1 + i));
+                    out_builder.push_stmt_drop(sp, ::MIR::LValue::newField(self.clone(), 1 + i));
                 }
             }
             out_builder.end_block(::MIR::Terminator::make_Return({}));
@@ -212,12 +212,12 @@ namespace {
             }
             // Generate the dispatch switch
             out_builder.set_cur_block(entry_block);
-            out_builder.push_stmt_assign(sp, ::MIR::LValue::new_Return(), ::MIR::RValue::make_Tuple({}));
+            out_builder.push_stmt_assign(sp, ::MIR::LValue::newReturn(), ::MIR::RValue::make_Tuple({}));
             auto stmt_idx_lv = mv$(self);
-            stmt_idx_lv = ::MIR::LValue::new_Field(mv$(stmt_idx_lv), 0);    // .state
-            stmt_idx_lv = ::MIR::LValue::new_Downcast(mv$(stmt_idx_lv), 1); // .value (From MaybeUninit)
-            stmt_idx_lv = ::MIR::LValue::new_Field(mv$(stmt_idx_lv), 0);    // .value (From ManuallyDrop)
-            stmt_idx_lv = ::MIR::LValue::new_Field(mv$(stmt_idx_lv), 0);    // .idx
+            stmt_idx_lv = ::MIR::LValue::newField(mv$(stmt_idx_lv), 0);    // .state
+            stmt_idx_lv = ::MIR::LValue::newDowncast(mv$(stmt_idx_lv), 1); // .value (From MaybeUninit)
+            stmt_idx_lv = ::MIR::LValue::newField(mv$(stmt_idx_lv), 0);    // .value (From ManuallyDrop)
+            stmt_idx_lv = ::MIR::LValue::newField(mv$(stmt_idx_lv), 0);    // .idx
             out_builder.end_block(::MIR::Terminator::make_Switch({mv$(stmt_idx_lv), mv$(arms)}));
         }
 
@@ -273,19 +273,19 @@ namespace {
                         // Create a new array value
                         std::vector<MIR::Param> array_vals;
                         for (size_t i = b.split_slice.first; i < tep->size.as_Known() - b.split_slice.second; i++) {
-                            array_vals.push_back(::MIR::LValue::new_Field(lval.clone(), static_cast<unsigned>(i)));
+                            array_vals.push_back(::MIR::LValue::newField(lval.clone(), static_cast<unsigned>(i)));
                         }
                         lval = m_builder.lvalue_or_temp(sp, mv$(ret_ty), ::MIR::RValue::make_Array({std::move(array_vals)}));
                     } else {
                         // Create a pointer to this array, by casting a raw pointer to its first element
                         ::HIR::BorrowType bt = H::get_borrow_type(sp, *b.binding);
-                        ::MIR::LValue ptr_val = m_builder.lvalue_or_temp(sp, types.pointer(bt, inner_type), ::MIR::RValue::make_Borrow({bt, true, ::MIR::LValue::new_Field(lval.clone(), static_cast<unsigned int>(b.split_slice.first))}));
+                        ::MIR::LValue ptr_val = m_builder.lvalue_or_temp(sp, types.pointer(bt, inner_type), ::MIR::RValue::make_Borrow({bt, true, ::MIR::LValue::newField(lval.clone(), static_cast<unsigned int>(b.split_slice.first))}));
 
                         // 3. Create a slice pointer
                         auto ptr_ty = types.pointer(bt, ret_ty);
                         lval = m_builder.lvalue_or_temp(sp, ptr_ty, ::MIR::RValue::make_Cast({mv$(ptr_val), ptr_ty}));
                         // 4. And dereference it
-                        lval = ::MIR::LValue::new_Deref(std::move(lval));
+                        lval = ::MIR::LValue::newDeref(std::move(lval));
                     }
                 } else if (const auto* tep = ty->opt_Slice()) {
                     auto inner_type = tep->inner;
@@ -300,12 +300,12 @@ namespace {
                     // TODO: This currently emits a borrow to that element, but we need a raw pointer (to avoid being technically out-of-bounds)
                     // - Should add a MIR op for `BorrowRaw`
                     ::HIR::BorrowType bt = H::get_borrow_type(sp, *b.binding);
-                    ::MIR::LValue ptr_val = m_builder.lvalue_or_temp(sp, types.pointer(bt, inner_type), ::MIR::RValue::make_Borrow({bt, true, ::MIR::LValue::new_Field(lval.clone(), static_cast<unsigned int>(b.split_slice.first))}));
+                    ::MIR::LValue ptr_val = m_builder.lvalue_or_temp(sp, types.pointer(bt, inner_type), ::MIR::RValue::make_Borrow({bt, true, ::MIR::LValue::newField(lval.clone(), static_cast<unsigned int>(b.split_slice.first))}));
 
                     // 3. Create a slice pointer
                     lval = m_builder.lvalue_or_temp(sp, types.borrow(bt, ty), ::MIR::RValue::make_MakeDst({mv$(ptr_val), mv$(len_val)}));
                     // 4. And dereference it
-                    lval = ::MIR::LValue::new_Deref(std::move(lval));
+                    lval = ::MIR::LValue::newDeref(std::move(lval));
                 } else {
                     TODO(sp, "SplitSlice binding: " << b.split_slice << " - " << ty);
                 }
@@ -592,13 +592,13 @@ namespace {
 
         // Common code used by both `ExprNodeReturn` and the final return of a GeneratorWrapper
         void coroutine_return(const Span& sp, const ::HIR::TypeData* value_ty) {
-            static RcString rcstring_Complete = RcString::new_interned("Complete");
-            static RcString rcstring_Ready = RcString::new_interned("Ready"); // TODO: This is a lang item
-            const auto& variant_name = m_generator_state.is_future ? rcstring_Ready : rcstring_Complete;
+            static RcString rcstringComplete = RcString::new_interned("Complete");
+            static RcString rcstringReady = RcString::new_interned("Ready"); // TODO: This is a lang item
+            const auto& variant_name = m_generator_state.is_future ? rcstringReady : rcstringComplete;
             // TODO: Handle difference between generators and futures (different return/yield types)
             ::HIR::GenericPath enm_path;
             size_t variant_index = SIZE_MAX;
-            m_builder.with_val_type(sp, ::MIR::LValue::new_Return(), [&](const ::HIR::TypeData* ty) {
+            m_builder.with_val_type(sp, ::MIR::LValue::newReturn(), [&](const ::HIR::TypeData* ty) {
                 const auto& te = ty->as_Path();
                 enm_path = te.path.m_data.as_Generic().clone();
                 variant_index = te.binding.as_Enum()->find_variant(variant_name);
@@ -609,7 +609,7 @@ namespace {
             ::std::vector<::MIR::Param> values;
             values.push_back(m_builder.get_result_in_param(sp, value_ty));
             auto res = ::MIR::RValue::make_EnumVariant({std::move(enm_path), static_cast<unsigned>(variant_index), std::move(values)});
-            m_builder.push_stmt_assign(sp, ::MIR::LValue::new_Return(), std::move(res));
+            m_builder.push_stmt_assign(sp, ::MIR::LValue::newReturn(), std::move(res));
         }
 
         void visit(::HIR::ExprNodeReturn& node) override {
@@ -623,7 +623,7 @@ namespace {
             if (m_is_generator) {
                 coroutine_return(node.span(), node.m_value->m_res_type);
             } else {
-                m_builder.push_stmt_assign(node.span(), ::MIR::LValue::new_Return(), m_builder.get_result(node.span()));
+                m_builder.push_stmt_assign(node.span(), ::MIR::LValue::newReturn(), m_builder.get_result(node.span()));
             }
             m_builder.terminate_scope_early(node.span(), m_builder.fcn_scope());
             m_builder.end_block(::MIR::Terminator::make_Return({}));
@@ -635,7 +635,7 @@ namespace {
                 ASSERT_BUG(node.span(), !m_generator_state.is_future, "");
 
                 ::HIR::GenericPath enm_path;
-                m_builder.with_val_type(node.span(), ::MIR::LValue::new_Return(), [&](const ::HIR::TypeData* ty) {
+                m_builder.with_val_type(node.span(), ::MIR::LValue::newReturn(), [&](const ::HIR::TypeData* ty) {
                     const auto& te = ty->as_Path();
                     enm_path = te.path.m_data.as_Generic().clone();
                     ASSERT_BUG(node.span(), te.binding.as_Enum()->find_variant("Yielded") == 0, "");
@@ -650,7 +650,7 @@ namespace {
                      0, // Yielded is the first variant
                      mv$(values)}
                 );
-                m_builder.push_stmt_assign(node.span(), ::MIR::LValue::new_Return(), mv$(res));
+                m_builder.push_stmt_assign(node.span(), ::MIR::LValue::newReturn(), mv$(res));
                 m_builder.push_stmt_assign(node.span(), generator_state_lv(), ::MIR::RValue::make_EnumVariant({m_generator_state.state_idx_enm_path.clone(), static_cast<unsigned>(m_generator_state.states.size()), {}}));
                 // NOTE: No scope terminate
                 m_builder.end_block(::MIR::Terminator::make_Return({}));
@@ -681,11 +681,11 @@ namespace {
             m_builder.set_cur_block(m_generator_state.states.back().entrypoint);
 
             // Create `Pin<&mut >` as the reciever, using `Pin::new_unchecked`
-            const auto& lang_Pin = m_builder.resolve().m_crate.get_lang_item_path(sp, "pin");
+            const auto& langPin = m_builder.resolve().m_crate.get_lang_item_path(sp, "pin");
             auto& types = m_builder.resolve().m_crate.m_types;
             auto type_mut = types.borrow(::HIR::BorrowType::Unique, ty_inner);
-            auto pin_path = ::HIR::GenericPath(lang_Pin, ::HIR::PathParams(type_mut));
-            auto type_pin = types.path(std::move(pin_path), &m_builder.resolve().m_crate.get_struct_by_path(sp, lang_Pin));
+            auto pin_path = ::HIR::GenericPath(langPin, ::HIR::PathParams(type_mut));
+            auto type_pin = types.path(std::move(pin_path), &m_builder.resolve().m_crate.get_struct_by_path(sp, langPin));
 
             auto lv_mut = m_builder.lvalue_or_temp(sp, type_mut, ::MIR::RValue::make_Borrow({::HIR::BorrowType::Unique, false, std::move(lv_res)}));
             auto lv_pin = m_builder.new_temporary(type_pin);
@@ -699,8 +699,8 @@ namespace {
                 m_builder.set_cur_block(bb_ret);
             }
             // Call `Future::poll`
-            const auto& lang_Poll = m_builder.resolve().m_crate.get_lang_item_path(sp, "Poll");
-            auto type_poll = types.path(::HIR::GenericPath(lang_Poll, ::HIR::PathParams(node.m_res_type)), &m_builder.resolve().m_crate.get_enum_by_path(sp, lang_Poll));
+            const auto& langPoll = m_builder.resolve().m_crate.get_lang_item_path(sp, "Poll");
+            auto type_poll = types.path(::HIR::GenericPath(langPoll, ::HIR::PathParams(node.m_res_type)), &m_builder.resolve().m_crate.get_enum_by_path(sp, langPoll));
             auto lv_poll = m_builder.new_temporary(type_poll);
             {
                 auto bb_ret = m_builder.new_bb_unlinked();
@@ -715,7 +715,7 @@ namespace {
                              ::MIR::Param(lv_pin.clone()),
                              ::MIR::Param::make_Borrow({
                                  ::HIR::BorrowType::Unique,
-                                 ::MIR::LValue::new_Deref(::MIR::LValue::new_Argument(1)) // Context is the second argument (first is `self`)
+                                 ::MIR::LValue::newDeref(::MIR::LValue::newArgument(1)) // Context is the second argument (first is `self`)
                              })
                          )}
                     )
@@ -726,28 +726,28 @@ namespace {
                 m_builder.set_cur_block(bb_ret);
             }
             // Check return
-            const auto variant_Ready = 0;
+            const auto variantReady = 0;
             {
                 auto bb_pending = m_builder.new_bb_unlinked();
                 auto bb_ready = m_builder.new_bb_unlinked();
-                ASSERT_BUG(node.span(), type_poll->as_Path().binding.as_Enum()->find_variant("Ready") == variant_Ready, "");
+                ASSERT_BUG(node.span(), type_poll->as_Path().binding.as_Enum()->find_variant("Ready") == variantReady, "");
                 ASSERT_BUG(node.span(), type_poll->as_Path().binding.as_Enum()->find_variant("Pending") == 1, "");
                 m_builder.end_block(::MIR::Terminator::make_Switch({lv_poll.clone(), make_vec2(bb_ready, bb_pending)}));
                 m_builder.set_cur_block(bb_pending);
 
                 // `retval = ::core::task::Poll::Pending; RETURN`
-                HIR::GenericPath path_local_Poll;
-                m_builder.with_val_type(sp, ::MIR::LValue::new_Return(), [&](const ::HIR::TypeData* ty) {
-                    path_local_Poll = ty->as_Path().path.m_data.as_Generic().clone();
+                HIR::GenericPath pathLocalPoll;
+                m_builder.with_val_type(sp, ::MIR::LValue::newReturn(), [&](const ::HIR::TypeData* ty) {
+                    pathLocalPoll = ty->as_Path().path.m_data.as_Generic().clone();
                 });
-                m_builder.push_stmt_assign(node.span(), ::MIR::LValue::new_Return(), ::MIR::RValue::make_EnumVariant({std::move(path_local_Poll), 1, {}}));
+                m_builder.push_stmt_assign(node.span(), ::MIR::LValue::newReturn(), ::MIR::RValue::make_EnumVariant({std::move(pathLocalPoll), 1, {}}));
                 m_builder.push_stmt_assign(node.span(), generator_state_lv(), ::MIR::RValue::make_EnumVariant({m_generator_state.state_idx_enm_path.clone(), state_value, {}}));
                 m_builder.end_block(::MIR::Terminator::make_Return({}));
 
                 m_builder.set_cur_block(bb_ready);
             }
             // lv_poll.#0.0 to get the field of the first variant
-            m_builder.set_result(node.span(), ::MIR::LValue::new_Field(::MIR::LValue::new_Downcast(std::move(lv_poll), variant_Ready), 0));
+            m_builder.set_result(node.span(), ::MIR::LValue::newField(::MIR::LValue::newDowncast(std::move(lv_poll), variantReady), 0));
         }
 
         void visit(::HIR::ExprNodeLet& node) override {
@@ -1622,8 +1622,8 @@ namespace {
                 const auto& ty_in = ie.inner;
                 TU_MATCH_HDRA( (*ty_out), {)
                 default: {
-                        const auto& lang_Unsize = m_builder.crate().get_lang_item_path(node.span(), "unsize");
-                        if (m_builder.resolve().find_impl(node.span(), lang_Unsize, ::HIR::PathParams(ty_out), ty_in, [](auto, bool) {
+                        const auto& langUnsize = m_builder.crate().get_lang_item_path(node.span(), "unsize");
+                        if (m_builder.resolve().find_impl(node.span(), langUnsize, ::HIR::PathParams(ty_out), ty_in, [](auto, bool) {
                             return true;
                         })) {
                             // - HACK: Emit a cast operation on the pointers. Leave it up to monomorph to 'fix' it
@@ -1735,7 +1735,7 @@ namespace {
             emit_unwind(sp);
 
             m_builder.set_cur_block(ok_block);
-            m_builder.set_result(node.span(), ::MIR::LValue::new_Deref(std::move(res_val)));
+            m_builder.set_result(node.span(), ::MIR::LValue::newDeref(std::move(res_val)));
         }
 
         void visit(::HIR::ExprNodeIndex& node) override {
@@ -1820,7 +1820,7 @@ namespace {
                 m_builder.push_stmt_assign(node.span(), local_idx.clone(), mv$(index));
                 index = mv$(local_idx);
             }
-            m_builder.set_result( node.span(), ::MIR::LValue::new_Index( mv$(value), index.m_root.as_Local() ) );
+            m_builder.set_result( node.span(), ::MIR::LValue::newIndex( mv$(value), index.m_root.as_Local() ) );
         }
 
         void visit(::HIR::ExprNodeDeref& node) override {
@@ -1883,7 +1883,7 @@ namespace {
                 m_builder.set_cur_block(ok_block);
             }
 
-            m_builder.set_result( node.span(), ::MIR::LValue::new_Deref( mv$(val) ) );
+            m_builder.set_result( node.span(), ::MIR::LValue::newDeref( mv$(val) ) );
         }
 
         void visit(::HIR::ExprNodeEmplace& node) override {
@@ -1913,19 +1913,19 @@ namespace {
             } else {
                 // Insert calls to "size_of" and "align_of" intrinsics
                 auto size_slot = m_builder.new_temporary(types.primitive(::HIR::CoreType::Usize));
-                auto size__panic = m_builder.new_bb_unlinked();
-                auto size__ok = m_builder.new_bb_unlinked();
-                m_builder.end_block(::MIR::Terminator::make_Call({size__ok, ::MIR::UnwindAction::make_Cleanup(size__panic), size_slot.clone(), ::MIR::CallTarget::make_Intrinsic({"size_of", trait_params_data.clone()}), {}}));
-                m_builder.set_cur_block(size__panic);
+                auto sizePanic = m_builder.new_bb_unlinked();
+                auto sizeOk = m_builder.new_bb_unlinked();
+                m_builder.end_block(::MIR::Terminator::make_Call({sizeOk, ::MIR::UnwindAction::make_Cleanup(sizePanic), size_slot.clone(), ::MIR::CallTarget::make_Intrinsic({"size_of", trait_params_data.clone()}), {}}));
+                m_builder.set_cur_block(sizePanic);
                 emit_unwind(node.span());
-                m_builder.set_cur_block(size__ok);
+                m_builder.set_cur_block(sizeOk);
                 auto align_slot = m_builder.new_temporary(types.primitive(::HIR::CoreType::Usize));
-                auto align__panic = m_builder.new_bb_unlinked();
-                auto align__ok = m_builder.new_bb_unlinked();
-                m_builder.end_block(::MIR::Terminator::make_Call({align__ok, ::MIR::UnwindAction::make_Cleanup(align__panic), align_slot.clone(), ::MIR::CallTarget::make_Intrinsic({"align_of", trait_params_data.clone()}), {}}));
-                m_builder.set_cur_block(align__panic);
+                auto alignPanic = m_builder.new_bb_unlinked();
+                auto alignOk = m_builder.new_bb_unlinked();
+                m_builder.end_block(::MIR::Terminator::make_Call({alignOk, ::MIR::UnwindAction::make_Cleanup(alignPanic), align_slot.clone(), ::MIR::CallTarget::make_Intrinsic({"align_of", trait_params_data.clone()}), {}}));
+                m_builder.set_cur_block(alignPanic);
                 emit_unwind(node.span());
-                m_builder.set_cur_block(align__ok);
+                m_builder.set_cur_block(alignOk);
 
                 size_param = ::std::move(size_slot);
                 align_param = ::std::move(align_slot);
@@ -1936,30 +1936,30 @@ namespace {
             auto place_raw_type = types.pointer(::HIR::BorrowType::Unique, types.primitive(::HIR::CoreType::U8));
             auto place_raw = m_builder.new_temporary(place_raw_type);
 
-            auto place__panic = m_builder.new_bb_unlinked();
-            auto place__ok = m_builder.new_bb_unlinked();
-            m_builder.end_block(::MIR::Terminator::make_Call({place__ok, ::MIR::UnwindAction::make_Cleanup(place__panic), place_raw.clone(), ::HIR::Path(lang_exchange_malloc), make_vec2<::MIR::Param>(::std::move(size_param), ::std::move(align_param))}));
-            m_builder.set_cur_block(place__panic);
+            auto placePanic = m_builder.new_bb_unlinked();
+            auto placeOk = m_builder.new_bb_unlinked();
+            m_builder.end_block(::MIR::Terminator::make_Call({placeOk, ::MIR::UnwindAction::make_Cleanup(placePanic), place_raw.clone(), ::HIR::Path(lang_exchange_malloc), make_vec2<::MIR::Param>(::std::move(size_param), ::std::move(align_param))}));
+            m_builder.set_cur_block(placePanic);
             emit_unwind(node.span());
-            m_builder.set_cur_block(place__ok);
+            m_builder.set_cur_block(placeOk);
 
             auto place_type = types.pointer(::HIR::BorrowType::Unique, data_ty);
             auto place = m_builder.new_temporary(place_type);
             m_builder.push_stmt_assign(node.span(), place.clone(), ::MIR::RValue::make_Cast({mv$(place_raw), place_type}));
             // 3. Do a non-dropping write into the target location (i.e. just a MIR assignment)
-            m_builder.push_stmt_assign(node.span(), ::MIR::LValue::new_Deref(place.clone()), mv$(val), /*drop_destination=*/false);
+            m_builder.push_stmt_assign(node.span(), ::MIR::LValue::newDeref(place.clone()), mv$(val), /*drop_destination=*/false);
             // 4. Convert the pointer into an `owned_box`
             const auto& res_type = node.m_res_type;
             auto res = m_builder.new_temporary(res_type);
-            auto cast__panic = m_builder.new_bb_unlinked();
-            auto cast__ok = m_builder.new_bb_unlinked();
+            auto castPanic = m_builder.new_bb_unlinked();
+            auto castOk = m_builder.new_bb_unlinked();
             ::HIR::PathParams transmute_params;
             transmute_params.m_types.push_back(res_type);
             transmute_params.m_types.push_back(place_type);
-            m_builder.end_block(::MIR::Terminator::make_Call({cast__ok, ::MIR::UnwindAction::make_Cleanup(cast__panic), res.clone(), ::MIR::CallTarget::make_Intrinsic({"transmute", mv$(transmute_params)}), make_vec1(::MIR::Param(mv$(place)))}));
-            m_builder.set_cur_block(cast__panic);
+            m_builder.end_block(::MIR::Terminator::make_Call({castOk, ::MIR::UnwindAction::make_Cleanup(castPanic), res.clone(), ::MIR::CallTarget::make_Intrinsic({"transmute", mv$(transmute_params)}), make_vec1(::MIR::Param(mv$(place)))}));
+            m_builder.set_cur_block(castPanic);
             emit_unwind(node.span());
-            m_builder.set_cur_block(cast__ok);
+            m_builder.set_cur_block(castOk);
 
             m_builder.set_result(node.span(), mv$(res));
         }
@@ -2096,7 +2096,7 @@ namespace {
                         ::MIR::LValue slot;
                         TU_MATCH_HDRA((values[0]), {)
                         TU_ARMA(LValue, lv) {
-                                slot = ::MIR::LValue::new_Deref(std::move(lv));
+                                slot = ::MIR::LValue::newDeref(std::move(lv));
                             }
                             TU_ARMA(Constant, c) TODO(node.span(), "");
                             TU_ARMA(Borrow, v) {
@@ -2121,7 +2121,7 @@ namespace {
                         m_builder.push_stmt_assign(node.span(), res.clone(), ::MIR::RValue::make_Borrow({
                             borrow_ty,
                             is_raw,
-                            ::MIR::LValue::new_Index(std::move(slot), std::move(index_lv.as_Local()))
+                            ::MIR::LValue::newIndex(std::move(slot), std::move(index_lv.as_Local()))
                             }));
                         m_builder.set_result(node.span(), std::move(res));
                         return ;
@@ -2256,14 +2256,14 @@ namespace {
             unsigned int idx;
             if (::std::isdigit(node.m_field.c_str()[0])) {
                 ::std::stringstream(node.m_field.c_str()) >> idx;
-                m_builder.set_result(node.span(), ::MIR::LValue::new_Field(mv$(val), idx));
+                m_builder.set_result(node.span(), ::MIR::LValue::newField(mv$(val), idx));
             } else if (const auto* bep = val_ty->as_Path().binding.opt_Struct()) {
                 const auto& str = **bep;
                 const auto& fields = str.m_data.as_Named();
                 idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
                     return x.name == node.m_field;
                 }) - fields.begin();
-                m_builder.set_result(node.span(), ::MIR::LValue::new_Field(mv$(val), idx));
+                m_builder.set_result(node.span(), ::MIR::LValue::newField(mv$(val), idx));
             } else if (const auto* bep = val_ty->as_Path().binding.opt_Union()) {
                 const auto& unm = **bep;
                 const auto& fields = unm.m_variants;
@@ -2271,7 +2271,7 @@ namespace {
                     return x.name == node.m_field;
                 }) - fields.begin();
 
-                m_builder.set_result(node.span(), ::MIR::LValue::new_Downcast(mv$(val), idx));
+                m_builder.set_result(node.span(), ::MIR::LValue::newDowncast(mv$(val), idx));
             } else {
                 BUG(node.span(), "Field access on non-union/struct - " << val_ty);
             }
@@ -2325,15 +2325,15 @@ namespace {
                     // Emit as `transmute<&Cstr,&str>`
                     auto res = m_builder.new_temporary(node.m_res_type);
 
-                    auto cast__panic = m_builder.new_bb_unlinked();
-                    auto cast__ok = m_builder.new_bb_unlinked();
+                    auto castPanic = m_builder.new_bb_unlinked();
+                    auto castOk = m_builder.new_bb_unlinked();
                     ::HIR::PathParams transmute_params;
                     transmute_params.m_types.push_back(node.m_res_type);
                     transmute_params.m_types.push_back(m_builder.resolve().m_crate.m_types.borrow(::HIR::BorrowType::Shared, m_builder.resolve().m_crate.m_types.primitive(::HIR::CoreType::Str)));
-                    m_builder.end_block(::MIR::Terminator::make_Call({cast__ok, ::MIR::UnwindAction::make_Cleanup(cast__panic), res.clone(), ::MIR::CallTarget::make_Intrinsic({"transmute", mv$(transmute_params)}), make_vec1(::MIR::Param(::MIR::Constant(std::move(s))))}));
-                    m_builder.set_cur_block(cast__panic);
+                    m_builder.end_block(::MIR::Terminator::make_Call({castOk, ::MIR::UnwindAction::make_Cleanup(castPanic), res.clone(), ::MIR::CallTarget::make_Intrinsic({"transmute", mv$(transmute_params)}), make_vec1(::MIR::Param(::MIR::Constant(std::move(s))))}));
+                    m_builder.set_cur_block(castPanic);
                     emit_unwind(node.span());
-                    m_builder.set_cur_block(cast__ok);
+                    m_builder.set_cur_block(castOk);
 
                     m_builder.set_result(node.span(), mv$(res));
                 }
@@ -2397,7 +2397,7 @@ namespace {
                             m_builder.set_result(node.span(), mv$(tmp));
                         }
                         TU_ARMA(Static, e) {
-                            m_builder.set_result(node.span(), ::MIR::LValue::new_Static(node.m_path.clone()));
+                            m_builder.set_result(node.span(), ::MIR::LValue::newStatic(node.m_path.clone()));
                         }
                         TU_ARMA(StructConstant, e) {
                             // TODO: Why is this still a PathValue?
@@ -2514,7 +2514,7 @@ namespace {
                 }
             }
 
-            auto base_val = ::MIR::LValue::new_Return();
+            auto base_val = ::MIR::LValue::newReturn();
             if (node.m_base_value) {
                 DEBUG("_StructLiteral - base");
                 this->visit_node_ptr(node.m_base_value);
@@ -2526,7 +2526,7 @@ namespace {
             for (unsigned int i = 0; i < values.size(); i++) {
                 if (!values_set[i]) {
                     if (node.m_base_value) {
-                        values[i] = ::MIR::LValue::new_Field(base_val.clone(), i);
+                        values[i] = ::MIR::LValue::newField(base_val.clone(), i);
                     } else if (fields[i].default_value) {
                         const auto& v = *fields[i].default_value;
                         auto ms = MonomorphStatePtr(m_builder.resolve().m_crate.m_types, nullptr, &path.m_params, nullptr);
@@ -2663,25 +2663,25 @@ namespace {
 
             // Zero the state index
             {
-                const auto& lang_MaybeUninit = m_builder.resolve().m_crate.get_lang_item_path(sp, "maybe_uninit");
-                const auto& unm_MaybeUninit = m_builder.resolve().m_crate.get_union_by_path(sp, lang_MaybeUninit);
-                auto slot_type = m_builder.resolve().m_crate.m_types.path(::HIR::GenericPath(lang_MaybeUninit, ::HIR::PathParams(state_type)), &unm_MaybeUninit);
+                const auto& langMaybeUninit = m_builder.resolve().m_crate.get_lang_item_path(sp, "maybe_uninit");
+                const auto& unmMaybeUninit = m_builder.resolve().m_crate.get_union_by_path(sp, langMaybeUninit);
+                auto slot_type = m_builder.resolve().m_crate.m_types.path(::HIR::GenericPath(langMaybeUninit, ::HIR::PathParams(state_type)), &unmMaybeUninit);
 
                 auto res_slot = m_builder.new_temporary(slot_type);
-                auto size__panic = m_builder.new_bb_unlinked();
-                auto size__ok = m_builder.new_bb_unlinked();
+                auto sizePanic = m_builder.new_bb_unlinked();
+                auto sizeOk = m_builder.new_bb_unlinked();
                 m_builder.end_block(
                     ::MIR::Terminator::make_Call(
-                        {size__ok,
-                         ::MIR::UnwindAction::make_Cleanup(size__panic),
+                        {sizeOk,
+                         ::MIR::UnwindAction::make_Cleanup(sizePanic),
                          res_slot.clone(),
                          ::MIR::CallTarget::make_Intrinsic({"init", ::HIR::PathParams(mv$(slot_type))}), // I.e. `mem::zeroed`
                          {}}
                     )
                 );
-                m_builder.set_cur_block(size__panic);
+                m_builder.set_cur_block(sizePanic);
                 emit_unwind(sp);
-                m_builder.set_cur_block(size__ok);
+                m_builder.set_cur_block(sizeOk);
                 vals.push_back(std::move(res_slot));
             }
             // Populate the rest
@@ -2743,7 +2743,7 @@ namespace {
             } else {
                 DEBUG("Argument a" << i << " - " << pat);
                 ev.schedule_pattern_drops(ptr->span(), arg.first, PatternDropOrder::FirstCandidate);
-                MIRLowerHIRLet(builder, ev, ptr->span(), arg.first, ::MIR::LValue::new_Argument(i), /*else_node=*/nullptr);
+                MIRLowerHIRLet(builder, ev, ptr->span(), arg.first, ::MIR::LValue::newArgument(i), /*else_node=*/nullptr);
             }
             i++;
         }
@@ -2759,17 +2759,17 @@ namespace {
                     case ::HIR::ValueUsage::Borrow:
                     case ::HIR::ValueUsage::Mutate: {
                         // TODO: Use `m_variable_aliases` for by-borrow captures, to avoid them being dropped
-                        auto lv = ::MIR::LValue::new_Argument(0);
-                        lv.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0)); // Pin.ptr
-                        lv.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Deref());  // *
-                        lv.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(1 + i));
-                        lv.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Deref());
+                        auto lv = ::MIR::LValue::newArgument(0);
+                        lv.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(0)); // Pin.ptr
+                        lv.m_wrappers.push_back(::MIR::LValue::Wrapper::newDeref());  // *
+                        lv.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(1 + i));
+                        lv.m_wrappers.push_back(::MIR::LValue::Wrapper::newDeref());
                         builder.add_variable_alias(root_node.span(), idx, ::HIR::PatternBinding::Type::Move, std::move(lv));
                     } break;
                     case ::HIR::ValueUsage::Move:
                     case ::HIR::ValueUsage::Unknown:
-                        builder.mark_value_assigned(root_node.span(), ::MIR::LValue::new_Local(idx));
-                        mappings.insert(std::make_pair(idx, ::make_vec1(::MIR::LValue::Wrapper::new_Field(1 + i))));
+                        builder.mark_value_assigned(root_node.span(), ::MIR::LValue::newLocal(idx));
+                        mappings.insert(std::make_pair(idx, ::make_vec1(::MIR::LValue::Wrapper::newField(1 + i))));
                         break;
                 }
             }
@@ -2790,10 +2790,10 @@ namespace {
             auto& state_ty = const_cast<HIR::Struct&>(*gen_node->m_state_data_type->as_Path().binding.as_Struct());
             unsigned value_var_idx;
             {
-                const auto& unm_MaybeUninit = resolve.m_crate.get_union_by_path(sp, resolve.m_crate.get_lang_item_path(gen_node->span(), "maybe_uninit"));
-                value_var_idx = std::find_if(unm_MaybeUninit.m_variants.begin(), unm_MaybeUninit.m_variants.end(), [&](const auto& e) {
+                const auto& unmMaybeUninit = resolve.m_crate.get_union_by_path(sp, resolve.m_crate.get_lang_item_path(gen_node->span(), "maybe_uninit"));
+                value_var_idx = std::find_if(unmMaybeUninit.m_variants.begin(), unmMaybeUninit.m_variants.end(), [&](const auto& e) {
                     return e.name == "value";
-                }) - unm_MaybeUninit.m_variants.begin();
+                }) - unmMaybeUninit.m_variants.begin();
             }
             ASSERT_BUG(sp, value_var_idx == 1, "Assumption on MaybeUninit.value's variant index failed");
             // - Any variables that are saved twice need to have a static address, others can share?
@@ -2810,10 +2810,10 @@ namespace {
                         std::make_pair(
                             idx,
                             std::vector<MIR::LValue::Wrapper>{
-                                ::MIR::LValue::Wrapper::new_Field(0),
-                                ::MIR::LValue::Wrapper::new_Downcast(value_var_idx), // MaybeUninit.value
-                                ::MIR::LValue::Wrapper::new_Field(0),                // ManuallyDrop.value
-                                ::MIR::LValue::Wrapper::new_Field(field_idx)
+                                ::MIR::LValue::Wrapper::newField(0),
+                                ::MIR::LValue::Wrapper::newDowncast(value_var_idx), // MaybeUninit.value
+                                ::MIR::LValue::Wrapper::newField(0),                // ManuallyDrop.value
+                                ::MIR::LValue::Wrapper::newField(field_idx)
                             }
                         )
                     );
@@ -2859,10 +2859,10 @@ namespace {
                     if (lv.m_root.is_Local()) {
                         auto it = m_mappings.find(lv.m_root.as_Local());
                         if (it != m_mappings.end()) {
-                            lv.m_root = ::MIR::LValue::Storage::new_Argument(0);
+                            lv.m_root = ::MIR::LValue::Storage::newArgument(0);
                             auto dit = lv.m_wrappers.begin();
-                            dit = lv.m_wrappers.insert(dit, ::MIR::LValue::Wrapper::new_Field(0)) + 1; // Pin.ptr
-                            dit = lv.m_wrappers.insert(dit, ::MIR::LValue::Wrapper::new_Deref()) + 1;  // *
+                            dit = lv.m_wrappers.insert(dit, ::MIR::LValue::Wrapper::newField(0)) + 1; // Pin.ptr
+                            dit = lv.m_wrappers.insert(dit, ::MIR::LValue::Wrapper::newDeref()) + 1;  // *
                             dit = lv.m_wrappers.insert(dit, it->second.begin(), it->second.end()) + 1;
                             DEBUG("BB" << bb_idx << "/" << FMT_CB(os, if (stmt_idx == ~0u) { os << "TERM"; } else { os << stmt_idx; }) << " > " << lv);
                         }
@@ -2882,13 +2882,13 @@ namespace {
 
                 bool visit_stmt(::MIR::Statement& stmt) override {
                     auto get_drop_flags_slot = [this]() -> MIR::LValue {
-                        ::MIR::LValue slot = ::MIR::LValue::new_Argument(0);
-                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));                  // Pin.ptr
-                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Deref());                   // *
-                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));                  // .0
-                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Downcast(1));               // .value (From MaybeUninit)
-                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));                  // .value (From ManuallyDrop)
-                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(m_drop_flags_field)); // .drop_flags
+                        ::MIR::LValue slot = ::MIR::LValue::newArgument(0);
+                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                  // Pin.ptr
+                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newDeref());                   // *
+                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                  // .0
+                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newDowncast(1));               // .value (From MaybeUninit)
+                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                  // .value (From ManuallyDrop)
+                        slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(m_drop_flags_field)); // .drop_flags
                         return slot;
                     };
                     if (auto* s = stmt.opt_SetDropFlag()) {
@@ -2938,13 +2938,13 @@ namespace {
                         this->stmt_idx = ~0u;
                         if (auto* s = bb.terminator.opt_Drop()) {
                             if (m_drop_flag_mapping.count(s->flag_idx) != 0) {
-                                auto slot = ::MIR::LValue::new_Argument(0);
-                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));
-                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Deref());
-                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));
-                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Downcast(1));
-                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(0));
-                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::new_Field(m_drop_flags_field));
+                                auto slot = ::MIR::LValue::newArgument(0);
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(0));
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newDeref());
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(0));
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newDowncast(1));
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(0));
+                                slot.m_wrappers.push_back(::MIR::LValue::Wrapper::newField(m_drop_flags_field));
                                 m_new_statements.push_back(::MIR::Statement::make_LoadDropFlag({
                                     s->flag_idx,
                                     std::move(slot),
@@ -3153,7 +3153,7 @@ struct ArmCode {
 typedef ::std::vector<PatternRuleset> t_arm_rules;
 
 void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
-int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb);
+int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb);
 void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIR::TypeData* match_ty, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arms_code, ::MIR::BasicBlockId first_cmp_block);
 void MIRLowerHIRMatchDecisionTree(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, t_arm_rules arm_rules, ::std::vector<ArmCode> arm_code, ::MIR::BasicBlockId first_cmp_block);
 
@@ -3484,7 +3484,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMa
                 // Assign the temporary with a borrow of the other slot
                 builder.push_stmt_assign(sp, tmp.clone(), ::MIR::RValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
                 // And set an alias to point to `*temp`
-                builder.add_variable_alias(sp, b.binding->m_slot, ::HIR::PatternBinding::Type::Move, ::MIR::LValue::new_Deref(std::move(tmp)));
+                builder.add_variable_alias(sp, b.binding->m_slot, ::HIR::PatternBinding::Type::Move, ::MIR::LValue::newDeref(std::move(tmp)));
             }
 
             // Require that either there's no guards, or that there's only one rule
@@ -3555,7 +3555,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMa
                             }
 
                             ASSERT_BUG(c.val->span(), builder.block_active(), "Block not active");
-                            MIR_LowerHIR_Match_Simple__GeneratePattern(builder, c.val->span(), sr.m_rules.data(), sr.m_rules.size(), c.val->m_res_type, match_cond_val, 0, local_false);
+                            MIRLowerHIRMatchSimpleGeneratePattern(builder, c.val->span(), sr.m_rules.data(), sr.m_rules.size(), c.val->m_res_type, match_cond_val, 0, local_false);
                             ends.push_back(std::make_pair(builder.pause_cur_block(), &sr));
                             builder.set_cur_block(local_false);
                             local_false_used = true;
@@ -3643,12 +3643,12 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMa
                                 tmp2 = builder.new_temporary(final_ty);
                                 binding_temps_alt[j] = tmp2.as_Local();
                             } else {
-                                tmp2 = ::MIR::LValue::new_Local(binding_temps_alt[j]);
+                                tmp2 = ::MIR::LValue::newLocal(binding_temps_alt[j]);
                             }
                             builder.push_stmt_assign(sp, tmp2.clone(), ::MIR::RValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
                             val = std::move(tmp2);
                         }
-                        builder.push_stmt_assign(sp, ::MIR::LValue::new_Local(binding_temps[j]), ::MIR::RValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                        builder.push_stmt_assign(sp, ::MIR::LValue::newLocal(binding_temps[j]), ::MIR::RValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
                     }
                     builder.insert_cloned(sp, guard_code, mapper);
                     ASSERT_BUG(sp, !builder.block_active(), "Diverging guard clone remained reachable");
@@ -3746,12 +3746,12 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMa
                             tmp2 = builder.new_temporary(final_ty);
                             binding_temps_alt[j] = tmp2.as_Local();
                         } else {
-                            tmp2 = ::MIR::LValue::new_Local(binding_temps_alt[j]);
+                            tmp2 = ::MIR::LValue::newLocal(binding_temps_alt[j]);
                         }
                         builder.push_stmt_assign(sp, tmp2.clone(), ::MIR::RValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
                         val = std::move(tmp2);
                     }
-                    builder.push_stmt_assign(sp, ::MIR::LValue::new_Local(binding_temps[j]), ::MIR::RValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
+                    builder.push_stmt_assign(sp, ::MIR::LValue::newLocal(binding_temps[j]), ::MIR::RValue::make_Borrow({::HIR::BorrowType::Shared, false, std::move(val)}));
                 }
                 // Clone the guard contents with updated block references
                 builder.insert_cloned(sp, guard_code, mapper);
@@ -3782,7 +3782,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMa
 
             if (node.m_is_let_else && arm_idx + 1 == node.m_arms.size()) {
                 for (const auto temporary : ::reverse(let_else_initializer_temps)) {
-                    builder.drop_lvalue(node.span(), ::MIR::LValue::new_Local(temporary));
+                    builder.drop_lvalue(node.span(), ::MIR::LValue::newLocal(temporary));
                 }
             }
 
@@ -5506,14 +5506,14 @@ namespace {
                 TU_ARMA(Primitive, e) BUG(sp, "Destructuring a primitive");
                 TU_ARMA(Tuple, e) {
                     ASSERT_BUG(sp, idx < e.size(), "Tuple index out of range");
-                    lval = ::MIR::LValue::new_Field(mv$(lval), idx);
+                    lval = ::MIR::LValue::newField(mv$(lval), idx);
                     cur_ty = e[idx];
                 }
                 TU_ARMA(Path, e) {
                     if (idx == FIELD_DEREF) {
                         auto new_ty = resolve.is_type_owned_box(cur_ty);
                         ASSERT_BUG(sp, new_ty, "Deref on non-Box - " << cur_ty);
-                        lval = ::MIR::LValue::new_Deref(mv$(lval));
+                        lval = ::MIR::LValue::newDeref(mv$(lval));
                         cur_ty = new_ty;
                         break;
                     }
@@ -5546,13 +5546,13 @@ namespace {
                                     ASSERT_BUG(sp, idx < fields.size(), "Tuple struct index (" << idx << ") out of range (" << fields.size() << ") in " << cur_ty);
                                     const auto& fld = fields[idx];
                                     cur_ty = monomorph_to_ptr(fld.ent);
-                                    lval = ::MIR::LValue::new_Field(mv$(lval), idx);
+                                    lval = ::MIR::LValue::newField(mv$(lval), idx);
                                 }
                                 TU_ARMA(Named, fields) {
                                     ASSERT_BUG(sp, idx < fields.size(), "Tuple struct index (" << idx << ") out of range (" << fields.size() << ") in " << cur_ty);
                                     const auto& fld = fields[idx];
                                     cur_ty = monomorph_to_ptr(fld.ty);
-                                    lval = ::MIR::LValue::new_Field(mv$(lval), idx);
+                                    lval = ::MIR::LValue::newField(mv$(lval), idx);
                                 }
                     }
                         }
@@ -5560,7 +5560,7 @@ namespace {
                             ASSERT_BUG(sp, idx < pbe->m_variants.size(), "Union variant index (" << idx << ") out of range (" << pbe->m_variants.size() << ") in " << cur_ty);
                             const auto& fld = pbe->m_variants[idx];
                             cur_ty = monomorph_to_ptr(fld.ty);
-                            lval = ::MIR::LValue::new_Downcast(mv$(lval), idx);
+                            lval = ::MIR::LValue::newDowncast(mv$(lval), idx);
                         }
                         TU_ARMA(Enum, pbe) {
                             ASSERT_BUG(sp, pbe->m_data.is_Data(), "Value enum being destructured - " << cur_ty);
@@ -5569,7 +5569,7 @@ namespace {
                             const auto& var = variants[idx];
 
                             cur_ty = monomorph_to_ptr(var.type);
-                            lval = ::MIR::LValue::new_Downcast(mv$(lval), idx);
+                            lval = ::MIR::LValue::newDowncast(mv$(lval), idx);
                         }
                 }
                 }
@@ -5586,7 +5586,7 @@ namespace {
                     cur_ty = e.inner;
                     if (idx < FIELD_INDEX_MAX) {
                         ASSERT_BUG(sp, idx < e.size.as_Known(), "Index out of range");
-                        lval = ::MIR::LValue::new_Field(mv$(lval), idx);
+                        lval = ::MIR::LValue::newField(mv$(lval), idx);
                     } else {
                         idx -= FIELD_INDEX_MAX;
                         idx = FIELD_INDEX_MAX - idx;
@@ -5597,7 +5597,7 @@ namespace {
                 TU_ARMA(Slice, e) {
                     cur_ty = e.inner;
                     if (idx < FIELD_INDEX_MAX) {
-                        lval = ::MIR::LValue::new_Field(mv$(lval), idx);
+                        lval = ::MIR::LValue::newField(mv$(lval), idx);
                     } else {
                         idx -= FIELD_INDEX_MAX;
                         idx = FIELD_INDEX_MAX - idx;
@@ -5606,7 +5606,7 @@ namespace {
                         auto sub_val = ::MIR::Param(::MIR::Constant::make_Uint({U128(idx), ::HIR::CoreType::Usize}));
                         auto ofs_val = builder.lvalue_or_temp(sp, builder.resolve().m_crate.m_types.primitive(::HIR::CoreType::Usize), ::MIR::RValue::make_BinOp({mv$(len_lval), ::MIR::eBinOp::SUB, mv$(sub_val)}));
                         // 2. Return _Index with that value
-                        lval = ::MIR::LValue::new_Index(mv$(lval), ofs_val.as_Local());
+                        lval = ::MIR::LValue::newIndex(mv$(lval), ofs_val.as_Local());
                     }
                 }
                 TU_ARMA(Borrow, e) {
@@ -5614,7 +5614,7 @@ namespace {
                     //DEBUG(i << " " << *cur_ty << " - " << cur_ty << " " << &tmp_ty);
                     cur_ty = e.inner;
                     //DEBUG(i << " " << *cur_ty);
-                    lval = ::MIR::LValue::new_Deref(mv$(lval));
+                    lval = ::MIR::LValue::newDeref(mv$(lval));
                 }
                 TU_ARMA(Pointer, e) {
                     ERROR(sp, E0000, "Attempting to match over a pointer");
@@ -5662,7 +5662,7 @@ void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, ::HIR::Expr
         // 1. Check
         // - If the ruleset is empty, this is a _ arm over a value
         if (pat_rule.m_rules.size() > 0) {
-            MIR_LowerHIR_Match_Simple__GeneratePattern(builder, arm.m_code->span(), pat_rule.m_rules.data(), pat_rule.m_rules.size(), node.m_value->m_res_type, match_val, 0, next_pattern_bb);
+            MIRLowerHIRMatchSimpleGeneratePattern(builder, arm.m_code->span(), pat_rule.m_rules.data(), pat_rule.m_rules.size(), node.m_value->m_res_type, match_val, 0, next_pattern_bb);
         }
         builder.end_block(::MIR::Terminator::make_Goto(rc.entry));
 
@@ -5684,7 +5684,7 @@ void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, ::HIR::Expr
     builder.end_block(::MIR::Terminator::make_Unreachable({}));
 }
 
-int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb) {
+int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int num_rules, const ::HIR::TypeData* top_ty, const ::MIR::LValue& top_val, unsigned int field_path_ofs, ::MIR::BasicBlockId fail_bb) {
     TRACE_FUNCTION_F("top_ty = " << top_ty << ", rules = [" << FMT_CB(os, for (size_t i = 0; i < num_rules; i++) os << rules[i] << ",";));
     for (unsigned int rule_idx = 0; rule_idx < num_rules; rule_idx++) {
         const auto& rule = rules[rule_idx];
@@ -5971,7 +5971,7 @@ int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& 
                             const auto& var_ty_m = (monomorphise_type_needed(var_ty) ? tmp = monomorph(var_ty) : var_ty);
 
                             // Recurse with the new ruleset
-                            MIR_LowerHIR_Match_Simple__GeneratePattern(builder, sp, re.sub_rules.data(), re.sub_rules.size(), var_ty_m, ::MIR::LValue::new_Downcast(val.clone(), var_idx), rule.field_path.size() + 1, fail_bb);
+                            MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, re.sub_rules.data(), re.sub_rules.size(), var_ty_m, ::MIR::LValue::newDowncast(val.clone(), var_idx), rule.field_path.size() + 1, fail_bb);
                         }
                     } // TypePathBinding::Enum
             }
@@ -6018,7 +6018,7 @@ int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& 
                     builder.set_cur_block(len_succ_bb);
 
                     // Recurse checking values
-                    MIR_LowerHIR_Match_Simple__GeneratePattern(builder, sp, re.sub_rules.data(), re.sub_rules.size(), top_ty, top_val, field_path_ofs, fail_bb);
+                    MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, re.sub_rules.data(), re.sub_rules.size(), top_ty, top_val, field_path_ofs, fail_bb);
                 } else if (rule.is_SplitSlice()) {
                     const auto& re = rule.as_SplitSlice();
 
@@ -6031,9 +6031,9 @@ int MIR_LowerHIR_Match_Simple__GeneratePattern(MirBuilder& builder, const Span& 
                     builder.end_block(::MIR::Terminator::make_If({mv$(cmp_lval), fail_bb, len_succ_bb})); // if len < test : FAIL
                     builder.set_cur_block(len_succ_bb);
 
-                    MIR_LowerHIR_Match_Simple__GeneratePattern(builder, sp, re.leading.data(), re.leading.size(), top_ty, top_val, field_path_ofs, fail_bb);
+                    MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, re.leading.data(), re.leading.size(), top_ty, top_val, field_path_ofs, fail_bb);
 
-                    MIR_LowerHIR_Match_Simple__GeneratePattern(builder, sp, re.trailing.data(), re.trailing.size(), top_ty, top_val, field_path_ofs, fail_bb);
+                    MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, re.trailing.data(), re.trailing.size(), top_ty, top_val, field_path_ofs, fail_bb);
                 } else {
                     BUG(sp, "Invalid rule type for slice - " << rule);
                 }
@@ -6208,9 +6208,9 @@ public:
 
     void gen_for_slice(t_rules_subset rules, size_t ofs, ::MIR::BasicBlockId default_arm);
     void gen_dispatch(const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk);
-    void gen_dispatch__primitive(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk);
-    void gen_dispatch__enum(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk);
-    void gen_dispatch__slice(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk);
+    void genDispatchPrimitive(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk);
+    void genDispatchEnum(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk);
+    void genDispatchSlice(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk);
 
     void gen_dispatch_range(const field_path_t& field_path, const ::MIR::Constant& first, const ::MIR::Constant& last, bool is_inclusive, ::MIR::BasicBlockId def_blk);
     void gen_dispatch_splitslice(const field_path_t& field_path, const PatternRule::Data_SplitSlice& e, ::MIR::BasicBlockId def_blk);
@@ -6541,7 +6541,7 @@ void MatchGenGrouped::gen_dispatch(const ::std::vector<t_rules_subset>& rules, s
             BUG(sp, "Matching over !");
         }
         TU_ARMA(Primitive, te) {
-            this->gen_dispatch__primitive(mv$(ty), mv$(val), rules, ofs, arm_targets, def_blk);
+            this->genDispatchPrimitive(mv$(ty), mv$(val), rules, ofs, arm_targets, def_blk);
         }
         TU_ARMA(Path, te) {
             // Matching over a path can only happen with an enum.
@@ -6575,7 +6575,7 @@ void MatchGenGrouped::gen_dispatch(const ::std::vector<t_rules_subset>& rules, s
                     TODO(sp, "Match over ExternType - " << ty);
                 }
                 TU_ARM(te.binding, Enum, pbe) {
-                    this->gen_dispatch__enum(mv$(ty), mv$(val), rules, ofs, arm_targets, def_blk);
+                    this->genDispatchEnum(mv$(ty), mv$(val), rules, ofs, arm_targets, def_blk);
                 }
         }
         }
@@ -6617,7 +6617,7 @@ void MatchGenGrouped::gen_dispatch(const ::std::vector<t_rules_subset>& rules, s
             m_builder.end_block(::MIR::Terminator::make_SwitchValue({mv$(val), def_blk, mv$(targets), ::MIR::SwitchValues(mv$(values))}));
         }
         TU_ARMA(Slice, te) {
-            this->gen_dispatch__slice(mv$(ty), mv$(val), rules, ofs, arm_targets, def_blk);
+            this->genDispatchSlice(mv$(ty), mv$(val), rules, ofs, arm_targets, def_blk);
         }
         TU_ARMA(Tuple, te) {
             BUG(sp, "Match directly on tuple");
@@ -6628,7 +6628,7 @@ void MatchGenGrouped::gen_dispatch(const ::std::vector<t_rules_subset>& rules, s
         TU_ARMA(Pointer, te) {
             auto val_usize = m_builder.new_temporary(m_builder.resolve().m_crate.m_types.primitive(HIR::CoreType::Usize));
             m_builder.push_stmt_assign(sp, val_usize.clone(), ::MIR::RValue::make_Cast({mv$(val), m_builder.resolve().m_crate.m_types.primitive(::HIR::CoreType::Usize)}));
-            this->gen_dispatch__primitive(m_builder.resolve().m_crate.m_types.primitive(HIR::CoreType::Usize), mv$(val_usize), rules, ofs, arm_targets, def_blk);
+            this->genDispatchPrimitive(m_builder.resolve().m_crate.m_types.primitive(HIR::CoreType::Usize), mv$(val_usize), rules, ofs, arm_targets, def_blk);
         }
         TU_ARMA(NamedFunction, te) {
             BUG(sp, "Attempting to match a function pointer - " << ty);
@@ -6650,7 +6650,7 @@ namespace {
     }
 }
 
-void MatchGenGrouped::gen_dispatch__primitive(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk) {
+void MatchGenGrouped::genDispatchPrimitive(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk) {
     auto te = ty->as_Primitive();
     switch (te) {
         case ::HIR::CoreType::Bool: {
@@ -6838,7 +6838,7 @@ void MatchGenGrouped::gen_dispatch__primitive(::HIR::TypeRef ty, ::MIR::LValue v
     }
 }
 
-void MatchGenGrouped::gen_dispatch__enum(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk) {
+void MatchGenGrouped::genDispatchEnum(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk) {
     TRACE_FUNCTION;
     auto& te = ty->as_Path();
     const auto& pbe = te.binding.as_Enum();
@@ -6867,7 +6867,7 @@ void MatchGenGrouped::gen_dispatch__enum(::HIR::TypeRef ty, ::MIR::LValue val, c
     m_builder.end_block(::MIR::Terminator::make_Switch({mv$(val), mv$(arms)}));
 }
 
-void MatchGenGrouped::gen_dispatch__slice(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk) {
+void MatchGenGrouped::genDispatchSlice(::HIR::TypeRef ty, ::MIR::LValue val, const ::std::vector<t_rules_subset>& rules, size_t ofs, const ::std::vector<::MIR::BasicBlockId>& arm_targets, ::MIR::BasicBlockId def_blk) {
     auto val_len = m_builder.lvalue_or_temp(sp, m_builder.resolve().m_crate.m_types.primitive(::HIR::CoreType::Usize), ::MIR::RValue::make_DstMeta({m_builder.get_ptr_to_dst(sp, val)}));
 
     // TODO: Re-sort the rules list to interleve Constant::Bytes and Slice
@@ -7110,7 +7110,7 @@ void MirBuilder::final_cleanup() {
             end_block(::MIR::Terminator::make_Unreachable({}));
         } else {
             if (has_result()) {
-                push_stmt_assign(sp, ::MIR::LValue::new_Return(), get_result(sp));
+                push_stmt_assign(sp, ::MIR::LValue::newReturn(), get_result(sp));
             }
 
             terminate_scope_early(sp, fcn_scope());
@@ -7391,7 +7391,7 @@ void MirBuilder::drop_lvalue(const Span& sp, const ::MIR::LValue& value) {
     assert(tmp_scope.is_temporary);
     tmp_scope.slots.push_back(rv);
     tmp_scope.drop_slots.push_back(ScopeDropSlot{false, rv});
-    return ::MIR::LValue::new_Local(rv);
+    return ::MIR::LValue::newLocal(rv);
 }
 
 ::MIR::LValue MirBuilder::lvalue_or_temp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val) {
@@ -7612,7 +7612,7 @@ void MirBuilder::raise_temporaries(const Span& sp, const ::MIR::LValue& val, con
     for (const auto& w : val.m_wrappers) {
         if (w.is_Index()) {
             // Raise index temporary
-            raise_temporaries(sp, ::MIR::LValue::new_Local(w.as_Index()), scope, to_above);
+            raise_temporaries(sp, ::MIR::LValue::newLocal(w.as_Index()), scope, to_above);
         }
     }
     if (!val.m_root.is_Local()) {
@@ -8023,7 +8023,7 @@ void MirBuilder::raise_all(const Span& sp, ScopeHandle source, const ScopeHandle
     ASSERT_BUG(sp, src_scope_def.data.as_Owning().is_temporary, "Rasising scopes can only be done on temporaries (source)");
     auto& src_list = src_scope_def.data.as_Owning().slots;
     for (auto idx : src_list) {
-        DEBUG("> Raising " << ::MIR::LValue::new_Local(idx));
+        DEBUG("> Raising " << ::MIR::LValue::newLocal(idx));
         assert(idx >= m_first_temp_idx);
     }
 
@@ -8242,7 +8242,7 @@ namespace {
                             is_box = builder.is_type_owned_box(ty);
                         });
                         if (is_box) {
-                            merge_state(sp, builder, ::MIR::LValue::new_Deref(lv.clone()), *ose.inner_state, *nse.inner_state);
+                            merge_state(sp, builder, ::MIR::LValue::newDeref(lv.clone()), *ose.inner_state, *nse.inner_state);
                         } else {
                             BUG(sp, "Handle MovedOut on non-Box");
                         }
@@ -8268,11 +8268,11 @@ namespace {
                         auto& ose = old_state.as_Partial();
                         if (is_enum) {
                             for (size_t i = 0; i < ose.inner_states.size(); i++) {
-                                merge_state(sp, builder, ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], nse.inner_states[i]);
+                                merge_state(sp, builder, ::MIR::LValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], nse.inner_states[i]);
                             }
                         } else {
                             for (unsigned int i = 0; i < ose.inner_states.size(); i++) {
-                                merge_state(sp, builder, ::MIR::LValue::new_Field(lv.clone(), i), ose.inner_states[i], nse.inner_states[i]);
+                                merge_state(sp, builder, ::MIR::LValue::newField(lv.clone(), i), ose.inner_states[i], nse.inner_states[i]);
                             }
                         }
                     }
@@ -8330,7 +8330,7 @@ namespace {
                         });
 
                         if (is_box) {
-                            merge_state(sp, builder, ::MIR::LValue::new_Deref(lv.clone()), *ose.inner_state, *nse.inner_state);
+                            merge_state(sp, builder, ::MIR::LValue::newDeref(lv.clone()), *ose.inner_state, *nse.inner_state);
                         } else {
                             BUG(sp, "MovedOut on non-Box");
                         }
@@ -8359,16 +8359,16 @@ namespace {
                         }
                         auto& ose = old_state.as_Partial();
                         if (is_enum) {
-                            auto ilv = ::MIR::LValue::new_Downcast(lv.clone(), 0);
+                            auto ilv = ::MIR::LValue::newDowncast(lv.clone(), 0);
                             for (size_t i = 0; i < ose.inner_states.size(); i++) {
                                 merge_state(sp, builder, ilv, ose.inner_states[i], nse.inner_states[i]);
-                                ilv.inc_Downcast();
+                                ilv.incDowncast();
                             }
                         } else {
-                            auto ilv = ::MIR::LValue::new_Field(lv.clone(), 0);
+                            auto ilv = ::MIR::LValue::newField(lv.clone(), 0);
                             for (unsigned int i = 0; i < ose.inner_states.size(); i++) {
                                 merge_state(sp, builder, ilv, ose.inner_states[i], nse.inner_states[i]);
-                                ilv.inc_Field();
+                                ilv.incField();
                             }
                         }
                     }
@@ -8408,7 +8408,7 @@ namespace {
                         });
 
                         if (is_box) {
-                            merge_state(sp, builder, ::MIR::LValue::new_Deref(lv.clone()), *old_state.as_MovedOut().inner_state, *new_state.as_MovedOut().inner_state);
+                            merge_state(sp, builder, ::MIR::LValue::newDeref(lv.clone()), *old_state.as_MovedOut().inner_state, *new_state.as_MovedOut().inner_state);
                         } else {
                             BUG(sp, "MovedOut on non-Box");
                         }
@@ -8451,11 +8451,11 @@ namespace {
                         // Propagate to inners
                         if (is_enum) {
                             for (size_t i = 0; i < ose.inner_states.size(); i++) {
-                                merge_state(sp, builder, ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], nse.inner_states[i]);
+                                merge_state(sp, builder, ::MIR::LValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], nse.inner_states[i]);
                             }
                         } else {
                             for (unsigned int i = 0; i < ose.inner_states.size(); i++) {
-                                merge_state(sp, builder, ::MIR::LValue::new_Field(lv.clone(), i), ose.inner_states[i], nse.inner_states[i]);
+                                merge_state(sp, builder, ::MIR::LValue::newField(lv.clone(), i), ose.inner_states[i], nse.inner_states[i]);
                             }
                         }
                         return;
@@ -8487,7 +8487,7 @@ namespace {
                             builder.push_stmt_set_dropflag_val(sp, ose.outer_flag, is_valid);
                         }
 
-                        merge_state(sp, builder, ::MIR::LValue::new_Deref(lv.clone()), *ose.inner_state, new_state);
+                        merge_state(sp, builder, ::MIR::LValue::newDeref(lv.clone()), *ose.inner_state, new_state);
                         return;
                     }
                     case VarState::TAG_Optional: {
@@ -8505,7 +8505,7 @@ namespace {
                             // In this arm, assign the outer state to this drop flag
                             builder.push_stmt_set_dropflag_other(sp, ose.outer_flag, nse);
                         }
-                        merge_state(sp, builder, ::MIR::LValue::new_Deref(lv.clone()), *ose.inner_state, new_state);
+                        merge_state(sp, builder, ::MIR::LValue::newDeref(lv.clone()), *ose.inner_state, new_state);
                         return;
                     }
                     case VarState::TAG_MovedOut: {
@@ -8516,7 +8516,7 @@ namespace {
                         } else {
                             builder.push_stmt_set_dropflag_other(sp, ose.outer_flag, nse.outer_flag);
                         }
-                        merge_state(sp, builder, ::MIR::LValue::new_Deref(lv.clone()), *ose.inner_state, *nse.inner_state);
+                        merge_state(sp, builder, ::MIR::LValue::newDeref(lv.clone()), *ose.inner_state, *nse.inner_state);
                         return;
                     }
                     case VarState::TAG_Partial:
@@ -8548,11 +8548,11 @@ namespace {
                                 merge_outer_validity(sp, builder, ose.outer_flag, new_state.as_Optional());
                             }
                             for (size_t i = 0; i < ose.inner_states.size(); i++) {
-                                merge_state(sp, builder, ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], new_state);
+                                merge_state(sp, builder, ::MIR::LValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], new_state);
                             }
                         } else {
                             for (unsigned int i = 0; i < ose.inner_states.size(); i++) {
-                                merge_state(sp, builder, ::MIR::LValue::new_Field(lv.clone(), i), ose.inner_states[i], new_state);
+                                merge_state(sp, builder, ::MIR::LValue::newField(lv.clone(), i), ose.inner_states[i], new_state);
                             }
                         }
                         return;
@@ -8568,11 +8568,11 @@ namespace {
                                 merge_outer_validity(sp, builder, ose.outer_flag, nse.outer_flag);
                             }
                             for (size_t i = 0; i < ose.inner_states.size(); i++) {
-                                merge_state(sp, builder, ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], nse.inner_states[i]);
+                                merge_state(sp, builder, ::MIR::LValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)), ose.inner_states[i], nse.inner_states[i]);
                             }
                         } else {
                             for (unsigned int i = 0; i < ose.inner_states.size(); i++) {
-                                merge_state(sp, builder, ::MIR::LValue::new_Field(lv.clone(), i), ose.inner_states[i], nse.inner_states[i]);
+                                merge_state(sp, builder, ::MIR::LValue::newField(lv.clone(), i), ose.inner_states[i], nse.inner_states[i]);
                             }
                         }
                     }
@@ -8599,9 +8599,9 @@ void MirBuilder::terminate_loop_early(const Span& sp, ScopeType::Data_Loop& sd_l
                 merge_state(sp, *this, val_cb(idx), old_state, get_slot_state(sp, idx, type));
             }
         };
-        merge_list(sd_loop.changed_slots, sd_loop.exit_state.states, ::MIR::LValue::new_Local, SlotType::Local);
+        merge_list(sd_loop.changed_slots, sd_loop.exit_state.states, ::MIR::LValue::newLocal, SlotType::Local);
         merge_list(sd_loop.changed_args, sd_loop.exit_state.arg_states, [](auto v) {
-            return ::MIR::LValue::new_Argument(v);
+            return ::MIR::LValue::newArgument(v);
         }, SlotType::Argument);
     } else {
         auto init_list = [sp, this](const auto& changed, auto& exit_states, auto type) {
@@ -8623,7 +8623,7 @@ void MirBuilder::merge_split_lists(const Span& sp, const ScopeHandle& handle, co
     for (const auto& ent : states) {
         if (end_states.count(ent.first) == 0) {
             auto s = this->get_slot_state(sp, ent.first, type, &handle).clone();
-            DEBUG("Add from parent: " << (type == SlotType::Local ? ::MIR::LValue::new_Local(ent.first) : ::MIR::LValue::new_Argument(ent.first)) << " = " << s);
+            DEBUG("Add from parent: " << (type == SlotType::Local ? ::MIR::LValue::newLocal(ent.first) : ::MIR::LValue::newArgument(ent.first)) << " = " << s);
             end_states.insert(::std::make_pair(ent.first, std::move(s)));
         }
     }
@@ -8636,7 +8636,7 @@ void MirBuilder::merge_split_lists(const Span& sp, const ScopeHandle& handle, co
         auto it = states.find(idx);
         const auto& src_state = (it != states.end() ? it->second : this->get_slot_state(sp, idx, type, &handle));
 
-        auto lv = (type == SlotType::Local ? ::MIR::LValue::new_Local(idx) : ::MIR::LValue::new_Argument(idx));
+        auto lv = (type == SlotType::Local ? ::MIR::LValue::newLocal(idx) : ::MIR::LValue::newArgument(idx));
         merge_state(sp, *this, mv$(lv), out_state, src_state);
     }
 }
@@ -8776,14 +8776,14 @@ void MirBuilder::complete_scope(ScopeDef& sd) {
             for (auto& ent : end_state.states) {
                 auto& vs = builder.get_slot_state_mut(sp, ent.first, SlotType::Local);
                 if (vs != ent.second) {
-                    DEBUG(::MIR::LValue::new_Local(ent.first) << " " << vs << " => " << ent.second);
+                    DEBUG(::MIR::LValue::newLocal(ent.first) << " " << vs << " => " << ent.second);
                     vs = ::std::move(ent.second);
                 }
             }
             for (auto& ent : end_state.arg_states) {
                 auto& vs = builder.get_slot_state_mut(sp, ent.first, SlotType::Argument);
                 if (vs != ent.second) {
-                    DEBUG(::MIR::LValue::new_Argument(ent.first) << " " << vs << " => " << ent.second);
+                    DEBUG(::MIR::LValue::newArgument(ent.first) << " " << vs << " => " << ent.second);
                     vs = ::std::move(ent.second);
                 }
             }
@@ -9220,7 +9220,7 @@ void MirBuilder::drop_value_from_state(const Span& sp, VarState& vs, ::MIR::LVal
     }
             );
             if (is_box) {
-                drop_value_from_state(sp, *vse.inner_state, ::MIR::LValue::new_Deref(lv.clone()));
+                drop_value_from_state(sp, *vse.inner_state, ::MIR::LValue::newDeref(lv.clone()));
                 const auto outer_flag = vse.outer_flag;
                 vs = VarState::make_Invalid(InvalidType::Moved);
                 push_stmt_drop_shallow(sp, mv$(lv), outer_flag);
@@ -9265,7 +9265,7 @@ void MirBuilder::drop_value_from_state(const Span& sp, VarState& vs, ::MIR::LVal
                     }
                     set_cur_block(cleanup_blocks[i]);
                     vs = original_state.clone();
-                    drop_value_from_state(sp, vs.as_Partial().inner_states[i], ::MIR::LValue::new_Downcast(lv.clone(), static_cast<unsigned int>(i)));
+                    drop_value_from_state(sp, vs.as_Partial().inner_states[i], ::MIR::LValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)));
                     vs = VarState::make_Invalid(InvalidType::Moved);
                     end_block(::MIR::Terminator::make_Goto(next_bb));
                 }
@@ -9276,7 +9276,7 @@ void MirBuilder::drop_value_from_state(const Span& sp, VarState& vs, ::MIR::LVal
                 vs = VarState::make_Invalid(InvalidType::Moved);
             } else {
                 for (size_t i = 0; i < vse.inner_states.size(); i++) {
-                    drop_value_from_state(sp, vse.inner_states[i], ::MIR::LValue::new_Field(lv.clone(), static_cast<unsigned int>(i)));
+                    drop_value_from_state(sp, vse.inner_states[i], ::MIR::LValue::newField(lv.clone(), static_cast<unsigned int>(i)));
                 }
                 vs = VarState::make_Invalid(InvalidType::Moved);
             }
@@ -9293,8 +9293,8 @@ void MirBuilder::drop_scope_values(ScopeDef& sd) {
          for (const auto& slot : ::reverse(e.drop_slots)) {
              const auto slot_type = slot.is_argument ? SlotType::Argument : SlotType::Local;
              auto lvalue = slot.is_argument
-                 ? ::MIR::LValue::new_Argument(slot.index)
-                 : ::MIR::LValue::new_Local(slot.index);
+                 ? ::MIR::LValue::newArgument(slot.index)
+                 : ::MIR::LValue::newLocal(slot.index);
              if (m_building_cleanup) {
                  if (m_unwind_consumed_value && lvalue == *m_unwind_consumed_value) {
                      continue;
@@ -9551,9 +9551,9 @@ const MirBuilder::var_alias_t* MirBuilder::get_variable_alias(const Span& sp, un
 ::MIR::LValue MirBuilder::get_variable(const Span& sp, unsigned idx) const {
     auto it = m_var_arg_mappings.find(idx);
     if (it != m_var_arg_mappings.end()) {
-        return ::MIR::LValue::new_Argument(it->second);
+        return ::MIR::LValue::newArgument(it->second);
     }
-    return ::MIR::LValue::new_Local(idx);
+    return ::MIR::LValue::newLocal(idx);
 }
 ::MIR::LValue MirBuilder::get_rval_in_if_cond(const Span& sp, ::MIR::RValue val) {
     push_stmt_assign(sp, m_if_cond_lval.clone(), mv$(val));

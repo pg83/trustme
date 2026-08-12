@@ -994,9 +994,9 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         m_try_stack.pop_back();
 
         auto core_crate = crate.m_ext_cratename_core;
-        auto path_Try = get_path(core_crate, "ops", "Try");
-        auto path_Try_from_output = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Try, {::AST::PathNode(RcString::new_interned("from_output"))});
-        auto ok_node = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(mv$(path_Try_from_output), ::make_vec1(mv$(node.m_inner))));
+        auto pathTry = get_path(core_crate, "ops", "Try");
+        auto pathTryFromOutput = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), pathTry, {::AST::PathNode(RcString::new_interned("from_output"))});
+        auto ok_node = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(mv$(pathTryFromOutput), ::make_vec1(mv$(node.m_inner))));
         auto break_node = AST::ExprNodeP(new AST::ExprNodeFlow(AST::ExprNodeFlow::BREAK, loop_name, mv$(ok_node)));
         this->replacement = AST::ExprNodeP(new AST::ExprNodeLoop(loop_name, mv$(break_node)));
     }
@@ -1035,12 +1035,12 @@ struct CExpandExpr: public ::AST::NodeVisitor {
 
         if (node.m_type == AST::ExprNodeFlow::YEET) {
             auto core_crate = crate.m_ext_cratename_core;
-            auto path_ops_Yeet = get_path(core_crate, "ops", "Yeet");
-            auto path_FromResidual_from_residual = get_path(core_crate, "ops", "FromResidual", "from_residual");
+            auto pathOpsYeet = get_path(core_crate, "ops", "Yeet");
+            auto pathFromResidualFromResidual = get_path(core_crate, "ops", "FromResidual", "from_residual");
 
-            auto v = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(path_ops_Yeet), ::make_vec1(std::move(node.m_value))));
+            auto v = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(pathOpsYeet), ::make_vec1(std::move(node.m_value))));
             v->set_span(node.span());
-            v = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(path_FromResidual_from_residual), ::make_vec1(std::move(v))));
+            v = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(pathFromResidualFromResidual), ::make_vec1(std::move(v))));
             v->set_span(node.span());
             replacement = ::AST::ExprNodeP(new ::AST::ExprNodeFlow(
                 (m_try_stack.empty() ? ::AST::ExprNodeFlow::RETURN : ::AST::ExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
@@ -1654,16 +1654,16 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             //auto it = crate.m_lang_items.find("try");
             //ASSERT_BUG(node.span(), it != crate.m_lang_items.end(), "Can't find the `try` lang item");
             //auto path_Try = it->second;
-            auto path_Try = get_path(core_crate, "ops", "Try");
+            auto pathTry = get_path(core_crate, "ops", "Try");
             static const RcString rcstring_v = RcString::new_interned("v");
             static const RcString rcstring_r = RcString::new_interned("r");
             // TryV2
             {
-                auto path_Try_branch = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), path_Try, {::AST::PathNode(RcString::new_interned("branch"))});
+                auto path_Try_branch = ::AST::Path::new_ufcs_trait(::TypeRef(node.span()), pathTry, {::AST::PathNode(RcString::new_interned("branch"))});
                 // Not a lang item
                 auto path_ControlFlow_Continue = get_path(core_crate, "ops", "ControlFlow", "Continue");
                 auto path_ControlFlow_Break = get_path(core_crate, "ops", "ControlFlow", "Break");
-                auto path_FromResidual_from_residual = get_path(core_crate, "ops", "FromResidual", "from_residual");
+                auto pathFromResidualFromResidual = get_path(core_crate, "ops", "FromResidual", "from_residual");
 
                 ::std::vector<::AST::ExprNodeMatchArm> arms;
                 // `Continue(v) => v,`
@@ -1676,7 +1676,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                         ::AST::ExprNodeP(new ::AST::ExprNodeFlow(
                             (m_try_stack.empty() ? ::AST::ExprNodeFlow::RETURN : ::AST::ExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
                             (m_try_stack.empty() ? RcString("") : m_try_stack.back()),
-                            ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(path_FromResidual_from_residual), ::make_vec1(::AST::ExprNodeP(new ::AST::ExprNodeNamedValue(::AST::Path(rcstring_r))))))
+                            ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(pathFromResidualFromResidual), ::make_vec1(::AST::ExprNodeP(new ::AST::ExprNodeNamedValue(::AST::Path(rcstring_r))))))
                         ))
                     )
                 );

@@ -529,7 +529,7 @@ Token Lexer::getTokenInt() {
                 }
 
                 if (ch == 'r') {
-                    return this->getTokenInt_RawString(is_byte);
+                    return this->getTokenIntRawString(is_byte);
                 } else {
                     assert(is_byte);
 
@@ -570,13 +570,13 @@ Token Lexer::getTokenInt() {
                     } else {
                         assert(is_byte);
                         this->ungetc();
-                        return this->getTokenInt_Identifier('b');
+                        return this->getTokenIntIdentifier('b');
                     }
                 }
             }
             // Symbols
             else if (issym(ch)) {
-                return this->getTokenInt_Identifier(ch);
+                return this->getTokenIntIdentifier(ch);
             } else {
                 throw ParseError::BadChar(*this, ch.v);
             }
@@ -750,7 +750,7 @@ Token Lexer::getTokenInt() {
     throw "Fell off the end of getTokenInt";
 }
 
-Token Lexer::getTokenInt_RawString(bool is_byte) {
+Token Lexer::getTokenIntRawString(bool is_byte) {
     // Raw string (possibly byte)
     Codepoint ch = this->getc();
     unsigned int hashes = 0;
@@ -763,14 +763,14 @@ Token Lexer::getTokenInt_RawString(bool is_byte) {
         if (hashes == 0) {
             this->ungetc(); // Unget the not '"'
             if (is_byte) {
-                return this->getTokenInt_Identifier('b', 'r');
+                return this->getTokenIntIdentifier('b', 'r');
             } else {
-                return this->getTokenInt_Identifier('r');
+                return this->getTokenIntIdentifier('r');
             }
         }
         // Raw identifier
         else if (hashes == 1) {
-            return this->getTokenInt_Identifier(ch, Codepoint(), /*parse_reserved_word*/ false);
+            return this->getTokenIntIdentifier(ch, Codepoint(), /*parse_reserved_word*/ false);
         } else {
             throw ParseError::Generic(*this, "Expected '\"' after hashes following `r`");
         }
@@ -818,7 +818,7 @@ Token Lexer::getTokenInt_RawString(bool is_byte) {
     return Token(is_byte ? TOK_BYTESTRING : TOK_STRING, mv$(val), realGetHygiene());
 }
 
-Token Lexer::getTokenInt_Identifier(Codepoint leader, Codepoint leader2, bool parse_reserved_word) {
+Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool parse_reserved_word) {
     ::std::string str;
     if (leader2 != '\0') {
         str += leader;

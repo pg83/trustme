@@ -41,15 +41,15 @@ namespace MIR {
 
             ~Storage();
 
-            static Storage new_Return() {
+            static Storage newReturn() {
                 return Storage(0 << 2);
             }
 
-            static Storage new_Argument(unsigned idx);
+            static Storage newArgument(unsigned idx);
 
-            static Storage new_Local(unsigned idx);
+            static Storage newLocal(unsigned idx);
 
-            static Storage new_Static(::HIR::Path p);
+            static Storage newStatic(::HIR::Path p);
 
             Storage clone() const;
 
@@ -110,19 +110,19 @@ namespace MIR {
             Wrapper(uint32_t v);
 
         public:
-            static Wrapper new_Deref() {
+            static Wrapper newDeref() {
                 return Wrapper(0);
             }
 
-            static Wrapper new_Field(unsigned idx) {
+            static Wrapper newField(unsigned idx) {
                 return Wrapper((idx << 2) | 1);
             }
 
-            static Wrapper new_Downcast(unsigned idx) {
+            static Wrapper newDowncast(unsigned idx) {
                 return Wrapper((idx << 2) | 2);
             }
 
-            static Wrapper new_Index(unsigned idx);
+            static Wrapper newIndex(unsigned idx);
 
             uint32_t get_inner() const {
                 return val;
@@ -172,9 +172,9 @@ namespace MIR {
             // TODO: Should this return a LValue?
             unsigned as_Index() const;
 
-            void inc_Field();
+            void incField();
 
-            void inc_Downcast();
+            void incDowncast();
 
             Ordering ord(const Wrapper& x) const {
                 return ::ord(val, x.val);
@@ -196,29 +196,29 @@ namespace MIR {
 
         LValue(Storage root, ::std::vector<Wrapper> wrappers);
 
-        static LValue new_Return() {
-            return LValue(Storage::new_Return(), {});
+        static LValue newReturn() {
+            return LValue(Storage::newReturn(), {});
         }
 
-        static LValue new_Argument(unsigned idx) {
-            return LValue(Storage::new_Argument(idx), {});
+        static LValue newArgument(unsigned idx) {
+            return LValue(Storage::newArgument(idx), {});
         }
 
-        static LValue new_Local(unsigned idx) {
-            return LValue(Storage::new_Local(idx), {});
+        static LValue newLocal(unsigned idx) {
+            return LValue(Storage::newLocal(idx), {});
         }
 
-        static LValue new_Static(::HIR::Path p) {
-            return LValue(Storage::new_Static(::std::move(p)), {});
+        static LValue newStatic(::HIR::Path p) {
+            return LValue(Storage::newStatic(::std::move(p)), {});
         }
 
-        static LValue new_Deref(LValue lv);
+        static LValue newDeref(LValue lv);
 
-        static LValue new_Field(LValue lv, unsigned idx);
+        static LValue newField(LValue lv, unsigned idx);
 
-        static LValue new_Downcast(LValue lv, unsigned idx);
+        static LValue newDowncast(LValue lv, unsigned idx);
 
-        static LValue new_Index(LValue lv, unsigned local_idx);
+        static LValue newIndex(LValue lv, unsigned local_idx);
 
         bool is_Return() const {
             return m_wrappers.empty() && m_root.is_Return();
@@ -244,9 +244,9 @@ namespace MIR {
 
         unsigned as_Field() const;
 
-        void inc_Field();
+        void incField();
 
-        void inc_Downcast();
+        void incDowncast();
 
         Ordering ord(const LValue& x) const;
 

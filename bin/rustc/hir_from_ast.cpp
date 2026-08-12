@@ -26,9 +26,9 @@
 ::HIR::TraitPath LowerHIRTraitPath(const Span& sp, const ::AST::Path& path, const AST::HigherRankedBounds& hrbs, bool allow_bounds = false, AST::BoundConstness constness = AST::BoundConstness::Never);
 ::HIR::GenericParams LowerHIRHigherRankedBounds(const AST::HigherRankedBounds& hrbs);
 
-::HIR::SimplePath path_Sized;
-::HIR::SimplePath path_PointeeSized;
-::HIR::SimplePath path_MetadataSized;
+::HIR::SimplePath pathSized;
+::HIR::SimplePath pathPointeeSized;
+::HIR::SimplePath pathMetadataSized;
 RcString g_core_crate;
 RcString g_crate_name;
 ::HIR::Crate* g_crate_ptr = nullptr;
@@ -107,7 +107,7 @@ HIR::LifetimeRef LowerHIRLifetimeRef(const ::AST::LifetimeRef& r) {
                 bound_trait_path.m_trait_bounds.clear();
 
                 // 1.90 added some traits that imply ?Sized
-                if (bound_trait_path.m_path.m_path == path_PointeeSized || bound_trait_path.m_path.m_path == path_MetadataSized) {
+                if (bound_trait_path.m_path.m_path == pathPointeeSized || bound_trait_path.m_path.m_path == pathMetadataSized) {
                     if (const auto* ge = type->opt_Generic()) {
                         if (ge->binding == GENERICSelf) {
                             *self_is_sized = false;
@@ -159,7 +159,7 @@ HIR::LifetimeRef LowerHIRLifetimeRef(const ::AST::LifetimeRef& r) {
 
                 // Compare with list of known default traits (just Sized atm) and set a marker
                 auto trait = LowerHIRGenericPath(bound.span, e.trait, FromASTPathClass::Type);
-                if (trait.m_path == path_Sized) {
+                if (trait.m_path == pathSized) {
                     if (param_idx == 0xFFFF) {
                         assert(self_is_sized);
                         *self_is_sized = false;
@@ -1186,7 +1186,7 @@ namespace {
             bool is_sized = true;
             for (const auto& t : e->maybe_traits) {
                 auto tp = LowerHIRTraitPath(ty.span(), *t.path, t.hrbs, /*allow_aty_trait_bounds=*/true);
-                if (tp.m_path.m_path == path_Sized) {
+                if (tp.m_path.m_path == pathSized) {
                     is_sized = false;
                 } else {
                     TODO(ty.span(), "Optional trait (not Sized) - " << ty);
@@ -2633,9 +2633,9 @@ public:
         auto crate_file = (p == ::std::string::npos ? ext_crate.second.m_filename : ext_crate.second.m_filename.substr(p + 1));
         rv.m_ext_crates.insert(::std::make_pair(ext_crate.first, ::HIR::ExternCrate{ext_crate.second.m_hir, crate_file, ext_crate.second.m_filename}));
     }
-    path_Sized = rv.get_lang_item_path_opt("sized");
-    path_PointeeSized = rv.get_lang_item_path_opt("pointee_sized");
-    path_MetadataSized = rv.get_lang_item_path_opt("metadata_sized");
+    pathSized = rv.get_lang_item_path_opt("sized");
+    pathPointeeSized = rv.get_lang_item_path_opt("pointee_sized");
+    pathMetadataSized = rv.get_lang_item_path_opt("metadata_sized");
 
     rv.m_root_module = LowerHIRModule(crate.m_root_module, ::HIR::ItemPath(rv.m_crate_name));
     for (auto& e : macros) {

@@ -791,7 +791,7 @@ namespace {
     /// Generate a struct representation using the provided entries
     ///
     /// - Handles (optional) sorting and packing
-    ::std::unique_ptr<TypeRepr> make_type_repr_struct__inner(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forced_alignment, unsigned max_alignment) {
+    ::std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forced_alignment, unsigned max_alignment) {
         if (ents.size() > 0) {
             auto sort_fields = [&](auto first, auto last) {
                 ::std::stable_sort(first, last, [&](const Ent& a, const Ent& b) {
@@ -941,7 +941,7 @@ namespace {
             BUG(sp, "Unexpected type in creating type repr - " << ty);
         }
 
-        return make_type_repr_struct__inner(sp, ty, ents, sorting, forced_alignment, max_alignment);
+        return makeTypeReprStructInner(sp, ty, ents, sorting, forced_alignment, max_alignment);
     }
 
     bool bounded_max_is_full_range(const ::HIR::TypeData* ty, U128 bounded_max) {
@@ -1409,7 +1409,7 @@ namespace {
                                 size_t max_align = 1;
                                 std::vector<std::unique_ptr<TypeRepr>> reprs;
                                 for (size_t i = 0; i < variants.size(); i++) {
-                                    reprs.push_back(make_type_repr_struct__inner(sp, e[i].type, variants[i].ents, StructSorting::All, variants[i].forced_alignment, 0));
+                                    reprs.push_back(makeTypeReprStructInner(sp, e[i].type, variants[i].ents, StructSorting::All, variants[i].forced_alignment, 0));
                                     max_align = std::max(max_align, reprs.back()->align);
                                     size_t var_size = reprs.back()->size;
                                     // If larger than current max, update current max and reset
@@ -1585,7 +1585,7 @@ namespace {
                                                 variants[i].ents[0].field = variants[i].ents.size() - 1;
                                                 variants[i].ents[0].ty = niche_ty;
                                                 // Create the new repr
-                                                reprs[i] = make_type_repr_struct__inner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
+                                                reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
                                                 assert(reprs[i]->size <= max_size);
                                                 assert(reprs[i]->align <= max_align);
@@ -1615,7 +1615,7 @@ namespace {
                                                 variants[i].ents.back().field = tag_fld_idx;
                                                 variants[i].ents.back().ty = niche_ty;
                                                 // Create the new repr
-                                                reprs[i] = make_type_repr_struct__inner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
+                                                reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
                                                 assert(reprs[i]->size <= max_size);
                                                 assert(reprs[i]->align <= max_align);
@@ -1714,7 +1714,7 @@ namespace {
                                     ents[0].ty = tag_ty;
 
                                     // - Create repr and assign
-                                    auto repr = make_type_repr_struct__inner(sp, var_ty, ents, StructSorting::None, variants[var_i].forced_alignment, 0);
+                                    auto repr = makeTypeReprStructInner(sp, var_ty, ents, StructSorting::None, variants[var_i].forced_alignment, 0);
                                     max_size = std::max(max_size, repr->size);
                                     max_align = std::max(max_align, repr->align);
                                     set_type_repr(sp, var_ty, std::move(repr));

@@ -84,9 +84,9 @@ public:
     bool find_impl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb, bool dont_handoff_to_specialised = false) const;
 
 private:
-    bool find_impl__bounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb) const;
-    bool find_impl__check_crate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb, const ::HIR::TraitImpl& impl) const;
-    bool find_impl__check_crate_raw(const Span& sp, const ::HIR::SimplePath& des_trait_path, const ::HIR::PathParams* des_trait_params, const ::HIR::TypeData* des_type, const ::HIR::GenericParams& impl_params_def, const ::HIR::PathParams& impl_trait_params, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
+    bool findImplBounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb) const;
+    bool findImplCheckCrate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb, const ::HIR::TraitImpl& impl) const;
+    bool findImplCheckCrateRaw(const Span& sp, const ::HIR::SimplePath& des_trait_path, const ::HIR::PathParams* des_trait_params, const ::HIR::TypeData* des_type, const ::HIR::GenericParams& impl_params_def, const ::HIR::PathParams& impl_trait_params, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
     ::HIR::Compare check_auto_trait_impl_destructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeData* type) const;
 
 public:
@@ -110,8 +110,8 @@ public:
 private:
     void expand_associated_types_params(const Span& sp, ::HIR::PathParams& input) const;
     void expand_associated_types_inner(const Span& sp, ::HIR::TypeRef& input) const;
-    bool expand_associated_types__UfcsInherent(const Span& sp, ::HIR::TypeRef& input) const;
-    bool expand_associated_types__UfcsKnown(const Span& sp, ::HIR::TypeRef& input, bool recurse = true) const;
+    bool expandAssociatedTypesUfcsInherent(const Span& sp, ::HIR::TypeRef& input) const;
+    bool expandAssociatedTypesUfcsKnown(const Span& sp, ::HIR::TypeRef& input, bool recurse = true) const;
 
 protected:
     virtual bool replace_equalities(::HIR::TypeRef& input) const;

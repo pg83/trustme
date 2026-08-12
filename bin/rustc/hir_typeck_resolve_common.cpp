@@ -19,11 +19,11 @@ void TraitResolveCommon::prep_indexes(const Span& sp) {
         default:
             break;
             TU_ARMA(TraitBound, be) {
-                this->prep_indexes__add_trait_bound(sp, be.hrtbs.get(), be.type, be.trait.clone());
+                this->prepIndexesAddTraitBound(sp, be.hrtbs.get(), be.type, be.trait.clone());
             }
             TU_ARMA(TypeEquality, be) {
                 DEBUG("Equality - " << be.type << " = " << be.other_type);
-                this->prep_indexes__add_equality(sp, nullptr, be.type, be.other_type);
+                this->prepIndexesAddEquality(sp, nullptr, be.type, be.other_type);
             }
         }
         return false;
@@ -34,7 +34,7 @@ void TraitResolveCommon::prep_indexes(const Span& sp) {
     }
 }
 
-void TraitResolveCommon::prep_indexes__add_equality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef long_ty, ::HIR::TypeRef short_ty) {
+void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef long_ty, ::HIR::TypeRef short_ty) {
     DEBUG("ADD " << long_ty << " => " << short_ty);
     if (!hrtbs) {
         static const HIR::GenericParams empty_hrtbs;
@@ -44,7 +44,7 @@ void TraitResolveCommon::prep_indexes__add_equality(const Span& sp, const ::HIR:
     this->m_type_equalities.insert(::std::make_pair(mv$(long_ty), CachedEquality{hrtbs->clone(), mv$(short_ty)}));
 }
 
-void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::HIR::GenericParams* outer_hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool add_parents /*=true*/) {
+void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* outer_hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool add_parents /*=true*/) {
     TRACE_FUNCTION_F(FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmt_args() << " ";) << type << " : " << trait_path);
 
     const auto bound_constness = trait_path.m_constness;
@@ -97,7 +97,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
         push_type(tb.first, trait_path.m_hrtbs.get(), tb.second);
 
         auto ty_l = m_crate.m_types.path(::HIR::Path(type, tb.second.source_trait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
-        prep_indexes__add_equality(sp, trait_path.m_hrtbs.get(), ty_l, tb.second.type);
+        prepIndexesAddEquality(sp, trait_path.m_hrtbs.get(), ty_l, tb.second.type);
     }
 
     if (trait_path.m_hrtbs && !trait_path.m_hrtbs->is_empty()) {
@@ -112,7 +112,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
         for (const auto& trait : tb.second.traits) {
             auto ty_l = m_crate.m_types.path(::HIR::Path(type, tb.second.source_trait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
             DEBUG("Bound (TB) - <" << type << " as " << tb.second.source_trait << ">::" << tb.first << " : " << trait);
-            prep_indexes__add_trait_bound(sp, outer_hrtbs, std::move(ty_l), trait.clone());
+            prepIndexesAddTraitBound(sp, outer_hrtbs, std::move(ty_l), trait.clone());
         }
     }
 
@@ -150,7 +150,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
                     TODO(sp, "Double-layerd HRLs - outer=" << outer_hrtbs->fmt_args() << " and inner=" << trait_mono.m_hrtbs->fmt_args());
                 }
                 auto* inner_hrtbs = outer_hrtbs ? outer_hrtbs : a_ty_b.m_hrtbs.get();
-                prep_indexes__add_equality(sp, inner_hrtbs, mv$(ty_l), std::move(tb.second.type));
+                prepIndexesAddEquality(sp, inner_hrtbs, mv$(ty_l), std::move(tb.second.type));
             }
         }
 
@@ -159,7 +159,7 @@ void TraitResolveCommon::prep_indexes__add_trait_bound(const Span& sp, const ::H
 
     for (const auto& st : trait.m_all_parent_traits) {
         DEBUG("(Parent) " << st);
-        prep_indexes__add_trait_bound(sp, outer_hrtbs, type, monomorph.monomorph_traitpath(sp, st, false), /*add_parents*/ false);
+        prepIndexesAddTraitBound(sp, outer_hrtbs, type, monomorph.monomorph_traitpath(sp, st, false), /*add_parents*/ false);
     }
 }
 

@@ -1536,9 +1536,9 @@ TU_ARMA(Alias, ee) {
             static ::HIR::PathParams null_params;
             static ::HIR::TraitPath::assoc_list_t null_assoc;
 
-            const auto lang_CoerceUnsized = this->m_crate.get_lang_item_path_opt("coerce_unsized");
-            const auto lang_FnPtr = this->m_crate.get_lang_item_path_opt("fn_ptr_trait");
-            const auto lang_Tuple = this->m_crate.get_lang_item_path_opt("tuple_trait");
+            const auto langCoerceUnsized = this->m_crate.get_lang_item_path_opt("coerce_unsized");
+            const auto langFnPtr = this->m_crate.get_lang_item_path_opt("fn_ptr_trait");
+            const auto langTuple = this->m_crate.get_lang_item_path_opt("tuple_trait");
 
             const auto& type = this->m_ivars.get_type(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
@@ -1561,7 +1561,7 @@ TU_ARMA(Alias, ee) {
                 }
             }
 
-            if (!lang_FnPtr.components().empty() && trait == lang_FnPtr) {
+            if (!langFnPtr.components().empty() && trait == langFnPtr) {
                 if (type->is_Function()) {
                     return callback(ImplRef(type, &null_params, &null_assoc), HIR::Compare::Equal);
                 }
@@ -1584,7 +1584,7 @@ TU_ARMA(Alias, ee) {
 
             // - `DiscriminantKind`
             if (!m_lang_DiscriminantKind.components().empty() && trait == m_lang_DiscriminantKind) {
-                static auto name_Discriminant = RcString::new_interned("Discriminant");
+                static auto nameDiscriminant = RcString::new_interned("Discriminant");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
                 if (type->is_Infer() || (type->is_Path() && type->as_Path().binding.is_Unbound())) {
@@ -1592,23 +1592,23 @@ TU_ARMA(Alias, ee) {
                     return callback(ImplRef(type, HIR::PathParams(), ::HIR::TraitPath::assoc_list_t()), ::HIR::Compare::Fuzzy);
                 } else if (type->is_Generic() || (type->is_Path() && type->as_Path().binding.is_Opaque())) {
                     ::HIR::TraitPath::assoc_list_t assoc_list;
-                    assoc_list.insert(std::make_pair(name_Discriminant, HIR::TraitPath::AtyEqual{trait, {}, m_crate.m_types.path(HIR::Path(type, trait.clone(), name_Discriminant), HIR::TypePathBinding::make_Opaque({}))}));
+                    assoc_list.insert(std::make_pair(nameDiscriminant, HIR::TraitPath::AtyEqual{trait, {}, m_crate.m_types.path(HIR::Path(type, trait.clone(), nameDiscriminant), HIR::TypePathBinding::make_Opaque({}))}));
                     return callback(ImplRef(type, HIR::PathParams(), ::HIR::TraitPath::assoc_list_t()), ::HIR::Compare::Equal);
                     //return false;
                 } else if (type->is_Path() && type->as_Path().binding.is_Enum()) {
                     const auto& enm = *type->as_Path().binding.as_Enum();
                     HIR::TypeRef tag_ty = m_crate.m_types.primitive(enm.get_repr_type(enm.m_tag_repr));
                     ::HIR::TraitPath::assoc_list_t assoc_list;
-                    assoc_list.insert(std::make_pair(name_Discriminant, HIR::TraitPath::AtyEqual{trait, {}, std::move(tag_ty)}));
+                    assoc_list.insert(std::make_pair(nameDiscriminant, HIR::TraitPath::AtyEqual{trait, {}, std::move(tag_ty)}));
                     return callback(ImplRef(type, {}, std::move(assoc_list)), ::HIR::Compare::Equal);
                 } else {
                     ::HIR::TraitPath::assoc_list_t assoc_list;
-                    assoc_list.insert(std::make_pair(name_Discriminant, HIR::TraitPath::AtyEqual{trait, {}, m_crate.m_types.primitive(HIR::CoreType::U8)}));
+                    assoc_list.insert(std::make_pair(nameDiscriminant, HIR::TraitPath::AtyEqual{trait, {}, m_crate.m_types.primitive(HIR::CoreType::U8)}));
                     return callback(ImplRef(type, {}, std::move(assoc_list)), ::HIR::Compare::Equal);
                 }
             }
             if (!m_lang_Pointee.components().empty() && trait == m_lang_Pointee) {
-                static auto name_Metadata = RcString::new_interned("Metadata");
+                static auto nameMetadata = RcString::new_interned("Metadata");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
                 HIR::TypeRef meta_ty = m_crate.m_types.infer();
@@ -1663,7 +1663,7 @@ TU_ARMA(Alias, ee) {
                                 ::HIR::TraitPath::assoc_list_t assoc;
                                 auto metadata_ty = impl.get_type(m_crate.m_types, "Metadata", {});
                                 if (metadata_ty) {
-                                    assoc.insert(std::make_pair(name_Metadata, HIR::TraitPath::AtyEqual{trait, {}, std::move(metadata_ty)}));
+                                    assoc.insert(std::make_pair(nameMetadata, HIR::TraitPath::AtyEqual{trait, {}, std::move(metadata_ty)}));
                                 }
                                 return callback(ImplRef(type, params.clone(), std::move(assoc)), cmp);
                             });
@@ -1686,7 +1686,7 @@ TU_ARMA(Alias, ee) {
                 return callback(ImplRef(type, {}, std::move(assoc_list)), ::HIR::Compare::Equal);
             }
             // - `Tuple`
-            if (!lang_Tuple.components().empty() && trait == lang_Tuple) {
+            if (!langTuple.components().empty() && trait == langTuple) {
                 // Fuzzy impl for `_` and unbound ATYs
                 if (type->is_Infer() || (type->is_Path() && type->as_Path().binding.is_Unbound())) {
                     return callback(ImplRef(type, HIR::PathParams(), ::HIR::TraitPath::assoc_list_t()), ::HIR::Compare::Fuzzy);
@@ -1727,7 +1727,7 @@ TU_ARMA(Alias, ee) {
             }
 
             // Magical CoerceUnsized impls for various types
-            if (!lang_CoerceUnsized.components().empty() && trait == lang_CoerceUnsized) {
+            if (!langCoerceUnsized.components().empty() && trait == langCoerceUnsized) {
                 if (find_trait_impls_bound(sp, trait, params, type, callback)) {
                     return true;
                 }
@@ -1833,11 +1833,11 @@ TU_ARMA(Alias, ee) {
                 }
                 TU_ARMA(Generator, node_p) {
                     if (trait == m_lang_Generator) {
-                        static const RcString rcstring_Yield = RcString::new_interned("Yield");
-                        static const RcString rcstring_Return = RcString::new_interned("Return");
+                        static const RcString rcstringYield = RcString::new_interned("Yield");
+                        static const RcString rcstringReturn = RcString::new_interned("Return");
                         ::HIR::TraitPath::assoc_list_t assoc;
-                        assoc.insert(::std::make_pair(rcstring_Yield, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, node_p->m_yield_ty}));
-                        assoc.insert(::std::make_pair(rcstring_Return, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, node_p->m_return}));
+                        assoc.insert(::std::make_pair(rcstringYield, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, node_p->m_yield_ty}));
+                        assoc.insert(::std::make_pair(rcstringReturn, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, node_p->m_return}));
                         HIR::PathParams params;
                         params.m_types.push_back(node_p->m_resume_ty);
                         return callback(ImplRef(type, mv$(params), mv$(assoc)), ::HIR::Compare::Equal);
@@ -1845,9 +1845,9 @@ TU_ARMA(Alias, ee) {
                 }
                 TU_ARMA(Async, node_p) {
                     if (trait == m_lang_Future) {
-                        static const RcString rcstring_Output = RcString::new_interned("Output");
+                        static const RcString rcstringOutput = RcString::new_interned("Output");
                         ::HIR::TraitPath::assoc_list_t assoc;
-                        assoc.insert(::std::make_pair(rcstring_Output, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, node_p->m_code->m_res_type}));
+                        assoc.insert(::std::make_pair(rcstringOutput, ::HIR::TraitPath::AtyEqual{trait.clone(), {}, node_p->m_code->m_res_type}));
                         return callback(ImplRef(type, {}, mv$(assoc)), ::HIR::Compare::Equal);
                     }
                 }
@@ -5754,7 +5754,7 @@ bool TraitResolution::find_trait_impls(
                     H::expand_associated_types_params(sp, *this, pe.params, stack);
                     H::expand_associated_types_params(sp, *this, pe.impl_params, stack);
                     input = m_crate.m_types.intern(mv$(data));
-                    if (this->expand_associated_types_inplace__UfcsInherent(sp, input, stack)) {
+                    if (this->expandAssociatedTypesInplaceUfcsInherent(sp, input, stack)) {
                         this->expand_associated_types_inplace(sp, input, stack);
                     }
                     return;
@@ -5789,7 +5789,7 @@ bool TraitResolution::find_trait_impls(
                     const bool was_opaque = input->as_Path().binding.is_Opaque();
                     if (was_unbound || was_opaque) {
                         if (was_opaque) {
-                            this->expand_associated_types_inplace__UfcsKnown(sp, input, stack);
+                            this->expandAssociatedTypesInplaceUfcsKnown(sp, input, stack);
                             return;
                         }
 
@@ -5804,7 +5804,7 @@ bool TraitResolution::find_trait_impls(
                             DEBUG("CACHED: " << input << " -> " << it->second);
                             input = it->second;
                         } else {
-                            this->expand_associated_types_inplace__UfcsKnown(sp, input, stack);
+                            this->expandAssociatedTypesInplaceUfcsKnown(sp, input, stack);
                             if (input->is_Path()
                                 && (input->as_Path().binding.is_Unbound()
                                     || input->as_Path().binding.is_Opaque())) {
@@ -5885,7 +5885,7 @@ bool TraitResolution::find_trait_impls(
             input = m_crate.m_types.intern(mv$(data));
         }
 
-        bool TraitResolution::expand_associated_types_inplace__UfcsInherent(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const {
+        bool TraitResolution::expandAssociatedTypesInplaceUfcsInherent(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const {
             TRACE_FUNCTION_FR(input, input);
             ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.m_data.is_UfcsInherent(), input);
 
@@ -5967,7 +5967,7 @@ bool TraitResolution::find_trait_impls(
             return true;
         }
 
-        void TraitResolution::expand_associated_types_inplace__UfcsKnown(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const {
+        void TraitResolution::expandAssociatedTypesInplaceUfcsKnown(const Span& sp, ::HIR::TypeRef& input, LList<const ::HIR::TypeData*> stack) const {
             TRACE_FUNCTION_FR("input=" << input, input);
             auto data = input->clone_data();
             auto& builder_e = data.as_Path();
@@ -6160,7 +6160,7 @@ bool TraitResolution::find_trait_impls(
                             auto it = trait.m_trait_bounds.find(pe.item);
                             if (it != trait.m_trait_bounds.end()) {
                                 for (const auto& bound : it->second.traits) {
-                                    const_cast<TraitResolution&>(*this).prep_indexes__add_trait_bound(sp, nullptr, input, bound.clone());
+                                    const_cast<TraitResolution&>(*this).prepIndexesAddTraitBound(sp, nullptr, input, bound.clone());
                                 }
                             }
                         }

@@ -919,7 +919,7 @@ namespace {
         return true;
     }
 
-    bool consume_type_TraitList(TokenStreamRO& lex) {
+    bool consumeTypeTraitList(TokenStreamRO& lex) {
         do {
             if (lex.consume_if(TOK_LIFETIME)) {
                 continue;
@@ -946,11 +946,11 @@ namespace {
             case TOK_RWORD_IMPL:
             case TOK_RWORD_DYN:
                 lex.consume();
-                return consume_type_TraitList(lex);
+                return consumeTypeTraitList(lex);
             case TOK_IDENT:
                 if (lex.next_tok().ident().name == "dyn") {
                     lex.consume();
-                    return consume_type_TraitList(lex);
+                    return consumeTypeTraitList(lex);
                 }
             case TOK_RWORD_CRATE:
             case TOK_RWORD_SUPER:

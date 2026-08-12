@@ -1020,9 +1020,9 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
 
             ::std::cout << "rustc " << rustc_target << ".100 (mrustc " << VersionGetString() << ")" << ::std::endl;
             ::std::cout << "binary: rustc" << ::std::endl;
-            ::std::cout << "commit-hash: " << gsVersion_GitHash << ::std::endl;
+            ::std::cout << "commit-hash: " << gsVersionGitHash << ::std::endl;
             ::std::cout << "commit-date: UNKNOWN" << ::std::endl;
-            ::std::cout << "build-date: " << gsVersion_BuildTime << ::std::endl;
+            ::std::cout << "build-date: " << gsVersionBuildTime << ::std::endl;
             ::std::cout << "host: UNKNOWN" << ::std::endl;
             ::std::cout << "release: " << rustc_target << ".100" << ::std::endl;
 
@@ -1366,8 +1366,8 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 // NOTE: Starts the version with "rustc 1.29.100" so build scripts don't get confused
                 ::std::cout << "rustc " << rustc_target << ".100 (mrustc " << VersionGetString() << ")" << ::std::endl;
                 ::std::cout << "release: " << rustc_target << ".100" << ::std::endl; // `autoconfig` looks for this line
-                ::std::cout << "- Build time: " << gsVersion_BuildTime << ::std::endl;
-                ::std::cout << "- Commit: " << gsVersion_GitHash << (gbVersion_GitDirty ? " (dirty tree)" : "") << ::std::endl;
+                ::std::cout << "- Build time: " << gsVersionBuildTime << ::std::endl;
+                ::std::cout << "- Commit: " << gsVersionGitHash << (gbVersionGitDirty ? " (dirty tree)" : "") << ::std::endl;
                 exit(0);
             }
             // --out-dir <dir>  >> Set the output directory for automatically-named files

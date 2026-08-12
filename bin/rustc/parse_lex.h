@@ -71,8 +71,8 @@ private:
     Token getTokenInt();
 
     signed int getSymbol();
-    Token getTokenInt_RawString(bool is_byte);
-    Token getTokenInt_Identifier(Codepoint ch, Codepoint ch2 = '\0', bool parse_reserved_word = true);
+    Token getTokenIntRawString(bool is_byte);
+    Token getTokenIntIdentifier(Codepoint ch, Codepoint ch2 = '\0', bool parse_reserved_word = true);
     enum class NumMode {
         BIN,
         OCT,

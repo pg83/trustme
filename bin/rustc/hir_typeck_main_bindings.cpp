@@ -555,19 +555,19 @@ namespace {
                 const auto& src_ty = se.inner;
                 const auto& dst_ty = de.inner;
 
-                const auto& lang_Unsize = m_resolve.m_crate.get_lang_item_path_opt("unsize");
-                if (!lang_Unsize.components().empty()) {
+                const auto& langUnsize = m_resolve.m_crate.get_lang_item_path_opt("unsize");
+                if (!langUnsize.components().empty()) {
                     // _ == < `src_ty` as Unsize< `dst_ty` >::""
-                    check_trait_bound(sp, lang_Unsize, {dst_ty}, src_ty);
+                    check_trait_bound(sp, langUnsize, {dst_ty}, src_ty);
                 } else if (!m_resolve.can_unsize(sp, dst_ty, src_ty)) {
                     ERROR(sp, E0000, "Invalid unsizing operation to " << dst_ty << " from " << src_ty);
                 }
             } else if (src_ty->is_Borrow() || dst_ty->is_Borrow()) {
                 ERROR(sp, E0000, "Invalid unsizing operation to " << dst_ty << " from " << src_ty);
             } else {
-                const auto& lang_CoerceUnsized = this->get_lang_item_path(node.span(), "coerce_unsized");
+                const auto& langCoerceUnsized = this->get_lang_item_path(node.span(), "coerce_unsized");
                 // _ == < `src_ty` as CoerceUnsized< `dst_ty` >::""
-                check_trait_bound(sp, lang_CoerceUnsized, {dst_ty}, src_ty);
+                check_trait_bound(sp, langCoerceUnsized, {dst_ty}, src_ty);
             }
 
             node.m_value->visit(*this);
@@ -1927,7 +1927,7 @@ namespace {
             return trait_path;
         }
 
-        void visit_path_UfcsUnknown(const Span& sp, ::HIR::Path& p, ::HIR::Visitor::PathContext pc) {
+        void visitPathUfcsUnknown(const Span& sp, ::HIR::Path& p, ::HIR::Visitor::PathContext pc) {
             TRACE_FUNCTION_FR("UfcsUnknown - p=" << p, p);
             auto& e = p.m_data.as_UfcsUnknown();
 

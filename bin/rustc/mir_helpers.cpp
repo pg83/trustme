@@ -1623,7 +1623,7 @@ bool Visitor::visit_lvalue(const ::MIR::LValue& lv, ValUsage u) {
 
     for (auto& w : lv.m_wrappers) {
         if (w.is_Index()) {
-            if (visit_lvalue(LValue::new_Local(w.as_Index()), ValUsage::Read)) {
+            if (visit_lvalue(LValue::newLocal(w.as_Index()), ValUsage::Read)) {
                 return true;
             }
         }
@@ -1636,10 +1636,10 @@ bool VisitorMut::visit_lvalue(::MIR::LValue& lv, ValUsage u) {
     }
     for (auto& w : lv.m_wrappers) {
         if (w.is_Index()) {
-            auto lv = LValue::new_Local(w.as_Index());
+            auto lv = LValue::newLocal(w.as_Index());
             bool rv = visit_lvalue(lv, ValUsage::Read);
             ASSERT_BUG(Span(), lv.is_Local(), "visit_lvalue on Index mutated the index to a non-local");
-            w = ::MIR::LValue::Wrapper::new_Index(lv.as_Local());
+            w = ::MIR::LValue::Wrapper::newIndex(lv.as_Local());
             if (rv) {
                 return true;
             }

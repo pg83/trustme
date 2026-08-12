@@ -321,7 +321,7 @@ namespace {
                     }
                     break;
                     TU_ARM(w, Index, e) {
-                        os << "[" << fmt(::MIR::LValue::new_Local(e)) << "]";
+                        os << "[" << fmt(::MIR::LValue::newLocal(e)) << "]";
                     }
                     break;
                     TU_ARM(w, Downcast, variant_index) {

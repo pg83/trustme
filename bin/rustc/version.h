@@ -2,12 +2,12 @@
 
 #include <string>
 
-extern unsigned int giVersion_Major;
-extern unsigned int giVersion_Minor;
-extern unsigned int giVersion_Patch;
-extern const char* gsVersion_GitHash;
-extern const char* gsVersion_GitShortHash;
-extern const char* gsVersion_BuildTime;
-extern bool gbVersion_GitDirty;
+extern unsigned int giVersionMajor;
+extern unsigned int giVersionMinor;
+extern unsigned int giVersionPatch;
+extern const char* gsVersionGitHash;
+extern const char* gsVersionGitShortHash;
+extern const char* gsVersionBuildTime;
+extern bool gbVersionGitDirty;
 
 extern ::std::string VersionGetString();

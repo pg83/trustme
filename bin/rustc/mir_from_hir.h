@@ -235,7 +235,7 @@ public:
 
     void final_cleanup();
 
-    const ::HIR::SimplePath* lang_Box() const {
+    const ::HIR::SimplePath* langBox() const {
         return m_lang_Box;
     }
 

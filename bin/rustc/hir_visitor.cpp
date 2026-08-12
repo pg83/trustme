@@ -226,8 +226,8 @@ void ::HIR::Visitor::visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) {
     }
     auto trait_sp = p.get_simple_path();
     auto trait_pp = item.m_params.make_nop_params(type_interner(), 0);
-    const HIR::TypeRef ty_Self = type_interner().self();
-    ItemPath trait_ip(ty_Self, trait_sp, trait_pp);
+    const HIR::TypeRef tySelf = type_interner().self();
+    ItemPath trait_ip(tySelf, trait_sp, trait_pp);
     TRACE_FUNCTION;
 
     this->visit_params(item.m_params);

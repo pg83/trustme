@@ -415,7 +415,7 @@ namespace MIR {
 
 ::MIR::LValue::Storage MIR::LValue::Storage::clone() const {
     if (is_Static()) {
-        return new_Static(as_Static().clone());
+        return newStatic(as_Static().clone());
     } else {
         return Storage(this->val);
     }
@@ -673,21 +673,21 @@ const Monomorphiser& MIR::Cloner::monomorphiser() const {
     auto wrappers = src.m_wrappers;
     for (auto& w : wrappers) {
         if (w.is_Index()) {
-            w = ::MIR::LValue::Wrapper::new_Index(map_local(w.as_Index()));
+            w = ::MIR::LValue::Wrapper::newIndex(map_local(w.as_Index()));
         }
     }
     TU_MATCH_HDRA( (src.m_root), {)
     TU_ARMA(Return, se) {
-            return ::MIR::LValue(::MIR::LValue::Storage::new_Return(), mv$(wrappers));
+            return ::MIR::LValue(::MIR::LValue::Storage::newReturn(), mv$(wrappers));
         }
         TU_ARMA(Argument, se) {
-            return ::MIR::LValue(::MIR::LValue::Storage::new_Argument(se), mv$(wrappers));
+            return ::MIR::LValue(::MIR::LValue::Storage::newArgument(se), mv$(wrappers));
         }
         TU_ARMA(Local, se) {
-            return ::MIR::LValue(::MIR::LValue::Storage::new_Local(this->map_local(se)), mv$(wrappers));
+            return ::MIR::LValue(::MIR::LValue::Storage::newLocal(this->map_local(se)), mv$(wrappers));
         }
         TU_ARMA(Static, se) {
-            return ::MIR::LValue(::MIR::LValue::Storage::new_Static(this->monomorph(se)), mv$(wrappers));
+            return ::MIR::LValue(::MIR::LValue::Storage::newStatic(this->monomorph(se)), mv$(wrappers));
         }
     }
     throw "";
@@ -849,15 +849,15 @@ LValue::Storage::~Storage() {
         val = 0;
     }
 }
-LValue::Storage LValue::Storage::new_Argument(unsigned idx) {
+LValue::Storage LValue::Storage::newArgument(unsigned idx) {
     assert(idx < MAX_ARG);
     return Storage((idx + 1) << 2);
 }
-LValue::Storage LValue::Storage::new_Local(unsigned idx) {
+LValue::Storage LValue::Storage::newLocal(unsigned idx) {
     assert(idx <= MAX_ARG);
     return Storage((idx << 2) | 1);
 }
-LValue::Storage LValue::Storage::new_Static(::HIR::Path p) {
+LValue::Storage LValue::Storage::newStatic(::HIR::Path p) {
     ::HIR::Path* ptr = new ::HIR::Path(::std::move(p));
     return Storage(reinterpret_cast<uintptr_t>(ptr) | 2);
 }
@@ -898,7 +898,7 @@ const ::HIR::Path& LValue::Storage::as_Static() const {
 LValue::Wrapper::Wrapper(uint32_t v)
     : val(v) {
 }
-LValue::Wrapper LValue::Wrapper::new_Index(unsigned idx) {
+LValue::Wrapper LValue::Wrapper::newIndex(unsigned idx) {
     if (idx == ~0u) {
         idx = Storage::MAX_ARG;
     }
@@ -922,35 +922,35 @@ unsigned LValue::Wrapper::as_Index() const {
     unsigned rv = (val >> 2);
     return rv;
 }
-void LValue::Wrapper::inc_Field() {
+void LValue::Wrapper::incField() {
     assert(is_Field());
-    *this = Wrapper::new_Field(as_Field() + 1);
+    *this = Wrapper::newField(as_Field() + 1);
 }
-void LValue::Wrapper::inc_Downcast() {
+void LValue::Wrapper::incDowncast() {
     assert(is_Downcast());
-    *this = Wrapper::new_Downcast(as_Downcast() + 1);
+    *this = Wrapper::newDowncast(as_Downcast() + 1);
 }
 LValue::LValue()
-    : m_root(Storage::new_Return()) {
+    : m_root(Storage::newReturn()) {
 }
 LValue::LValue(Storage root, ::std::vector<Wrapper> wrappers)
     : m_root(::std::move(root))
     , m_wrappers(::std::move(wrappers)) {
 }
-LValue LValue::new_Deref(LValue lv) {
-    lv.m_wrappers.push_back(Wrapper::new_Deref());
+LValue LValue::newDeref(LValue lv) {
+    lv.m_wrappers.push_back(Wrapper::newDeref());
     return lv;
 }
-LValue LValue::new_Field(LValue lv, unsigned idx) {
-    lv.m_wrappers.push_back(Wrapper::new_Field(idx));
+LValue LValue::newField(LValue lv, unsigned idx) {
+    lv.m_wrappers.push_back(Wrapper::newField(idx));
     return lv;
 }
-LValue LValue::new_Downcast(LValue lv, unsigned idx) {
-    lv.m_wrappers.push_back(Wrapper::new_Downcast(idx));
+LValue LValue::newDowncast(LValue lv, unsigned idx) {
+    lv.m_wrappers.push_back(Wrapper::newDowncast(idx));
     return lv;
 }
-LValue LValue::new_Index(LValue lv, unsigned local_idx) {
-    lv.m_wrappers.push_back(Wrapper::new_Index(local_idx));
+LValue LValue::newIndex(LValue lv, unsigned local_idx) {
+    lv.m_wrappers.push_back(Wrapper::newIndex(local_idx));
     return lv;
 }
 unsigned LValue::as_Local() const {
@@ -961,13 +961,13 @@ unsigned LValue::as_Field() const {
     assert(!m_wrappers.empty());
     return m_wrappers.back().as_Field();
 }
-void LValue::inc_Field() {
+void LValue::incField() {
     assert(m_wrappers.size() > 0);
-    m_wrappers.back().inc_Field();
+    m_wrappers.back().incField();
 }
-void LValue::inc_Downcast() {
+void LValue::incDowncast() {
     assert(m_wrappers.size() > 0);
-    m_wrappers.back().inc_Downcast();
+    m_wrappers.back().incDowncast();
 }
 LValue LValue::clone_wrapped(::std::vector<Wrapper> wrappers) const {
     if (this->m_wrappers.empty()) {

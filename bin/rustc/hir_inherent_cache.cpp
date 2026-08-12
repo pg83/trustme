@@ -156,7 +156,7 @@ void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeData* cur_ty
     }
 }
 
-void HIR::InherentCache::insert_all(const Span& sp, const HIR::TypeImpl& impl, const HIR::SimplePath& lang_Box) {
+void HIR::InherentCache::insert_all(const Span& sp, const HIR::TypeImpl& impl, const HIR::SimplePath& langBox) {
     for (const auto& m : impl.m_methods) {
         const auto& name = m.first;
         const auto& fcn = m.second.data;
@@ -184,7 +184,7 @@ void HIR::InherentCache::insert_all(const Span& sp, const HIR::TypeImpl& impl, c
                 break;
             case HIR::Function::Receiver::Box:
                 // TODO: 1.54+ has an allocator param here.
-                items[name].m_path[lang_Box].m_byvalue.insert(sp, impl);
+                items[name].m_path[langBox].m_byvalue.insert(sp, impl);
                 break;
             case HIR::Function::Receiver::Value:
                 items[name].m_byvalue.insert(sp, impl);

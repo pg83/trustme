@@ -590,7 +590,7 @@ public:
 
     ::MIR::LValue deserialise_mir_lvalue_() {
         auto root_v = m_in.read_count();
-        auto root = (root_v == 3 ? ::MIR::LValue::Storage::new_Static(deserialise_path()) : ::MIR::LValue::Storage::from_inner(root_v));
+        auto root = (root_v == 3 ? ::MIR::LValue::Storage::newStatic(deserialise_path()) : ::MIR::LValue::Storage::from_inner(root_v));
         return ::MIR::LValue(mv$(root), deserialise_vec<::MIR::LValue::Wrapper>());
     }
 

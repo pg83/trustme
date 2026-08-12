@@ -2577,7 +2577,7 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& out_inv);
 }
 
 namespace {
-    AST::LifetimeRef get_LifetimeRef(TokenStream& lex, Token tok) {
+    AST::LifetimeRef getLifetimeRef(TokenStream& lex, Token tok) {
         CHECK_TOK(tok, TOK_LIFETIME);
         return AST::LifetimeRef(/*lex.point_span(), */ tok.ident());
     }
@@ -2623,7 +2623,7 @@ void ParseTypeBound(TokenStream& lex, AST::GenericParams& ret, TypeRef checked_t
         is_first = false;
 
         if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-            ret.add_bound(AST::GenericBound::make_TypeLifetime({checked_type.clone(), get_LifetimeRef(lex, mv$(tok))}));
+            ret.add_bound(AST::GenericBound::make_TypeLifetime({checked_type.clone(), getLifetimeRef(lex, mv$(tok))}));
         } else if (lex.getTokenIf(TOK_QMARK)) {
             auto hrbs = ParseHRBOpt(lex);
             (void)hrbs; // The only valid ?Trait is Sized, which doesn't have any generics
@@ -2685,13 +2685,13 @@ AST::GenericParams ParseGenericParams(TokenStream& lex) {
             size_t bound_start = SIZE_MAX;
             size_t bound_end = SIZE_MAX;
             auto param_name = tok.ident();
-            auto ref = get_LifetimeRef(lex, mv$(tok));
+            auto ref = getLifetimeRef(lex, mv$(tok));
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 bound_start = ret.m_bounds.size();
                 if (lex.lookahead(0) == TOK_LIFETIME) {
                     do {
                         GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
-                        ret.add_bound(AST::GenericBound::make_Lifetime({AST::LifetimeRef(ref), get_LifetimeRef(lex, mv$(tok))}));
+                        ret.add_bound(AST::GenericBound::make_Lifetime({AST::LifetimeRef(ref), getLifetimeRef(lex, mv$(tok))}));
                     } while (GET_TOK(tok, lex) == TOK_PLUS);
                 } else {
                     GET_TOK(tok, lex);
@@ -2749,11 +2749,11 @@ void ParseWhereClause(TokenStream& lex, AST::GenericParams& params) {
         }
 
         if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-            auto lhs = get_LifetimeRef(lex, std::move(tok));
+            auto lhs = getLifetimeRef(lex, std::move(tok));
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             do {
                 GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
-                auto rhs = get_LifetimeRef(lex, mv$(tok));
+                auto rhs = getLifetimeRef(lex, mv$(tok));
                 params.add_bound(AST::GenericBound::make_Lifetime({lhs, rhs}));
             } while (lex.getTokenIf(TOK_PLUS));
         }
@@ -2800,7 +2800,7 @@ AST::Function::Arg ParseFunctionArg(TokenStream& lex, bool expect_named) {
 AST::Function ParseFunctionDef(TokenStream& lex, bool allow_self, bool can_be_prototype, std::string abi, AST::Function::Flags flags) {
     TRACE_FUNCTION;
     static const RcString rcstring_self = RcString::new_interned("self");
-    static const RcString rcstring_Self = RcString::new_interned("Self");
+    static const RcString rcstringSelf = RcString::new_interned("Self");
     ProtoSpan ps = lex.start_span();
 
     Token tok;
@@ -2827,7 +2827,7 @@ AST::Function ParseFunctionDef(TokenStream& lex, bool allow_self, bool can_be_pr
             auto ps = lex.start_span();
             AST::LifetimeRef lifetime;
             if (GET_TOK(tok, lex) == TOK_LIFETIME) {
-                lifetime = get_LifetimeRef(lex, mv$(tok));
+                lifetime = getLifetimeRef(lex, mv$(tok));
                 GET_TOK(tok, lex);
             }
 
@@ -2838,7 +2838,7 @@ AST::Function ParseFunctionDef(TokenStream& lex, bool allow_self, bool can_be_pr
             }
             CHECK_TOK(tok, TOK_RWORD_SELF);
             auto sp = lex.end_span(ps);
-            args.push_back(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, ::std::move(lifetime), is_mut, TypeRef(sp, rcstring_Self, 0xFFFF))));
+            args.push_back(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, ::std::move(lifetime), is_mut, TypeRef(sp, rcstringSelf, 0xFFFF))));
             //if( allow_self == false )
             //    ERROR(lex.point_span(), E0000, "Self binding not expected here");
 
@@ -2853,7 +2853,7 @@ AST::Function ParseFunctionDef(TokenStream& lex, bool allow_self, bool can_be_pr
             //if( allow_self == false )
             //    throw ParseError::Generic(lex, "Self binding not expected");
             auto binding_sp = lex.end_span(ps);
-            TypeRef ty = TypeRef(lex.point_span(), rcstring_Self, 0xFFFF);
+            TypeRef ty = TypeRef(lex.point_span(), rcstringSelf, 0xFFFF);
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 // Typed mut self
                 ty = ParseType(lex);
@@ -2868,7 +2868,7 @@ AST::Function ParseFunctionDef(TokenStream& lex, bool allow_self, bool can_be_pr
         //if( allow_self == false )
         //    throw ParseError::Generic(lex, "Self binding not expected");
         auto binding_sp = lex.end_span(ps);
-        TypeRef ty = TypeRef(lex.point_span(), rcstring_Self, 0xFFFF);
+        TypeRef ty = TypeRef(lex.point_span(), rcstringSelf, 0xFFFF);
         if (GET_TOK(tok, lex) == TOK_COLON) {
             // Typed mut self
             ty = ParseType(lex);

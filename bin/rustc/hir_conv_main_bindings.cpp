@@ -188,7 +188,7 @@ namespace {
             }
         }
 
-        void visit_pattern_Value(const Span& sp, ::HIR::Pattern& pat, ::HIR::Pattern::Value& val) {
+        void visitPatternValue(const Span& sp, ::HIR::Pattern& pat, ::HIR::Pattern::Value& val) {
             bool is_single_value = pat.m_data.is_Value();
 
             if (auto* ve = val.opt_Named()) {
@@ -261,14 +261,14 @@ namespace {
             default:
                 // Nothing
             TU_ARMA(Value, e) {
-                    this->visit_pattern_Value(sp, pat, e.val);
+                    this->visitPatternValue(sp, pat, e.val);
                 }
                 TU_ARMA(Range, e) {
                     if (e.start) {
-                        this->visit_pattern_Value(sp, pat, *e.start);
+                        this->visitPatternValue(sp, pat, *e.start);
                     }
                     if (e.end) {
-                        this->visit_pattern_Value(sp, pat, *e.end);
+                        this->visitPatternValue(sp, pat, *e.end);
                     }
                 }
                 TU_ARMA(PathValue, e) {
@@ -1547,7 +1547,7 @@ public:
         return mv$(rv);
     }
 
-    ::HIR::Pattern::PathBinding visit_pattern_PathBinding(const Span& sp, ::HIR::Path& path) {
+    ::HIR::Pattern::PathBinding visitPatternPathBinding(const Span& sp, ::HIR::Path& path) {
         auto resize_type_params = [&](::HIR::PathParams& params, size_t size) {
             if (params.m_types.size() > size) {
                 params.m_types.resize(size);
@@ -1672,7 +1672,7 @@ public:
                     DEBUG("Replacing " << e.path << " with " << new_path);
                     e.path = mv$(new_path);
                 }
-                e.binding = visit_pattern_PathBinding(sp, e.path);
+                e.binding = visitPatternPathBinding(sp, e.path);
             }
             TU_ARMA(PathTuple, e) {
                 auto new_path = expand_alias_path(sp, e.path);
@@ -1680,7 +1680,7 @@ public:
                     DEBUG("Replacing " << e.path << " with " << new_path);
                     e.path = mv$(new_path);
                 }
-                e.binding = visit_pattern_PathBinding(sp, e.path);
+                e.binding = visitPatternPathBinding(sp, e.path);
             }
             TU_ARMA(PathNamed, e) {
                 auto new_path = expand_alias_path(sp, e.path);
@@ -1688,7 +1688,7 @@ public:
                     DEBUG("Replacing " << e.path << " with " << new_path);
                     e.path = mv$(new_path);
                 }
-                e.binding = visit_pattern_PathBinding(sp, e.path);
+                e.binding = visitPatternPathBinding(sp, e.path);
                 // TODO: If this is an empty/wildcard AND it's poiting at a value/tuple entry, change to PathValue/PathTuple
             }
         }
@@ -4522,7 +4522,7 @@ namespace resolve_ufcs {
             default:
                 break;
                 TU_ARMA(Value, e) {
-                    this->visit_pattern_Value(sp, pat, e.val);
+                    this->visitPatternValue(sp, pat, e.val);
                     if (e.val.is_Named() && e.val.as_Named().path.m_data.is_Generic() && e.val.as_Named().path.m_data.as_Generic().m_path.components().size() > 1) {
                         auto& gp = e.val.as_Named().path.m_data.as_Generic();
                         if (const auto* enm_p = m_crate.get_typeitem_by_path(sp, gp.m_path, false, true).opt_Enum()) {
@@ -4533,10 +4533,10 @@ namespace resolve_ufcs {
                 }
                 TU_ARMA(Range, e) {
                     if (e.start) {
-                        this->visit_pattern_Value(sp, pat, *e.start);
+                        this->visitPatternValue(sp, pat, *e.start);
                     }
                     if (e.end) {
-                        this->visit_pattern_Value(sp, pat, *e.end);
+                        this->visitPatternValue(sp, pat, *e.end);
                     }
                 }
                 TU_ARMA(PathValue, e) {
@@ -4573,7 +4573,7 @@ namespace resolve_ufcs {
             }
         }
 
-        void visit_pattern_Value(const Span& sp, const ::HIR::Pattern& pat, ::HIR::Pattern::Value& val) {
+        void visitPatternValue(const Span& sp, const ::HIR::Pattern& pat, ::HIR::Pattern::Value& val) {
             TRACE_FUNCTION_F("pat=" << pat << ", val=" << val);
             if (auto* vep = val.opt_Named()) {
                 auto& ve = *vep;
@@ -4664,22 +4664,22 @@ namespace resolve_ufcs {
     }
 
     // --- Indexing of inherent methods ---
-    void push_index_inherent_methods_list(::HIR::InherentCache& icache, const HIR::SimplePath& lang_Box, const ::std::vector<std::unique_ptr<HIR::TypeImpl>>& src) {
+    void push_index_inherent_methods_list(::HIR::InherentCache& icache, const HIR::SimplePath& langBox, const ::std::vector<std::unique_ptr<HIR::TypeImpl>>& src) {
         Span sp;
         for (const auto& ti : src) {
             const auto& impl = *ti;
             TRACE_FUNCTION_F("impl" << impl.m_params.fmt_args() << " " << impl.m_type);
-            icache.insert_all(sp, impl, lang_Box);
+            icache.insert_all(sp, impl, langBox);
         }
     }
 
-    void push_index_inherent_methods(::HIR::InherentCache& icache, const HIR::SimplePath& lang_Box, const ::HIR::Crate& src) {
+    void push_index_inherent_methods(::HIR::InherentCache& icache, const HIR::SimplePath& langBox, const ::HIR::Crate& src) {
         TRACE_FUNCTION_F("src = " << src.m_crate_name);
         for (const auto& e : src.m_type_impls.named) {
-            push_index_inherent_methods_list(icache, lang_Box, e.second);
+            push_index_inherent_methods_list(icache, langBox, e.second);
         }
-        push_index_inherent_methods_list(icache, lang_Box, src.m_type_impls.non_named);
-        push_index_inherent_methods_list(icache, lang_Box, src.m_type_impls.generic);
+        push_index_inherent_methods_list(icache, langBox, src.m_type_impls.non_named);
+        push_index_inherent_methods_list(icache, langBox, src.m_type_impls.generic);
     }
 } // namespace ""
 
@@ -4739,10 +4739,10 @@ void ConvertHIRResolveUFCSSortImpls(::HIR::Crate& crate) {
     }
 
     {
-        const auto& lang_Box = crate.get_lang_item_path_opt("owned_box");
-        push_index_inherent_methods(crate.m_inherent_method_cache, lang_Box, crate);
+        const auto& langBox = crate.get_lang_item_path_opt("owned_box");
+        push_index_inherent_methods(crate.m_inherent_method_cache, langBox, crate);
         for (const auto& ec : crate.m_ext_crates) {
-            push_index_inherent_methods(crate.m_inherent_method_cache, lang_Box, *ec.second.m_data);
+            push_index_inherent_methods(crate.m_inherent_method_cache, langBox, *ec.second.m_data);
         }
     }
 }

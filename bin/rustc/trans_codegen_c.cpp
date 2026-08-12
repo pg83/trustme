@@ -1105,8 +1105,8 @@ namespace {
         void emit_box_drop(unsigned indent_level, const ::HIR::TypeData* inner_type, const ::HIR::TypeData* box_type, const ::MIR::LValue& slot, bool run_destructor) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
             if (run_destructor) {
-                auto inner_ptr = ::MIR::LValue::new_Field(::MIR::LValue::new_Field(::MIR::LValue::new_Field(slot.clone(), 0), 0), 0);
-                emit_destructor_call(::MIR::LValue::new_Deref(mv$(inner_ptr)), inner_type, /*unsized_valid=*/true, indent_level);
+                auto inner_ptr = ::MIR::LValue::newField(::MIR::LValue::newField(::MIR::LValue::newField(slot.clone(), 0), 0), 0);
+                emit_destructor_call(::MIR::LValue::newDeref(mv$(inner_ptr)), inner_type, /*unsized_valid=*/true, indent_level);
             }
 
             auto p = ::HIR::Path(box_type, m_crate.get_lang_item_path(Span(), "drop"), "drop");
@@ -1118,12 +1118,12 @@ namespace {
             // drop skips that path, but still drops the real fields after Box::drop.
             const auto* repr = TargetGetTypeRepr(sp, m_resolve, box_type);
             MIR_ASSERT(*m_mir_res, repr, "No repr for Box " << box_type);
-            auto field = ::MIR::LValue::new_Field(slot.clone(), 0);
+            auto field = ::MIR::LValue::newField(slot.clone(), 0);
             for (const auto& field_repr : repr->fields) {
                 if (m_resolve.type_needs_drop_glue(sp, field_repr.ty)) {
                     emit_destructor_call(field, field_repr.ty, /*unsized_valid=*/false, indent_level);
                 }
-                field.inc_Field();
+                field.incField();
             }
         }
 
@@ -1768,12 +1768,12 @@ namespace {
 
             std::vector<MIR::Param> vals;
             for (unsigned int i = 0; i < e.size(); i++) {
-                vals.push_back(MIR::LValue::new_Argument(i));
+                vals.push_back(MIR::LValue::newArgument(i));
             }
 
             // Create the variant
             // - Use `emit_statement` to avoid re-writing the enum tag handling
-            emit_statement(*m_mir_res, ::MIR::Statement::make_Assign({::MIR::LValue::new_Return(), ::MIR::RValue::make_EnumVariant({p.clone(), static_cast<unsigned>(var_idx), mv$(vals)})}));
+            emit_statement(*m_mir_res, ::MIR::Statement::make_Assign({::MIR::LValue::newReturn(), ::MIR::RValue::make_EnumVariant({p.clone(), static_cast<unsigned>(var_idx), mv$(vals)})}));
             m_of << "\treturn rv;\n";
             m_of << "}\n";
             m_mir_res = nullptr;
@@ -2781,7 +2781,7 @@ namespace {
                         assert(repr);
                         size_t n_parent_fields = repr->fields.size();
                         // Find next non-zero field
-                        auto tmp_lv = ::MIR::LValue::new_Field(field_inner.clone(), val_fp.as_Field() + 1);
+                        auto tmp_lv = ::MIR::LValue::newField(field_inner.clone(), val_fp.as_Field() + 1);
                         bool found = false;
                         while (tmp_lv.as_Field() < n_parent_fields) {
                             auto idx = tmp_lv.as_Field();
@@ -2794,7 +2794,7 @@ namespace {
                                 found = true;
                                 break;
                             }
-                            tmp_lv.m_wrappers.back() = ::MIR::LValue::Wrapper::new_Field(idx + 1);
+                            tmp_lv.m_wrappers.back() = ::MIR::LValue::Wrapper::newField(idx + 1);
                         }
 
                         // If no non-zero fields were found before the end, then do pointer manipulation using the repr
@@ -5334,7 +5334,7 @@ namespace {
                 ::std::vector<MIR::Param> args;
                 args.reserve(arg_ty_tuple.size());
                 for (size_t i = 0; i < arg_ty_tuple.size(); i++) {
-                    args.push_back(MIR::LValue::new_Field(arg.clone(), i));
+                    args.push_back(MIR::LValue::newField(arg.clone(), i));
                 }
                 auto pseudo_term = MIR::Terminator::Data_Call{e.ret_block, MIR::UnwindAction::make_Continue({}), e.ret_val.clone(), MIR::CallTarget::make_Path(fcn_path.clone()), std::move(args)};
                 emit_term_call(mir_res, pseudo_term, 1);
@@ -5534,7 +5534,7 @@ namespace {
             } else if (name == "forget") {
                 // Nothing needs to be done, this just stops the destructor from running.
             } else if (name == "drop_in_place") {
-                emit_destructor_call(::MIR::LValue::new_Deref(e.args.at(0).as_LValue().clone()), params.m_types.at(0), true, /*indent_level=*/1 /* TODO: get from caller */);
+                emit_destructor_call(::MIR::LValue::newDeref(e.args.at(0).as_LValue().clone()), params.m_types.at(0), true, /*indent_level=*/1 /* TODO: get from caller */);
             }
             // --- Type traits
             else if (name == "needs_drop") {
@@ -7255,7 +7255,7 @@ namespace {
             unsigned indent_level
         ) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indent_level)};
-            auto element = ::MIR::LValue::new_Index(slot.clone(), ::MIR::LValue::Storage::MAX_ARG);
+            auto element = ::MIR::LValue::newIndex(slot.clone(), ::MIR::LValue::Storage::MAX_ARG);
 
             m_of << indent << "for(unsigned i = 0; i < ";
             emit_count();
@@ -7284,14 +7284,14 @@ namespace {
             ::std::vector<::MIR::LValue> fields;
             ::std::vector<const ::HIR::TypeData*> field_types;
             ::std::vector<bool> field_unsized;
-            auto field = ::MIR::LValue::new_Field(slot.clone(), 0);
+            auto field = ::MIR::LValue::newField(slot.clone(), 0);
             for (size_t i = 0; i < tuple.size(); i++) {
                 if (m_resolve.type_needs_drop_glue(sp, tuple[i])) {
                     fields.push_back(field.clone());
                     field_types.push_back(tuple[i]);
                     field_unsized.push_back(unsized_valid && i == tuple.size() - 1);
                 }
-                field.inc_Field();
+                field.incField();
             }
             if (fields.empty()) {
                 return;
@@ -7353,7 +7353,7 @@ namespace {
                 TU_ARMA(Borrow, te) {
                     if (te.type == ::HIR::BorrowType::Owned) {
                         // Call drop glue on inner.
-                        emit_destructor_call(::MIR::LValue::new_Deref(slot.clone()), te.inner, true, indent_level);
+                        emit_destructor_call(::MIR::LValue::newDeref(slot.clone()), te.inner, true, indent_level);
                     }
                 }
                 TU_ARMA(Path, te) {
@@ -7627,7 +7627,7 @@ namespace {
                         emit_lvalue(inner);
                     }
                     m_of << ")[";
-                    emit_lvalue(::MIR::LValue::new_Local(index_local));
+                    emit_lvalue(::MIR::LValue::newLocal(index_local));
                     m_of << "]";
                 }
                 TU_ARMA(Downcast, variant_index) {
