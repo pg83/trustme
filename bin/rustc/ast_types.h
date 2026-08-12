@@ -11,10 +11,6 @@
 //#include "ast/path.h"
 #include "tagged_union.h"
 
-#ifdef AST_PATH_HPP_COMPLETE
-    #error ""
-#endif
-
 namespace AST {
     class ExprNode;
     class Expr;
@@ -388,4 +384,3 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const TypeRef& tr);
 };
 
-#define TYPES_HPP_COMPLETE

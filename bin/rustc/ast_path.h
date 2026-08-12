@@ -15,10 +15,6 @@
 #include "ast_types.h"
 #include "ast_expr_ptr.h"
 
-#ifndef TYPES_HPP_COMPLETE
-    #error "Expected TYPES_HPP_COMPLETE set"
-#endif
-
 class MacroRules;
 
 namespace HIR {
@@ -613,4 +609,3 @@ namespace AST {
 
 } // namespace AST
 
-#define AST_PATH_HPP_COMPLETE
