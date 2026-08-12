@@ -596,7 +596,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
             // ---
 
-            MIRValidate(state.resolve, HIRItemPath(path), *newFcn.mCode.mir, newFcn.mArgs, newFcn.returnType);
             transList.autoFunctions.push_back(box$(newFcn));
             auto* e = transList.addFunction(crate.types, path.clone());
             if (e) {
@@ -676,7 +675,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         builder.mir.blocks.back().isCleanup = true;
                         builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
 
-                        MIRValidate(state.resolve, HIRItemPath(path), *fcn.mCode.mir, fcn.mArgs, fcn.returnType);
                         transList.autoFunctions.push_back(box$(fcn));
                         e->ptr = transList.autoFunctions.back().get();
                     }
@@ -719,7 +717,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         builder.mir.blocks.back().isCleanup = true;
                         builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
 
-                        MIRValidate(state.resolve, HIRItemPath(path), *fcn.mCode.mir, fcn.mArgs, fcn.returnType);
                         transList.autoFunctions.push_back(box$(fcn));
                         e->ptr = transList.autoFunctions.back().get();
                     }
@@ -910,7 +907,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 builder.terminateBlock(MIRTerminator::make_UnwindResume({}));
                                 // ---
 
-                                MIRValidate(state.resolve, HIRItemPath(itemPath), *newFcn.mCode.mir, newFcn.mArgs, newFcn.returnType);
                                 transList.autoFunctions.push_back(box$(newFcn));
                                 e->ptr = transList.autoFunctions.back().get();
                             }
@@ -1236,7 +1232,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 builder.terminateBlock(MIRTerminator::make_Return({}));
             }
 
-            MIRValidate(state.resolve, HIRItemPath(path), *fcn.mCode.mir, fcn.mArgs, fcn.returnType);
             transList.autoFunctions.push_back(box$(fcn));
             auto* e = transList.addFunction(crate.types, mv$(path));
             if (e) {

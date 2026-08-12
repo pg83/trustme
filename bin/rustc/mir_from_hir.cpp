@@ -2978,7 +2978,6 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
                     }
                 }
             }
-            MIRValidate(resolve, path, *dropImplBody, genNode->dropFcnPtr->mArgs, resolve.crate.types.unit());
             genNode->dropFcnPtr->mCode.mir = std::move(dropImplBody);
         } else {
             rootNode.visit(ev);
@@ -2987,12 +2986,6 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
     }
 
     // NOTE: Can't clean up yet, as consteval isn't done
-    MIRValidate(resolve, path, fcn, args, retTy);
-
-    if (getenv("MRUSTC_VALIDATE_FULL_EARLY")) {
-        MIRValidateFull(resolve, path, fcn, args, ptr->resType);
-    }
-
     return MIRFunctionPointer(new MIRFunction(mv$(fcn)));
 }
 

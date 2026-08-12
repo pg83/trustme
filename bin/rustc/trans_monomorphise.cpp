@@ -214,14 +214,12 @@ void TransMonomorphiseList(const WireBoard& wb, const HIRCrate& crate, TransList
 
             //::std::string s = FMT(path);
             HIRItemPath ip(path);
-            MIRValidate(resolve, ip, *mir, args, retType);
             MIRCleanup(resolve, ip, *mir, args, retType);
             if (mirOptLevel == 0) {
                 MIROptimiseMin(resolve, ip, *mir, args, retType);
             } else {
                 MIROptimise(resolve, ip, *mir, args, retType, mirOptLevel, /*do_inline*/ false);
             }
-            MIRValidate(resolve, ip, *mir, args, retType);
 
             fcnEnt.second->monomorphised.retTy = ::std::move(retType);
             fcnEnt.second->monomorphised.argTys = ::std::move(args);

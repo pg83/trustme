@@ -19,25 +19,6 @@
 #include <stdexcept>
 
 namespace {
-    struct ExpectedCfgValues {
-        bool any = false;
-        bool none = false;
-        ::std::set<::std::string> values;
-    };
-
-    struct LintSetting {
-        bool isSet = false;
-        CfgLintLevel level = CfgLintLevel::Warn;
-    };
-
-    struct CheckCfgState {
-        bool active = false;
-        bool exhaustiveNames = true;
-        ::std::map<::std::string, ExpectedCfgValues> expected;
-        LintSetting warnings;
-        LintSetting unexpectedCfgs;
-        LintSetting cap;
-    };
 }
 
 // The cfg!() evaluation state: --cfg values/flags, value callbacks and the
@@ -47,7 +28,6 @@ struct CfgState {
     ::std::multimap<::std::string, ::std::string> values;
     ::std::map<::std::string, ::std::function<bool(const ::std::string&)>> valueFcns;
     ::std::set<::std::string> flags;
-    CheckCfgState check;
 };
 
 CfgState* CfgCreateState(stl::ObjPool& pool) {
@@ -61,11 +41,6 @@ namespace {
         size_t pos = 0;
 
     public:
-        struct CheckSpec {
-            bool anyNames = false;
-            ::std::vector<::std::string> names;
-            ExpectedCfgValues values;
-        };
 
         explicit CfgSpecParser(const ::std::string& input)
             : input(input)
@@ -211,240 +186,8 @@ namespace {
             return {::std::move(name), ::std::move(value)};
         }
 
-        CheckSpec parseCheckSpec() {
-            if (ident() != "cfg") {
-                fail("expected `cfg(...)`");
-            }
-            expect('(', "`(` after `cfg`");
-
-            CheckSpec rv;
-            bool sawValues = false;
-            if (take(')')) {
-                if (!atEnd()) {
-                    fail("unexpected input after `cfg(...)`");
-                }
-                return rv;
-            }
-
-            for (;;) {
-                auto word = ident();
-                if (take('(')) {
-                    if (word == "any") {
-                        if (!rv.names.empty() || sawValues || rv.anyNames) {
-                            fail("`cfg(any())` can only be provided in isolation");
-                        }
-                        expect(')', "`)` after `any(`");
-                        rv.anyNames = true;
-                    } else if (word == "values") {
-                        if (rv.names.empty()) {
-                            fail("`values()` cannot be specified before the names");
-                        }
-                        if (sawValues) {
-                            fail("`values()` cannot be specified multiple times");
-                        }
-                        sawValues = true;
-                        bool sawAny = false;
-                        if (!take(')')) {
-                            for (;;) {
-                                skipWs();
-                                if (pos < input.size() && input[pos] == '"') {
-                                    if (sawAny) {
-                                        fail("`values()` cannot combine string literals with `any()`");
-                                    }
-                                    rv.values.values.insert(stringLiteral());
-                                } else {
-                                    auto valueKind = ident();
-                                    expect('(', "`(` in `values()` special value");
-                                    expect(')', "`)` in `values()` special value");
-                                    if (valueKind == "none") {
-                                        if (sawAny) {
-                                            fail("`values()` cannot combine `none()` with `any()`");
-                                        }
-                                        rv.values.none = true;
-                                    } else if (valueKind == "any") {
-                                        if (sawAny || rv.values.none || !rv.values.values.empty()) {
-                                            fail("`values()` cannot combine `any()` with other values");
-                                        }
-                                        sawAny = true;
-                                        rv.values.any = true;
-                                    } else {
-                                        fail("`values()` arguments must be string literals, `none()` or `any()`");
-                                    }
-                                }
-                                if (take(')')) {
-                                    break;
-                                }
-                                expect(',', "`,` between `values()` arguments");
-                                if (take(')')) {
-                                    break;
-                                }
-                            }
-                        }
-                    } else {
-                        fail("`cfg()` arguments must be identifiers, `any()` or `values(...)`");
-                    }
-                } else {
-                    if (sawValues) {
-                        fail("`cfg()` names cannot be after values");
-                    }
-                    rv.names.push_back(::std::move(word));
-                }
-
-                if (take(')')) {
-                    break;
-                }
-                expect(',', "`,` between `cfg()` arguments");
-                if (take(')')) {
-                    break;
-                }
-            }
-            if (!atEnd()) {
-                fail("unexpected input after `cfg(...)`");
-            }
-            if (rv.anyNames && (!rv.names.empty() || sawValues)) {
-                fail("`cfg(any())` can only be provided in isolation");
-            }
-            if (!sawValues && !rv.anyNames) {
-                rv.values.none = true;
-            }
-            return rv;
-        }
     };
 
-    bool isStickyLintLevel(CfgLintLevel level) {
-        return level == CfgLintLevel::ForceWarn || level == CfgLintLevel::Forbid;
-    }
-
-    void updateLintSetting(LintSetting& setting, CfgLintLevel level) {
-        if (setting.isSet && isStickyLintLevel(setting.level)) {
-            return;
-        }
-        setting.isSet = true;
-        setting.level = level;
-    }
-
-    unsigned lintLevelRank(CfgLintLevel level) {
-        switch (level) {
-            case CfgLintLevel::Allow:
-                return 0;
-            case CfgLintLevel::Warn:
-            case CfgLintLevel::ForceWarn:
-                return 1;
-            case CfgLintLevel::Deny:
-                return 2;
-            case CfgLintLevel::Forbid:
-                return 3;
-        }
-        throw ::std::logic_error("invalid lint level");
-    }
-
-    CfgLintLevel unexpectedCfgLevel(const CfgState& cfg) {
-        auto level = cfg.check.unexpectedCfgs.isSet ? cfg.check.unexpectedCfgs.level : (cfg.check.warnings.isSet ? cfg.check.warnings.level : CfgLintLevel::Warn);
-        if (level != CfgLintLevel::ForceWarn && cfg.check.cap.isSet && lintLevelRank(level) > lintLevelRank(cfg.check.cap.level)) {
-            level = cfg.check.cap.level;
-        }
-        return level;
-    }
-
-    enum class BuiltinExpectation {
-        UnknownName,
-        Expected,
-        UnexpectedValue,
-    };
-
-    BuiltinExpectation checkBuiltinCfg(const ::std::string& name, const ::std::optional<::std::string>& value) {
-        static const ::std::set<::std::string> noValueNames = {
-            "debug_assertions",
-            "clippy",
-            "doc",
-            "doctest",
-            "miri",
-            "rustfmt",
-            "overflow_checks",
-            "proc_macro",
-            "sanitizer_cfi_generalize_pointers",
-            "sanitizer_cfi_normalize_integers",
-            "target_thread_local",
-            "ub_checks",
-            "contract_checks",
-            "unix",
-            "windows",
-        };
-        static const ::std::set<::std::string> anyValueNames = {
-            "fmt_debug",
-            "panic",
-            "relocation_model",
-            "sanitize",
-            "target_feature",
-            "target_abi",
-            "target_arch",
-            "target_endian",
-            "target_env",
-            "target_family",
-            "target_os",
-            "target_pointer_width",
-            "target_vendor",
-        };
-        static const ::std::set<::std::string> atomicNames = {
-            "target_has_atomic",
-            "target_has_atomic_equal_alignment",
-            "target_has_atomic_load_store",
-        };
-        if (noValueNames.count(name) != 0) {
-            return value ? BuiltinExpectation::UnexpectedValue : BuiltinExpectation::Expected;
-        }
-        if (anyValueNames.count(name) != 0) {
-            return value ? BuiltinExpectation::Expected : BuiltinExpectation::UnexpectedValue;
-        }
-        if (atomicNames.count(name) != 0) {
-            if (!value || *value == "ptr" || *value == "8" || *value == "16" || *value == "32" || *value == "64" || *value == "128") {
-                return BuiltinExpectation::Expected;
-            }
-            return BuiltinExpectation::UnexpectedValue;
-        }
-        return BuiltinExpectation::UnknownName;
-    }
-
-    void reportUnexpectedCfg(const CfgState& cfg, const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value, bool badValue) {
-        const auto level = unexpectedCfgLevel(cfg);
-        if (level == CfgLintLevel::Allow) {
-            return;
-        }
-        const auto condition = value ? FMT("`" << name << " = \"" << *value << "\"`") : FMT("`" << name << "`");
-        const auto message = badValue ? FMT("unexpected cfg condition value " << condition) : FMT("unexpected cfg condition name " << condition);
-        if (level == CfgLintLevel::Warn || level == CfgLintLevel::ForceWarn) {
-            WARNING(span, W0000, message);
-        } else {
-            ERROR(span, E0000, message);
-        }
-    }
-
-    void validateCfgUse(const CfgState& cfg, const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value) {
-        if (!cfg.check.active) {
-            return;
-        }
-        const auto it = cfg.check.expected.find(name);
-        if (it != cfg.check.expected.end()) {
-            const auto& expected = it->second;
-            const auto valid = expected.any || (value ? expected.values.count(*value) != 0 : expected.none);
-            if (!valid) {
-                reportUnexpectedCfg(cfg, span, name, value, true);
-            }
-            return;
-        }
-        switch (checkBuiltinCfg(name, value)) {
-            case BuiltinExpectation::Expected:
-                return;
-            case BuiltinExpectation::UnexpectedValue:
-                reportUnexpectedCfg(cfg, span, name, value, true);
-                return;
-            case BuiltinExpectation::UnknownName:
-                if (cfg.check.exhaustiveNames) {
-                    reportUnexpectedCfg(cfg, span, name, value, false);
-                }
-                return;
-        }
-    }
 }
 
 static const RcString rcstringCfg = RcString::newInterned("cfg");
@@ -489,49 +232,16 @@ bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasVal
 }
 
 bool CfgSetCheckSpec(Settings& settings, const ::std::string& spec, ::std::string& error) {
-    auto& cfg = *settings.cfg;
-    try {
-        auto parsed = CfgSpecParser(spec).parseCheckSpec();
-        cfg.check.active = true;
-        if (parsed.anyNames) {
-            cfg.check.exhaustiveNames = false;
-        }
-        for (auto& name : parsed.names) {
-            auto& expected = cfg.check.expected[name];
-            if (parsed.values.any) {
-                expected.any = true;
-                expected.none = false;
-                expected.values.clear();
-            } else if (!expected.any) {
-                expected.none |= parsed.values.none;
-                expected.values.insert(parsed.values.values.begin(), parsed.values.values.end());
-            }
-        }
-        return true;
-    } catch (const ::std::exception& e) {
-        error = e.what();
-        return false;
-    }
+    // Accepted for cargo compatibility; expectations are not checked.
+    return true;
 }
 
 void CfgSetLintLevel(Settings& settings, ::std::string name, CfgLintLevel level) {
-    auto& cfg = *settings.cfg;
-    for (auto& c : name) {
-        if (c == '-') {
-            c = '_';
-        }
-    }
-    if (name == "warnings") {
-        updateLintSetting(cfg.check.warnings, level);
-    } else if (name == "unexpected_cfgs") {
-        updateLintSetting(cfg.check.unexpectedCfgs, level);
-    }
+    // Accepted for cargo compatibility; cfg lints are not checked.
 }
 
 void CfgSetLintCap(Settings& settings, CfgLintLevel level) {
-    auto& cfg = *settings.cfg;
-    cfg.check.cap.isSet = true;
-    cfg.check.cap.level = level;
+    // Accepted for cargo compatibility; cfg lints are not checked.
 }
 
 namespace {
@@ -558,7 +268,6 @@ namespace {
     bool checkCfgInner1(const CfgState& cfg, const RcString& name, TokenStream& lex) {
         // Some compiler-generated cfg streams have no source parent.  They do
         // not need a diagnostic span unless check-cfg is actually enabled.
-        const auto conditionSpan = cfg.check.active ? lex.pointSpan() : Span();
         Token tok;
         switch (lex.lookahead(0)) {
             case TOK_EQUAL: {
@@ -573,7 +282,6 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_STRING);
                     val = tok.str();
                 }
-                validateCfgUse(cfg, conditionSpan, name.c_str(), val);
                 // Equality
                 auto its = cfg.values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
@@ -653,7 +361,6 @@ namespace {
 
                 break;
             default:
-                validateCfgUse(cfg, conditionSpan, name.c_str(), ::std::nullopt);
                 auto its = cfg.values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
                     return true;

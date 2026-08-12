@@ -4,9 +4,7 @@
 #include "hir_typeck_static.h"
 
 // Check that the MIR is well-formed
-extern void MIRValidate(const StaticTraitResolve& resolve, const HIRItemPath& path, const MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType);
 // -
-extern void MIRValidateFull(const StaticTraitResolve& resolve, const HIRItemPath& path, const MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType);
 // Perform needed changes to the generated MIR (virtualisation, Unsize/CoerceUnsize, ...)
 extern void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRFunction& fcn, const HIRFunction::argsT& args, const HIRTypeData* retType);
 // Optimise the MIR

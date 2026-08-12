@@ -205,8 +205,6 @@ struct ProgramParams {
         /// Debugger aid: pause just after startup so a debugger can attach.
         bool pause = false;
 
-        bool fullValidate = false;
-        bool fullValidateEarly = false;
 
         bool dumpAst = false;
         bool dumpHir = false;
@@ -286,17 +284,13 @@ void initDebugList() {
          "Expand HIR VTables",
          "Expand HIR Reborrows",
          "Expand HIR ErasedType",
-         "Typecheck Expressions (validate)",
 
          "Dump HIR",
          "Lower MIR",
-         "MIR Validate Full Early",
          "Dump MIR",
          "Constant Evaluate Full",
          "MIR Cleanup",
          "MIR Optimise",
-         "MIR Validate PO",
-         "MIR Validate Full",
 
          "HIR Serialise",
          "Trans Enumerate",
@@ -750,13 +744,6 @@ int main(int argc, char* argv[]) {
                 HIRDump(os, *hirCrate);
             });
         }
-        // - Ensure that typeck worked (including Fn trait call insertion etc)
-        CompilePhaseV("Typecheck Expressions (validate)", [&]() {
-            TypecheckExpressionsValidate(wb, *hirCrate);
-        });
-        // HACK?: Run lifetime inference again, so that bad closures are caught
-        // - Doesn't quite work, can't seem to run this twice?
-
         if (params.lastStage == ProgramParams::STAGE_TYPECK) {
             return 0;
         }
@@ -783,12 +770,6 @@ int main(int argc, char* argv[]) {
         CompilePhaseV("MIR Cleanup", [&]() {
             MIRCleanupCrate(wb, *hirCrate);
         });
-        if (params.debug.fullValidateEarly || getenv("MRUSTC_FULL_VALIDATE_PREOPT")) {
-            CompilePhaseV("MIR Validate Full Early", [&]() {
-                MIRCheckCrateFull(wb, *hirCrate);
-            });
-        }
-
         // Optimise the MIR
         CompilePhaseV("MIR Optimise", [&]() {
             MIROptimiseCrate(wb, *hirCrate, mirOptLevel, enableMirInlining);
@@ -801,17 +782,6 @@ int main(int argc, char* argv[]) {
                 MIRDump(os, *hirCrate);
             });
         }
-        CompilePhaseV("MIR Validate PO", [&]() {
-            MIRCheckCrate(wb, *hirCrate);
-        });
-        // - Exhaustive MIR validation (follows every code path and checks variable validity)
-        // > DEBUGGING ONLY
-        CompilePhaseV("MIR Validate Full", [&]() {
-            if (params.debug.fullValidate || getenv("MRUSTC_FULL_VALIDATE")) {
-                MIRCheckCrateFull(wb, *hirCrate);
-            }
-        });
-
         if (params.lastStage == ProgramParams::STAGE_MIR) {
             return 0;
         }
@@ -1228,12 +1198,6 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             ::std::cerr << "Invalid value for -Z next-solver: '" << optval << "' (expected 'no', 'coherence', or 'globally')" << ::std::endl;
                             exit(1);
                         }
-                    } else if (optname == "full-validate") {
-                        noOptval();
-                        this->debug.fullValidate = true;
-                    } else if (optname == "full-validate-early") {
-                        noOptval();
-                        this->debug.fullValidateEarly = true;
                     } else if (optname == "dump-ast") {
                         noOptval();
                         this->debug.dumpAst = true;

@@ -76,4 +76,3 @@ bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const HIR
 bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const HIRTypeData* value);
 
 class StaticTraitResolve;
-extern void TypecheckExpressionsValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<HIRPattern, HIRTypeRef>>& args, const HIRTypeData* retTy, const HIRExprPtr& code);

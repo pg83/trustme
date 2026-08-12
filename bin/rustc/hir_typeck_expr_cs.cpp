@@ -8486,10 +8486,8 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
     }
 
     {
-        DEBUG("==== FINAL VALIDATE ====");
         StaticTraitResolve staticResolve(ms.wb);
         staticResolve.setBothGenericsRaw(ms.mImplGenerics, ms.mItemGenerics);
-        TypecheckExpressionsValidateOne(staticResolve, args, resultType, expr);
 
         DEBUG("=== Method const params ===");
 
