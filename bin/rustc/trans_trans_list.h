@@ -1,8 +1,9 @@
 #pragma once
 
-#include "hir_type.h"
 #include "hir_path.h"
+#include "hir_type.h"
 #include "hir_typeck_common.h"
+
 #include <unordered_map>
 
 class StaticTraitResolve;
@@ -100,11 +101,13 @@ class TransList {
     // an emitted symbol. Keep the ABI identity alongside the exact-path maps.
     ::std::unordered_map<::std::string, ::HIR::Path> functionSymbols;
     ::std::unordered_map<::std::string, ::HIR::Path> staticSymbols;
+
     struct TypeEmissionState {
         ::HIR::TypeRef canonical;
         bool hasPrototype;
         bool hasDefinition;
     };
+
     ::std::unordered_map<::std::string, TypeEmissionState> typeSymbols;
 
 public:

@@ -1,4 +1,5 @@
 #include "mir_mir_ptr.h"
+
 #include "mir_mir.h"
 
 void MIRFunctionPointer::reset() {
@@ -8,44 +9,54 @@ void MIRFunctionPointer::reset() {
     }
 }
 
-
 MIRFunctionPointer::MIRFunctionPointer()
-    : ptr(nullptr) {
+    : ptr(nullptr)
+{
 }
+
 MIRFunctionPointer::MIRFunctionPointer(MIRFunction* p)
-    : ptr(p) {
+    : ptr(p)
+{
 }
+
 MIRFunctionPointer::MIRFunctionPointer(MIRFunctionPointer&& x)
-    : ptr(x.ptr) {
+    : ptr(x.ptr)
+{
     x.ptr = nullptr;
 }
+
 MIRFunctionPointer::~MIRFunctionPointer() {
     reset();
 }
+
 MIRFunctionPointer& MIRFunctionPointer::operator=(MIRFunctionPointer&& x) {
     reset();
     ptr = x.ptr;
     x.ptr = nullptr;
     return *this;
 }
+
 MIRFunction* MIRFunctionPointer::operator->() {
     if (!ptr) {
         throw "";
     }
     return ptr;
 }
+
 const MIRFunction* MIRFunctionPointer::operator->() const {
     if (!ptr) {
         throw "";
     }
     return ptr;
 }
+
 MIRFunction& MIRFunctionPointer::operator*() {
     if (!ptr) {
         throw "";
     }
     return *ptr;
 }
+
 const MIRFunction& MIRFunctionPointer::operator*() const {
     if (!ptr) {
         throw "";

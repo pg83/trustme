@@ -601,7 +601,7 @@ public:
         TRACE_FUNCTION;
 
         switch (auto tag = in.readTag()) {
-#define _(x, ...)                \
+#define _(x, ...)            \
     case MIRRValue::TAG_##x: \
         return MIRRValue::make_##x(__VA_ARGS__);
             _(Use, deserialiseMirLvalue())
@@ -629,9 +629,9 @@ public:
         TRACE_FUNCTION;
 
         switch (auto tag = in.readTag()) {
-#define _(x, ...)                  \
+#define _(x, ...)              \
     case MIRConstant::TAG_##x: \
-        DEBUG("- " #x);            \
+        DEBUG("- " #x);        \
         return MIRConstant::make_##x(__VA_ARGS__);
             _(Int, {in.readI128(), static_cast<::HIR::CoreType>(in.readTag())})
             _(Uint, {in.readU128(), static_cast<::HIR::CoreType>(in.readTag())})
@@ -1468,7 +1468,7 @@ MIRTerminator HirDeserialiser::deserialiseMirTerminator() {
 
 MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
     switch (auto tag = in.readTag()) {
-#define _(x, ...)                    \
+#define _(x, ...)                \
     case MIRTerminator::TAG_##x: \
         return MIRTerminator::make_##x(__VA_ARGS__);
         case MIRTerminator::TAGDEAD:
@@ -1520,7 +1520,7 @@ MIRUnwindAction HirDeserialiser::deserialiseMirUnwindAction() {
 MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
     TRACE_FUNCTION;
     switch (auto tag = in.readTag()) {
-#define _(x, ...)                      \
+#define _(x, ...)                  \
     case MIRSwitchValues::TAG_##x: \
         return MIRSwitchValues::make_##x(__VA_ARGS__);
         _(Unsigned, deserialiseVecC<uint64_t>([&]() {
@@ -1539,7 +1539,7 @@ MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
 
 MIRCallTarget HirDeserialiser::deserialiseMirCalltarget() {
     switch (auto tag = in.readTag()) {
-#define _(x, ...)                    \
+#define _(x, ...)                \
     case MIRCallTarget::TAG_##x: \
         return MIRCallTarget::make_##x(__VA_ARGS__);
         _(Value, deserialiseMirLvalue())

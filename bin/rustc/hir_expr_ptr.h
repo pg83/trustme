@@ -1,9 +1,9 @@
 #pragma once
 
+#include "mir_mir_ptr.h"
+
 #include <vector>
 #include <cassert>
-
-#include "mir_mir_ptr.h"
 
 struct Span;
 

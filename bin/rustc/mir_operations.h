@@ -1,7 +1,7 @@
 #pragma once
 
-#include "hir_typeck_static.h"
 #include "hir_item_path.h"
+#include "hir_typeck_static.h"
 
 // Check that the MIR is well-formed
 extern void MIRValidate(const StaticTraitResolve& resolve, const ::HIR::ItemPath& path, const MIRFunction& fcn, const ::HIR::Function::argsT& args, const ::HIR::TypeData* retType);

@@ -14,7 +14,7 @@ namespace HIR {
     class GlobalAssembly;
 }
 
-    class MIRFunctionPointer;
+class MIRFunctionPointer;
 
 class CodeGenerator {
 public:

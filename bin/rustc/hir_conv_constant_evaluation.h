@@ -7,13 +7,13 @@
 #include "hir_typeck_static.h"
 #include <std/mem/obj_pool.h>
 
-    class MIREvalAllocationPtr;
-    class MIREvalAllocation;
-    class MIREvalCallStackEntry;
-    class MIRLValue;
-    class MIRStatement;
-    class MIRTerminator;
-    class MIRTypeResolve;
+class MIREvalAllocationPtr;
+class MIREvalAllocation;
+class MIREvalCallStackEntry;
+class MIRLValue;
+class MIRStatement;
+class MIRTerminator;
+class MIRTypeResolve;
 
 namespace HIR {
 

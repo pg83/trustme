@@ -1,4 +1,5 @@
 #include "mir_visit_crate_mir.h"
+
 #include "hir_expr.h"
 
 // NOTE: This is left here to ensure that any expressions that aren't handled by higher code cause a failure
@@ -102,9 +103,9 @@ void MIROuterVisitor::visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::
     ::HIR::Visitor::visitTraitImpl(traitPath, impl);
 }
 
-
 MIROuterVisitor::MIROuterVisitor(const ::HIR::Crate& crate, cbT cb)
     : HIR::Visitor(nullptr, crate.types)
     , mResolve(crate)
-    , cb(cb) {
+    , cb(cb)
+{
 }

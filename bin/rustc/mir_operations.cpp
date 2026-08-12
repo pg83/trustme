@@ -1265,7 +1265,8 @@ void MIRValidateValState(MIRTypeResolve& state, const MIRFunction& fcn) {
                         }
                     }
                     // Check source (and invalidate sources)
-                    TU_MATCH(MIRRValue,
+                    TU_MATCH(
+                        MIRRValue,
                         (stmt.as_Assign().src),
                         (se),
                         (Use, valState.moveVal(state, se);),
@@ -2209,7 +2210,6 @@ namespace {
         };
 
         InvalidReason findInvalidReason(const MIRTypeResolve& localMirRes, const MIRLValue& rootLv) const {
-
             ::HIR::TypeRef tmp;
             bool isCopy = localMirRes.lvalueIsCopy(rootLv);
             size_t curStmt = localMirRes.getCurStmtOfs();

@@ -1411,48 +1411,48 @@ void TransEnumerateGlobalAllocator(EnumState& state) {
     }
 }
 
-    struct MIREnumCache {
-        ::std::vector<const ::HIR::Path*> paths;
-        ::std::vector<const ::HIR::TypeData*> typeids;
+struct MIREnumCache {
+    ::std::vector<const ::HIR::Path*> paths;
+    ::std::vector<const ::HIR::TypeData*> typeids;
 
-        MIREnumCache() {
-        }
-
-        void insertPath(const ::HIR::Path& newPath) {
-            for (const auto* p : this->paths) {
-                if (*p == newPath) {
-                    return;
-                }
-            }
-            this->paths.push_back(&newPath);
-        }
-
-        void insertTypeid(const ::HIR::TypeData* newTy) {
-            for (const auto* p : this->typeids) {
-                if (p == newTy) {
-                    return;
-                }
-            }
-            this->typeids.push_back(newTy);
-        }
-
-        void apply(EnumState& state, const TransParams& pp) const {
-            TRACE_FUNCTION_F(" w/ impl=" << pp.ppImpl << " method=" << pp.ppMethod);
-            for (const auto* tyP : this->typeids) {
-                DEBUG("TypeID " << tyP);
-                state.rv.typeids.insert(pp.monomorph(state.resolve, tyP));
-            }
-            for (const auto& path : this->paths) {
-                DEBUG("Path " << *path);
-                TransEnumerateFillFromPath(state, *path, pp);
-            }
-        }
-    };
-
-    MIREnumCachePtr::~MIREnumCachePtr() {
-        delete this->p;
-        this->p = nullptr;
+    MIREnumCache() {
     }
+
+    void insertPath(const ::HIR::Path& newPath) {
+        for (const auto* p : this->paths) {
+            if (*p == newPath) {
+                return;
+            }
+        }
+        this->paths.push_back(&newPath);
+    }
+
+    void insertTypeid(const ::HIR::TypeData* newTy) {
+        for (const auto* p : this->typeids) {
+            if (p == newTy) {
+                return;
+            }
+        }
+        this->typeids.push_back(newTy);
+    }
+
+    void apply(EnumState& state, const TransParams& pp) const {
+        TRACE_FUNCTION_F(" w/ impl=" << pp.ppImpl << " method=" << pp.ppMethod);
+        for (const auto* tyP : this->typeids) {
+            DEBUG("TypeID " << tyP);
+            state.rv.typeids.insert(pp.monomorph(state.resolve, tyP));
+        }
+        for (const auto& path : this->paths) {
+            DEBUG("Path " << *path);
+            TransEnumerateFillFromPath(state, *path, pp);
+        }
+    }
+};
+
+MIREnumCachePtr::~MIREnumCachePtr() {
+    delete this->p;
+    this->p = nullptr;
+}
 
 /// Enumerate trans items starting from `::main` (binary crate)
 TransList TransEnumerateMain(const ::HIR::Crate& crate) {

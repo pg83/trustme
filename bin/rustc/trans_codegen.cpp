@@ -1,18 +1,19 @@
 #include "trans_codegen.h"
-#include "trans_main_bindings.h"
-#include "trans_trans_list.h"
+
 #include "hir_hir.h"
 #include "mir_mir.h"
-#include "mir_operations.h"
-#include <algorithm>
-#include "trans_target.h"
-
-#include "trans_monomorphise.h"
-#include "hir_typeck_static.h"
 #include "mir_helpers.h"
+#include "trans_target.h"
+#include "mir_operations.h"
 #include "trans_mangling.h"
-#include <iomanip>
+#include "trans_trans_list.h"
+#include "hir_typeck_static.h"
+#include "trans_monomorphise.h"
+#include "trans_main_bindings.h"
+
 #include <fstream>
+#include <iomanip>
+#include <algorithm>
 
 void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const TransOptions& opt, ::HIR::Crate* cratePtr, TransList list, const ::std::string& hirFile) {
     static Span sp;
@@ -175,8 +176,6 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput outTy, const Trans
     // Would drop the entire crate, but finalise tends to need it
     codegen->finalise(opt, outTy, hirFile);
 }
-
-
 
 namespace {
 
@@ -1285,8 +1284,12 @@ namespace {
                         break;
                         TU_ARM(term, Drop, e) {
                             of << "DROP " << fmt(e.slot);
-                            if (e.kind == MIRDropKind::SHALLOW) of << " SHALLOW";
-                            if (e.flagIdx != ~0u) of << " IF df" << e.flagIdx;
+                            if (e.kind == MIRDropKind::SHALLOW) {
+                                of << " SHALLOW";
+                            }
+                            if (e.flagIdx != ~0u) {
+                                of << " IF df" << e.flagIdx;
+                            }
                             of << " goto " << e.target << " unwind " << e.unwind.tagStr() << "\n";
                         }
                         break;

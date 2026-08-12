@@ -1,9 +1,10 @@
 #include "mir_main_bindings.h"
-
 #include "mir_main_bindings.h"
-#include "hir_visitor.h"
+
 #include "mir_mir.h"
+#include "hir_visitor.h"
 #include "mir_operations.h"
+
 #include <iomanip>
 
 namespace {
@@ -128,12 +129,7 @@ namespace {
 
                 os << indent();
                 auto fmtUnwind = [this](const MIRUnwindAction& action) {
-                    TU_MATCHA((action), (ue),
-                        (Continue, os << "continue";),
-                        (Cleanup, os << "cleanup bb" << ue;),
-                        (Terminate, os << "terminate";),
-                        (Unreachable, os << "unreachable";)
-                    )
+                    TU_MATCHA((action), (ue), (Continue, os << "continue";), (Cleanup, os << "cleanup bb" << ue;), (Terminate, os << "terminate";), (Unreachable, os << "unreachable";))
                 };
                 TU_MATCHA(
                     (block.terminator),
@@ -147,38 +143,38 @@ namespace {
                     (If, os << "if " << FMT_M(e.cond) << " { goto bb" << e.bbTrue << "; } else { goto bb" << e.bbFalse << "; }\n";),
                     (Switch, os << "switch " << FMT_M(e.val) << " {"; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << "}\n";),
                     (SwitchValue, os << "switch " << FMT_M(e.val) << " {"; TU_MATCHA(
-                                                                                 (e.values),
-                                                                                 (ve),
-                                                                                 (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";),
-                                                                                 (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";),
-                                                                                 (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << FmtEscaped(ve[j]) << "\" => bb" << e.targets[j] << ", ";),
-                                                                                 (ByteString,
-                                                                                  for (unsigned int j = 0; j < e.targets.size(); j++) {
-                                                                                      os << "b\"";
-                                                                                      for (size_t i = 0; i < ve[j].size(); i++) {
-                                                                                          auto b = ve[j][i];
-                                                                                          switch (b) {
-                                                                                              case '\\':
-                                                                                                  os << "\\\\";
-                                                                                                  break;
-                                                                                              case '\"':
-                                                                                                  os << "\\\"";
-                                                                                                  break;
-                                                                                              default:
-                                                                                                  if (' ' <= b && b < 0x7f) {
-                                                                                                      os << char(ve[j][i]);
-                                                                                                  } else {
-                                                                                                      os << "\\x";
-                                                                                                      os << "0123456789ABCDEF"[b >> 4];
-                                                                                                      os << "0123456789ABCDEF"[b & 15];
-                                                                                                  }
-                                                                                                  break;
-                                                                                          }
-                                                                                      }
-                                                                                      os << "\" => bb" << e.targets[j] << ", ";
-                                                                                  })
-                                                                             ) os
-                                                                             << "_ => bb" << e.defTarget << "}\n";),
+                                                                               (e.values),
+                                                                               (ve),
+                                                                               (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";),
+                                                                               (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";),
+                                                                               (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << FmtEscaped(ve[j]) << "\" => bb" << e.targets[j] << ", ";),
+                                                                               (ByteString,
+                                                                                for (unsigned int j = 0; j < e.targets.size(); j++) {
+                                                                                    os << "b\"";
+                                                                                    for (size_t i = 0; i < ve[j].size(); i++) {
+                                                                                        auto b = ve[j][i];
+                                                                                        switch (b) {
+                                                                                            case '\\':
+                                                                                                os << "\\\\";
+                                                                                                break;
+                                                                                            case '\"':
+                                                                                                os << "\\\"";
+                                                                                                break;
+                                                                                            default:
+                                                                                                if (' ' <= b && b < 0x7f) {
+                                                                                                    os << char(ve[j][i]);
+                                                                                                } else {
+                                                                                                    os << "\\x";
+                                                                                                    os << "0123456789ABCDEF"[b >> 4];
+                                                                                                    os << "0123456789ABCDEF"[b & 15];
+                                                                                                }
+                                                                                                break;
+                                                                                        }
+                                                                                    }
+                                                                                    os << "\" => bb" << e.targets[j] << ", ";
+                                                                                })
+                                                                           ) os
+                                                                           << "_ => bb" << e.defTarget << "}\n";),
                     (Drop, os << "drop(" << FMT_M(e.slot); if (e.kind == MIRDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") goto bb" << e.target << " unwind "; fmtUnwind(e.unwind); os << "\n";),
                     (Call, os << FMT_M(e.retVal) << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ") goto bb" << e.retBlock << " unwind "; fmtUnwind(e.unwind); os << "\n";)
                 )

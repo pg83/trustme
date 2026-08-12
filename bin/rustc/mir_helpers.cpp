@@ -412,49 +412,48 @@ std::string MIRTypeResolve::intrinsicTypeName(const ::HIR::TypeData* ty) const {
     return FMT(ty);
 }
 
+struct LValueCbVisitor: public MIRVisitor {
+    ::std::function<bool(const MIRLValue&, MIRValUsage)> cb;
 
-    struct LValueCbVisitor: public MIRVisitor {
-        ::std::function<bool(const MIRLValue&, MIRValUsage)> cb;
+    LValueCbVisitor(::std::function<bool(const MIRLValue&, MIRValUsage)> cb)
+        : cb(std::move(cb))
+    {
+    }
 
-        LValueCbVisitor(::std::function<bool(const MIRLValue&, MIRValUsage)> cb)
-            : cb(std::move(cb))
-        {
+    bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override {
+        if (cb(lv, u)) {
+            return true;
         }
-
-        bool visitLvalue(const MIRLValue& lv, MIRValUsage u) override {
-            if (cb(lv, u)) {
-                return true;
-            }
-            return MIRVisitor::visitLvalue(lv, u);
-        }
-    };
-
-    bool visitMirLvalue(const MIRLValue& lv, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-        LValueCbVisitor v{mv$(cb)};
-        return v.visitLvalue(lv, u);
+        return MIRVisitor::visitLvalue(lv, u);
     }
+};
 
-    bool visitMirLvalue(const MIRParam& p, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-        LValueCbVisitor v{mv$(cb)};
-        return v.visitParam(p, u);
-    }
+bool visitMirLvalue(const MIRLValue& lv, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
+    LValueCbVisitor v{mv$(cb)};
+    return v.visitLvalue(lv, u);
+}
 
-    bool visitMirLvalues(const MIRRValue& rval, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-        LValueCbVisitor v{mv$(cb)};
-        return v.visitRvalue(rval);
-    }
+bool visitMirLvalue(const MIRParam& p, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
+    LValueCbVisitor v{mv$(cb)};
+    return v.visitParam(p, u);
+}
 
-    bool visitMirLvalues(const MIRStatement& stmt, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-        LValueCbVisitor v{mv$(cb)};
-        return v.visitStmt(stmt);
-    }
+bool visitMirLvalues(const MIRRValue& rval, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
+    LValueCbVisitor v{mv$(cb)};
+    return v.visitRvalue(rval);
+}
 
-    bool visitMirLvalues(const MIRTerminator& term, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-        LValueCbVisitor v{mv$(cb)};
-        return v.visitTerminator(term);
-    }
+bool visitMirLvalues(const MIRStatement& stmt, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
+    LValueCbVisitor v{mv$(cb)};
+    return v.visitStmt(stmt);
+}
 
-    /*
+bool visitMirLvalues(const MIRTerminator& term, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
+    LValueCbVisitor v{mv$(cb)};
+    return v.visitTerminator(term);
+}
+
+/*
     void visit_mir_lvalues_mut(::MIR::TypeResolve& state, ::MIR::Function& fcn, ::std::function<bool(::MIR::LValue& , ValUsage)> cb)
     {
         for(unsigned int block_idx = 0; block_idx < fcn.blocks.size(); block_idx ++)
@@ -477,23 +476,23 @@ std::string MIRTypeResolve::intrinsicTypeName(const ::HIR::TypeData* ty) const {
     }
     */
 
-    void visitTerminatorTargetMut(MIRTerminator& term, ::std::function<void(MIRBasicBlockId&)> cb) {
-        struct TermCbVisitorMut: public MIRVisitorMut {
-            ::std::function<void(MIRBasicBlockId&)> cb;
+void visitTerminatorTargetMut(MIRTerminator& term, ::std::function<void(MIRBasicBlockId&)> cb) {
+    struct TermCbVisitorMut: public MIRVisitorMut {
+        ::std::function<void(MIRBasicBlockId&)> cb;
 
-            bool visitBlockId(MIRBasicBlockId& x) override {
-                cb(x);
-                return false;
-            }
-        } v;
+        bool visitBlockId(MIRBasicBlockId& x) override {
+            cb(x);
+            return false;
+        }
+    } v;
 
-        v.cb = std::move(cb);
-        v.visitTerminator(term);
-    }
+    v.cb = std::move(cb);
+    v.visitTerminator(term);
+}
 
-    void visitTerminatorTarget(const MIRTerminator& term, ::std::function<void(const MIRBasicBlockId&)> cb) {
-        visitTerminatorTargetMut(const_cast<MIRTerminator&>(term), cb);
-    }
+void visitTerminatorTarget(const MIRTerminator& term, ::std::function<void(const MIRBasicBlockId&)> cb) {
+    visitTerminatorTargetMut(const_cast<MIRTerminator&>(term), cb);
+}
 
 // --------------------------------------------------------------------
 // MIR_Helper_GetLifetimes
@@ -1468,7 +1467,8 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
         state.setCurStmtTerm(bbIdx);
         DEBUG(state << "TERM " << fcn.blocks[bbIdx].terminator);
-        TU_MATCH(MIRTerminator,
+        TU_MATCH(
+            MIRTerminator,
             (fcn.blocks[bbIdx].terminator),
             (e),
             (
@@ -1533,84 +1533,83 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 }
 #endif
 
+MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* retType, const argsT& args, const MIRFunction& fcn)
+    : sp(sp)
+    , mResolve(resolve)
+    , crate(resolve.crate)
+    , mPath(path)
+    , retType(retType)
+    , mArgs(args)
+    , fcn(fcn)
+    , monomorphedRettype(nullptr)
+    , monomorphedLocals(nullptr)
+{
+    if (crate.mLangItems.count("owned_box") > 0) {
+        mLangBox = &crate.mLangItems.at("owned_box");
+    }
+}
 
-    MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* retType, const argsT& args, const MIRFunction& fcn)
-        : sp(sp)
-        , mResolve(resolve)
-        , crate(resolve.crate)
-        , mPath(path)
-        , retType(retType)
-        , mArgs(args)
-        , fcn(fcn)
-        , monomorphedRettype(nullptr)
-        , monomorphedLocals(nullptr)
-    {
-        if (crate.mLangItems.count("owned_box") > 0) {
-            mLangBox = &crate.mLangItems.at("owned_box");
+void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, const MIRStatement& stmt) {
+    assert(&stmt >= &bb.statements.front());
+    assert(&stmt <= &bb.statements.back());
+    this->setCurStmt(bb, &stmt - bb.statements.data());
+}
+
+void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, unsigned int stmtIdx) {
+    assert(&bb >= &fcn.blocks.front());
+    assert(&bb <= &fcn.blocks.back());
+    this->setCurStmt(&bb - fcn.blocks.data(), stmtIdx);
+}
+
+void MIRTypeResolve::setCurStmt(unsigned int bbIdx, unsigned int stmtIdx) {
+    this->bbIdx = bbIdx;
+    this->stmtIdx = stmtIdx;
+}
+
+void MIRTypeResolve::setCurStmtTerm(const MIRBasicBlock& bb) {
+    assert(&bb >= &fcn.blocks.front());
+    assert(&bb <= &fcn.blocks.back());
+    this->setCurStmtTerm(&bb - fcn.blocks.data());
+}
+
+void MIRTypeResolve::setCurStmtTerm(unsigned int bbIdx) {
+    this->bbIdx = bbIdx;
+    this->stmtIdx = STMT_TERM;
+}
+
+MIRValueLifetime::MIRValueLifetime(::std::vector<bool> stmts)
+    : statements(mv$(stmts))
+{
+}
+
+// true if this value is used at any point
+bool MIRValueLifetime::isUsed() const {
+    for (auto v : statements) {
+        if (v) {
+            return true;
         }
     }
+    return false;
+}
 
-    void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, const MIRStatement& stmt) {
-        assert(&stmt >= &bb.statements.front());
-        assert(&stmt <= &bb.statements.back());
-        this->setCurStmt(bb, &stmt - bb.statements.data());
-    }
-
-    void MIRTypeResolve::setCurStmt(const MIRBasicBlock& bb, unsigned int stmtIdx) {
-        assert(&bb >= &fcn.blocks.front());
-        assert(&bb <= &fcn.blocks.back());
-        this->setCurStmt(&bb - fcn.blocks.data(), stmtIdx);
-    }
-
-    void MIRTypeResolve::setCurStmt(unsigned int bbIdx, unsigned int stmtIdx) {
-        this->bbIdx = bbIdx;
-        this->stmtIdx = stmtIdx;
-    }
-
-    void MIRTypeResolve::setCurStmtTerm(const MIRBasicBlock& bb) {
-        assert(&bb >= &fcn.blocks.front());
-        assert(&bb <= &fcn.blocks.back());
-        this->setCurStmtTerm(&bb - fcn.blocks.data());
-    }
-
-    void MIRTypeResolve::setCurStmtTerm(unsigned int bbIdx) {
-        this->bbIdx = bbIdx;
-        this->stmtIdx = STMT_TERM;
-    }
-
-    MIRValueLifetime::MIRValueLifetime(::std::vector<bool> stmts)
-        : statements(mv$(stmts))
-    {
-    }
-
-    // true if this value is used at any point
-    bool MIRValueLifetime::isUsed() const {
-        for (auto v : statements) {
-            if (v) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    bool MIRValueLifetime::overlaps(const MIRValueLifetime& x) const {
-        assert(statements.size() == x.statements.size());
-        for (unsigned int i = 0; i < statements.size(); i++) {
-            if (statements[i] && x.statements[i]) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    void MIRValueLifetime::unify(const MIRValueLifetime& x) {
-        assert(statements.size() == x.statements.size());
-        for (unsigned int i = 0; i < statements.size(); i++) {
-            if (x.statements[i]) {
-                statements[i] = true;
-            }
+bool MIRValueLifetime::overlaps(const MIRValueLifetime& x) const {
+    assert(statements.size() == x.statements.size());
+    for (unsigned int i = 0; i < statements.size(); i++) {
+        if (statements[i] && x.statements[i]) {
+            return true;
         }
     }
+    return false;
+}
+
+void MIRValueLifetime::unify(const MIRValueLifetime& x) {
+    assert(statements.size() == x.statements.size());
+    for (unsigned int i = 0; i < statements.size(); i++) {
+        if (x.statements[i]) {
+            statements[i] = true;
+        }
+    }
+}
 
 bool MIRVisitor::visitLvalue(const MIRLValue& lv, MIRValUsage u) {
     if (lv.root.is_Static()) {
@@ -1645,8 +1644,7 @@ bool MIRVisitorMut::visitLvalue(MIRLValue& lv, MIRValUsage u) {
     return false;
 }
 
-
-    ::std::ostream& operator<<(::std::ostream& os, const MIRTypeResolve& x) {
-        x.fmtPos(os);
-        return os;
-    }
+::std::ostream& operator<<(::std::ostream& os, const MIRTypeResolve& x) {
+    x.fmtPos(os);
+    return os;
+}

@@ -1,8 +1,8 @@
 #pragma once
 
 #include "mir_mir.h"
+#include "hir_expr.h" // for ExprNodeMatch
 #include "hir_type.h"
-#include "hir_expr.h"          // for ExprNodeMatch
 #include "hir_typeck_static.h" // StaticTraitResolve for Copy
 
 class MirBuilder;
@@ -90,7 +90,7 @@ TAGGED_UNION(
     (Owning,
      struct {
          bool isTemporary;
-         ::std::vector<unsigned int> slots; // Locals whose state is owned by this scope
+         ::std::vector<unsigned int> slots;      // Locals whose state is owned by this scope
          ::std::vector<ScopeDropSlot> dropSlots; // Locals and arguments in scheduled drop order
      }),
     (Split,
@@ -271,6 +271,7 @@ public:
 
     MIRLValue newTemporary(const ::HIR::TypeData* ty);
     MIRLValue lvalueOrTemp(const Span& sp, const ::HIR::TypeData* ty, MIRRValue val);
+
     size_t localCount() const {
         return output.locals.size();
     }

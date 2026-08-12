@@ -1,34 +1,32 @@
 #pragma once
 
+class MIRFunction;
 
-    class MIRFunction;
+class MIRFunctionPointer {
+    MIRFunction* ptr;
 
-    class MIRFunctionPointer {
-        MIRFunction* ptr;
+public:
+    MIRFunctionPointer();
 
-    public:
-        MIRFunctionPointer();
+    MIRFunctionPointer(MIRFunction* p);
 
-        MIRFunctionPointer(MIRFunction* p);
+    MIRFunctionPointer(MIRFunctionPointer&& x);
 
-        MIRFunctionPointer(MIRFunctionPointer&& x);
+    ~MIRFunctionPointer();
 
-        ~MIRFunctionPointer();
+    MIRFunctionPointer& operator=(MIRFunctionPointer&& x);
 
-        MIRFunctionPointer& operator=(MIRFunctionPointer&& x);
+    void reset();
 
-        void reset();
+    MIRFunction* operator->();
 
-        MIRFunction* operator->();
+    const MIRFunction* operator->() const;
 
-        const MIRFunction* operator->() const;
+    MIRFunction& operator*();
 
-        MIRFunction& operator*();
+    const MIRFunction& operator*() const;
 
-        const MIRFunction& operator*() const;
-
-        operator bool() const {
-            return ptr != nullptr;
-        }
-    };
-
+    operator bool() const {
+        return ptr != nullptr;
+    }
+};
