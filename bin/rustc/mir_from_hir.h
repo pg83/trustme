@@ -1,6 +1,8 @@
 #pragma once
 
 #include "mir_mir.h"
+
+#include <map>
 #include "hir_expr.h" // for ExprNodeMatch
 #include "hir_type.h"
 #include "hir_typeck_static.h" // StaticTraitResolve for Copy
@@ -47,6 +49,15 @@ TAGGED_UNION_EX(
          struct {
              ::std::vector<VarState> innerStates;
              unsigned int outerFlag; // If ~0u, the outer discriminant is always valid.
+         }),
+        // Partially valid large array: a shared state for untouched elements plus
+        // per-index exceptions. Avoids materialising one state per element (fatal
+        // for e.g. `let [a, ..] = [String::new(); 64_000_000]`).
+        (PartialArray,
+         struct {
+             ::std::unique_ptr<VarState> fillState;
+             ::std::map<unsigned, VarState> otherStates;
+             size_t count;
          }),
         (MovedOut,
          struct {
@@ -270,6 +281,10 @@ public:
     MIRLValue getVariable(const Span& sp, unsigned idx) const;
 
     MIRLValue newTemporary(const HIRTypeData* ty);
+
+    /// Emit a `for i in start..end { drop(arr[i]) }` loop (used when dropping the
+    /// shared remainder of a PartialArray state).
+    void emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv, size_t start, size_t end, unsigned int dropFlag);
     MIRLValue lvalueOrTemp(const Span& sp, const HIRTypeData* ty, MIRRValue val);
 
     size_t localCount() const {

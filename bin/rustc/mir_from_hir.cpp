@@ -1,5 +1,8 @@
 #include "mir_from_hir.h"
 
+// Arrays at least this large use the sparse PartialArray move-tracking state.
+static const size_t PARTIAL_ARRAY_MIN = 32;
+
 #include "hir_hir.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
@@ -5010,13 +5013,31 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                         this->appendFrom(sp, subpat, e.inner);
                         fieldPath.back()++;
                     }
-                    while (fieldPath.back() < arraySize - pe.trailing.size()) {
-                        this->appendFrom(sp, emptyPattern, e.inner);
-                        fieldPath.back()++;
-                    }
-                    for (const auto& subpat : pe.trailing) {
-                        this->appendFrom(sp, subpat, e.inner);
-                        fieldPath.back()++;
+                    if (arraySize < PARTIAL_ARRAY_MIN) {
+                        // Small arrays enumerate the `..` middle so every arm of a
+                        // multi-arm match produces the same rule count (the column
+                        // sorter and the grouped matcher rely on that).
+                        while (fieldPath.back() < arraySize - pe.trailing.size()) {
+                            this->appendFrom(sp, emptyPattern, e.inner);
+                            fieldPath.back()++;
+                        }
+                        for (const auto& subpat : pe.trailing) {
+                            this->appendFrom(sp, subpat, e.inner);
+                            fieldPath.back()++;
+                        }
+                    } else {
+                        // The `..` middle of a huge array binds nothing and tests
+                        // nothing, so no rules are emitted for it (rules are
+                        // self-addressed via their field path). Enumerating it would
+                        // allocate per-element rules - fatal for [T; 64_000_000].
+                        if (!pe.trailing.empty()) {
+                            ASSERT_BUG(sp, arraySize - pe.trailing.size() < FIELD_INDEX_MAX, "Trailing slice rules after a too-large array gap");
+                            fieldPath.back() = static_cast<uint16_t>(arraySize - pe.trailing.size());
+                            for (const auto& subpat : pe.trailing) {
+                                this->appendFrom(sp, subpat, e.inner);
+                                fieldPath.back()++;
+                            }
+                        }
                     }
 
                     if (pe.extraBind.isValid()) {
@@ -8223,6 +8244,26 @@ namespace {
                         }
                     }
                         return;
+                    // Invalid <= PartialArray
+                    case VarState::TAG_PartialArray: {
+                        const auto& nse = newState.as_PartialArray();
+                        // Expand the scalar into a matching sparse state, then merge element-wise.
+                        {
+                            ::std::map<unsigned, VarState> other;
+                            for (const auto& kv : nse.otherStates) {
+                                other.insert(::std::make_pair(kv.first, oldState.clone()));
+                            }
+                            oldState = VarState::make_PartialArray({box$(oldState.clone()), mv$(other), nse.count});
+                        }
+                        auto& ose = oldState.as_PartialArray();
+                        // NOTE: The fill covers a uniform run, so a single merged state (and any
+                        // drop flag it allocates) stands for every untouched element.
+                        mergeState(sp, builder, MIRLValue::newField(lv.clone(), 0), *ose.fillState, *nse.fillState);
+                        for (auto& kv : ose.otherStates) {
+                            mergeState(sp, builder, MIRLValue::newField(lv.clone(), kv.first), kv.second, nse.otherStates.at(kv.first));
+                        }
+                        return;
+                    }
                 }
                 break;
             // Valid <= ...
@@ -8319,6 +8360,23 @@ namespace {
                         }
                     }
                         return;
+                    // Valid <= PartialArray
+                    case VarState::TAG_PartialArray: {
+                        const auto& nse = newState.as_PartialArray();
+                        {
+                            ::std::map<unsigned, VarState> other;
+                            for (const auto& kv : nse.otherStates) {
+                                other.insert(::std::make_pair(kv.first, VarState::make_Valid({})));
+                            }
+                            oldState = VarState::make_PartialArray({box$(VarState::make_Valid({})), mv$(other), nse.count});
+                        }
+                        auto& ose = oldState.as_PartialArray();
+                        mergeState(sp, builder, MIRLValue::newField(lv.clone(), 0), *ose.fillState, *nse.fillState);
+                        for (auto& kv : ose.otherStates) {
+                            mergeState(sp, builder, MIRLValue::newField(lv.clone(), kv.first), kv.second, nse.otherStates.at(kv.first));
+                        }
+                        return;
+                    }
                 }
                 break;
             // Optional <= ...
@@ -8406,6 +8464,31 @@ namespace {
                         }
                         return;
                     }
+                    // Optional <= PartialArray
+                    case VarState::TAG_PartialArray: {
+                        const auto& nse = newState.as_PartialArray();
+                        const auto oldOptionalFlag = oldState.as_Optional();
+                        // Expand into a sparse state whose entries each get their own flag
+                        // aliased to the original one (same trick as Optional <= Partial).
+                        const auto newAliasFlag = [&]() {
+                            auto flag = builder.newDropFlag(builder.getDropFlagDefault(sp, oldOptionalFlag));
+                            builder.dropFlagAlias(oldOptionalFlag, flag);
+                            return flag;
+                        };
+                        {
+                            ::std::map<unsigned, VarState> other;
+                            for (const auto& kv : nse.otherStates) {
+                                other.insert(::std::make_pair(kv.first, VarState::make_Optional(newAliasFlag())));
+                            }
+                            oldState = VarState::make_PartialArray({box$(VarState::make_Optional(newAliasFlag())), mv$(other), nse.count});
+                        }
+                        auto& ose = oldState.as_PartialArray();
+                        mergeState(sp, builder, MIRLValue::newField(lv.clone(), 0), *ose.fillState, *nse.fillState);
+                        for (auto& kv : ose.otherStates) {
+                            mergeState(sp, builder, MIRLValue::newField(lv.clone(), kv.first), kv.second, nse.otherStates.at(kv.first));
+                        }
+                        return;
+                    }
                 }
                 break;
             case VarState::TAG_MovedOut: {
@@ -8466,6 +8549,7 @@ namespace {
                         return;
                     }
                     case VarState::TAG_Partial:
+                    case VarState::TAG_PartialArray:
                         BUG(sp, "MovedOut->Partial not valid");
                 }
                 break;
@@ -8504,6 +8588,8 @@ namespace {
                         return;
                     case VarState::TAG_MovedOut:
                         BUG(sp, "Partial->MovedOut not valid");
+                    case VarState::TAG_PartialArray:
+                        BUG(sp, "Partial->PartialArray not valid (threshold mismatch)");
                     case VarState::TAG_Partial: {
                         const auto& nse = newState.as_Partial();
                         ASSERT_BUG(sp, ose.innerStates.size() == nse.innerStates.size(), "Partial->Partial with mismatched sizes - " << oldState << " <= " << newState);
@@ -8523,6 +8609,44 @@ namespace {
                         }
                     }
                         return;
+                }
+            } break;
+            case VarState::TAG_PartialArray: {
+                auto& ose = oldState.as_PartialArray();
+                switch (newState.tag()) {
+                    case VarState::TAGDEAD:
+                        throw "";
+                    // PartialArray <= scalar: fold the scalar into the fill and every exception
+                    case VarState::TAG_Invalid:
+                    case VarState::TAG_Valid:
+                    case VarState::TAG_Optional:
+                        mergeState(sp, builder, MIRLValue::newField(lv.clone(), 0), *ose.fillState, newState);
+                        for (auto& kv : ose.otherStates) {
+                            mergeState(sp, builder, MIRLValue::newField(lv.clone(), kv.first), kv.second, newState);
+                        }
+                        return;
+                    case VarState::TAG_MovedOut:
+                        BUG(sp, "PartialArray->MovedOut not valid");
+                    case VarState::TAG_Partial:
+                        BUG(sp, "PartialArray->Partial not valid (threshold mismatch)");
+                    case VarState::TAG_PartialArray: {
+                        const auto& nse = newState.as_PartialArray();
+                        ASSERT_BUG(sp, ose.count == nse.count, "PartialArray size mismatch - " << oldState << " <= " << newState);
+                        // Materialise entries that only the new state singles out, using the
+                        // pre-merge fill as their effective old state.
+                        for (const auto& kv : nse.otherStates) {
+                            if (ose.otherStates.find(kv.first) == ose.otherStates.end()) {
+                                ose.otherStates.insert(::std::make_pair(kv.first, ose.fillState->clone()));
+                            }
+                        }
+                        mergeState(sp, builder, MIRLValue::newField(lv.clone(), 0), *ose.fillState, *nse.fillState);
+                        for (auto& kv : ose.otherStates) {
+                            const auto it = nse.otherStates.find(kv.first);
+                            const VarState& newEff = it != nse.otherStates.end() ? it->second : *nse.fillState;
+                            mergeState(sp, builder, MIRLValue::newField(lv.clone(), kv.first), kv.second, newEff);
+                        }
+                        return;
+                    }
                 }
             } break;
         }
@@ -9036,9 +9160,10 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
         TU_MATCH_HDRA( (w), { )
         TU_ARMA(Field, fieldIndex) {
                 VarState tpl;
-                TU_MATCHA((ivs), (ivse), (Invalid, tpl = VarState::make_Valid({});), (MovedOut, BUG(sp, "Field on value with MovedOut state - " << lv);), (Partial, ), (Optional, tpl = ivs.clone();), (Valid, tpl = VarState::make_Valid({});))
-                if (!ivs.is_Partial()) {
+                TU_MATCHA((ivs), (ivse), (Invalid, tpl = VarState::make_Valid({});), (MovedOut, BUG(sp, "Field on value with MovedOut state - " << lv);), (Partial, ), (PartialArray, ), (Optional, tpl = ivs.clone();), (Valid, tpl = VarState::make_Valid({});))
+                if (!ivs.is_Partial() && !ivs.is_PartialArray()) {
                     size_t nFlds = 0;
+                    bool isArray = false;
                     withValType(sp, lv, [&](const auto& ty) {
                         DEBUG("ty = " << ty);
                         if (const auto* e = ty->opt_Path()) {
@@ -9050,18 +9175,33 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                         } else if (const auto* e = ty->opt_Array()) {
                             ASSERT_BUG(sp, e->size.is_Known(), "Array size not known");
                             nFlds = e->size.as_Known();
+                            isArray = true;
                         } else {
                             TODO(sp, "Determine field count for " << ty);
                         }
                     }, &w);
-                    ::std::vector<VarState> innerVs;
-                    innerVs.reserve(nFlds);
-                    for (size_t i = 0; i < nFlds; i++) {
-                        innerVs.push_back(tpl.clone());
+                    if (isArray && nFlds >= PARTIAL_ARRAY_MIN) {
+                        ivs = VarState::make_PartialArray({box$(tpl.clone()), {}, nFlds});
+                    } else {
+                        ::std::vector<VarState> innerVs;
+                        innerVs.reserve(nFlds);
+                        for (size_t i = 0; i < nFlds; i++) {
+                            innerVs.push_back(tpl.clone());
+                        }
+                        ivs = VarState::make_Partial({mv$(innerVs), ~0u});
                     }
-                    ivs = VarState::make_Partial({mv$(innerVs), ~0u});
                 }
-                vs = &ivs.as_Partial().innerStates.at(fieldIndex);
+                if (ivs.is_PartialArray()) {
+                    auto& pa = ivs.as_PartialArray();
+                    ASSERT_BUG(sp, fieldIndex < pa.count, "Array field index out of range - " << lv);
+                    auto it = pa.otherStates.find(fieldIndex);
+                    if (it == pa.otherStates.end()) {
+                        it = pa.otherStates.insert(::std::make_pair(fieldIndex, pa.fillState->clone())).first;
+                    }
+                    vs = &it->second;
+                } else {
+                    vs = &ivs.as_Partial().innerStates.at(fieldIndex);
+                }
             }
             TU_ARMA(Deref, _e) {
                 // A Box dereference is a move path: track its pointee separately so a
@@ -9126,6 +9266,39 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
         assert(vs);
     }
     return vs;
+}
+
+void MirBuilder::emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv, size_t start, size_t end, unsigned int dropFlag) {
+    if (start >= end) {
+        return;
+    }
+    const auto* usizeTy = mResolve.crate.types.primitive(HIRCoreType::Usize);
+    const auto* boolTy = mResolve.crate.types.primitive(HIRCoreType::Bool);
+    // Unscoped locals: primitives that outlive scope teardown and need no drops.
+    const auto newUnscopedLocal = [&](const HIRTypeData* ty) -> unsigned {
+        const auto rv = static_cast<unsigned>(output.locals.size());
+        output.locals.push_back(ty);
+        slotStates.push_back(VarState::make_Valid({}));
+        return rv;
+    };
+    const auto idxLocal = newUnscopedLocal(usizeTy);
+    const auto cmpLocal = newUnscopedLocal(boolTy);
+    const auto mkUsize = [](size_t v) {
+        return MIRParam(MIRConstant::make_Uint({U128(static_cast<uint64_t>(v)), HIRCoreType::Usize}));
+    };
+    pushStmtAssign(sp, MIRLValue::newLocal(idxLocal), MIRRValue::make_Constant(MIRConstant::make_Uint({U128(static_cast<uint64_t>(start)), HIRCoreType::Usize})), /*update_dest_state=*/false);
+    const auto bbCond = newBbUnlinked();
+    const auto bbBody = newBbUnlinked();
+    const auto bbNext = newBbUnlinked();
+    endBlock(MIRTerminator::make_Goto(bbCond));
+    setCurBlock(bbCond);
+    pushStmtAssign(sp, MIRLValue::newLocal(cmpLocal), MIRRValue::make_BinOp({MIRParam(MIRLValue::newLocal(idxLocal)), MIRBinOp::LT, mkUsize(end)}), /*update_dest_state=*/false);
+    endBlock(MIRTerminator::make_If({MIRLValue::newLocal(cmpLocal), bbBody, bbNext}));
+    setCurBlock(bbBody);
+    pushStmtDrop(sp, MIRLValue::newIndex(arrLv.clone(), idxLocal), dropFlag);
+    pushStmtAssign(sp, MIRLValue::newLocal(idxLocal), MIRRValue::make_BinOp({MIRParam(MIRLValue::newLocal(idxLocal)), MIRBinOp::ADD, mkUsize(1)}), /*update_dest_state=*/false);
+    endBlock(MIRTerminator::make_Goto(bbCond));
+    setCurBlock(bbNext);
 }
 
 void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) {
@@ -9205,7 +9378,36 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
                 vs = VarState::make_Invalid(InvalidType::Moved);
             }
         ),
-        (Optional, const auto flag = vse; vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv), flag);)
+        (Optional, const auto flag = vse; vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv), flag);),
+        (
+            PartialArray,
+            unsigned int fillFlag = ~0u;
+            bool fillDrop = true;
+            TU_MATCH_HDRA((*vse.fillState), {)
+            default:
+                BUG(sp, "Composite fill state in PartialArray drop - " << *vse.fillState);
+                TU_ARMA(Valid, fe) {
+                }
+                TU_ARMA(Invalid, fe) {
+                    fillDrop = false;
+                }
+                TU_ARMA(Optional, fe) {
+                    fillFlag = fe;
+                }
+            }
+            size_t prev = 0;
+            for (auto& kv : vse.otherStates) {
+                if (fillDrop) {
+                    emitArrayElementDropLoop(sp, lv, prev, kv.first, fillFlag);
+                }
+                dropValueFromState(sp, kv.second, MIRLValue::newField(lv.clone(), kv.first));
+                prev = kv.first + 1;
+            }
+            if (fillDrop) {
+                emitArrayElementDropLoop(sp, lv, prev, vse.count, fillFlag);
+            }
+            vs = VarState::make_Invalid(InvalidType::Moved);
+        )
     )
 }
 
@@ -9339,7 +9541,7 @@ ScopeHandle::~ScopeHandle() {
 }
 
 VarState VarState::clone() const {
-    TU_MATCHA((*this), (e), (Invalid, return VarState(e);), (Valid, return VarState(e);), (Optional, return VarState(e);), (MovedOut, return VarState::make_MovedOut({box$(e.innerState->clone()), e.outerFlag});), (Partial, ::std::vector<VarState> n; n.reserve(e.innerStates.size()); for (const auto& a : e.innerStates) n.push_back(a.clone()); return VarState::make_Partial({mv$(n), e.outerFlag});))
+    TU_MATCHA((*this), (e), (Invalid, return VarState(e);), (Valid, return VarState(e);), (Optional, return VarState(e);), (MovedOut, return VarState::make_MovedOut({box$(e.innerState->clone()), e.outerFlag});), (Partial, ::std::vector<VarState> n; n.reserve(e.innerStates.size()); for (const auto& a : e.innerStates) n.push_back(a.clone()); return VarState::make_Partial({mv$(n), e.outerFlag});), (PartialArray, ::std::map<unsigned, VarState> n; for (const auto& kv : e.otherStates) n.insert(::std::make_pair(kv.first, kv.second.clone())); return VarState::make_PartialArray({box$(e.fillState->clone()), mv$(n), e.count});))
     throw "";
 }
 
@@ -9349,6 +9551,10 @@ bool VarState::operator==(const VarState& x) const {
     }
     TU_MATCHA((*this, x), (te, xe), (Invalid, return te == xe;), (Valid, return true;), (Optional, return te == xe;), (MovedOut, if (te.outerFlag != xe.outerFlag) return false; return *te.innerState == *xe.innerState;), (Partial, if (te.outerFlag != xe.outerFlag || te.innerStates.size() != xe.innerStates.size()) return false; for (unsigned int i = 0; i < te.innerStates.size(); i++) {
                   if (te.innerStates[i] != xe.innerStates[i]) {
+                      return false;
+                  }
+              } return true;), (PartialArray, if (te.count != xe.count || !(*te.fillState == *xe.fillState) || te.otherStates.size() != xe.otherStates.size()) return false; for (auto itT = te.otherStates.begin(), itX = xe.otherStates.begin(); itT != te.otherStates.end(); ++itT, ++itX) {
+                  if (itT->first != itX->first || itT->second != itX->second) {
                       return false;
                   }
               } return true;))
@@ -9374,7 +9580,8 @@ bool VarState::operator==(const VarState& x) const {
         (Valid, os << "Valid";),
         (Optional, os << "Optional(df" << e << ")";),
         (MovedOut, os << "MovedOut("; if (e.outerFlag == ~0u) os << "-"; else os << "df" << e.outerFlag; os << " " << *e.innerState << ")";),
-        (Partial, os << "Partial("; if (e.outerFlag == ~0u) os << "-"; else os << "df" << e.outerFlag; os << ", [" << e.innerStates << "])";)
+        (Partial, os << "Partial("; if (e.outerFlag == ~0u) os << "-"; else os << "df" << e.outerFlag; os << ", [" << e.innerStates << "])";),
+        (PartialArray, os << "PartialArray(" << e.count << ", fill=" << *e.fillState << ", {"; for (const auto& kv : e.otherStates) os << kv.first << ": " << kv.second << ","; os << "})";)
     )
     return os;
 }
@@ -9401,6 +9608,12 @@ bool VarState::getUsedDropFlags(std::set<unsigned>* out) const {
             }
             for (const auto& vs : ve.innerStates) {
                 rv |= vs.getUsedDropFlags(out);
+            }
+        }
+        TU_ARMA(PartialArray, ve) {
+            rv |= ve.fillState->getUsedDropFlags(out);
+            for (const auto& kv : ve.otherStates) {
+                rv |= kv.second.getUsedDropFlags(out);
             }
         }
         TU_ARMA(MovedOut, ve) {
