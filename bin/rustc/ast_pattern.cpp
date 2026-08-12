@@ -26,7 +26,7 @@ namespace AST {
             (Float,
              switch (e.type) {
                  case CORETYPE_BOOL:
-                     os << (e.value ? "true" : "false");
+                     os << (e.value != FloatValue() ? "true" : "false");
                      break;
                  case CORETYPE_ANY:
                  case CORETYPE_F32:

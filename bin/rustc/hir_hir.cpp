@@ -2039,7 +2039,7 @@ FloatValue EncodedLiteralSlice::read_float(size_t size /*=0*/) const {
         case 2: {
             F16 v;
             memcpy(&v, &m_base.bytes[m_ofs], 2);
-            return FloatValue(static_cast<_Float128>(static_cast<float>(v)));
+            return FloatValue(static_cast<float>(v));
         }
         case 4: {
             float v;

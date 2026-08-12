@@ -11,6 +11,11 @@ with its own copies of both files.
   the module namespaces inherited from mrustc (`AST`, `HIR`, `MIR`, ...).
 - **Formatter.** `./dev/style.py` formats every tracked C++ source except
   `ext/`, which formats itself.
+- **Unit tests.** New compiler modules pair `x.h`/`x.cpp` with an `x_ut.cpp`
+  next to them, written with libstd's `STD_TEST` framework. Every
+  `bin/rustc/*_ut.cpp` is linked into the `rustc_ut` runner (built and run by
+  the `unit_rustc_ut` node); methods are implemented in the `.cpp`, not the
+  header.
 
 ## Deviations
 

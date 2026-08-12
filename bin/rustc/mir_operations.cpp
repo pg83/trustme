@@ -7739,7 +7739,8 @@ bool MIR_Optimise_ConstPropagate(::MIR::TypeResolve& state, ::MIR::Function& fcn
                                         } else if (const auto* vp = nv.opt_Bool()) {
                                             new_value = ::MIR::Constant::make_Uint({U128(vp->v ? 1u : 0u), *te});
                                         } else if (const auto* vp = nv.opt_Float()) {
-                                            if (0.0 <= vp->v && vp->v <= UINT64_MAX) {
+                                            // NaN fails both comparisons and is left unfolded
+                                            if (FloatValue() <= vp->v && vp->v < FloatValue(18446744073709551616.0)) {
                                                 new_value = ::MIR::Constant::make_Uint({H::truncate_u(*te, U128(static_cast<uint64_t>(vp->v))), *te});
                                             } else {
                                                 // UB: Casting float out of range?

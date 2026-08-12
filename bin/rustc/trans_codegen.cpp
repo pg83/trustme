@@ -358,7 +358,7 @@ namespace {
                 break;
                 TU_ARM(e, Float, v) {
                     // TODO: Infinity/nan/...
-                    auto vi = H::double_to_u64(v.v);
+                    auto vi = H::double_to_u64(static_cast<double>(v.v));
                     bool sign = (vi & (1ull << 63)) != 0;
                     int exp = (vi >> 52) & 0x7FF;
                     uint64_t frac = vi & ((1ull << 52) - 1);

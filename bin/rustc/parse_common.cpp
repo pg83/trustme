@@ -1312,30 +1312,32 @@ ExprNodeP Parse_ExprVal_Inner(TokenStream& lex) {
                                             expr_args.push_back(NEWNODE(AST::ExprNode_Integer, n->m_value, n->m_datatype));
                                             break;
                                         } else if (const auto* n = cast<const AST::ExprNode_Float>(expr)) {
-                                            auto value = static_cast<_Float128>(n->m_value);
-                                            if (value < 0 || __builtin_isnan(value) || __builtin_isinf(value)) {
+                                            const auto value = n->m_value;
+                                            if (value < FloatValue() || float_value_is_nan(value) || float_value_is_infinite(value)) {
                                                 TODO(lex.point_span(), "offset_of - invalid tuple indices " << *expr);
                                             }
-                                            auto whole = ::truncf128(value);
-                                            if (whole > static_cast<_Float128>(SIZE_MAX)) {
+                                            // An integer index fits iff it is below SIZE_MAX + 1 = 2^64
+                                            const auto index_limit = FloatValue(18446744073709551616.0);
+                                            const auto whole = float_value_trunc(value);
+                                            if (whole >= index_limit) {
                                                 TODO(lex.point_span(), "offset_of - tuple index is too large " << *expr);
                                             }
 
-                                            auto fraction = value - whole;
-                                            _Float128 scale = 1;
-                                            _Float128 fractional_index = 0;
-                                            auto tolerance_per_unit = static_cast<_Float128>(parse_float_value("1e-32"));
+                                            const auto fraction = value - whole;
+                                            auto scale = FloatValue(1.0);
+                                            FloatValue fractional_index;
+                                            const auto tolerance_per_unit = parse_float_value("1e-32");
                                             bool found_fractional_index = false;
                                             for (unsigned digits = 0; digits < 20; digits++) {
-                                                scale *= 10;
-                                                auto scaled = fraction * scale;
-                                                fractional_index = ::roundf128(scaled);
-                                                if (::fabsf128(scaled - fractional_index) <= scale * tolerance_per_unit) {
+                                                scale = scale * FloatValue(10.0);
+                                                const auto scaled = fraction * scale;
+                                                fractional_index = float_value_round(scaled);
+                                                if (float_value_abs(scaled - fractional_index) <= scale * tolerance_per_unit) {
                                                     found_fractional_index = true;
                                                     break;
                                                 }
                                             }
-                                            if (!found_fractional_index || fractional_index > static_cast<_Float128>(SIZE_MAX)) {
+                                            if (!found_fractional_index || fractional_index >= index_limit) {
                                                 TODO(lex.point_span(), "offset_of - invalid tuple indices " << *expr);
                                             }
                                             expr_args.push_back(NEWNODE(AST::ExprNode_Integer, U128(static_cast<uint64_t>(fractional_index)), CORETYPE_ANY));

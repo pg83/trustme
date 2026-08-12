@@ -829,7 +829,7 @@ namespace MIR {
                     case 16: {
                         F16 v_f16;
                         read_bytes(state, &v_f16, sizeof(v_f16));
-                        return FloatValue(static_cast<_Float128>(static_cast<float>(v_f16)));
+                        return FloatValue(static_cast<float>(v_f16));
                     } break;
                     case 32: {
                         float v_f32 = 0;
@@ -3187,27 +3187,27 @@ namespace HIR {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, ::floorf128(local_state.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, float_value_floor(local_state.read_param_float(ti.bits, e.args.at(0))));
                     } else if (te->name == "ceilf16" || te->name == "ceilf32" || te->name == "ceilf64" || te->name == "ceilf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, ::ceilf128(local_state.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, float_value_ceil(local_state.read_param_float(ti.bits, e.args.at(0))));
                     } else if (te->name == "roundf16" || te->name == "roundf32" || te->name == "roundf64" || te->name == "roundf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, ::roundf128(local_state.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, float_value_round(local_state.read_param_float(ti.bits, e.args.at(0))));
                     } else if (te->name == "round_ties_even_f16" || te->name == "round_ties_even_f32" || te->name == "round_ties_even_f64" || te->name == "round_ties_even_f128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, ::roundevenf128(local_state.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, float_value_round_even(local_state.read_param_float(ti.bits, e.args.at(0))));
                     } else if (te->name == "truncf16" || te->name == "truncf32" || te->name == "truncf64" || te->name == "truncf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));
                         MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                        dst.write_float(state, ti.bits, ::truncf128(local_state.read_param_float(ti.bits, e.args.at(0))));
+                        dst.write_float(state, ti.bits, float_value_trunc(local_state.read_param_float(ti.bits, e.args.at(0))));
                     } else if (te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128" || te->name == "maxnumf16" || te->name == "maxnumf32" || te->name == "maxnumf64" || te->name == "maxnumf128") {
                         ::HIR::TypeRef tmp;
                         auto ti = TypeInfo::for_type(state.get_param_type(tmp, e.args.at(0)));

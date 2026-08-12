@@ -6,6 +6,7 @@
 #include "ast_expr.h"
 #include "ast_crate.h"
 #include "main_bindings.h"
+#include "ast_dump.h"
 #include "hir_hir.h" // ABI_RUST
 #include "parse_lex.h"
 #include "parse_ttstream.h"

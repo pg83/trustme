@@ -54,7 +54,7 @@ def parse_test_partition():
 test_partition = parse_test_partition()
 system_rustc_mode = bool(build.flags.system_rustc)
 
-build.includes += ["$(S)/bin/rustc"]
+build.includes += ["$(S)/bin/rustc", "$(B)/gen"]
 
 # version.cpp expects these from the build system (Makefile filled them from
 # git); pin static values so the build stays hermetic.
@@ -89,6 +89,10 @@ platform_libstd = import_build(
 platform_libstd.name = "platform_libstd"
 
 SRC = build.glob("$(S)/bin/rustc/*.cpp")
+# Compiler C++ unit tests live next to the code they test (x.cpp -> x_ut.cpp)
+# and are linked into the rustc_ut runner, not into the compiler.
+UT_SRC = sorted(s for s in SRC if s.endswith("_ut.cpp"))
+SRC = [s for s in SRC if not s.endswith("_ut.cpp")]
 
 if system_rustc_mode:
     rustc = command(
@@ -111,6 +115,36 @@ else:
         deps=[platform_libstd],
         ldflags=["-lz"],
     )
+
+# Reference vectors for the float128 unit tests are produced by a generator
+# node, not checked in.
+FLOAT128_VECTORS = "$(B)/gen/float128_ut_vectors.inc"
+float128_ut_vectors = command(
+    name="float128_ut_vectors",
+    inputs=["$(S)/dev/gen_float128_vectors.py"],
+    outputs=[FLOAT128_VECTORS],
+    cmd=["python3", "$(S)/dev/gen_float128_vectors.py", FLOAT128_VECTORS],
+    descr="GN",
+)
+
+# The compiler's C++ unit-test runner: every bin/rustc/*_ut.cpp registers its
+# STD_TEST cases, linked against the compiler objects (minus main) and the
+# platform library's test framework.
+rustc_ut = program(
+    name="rustc_ut",
+    srcs=[
+        "$(S)/tst/unit/rustc_ut_main.cpp",
+        *[
+            {"src": s, "inputs": [FLOAT128_VECTORS]}
+            if s.endswith("/float128_ut.cpp") else s
+            for s in UT_SRC
+        ],
+        *[s for s in SRC if not s.endswith("/main_bindings.cpp")],
+    ],
+    output="$(B)/tst/unit/rustc_ut",
+    deps=[platform_libstd, float128_ut_vectors],
+    ldflags=["-lz"],
+)
 
 node_cast_test = program(
     name="node_cast_test",
@@ -402,6 +436,18 @@ unit_tests = [
         color="green",
     )
 ]
+unit_tests.append(command(
+    name="unit_rustc_ut",
+    inputs=UT_SRC,
+    outputs=["$(B)/tst/unit/rustc_ut.stamp"],
+    cmd=[
+        [*TEST_TIMEOUT, "$(B)/tst/unit/rustc_ut"],
+        [*TEST_TIMEOUT, "sh", "-c", "> $(B)/tst/unit/rustc_ut.stamp"],
+    ],
+    deps=[rustc_ut],
+    descr="UT",
+    color="green",
+))
 unit_tests.append(command(
     name="unit_node_cast",
     inputs=[
