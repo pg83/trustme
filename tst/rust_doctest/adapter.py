@@ -25,14 +25,14 @@ def main() -> int:
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         binary = os.path.join(work, "test")
         compile_result = subprocess.run(
-            [
+            lib.wrap_gdb([
                 rustc,
                 source,
                 "-L", os.path.join(libstd, "release"),
                 "-o", binary,
                 "--crate-type", "bin",
                 "--edition", edition,
-            ],
+            ]),
             env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

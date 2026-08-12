@@ -86,7 +86,7 @@ def main() -> int:
         library_path = os.path.join(libstd, "release")
         binary = os.path.join(work, "test")
         compile_result = subprocess.run(
-            [
+            lib.wrap_gdb([
                 rustc,
                 source,
                 "-L", library_path,
@@ -94,7 +94,7 @@ def main() -> int:
                 "--crate-type", "bin",
                 "--edition", edition(text),
                 *compiler_options(text),
-            ],
+            ]),
             env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

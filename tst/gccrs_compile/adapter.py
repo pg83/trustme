@@ -102,7 +102,7 @@ def main() -> int:
             ):
                 environment[key] = value
             compile_result = subprocess.run(
-                [
+                lib.wrap_gdb([
                     rustc,
                     source,
                     "-L", library_path,
@@ -111,7 +111,7 @@ def main() -> int:
                     *crate_name_options(case, text),
                     "--edition", edition(text),
                     *compiler_options(text),
-                ],
+                ]),
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

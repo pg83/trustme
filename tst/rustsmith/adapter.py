@@ -44,7 +44,7 @@ def main() -> int:
             source = os.path.join(upstream, stem + ".rs")
             binary = os.path.join(work, "test-" + stem)
             compile_result = subprocess.run(
-                [
+                lib.wrap_gdb([
                     rustc,
                     source,
                     "-L", os.path.join(libstd, "release"),
@@ -52,7 +52,7 @@ def main() -> int:
                     "--crate-type", "bin",
                     "--edition", "2021",
                     "-O",
-                ],
+                ]),
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

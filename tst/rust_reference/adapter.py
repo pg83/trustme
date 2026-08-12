@@ -44,14 +44,14 @@ def main() -> int:
             source = os.path.join(upstream, case)
             binary = os.path.join(work, f"test-{index}")
             compile_result = subprocess.run(
-                [
+                lib.wrap_gdb([
                     rustc,
                     source,
                     "-L", library_path,
                     "-o", binary,
                     "--crate-type", "bin",
                     "--edition", edition,
-                ],
+                ]),
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

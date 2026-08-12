@@ -64,7 +64,7 @@ def main() -> int:
             if not has_output:
                 command.extend(["-o", os.path.join(work, f"case-{index}")])
             compile_result = subprocess.run(
-                command,
+                lib.wrap_gdb(command),
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,

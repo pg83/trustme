@@ -44,7 +44,7 @@ def main() -> int:
             exercise = os.path.join(upstream, slug)
             library = os.path.join(work, f"lib-{index}.rlib")
             compile_library = subprocess.run(
-                [
+                lib.wrap_gdb([
                     rustc,
                     os.path.join(exercise, "solution.rs"),
                     "-L", library_path,
@@ -52,7 +52,7 @@ def main() -> int:
                     "--crate-name", crate_name,
                     "--crate-type", "lib",
                     "--edition", edition,
-                ],
+                ]),
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
@@ -72,7 +72,7 @@ def main() -> int:
             for test_index, test_source in enumerate(test_sources):
                 binary = os.path.join(work, f"test-{index}-{test_index}")
                 compile_test = subprocess.run(
-                    [
+                    lib.wrap_gdb([
                         rustc,
                         test_source,
                         "-L", library_path,
@@ -80,7 +80,7 @@ def main() -> int:
                         "--test",
                         "--edition", edition,
                         "--extern", f"{crate_name}={library}",
-                    ],
+                    ]),
                     env=environment,
                     stdout=subprocess.PIPE,
                     stderr=subprocess.PIPE,

@@ -244,7 +244,7 @@ def main() -> int:
             Path(source).stem if kind in ("crate", "adapter-crate") else suite
         )
         result = subprocess.run(
-            [
+            lib.wrap_gdb([
                 rustc,
                 str(source_path),
                 "-L", str(libstd / "release"),
@@ -260,7 +260,7 @@ def main() -> int:
                     "_",
                     crate_name,
                 ),
-            ],
+            ]),
             env=environment,
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,

@@ -60,7 +60,7 @@ def main() -> int:
                 raise SystemExit(f"unknown Rust Book mode {mode!r} for {case}")
 
             compile_result = subprocess.run(
-                command,
+                lib.wrap_gdb(command),
                 cwd=crate,
                 env=environment,
                 stdout=subprocess.PIPE,

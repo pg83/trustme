@@ -57,7 +57,7 @@ def main() -> int:
                 raise SystemExit(f"unknown Rustlings mode {mode!r} for {case}")
 
             compile_result = subprocess.run(
-                command,
+                lib.wrap_gdb(command),
                 env=environment,
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
