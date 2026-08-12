@@ -711,8 +711,6 @@ struct HIRExprNodeClosure: public HIRExprNode {
         ::std::vector<Capture> capturedVars;
     } avuCache;
 
-    // Lifetime for captured borrows, filled by lifetime infer pass
-    HIRLifetimeRef captureLifetime;
     // - Path to the generated closure type
     const HIRStruct* objPtr = nullptr;
     HIRGenericPath objPathBase;
@@ -746,8 +744,6 @@ struct HIRExprNodeGenerator: public HIRExprNode {
     // Generated type information
     const HIRStruct* objPtr = nullptr;
     HIRGenericPath objPath;
-    // Lifetime for captured borrows, filled by lifetime infer pass
-    HIRLifetimeRef captureLifetime;
     // Captured variables (used for emitting the constructor)
     ::std::vector<HIRExprNodeP> captures;
     // State data type (needed for initialising)
@@ -797,8 +793,6 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
     // Generated type information
     const HIRStruct* objPtr = nullptr;
     HIRGenericPath objPath;
-    // Lifetime for captured borrows, filled by lifetime infer pass
-    HIRLifetimeRef captureLifetime;
     // Captured variables (used for emitting the constructor)
     ::std::vector<HIRExprNodeP> captures;
     // State data type (needed for initialising)

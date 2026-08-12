@@ -27,5 +27,3 @@ extern void HIRExpandUfcsEverythingExpr(const WireBoard& wb, const HIRCrate& cra
 extern void HIRExpandReborrowsExpr(const WireBoard& wb, const HIRCrate& crate, HIRExprPtr& exp);
 extern void HIRExpandStaticBorrowConstantsMarkExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp);
 extern void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, HIRExprPtr& exp);
-extern void HIRExpandLifetimeInfer(const WireBoard& wb, HIRCrate& crate);
-extern void HIRExpandLifetimeInferExpr(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& ip, const ::std::vector<::std::pair<HIRPattern, HIRTypeRef>>& args, const HIRTypeData* retTy, HIRExprPtr& exp);

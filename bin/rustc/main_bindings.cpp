@@ -282,7 +282,6 @@ void initDebugList() {
 
          "Expand HIR Annotate",
          "Expand HIR Static Borrow Mark",
-         "Expand HIR Lifetimes",
          "Expand HIR Closures",
          "Expand HIR Static Borrow",
          "Expand HIR Calls",
@@ -725,10 +724,6 @@ int main(int argc, char* argv[]) {
         });
         CompilePhaseV("Expand HIR Static Borrow Mark", [&]() {
             HIRExpandStaticBorrowConstantsMark(wb, *hirCrate);
-        });
-        // - Needs to be done after static borrows, but before closures
-        CompilePhaseV("Expand HIR Lifetimes", [&]() {
-            HIRExpandLifetimeInfer(wb, *hirCrate);
         });
         // - Now that all types are known, closures can be desugared
         CompilePhaseV("Expand HIR Closures", [&]() {

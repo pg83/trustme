@@ -1737,10 +1737,6 @@ const MIRFunction* HIRCrate::getOrGenMir(const WireBoard& wb, const HIRItemPath&
                 HIRExpandAnnotateUsageExpr(wb, *this, ip, epMut);
                 HIRExpandStaticBorrowConstantsMarkExpr(wb, *this, ip, epMut);
             }
-            if (ep.state->stage < HIRExprState::Stage::Lifetimes) {
-                HIRExpandLifetimeInferExpr(wb, *this, ip, args, retTy, epMut);
-                ep.state->stage = HIRExprState::Stage::Lifetimes;
-            }
             if (ep.state->stage < HIRExprState::Stage::Sbc) {
                 if (ep.state->stage == HIRExprState::Stage::SbcRequest) {
                     ERROR(Span(), E0000, "Loop in constant evaluation");
