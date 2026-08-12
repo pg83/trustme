@@ -98,21 +98,9 @@ public:
 
         ResolvePlaceholders(const HMTypeInferrence& parent);
 
-        const ::HIR::TypeData* get_type(const Span& sp, const HIR::TypeData* ty) const override {
-            if (ty->is_Infer()) {
-                return m_parent.get_type(ty);
-            } else {
-                return ty;
-            }
-        }
+        const ::HIR::TypeData* get_type(const Span& sp, const HIR::TypeData* ty) const override;
 
-        const ::HIR::ConstGeneric& get_val(const Span& sp, const HIR::ConstGeneric& v) const override {
-            if (v.is_Infer()) {
-                return m_parent.get_value(v);
-            } else {
-                return v;
-            }
-        }
+        const ::HIR::ConstGeneric& get_val(const Span& sp, const HIR::ConstGeneric& v) const override;
     };
 
     ResolvePlaceholders callback_resolve_infer() const {

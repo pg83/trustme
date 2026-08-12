@@ -101,3 +101,12 @@ void MIR::OuterVisitor::visit_trait_impl(const ::HIR::SimplePath& trait_path, ::
     auto _ = this->m_resolve.set_impl_generics(impl.m_type, impl.m_params);
     ::HIR::Visitor::visit_trait_impl(trait_path, impl);
 }
+
+namespace MIR {
+
+OuterVisitor::OuterVisitor(const ::HIR::Crate& crate, cb_t cb)
+    : HIR::Visitor(nullptr, crate.m_types)
+    , m_resolve(crate)
+    , m_cb(cb) {
+}
+}

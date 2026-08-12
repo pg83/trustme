@@ -143,33 +143,11 @@ struct MonomorphHrlsOnly: public Monomorphiser {
 
     MonomorphHrlsOnly(HIR::TypeInterner& types, const ::HIR::PathParams& params_h);
 
-    ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& ty) const override {
-        if (ty.group() == 3) {
-            ASSERT_BUG(sp, ty.idx() < pp_hrb->m_types.size(), ty << " out of bounds (" << pp_hrb->m_types.size() << ")");
-            return pp_hrb->m_types.at(ty.idx());
-        }
-        return m_types.generic(ty.name, ty.binding);
-    }
+    ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& ty) const override;
 
-    ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& val) const override {
-        if (val.group() == 3) {
-            ASSERT_BUG(sp, val.idx() < pp_hrb->m_values.size(), val << " out of bounds (" << pp_hrb->m_values.size() << ")");
-            return pp_hrb->m_values.at(val.idx()).clone();
-        }
-        return HIR::ConstGeneric(val);
-    }
+    ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& val) const override;
 
-    ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& lft_ref) const override {
-        if (lft_ref.group() == 3) {
-            // If the HRL batch does not cover this index, pass the lifetime through rather than abort: not reliably in range for nested binders, and erased before codegen.
-            if (lft_ref.idx() >= pp_hrb->m_lifetimes.size()) {
-                DEBUG("HRL " << lft_ref << " out of bounds (" << pp_hrb->m_lifetimes.size() << ") - passthrough");
-                return ::HIR::LifetimeRef(lft_ref.binding);
-            }
-            return pp_hrb->m_lifetimes.at(lft_ref.idx());
-        }
-        return ::HIR::LifetimeRef(lft_ref.binding);
-    }
+    ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& lft_ref) const override;
 };
 
 // Helper for passing a group of params around

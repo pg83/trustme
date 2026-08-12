@@ -14,12 +14,7 @@ namespace MIR {
         cb_t m_cb;
 
     public:
-        OuterVisitor(const ::HIR::Crate& crate, cb_t cb)
-            : HIR::Visitor(nullptr, crate.m_types)
-            , m_resolve(crate)
-            , m_cb(cb)
-        {
-        }
+        OuterVisitor(const ::HIR::Crate& crate, cb_t cb);
 
         void visit_expr(::HIR::ExprPtr& exp) override;
 

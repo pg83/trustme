@@ -774,3 +774,12 @@ TomlFileIter::TomlFileIter(TomlFile& tf)
     }
     return os;
 }
+
+TomlValue::TypeError::TypeError(TomlValue::Type h, TomlValue::Type e)
+    : have(h)
+    , exp(e) {
+}
+::std::ostream& operator<<(::std::ostream& os, const TomlValue::TypeError& e) {
+    os << "expected " << e.exp << ", got " << e.have;
+    return os;
+}

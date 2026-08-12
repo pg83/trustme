@@ -30,3 +30,54 @@ namespace HIR {
     return os;
 }
 }
+
+namespace HIR {
+
+LifetimeRef::LifetimeRef()
+    : binding(LifetimeRef::UNKNOWN) {
+}
+LifetimeRef::LifetimeRef(uint32_t binding)
+    : binding(binding) {
+}
+LifetimeRef LifetimeRef::new_static() {
+    LifetimeRef rv;
+    rv.binding = LifetimeRef::STATIC;
+    return rv;
+}
+GenericRef LifetimeRef::as_param() const {
+    assert(is_param());
+    return GenericRef(RcString(), binding);
+}
+::std::ostream& operator<<(::std::ostream& os, const LifetimeRef& x) {
+    if (x.binding == LifetimeRef::INFER) {
+        os << "'_";
+    } else if (x.binding == LifetimeRef::UNKNOWN) {
+        os << "'#omitted";
+    } else if (x.binding == LifetimeRef::STATIC) {
+        os << "'static";
+    } else if (x.binding < 0xFFFF) {
+        switch ((x.binding & 0xFF00) >> 8) {
+            case 0:
+                os << "'I" << (x.binding & 0xFF);
+                break; // Impl/type
+            case 1:
+                os << "'M" << (x.binding & 0xFF);
+                break; // Method/value
+            case 2:
+                os << "'P" << (x.binding & 0xFF);
+                break; // HRLS
+            case 3:
+                os << "'H" << (x.binding & 0xFF);
+                break; // HRLS
+            default:
+                os << "'unk" << std::hex << x.binding << std::dec;
+                break;
+        }
+    } else if (x.binding < LifetimeRef::MAX_LOCAL) {
+        os << "'#local" << (x.binding - 0x1'0000);
+    } else {
+        os << "'#ivar" << (x.binding - LifetimeRef::MAX_LOCAL);
+    }
+    return os;
+}
+}

@@ -146,3 +146,14 @@ InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
     }
     return os;
 }
+
+// :vis
+
+TokenTree& InterpolatedFragment::as_tt() {
+    assert(m_type == TT);
+    return *reinterpret_cast<TokenTree*>(m_ptr);
+}
+const TokenTree& InterpolatedFragment::as_tt() const {
+    assert(m_type == TT);
+    return *reinterpret_cast<TokenTree*>(m_ptr);
+}

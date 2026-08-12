@@ -91,20 +91,13 @@ struct TomlValue {
         Type have;
         Type exp;
 
-        TypeError(Type h, Type e)
-            : have(h)
-            , exp(e)
-        {
-        }
+        TypeError(Type h, Type e);
 
         const char* what() const noexcept override {
             return "toml type error";
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const TypeError& e) {
-            os << "expected " << e.exp << ", got " << e.have;
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const TypeError& e);
     };
 
     Type m_type;

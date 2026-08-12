@@ -9392,3 +9392,18 @@ bool type_is_unbounded_infer(const ::HIR::TypeData* ty) {
     x.ctxt.print_pathparams(os, x.pps);
     return os;
 }
+
+const ::HIR::TypeData* HMTypeInferrence::ResolvePlaceholders::get_type(const Span& sp, const HIR::TypeData* ty) const {
+    if (ty->is_Infer()) {
+        return m_parent.get_type(ty);
+    } else {
+        return ty;
+    }
+}
+const ::HIR::ConstGeneric& HMTypeInferrence::ResolvePlaceholders::get_val(const Span& sp, const HIR::ConstGeneric& v) const {
+    if (v.is_Infer()) {
+        return m_parent.get_value(v);
+    } else {
+        return v;
+    }
+}

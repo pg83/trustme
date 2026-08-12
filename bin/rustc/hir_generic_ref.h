@@ -75,30 +75,17 @@ namespace HIR {
         // Values below 2^16 are parameters/static, values above are per-function region IDs allocated during region inferrence.
         uint32_t binding = UNKNOWN;
 
-        LifetimeRef()
-            : binding(UNKNOWN)
-        {
-        }
+        LifetimeRef();
 
-        LifetimeRef(uint32_t binding)
-            : binding(binding)
-        {
-        }
+        LifetimeRef(uint32_t binding);
 
-        static LifetimeRef new_static() {
-            LifetimeRef rv;
-            rv.binding = STATIC;
-            return rv;
-        }
+        static LifetimeRef new_static();
 
         bool is_param() const {
             return binding < 0xFF00;
         }
 
-        GenericRef as_param() const {
-            assert(is_param());
-            return GenericRef(RcString(), binding);
-        }
+        GenericRef as_param() const;
 
         bool is_hrl() const {
             return is_param() && as_param().group() == 3;
@@ -120,38 +107,7 @@ namespace HIR {
             return !(*this == x);
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const LifetimeRef& x) {
-            if (x.binding == INFER) {
-                os << "'_";
-            } else if (x.binding == UNKNOWN) {
-                os << "'#omitted";
-            } else if (x.binding == STATIC) {
-                os << "'static";
-            } else if (x.binding < 0xFFFF) {
-                switch ((x.binding & 0xFF00) >> 8) {
-                    case 0:
-                        os << "'I" << (x.binding & 0xFF);
-                        break; // Impl/type
-                    case 1:
-                        os << "'M" << (x.binding & 0xFF);
-                        break; // Method/value
-                    case 2:
-                        os << "'P" << (x.binding & 0xFF);
-                        break; // HRLS
-                    case 3:
-                        os << "'H" << (x.binding & 0xFF);
-                        break; // HRLS
-                    default:
-                        os << "'unk" << std::hex << x.binding << std::dec;
-                        break;
-                }
-            } else if (x.binding < MAX_LOCAL) {
-                os << "'#local" << (x.binding - 0x1'0000);
-            } else {
-                os << "'#ivar" << (x.binding - MAX_LOCAL);
-            }
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const LifetimeRef& x);
     };
 
 }

@@ -754,3 +754,55 @@ Position::Position(RcString filename, unsigned int line, unsigned int ofs)
     , line(line)
     , ofs(ofs) {
 }
+
+// Only for strings, for formatting
+
+Token::Token(enum eTokenType t, Data d, Position p)
+    : m_type(t)
+    , m_data(::std::move(d))
+    , m_pos(::std::move(p)) {
+}
+Token& Token::operator=(Token&& t) {
+    if (this == &t) {
+        return *this;
+    }
+    this->~Token();
+    new (this) Token(::std::move(t));
+    return *this;
+}
+Token::Token(Token&& t)
+    : m_type(t.m_type)
+    , m_data(::std::move(t.m_data))
+    , m_pos(::std::move(t.m_pos))
+    , m_hygiene(std::move(t.m_hygiene)) {
+    t.m_type = TOK_NULL;
+}
+Token& Token::operator=(const Token& t) {
+    this->~Token();
+    new (this) Token(t);
+    return *this;
+}
+// TODO: Replace these with a way of getting a InterpolatedFragment&
+TypeRef& Token::frag_type() {
+    assert(m_type == TOK_INTERPOLATED_TYPE);
+    return *reinterpret_cast<TypeRef*>(m_data.as_Fragment());
+}
+AST::Path& Token::frag_path() {
+    assert(m_type == TOK_INTERPOLATED_PATH);
+    return *reinterpret_cast<AST::Path*>(m_data.as_Fragment());
+}
+AST::Pattern& Token::frag_pattern() {
+    assert(m_type == TOK_INTERPOLATED_PATTERN);
+    return *reinterpret_cast<AST::Pattern*>(m_data.as_Fragment());
+}
+AST::Attribute& Token::frag_meta() {
+    assert(m_type == TOK_INTERPOLATED_META);
+    return *reinterpret_cast<AST::Attribute*>(m_data.as_Fragment());
+}
+bool Token::operator==(const Token& r) const {
+    if (type() != r.type()) {
+        return false;
+    }
+    TU_MATCH(Data, (m_data, r.m_data), (e, re), (None, return true;), (Ident, return e.same_name(re);), (String, return e == re;), (Integer, return e.m_datatype == re.m_datatype && e.m_intval == re.m_intval;), (Float, return e.m_datatype == re.m_datatype && e.m_floatval == re.m_floatval;), (Fragment, assert(!"Token equality on Fragment");))
+    throw "";
+}
