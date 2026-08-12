@@ -2,6 +2,7 @@
 
 #include "hir_expr.h"
 #include "wire_board.h"
+#include "settings.h"
 #include "hir_typeck_helpers.h"
 #include "hir_conv_main_bindings.h"
 
@@ -123,7 +124,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     TRACE_FUNCTION_F(traitPath << FMT_CB(os, if (traitParams) { os << *traitParams; } else { os << "<?>"; }) << " for " << type);
     auto cbIdent = HIRResolvePlaceholdersNop();
 
-    if (this->wb.solver.globally && !dontHandoffToSpecialised) {
+    if (this->wb.settings->solver.globally && !dontHandoffToSpecialised) {
         if (!nextSolver) {
             ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
             nextSolver = crate.pool->make<NextSolverBridge>(this->wb);

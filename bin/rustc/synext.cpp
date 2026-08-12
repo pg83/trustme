@@ -10,11 +10,11 @@
 #include "macro_rules_macro_rules.h"
 
 class CMacroRulesExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         ERROR(sp, E0000, "macro_rules! requires an identifier");
     }
 
-    ::std::unique_ptr<TokenStream> expandIdent(const Span& sp, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) override {
+    ::std::unique_ptr<TokenStream> expandIdent(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const RcString& ident, const TokenTree& tt, ASTModule& mod) override {
         DEBUG("Parsing macro_rules! " << ident);
         TTStream lex(sp, ParseState(), tt);
         auto mac = ParseMacroRules(lex);
@@ -34,7 +34,7 @@ class CMacroUseHandler: public ExpandDecorator {
         return true;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         TRACE_FUNCTION_F("[CMacroUseHandler] path=" << path);
 
         std::vector<RcString> filter;
@@ -190,7 +190,7 @@ class CMacroExportHandler: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: Flags on the attribute
         // - `local_inner_macros`: Forces macro lookups within the expansion to search within the source crate
         //   > Strictly speaking, not the same as `macro`-style macros?
@@ -269,7 +269,7 @@ class CMacroReexportHandler: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (!i.is_Crate()) {
             ERROR(sp, E0000, "Use of #[macro_reexport] on non-crate - " << i.tagStr());
         }
@@ -293,7 +293,7 @@ class CBuiltinMacroHandler: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& /*mod*/, size_t /*mod_idx*/, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& /*mod*/, size_t /*mod_idx*/, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         RcString name;
         if (i.is_MacroInv()) {
             const auto& e = i.as_MacroInv();

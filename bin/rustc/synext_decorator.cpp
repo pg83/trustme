@@ -1,5 +1,8 @@
 #include "synext_decorator.h"
 
+#include "settings.h"
+#include "wire_board.h"
+
 #include "common.h"
 #include "synext.h"
 #include "ast_ast.h"
@@ -24,7 +27,7 @@ namespace {
             return AttrStage::Pre;
         }
 
-        void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
             if (i.is_None()) {
             } else if (i.is_Function()) {
                 this->handle(mi, i.as_Function());
@@ -33,7 +36,7 @@ namespace {
             }
         }
 
-        void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
             if (i.is_None()) {
             } else if (i.is_Function()) {
                 this->handle(mi, i.as_Function());
@@ -42,7 +45,7 @@ namespace {
             }
         }
 
-        void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+        void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
             if (i.is_None()) {
             } else if (i.is_Function()) {
                 this->handle(mi, i.as_Function());
@@ -113,12 +116,13 @@ class CHandlerRepr: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_None()) {
         }
         // --- struct ---
         else if (auto* s = i.opt_Struct()) {
             TTStream lex(sp, ParseState(), mi.data());
+            lex.parseState().wb = &wb;
             lex.getTokenCheck(TOK_PAREN_OPEN);
             do {
                 auto reprType = lex.getTokenCheck(TOK_IDENT).ident().name;
@@ -184,6 +188,7 @@ class CHandlerRepr: public ExpandDecorator {
         // --- enum ---
         else if (auto* e = i.opt_Enum()) {
             TTStream lex(sp, ParseState(), mi.data());
+            lex.parseState().wb = &wb;
             lex.getTokenCheck(TOK_PAREN_OPEN);
 
             // Loop, so `repr(C, u8)` is valid
@@ -244,6 +249,7 @@ class CHandlerRepr: public ExpandDecorator {
         // --- union ---
         else if (auto* e = i.opt_Union()) {
             TTStream lex(sp, ParseState(), mi.data());
+            lex.parseState().wb = &wb;
             lex.getTokenCheck(TOK_PAREN_OPEN);
 
             do {
@@ -293,7 +299,7 @@ class CHandlerRustcNonnullOptimizationGuaranteed: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: Types only
         if (i.is_Struct()) {
         } else {
@@ -309,10 +315,11 @@ class CHandlerRustcLayoutScalarValidRangeStart: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: Types only
         if (auto* s = i.opt_Struct()) {
             TTStream lex(sp, ParseState(), mi.data());
+            lex.parseState().wb = &wb;
             lex.getTokenCheck(TOK_PAREN_OPEN);
             auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
             auto* np = cast<ASTExprNodeInteger>(n.get());
@@ -336,10 +343,11 @@ class CHandlerRustcLayoutScalarValidRangeEnd: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: Types only
         if (auto* s = i.opt_Struct()) {
             TTStream lex(sp, ParseState(), mi.data());
+            lex.parseState().wb = &wb;
             lex.getTokenCheck(TOK_PAREN_OPEN);
             auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
             auto* np = cast<ASTExprNodeInteger>(n.get());
@@ -362,8 +370,8 @@ class CHandlerLinkName: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        auto linkName = mi.parseEqualsString(crate, mod);
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+        auto linkName = mi.parseEqualsString(wb, crate, mod);
         ASSERT_BUG(sp, linkName != "", "Empty #[link_name] attribute");
 
         if (i.is_None()) {
@@ -386,8 +394,8 @@ class CHandlerLinkSection: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        auto linkSection = mi.parseEqualsString(crate, mod);
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+        auto linkSection = mi.parseEqualsString(wb, crate, mod);
         ASSERT_BUG(sp, linkSection != "", "Empty #[link_section] attribute");
 
         if (i.is_None()) {
@@ -410,10 +418,11 @@ class CHandlerLink: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_None()) {
         } else if (auto* b = i.opt_ExternBlock()) {
             TTStream lex(sp, ParseState(), mi.data());
+            lex.parseState().wb = &wb;
             lex.getTokenCheck(TOK_PAREN_OPEN);
             std::string libName;
             bool emit = true;
@@ -436,7 +445,7 @@ class CHandlerLink: public ExpandDecorator {
                     }
                     // TODO: save and use the kind
                 } else if (key == "cfg") {
-                    emit &= checkCfgStream(lex);
+                    emit &= checkCfgStream(*wb.settings, lex);
                 } else if (key == "modifiers") {
                     lex.getTokenCheck(TOK_EQUAL);
                     auto v = lex.getTokenCheck(TOK_STRING).str();
@@ -472,8 +481,9 @@ class CHandlerLinkage: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         TTStream lex(sp, ParseState(), mi.data());
+        lex.parseState().wb = &wb;
         lex.getTokenCheck(TOK_EQUAL);
         auto tok = lex.getTokenCheck(TOK_STRING);
         auto linkageStr = tok.str();
@@ -521,7 +531,7 @@ class CHandlerTargetFeature: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: Only valid on functions?
     }
 };
@@ -533,7 +543,7 @@ class CHandlerRustcIntrinsic: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (auto* e = i.opt_Function()) {
             if (e->abi() != ABI_RUST) {
                 ERROR(sp, E0000, "#[rustc_intrinsic] on function with ABI already set (`" << e->abi() << "`)");
@@ -555,7 +565,7 @@ class CHandlerTrackCaller: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (/*auto* e =*/i.opt_Function()) {
             // Handled by HIR lower
         } else {
@@ -563,7 +573,7 @@ class CHandlerTrackCaller: public ExpandDecorator {
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (/*auto* e =*/i.opt_Function()) {
             // Handled by HIR lower
         } else {
@@ -571,7 +581,7 @@ class CHandlerTrackCaller: public ExpandDecorator {
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
         if (/*auto* e =*/i.opt_Function()) {
             // Handled by HIR lower
         } else {
@@ -579,7 +589,7 @@ class CHandlerTrackCaller: public ExpandDecorator {
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeP& expr) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
         if (auto* n = cast<ASTExprNodeClosure>(expr.get())) {
             (void)n;
         } else {
@@ -596,8 +606,9 @@ class CHandlerUnsafe: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         TTStream lex(mi.span(), ParseState(), mi.data());
+        lex.parseState().wb = &wb;
         lex.getTokenCheck(TOK_PAREN_OPEN);
         while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
             auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
@@ -658,8 +669,8 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
-        auto name = mi.parseEqualsString(crate, crate.mRootModule);
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
+        auto name = mi.parseEqualsString(wb, crate, crate.mRootModule);
         if (name == "rlib" || name == "lib") {
             crate.crateType = ASTCrate::Type::RustLib;
         } else if (name == "dylib" || name == "rdylib") {
@@ -680,8 +691,8 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
-        auto name = mi.parseEqualsString(crate, crate.mRootModule);
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
+        auto name = mi.parseEqualsString(wb, crate, crate.mRootModule);
         crate.setCrateName(name);
     }
 };
@@ -692,7 +703,7 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         mi.parseParenIdentList([&](const Span&, RcString feature) {
             crate.features.insert(feature);
         });
@@ -706,12 +717,12 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         // TODO: Check for an existing allocator crate
         crate.mLangItems.insert(::std::make_pair("mrustc-allocator", ASTAbsolutePath()));
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (!i.is_Function()) {
             ERROR(sp, E0000, "#[allocator] can only be put on functions and the crate - found on " << i.tagStr());
         }
@@ -726,7 +737,7 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         // TODO: Check for an existing panic_runtime crate
         crate.mLangItems.insert(::std::make_pair("mrustc-panic_runtime", ASTAbsolutePath()));
     }
@@ -738,7 +749,7 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         crate.mLangItems.insert(::std::make_pair("mrustc-needs_panic_runtime", ASTAbsolutePath()));
     }
 };
@@ -2373,7 +2384,7 @@ namespace {
         return type;
     }
 
-    std::vector<RcString> findMacro(const Span& sp, const ASTCrate& crate, const ASTModule& mod, const ASTPath& traitPath) {
+    std::vector<RcString> findMacro(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, const ASTPath& traitPath) {
         std::vector<RcString> macPath;
 
         if (traitPath.isTrivial()) {
@@ -2397,7 +2408,7 @@ namespace {
             }
         }
         if (macPath.empty()) {
-            auto mac = ExpandLookupMacro(sp, crate, LList<const ASTModule*>(nullptr, &mod), traitPath);
+            auto mac = ExpandLookupMacro(sp, wb, crate, LList<const ASTModule*>(nullptr, &mod), traitPath);
 
             TU_MATCH_HDRA( (mac), {)
             TU_ARMA(None, e) {
@@ -2420,7 +2431,7 @@ namespace {
 }
 
 template <typename T>
-static void deriveItem(const Span& sp, const ASTCrate& crate, ASTModule& mod, const ASTAttribute& attr, const ASTAbsolutePath& path, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const T& item) {
+static void deriveItem(const Span& sp, const WireBoard& wb, const ASTCrate& crate, ASTModule& mod, const ASTAttribute& attr, const ASTAbsolutePath& path, slice<const ASTAttribute> attrs, const ASTVisibility& vis, const T& item) {
     auto deriveItems = getDeriveItems(attr);
     if (deriveItems.empty()) {
         return;
@@ -2446,9 +2457,9 @@ static void deriveItem(const Span& sp, const ASTCrate& crate, ASTModule& mod, co
 
         // TODO: Handle full paths to standard library traits
 
-        std::vector<RcString> macPath = findMacro(sp, crate, mod, traitPath);
+        std::vector<RcString> macPath = findMacro(sp, wb, crate, mod, traitPath);
         if (!macPath.empty()) {
-            auto lex = ProcMacroInvoke(sp, crate, macPath, attrs, vis, path.nodes.back(), item);
+            auto lex = ProcMacroInvoke(sp, wb, crate, macPath, attrs, vis, path.nodes.back(), item);
             if (lex) {
                 lex->parseState().module = &mod;
                 ParseModRootItems(*lex, mod);
@@ -2496,7 +2507,7 @@ public:
         return true;
     }
 
-    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         TU_MATCH_DEF(
             ASTItem,
             (i),
@@ -2506,9 +2517,9 @@ public:
                 None,
                 // Ignore, it's been deleted
             ),
-            (Union, deriveItem(sp, crate, mod, attr, path, attrs, vis, e);),
-            (Enum, deriveItem(sp, crate, mod, attr, path, attrs, vis, e);),
-            (Struct, deriveItem(sp, crate, mod, attr, path, attrs, vis, e);)
+            (Union, deriveItem(sp, wb, crate, mod, attr, path, attrs, vis, e);),
+            (Enum, deriveItem(sp, wb, crate, mod, attr, path, attrs, vis, e);),
+            (Struct, deriveItem(sp, wb, crate, mod, attr, path, attrs, vis, e);)
         )
     }
 };
@@ -2524,28 +2535,28 @@ class CDocHandler: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTStructItem& si) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTTupleItem& si) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTEnumVariant& ev) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override {
     }
 };
 
@@ -2958,8 +2969,8 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        auto name = attr.parseEqualsString(crate, mod);
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+        auto name = attr.parseEqualsString(wb, crate, mod);
         TU_MATCH_HDRA( (i), {)
         default:
             TODO(sp, "Unknown item type " << i.tagStr() << " with #["<<attr<<"] attached at " << path);
@@ -3041,15 +3052,15 @@ public:
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
         // TODO: Trait ATYs (a sub-item of others)
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTEnumVariant& ev) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override {
         // TODO: Enum variants (sub-item of other lang items)
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: lang items on associated items (e.g. functions - `RangeFull::new`)
     }
 };
@@ -3060,7 +3071,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_None()) {
             // Ignore.
         } else if (/*const auto* e =*/i.opt_Function()) {
@@ -3081,7 +3092,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_None()) {
         } else if (i.is_Function()) {
             auto rv = crate.mLangItems.insert(::std::make_pair(::std::string("mrustc-start"), path));
@@ -3101,7 +3112,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_Function()) {
             auto rv = crate.mLangItems.insert(::std::make_pair(::std::string("mrustc-panic_implementation"), path));
             if (!rv.second) {
@@ -3120,7 +3131,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_Function()) {
             auto rv = crate.mLangItems.insert(::std::make_pair(::std::string("mrustc-panic_implementation"), path));
             if (!rv.second) {
@@ -3139,7 +3150,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // Attribute that acts as like `#[no_mangle]` `#[linkage="external"]`
     }
 };
@@ -3150,7 +3161,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& attr, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_Function()) {
             auto rv = crate.mLangItems.insert(::std::make_pair(::std::string("mrustc-alloc_error_handler"), path));
             if (!rv.second) {
@@ -3167,7 +3178,7 @@ public:
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute&, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& item) const override {
+    void handle(const Span& sp, const ASTAttribute&, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& item) const override {
         if (!item.is_Static()) {
             ERROR(sp, E0000, "#[global_allocator] on non-static " << path);
         }
@@ -3192,34 +3203,34 @@ class CMultiHandlerLint: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTStructItem& si) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTTupleItem& si) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTEnumVariant& ev) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeP& expr) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const override {
     }
 };
 
@@ -3245,15 +3256,15 @@ class CHandlerMustUse: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: only allowed on types
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: only allowed on associated types
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
         // TODO: only allowed on associated types
     }
 };
@@ -3266,7 +3277,7 @@ class CHandlerNonExhaustive: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: only allowed on types
     }
 };
@@ -3279,7 +3290,7 @@ class CHandlerPath: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: only allowed on modules
     }
 };
@@ -3292,14 +3303,14 @@ class CHandlerRustcPromotable: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // TODO: only allowed on functions?
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
         // TODO: only allowed on functions?
     }
 };
@@ -3312,16 +3323,16 @@ class CHandlerRustcInheritOverflowChecks: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeP& expr) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
     }
 };
 
@@ -3333,7 +3344,7 @@ class CHandlerRustcOnUnimiplemented: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         // Trait only.
     }
 };
@@ -3346,7 +3357,7 @@ class CHandlerRustBox: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeP& expr) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
         auto* n = cast<ASTExprNodeCallPath>(expr.get());
         ASSERT_BUG(expr->span(), n, "");
         ASSERT_BUG(expr->span(), n->mArgs.size() == 1, "");
@@ -3364,25 +3375,25 @@ class CMultiHandlerStability: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTStructItem& si) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTTupleItem& si) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const override {
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTEnumVariant& ev) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const override {
     }
 };
 
@@ -3412,7 +3423,7 @@ class CHandlerAllowInternalUnstable: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
     }
 };
 
@@ -3424,7 +3435,7 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         if (crate.loadStd != ASTCrate::LOAD_STD && crate.loadStd != ASTCrate::LOAD_CORE) {
             WARNING(sp, W0000, "Use of #![no_std] with itself or #![no_core]");
             return;
@@ -3439,7 +3450,7 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         if (crate.loadStd != ASTCrate::LOAD_STD && crate.loadStd != ASTCrate::LOAD_NONE) {
             WARNING(sp, W0000, "Use of #![no_core] with itself or #![no_std]");
         }
@@ -3453,7 +3464,7 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span&, const ASTAttribute&, ASTCrate& crate) const override {
+    void handle(const Span&, const ASTAttribute&, const WireBoard&, ASTCrate& crate) const override {
         crate.noMain = true;
     }
 };
@@ -3470,7 +3481,7 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_Module()) {
             i.as_Module().insertPrelude = false;
         } else {
@@ -3485,7 +3496,7 @@ public:
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (const auto* e = i.opt_Use()) {
             if (e->entries.size() != 1) {
                 ERROR(sp, E0000, "#[prelude_import] should be on a single-entry use");
@@ -3523,7 +3534,7 @@ class CTestHandler: public ExpandDecorator {
         return AttrStage::Pre;
     } // Expand early so tests are removed before inner expansion
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (!i.is_Function()) {
             ERROR(sp, E0000, "#[test] can only be put on functions - found on " << i.tagStr());
         }
@@ -3549,7 +3560,7 @@ class CTestHandlerSP: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (!i.is_Function()) {
             ERROR(sp, E0000, "#[should_panic] can only be put on functions - found on " << i.tagStr());
         }
@@ -3565,6 +3576,7 @@ class CTestHandlerSP: public ExpandDecorator {
                     td.panicType = ASTTestDesc::ShouldPanic::YesWithMessage;
 
                     TTStream lex(sp, ParseState(), mi.data());
+                    lex.parseState().wb = &wb;
                     auto parseMessage = [&]() {
                         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
                         if (auto* v = cast<ASTExprNodeString>(&*n)) {
@@ -3606,7 +3618,7 @@ class CTestHandlerIgnore: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (!i.is_Function()) {
             ERROR(sp, E0000, "#[ignore] can only be put on functions - found on " << i.tagStr());
         }

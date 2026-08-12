@@ -386,93 +386,93 @@ void TargetExportCurSpec(const ::std::string& filename) {
     saveSpecToFile(filename, gTarget);
 }
 
-void TargetSetCfg(const ::std::string& targetName) {
+void TargetSetCfg(Settings& settings, const ::std::string& targetName) {
     gTarget = initFromSpecName(targetName);
 
     if (gTarget.family == "unix") {
-        CfgSetFlag("unix");
+        CfgSetFlag(settings, "unix");
     }
-    CfgSetValue("target_family", gTarget.family);
+    CfgSetValue(settings, "target_family", gTarget.family);
 
     if (gTarget.osName == "linux") {
-        CfgSetFlag("linux");
-        CfgSetValue("target_vendor", "gnu");
+        CfgSetFlag(settings, "linux");
+        CfgSetValue(settings, "target_vendor", "gnu");
     }
 
     if (gTarget.osName == "macos") {
-        CfgSetFlag("apple");
-        CfgSetValue("target_vendor", "apple");
+        CfgSetFlag(settings, "apple");
+        CfgSetValue(settings, "target_vendor", "apple");
     }
 
     if (gTarget.osName == "freebsd") {
-        CfgSetFlag("freebsd");
-        CfgSetValue("target_vendor", "unknown");
+        CfgSetFlag(settings, "freebsd");
+        CfgSetValue(settings, "target_vendor", "unknown");
     }
 
     if (gTarget.osName == "netbsd") {
-        CfgSetFlag("netbsd");
-        CfgSetValue("target_vendor", "unknown");
+        CfgSetFlag(settings, "netbsd");
+        CfgSetValue(settings, "target_vendor", "unknown");
     }
 
     if (gTarget.osName == "openbsd") {
-        CfgSetFlag("openbsd");
-        CfgSetValue("target_vendor", "unknown");
+        CfgSetFlag(settings, "openbsd");
+        CfgSetValue(settings, "target_vendor", "unknown");
     }
 
     if (gTarget.osName == "dragonfly") {
-        CfgSetFlag("dragonfly");
-        CfgSetValue("target_vendor", "unknown");
+        CfgSetFlag(settings, "dragonfly");
+        CfgSetValue(settings, "target_vendor", "unknown");
     }
 
-    CfgSetValue("target_vendor", ""); // NOTE: Doesn't override a pre-set value
-    CfgSetValue("target_env", gTarget.envName);
-    CfgSetValue("target_os", gTarget.osName);
-    CfgSetValue("target_pointer_width", FMT(gTarget.arch.pointerBits));
-    CfgSetValue("target_endian", gTarget.arch.bigEndian ? "big" : "little");
-    CfgSetValue("target_arch", gTarget.arch.mName);
-    CfgSetValue("target_abi", "llvm"); // This is a lie, but hopefully works?
+    CfgSetValue(settings, "target_vendor", ""); // NOTE: Doesn't override a pre-set value
+    CfgSetValue(settings, "target_env", gTarget.envName);
+    CfgSetValue(settings, "target_os", gTarget.osName);
+    CfgSetValue(settings, "target_pointer_width", FMT(gTarget.arch.pointerBits));
+    CfgSetValue(settings, "target_endian", gTarget.arch.bigEndian ? "big" : "little");
+    CfgSetValue(settings, "target_arch", gTarget.arch.mName);
+    CfgSetValue(settings, "target_abi", "llvm"); // This is a lie, but hopefully works?
     // target_has_atomic_equal_alignment="N" means align_of::<AtomicN>() == align_of::<N>().
     // Since libcore declares AtomicN with repr(align(sizeof(N))), only set it when the
     // primitive's natural alignment already matches its size (e.g. u64 on x86 has align 4,
     // so target_has_atomic_equal_alignment="64" must be unset there even with cmpxchg8b).
     if (gTarget.arch.atomics.u8) {
-        CfgSetValue("target_has_atomic", "8");
-        CfgSetValue("target_has_atomic_load_store", "8");
-        CfgSetValue("target_has_atomic_equal_alignment", "8");
+        CfgSetValue(settings, "target_has_atomic", "8");
+        CfgSetValue(settings, "target_has_atomic_load_store", "8");
+        CfgSetValue(settings, "target_has_atomic_equal_alignment", "8");
     }
     if (gTarget.arch.atomics.u16) {
-        CfgSetValue("target_has_atomic", "16");
-        CfgSetValue("target_has_atomic_load_store", "16");
+        CfgSetValue(settings, "target_has_atomic", "16");
+        CfgSetValue(settings, "target_has_atomic_load_store", "16");
         if (gTarget.arch.alignments.u16 >= 2) {
-            CfgSetValue("target_has_atomic_equal_alignment", "16");
+            CfgSetValue(settings, "target_has_atomic_equal_alignment", "16");
         }
     }
     if (gTarget.arch.atomics.u32) {
-        CfgSetValue("target_has_atomic", "32");
-        CfgSetValue("target_has_atomic_load_store", "32");
+        CfgSetValue(settings, "target_has_atomic", "32");
+        CfgSetValue(settings, "target_has_atomic_load_store", "32");
         if (gTarget.arch.alignments.u32 >= 4) {
-            CfgSetValue("target_has_atomic_equal_alignment", "32");
+            CfgSetValue(settings, "target_has_atomic_equal_alignment", "32");
         }
     }
     if (gTarget.arch.atomics.u64) {
-        CfgSetValue("target_has_atomic", "64");
-        CfgSetValue("target_has_atomic_load_store", "64");
+        CfgSetValue(settings, "target_has_atomic", "64");
+        CfgSetValue(settings, "target_has_atomic_load_store", "64");
         if (gTarget.arch.alignments.u64 >= 8) {
-            CfgSetValue("target_has_atomic_equal_alignment", "64");
+            CfgSetValue(settings, "target_has_atomic_equal_alignment", "64");
         }
     }
     if (gTarget.arch.atomics.ptr) {
-        CfgSetValue("target_has_atomic", "ptr");
-        CfgSetValue("target_has_atomic_load_store", "ptr");
+        CfgSetValue(settings, "target_has_atomic", "ptr");
+        CfgSetValue(settings, "target_has_atomic_load_store", "ptr");
         if (gTarget.arch.alignments.ptr * 8u >= gTarget.arch.pointerBits) {
-            CfgSetValue("target_has_atomic_equal_alignment", "ptr");
+            CfgSetValue(settings, "target_has_atomic_equal_alignment", "ptr");
         }
     }
     // TODO: Atomic compare-and-set option
     if (gTarget.arch.atomics.ptr) {
-        CfgSetValue("target_has_atomic", "cas");
+        CfgSetValue(settings, "target_has_atomic", "cas");
     }
-    CfgSetValueCb("target_feature", [](const ::std::string& s) {
+    CfgSetValueCb(settings, "target_feature", [](const ::std::string& s) {
         //if(g_target.m_arch.m_name == "x86_64" && s == "sse2") return true;    // 1.39 ppv-lite86 requires sse2 (x86_64 always has it)
         return false;
     });

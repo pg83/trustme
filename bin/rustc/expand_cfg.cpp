@@ -1,5 +1,10 @@
 #include "expand_cfg.h"
 
+#include "settings.h"
+#include "wire_board.h"
+
+#include <std/mem/obj_pool.h>
+
 #include "synext.h"
 #include "ast_expr.h" // Needed to clear a ExprNodeP
 #include "ast_attrs.h"
@@ -13,10 +18,6 @@
 #include <set>
 #include <optional>
 #include <stdexcept>
-
-::std::multimap<::std::string, ::std::string> gCfgValues;
-::std::map<::std::string, ::std::function<bool(const ::std::string&)>> gCfgValueFcns;
-::std::set<::std::string> gCfgFlags;
 
 namespace {
     struct ExpectedCfgValues {
@@ -37,7 +38,24 @@ namespace {
         LintSetting warnings;
         LintSetting unexpectedCfgs;
         LintSetting cap;
-    } gCheckCfg;
+    };
+}
+
+// The cfg!() evaluation state: --cfg values/flags, value callbacks and the
+// --check-cfg expectations with their lint settings. Opaque outside this
+// file; Settings holds a pointer.
+struct CfgState {
+    ::std::multimap<::std::string, ::std::string> values;
+    ::std::map<::std::string, ::std::function<bool(const ::std::string&)>> valueFcns;
+    ::std::set<::std::string> flags;
+    CheckCfgState check;
+};
+
+CfgState* CfgCreateState(stl::ObjPool& pool) {
+    return pool.make<CfgState>();
+}
+
+namespace {
 
     class CfgSpecParser {
         const ::std::string& input;
@@ -321,10 +339,10 @@ namespace {
         throw ::std::logic_error("invalid lint level");
     }
 
-    CfgLintLevel unexpectedCfgLevel() {
-        auto level = gCheckCfg.unexpectedCfgs.isSet ? gCheckCfg.unexpectedCfgs.level : (gCheckCfg.warnings.isSet ? gCheckCfg.warnings.level : CfgLintLevel::Warn);
-        if (level != CfgLintLevel::ForceWarn && gCheckCfg.cap.isSet && lintLevelRank(level) > lintLevelRank(gCheckCfg.cap.level)) {
-            level = gCheckCfg.cap.level;
+    CfgLintLevel unexpectedCfgLevel(const CfgState& cfg) {
+        auto level = cfg.check.unexpectedCfgs.isSet ? cfg.check.unexpectedCfgs.level : (cfg.check.warnings.isSet ? cfg.check.warnings.level : CfgLintLevel::Warn);
+        if (level != CfgLintLevel::ForceWarn && cfg.check.cap.isSet && lintLevelRank(level) > lintLevelRank(cfg.check.cap.level)) {
+            level = cfg.check.cap.level;
         }
         return level;
     }
@@ -388,8 +406,8 @@ namespace {
         return BuiltinExpectation::UnknownName;
     }
 
-    void reportUnexpectedCfg(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value, bool badValue) {
-        const auto level = unexpectedCfgLevel();
+    void reportUnexpectedCfg(const CfgState& cfg, const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value, bool badValue) {
+        const auto level = unexpectedCfgLevel(cfg);
         if (level == CfgLintLevel::Allow) {
             return;
         }
@@ -402,16 +420,16 @@ namespace {
         }
     }
 
-    void validateCfgUse(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value) {
-        if (!gCheckCfg.active) {
+    void validateCfgUse(const CfgState& cfg, const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value) {
+        if (!cfg.check.active) {
             return;
         }
-        const auto it = gCheckCfg.expected.find(name);
-        if (it != gCheckCfg.expected.end()) {
+        const auto it = cfg.check.expected.find(name);
+        if (it != cfg.check.expected.end()) {
             const auto& expected = it->second;
             const auto valid = expected.any || (value ? expected.values.count(*value) != 0 : expected.none);
             if (!valid) {
-                reportUnexpectedCfg(span, name, value, true);
+                reportUnexpectedCfg(cfg, span, name, value, true);
             }
             return;
         }
@@ -419,11 +437,11 @@ namespace {
             case BuiltinExpectation::Expected:
                 return;
             case BuiltinExpectation::UnexpectedValue:
-                reportUnexpectedCfg(span, name, value, true);
+                reportUnexpectedCfg(cfg, span, name, value, true);
                 return;
             case BuiltinExpectation::UnknownName:
-                if (gCheckCfg.exhaustiveNames) {
-                    reportUnexpectedCfg(span, name, value, false);
+                if (cfg.check.exhaustiveNames) {
+                    reportUnexpectedCfg(cfg, span, name, value, false);
                 }
                 return;
         }
@@ -432,26 +450,30 @@ namespace {
 
 static const RcString rcstringCfg = RcString::newInterned("cfg");
 
-void CfgDump(::std::ostream& os) {
-    for (const auto& v : gCfgValues) {
+void CfgDump(const Settings& settings, ::std::ostream& os) {
+    const auto& cfg = *settings.cfg;
+    for (const auto& v : cfg.values) {
         os << ">" << v.first << "=" << v.second << std::endl;
     }
-    for (const auto& f : gCfgFlags) {
+    for (const auto& f : cfg.flags) {
         os << ">" << f << std::endl;
     }
     // NOTE: `g_cfg_value_fcns` is only used for feature flags, which minicargo doesn't need
 }
 
-void CfgSetFlag(::std::string name) {
-    gCfgFlags.insert(mv$(name));
+void CfgSetFlag(Settings& settings, ::std::string name) {
+    auto& cfg = *settings.cfg;
+    cfg.flags.insert(mv$(name));
 }
 
-void CfgSetValue(::std::string name, ::std::string val) {
-    gCfgValues.insert(::std::make_pair(mv$(name), mv$(val)));
+void CfgSetValue(Settings& settings, ::std::string name, ::std::string val) {
+    auto& cfg = *settings.cfg;
+    cfg.values.insert(::std::make_pair(mv$(name), mv$(val)));
 }
 
-void CfgSetValueCb(::std::string name, ::std::function<bool(const ::std::string&)> cb) {
-    gCfgValueFcns.insert(::std::make_pair(mv$(name), mv$(cb)));
+void CfgSetValueCb(Settings& settings, ::std::string name, ::std::function<bool(const ::std::string&)> cb) {
+    auto& cfg = *settings.cfg;
+    cfg.valueFcns.insert(::std::make_pair(mv$(name), mv$(cb)));
 }
 
 bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasValue, ::std::string& value, ::std::string& error) {
@@ -467,15 +489,16 @@ bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& hasVal
     }
 }
 
-bool CfgSetCheckSpec(const ::std::string& spec, ::std::string& error) {
+bool CfgSetCheckSpec(Settings& settings, const ::std::string& spec, ::std::string& error) {
+    auto& cfg = *settings.cfg;
     try {
         auto parsed = CfgSpecParser(spec).parseCheckSpec();
-        gCheckCfg.active = true;
+        cfg.check.active = true;
         if (parsed.anyNames) {
-            gCheckCfg.exhaustiveNames = false;
+            cfg.check.exhaustiveNames = false;
         }
         for (auto& name : parsed.names) {
-            auto& expected = gCheckCfg.expected[name];
+            auto& expected = cfg.check.expected[name];
             if (parsed.values.any) {
                 expected.any = true;
                 expected.none = false;
@@ -492,33 +515,35 @@ bool CfgSetCheckSpec(const ::std::string& spec, ::std::string& error) {
     }
 }
 
-void CfgSetLintLevel(::std::string name, CfgLintLevel level) {
+void CfgSetLintLevel(Settings& settings, ::std::string name, CfgLintLevel level) {
+    auto& cfg = *settings.cfg;
     for (auto& c : name) {
         if (c == '-') {
             c = '_';
         }
     }
     if (name == "warnings") {
-        updateLintSetting(gCheckCfg.warnings, level);
+        updateLintSetting(cfg.check.warnings, level);
     } else if (name == "unexpected_cfgs") {
-        updateLintSetting(gCheckCfg.unexpectedCfgs, level);
+        updateLintSetting(cfg.check.unexpectedCfgs, level);
     }
 }
 
-void CfgSetLintCap(CfgLintLevel level) {
-    gCheckCfg.cap.isSet = true;
-    gCheckCfg.cap.level = level;
+void CfgSetLintCap(Settings& settings, CfgLintLevel level) {
+    auto& cfg = *settings.cfg;
+    cfg.check.cap.isSet = true;
+    cfg.check.cap.level = level;
 }
 
 namespace {
-    bool checkCfgInner1(const RcString& name, TokenStream& lex);
+    bool checkCfgInner1(const CfgState& cfg, const RcString& name, TokenStream& lex);
 
-    bool checkCfgInner(TokenStream& lex) {
+    bool checkCfgInner(const CfgState& cfg, TokenStream& lex) {
         TRACE_FUNCTION;
         if (lex.lookahead(0) == TOK_INTERPOLATED_META) {
             auto meta = std::move(lex.getTokenCheck(TOK_INTERPOLATED_META).fragMeta());
             auto ilex = TTStream(meta.span(), ParseState(), meta.data());
-            return checkCfgInner1(meta.name().asTrivial(), ilex);
+            return checkCfgInner1(cfg, meta.name().asTrivial(), ilex);
         } else if (lex.lookahead(0) == TOK_RWORD_TRUE) {
             lex.getTokenCheck(TOK_RWORD_TRUE);
             return true;
@@ -527,14 +552,14 @@ namespace {
             return false;
         } else {
             auto name = lex.getTokenCheck(TOK_IDENT).ident().name;
-            return checkCfgInner1(name, lex);
+            return checkCfgInner1(cfg, name, lex);
         }
     }
 
-    bool checkCfgInner1(const RcString& name, TokenStream& lex) {
+    bool checkCfgInner1(const CfgState& cfg, const RcString& name, TokenStream& lex) {
         // Some compiler-generated cfg streams have no source parent.  They do
         // not need a diagnostic span unless check-cfg is actually enabled.
-        const auto conditionSpan = gCheckCfg.active ? lex.pointSpan() : Span();
+        const auto conditionSpan = cfg.check.active ? lex.pointSpan() : Span();
         Token tok;
         switch (lex.lookahead(0)) {
             case TOK_EQUAL: {
@@ -549,9 +574,9 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_STRING);
                     val = tok.str();
                 }
-                validateCfgUse(conditionSpan, name.c_str(), val);
+                validateCfgUse(cfg, conditionSpan, name.c_str(), val);
                 // Equality
-                auto its = gCfgValues.equal_range(name.c_str());
+                auto its = cfg.values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
                     DEBUG(name << ": '" << it->second << "' == '" << val << "'");
                     if (it->second == val) {
@@ -562,8 +587,8 @@ namespace {
                     return false;
                 }
 
-                auto it2 = gCfgValueFcns.find(name.c_str());
-                if (it2 != gCfgValueFcns.end()) {
+                auto it2 = cfg.valueFcns.find(name.c_str());
+                if (it2 != cfg.valueFcns.end()) {
                     DEBUG(name << ": ('" << val << "')?");
                     return it2->second(val);
                 }
@@ -580,7 +605,7 @@ namespace {
                 if (name == rcstringAny || name == rcstringCfg) {
                     bool rv = false;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                        rv |= checkCfgInner(lex);
+                        rv |= checkCfgInner(cfg, lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
                         }
@@ -589,7 +614,7 @@ namespace {
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
                 } else if (name == rcstringNot) {
-                    bool rv = checkCfgInner(lex);
+                    bool rv = checkCfgInner(cfg, lex);
                     // Allow a trailing comma
                     lex.getTokenIf(TOK_COMMA);
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
@@ -597,7 +622,7 @@ namespace {
                 } else if (name == rcstringAll) {
                     bool rv = true;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-                        rv &= checkCfgInner(lex);
+                        rv &= checkCfgInner(cfg, lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
                         }
@@ -614,7 +639,7 @@ namespace {
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
                         const auto field = lex.getTokenCheck(TOK_IDENT).ident().name;
                         const auto canonical = RcString::newInterned(FMT("target_" << field));
-                        rv &= checkCfgInner1(canonical, lex);
+                        rv &= checkCfgInner1(cfg, canonical, lex);
                         if (lex.lookahead(0) != TOK_COMMA) {
                             break;
                         }
@@ -629,24 +654,25 @@ namespace {
 
                 break;
             default:
-                validateCfgUse(conditionSpan, name.c_str(), ::std::nullopt);
-                auto its = gCfgValues.equal_range(name.c_str());
+                validateCfgUse(cfg, conditionSpan, name.c_str(), ::std::nullopt);
+                auto its = cfg.values.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
                     return true;
                 }
                 // Flag
-                auto it = gCfgFlags.find(name.c_str());
-                return (it != gCfgFlags.end());
+                auto it = cfg.flags.find(name.c_str());
+                return (it != cfg.flags.end());
         }
     }
 }
 
-bool checkCfgStream(TokenStream& lex) {
+bool checkCfgStream(const Settings& settings, TokenStream& lex) {
+    const auto& cfg = *settings.cfg;
     Token tok;
     bool rv = false;
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-        rv |= checkCfgInner(lex);
+        rv |= checkCfgInner(cfg, lex);
         if (lex.lookahead(0) != TOK_COMMA) {
             break;
         }
@@ -656,15 +682,15 @@ bool checkCfgStream(TokenStream& lex) {
     return rv;
 }
 
-bool checkCfg(const Span& sp, const ASTAttribute& mi) {
+bool checkCfg(const Settings& settings, const Span& sp, const ASTAttribute& mi) {
     TTStream lex(sp, ParseState(), mi.data());
-    return checkCfgStream(lex);
+    return checkCfgStream(settings, lex);
 }
 
-bool checkCfgAttrs(const ASTAttributeList& attrs) {
+bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs) {
     for (auto& a : attrs.mItems) {
         if (a.name() == rcstringCfg) {
-            if (!checkCfg(a.span(), a)) {
+            if (!checkCfg(settings, a.span(), a)) {
                 return false;
             }
         }
@@ -672,13 +698,14 @@ bool checkCfgAttrs(const ASTAttributeList& attrs) {
     return true;
 }
 
-std::vector<ASTAttribute> checkCfgAttr(const ASTAttribute& mi) {
+std::vector<ASTAttribute> checkCfgAttr(const Settings& settings, const ASTAttribute& mi) {
+    const auto& cfg = *settings.cfg;
     TTStream lex(mi.span(), ParseState(), mi.data());
 
     Token tok;
     std::vector<ASTAttribute> rv;
     lex.getTokenCheck(TOK_PAREN_OPEN);
-    auto cfgRes = checkCfgInner(lex);
+    auto cfgRes = checkCfgInner(cfg, lex);
     while (lex.lookahead(0) == TOK_COMMA) {
         lex.getTokenCheck(TOK_COMMA);
         rv.push_back(ParseMetaItem(lex));
@@ -693,10 +720,11 @@ std::vector<ASTAttribute> checkCfgAttr(const ASTAttribute& mi) {
 }
 
 class CCfgExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         DEBUG("cfg!() - " << tt);
         auto lex = TTStream(sp, ParseState(), tt);
-        bool rv = checkCfgInner(lex);
+        const auto& cfg = *wb.settings->cfg;
+        bool rv = checkCfgInner(cfg, lex);
         lex.getTokenCheck(TOK_EOF);
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, {}, rv ? TOK_RWORD_TRUE : TOK_RWORD_FALSE)));
@@ -704,11 +732,12 @@ class CCfgExpander: public ExpandProcMacro {
 };
 
 class CCfgSelectExpander: public ExpandProcMacro {
-    ::std::unique_ptr<TokenStream> expand(const Span& sp, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         DEBUG("cfg_select!() - " << tt);
         auto lex = TTStream(sp, ParseState(), tt);
         for (;;) {
-            bool rv = lex.getTokenIf(TOK_UNDERSCORE) || checkCfgInner(lex);
+            const auto& cfg = *wb.settings->cfg;
+            bool rv = lex.getTokenIf(TOK_UNDERSCORE) || checkCfgInner(cfg, lex);
             lex.getTokenCheck(TOK_FATARROW);
             auto t = ParseTT(lex, true);
             if (rv) {
@@ -726,83 +755,83 @@ class CCfgHandler: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         DEBUG("#[cfg] crate - " << mi);
         // Ignore, as #[cfg] on a crate is handled in expand/mod.cpp
-        if (checkCfg(sp, mi)) {
+        if (checkCfg(*wb.settings, sp, mi)) {
         } else {
             // Remove all items (can't remove the module)
             crate.mRootModule.mItems.clear();
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
-        if (checkCfg(sp, mi)) {
+        if (checkCfg(*wb.settings, sp, mi)) {
             // Leave
         } else {
             i = ASTItem::make_None({});
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
-        if (checkCfg(sp, mi)) {
+        if (checkCfg(*wb.settings, sp, mi)) {
             // Leave
         } else {
             i = ASTItem::make_None({});
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const override {
         TRACE_FUNCTION_FR("#[cfg] item - " << mi, (i.is_None() ? "Deleted" : ""));
-        if (checkCfg(sp, mi)) {
+        if (checkCfg(*wb.settings, sp, mi)) {
             // Leave
         } else {
             i = ASTItem::make_None({});
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeP& expr) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
         DEBUG("#[cfg] expr - " << mi);
-        if (checkCfg(sp, mi)) {
+        if (checkCfg(*wb.settings, sp, mi)) {
             // Leave
         } else {
             expr.reset();
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTStructItem& si) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
         DEBUG("#[cfg] struct item - " << mi);
-        if (!checkCfg(sp, mi)) {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             si.mName = RcString();
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTTupleItem& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const override {
         DEBUG("#[cfg] tuple item - " << mi);
-        if (!checkCfg(sp, mi)) {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             i.mType = ::TypeRef(sp);
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTEnumVariant& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& i) const override {
         DEBUG("#[cfg] enum variant - " << mi);
-        if (!checkCfg(sp, mi)) {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             i.mName = RcString();
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeMatchArm& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& i) const override {
         DEBUG("#[cfg] match arm - " << mi);
-        if (!checkCfg(sp, mi)) {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             i.patterns.clear();
         }
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const override {
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& i) const override {
         DEBUG("#[cfg] struct lit - " << mi);
-        if (!checkCfg(sp, mi)) {
+        if (!checkCfg(*wb.settings, sp, mi)) {
             i.value.reset();
         }
     }

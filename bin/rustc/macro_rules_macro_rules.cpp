@@ -170,7 +170,7 @@ public:
 };
 
 // === Prototypes ===
-unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
+unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts);
 void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::vector<MacroExpansionEnt>& contents);
 
 // ------------------------------------
@@ -594,13 +594,13 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
 }
 
 /// Parse the input TokenTree according to the `macro_rules!` patterns and return a token stream of the replacement
-::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const ASTCrate& crate, ASTModule& mod) {
+::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod) {
     TRACE_FUNCTION_F("'" << name << "', " << input);
     DEBUG("rules.m_source_crate = " << rules.sourceCrate);
     DEBUG("rules.m_hygiene = " << rules.mHygiene);
 
     ParameterMappings boundTts;
-    unsigned int ruleIndex = MacroInvokeRulesMatchPattern(sp, rules, mv$(input), crate, mod, boundTts);
+    unsigned int ruleIndex = MacroInvokeRulesMatchPattern(sp, wb, rules, mv$(input), crate, mod, boundTts);
 
     const auto& rule = rules.rules.at(ruleIndex);
 
@@ -2026,7 +2026,7 @@ namespace {
     }
 }
 
-unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts) {
+unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const WireBoard& wb, const MacroRules& rules, TokenTree input, const ASTCrate& crate, ASTModule& mod, ParameterMappings& boundTts) {
     TRACE_FUNCTION_F(rules.rules.size() << " options");
     ASSERT_BUG(sp, rules.rules.size() > 0, "Empty macro_rules set");
 
@@ -2125,6 +2125,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
 
         auto lex = TTStreamO(sp, ParseState(), mv$(input));
         lex.parseState().crate = &crate;
+        lex.parseState().wb = &wb;
         SET_MODULE(lex, mod);
         auto armStream = MacroPatternStream(rules.rules[i].pattern, &history);
 

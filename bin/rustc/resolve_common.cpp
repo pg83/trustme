@@ -1,5 +1,7 @@
 #include "resolve_common.h"
 
+#include "settings.h"
+
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include "stdspan.h" // std::span
@@ -36,13 +38,15 @@ namespace {
 
     struct ResolveState {
         const Span& sp;
+        const Settings& settings;
         const ASTCrate& crate;
 
         typedef std::pair<const ASTModule*, RcString> antirecurseStackEntT;
         std::vector<antirecurseStackEntT> antirecurseStack;
 
-        ResolveState(const Span& span, const ASTCrate& crate)
+        ResolveState(const Span& span, const Settings& settings, const ASTCrate& crate)
             : sp(span)
+            , settings(settings)
             , crate(crate)
         {
         }
@@ -101,12 +105,12 @@ namespace {
                             const auto& name = e.nodes.back().name();
                             DEBUG("Trying implicit externs for " << name);
                             DEBUG(FmtLambda([&](std::ostream& os) {
-                                for (const auto& v : gImplicitCrates) {
+                                for (const auto& v : settings.implicitCrates) {
                                     os << " " << v.first;
                                 }
                             }));
-                            auto ecIt = gImplicitCrates.find(name);
-                            if (ecIt != gImplicitCrates.end()) {
+                            auto ecIt = settings.implicitCrates.find(name);
+                            if (ecIt != settings.implicitCrates.end()) {
                                 return ResolveModuleRef::make_ImplicitPrelude({});
                             }
                         }
@@ -183,12 +187,12 @@ namespace {
                     if (crate.edition >= ASTEdition::Rust2018 || name == "core") {
                         DEBUG("Trying implicit externs for " << name);
                         DEBUG(FmtLambda([&](std::ostream& os) {
-                            for (const auto& v : gImplicitCrates) {
+                            for (const auto& v : settings.implicitCrates) {
                                 os << " " << v.first;
                             }
                         }));
-                        auto ecIt = gImplicitCrates.find(name);
-                        if (ecIt != gImplicitCrates.end()) {
+                        auto ecIt = settings.implicitCrates.find(name);
+                        if (ecIt != settings.implicitCrates.end()) {
                             if (ecIt->second == "") {
                                 // This crate!
                                 return getModuleAst(crate.mRootModule, path, 1, ignoreLast, outPath);
@@ -242,8 +246,8 @@ namespace {
                         if (n == crate.crateNameSet) {
                             return getModuleAst(crate.mRootModule, path, 0, ignoreLast, outPath);
                         }
-                        auto ecIt = gImplicitCrates.find(n);
-                        if (ecIt == gImplicitCrates.end()) {
+                        auto ecIt = settings.implicitCrates.find(n);
+                        if (ecIt == settings.implicitCrates.end()) {
                             return ResolveModuleRef();
                         }
                         auto ecIt2 = crate.externCrates.find(ecIt->second);
@@ -511,7 +515,7 @@ namespace {
                 //   the attribute list multiple times.
                 switch (i->cachedCfg) {
                     case ASTCachedCfg::Unknown:
-                        i->cachedCfg = checkCfgAttrs(i->attrs) ? ASTCachedCfg::Yes : ASTCachedCfg::No;
+                        i->cachedCfg = checkCfgAttrs(settings, i->attrs) ? ASTCachedCfg::Yes : ASTCachedCfg::No;
                     case ASTCachedCfg::Yes:
                     case ASTCachedCfg::No:
                         if (i->cachedCfg == ASTCachedCfg::No) {
@@ -615,8 +619,8 @@ namespace {
                                 }
                                 TU_ARMA(ImplicitPrelude, _e) {
                                     if (ns == ResolveNamespace::Namespace) {
-                                        auto ecIt = gImplicitCrates.find(itemName);
-                                        if (ecIt != gImplicitCrates.end()) {
+                                        auto ecIt = settings.implicitCrates.find(itemName);
+                                        if (ecIt != settings.implicitCrates.end()) {
                                             if (outPath) {
                                                 outPath->crate = ecIt->second;
                                                 outPath->nodes.clear();
@@ -833,15 +837,15 @@ namespace {
 // TODO: Function that turns a relative path into a canonical absolute path to the containing module
 // - This should check if the index has been populated, and use it if present.
 // - NOTE: Can only go to the containing module, not to the item itself - `use` can end up importing disparate paths for all three namespaces.
-ResolveModuleRef ResolveLookupGetModule(const Span& sp, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath) {
-    ResolveState rs(sp, crate);
+ResolveModuleRef ResolveLookupGetModule(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath) {
+    ResolveState rs(sp, settings, crate);
 
     return rs.getModule(basePath, path, ignoreLast, outPath);
 }
 
-ResolveItemRefMacro ResolveLookupMacro(const Span& span, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath) {
+ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath) {
     TRACE_FUNCTION_F("path=" << path << " in " << basePath);
-    ResolveState rs(span, crate);
+    ResolveState rs(span, settings, crate);
 
     const auto& itemName = path.nodes().back().name();
     auto mod = rs.getModule(basePath, path, true, outPath);
@@ -888,9 +892,9 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const ASTCrate& crate, 
 
 /// Returns the source module for the specified name
 // NOTE: Name resolution
-ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath) {
+ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath) {
     TRACE_FUNCTION_F("path=" << path << " in " << basePath);
-    ResolveState rs(sp, crate);
+    ResolveState rs(sp, settings, crate);
 
     auto mod = rs.getModule(basePath, path, true, outPath);
     TU_MATCH_HDRA( (mod), {)

@@ -9,6 +9,7 @@ class ExpandProcMacro;
 class MacroRules;
 
 class ASTCrate;
+struct Settings;
 class ASTModule;
 class ASTItem;
 class ASTPath;
@@ -46,7 +47,7 @@ extern ::std::ostream& operator<<(::std::ostream& os, ResolveNamespace ns);
 /// <param name="ignore_last">Ignore the last node of the path</param>
 /// <param name="out_path"></param>
 /// <returns></returns>
-extern ResolveModuleRef ResolveLookupGetModule(const Span& span, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath);
-extern ResolveItemRefMacro ResolveLookupMacro(const Span& span, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath);
+extern ResolveModuleRef ResolveLookupGetModule(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, bool ignoreLast, ASTAbsolutePath* outPath);
+extern ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path, ASTAbsolutePath* outPath);
 // Returns the module that contains the provided name
-extern ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath);
+extern ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, const ASTPath& path, ResolveNamespace ns, ASTAbsolutePath* outPath);

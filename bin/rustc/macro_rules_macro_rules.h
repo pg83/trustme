@@ -1,3 +1,4 @@
+struct WireBoard;
 #pragma once
 
 #include "common.h"
@@ -181,7 +182,7 @@ public:
     MacroRules(MacroRules&&) = default;
 };
 
-extern ::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, TokenTree input, const ASTCrate& crate, ASTModule& mod);
+extern ::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod);
 
 /// Parse a full `macro_rules` block
 extern MacroRulesPtr ParseMacroRules(TokenStream& lex);

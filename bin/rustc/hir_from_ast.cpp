@@ -1,5 +1,8 @@
 #include "hir_from_ast.h"
 
+#include "settings.h"
+#include "wire_board.h"
+
 #include "common.h"
 #include "ast_ast.h"
 #include "hir_hir.h"
@@ -32,9 +35,9 @@ HIRGenericParams LowerHIRHigherRankedBounds(const ASTHigherRankedBounds& hrbs);
 HIRSimplePath pathSized;
 HIRSimplePath pathPointeeSized;
 HIRSimplePath pathMetadataSized;
-RcString gCoreCrate;
-RcString gCrateName;
-HIRCrate* gCratePtr = nullptr;
+static RcString gCoreCrate; // lowering-internal working copy; the canonical value lives in Settings
+static RcString gCrateName;
+static HIRCrate* gCratePtr = nullptr;
 const ASTCrate* gAstCratePtr;
 
 namespace {
@@ -2441,7 +2444,7 @@ public:
 ///
 /// - Removes all possibility for unexpanded macros
 /// - Performs desugaring of for/if-let/while-let/...
-HIRCrate* LowerHIRFromAST(stl::ObjPool* pool, ASTCrate& crate) {
+HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate) {
     auto& rv = *pool->make<HIRCrate>(pool, crate.types);
 
     if (crate.crateType != ASTCrate::Type::Executable) {
@@ -2459,6 +2462,8 @@ HIRCrate* LowerHIRFromAST(stl::ObjPool* pool, ASTCrate& crate) {
     gAstCratePtr = &crate;
     gCrateName = rv.crateName;
     gCoreCrate = crate.extCratenameCore;
+    wb.settings->crateName = gCrateName;
+    wb.settings->coreCrate = gCoreCrate;
     auto macros = std::map<RcString, HIRMacroItem>();
 
     // - Extract exported macros
@@ -2772,6 +2777,7 @@ HIRCrate* LowerHIRFromAST(stl::ObjPool* pool, ASTCrate& crate) {
 
     if (gCoreCrate == "") {
         gCoreCrate = gCrateName;
+        wb.settings->coreCrate = gCoreCrate;
     }
 
     gCratePtr = nullptr;

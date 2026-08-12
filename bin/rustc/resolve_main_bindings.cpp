@@ -1,5 +1,8 @@
 #include "resolve_main_bindings.h"
 
+#include "settings.h"
+#include "wire_board.h"
+
 #include "ast_ast.h"
 #include "hir_hir.h"
 #include "stdspan.h" // std::span
@@ -95,8 +98,11 @@ namespace {
         // Destination `GenericParams` for in_band_lifetimes
         ASTGenericParams* iblTargetGenerics;
 
-        Context(const ASTCrate& crate, const ASTModule& mod)
-            : crate(crate)
+        const Settings& settings;
+
+        Context(const Settings& settings, const ASTCrate& crate, const ASTModule& mod)
+            : settings(settings)
+            , crate(crate)
             , mMod(mod)
             , varCount(~0u)
             , blockLevel(0)
@@ -745,9 +751,9 @@ namespace {
 
             // #![feature(extern_prelude)] - 2018-style extern paths
             if (mode == LookupMode::Namespace /*&& m_crate.has_feature("extern_prelude")*/) {
-                DEBUG("Extern crates - " << gImplicitCrates);
-                auto it = gImplicitCrates.find(name);
-                if (it != gImplicitCrates.end()) {
+                DEBUG("Extern crates - " << this->settings.implicitCrates);
+                auto it = this->settings.implicitCrates.find(name);
+                if (it != this->settings.implicitCrates.end()) {
                     DEBUG("- Found '" << name << "' (= " << it->second << ")");
                     return ASTPath(it->second, {});
                 }
@@ -810,7 +816,7 @@ namespace {
 
         /// Clones the context, including only the module-level items (i.e. just the Module entries)
         Context cloneMod() const {
-            auto rv = Context(this->crate, this->mMod);
+            auto rv = Context(this->settings, this->crate, this->mMod);
             for (const auto& v : nameContext) {
                 if (const auto* e = v.opt_Module()) {
                     rv.nameContext.push_back(Ent::make_Module(*e));
@@ -852,7 +858,7 @@ void ResolveAbsoluteType(Context& context, TypeRef& type);
 void ResolveAbsoluteExpr(Context& context, ASTExpr& expr);
 void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node);
 void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& pat);
-void ResolveAbsoluteMod(const ASTCrate& crate, ASTModule& mod);
+void ResolveAbsoluteMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod);
 void ResolveAbsoluteMod(Context itemContext, ASTModule& mod);
 
 void ResolveAbsoluteFunction(Context& itemContext, ASTFunction& fcn);
@@ -1871,8 +1877,8 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             // HACK: if the crate name starts with `=` it's a 2018 absolute path (references a crate loaded with `--extern`)
             if (/*context.m_crate.m_edition >= AST::Edition::Rust2018 &&*/ e.crate.c_str()[0] == '=') {
                 // Absolute paths in 2018 edition are crate-prefixed?
-                auto ecIt = gImplicitCrates.find(e.crate.c_str() + 1);
-                if (ecIt == gImplicitCrates.end()) {
+                auto ecIt = context.settings.implicitCrates.find(e.crate.c_str() + 1);
+                if (ecIt == context.settings.implicitCrates.end()) {
                     ERROR(sp, E0000, "Unable to find external crate for path " << path);
                 }
                 e.crate = ecIt->second;
@@ -1880,8 +1886,8 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             // HACK: If this is `crate::foo::bar`, and `foo` doesn't exist in the root, but it is an implicit crate, then resolve to that
             // - This handles when a 2015 macro resolves to `::cratename::Bar` in a 2018+ crate
             else if (e.crate == "" && e.nodes.size() > 1 && context.crate.mRootModule.namespaceItems.count(e.nodes.front().name()) == 0) {
-                auto ecIt = gImplicitCrates.find(e.nodes.front().name().c_str());
-                if (ecIt != gImplicitCrates.end()) {
+                auto ecIt = context.settings.implicitCrates.find(e.nodes.front().name().c_str());
+                if (ecIt != context.settings.implicitCrates.end()) {
                     e.crate = ecIt->second;
                     e.nodes.erase(e.nodes.begin());
                 }
@@ -2656,8 +2662,8 @@ void ResolveAbsoluteEnum(Context& itemContext, ASTEnum& e) {
     itemContext.pop(e.params());
 }
 
-void ResolveAbsoluteMod(const ASTCrate& crate, ASTModule& mod) {
-    ResolveAbsoluteMod(Context{crate, mod}, mod);
+void ResolveAbsoluteMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod) {
+    ResolveAbsoluteMod(Context{settings, crate, mod}, mod);
 }
 
 void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
@@ -2744,7 +2750,7 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
             }
             TU_ARMA(Module, e) {
                 DEBUG("Module - " << i->name);
-                ResolveAbsoluteMod(itemContext.crate, e);
+                ResolveAbsoluteMod(itemContext.settings, itemContext.crate, e);
             }
             TU_ARMA(Crate, e) {
                 // - Nothing
@@ -2818,8 +2824,8 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
     }
 }
 
-void ResolveAbsolutise(ASTCrate& crate) {
-    ResolveAbsoluteMod(crate, crate.rootModule());
+void ResolveAbsolutise(const WireBoard& wb, ASTCrate& crate) {
+    ResolveAbsoluteMod(*wb.settings, crate, crate.rootModule());
 }
 
 #undef FLAG_CONST_GENERIC
@@ -3731,19 +3737,19 @@ namespace {
     const RcString rcstringCrateBuiltins = RcString::newInterned(CRATE_BUILTINS);
 }
 
-void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules = {});
-ASTPath::Bindings ResolveUseGetBinding(const Span& span, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTPath& path, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool softFail = false);
+void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules = {});
+ASTPath::Bindings ResolveUseGetBinding(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTPath& path, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool softFail = false);
 
-ASTPath::Bindings ResolveUseGetBindingMod(const Span& span, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool requireVisible = false);
+ASTPath::Bindings ResolveUseGetBindingMod(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTAbsolutePath& sourceModPath, const ASTModule& mod, const RcString& desItemName, ::std::span<const ASTModule*> parentModules, bool typesOnly = false, bool requireVisible = false);
 ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTExternCrate& ec, const HIRModule& hmodr, const ASTPath& path, unsigned int start, ASTAbsolutePath ap = {});
 ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
 
-void ResolveUse(ASTCrate& crate) {
-    ResolveUseMod(crate, crate.mRootModule, ASTPath("", {}));
+void ResolveUse(const WireBoard& wb, ASTCrate& crate) {
+    ResolveUseMod(*wb.settings, crate, crate.mRootModule, ASTPath("", {}));
 }
 
 // - Convert self::/super:: paths into non-canonical absolute forms
-ASTPath ResolveUseAbsolutisePath(const Span& span, const ASTCrate& crate, const ASTPath& basePath, ASTPath path) {
+ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path) {
     TU_MATCH_HDRA( (path.cls), {)
     TU_ARMA(Invalid, e) {
             // Should never happen
@@ -3765,8 +3771,8 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const ASTCrate& crate, const 
             // - Non-use paths use the extern prelude too, while use paths remain edition-sensitive.
             if (crate.edition >= ASTEdition::Rust2018) {
                 const auto& name = e.nodes.at(0).name();
-                auto ecIt = gImplicitCrates.find(name);
-                if (ecIt != gImplicitCrates.end()) {
+                auto ecIt = settings.implicitCrates.find(name);
+                if (ecIt != settings.implicitCrates.end()) {
                     DEBUG("Found implict crate " << name);
                     e.nodes.erase(e.nodes.begin());
                     return ASTPath(ecIt->second, e.nodes);
@@ -3830,7 +3836,7 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const ASTCrate& crate, const 
 
                 for (;;) {
                     DEBUG("Module " << curMod->path());
-                    if (ResolveUseGetBindingMod(span, crate, sourceMod->path(), *curMod, e.nodes.front().name(), parentMods, /*types_only*/ e.nodes.size() > 1).hasBinding()) {
+                    if (ResolveUseGetBindingMod(span, settings, crate, sourceMod->path(), *curMod, e.nodes.front().name(), parentMods, /*types_only*/ e.nodes.size() > 1).hasBinding()) {
                         break;
                     }
                     if (parentMods.empty()) {
@@ -3889,8 +3895,8 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const ASTCrate& crate, const 
             // HACK: if the crate name starts with `=` it's a 2018 absolute path (references a crate loaded with `--extern`)
             if (crate.edition >= ASTEdition::Rust2018 && e.crate.c_str()[0] == '=') {
                 // Absolute paths in 2018 edition are crate-prefixed?
-                auto ecIt = gImplicitCrates.find(e.crate.c_str() + 1);
-                if (ecIt == gImplicitCrates.end()) {
+                auto ecIt = settings.implicitCrates.find(e.crate.c_str() + 1);
+                if (ecIt == settings.implicitCrates.end()) {
                     ERROR(span, E0000, "Unable to find external crate for path " << path);
                 }
                 e.crate = ecIt->second;
@@ -3902,7 +3908,7 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const ASTCrate& crate, const 
     throw "BUG: Reached end of Resolve_Use_AbsolutisePath";
 }
 
-void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules) {
+void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::span<const ASTModule*> parentModules) {
     TRACE_FUNCTION_F("path = " << path);
 
     for (auto& useStmt : mod.mItems) {
@@ -3915,7 +3921,7 @@ void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::s
         for (auto& useEnt : useStmtData.entries) {
             TRACE_FUNCTION_F(useEnt);
 
-            useEnt.path = ResolveUseAbsolutisePath(span, crate, path, useEnt.path);
+            useEnt.path = ResolveUseAbsolutisePath(span, settings, crate, path, useEnt.path);
             if (!useEnt.path.cls.is_Absolute()) {
                 BUG(span, "Use path is not absolute after absolutisation");
             }
@@ -3925,7 +3931,7 @@ void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::s
             // - values ("value namespace")
             // - macros ("macro namespace")
             // TODO: Have Resolve_Use_GetBinding return the actual path
-            useEnt.path.mBindings = ResolveUseGetBinding(span, crate, mod.path(), useEnt.path, parentModules);
+            useEnt.path.mBindings = ResolveUseGetBinding(span, settings, crate, mod.path(), useEnt.path, parentModules);
             if (!useEnt.path.mBindings.hasBinding()) {
                 ERROR(span, E0000, "Unable to resolve `use` target " << useEnt.path);
             }
@@ -3940,11 +3946,13 @@ void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::s
     }
 
     struct NV: public ASTNodeVisitorDef {
+        const Settings& settings;
         const ASTCrate& crate;
         ::std::vector<const ASTModule*> parentModules;
 
-        NV(const ASTCrate& crate, const ASTModule& curModule, ::std::span<const ASTModule*> parentModules)
-            : crate(crate)
+        NV(const Settings& settings, const ASTCrate& crate, const ASTModule& curModule, ::std::span<const ASTModule*> parentModules)
+            : settings(settings)
+            , crate(crate)
             , parentModules(parentModules.begin(), parentModules.end())
         {
             this->parentModules.push_back(&curModule);
@@ -3952,7 +3960,7 @@ void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::s
 
         void visit(ASTExprNodeBlock& node) override {
             if (node.localMod) {
-                ResolveUseMod(this->crate, *node.localMod, node.localMod->path(), this->parentModules);
+                ResolveUseMod(this->settings, this->crate, *node.localMod, node.localMod->path(), this->parentModules);
 
                 parentModules.push_back(&*node.localMod);
             }
@@ -3961,7 +3969,7 @@ void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::s
                 parentModules.pop_back();
             }
         }
-    } exprIter(crate, mod, parentModules);
+    } exprIter(settings, crate, mod, parentModules);
 
     // TODO: Check that all code blocks are covered by these
     // - NOTE: Handle anon modules by iterating code (allowing correct item mappings)
@@ -3971,7 +3979,7 @@ void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::s
         default:
             break;
             TU_ARMA(Module, e) {
-                ResolveUseMod(crate, e, path + i.name);
+                ResolveUseMod(settings, crate, e, path + i.name);
             }
             TU_ARMA(Impl, e) {
                 for (auto& i : e.items()) {
@@ -4015,6 +4023,7 @@ void ResolveUseMod(const ASTCrate& crate, ASTModule& mod, ASTPath path, ::std::s
 
 ASTPath::Bindings ResolveUseGetBindingMod(
     const Span& span,
+    const Settings& settings,
     const ASTCrate& crate,
     const ASTAbsolutePath& sourceModPath,
     const ASTModule& mod,
@@ -4231,7 +4240,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                     static ::std::vector<const ASTPath*> sMods;
                     if (::std::find(sMods.begin(), sMods.end(), &impE.path) == sMods.end()) {
                         sMods.push_back(&impE.path);
-                        rv.mergeFrom(ResolveUseGetBinding(sp2, crate, mod.path(), ResolveUseAbsolutisePath(sp2, crate, mod.path(), impE.path), parentModules));
+                        rv.mergeFrom(ResolveUseGetBinding(sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(sp2, settings, crate, mod.path(), impE.path), parentModules));
                         sMods.pop_back();
                     } else {
                         DEBUG("Recursion on path " << &impE.path << " " << impE.path);
@@ -4273,7 +4282,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                     static ::std::vector<const ASTUseItem*> resolveStackPtrs;
                     if (::std::find(resolveStackPtrs.begin(), resolveStackPtrs.end(), &impData) == resolveStackPtrs.end()) {
                         resolveStackPtrs.push_back(&impData);
-                        bindings_ = ResolveUseGetBinding(sp2, crate, mod.path(), ResolveUseAbsolutisePath(sp2, crate, mod.path(), impE.path), parentModules, /*type_only=*/true, /*soft_fail=*/true);
+                        bindings_ = ResolveUseGetBinding(sp2, settings, crate, mod.path(), ResolveUseAbsolutisePath(sp2, settings, crate, mod.path(), impE.path), parentModules, /*type_only=*/true, /*soft_fail=*/true);
                         if (bindings_.type.is_Unbound()) {
                             DEBUG("Recursion detected, skipping " << impE.path);
                             resolveStackPtrs.pop_back();
@@ -4305,7 +4314,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                             auto ent = ::std::make_pair(&*e.module_, desItemName);
                             if (::std::find(sUseGlobModStack.begin(), sUseGlobModStack.end(), ent) == sUseGlobModStack.end()) {
                                 sUseGlobModStack.push_back(ent);
-                                rv.mergeFrom(ResolveUseGetBindingMod(span, crate, mod.path(), *e.module_, desItemName, {}, /*types_only=*/false, /*require_visible=*/true));
+                                rv.mergeFrom(ResolveUseGetBindingMod(span, settings, crate, mod.path(), *e.module_, desItemName, {}, /*types_only=*/false, /*require_visible=*/true));
                                 sUseGlobModStack.pop_back();
                             } else {
                                 DEBUG("Recursion prevented of " << e.module_->path());
@@ -4363,7 +4372,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
 
     if (mod.path().nodes.size() > 0 && mod.path().nodes.back().c_str()[0] == '#') {
         ASSERT_BUG(span, parentModules.size() > 0, "Anon module with no parent modules - " << mod.path());
-        return ResolveUseGetBindingMod(span, crate, sourceModPath, *parentModules.back(), desItemName, parentModules.subspan(0, parentModules.size() - 1));
+        return ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *parentModules.back(), desItemName, parentModules.subspan(0, parentModules.size() - 1));
     } else {
         //if( allow == Lookup::Any )
         return ASTPath::Bindings();
@@ -4670,6 +4679,7 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
 
 ASTPath::Bindings ResolveUseGetBinding(
     const Span& span,
+    const Settings& settings,
     const ASTCrate& crate,
     const ASTAbsolutePath& sourceModPath,
     const ASTPath& path,
@@ -4715,7 +4725,7 @@ ASTPath::Bindings ResolveUseGetBinding(
         // TODO: If this came from an import, return the real path?
 
         assert(mod);
-        auto b = ResolveUseGetBindingMod(span, crate, sourceModPath, *mod, nodes.at(i).name(), innerParentModules, /*types_only=*/true);
+        auto b = ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, nodes.at(i).name(), innerParentModules, /*types_only=*/true);
         TU_MATCH_HDRA( (b.type.binding), {)
         default:
             ERROR(span, E0000, "Unexpected item type " << b.type.binding.tagStr() << " in import of " << path);
@@ -4796,7 +4806,7 @@ ASTPath::Bindings ResolveUseGetBinding(
     }
 
     assert(mod);
-    return ResolveUseGetBindingMod(span, crate, sourceModPath, *mod, nodes.back().name(), parentModules, typesOnly);
+    return ResolveUseGetBindingMod(span, settings, crate, sourceModPath, *mod, nodes.back().name(), parentModules, typesOnly);
 }
 
 //::AST::PathBinding_Macro Resolve_Use_GetBinding_Macro(const Span& span, const ::AST::Crate& crate, const ::AST::Path& path, ::std::span< const ::AST::Module* > parent_modules)

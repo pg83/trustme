@@ -11,6 +11,7 @@
 class TypeRef;
 
 class ASTCrate;
+struct WireBoard;
 class ASTAttribute;
 class ASTPath;
 
@@ -50,48 +51,48 @@ public:
         return false;
     }
 
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const {
         unexpected(sp, mi, "crate");
     }
 
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const {
         unexpected(sp, mi, "item");
     }
 
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const {
         unexpected(sp, mi, "associated item");
     }
 
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTTrait& trait, slice<const ASTAttribute> attrs, ASTItem& i) const {
         unexpected(sp, mi, "trait item");
     }
 
     // NOTE: To delete, clear the name
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTStructItem& si) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const {
         unexpected(sp, mi, "struct item");
     }
 
     // NOTE: To delete, make the type invalid
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTTupleItem& si) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& si) const {
         unexpected(sp, mi, "tuple item");
     }
 
     // NOTE: To delete, clear the name
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTEnumVariant& ev) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& ev) const {
         unexpected(sp, mi, "enum variant");
     }
 
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeP& expr) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const {
         unexpected(sp, mi, "expression");
     }
 
     // NOTE: To delete, clear the patterns vector
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeMatchArm& expr) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeMatchArm& expr) const {
         unexpected(sp, mi, "match arm");
     }
 
     // NOTE: To delete, clear the value
-    virtual void handle(const Span& sp, const ASTAttribute& mi, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const {
+    virtual void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeStructLiteral::Ent& expr) const {
         unexpected(sp, mi, "struct literal ent");
     }
 };

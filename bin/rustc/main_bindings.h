@@ -6,6 +6,7 @@
 #include <string>
 
 class ASTCrate;
+struct WireBoard;
 class ASTExprNode;
 
 namespace stl {
@@ -15,9 +16,9 @@ namespace stl {
 class HIRTypeInterner;
 
 /// Parse a crate from the given file
-extern ASTCrate* ParseCrate(stl::ObjPool* pool, HIRTypeInterner& types, ::std::string mainfile, ASTEdition edition);
+extern ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, HIRTypeInterner& types, ::std::string mainfile, ASTEdition edition);
 
 extern void ExpandInit();
-extern void Expand(ASTCrate& crate);
+extern void Expand(const WireBoard& wb, ASTCrate& crate);
 extern void ExpandTestHarness(ASTCrate& crate);
-extern void ExpandProcMacroHarness(ASTCrate& crate);
+extern void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate);

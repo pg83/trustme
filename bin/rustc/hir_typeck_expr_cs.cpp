@@ -3,6 +3,7 @@
 #include "hir_hir.h"
 #include "hir_expr.h"
 #include "wire_board.h"
+#include "settings.h"
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
 #include "hir_typeck_helpers.h"
@@ -5794,7 +5795,7 @@ namespace {
                     // Re-exporting them into the legacy constraint loop
                     // evaluates the same proof a second time and turns a
                     // coinductive fixed point into an endless new rule.
-                    if (!context.mResolve.wb.solver.globally) {
+                    if (!context.mResolve.wb.settings->solver.globally) {
                         addImplBounds(context, sp, impl);
                     }
                     return true;
@@ -5880,7 +5881,7 @@ namespace {
                     return false;
                 }
             };
-            const bool found = context.mResolve.wb.solver.globally ? context.mResolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.mResolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+            const bool found = context.mResolve.wb.settings->solver.globally ? context.mResolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.mResolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
             if (found) {
                 // Fully-known impl
                 DEBUG("Fully-known impl located");

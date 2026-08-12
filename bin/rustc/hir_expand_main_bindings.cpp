@@ -4,6 +4,7 @@
 #include "hir_hir.h"
 #include "hir_expr.h"
 #include "wire_board.h"
+#include "settings.h"
 #include "hir_visitor.h"
 #include "trans_target.h"
 #include "hir_expr_state.h"
@@ -6635,7 +6636,6 @@ void HIRExpandReborrows(const WireBoard& wb, HIRCrate& crate) {
 
 #undef NEWNODE
 
-extern RcString gCoreCrate; // Defined in hir/from_ast.cpp
 
 namespace {
     inline HIRExprNodeP mkExprnodep(HIRExprNode* en, HIRTypeRef ty) {

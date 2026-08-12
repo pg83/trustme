@@ -1,4 +1,7 @@
 #include "parse_common.h"
+
+#include "settings.h"
+#include "wire_board.h"
 #include "parse_common.h"
 
 #include "path.h"
@@ -4377,9 +4380,9 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
 
             // Check #[cfg] and don't load if it fails
             struct H {
-                static bool checkItemCfg(const ASTAttributeList& attrs) {
+                static bool checkItemCfg(const Settings& settings, const ASTAttributeList& attrs) {
                     for (const auto& at : attrs.mItems) {
-                        if (at.name() == "cfg" && !checkCfg(at.span(), at)) {
+                        if (at.name() == "cfg" && !checkCfg(settings, at.span(), at)) {
                             return false;
                         }
                     }
@@ -4396,12 +4399,12 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             for (const auto& a : metaItems.mItems) {
                 DEBUG("[mod path_attr] " << a);
                 if (a.name() == "path") {
-                    pathAttr = a.parseEqualsString(*lex.parseState().crate, *lex.parseState().module);
+                    pathAttr = a.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);
                 } else if (a.name() == "cfg_attr") {
-                    for (const auto& a2 : checkCfgAttr(a)) {
+                    for (const auto& a2 : checkCfgAttr(*lex.parseState().wb->settings, a)) {
                         DEBUG("[mod path_attr cfg_attr] " << a2);
                         if (a2.name() == "path") {
-                            pathAttr = a2.parseEqualsString(*lex.parseState().crate, *lex.parseState().module);
+                            pathAttr = a2.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);
                         }
                     }
                 } else {
@@ -4443,7 +4446,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 case TOK_BRACE_OPEN:
                     submod.fileInfo.path = subPath.str() + "/";
                     submod.fileInfo.inModBlock = true;
-                    submod.fileInfo.isDisabled = !H::checkItemCfg(metaItems);
+                    submod.fileInfo.isDisabled = !H::checkItemCfg(*lex.parseState().wb->settings, metaItems);
                     // TODO: If cfg fails, just eat the TT until a matching #[cfg]?
                     // - Or, mark the file infor as not being valid (so child modules don't try to load)
                     ParseModRoot(lex, submod, metaItems);
@@ -4453,7 +4456,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     if (modFileinfo.isDisabled) {
                     } else if (subPath.str() == "-") {
                         ERROR(lex.pointSpan(), E0000, "Cannot load module from file when reading stdin");
-                    } else if (!H::checkItemCfg(metaItems)) {
+                    } else if (!H::checkItemCfg(*lex.parseState().wb->settings, metaItems)) {
                         // Ignore - emit Item::None
                         itemName = mv$(name);
                         itemData = ASTItem();
@@ -4575,7 +4578,7 @@ void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs) 
     lex.parseState().module = prevMod;
 }
 
-ASTCrate* ParseCrate(stl::ObjPool* pool, HIRTypeInterner& types, ::std::string mainfile, ASTEdition edition) {
+ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, HIRTypeInterner& types, ::std::string mainfile, ASTEdition edition) {
     Token tok;
 
     Lexer lex(mainfile, edition, ParseState());
@@ -4591,6 +4594,7 @@ ASTCrate* ParseCrate(stl::ObjPool* pool, HIRTypeInterner& types, ::std::string m
     crate->rootModule().fileInfo.controlsDir = true;
 
     lex.parseState().crate = crate;
+    lex.parseState().wb = &wb;
     ParseModRoot(lex, crate->rootModule(), crate->mAttrs);
 
     return crate;

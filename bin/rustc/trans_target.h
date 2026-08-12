@@ -1,3 +1,4 @@
+struct Settings;
 #pragma once
 
 #include "hir_type.h"
@@ -144,7 +145,7 @@ struct TypeRepr {
 std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x);
 
 extern const TargetSpec& TargetGetCurSpec();
-extern void TargetSetCfg(const ::std::string& targetName);
+extern void TargetSetCfg(Settings& settings, const ::std::string& targetName);
 extern void TargetExportCurSpec(const ::std::string& filename);
 
 static inline unsigned TargetGetPointerBits() {

@@ -1,5 +1,7 @@
 #include "ast_crate.h"
 
+#include "settings.h"
+
 #include "ast_ast.h"
 #include "hir_hir.h" // HIR::Crate
 #include "expand_cfg.h"
@@ -9,26 +11,23 @@
 #include <fstream>
 #include <dirent.h>
 
-::std::vector<::std::string> gCrateLoadDirs = {};
-::std::map<::std::string, ::std::string> gCrateOverrides;
-::std::map<RcString, RcString> gImplicitCrates;
 
 namespace {
-    bool checkItemCfg(const ASTAttributeList& attrs) {
+    bool checkItemCfg(const Settings& settings, const ASTAttributeList& attrs) {
         for (const auto& at : attrs.mItems) {
-            if (at.name() == "cfg" && !checkCfg(at.span(), at)) {
+            if (at.name() == "cfg" && !checkCfg(settings, at.span(), at)) {
                 return false;
             }
         }
         return true;
     }
 
-    void iterateModule(ASTModule& mod, ::std::function<void(ASTModule& mod)> fcn) {
+    void iterateModule(const Settings& settings, ASTModule& mod, ::std::function<void(ASTModule& mod)> fcn) {
         fcn(mod);
         for (auto& sm : mod.mItems) {
             if (auto* e = sm->data.opt_Module()) {
-                if (checkItemCfg(sm->attrs)) {
-                    iterateModule(*e, fcn);
+                if (checkItemCfg(settings, sm->attrs)) {
+                    iterateModule(settings, *e, fcn);
                 }
             }
         }
@@ -46,21 +45,21 @@ ASTCrate::ASTCrate(stl::ObjPool* pool, HIRTypeInterner& types)
 {
 }
 
-void ASTCrate::loadExterns() {
-    auto cb = [this](ASTModule& mod) {
+void ASTCrate::loadExterns(Settings& settings) {
+    auto cb = [this, &settings](ASTModule& mod) {
         for (/*const*/ auto& it : mod.mItems) {
             if (auto* c = it->data.opt_Crate()) {
-                if (checkItemCfg(it->attrs)) {
+                if (checkItemCfg(settings, it->attrs)) {
                     if (c->name == "") {
                         // Leave for now
                     } else {
-                        c->name = loadExternCrate(it->span, c->name);
+                        c->name = loadExternCrate(settings, it->span, c->name);
                     }
                 }
             }
         }
     };
-    iterateModule(mRootModule, cb);
+    iterateModule(settings, mRootModule, cb);
 
     // Check for no_std or no_core, and load libstd/libcore
     // - Duplicates some of the logic in "Expand", but also helps keep crate loading separate to most of expand
@@ -76,7 +75,7 @@ void ASTCrate::loadExterns() {
             noCore = true;
         }
         if (a.name() == "cfg_attr") {
-            for (const auto& a2 : checkCfgAttr(a)) {
+            for (const auto& a2 : checkCfgAttr(settings, a)) {
                 if (a2.name() == "no_std") {
                     noStd = true;
                 }
@@ -90,34 +89,34 @@ void ASTCrate::loadExterns() {
     if (noCore) {
         // Don't load anything
     } else if (noStd) {
-        auto n = this->loadExternCrate(Span(), "core");
+        auto n = this->loadExternCrate(settings, Span(), "core");
         //}
     } else {
-        auto n = this->loadExternCrate(Span(), "std");
+        auto n = this->loadExternCrate(settings, Span(), "std");
         //}
     }
 
     // Ensure that all crates passed on the command line are loaded.
     DEBUG("Load from --crate");
-    for (const auto& c : gCrateOverrides) {
+    for (const auto& c : settings.crateOverrides) {
         auto n = RcString::newInterned(c.first);
-        auto realName = this->loadExternCrate(Span(), n);
-        gImplicitCrates.insert(std::make_pair(n, realName));
+        auto realName = this->loadExternCrate(settings, Span(), n);
+        settings.implicitCrates.insert(std::make_pair(n, realName));
     }
     if (this->extCratenameCore != "") {
-        gImplicitCrates.insert(std::make_pair(RcString::newInterned("core"), this->extCratenameCore));
+        settings.implicitCrates.insert(std::make_pair(RcString::newInterned("core"), this->extCratenameCore));
     }
 }
 
 // TODO: Handle disambiguating crates with the same name (e.g. libc in std and crates.io libc)
 // - Crates recorded in rlibs should specify a hash/tag that's passed in to this function.
-RcString ASTCrate::loadExternCrate(Span sp, const RcString& name, const ::std::string& basename /*=""*/) {
+RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& name, const ::std::string& basename /*=""*/) {
     TRACE_FUNCTION_F("Loading crate '" << name << "' (basename='" << basename << "')");
 
     ::std::string path;
-    auto it = gCrateOverrides.find(name.c_str());
+    auto it = settings.crateOverrides.find(name.c_str());
     // If there's no filename, and this crate name is in the override list - use an the explicit path
-    if (basename == "" && it != gCrateOverrides.end()) {
+    if (basename == "" && it != settings.crateOverrides.end()) {
         path = it->second;
         if (!::std::ifstream(path).good()) {
             ERROR(sp, E0000, "Unable to open crate '" << name << "' at path " << path);
@@ -128,7 +127,7 @@ RcString ASTCrate::loadExternCrate(Span sp, const RcString& name, const ::std::s
     // - Checks the crate name of each to ensure a match
     else if (basename != "") {
         // Search a list of load paths for the crate
-        for (const auto& p : gCrateLoadDirs) {
+        for (const auto& p : settings.crateLoadDirs) {
             path = p + "/" + basename;
 
             if (::std::ifstream(path).good()) {
@@ -152,7 +151,7 @@ RcString ASTCrate::loadExternCrate(Span sp, const RcString& name, const ::std::s
         auto directFilenameSo = FMT("lib" << name << RDYLIB_SUFFIX);
         auto namePrefix = FMT("lib" << name << "-");
         // Search a list of load paths for the crate
-        for (const auto& p : gCrateLoadDirs) {
+        for (const auto& p : settings.crateLoadDirs) {
             DEBUG("Searching in " << p);
             path = p + "/" + directFilename;
             if (::std::ifstream(path).good()) {
@@ -223,7 +222,7 @@ RcString ASTCrate::loadExternCrate(Span sp, const RcString& name, const ::std::s
     // Load referenced crates
     for (const auto& ext : crateExtList) {
         if (externCrates.count(ext.first) == 0) {
-            const auto loadName = this->loadExternCrate(sp, ext.first, ext.second.basename);
+            const auto loadName = this->loadExternCrate(settings, sp, ext.first, ext.second.basename);
             if (loadName != ext.first) {
                 // ERROR - The crate loaded wasn't the one that was used when compiling this crate.
                 ERROR(sp, E0000, "The crate file `" << ext.second.basename << "` didn't load the expected crate - have " << loadName << " != exp " << ext.first);

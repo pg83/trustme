@@ -9,6 +9,7 @@
 #include "parse_lex.h"
 #include "expand_cfg.h"
 #include "wire_board.h"
+#include "settings.h"
 #include "debug_inner.h"
 #include "memory_dump.h"
 #include "parse_common.h" // For edition checks
@@ -221,7 +222,7 @@ struct ProgramParams {
         ::std::vector<::std::string> linkerArgs;
     } codegen;
 
-    ProgramParams(int argc, char* argv[]);
+    ProgramParams(Settings& settings, int argc, char* argv[]);
 
     unsigned effectiveMirOptLevel() const {
         return mirOptLevelExplicit ? mirOptLevel : (optLevel == OptimizationLevel::None ? 1 : 2);
@@ -318,7 +319,21 @@ void initDebugList() {
 /// main!
 int main(int argc, char* argv[]) {
     initDebugList();
-    ProgramParams params(argc, argv);
+#if MRUSTC_SANITIZER_BUILD
+    // Keep teardown out of production, but make sanitizer builds destroy every
+    // pooled object so ASan/LSan can distinguish real leaks from arena lifetime.
+    auto poolOwner = stl::ObjPool::fromMemory();
+    auto* pool = poolOwner.mutPtr();
+#else
+    auto* pool = stl::ObjPool::fromMemoryRaw();
+#endif
+    auto* types = pool->make<HIRTypeInterner>(*pool);
+    WireBoard& wb = *pool->make<WireBoard>(pool);
+    wb.types = types;
+    wb.settings = pool->make<Settings>();
+    wb.settings->cfg = CfgCreateState(*pool);
+    ProgramParams params(*wb.settings, argc, argv);
+    wb.settings->solver = params.traitSolver;
     const auto mirOptLevel = params.effectiveMirOptLevel();
     const auto enableMirInlining = params.enableMirInlining();
     if (params.codegen.panicType.empty()) {
@@ -331,23 +346,25 @@ int main(int argc, char* argv[]) {
         ::std::cin >> c;
     }
 
+    wb.inherentMethods = HIRInherentCache::create(*pool);
+
     // Set up cfg values
     CompilePhaseV("Setup", [&]() {
-        CfgSetValue("rust_compiler", "mrustc");
-        CfgSetValue("panic", params.codegen.panicType);
+        CfgSetValue(*wb.settings, "rust_compiler", "mrustc");
+        CfgSetValue(*wb.settings, "panic", params.codegen.panicType);
         if (params.debugAssertionsEnabled()) {
-            CfgSetFlag("debug_assertions");
+            CfgSetFlag(*wb.settings, "debug_assertions");
         }
-        CfgSetValueCb("feature", [&params](const ::std::string& s) {
+        CfgSetValueCb(*wb.settings, "feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
         });
     });
     CompilePhaseV("Target Load", [&]() {
-        TargetSetCfg(params.target);
+        TargetSetCfg(*wb.settings, params.target);
     });
 
     if (params.printCfgs) {
-        CfgDump(std::cout);
+        CfgDump(*wb.settings, std::cout);
         return 0;
     }
     if (params.targetSaveback != "") {
@@ -361,28 +378,15 @@ int main(int argc, char* argv[]) {
     }
 
     if (params.testHarness) {
-        CfgSetFlag("test");
+        CfgSetFlag(*wb.settings, "test");
     }
 
     ExpandInit();
-#if MRUSTC_SANITIZER_BUILD
-    // Keep teardown out of production, but make sanitizer builds destroy every
-    // pooled object so ASan/LSan can distinguish real leaks from arena lifetime.
-    auto poolOwner = stl::ObjPool::fromMemory();
-    auto* pool = poolOwner.mutPtr();
-#else
-    auto* pool = stl::ObjPool::fromMemoryRaw();
-#endif
-    auto* types = pool->make<HIRTypeInterner>(*pool);
-    WireBoard& wb = *pool->make<WireBoard>(pool);
-    wb.types = types;
-    wb.solver = params.traitSolver;
-    wb.inherentMethods = HIRInherentCache::create(*pool);
 
     try {
         // Parse the crate into AST
         ASTCrate* cratePtr = CompilePhase<ASTCrate*>("Parse", [&]() {
-            return ParseCrate(pool, *types, params.infile, params.edition);
+            return ParseCrate(wb, pool, *types, params.infile, params.edition);
         });
         ASTCrate& crate = *cratePtr;
         wb.astCrate = cratePtr;
@@ -397,14 +401,14 @@ int main(int argc, char* argv[]) {
         // Load external crates.
         CompilePhaseV("LoadCrates", [&]() {
             // Hacky!
-            gCrateOverrides = params.crateOverrides;
+            wb.settings->crateOverrides = params.crateOverrides;
             for (const auto& ld : params.libSearchDirs) {
-                gCrateLoadDirs.push_back(ld);
+                wb.settings->crateLoadDirs.push_back(ld);
             }
-            crate.loadExterns();
+            crate.loadExterns(*wb.settings);
             if (params.testHarness) {
                 auto testCrateName = RcString::newInterned("test");
-                gImplicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(Span(), testCrateName)));
+                wb.settings->implicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(*wb.settings, Span(), testCrateName)));
             }
         });
 
@@ -426,7 +430,7 @@ int main(int argc, char* argv[]) {
 
         // Iterate all items in the AST, applying syntax extensions
         CompilePhaseV("Expand", [&]() {
-            Expand(crate);
+            Expand(wb, crate);
 
             if (params.testHarness) {
                 ExpandTestHarness(crate);
@@ -445,7 +449,7 @@ int main(int argc, char* argv[]) {
         crate.crateType = crateType;
 
         if (crate.crateType == ASTCrate::Type::ProcMacro) {
-            ExpandProcMacroHarness(crate);
+            ExpandProcMacroHarness(wb, crate);
         }
 
         auto crateName = params.crateName;
@@ -553,12 +557,12 @@ int main(int argc, char* argv[]) {
                 // The default (system) allocator is provided by liballoc.
                 allocatorCrateLoaded = true;
                 if (!allocatorCrateLoaded) {
-                    crate.loadExternCrate(Span(), "alloc_system");
+                    crate.loadExternCrate(*wb.settings, Span(), "alloc_system");
                 }
 
                 if (panicRuntimeNeeded /*&& !panic_runtime_loaded*/) {
                     auto panicCrate = "panic_" + params.codegen.panicType;
-                    crate.loadExternCrate(Span(), panicCrate.c_str());
+                    crate.loadExternCrate(*wb.settings, Span(), panicCrate.c_str());
                 }
 
                 // - `mrustc-main` lang item default
@@ -611,13 +615,13 @@ int main(int argc, char* argv[]) {
         // - This does name checking on types and free functions.
         // - Resolves all identifiers/paths to references
         CompilePhaseV("Resolve Use", [&]() {
-            ResolveUse(crate); // - Absolutise and resolve use statements
+            ResolveUse(wb, crate); // - Absolutise and resolve use statements
         });
         CompilePhaseV("Resolve Index", [&]() {
             ResolveIndex(crate); // - Build up a per-module index of avalable names (faster and simpler later resolve)
         });
         CompilePhaseV("Resolve Absolute", [&]() {
-            ResolveAbsolutise(crate); // - Convert all paths to Absolute or UFCS, and resolve variables
+            ResolveAbsolutise(wb, crate); // - Convert all paths to Absolute or UFCS, and resolve variables
         });
         memoryDump("Resolved");
 
@@ -636,7 +640,7 @@ int main(int argc, char* argv[]) {
         // --------------------------------------
         // Construct the HIR beside the AST in the compilation object pool.
         HIRCrate* hirCrate = CompilePhase<HIRCrate*>("HIR Lower", [&]() {
-            return LowerHIRFromAST(pool, crate);
+            return LowerHIRFromAST(wb, pool, crate);
         });
         wb.crate = hirCrate;
         memoryDump("HIR Gen");
@@ -992,7 +996,7 @@ int main(int argc, char* argv[]) {
     return 0;
 }
 
-ProgramParams::ProgramParams(int argc, char* argv[]) {
+ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
     if (const auto* a = getenv("MRUSTC_LIBDIR")) {
         this->libSearchDirs.push_back(a);
     }
@@ -1070,7 +1074,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         exit(1);
                     }
                     const auto level = flag == 'A' ? CfgLintLevel::Allow : flag == 'W' ? CfgLintLevel::Warn : flag == 'D' ? CfgLintLevel::Deny : CfgLintLevel::Forbid;
-                    CfgSetLintLevel(lintName, level);
+                    CfgSetLintLevel(settings, lintName, level);
                     continue;
                 }
                 case 'C': {
@@ -1411,14 +1415,14 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     if (name == "feature") {
                         this->features.insert(value);
                     } else {
-                        CfgSetValue(mv$(name), mv$(value));
+                        CfgSetValue(settings, mv$(name), mv$(value));
                     }
                 } else {
-                    CfgSetFlag(mv$(name));
+                    CfgSetFlag(settings, mv$(name));
                 }
             } else if (const char* checkCfgSpec = checkWithArg("check-cfg")) {
                 ::std::string error;
-                if (!CfgSetCheckSpec(checkCfgSpec, error)) {
+                if (!CfgSetCheckSpec(settings, checkCfgSpec, error)) {
                     ::std::cerr << "invalid `--check-cfg` argument: `" << checkCfgSpec << "`: " << error << ::std::endl;
                     exit(1);
                 }
@@ -1427,7 +1431,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     ::std::cerr << "Flag --force-warn requires an argument" << ::std::endl;
                     exit(1);
                 }
-                CfgSetLintLevel(forceWarn, CfgLintLevel::ForceWarn);
+                CfgSetLintLevel(settings, forceWarn, CfgLintLevel::ForceWarn);
             } else if (const char* lintCap = checkWithArg("cap-lints")) {
                 CfgLintLevel level;
                 if (strcmp(lintCap, "allow") == 0) {
@@ -1442,7 +1446,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     ::std::cerr << "unknown lint level: `" << lintCap << "`" << ::std::endl;
                     exit(1);
                 }
-                CfgSetLintCap(level);
+                CfgSetLintCap(settings, level);
             } else if (const char* emit = checkWithArg("emit")) {
                 ::std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
             }

@@ -12,6 +12,7 @@ struct ASTPathParams;
 class ASTPattern;
 
 class HIRCrate;
+struct WireBoard;
 class HIRGenericPath;
 class HIRPath;
 struct HIRPathParams;
@@ -32,6 +33,3 @@ extern HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& src
 extern HIRTypeRef LowerHIRType(const ::TypeRef& ty);
 extern HIRPattern LowerHIRPattern(const ASTPattern& pat);
 
-extern RcString gCoreCrate;
-extern RcString gCrateName;
-extern HIRCrate* gCratePtr;

@@ -1,6 +1,7 @@
 #include "hir_typeck_helpers.h"
 
 #include "wire_board.h"
+#include "settings.h"
 #include "hir_inherent_cache.h"
 #include "hir_conv_main_bindings.h"
 
@@ -4340,7 +4341,7 @@ TU_ARMA(Alias, ee) {
         bool TraitResolution::implsOverlap(const Span& sp, const ImplRef& left, const ImplRef& right) const {
             const auto* leftImpl = left.mData.opt_TraitImpl();
             const auto* rightImpl = right.mData.opt_TraitImpl();
-            if (!this->wb.solver.coherence || !leftImpl || !rightImpl || !leftImpl->impl || !rightImpl->impl) {
+            if (!this->wb.settings->solver.coherence || !leftImpl || !rightImpl || !leftImpl->impl || !rightImpl->impl) {
                 return left.overlapsWith(crate, right);
             }
             if (!leftImpl->traitPath || !rightImpl->traitPath || *leftImpl->traitPath != *rightImpl->traitPath) {
@@ -4377,7 +4378,7 @@ TU_ARMA(Alias, ee) {
         }
 
         bool TraitResolution::findTraitImpls(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, bool magicTraitImpls) const {
-            if (this->wb.solver.globally && magicTraitImpls) {
+            if (this->wb.settings->solver.globally && magicTraitImpls) {
                 return findTraitImplsNext(sp, trait, params, type, ::std::move(callback));
             }
             return findTraitImplsLegacy(sp, trait, params, type, ::std::move(callback), magicTraitImpls);
@@ -5132,7 +5133,7 @@ TU_ARMA(Alias, ee) {
         }
     }
 
-    if (this->wb.solver.globally) {
+    if (this->wb.settings->solver.globally) {
         bool normalized = false;
         bool ambiguous = false;
         this->findTraitImplsNext(sp, traitPath.mPath, traitPath.mParams, pe.type, [&](ImplRef impl, HIRCompare certainty) {

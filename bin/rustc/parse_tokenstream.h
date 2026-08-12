@@ -12,6 +12,7 @@
 class ASTModule;
 class ASTCrate;
 class ASTAttributeList;
+struct WireBoard;
 
 /// State the parser needs to pass down via a second channel.
 struct ParseState {
@@ -26,6 +27,7 @@ public:
     bool noExpandMacros = false;
 
     const ASTCrate* crate = nullptr; // TODO: Remove this (needed for MetaItem)
+    const WireBoard* wb = nullptr; // cfg!() evaluation and expansion read components through the board
     ASTModule* module = nullptr;
     ASTAttributeList* parentAttrs = nullptr;
 

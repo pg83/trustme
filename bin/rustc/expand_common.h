@@ -6,6 +6,7 @@
 class HIRProcMacro;
 
 class ASTCrate;
+struct WireBoard;
 class ASTModule;
 class ASTPath;
 class ExpandProcMacro;
@@ -26,8 +27,8 @@ TAGGED_UNION_EX(MacroRef, (), None, ((None, struct {}), (MacroRules, const Macro
                     }
                     abort();
                 }));
-extern MacroRef ExpandLookupMacro(const Span& miSpan, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path);
-extern MacroRef ExpandLookupMacro(const Span& miSpan, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path);
+extern MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path);
+extern MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path);
 
 extern ExpandProcMacro* ExpandFindProcMacro(const RcString& name);
 extern ExpandDecorator* ExpandFindDecorator(const RcString& name);

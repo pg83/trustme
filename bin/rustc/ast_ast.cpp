@@ -107,8 +107,9 @@ void ASTAttribute::fmt(std::ostream& os) const {
     os << mData;
 }
 
-std::string ASTAttribute::parseEqualsString(const ASTCrate& crate, const ASTModule& mod) const {
+std::string ASTAttribute::parseEqualsString(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod) const {
     TTStream lex(this->mSpan, ParseState(), this->data());
+    lex.parseState().wb = &wb;
     lex.getTokenCheck(TOK_EQUAL);
     auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
 

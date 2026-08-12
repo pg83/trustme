@@ -1,3 +1,4 @@
+struct Settings;
 #pragma once
 
 #include "ast_ast.h"
@@ -114,11 +115,11 @@ public:
     void setCrateName(std::string name);
 
     /// Load referenced crates
-    void loadExterns();
+    void loadExterns(Settings& settings);
 
     /// Load the named crate and returns the crate's unique name
     /// If the parameter `file` is non-empty, only that particular filename will be loaded (from any of the search paths)
-    RcString loadExternCrate(Span sp, const RcString& name, const ::std::string& file = "");
+    RcString loadExternCrate(Settings& settings, Span sp, const RcString& name, const ::std::string& file = "");
 };
 
 /// Representation of an imported crate
@@ -137,6 +138,3 @@ public:
     ASTExternCrate& operator=(const ASTExternCrate&) = delete;
 };
 
-extern ::std::vector<::std::string> gCrateLoadDirs;
-extern ::std::map<::std::string, ::std::string> gCrateOverrides;
-extern ::std::map<RcString, RcString> gImplicitCrates;

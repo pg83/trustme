@@ -5,6 +5,7 @@
 #include "parse_tokentree.h"
 
 class ASTCrate;
+struct WireBoard;
 class ASTModule;
 
 class ASTAttribute;
@@ -120,7 +121,7 @@ public:
     }
 
     /// Parses the data as a `="string"` and returns the string
-    std::string parseEqualsString(const ASTCrate& crate, const ASTModule& mod) const;
+    std::string parseEqualsString(const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod) const;
     /// Parses the data as a `("string")` and returns the string
     std::string parseParenString() const;
 
