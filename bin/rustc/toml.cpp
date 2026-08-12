@@ -118,11 +118,11 @@ TomlFileIter TomlFile::end() {
 }
 
 TomlKeyValue TomlFile::getNextValue() {
-    auto t = mLexer.get_token();
+    auto t = mLexer.getToken();
 
     if (currentComposite.empty()) {
         while (t.mType == TomlToken::Type::Newline) {
-            t = mLexer.get_token();
+            t = mLexer.getToken();
         }
 
         // Expect '[', a string, or an identifier
@@ -133,11 +133,11 @@ TomlKeyValue TomlFile::getNextValue() {
             case TomlToken::Type::SquareOpen: {
                 currentBlock.clear();
 
-                t = mLexer.get_token();
+                t = mLexer.getToken();
                 bool is_array = false;
                 if (t.mType == TomlToken::Type::SquareOpen) {
                     is_array = true;
-                    t = mLexer.get_token();
+                    t = mLexer.getToken();
                 }
                 for (;;) {
                     if (!(t.mType == TomlToken::Type::Ident || t.mType == TomlToken::Type::String)) {
@@ -145,23 +145,23 @@ TomlKeyValue TomlFile::getNextValue() {
                     }
                     currentBlock.push_back(t.asString());
 
-                    t = mLexer.get_token();
+                    t = mLexer.getToken();
                     if (t.mType != TomlToken::Type::Dot) {
                         break;
                     }
-                    t = mLexer.get_token();
+                    t = mLexer.getToken();
                 }
                 if (is_array) {
                     currentBlock.push_back(::format(arrayCounts[currentBlock.back()]++));
                     if (t.mType != TomlToken::Type::SquareClose) {
                         throw ::std::runtime_error(::format(mLexer, ": Unexpected token after array name - ", t));
                     }
-                    t = mLexer.get_token();
+                    t = mLexer.getToken();
                 }
                 if (t.mType != TomlToken::Type::SquareClose) {
                     throw ::std::runtime_error(::format(mLexer, ": Unexpected token in block header - ", t));
                 }
-                t = mLexer.get_token();
+                t = mLexer.getToken();
                 if (t.mType != TomlToken::Type::Newline) {
                     throw ::std::runtime_error(::format(mLexer, ": Unexpected token after block block - ", t));
                 }
@@ -189,7 +189,7 @@ TomlKeyValue TomlFile::getNextValue() {
                 throw ::std::runtime_error(::format(mLexer, ": Unexpected token for key - ", t));
         }
         keyName.push_back(t.asString());
-        t = mLexer.get_token();
+        t = mLexer.getToken();
         if (t.mType == TomlToken::Type::Assign) {
             break;
         }
@@ -197,12 +197,12 @@ TomlKeyValue TomlFile::getNextValue() {
         if (t.mType != TomlToken::Type::Dot) {
             throw ::std::runtime_error(::format(mLexer, ": Unexpected token after key - ", t));
         }
-        t = mLexer.get_token();
+        t = mLexer.getToken();
     }
 
     // Note: Should be impossible, as it's the break condition above
     assert(t.mType == TomlToken::Type::Assign);
-    t = mLexer.get_token();
+    t = mLexer.getToken();
 
     // --- Value ---
     TomlKeyValue rv;
@@ -217,9 +217,9 @@ TomlKeyValue TomlFile::getNextValue() {
             rv.path = this->getPath(std::move(keyName));
             rv.value.mType = TomlValue::Type::List;
             bool skippedNested = false;
-            while ((t = mLexer.get_token()).mType != TomlToken::Type::SquareClose) {
+            while ((t = mLexer.getToken()).mType != TomlToken::Type::SquareClose) {
                 while (t.mType == TomlToken::Type::Newline) {
-                    t = mLexer.get_token();
+                    t = mLexer.getToken();
                 }
                 if (t.mType == TomlToken::Type::SquareClose) {
                     break;
@@ -253,13 +253,13 @@ TomlKeyValue TomlFile::getNextValue() {
                         throw ::std::runtime_error(::format(mLexer, ": Unexpected token in array value position - ", t));
                 }
 
-                t = mLexer.get_token();
+                t = mLexer.getToken();
                 if (t.mType != TomlToken::Type::Comma) {
                     break;
                 }
             }
             while (t.mType == TomlToken::Type::Newline) {
-                t = mLexer.get_token();
+                t = mLexer.getToken();
             }
             if (t.mType != TomlToken::Type::SquareClose) {
                 throw ::std::runtime_error(::format(mLexer, ": Unexpected token after array - ", t));
@@ -301,11 +301,11 @@ TomlKeyValue TomlFile::getNextValue() {
             throw ::std::runtime_error(::format(mLexer, ": Unexpected token in value position - ", t));
     }
 
-    t = mLexer.get_token();
+    t = mLexer.getToken();
     while (!currentComposite.empty() && t.mType == TomlToken::Type::BraceClose) {
         DEBUG("Leave composite block " << currentBlock << ", " << currentComposite);
         currentComposite.pop_back();
-        t = mLexer.get_token();
+        t = mLexer.getToken();
     }
     if (currentComposite.empty()) {
         if (t.mType != TomlToken::Type::Newline && t.mType != TomlToken::Type::Eof) {
@@ -325,7 +325,7 @@ void TomlFile::skipCompositeValue() {
     // the count back to zero. Contents are discarded.
     unsigned depth = 1;
     while (depth > 0) {
-        auto t = mLexer.get_token();
+        auto t = mLexer.getToken();
         switch (t.mType) {
             case TomlToken::Type::Eof:
                 throw ::std::runtime_error(::format(mLexer, ": Unexpected EOF in nested array/table value"));
@@ -363,7 +363,7 @@ TomlLexer::TomlLexer(const ::std::string& filename)
     }
 }
 
-TomlToken TomlLexer::get_token() {
+TomlToken TomlLexer::getToken() {
     auto rv = TomlToken::lexFrom(input, line);
     if (rv.mType == TomlToken::Type::Newline) {
         line++;

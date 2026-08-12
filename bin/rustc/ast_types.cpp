@@ -17,12 +17,12 @@ TAGGED_UNION_OUT_OF_LINE_IMPL(
     (Borrow,
      struct {
          AST::LifetimeRef lifetime;
-         bool is_mut;
+         bool isMut;
          ::std::unique_ptr<TypeRef> inner;
      }),
     (Pointer,
      struct {
-         bool is_mut;
+         bool isMut;
          ::std::unique_ptr<TypeRef> inner;
      }),
     (Array,
@@ -87,13 +87,13 @@ bool AST::HigherRankedBounds::empty() const {
 
 TypeFunction::TypeFunction() = default;
 
-TypeFunction::TypeFunction(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic)
+TypeFunction::TypeFunction(AST::HigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool isVariadic)
     : hrbs(mv$(hrbs))
-    , is_unsafe(is_unsafe)
+    , isUnsafe(isUnsafe)
     , mAbi(mv$(abi))
     , mRettype(mv$(ret))
     , argTypes(mv$(args))
-    , is_variadic(is_variadic)
+    , isVariadic(isVariadic)
 {
 }
 
@@ -164,10 +164,10 @@ const char* coretypeName(const eCoreType ct) {
 
 TypeFunction::TypeFunction(const TypeFunction& other)
     : hrbs(other.hrbs)
-    , is_unsafe(other.is_unsafe)
+    , isUnsafe(other.isUnsafe)
     , mAbi(other.mAbi)
     , mRettype(box$(other.mRettype->clone()))
-    , is_variadic(other.is_variadic)
+    , isVariadic(other.isVariadic)
 {
     for (const auto& at : other.argTypes) {
         argTypes.push_back(at.clone());
@@ -241,8 +241,8 @@ TypeRef TypeRef::clone() const {
             _COPY(Primitive)
             _COPY(Function)
             _CLONE(Tuple, {H::cloneTyVec(old.innerTypes)})
-            _CLONE(Borrow, {AST::LifetimeRef(old.lifetime), old.is_mut, box$(old.inner->clone())})
-            _CLONE(Pointer, {old.is_mut, box$(old.inner->clone())})
+            _CLONE(Borrow, {AST::LifetimeRef(old.lifetime), old.isMut, box$(old.inner->clone())})
+            _CLONE(Pointer, {old.isMut, box$(old.inner->clone())})
             _CLONE(Array, {box$(old.inner->clone()), old.size})
             _CLONE(Slice, {box$(old.inner->clone())})
             _COPY(Generic)
@@ -297,7 +297,7 @@ Ordering TypeRef::ord(const TypeRef& x) const {
         return rv;
     }
 
-    TU_MATCH(TypeData, (mData, x.mData), (ent, xEnt), (None, return OrdEqual;), (Macro, throw CompileError::BugCheck("TypeRef::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);), (Function, return ent.info.ord(xEnt.info);), (Tuple, return ::ord(ent.innerTypes, xEnt.innerTypes);), (Borrow, rv = ::ord(ent.is_mut, xEnt.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*xEnt.inner);), (Pointer, rv = ::ord(ent.is_mut, xEnt.is_mut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*xEnt.inner);), (Array, rv = (*ent.inner).ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return (*ent.inner).ord(*xEnt.inner);), (Generic, return ::ord(ent.name, xEnt.name);), (Path, return ent->ord(*xEnt);), (TraitObject, return ::ord(ent.traits, xEnt.traits);), (ErasedType, ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;))
+    TU_MATCH(TypeData, (mData, x.mData), (ent, xEnt), (None, return OrdEqual;), (Macro, throw CompileError::BugCheck("TypeRef::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);), (Function, return ent.info.ord(xEnt.info);), (Tuple, return ::ord(ent.innerTypes, xEnt.innerTypes);), (Borrow, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*xEnt.inner);), (Pointer, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return (*ent.inner).ord(*xEnt.inner);), (Array, rv = (*ent.inner).ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return (*ent.inner).ord(*xEnt.inner);), (Generic, return ::ord(ent.name, xEnt.name);), (Path, return ent->ord(*xEnt);), (TraitObject, return ::ord(ent.traits, xEnt.traits);), (ErasedType, ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;))
     throw ::std::runtime_error(FMT("BUGCHECK - Unhandled TypeRef class '" << mData.tag() << "'"));
 }
 
@@ -331,7 +331,7 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
                 if (ent.info.mAbi != "") {
                     os << "extern \"" << ent.info.mAbi << "\" ";
                 }
-                if (ent.info.is_unsafe) {
+                if (ent.info.isUnsafe) {
                     os << "unsafe ";
                 }
                 os << "fn(";
@@ -354,11 +354,11 @@ void TypeRef::print(::std::ostream& os, bool isDebug /*=false*/) const {
                 if (ent.lifetime != AST::LifetimeRef()) {
                     os << ent.lifetime << " ";
                 }
-                os << (ent.is_mut ? "mut " : "");
+                os << (ent.isMut ? "mut " : "");
                 ent.inner->print(os, isDebug);
             }
             break;
-            _(Pointer, os << "*" << (ent.is_mut ? "mut " : "const "); ent.inner->print(os, isDebug);)
+            _(Pointer, os << "*" << (ent.isMut ? "mut " : "const "); ent.inner->print(os, isDebug);)
             _(Array, os << "["; ent.inner->print(os, isDebug); os << "; "; if (ent.size.get()) { os << *ent.size; } else { os << "_"; } os << "]";)
             _(Slice, os << "["; ent.inner->print(os, isDebug); os << "]";)
             _(Generic, if (isDebug) os << "/* arg */ "; os << ent.name; if (isDebug) os << "/*" << ent.index << "*/";)
@@ -468,17 +468,17 @@ TypeRef::TypeRef(TagTuple, Span sp, ::std::vector<TypeRef> innerTypes)
     : mSpan(mv$(sp))
     , mData(TypeData::make_Tuple({::std::move(innerTypes)})) {
 }
-TypeRef::TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::vector<TypeRef> args, bool is_variadic, TypeRef ret)
+TypeRef::TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret)
     : mSpan(mv$(sp))
-    , mData(TypeData::make_Function({TypeFunction(mv$(hrbs), is_unsafe, abi, box$(ret), mv$(args), is_variadic)})) {
+    , mData(TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, box$(ret), mv$(args), isVariadic)})) {
 }
-TypeRef::TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool is_mut, TypeRef innerType)
+TypeRef::TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool isMut, TypeRef innerType)
     : mSpan(mv$(sp))
-    , mData(TypeData::make_Borrow({::std::move(lft), is_mut, ::makeUniquePtr(mv$(innerType))})) {
+    , mData(TypeData::make_Borrow({::std::move(lft), isMut, ::makeUniquePtr(mv$(innerType))})) {
 }
-TypeRef::TypeRef(TagPointer, Span sp, bool is_mut, TypeRef innerType)
+TypeRef::TypeRef(TagPointer, Span sp, bool isMut, TypeRef innerType)
     : mSpan(mv$(sp))
-    , mData(TypeData::make_Pointer({is_mut, ::makeUniquePtr(mv$(innerType))})) {
+    , mData(TypeData::make_Pointer({isMut, ::makeUniquePtr(mv$(innerType))})) {
 }
 TypeRef::TypeRef(TagSizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<AST::ExprNode> size)
     : mSpan(mv$(sp))

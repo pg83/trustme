@@ -1,18 +1,18 @@
 #include "parse_ttstream.h"
 #include "common.h"
 
-TTStream::TTStream(Span parent, ParseState ps, const TokenTree& input_tt)
+TTStream::TTStream(Span parent, ParseState ps, const TokenTree& inputTt)
     : TokenStream(ps)
     , parentSpan(mv$(parent))
 {
     DEBUG("parent " << parentSpan);
-    for (auto s = parentSpan; s; s = s->parent_span) {
-        DEBUG("parent " << s->parent_span);
+    for (auto s = parentSpan; s; s = s->parentSpan) {
+        DEBUG("parent " << s->parentSpan);
     }
-    DEBUG("input_tt = [" << input_tt << "]");
-    DEBUG("Set edition " << input_tt.getEdition());
-    edition = input_tt.getEdition();
-    stack.push_back(::std::make_pair(0, &input_tt));
+    DEBUG("input_tt = [" << inputTt << "]");
+    DEBUG("Set edition " << inputTt.getEdition());
+    edition = inputTt.getEdition();
+    stack.push_back(::std::make_pair(0, &inputTt));
 }
 
 TTStream::~TTStream() {
@@ -73,10 +73,10 @@ Ident::Hygiene TTStream::realGetHygiene() const {
     return *hygienePtr;
 }
 
-TTStreamO::TTStreamO(Span parent, ParseState ps, TokenTree input_tt)
+TTStreamO::TTStreamO(Span parent, ParseState ps, TokenTree inputTt)
     : TokenStream(ps)
     , parentSpan(mv$(parent))
-    , inputTt(mv$(input_tt))
+    , inputTt(mv$(inputTt))
 {
     assert(parentSpan);
     stack.push_back(::std::make_pair(0, nullptr));

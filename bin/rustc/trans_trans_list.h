@@ -19,7 +19,7 @@ struct TransParams: public MonomorphiserPP {
     const ::HIR::GenericParams* gdefImpl;
     ::HIR::PathParams ppMethod;
     ::HIR::PathParams ppImpl;
-    ::HIR::TypeRef self_type;
+    ::HIR::TypeRef selfType;
     bool forceMonomorphisation;
 
     explicit TransParams(HIR::TypeInterner& types);
@@ -33,7 +33,7 @@ struct TransParams: public MonomorphiserPP {
     TransParams(const TransParams&) = delete;
     TransParams& operator=(const TransParams&) = delete;
 
-    static TransParams newImpl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params);
+    static TransParams newImpl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams implParams);
 
     const ::HIR::TypeData* maybeMonomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const;
 
@@ -47,7 +47,7 @@ struct TransParams: public MonomorphiserPP {
     }
 
     const ::HIR::TypeData* getSelfType() const override {
-        return self_type;
+        return selfType;
     }
 
     const ::HIR::PathParams* getImplParams() const override {
@@ -64,7 +64,7 @@ struct TransParams: public MonomorphiserPP {
 };
 
 struct CachedFunction {
-    ::HIR::TypeRef ret_ty;
+    ::HIR::TypeRef retTy;
     ::HIR::Function::argsT argTys;
     ::MIR::FunctionPointer code;
 };

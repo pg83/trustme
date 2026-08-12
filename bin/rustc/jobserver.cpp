@@ -24,11 +24,11 @@ class JobServerClient: public JobServer {
     std::vector<uint8_t> heldTokens;
     //::std::semaphore    m_sem;
 public:
-    JobServerClient(int fd_read, int fd_write = -1)
-        : fdRead(fd_read)
-        , fdWrite(fd_write)
+    JobServerClient(int fdRead, int fdWrite = -1)
+        : fdRead(fdRead)
+        , fdWrite(fdWrite)
     {
-        assert(fd_read >= 0);
+        assert(fdRead >= 0);
     }
 
     ~JobServerClient() {

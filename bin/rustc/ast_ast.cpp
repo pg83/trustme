@@ -15,8 +15,8 @@
 namespace AST {
 
     Trait::Trait()
-        : isMarker(false)
-        , isUnsafe(false)
+        : mIsMarker(false)
+        , mIsUnsafe(false)
     {
     }
 
@@ -24,8 +24,8 @@ namespace AST {
         : mParams(mv$(params))
         , mSupertraits(mv$(supertraits))
         , mLifetimes(mv$(lifetimes))
-        , isMarker(false)
-        , isUnsafe(false)
+        , mIsMarker(false)
+        , mIsUnsafe(false)
     {
     }
 
@@ -96,7 +96,7 @@ namespace AST {
         : mSpan(x.mSpan)
         , mName(x.mName)
         , mData(x.mData.clone())
-        , isInert(x.isInert)
+        , mIsInert(x.mIsInert)
     {
     }
 
@@ -153,15 +153,15 @@ namespace AST {
     Visibility Visibility::makeRestricted(Ty ty, AST::AbsolutePath p) {
         Visibility rv;
         rv.mTy = ty;
-        rv.visPath = std::make_shared<AST::AbsolutePath>(std::move(p));
+        rv.mVisPath = std::make_shared<AST::AbsolutePath>(std::move(p));
         return rv;
     }
 
-    Visibility Visibility::makeRestricted(AST::AbsolutePath p, AST::Path in_path) {
+    Visibility Visibility::makeRestricted(AST::AbsolutePath p, AST::Path inPath) {
         Visibility rv;
         rv.mTy = Ty::PubIn;
-        rv.visPath = std::make_shared<AST::AbsolutePath>(std::move(p));
-        rv.inPath = std::make_shared<AST::Path>(std::move(in_path));
+        rv.mVisPath = std::make_shared<AST::AbsolutePath>(std::move(p));
+        rv.mInPath = std::make_shared<AST::Path>(std::move(inPath));
         return rv;
     }
 
@@ -186,8 +186,8 @@ namespace AST {
                 break;
             case Ty::PubIn:
                 os << "pub(in ";
-                if (inPath) {
-                    os << *inPath;
+                if (mInPath) {
+                    os << *mInPath;
                 } else {
                     os << "???";
                 }
@@ -202,15 +202,15 @@ namespace AST {
     }
 
     bool Visibility::isVisible(const ::AST::AbsolutePath& fromMod) const {
-        if (visPath) {
-            if (visPath->crate != fromMod.crate) {
+        if (mVisPath) {
+            if (mVisPath->crate != fromMod.crate) {
                 return false;
             }
-            if (visPath->nodes.size() > fromMod.nodes.size()) {
+            if (mVisPath->nodes.size() > fromMod.nodes.size()) {
                 return false;
             }
-            for (size_t i = 0; i < visPath->nodes.size(); i++) {
-                if (visPath->nodes[i] != fromMod.nodes[i]) {
+            for (size_t i = 0; i < mVisPath->nodes.size(); i++) {
+                if (mVisPath->nodes[i] != fromMod.nodes[i]) {
                     return false;
                 }
             }
@@ -221,8 +221,8 @@ namespace AST {
     }
 
     bool Visibility::contains(const ::AST::Visibility& x) const {
-        if (visPath) {
-            return x.isVisible(*visPath);
+        if (mVisPath) {
+            return x.isVisible(*mVisPath);
         } else {
             return true;
         }
@@ -231,7 +231,7 @@ namespace AST {
     void Visibility::inplaceUnion(const Visibility& x) {
         if (this->contains(x)) {
         } else if (x.contains(*this)) {
-            visPath = x.visPath;
+            mVisPath = x.mVisPath;
         } else {
             TODO(Span(), "Union with incompatible visbility");
         }
@@ -255,12 +255,12 @@ namespace AST {
         return Static(cls, mType.clone(), mValue.isValid() ? AST::Expr(mValue.node().clone()) : AST::Expr());
     }
 
-    Function::Function(Span sp, ::std::string abi, Flags flags, GenericParams params, TypeRef ret_type, Arglist args, bool is_variadic)
+    Function::Function(Span sp, ::std::string abi, Flags flags, GenericParams params, TypeRef retType, Arglist args, bool isVariadic)
         : mSpan(sp)
         , mParams(mv$(params))
-        , mRettype(mv$(ret_type))
+        , mRettype(mv$(retType))
         , mArgs(mv$(args))
-        , isVariadic(is_variadic)
+        , mIsVariadic(isVariadic)
         , mAbi(mv$(abi))
         , flags(flags)
     {
@@ -272,7 +272,7 @@ namespace AST {
             newArgs.push_back(AST::Function::Arg(arg.pat.clone(), arg.ty.clone(), arg.attrs.clone()));
         }
 
-        auto rv = Function(mSpan, mAbi, flags, mParams.clone(), mRettype.clone(), mv$(newArgs), isVariadic);
+        auto rv = Function(mSpan, mAbi, flags, mParams.clone(), mRettype.clone(), mv$(newArgs), mIsVariadic);
         if (mCode.isValid()) {
             rv.mCode = AST::Expr(mCode.node().clone());
         }
@@ -292,11 +292,11 @@ namespace AST {
     }
 
     void Trait::setIsMarker() {
-        isMarker = true;
+        mIsMarker = true;
     }
 
-    bool Trait::is_marker() const {
-        return isMarker;
+    bool Trait::isMarker() const {
+        return mIsMarker;
     }
 
     bool Trait::hasNamedItem(const RcString& name, bool& outIsFcn) const {
@@ -495,7 +495,7 @@ namespace AST {
         //os << "TypeParam(";
         os << tp.mName;
         os << " = ";
-        os << tp.defaultValue;
+        os << tp.mDefaultValue;
         //os << ")";
         return os;
     }
@@ -615,12 +615,12 @@ namespace AST {
 
 //StructItem() {}
 
-StructItem::StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr default_value)
+StructItem::StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr defaultValue)
     : mAttrs(mv$(attrs))
     , vis(mv$(vis))
     , mName(mv$(name))
     , mType(mv$(ty))
-    , defaultValue(mv$(default_value)) {
+    , defaultValue(mv$(defaultValue)) {
 }
 //TupleItem() {}
 
@@ -634,9 +634,9 @@ TypeAlias::TypeAlias(GenericParams params, TypeRef type)
     : mParams(std::move(params))
     , mType(std::move(type)) {
 }
-TypeAlias TypeAlias::newAssociatedType(GenericParams params, GenericParams type_bounds, TypeRef defaultType) {
+TypeAlias TypeAlias::newAssociatedType(GenericParams params, GenericParams typeBounds, TypeRef defaultType) {
     TypeAlias rv{std::move(params), std::move(defaultType)};
-    rv.selfBounds = std::move(type_bounds);
+    rv.selfBounds = std::move(typeBounds);
     return rv;
 }
 TraitAlias TraitAlias::clone() const {
@@ -658,12 +658,12 @@ Function::Arg::Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs)
 }
 Function::Flags::Flags()
     : is_const(false)
-    , is_unsafe(false)
+    , isUnsafe(false)
     , isAsync(false) {
 }
 Function::Flags Function::Flags::setUnsafe() const {
     auto rv = *this;
-    rv.is_unsafe = true;
+    rv.isUnsafe = true;
     return rv;
 }
 Function::Flags Function::Flags::setConst() const {
@@ -677,8 +677,8 @@ Function::Flags Function::Flags::setAsync() const {
     return rv;
 }
 // Helper for derive, defines an ABI_RUST function with no generics
-Function::Function(Span sp, TypeRef ret_type, Arglist args)
-    : Function(sp, ABI_RUST, Flags(), GenericParams(), std::move(ret_type), std::move(args), false) {
+Function::Function(Span sp, TypeRef retType, Arglist args)
+    : Function(sp, ABI_RUST, Flags(), GenericParams(), std::move(retType), std::move(args), false) {
 }
 EnumVariant::EnumVariant() {
 }
@@ -723,12 +723,12 @@ Union::Union(GenericParams params, ::std::vector<StructItem> fields)
     : mParams(::std::move(params))
     , mVariants(::std::move(fields)) {
 }
-ImplDef::ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef impl_type)
-    : isUnsafe(false)
+ImplDef::ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef implType)
+    : mIsUnsafe(false)
     , isConst(false)
     , mParams(mv$(params))
     , mTrait(mv$(traitType))
-    , mType(mv$(impl_type)) {
+    , mType(mv$(implType)) {
 }
 }
 

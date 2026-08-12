@@ -21,11 +21,11 @@ namespace {
         const HIR::TypeData* valueGenericType(HIR::GenericRef g) const override {
             switch (g.group()) {
                 case 0:
-                    ASSERT_BUG(sp, g.idx() < mResolve.impl_generics().values.size(), "Value generic " << g << " out of bounds in impl: " << mResolve.impl_generics().values.size());
-                    return mResolve.impl_generics().values.at(g.idx()).mType;
+                    ASSERT_BUG(sp, g.idx() < mResolve.implGenerics().values.size(), "Value generic " << g << " out of bounds in impl: " << mResolve.implGenerics().values.size());
+                    return mResolve.implGenerics().values.at(g.idx()).mType;
                 case 1:
-                    ASSERT_BUG(sp, g.idx() < mResolve.item_generics().values.size(), "Value generic " << g << " out of bounds in fcn: " << mResolve.item_generics().values.size());
-                    return mResolve.item_generics().values.at(g.idx()).mType;
+                    ASSERT_BUG(sp, g.idx() < mResolve.itemGenerics().values.size(), "Value generic " << g << " out of bounds in fcn: " << mResolve.itemGenerics().values.size());
+                    return mResolve.itemGenerics().values.at(g.idx()).mType;
                 default:
                     BUG(Span(), "");
             }
@@ -106,7 +106,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         {
         }
 
-        ::HIR::Path new_static(::HIR::TypeRef type, EncodedLiteral value) override {
+        ::HIR::Path newStatic(::HIR::TypeRef type, EncodedLiteral value) override {
             // Ensure that the type is in enumeration (it should have been, but maybe not?)
             out.addType(type, false);
             auto name = RcString::newInterned(FMT("ConstEvalMonomorph#" << count));
@@ -121,7 +121,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
                 s.saveLiteral = false;
                 added.push_back(std::make_pair(p, &s));
             }
-            const_cast<HIR::Module&>(crate.rootModule).valueItems.insert(std::make_pair(name, std::move(ent)));
+            const_cast<HIR::Module&>(crate.mRootModule).valueItems.insert(std::make_pair(name, std::move(ent)));
             return p;
         }
     } nvs{list, crate};
@@ -138,7 +138,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
         eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.mParams);
         MonomorphState ms(crate.types);
-        ms.self_ty = pp.self_type;
+        ms.selfTy = pp.selfType;
         ms.ppImpl = &pp.ppImpl;
         ms.ppMethod = &pp.ppMethod;
         DEBUG("ms = " << ms);
@@ -167,7 +167,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
         eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.mParams);
         MonomorphState ms(crate.types);
-        ms.self_ty = pp.self_type;
+        ms.selfTy = pp.selfType;
         ms.ppImpl = &pp.ppImpl;
         ms.ppMethod = &pp.ppMethod;
         DEBUG("ms = " << ms);
@@ -204,7 +204,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
             auto mir = TransMonomorphise(resolve, fcnEnt.second->pp, fcn.mCode.mir);
 
             // TODO: Should these be moved to their own pass? Potentially not, the extra pass should just be an inlining optimise pass
-            auto ret_type = pp.monomorph(resolve, fcn.returnType);
+            auto retType = pp.monomorph(resolve, fcn.returnType);
             ::HIR::Function::argsT args;
             for (const auto& a : fcn.mArgs) {
                 args.push_back(::std::make_pair(::HIR::Pattern{}, pp.monomorph(resolve, a.second)));
@@ -212,16 +212,16 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
 
             //::std::string s = FMT(path);
             ::HIR::ItemPath ip(path);
-            MIRValidate(resolve, ip, *mir, args, ret_type);
-            MIRCleanup(resolve, ip, *mir, args, ret_type);
+            MIRValidate(resolve, ip, *mir, args, retType);
+            MIRCleanup(resolve, ip, *mir, args, retType);
             if (mirOptLevel == 0) {
-                MIROptimiseMin(resolve, ip, *mir, args, ret_type);
+                MIROptimiseMin(resolve, ip, *mir, args, retType);
             } else {
-                MIROptimise(resolve, ip, *mir, args, ret_type, mirOptLevel, /*do_inline*/ false);
+                MIROptimise(resolve, ip, *mir, args, retType, mirOptLevel, /*do_inline*/ false);
             }
-            MIRValidate(resolve, ip, *mir, args, ret_type);
+            MIRValidate(resolve, ip, *mir, args, retType);
 
-            fcnEnt.second->monomorphised.ret_ty = ::std::move(ret_type);
+            fcnEnt.second->monomorphised.retTy = ::std::move(retType);
             fcnEnt.second->monomorphised.argTys = ::std::move(args);
             fcnEnt.second->monomorphised.code = ::std::move(mir);
             resolve.clearBothGenerics();

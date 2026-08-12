@@ -6,17 +6,17 @@ TypeParam::TypeParam(const TypeParam& x)
     : mAttrs(x.mAttrs)
     , mSpan(x.mSpan)
     , mName(x.mName)
-    , defaultValue(x.defaultValue.clone()) {
+    , mDefaultValue(x.mDefaultValue.clone()) {
 }
 TypeParam::TypeParam(Span sp, ::AST::AttributeList attrs, RcString name)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name))
-    , defaultValue(mSpan) {
+    , mDefaultValue(mSpan) {
 }
 void TypeParam::setDefault(TypeRef type) {
-    assert(defaultValue.isWildcard());
-    defaultValue = ::std::move(type);
+    assert(mDefaultValue.isWildcard());
+    mDefaultValue = ::std::move(type);
 }
 LifetimeParam::LifetimeParam(Span sp, ::AST::AttributeList attrs, Ident name)
     : mAttrs(::std::move(attrs))
@@ -28,14 +28,14 @@ ValueParam::ValueParam(Span sp, ::AST::AttributeList attrs, Ident name, TypeRef 
     , mSpan(::std::move(sp))
     , mName(::std::move(name))
     , mType(::std::move(type))
-    , defaultValue(::std::move(val)) {
+    , mDefaultValue(::std::move(val)) {
 }
 ValueParam::ValueParam(const ValueParam& x)
     : mAttrs(x.mAttrs)
     , mSpan(x.mSpan)
     , mName(x.mName)
     , mType(x.mType.clone())
-    , defaultValue(x.defaultValue ? x.defaultValue.clone() : Expr()) {
+    , mDefaultValue(x.mDefaultValue ? x.mDefaultValue.clone() : Expr()) {
 }
 GenericParams::GenericParams() {
 }

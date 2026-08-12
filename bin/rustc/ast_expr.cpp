@@ -991,29 +991,29 @@ ExprNodeBlock::ExprNodeBlock(ExprNodeP value)
     setSpan(value->span());
     nodes.push_back({false, std::move(value)});
 }
-ExprNodeBlock::ExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> local_mod)
+ExprNodeBlock::ExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> localMod)
     : blockType(type)
     , label("")
-    , localMod(::std::move(local_mod))
+    , localMod(::std::move(localMod))
     , nodes(::std::move(nodes)) {
 }
-ExprNodeAsyncBlock::ExprNodeAsyncBlock(ExprNodeP inner, bool is_move)
+ExprNodeAsyncBlock::ExprNodeAsyncBlock(ExprNodeP inner, bool isMove)
     : inner(std::move(inner))
-    , isMove(is_move) {
+    , isMove(isMove) {
 }
-ExprNodeGeneratorBlock::ExprNodeGeneratorBlock(ExprNodeP inner, bool is_move)
+ExprNodeGeneratorBlock::ExprNodeGeneratorBlock(ExprNodeP inner, bool isMove)
     : inner(std::move(inner))
-    , isMove(is_move) {
+    , isMove(isMove) {
 }
 ExprNodeTry::ExprNodeTry(ExprNodeP inner)
     : inner(::std::move(inner)) {
 }
-ExprNodeMacro::ExprNodeMacro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced, Ident::Hygiene definition_hygiene)
+ExprNodeMacro::ExprNodeMacro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool isBraced, Ident::Hygiene definitionHygiene)
     : mPath(::std::move(name))
     , ident(ident)
     , tokens(::std::move(tokens))
-    , isBraced(is_braced)
-    , definitionHygiene(::std::move(definition_hygiene)) {
+    , isBraced(isBraced)
+    , definitionHygiene(::std::move(definitionHygiene)) {
 }
 ExprNodeAsm::ExprNodeAsm(::std::string text, ::std::vector<ValRef> output, ::std::vector<ValRef> input, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags)
     : text(::std::move(text))
@@ -1032,12 +1032,12 @@ ExprNodeFlow::ExprNodeFlow(Type type, Ident target, ExprNodeP value)
     , target(::std::move(target))
     , mValue(::std::move(value)) {
 }
-ExprNodeLetBinding::ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP elseArm, bool is_super)
+ExprNodeLetBinding::ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP elseArm, bool isSuper)
     : pat(::std::move(pat))
     , mType(::std::move(type))
     , mValue(::std::move(value))
     , elseNode(::std::move(elseArm))
-    , isSuper(is_super) {
+    , isSuper(isSuper) {
 }
 ExprNodeAssign::ExprNodeAssign()
     : op(NONE) {
@@ -1114,9 +1114,9 @@ ExprNodeByteString::ExprNodeByteString(::std::string value)
 ExprNodeCString::ExprNodeCString(::std::string value)
     : mValue(::std::move(value)) {
 }
-ExprNodeStructLiteral::ExprNodeStructLiteral(Path path, ExprNodeP base_value, tValues&& values)
+ExprNodeStructLiteral::ExprNodeStructLiteral(Path path, ExprNodeP baseValue, tValues&& values)
     : mPath(std::move(path))
-    , baseValue(std::move(base_value))
+    , baseValue(std::move(baseValue))
     , values(std::move(values)) {
 }
 ExprNodeStructLiteralPattern::ExprNodeStructLiteralPattern(Path path, tValues&& values)
@@ -1147,13 +1147,13 @@ ExprNodeIndex::ExprNodeIndex(ExprNodeP obj, ExprNodeP idx)
 ExprNodeDeref::ExprNodeDeref(ExprNodeP value)
     : mValue(::std::move(value)) {
 }
-ExprNodeCast::ExprNodeCast(ExprNodeP value, TypeRef&& dst_type)
+ExprNodeCast::ExprNodeCast(ExprNodeP value, TypeRef&& dstType)
     : mValue(::std::move(value))
-    , mType(::std::move(dst_type)) {
+    , mType(::std::move(dstType)) {
 }
-ExprNodeTypeAnnotation::ExprNodeTypeAnnotation(ExprNodeP value, TypeRef&& dst_type)
+ExprNodeTypeAnnotation::ExprNodeTypeAnnotation(ExprNodeP value, TypeRef&& dstType)
     : mValue(::std::move(value))
-    , mType(::std::move(dst_type)) {
+    , mType(::std::move(dstType)) {
 }
 ExprNodeBinOp::ExprNodeBinOp(Type type, ExprNodeP left, ExprNodeP right)
     : mType(type)
@@ -1164,10 +1164,10 @@ ExprNodeUniOp::ExprNodeUniOp(Type type, ExprNodeP value)
     : mType(type)
     , mValue(::std::move(value)) {
 }
-ExprNodeMacroDefinition::ExprNodeMacroDefinition(unsigned int definition_id, Ident::Hygiene token_hygiene, Ident::Hygiene definition_hygiene)
-    : definitionId(definition_id)
-    , tokenHygiene(::std::move(token_hygiene))
-    , definitionHygiene(::std::move(definition_hygiene)) {
+ExprNodeMacroDefinition::ExprNodeMacroDefinition(unsigned int definitionId, Ident::Hygiene tokenHygiene, Ident::Hygiene definitionHygiene)
+    : definitionId(definitionId)
+    , tokenHygiene(::std::move(tokenHygiene))
+    , definitionHygiene(::std::move(definitionHygiene)) {
 }
 void NodeVisitor::visit(ExprNodeP& cnode) {
     if (cnode.get()) {

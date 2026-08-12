@@ -21,8 +21,8 @@ namespace AST {
         };
 
     private:
-        ::std::shared_ptr<AST::Path> inPath;          // Only valid when
-        ::std::shared_ptr<AST::AbsolutePath> visPath; // if null, then global
+        ::std::shared_ptr<AST::Path> mInPath;          // Only valid when
+        ::std::shared_ptr<AST::AbsolutePath> mVisPath; // if null, then global
         Ty mTy;
 
         Visibility();
@@ -32,7 +32,7 @@ namespace AST {
 
         static Visibility makeGlobal();
         static Visibility makeRestricted(Ty ty, AST::AbsolutePath p);
-        static Visibility makeRestricted(AST::AbsolutePath p, AST::Path in_path);
+        static Visibility makeRestricted(AST::AbsolutePath p, AST::Path inPath);
 
         void fmt(::std::ostream& os) const;
         friend std::ostream& operator<<(::std::ostream& os, const Visibility& x);
@@ -45,9 +45,9 @@ namespace AST {
             return mTy == Ty::Pub;
         }
 
-        const AST::Path& in_path() const;
+        const AST::Path& inPath() const;
 
-        const AST::AbsolutePath& vis_path() const;
+        const AST::AbsolutePath& visPath() const;
 
         bool isVisible(const ::AST::AbsolutePath& fromMod) const;
         /// Returns true if this visibility is "more" than `x`

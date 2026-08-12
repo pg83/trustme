@@ -27,7 +27,7 @@ public:
 
     virtual ~Monomorphiser() = default;
 
-    HIR::TypeInterner& type_interner() const { return types; }
+    HIR::TypeInterner& typeInterner() const { return types; }
 
     void setConstevalState(const HIR::Crate& crate, HIR::ItemPath ip);
 
@@ -103,7 +103,7 @@ static inline const ::HIR::PathParams& monomorphisePathparamsWithOpt(const Span&
 
 // Helper for passing a group of params around
 struct MonomorphStatePtr: public MonomorphiserPP {
-    const ::HIR::TypeData* self_ty;
+    const ::HIR::TypeData* selfTy;
     const ::HIR::PathParams* ppImpl;
     const ::HIR::PathParams* ppMethod;
     //const ::HIR::PathParams*    pp_placeholder;
@@ -111,7 +111,7 @@ struct MonomorphStatePtr: public MonomorphiserPP {
 
     explicit MonomorphStatePtr(HIR::TypeInterner& types);
 
-    MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeData* self_ty, const ::HIR::PathParams* paramsI, const ::HIR::PathParams* paramsM, const ::HIR::PathParams* paramsP = nullptr, const ::HIR::PathParams* paramsH = nullptr);
+    MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeData* selfTy, const ::HIR::PathParams* paramsI, const ::HIR::PathParams* paramsM, const ::HIR::PathParams* paramsP = nullptr, const ::HIR::PathParams* paramsH = nullptr);
 
     MonomorphStatePtr(MonomorphStatePtr&& x);
 
@@ -120,7 +120,7 @@ struct MonomorphStatePtr: public MonomorphiserPP {
     MonomorphStatePtr& operator=(MonomorphStatePtr&& x);
 
     const ::HIR::TypeData* getSelfType() const override {
-        return self_ty;
+        return selfTy;
     }
 
     const ::HIR::PathParams* getImplParams() const override {
@@ -152,7 +152,7 @@ struct MonomorphHrlsOnly: public Monomorphiser {
 
 // Helper for passing a group of params around
 struct MonomorphState: public MonomorphiserPP {
-    ::HIR::TypeRef self_ty;
+    ::HIR::TypeRef selfTy;
     const ::HIR::PathParams* ppImpl;
     const ::HIR::PathParams* ppMethod;
 
@@ -173,7 +173,7 @@ struct MonomorphState: public MonomorphiserPP {
     }
 
     const ::HIR::TypeData* getSelfType() const override {
-        return self_ty;
+        return selfTy;
     }
 
     const ::HIR::PathParams* getImplParams() const override {

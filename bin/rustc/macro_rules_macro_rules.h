@@ -174,7 +174,7 @@ public:
     /// Expansion rules
     ::std::vector<MacroRulesArm> rules;
 
-    MacroRules(RcString source_crate, AST::Edition edition);
+    MacroRules(RcString sourceCrate, AST::Edition edition);
 
     virtual ~MacroRules();
     MacroRules(MacroRules&&) = default;

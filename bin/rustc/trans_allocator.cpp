@@ -17,7 +17,7 @@ const char GLOBAL_ALLOCATOR_LANG_ITEM[] = "mrustc-global_allocator";
 
 HIR::SimplePath TransAllocatorTraitPath(const HIR::Crate& crate) {
     const auto& layoutPath = TransAllocatorLayoutPath(crate);
-    return HIR::SimplePath(layoutPath.crate_name(), {"alloc", "global", "GlobalAlloc"});
+    return HIR::SimplePath(layoutPath.crateName(), {"alloc", "global", "GlobalAlloc"});
 }
 
 const HIR::SimplePath& TransAllocatorLayoutPath(const HIR::Crate& crate) {
@@ -35,12 +35,12 @@ HIR::Path TransAllocatorLayoutCtorPath(const HIR::Crate& crate) {
 }
 
 HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData* allocator_type, const AllocatorMethod& method) {
-    const auto trait_path = TransAllocatorTraitPath(crate);
-    const auto& trait = crate.getTraitByPath(Span(), trait_path);
+    const auto traitPath = TransAllocatorTraitPath(crate);
+    const auto& trait = crate.getTraitByPath(Span(), traitPath);
     const auto& function = trait.values.at(method.name).as_Function();
     return HIR::Path(
         allocator_type,
-        HIR::GenericPath(trait_path),
+        HIR::GenericPath(traitPath),
         RcString::newInterned(method.name),
         function.mParams.makeEmptyParams(true)
     );

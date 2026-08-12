@@ -387,7 +387,7 @@ namespace AST {
         static Path newUfcsTrait(TypeRef type, Path trait, ::std::vector<PathNode> nodes = {});
 
         // VARIABLE
-        static Path new_local(RcString name) {
+        static Path newLocal(RcString name) {
             return Path(mv$(name));
         }
 

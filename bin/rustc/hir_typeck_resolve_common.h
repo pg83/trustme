@@ -11,8 +11,8 @@
 struct TraitResolveCommon {
     const ::HIR::Crate& crate;
 
-    const ::HIR::GenericParams* implGenerics;
-    const ::HIR::GenericParams* itemGenerics;
+    const ::HIR::GenericParams* mImplGenerics;
+    const ::HIR::GenericParams* mItemGenerics;
 
     struct CachedEquality {
         ::HIR::GenericParams hrbs;
@@ -24,7 +24,7 @@ struct TraitResolveCommon {
     // A pre-calculated list of trait bounds
     struct CachedBound {
         HIR::GenericParams hrbs;
-        const HIR::Trait* trait_ptr;
+        const HIR::Trait* traitPtr;
         HIR::TraitPath::assocListT assoc;
         HIR::BoundConstness constness = HIR::BoundConstness::Never;
     };
@@ -88,12 +88,12 @@ struct TraitResolveCommon {
     TraitResolveCommon(const ::HIR::Crate& crate);
 
     bool hasSelf() const {
-        return implGenerics ? true : false;
+        return mImplGenerics ? true : false;
     }
 
-    const ::HIR::GenericParams& impl_generics() const;
+    const ::HIR::GenericParams& implGenerics() const;
 
-    const ::HIR::GenericParams& item_generics() const;
+    const ::HIR::GenericParams& itemGenerics() const;
 
     /// <summary>
     /// Obtain the type for a given constant parameter
@@ -104,7 +104,7 @@ struct TraitResolveCommon {
 
 protected:
     void prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef longTy, ::HIR::TypeRef shortTy);
-    void prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool addParents = true);
+    void prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath traitPath, bool addParents = true);
 
     /// Iterate over in-scope bounds (function then type)
     bool iterateBounds(::std::function<bool(const ::HIR::GenericBound&)> cb) const;

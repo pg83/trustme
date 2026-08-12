@@ -52,7 +52,7 @@ namespace HIR {
     };
 
     struct ExprNodeBlock: public ExprNode {
-        bool isUnsafe;
+        bool mIsUnsafe;
         ::std::vector<ExprNodeP> nodes;
         ExprNodeP valueNode; // can be null
 
@@ -61,7 +61,7 @@ namespace HIR {
 
         ExprNodeBlock(Span sp);
 
-        ExprNodeBlock(Span sp, bool is_unsafe, ::std::vector<ExprNodeP> nodes, ExprNodeP value_node);
+        ExprNodeBlock(Span sp, bool isUnsafe, ::std::vector<ExprNodeP> nodes, ExprNodeP valueNode);
 
         static constexpr unsigned int kind = 1;
         unsigned int nodeKind() const override;
@@ -174,7 +174,7 @@ namespace HIR {
         bool diverges = false;
         bool requireLabel = false;
 
-        ExprNodeLoop(Span sp, RcString label, ::HIR::ExprNodeP code, bool require_label = false);
+        ExprNodeLoop(Span sp, RcString label, ::HIR::ExprNodeP code, bool requireLabel = false);
 
         static constexpr unsigned int kind = 8;
         unsigned int nodeKind() const override;
@@ -201,7 +201,7 @@ namespace HIR {
         ::HIR::ExprNodeP mValue;
         bool isSuper;
 
-        ExprNodeLet(Span sp, ::HIR::Pattern pat, ::HIR::TypeRef ty, ::HIR::ExprNodeP val, bool is_super = false);
+        ExprNodeLet(Span sp, ::HIR::Pattern pat, ::HIR::TypeRef ty, ::HIR::ExprNodeP val, bool isSuper = false);
 
         static constexpr unsigned int kind = 10;
         unsigned int nodeKind() const override;
@@ -231,7 +231,7 @@ namespace HIR {
         ::std::vector<Arm> arms;
         bool isLetElse;
 
-        ExprNodeMatch(Span sp, ::HIR::ExprNodeP val, ::std::vector<Arm> arms, bool is_let_else = false);
+        ExprNodeMatch(Span sp, ::HIR::ExprNodeP val, ::std::vector<Arm> arms, bool isLetElse = false);
 
         static constexpr unsigned int kind = 11;
         unsigned int nodeKind() const override;
@@ -352,7 +352,7 @@ namespace HIR {
         ::HIR::ExprNodeP mValue;
         ::HIR::TypeRef dstType;
 
-        ExprNodeCast(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type);
+        ExprNodeCast(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dstType);
 
         static constexpr unsigned int kind = 17;
         unsigned int nodeKind() const override;
@@ -369,7 +369,7 @@ namespace HIR {
         ::HIR::TypeRef dstType;
         bool isArrayToSliceAdjustment = false;
 
-        ExprNodeUnsize(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dst_type);
+        ExprNodeUnsize(Span sp, ::HIR::ExprNodeP value, ::HIR::TypeRef dstType);
 
         static constexpr unsigned int kind = 18;
         unsigned int nodeKind() const override;
@@ -441,7 +441,7 @@ namespace HIR {
         // - Cache for typeck
         ::std::vector<::HIR::TypeRef> argTypes;
 
-        ExprNodeTupleVariant(Span sp, ::HIR::GenericPath path, bool is_struct, ::std::vector<::HIR::ExprNodeP> args);
+        ExprNodeTupleVariant(Span sp, ::HIR::GenericPath path, bool isStruct, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 22;
         unsigned int nodeKind() const override;
@@ -522,7 +522,7 @@ namespace HIR {
         ::std::vector<unsigned int> traitParamIvars;
         unsigned int traitParamTypeIvars = 0;
 
-        ExprNodeCallMethod(Span sp, ::HIR::ExprNodeP val, RcString method_name, ::HIR::PathParams params, ::std::vector<::HIR::ExprNodeP> args);
+        ExprNodeCallMethod(Span sp, ::HIR::ExprNodeP val, RcString methodName, ::HIR::PathParams params, ::std::vector<::HIR::ExprNodeP> args);
 
         static constexpr unsigned int kind = 25;
         unsigned int nodeKind() const override;
@@ -574,7 +574,7 @@ namespace HIR {
         ::HIR::GenericPath mPath;
         bool isStruct;
 
-        ExprNodeUnitVariant(Span sp, ::HIR::GenericPath path, bool is_struct);
+        ExprNodeUnitVariant(Span sp, ::HIR::GenericPath path, bool isStruct);
 
         static constexpr unsigned int kind = 28;
         unsigned int nodeKind() const override;
@@ -639,9 +639,9 @@ namespace HIR {
         /// Monomorphised types of each field.
         ::std::vector<::HIR::TypeRef> valueTypes;
 
-        ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, ::HIR::ExprNodeP base_value, tValues values);
+        ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool isStruct, ::HIR::ExprNodeP baseValue, tValues values);
 
-        ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, bool, tValues values);
+        ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool isStruct, bool, tValues values);
 
         static constexpr unsigned int kind = 32;
         unsigned int nodeKind() const override;
@@ -699,7 +699,7 @@ namespace HIR {
 
         // - Cache between the AVU and ExpandClosures passes
         struct AvuCache {
-            ::std::vector<unsigned int> local_vars;
+            ::std::vector<unsigned int> localVars;
 
             struct Capture {
                 // Variable binding index
@@ -720,7 +720,7 @@ namespace HIR {
         ::HIR::GenericPath objPath;
         ::std::vector<::HIR::ExprNodeP> captures;
 
-        ExprNodeClosure(Span sp, argsT args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool is_move);
+        ExprNodeClosure(Span sp, argsT args, ::HIR::TypeRef rv, ::HIR::ExprNodeP code, bool isMove);
 
         static constexpr unsigned int kind = 36;
         unsigned int nodeKind() const override;
@@ -740,7 +740,7 @@ namespace HIR {
 
         // AnnotateValueUsage cache/information
         struct AvuCache {
-            ::std::vector<unsigned int> local_vars;
+            ::std::vector<unsigned int> localVars;
             ::std::vector<::std::pair<unsigned int, ::HIR::ValueUsage>> capturedVars;
         } avuCache;
 
@@ -757,11 +757,11 @@ namespace HIR {
         ExprNodeGenerator(
             Span sp,
             ::HIR::TypeRef rv,
-            ::HIR::TypeRef resume_ty,
-            ::HIR::TypeRef yield_ty,
+            ::HIR::TypeRef resumeTy,
+            ::HIR::TypeRef yieldTy,
             ::HIR::ExprNodeP code,
-            bool is_move,
-            bool is_pinned
+            bool isMove,
+            bool isPinned
         );
 
         static constexpr unsigned int kind = 37;
@@ -793,9 +793,9 @@ namespace HIR {
         ExprNodeGeneratorWrapper(
             Span sp,
             ::HIR::TypeRef rv,
-            ::HIR::TypeRef yield_ty,
+            ::HIR::TypeRef yieldTy,
             ::HIR::ExprNodeP code,
-            bool is_future
+            bool isFuture
         );
 
         static constexpr unsigned int kind = 38;
@@ -819,7 +819,7 @@ namespace HIR {
         // State data type (needed for initialising)
         ::HIR::TypeRef stateDataType;
 
-        ExprNodeAsyncBlock(Span sp, ::HIR::ExprNodeP code, bool is_move);
+        ExprNodeAsyncBlock(Span sp, ::HIR::ExprNodeP code, bool isMove);
 
         static constexpr unsigned int kind = 39;
         unsigned int nodeKind() const override;
@@ -885,7 +885,7 @@ namespace HIR {
 
     public:
         explicit ExprVisitorDef(TypeInterner& types);
-        TypeInterner& type_interner() const { return types; }
+        TypeInterner& typeInterner() const { return types; }
 
 #define NV(nt) virtual void visit(nt& n) override;
 

@@ -148,7 +148,7 @@ bool ::HIR::TypeDataErasedTypeAliasInner::isPublicTo(const HIR::SimplePath& p) c
 }
 
 ::HIR::TypeDataFunctionPointer HIR::TypeData::Data_NamedFunction::decay(TypeInterner& types, const Span& sp) const {
-    const ::HIR::TypeData* ty_self = nullptr;
+    const ::HIR::TypeData* tySelf = nullptr;
     const ::HIR::PathParams* ppImpl = nullptr;
     const ::HIR::PathParams* ppMethod = nullptr;
 
@@ -160,20 +160,20 @@ bool ::HIR::TypeDataErasedTypeAliasInner::isPublicTo(const HIR::SimplePath& p) c
                     ppMethod = &pe.mParams;
                 }
                 TU_ARMA(UfcsKnown, pe) {
-                    ty_self = pe.type;
+                    tySelf = pe.type;
                     ppImpl = &pe.trait.mParams;
                     ppMethod = &pe.params;
                 }
                 TU_ARMA(UfcsInherent, pe) {
-                    ty_self = pe.type;
-                    ppImpl = &pe.impl_params;
+                    tySelf = pe.type;
+                    ppImpl = &pe.implParams;
                     ppMethod = &pe.params;
                 }
                 TU_ARMA(UfcsUnknown, pe) {
                     BUG(sp, "UfcsUnknown seen");
                 }
         }
-        MonomorphStatePtr   ms { types, ty_self, ppImpl, ppMethod };
+        MonomorphStatePtr   ms { types, tySelf, ppImpl, ppMethod };
         const auto& f = *fp;
         ::HIR::TypeDataFunctionPointer ft {
             HIR::GenericParams(),   // TODO: Get HRLs
@@ -301,7 +301,7 @@ void ::HIR::TypeData::fmt(::std::ostream& os) const {
             for (const auto& tr : e.markers) {
                 os << "+" << tr;
             }
-            if (e.lifetime != LifetimeRef::new_static()) {
+            if (e.lifetime != LifetimeRef::newStatic()) {
                 os << "+" << e.lifetime;
             }
             os << ")";
@@ -384,7 +384,7 @@ void ::HIR::TypeData::fmt(::std::ostream& os) const {
             if (!e.hrls.mLifetimes.empty()) {
                 os << "for" << e.hrls.fmtArgs() << " ";
             }
-            if (e.is_unsafe) {
+            if (e.isUnsafe) {
                 os << "unsafe ";
             }
             if (e.mAbi != "") {
@@ -394,7 +394,7 @@ void ::HIR::TypeData::fmt(::std::ostream& os) const {
             for (const auto& t : e.argTypes) {
                 os << t << ", ";
             }
-            if (e.is_variadic) {
+            if (e.isVariadic) {
                 os << "...";
             }
             os << ") -> " << e.mRettype;
@@ -515,7 +515,7 @@ namespace {
         TU_ARMA(UfcsInherent, ae, be) {
             return ae.type == be.type && ae.item == be.item
                 && exactPathParamsEqual(ae.params, be.params)
-                && exactPathParamsEqual(ae.impl_params, be.impl_params);
+                && exactPathParamsEqual(ae.implParams, be.implParams);
         }
         TU_ARMA(UfcsKnown, ae, be) {
             return ae.type == be.type && exactGenericPathEqual(ae.trait, be.trait)
@@ -677,7 +677,7 @@ namespace {
         }
         TU_ARMA(Function, ae, be) {
             return exactGenericParamsEqual(ae.hrls, be.hrls)
-                && ae.is_unsafe == be.is_unsafe && ae.is_variadic == be.is_variadic
+                && ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic
                 && ae.mAbi == be.mAbi && ae.mRettype == be.mRettype
                 && ae.argTypes == be.argTypes;
         }
@@ -746,7 +746,7 @@ namespace {
         TU_ARMA(UfcsInherent, e) {
             addTypeFlags(flags, e.type);
             flags |= typeFlags(e.params);
-            flags |= typeFlags(e.impl_params);
+            flags |= typeFlags(e.implParams);
         }
         TU_ARMA(UfcsKnown, e) {
             addTypeFlags(flags, e.type);
@@ -830,7 +830,7 @@ namespace {
     }
 
     size_t hashSimplePath(const SimplePath& path) {
-        size_t h = ::std::hash<RcString>()(path.crate_name());
+        size_t h = ::std::hash<RcString>()(path.crateName());
         for (const auto& component : path.components()) h = hashMix(h, ::std::hash<RcString>()(component));
         return h;
     }
@@ -902,7 +902,7 @@ namespace {
             h = hashMix(h, hashTypeRef(e.type));
             h = hashMix(h, ::std::hash<RcString>()(e.item));
             h = hashMix(h, hashPathParams(e.params));
-            h = hashMix(h, hashPathParams(e.impl_params));
+            h = hashMix(h, hashPathParams(e.implParams));
         }
         TU_ARMA(UfcsKnown, e) {
             h = hashMix(h, hashTypeRef(e.type));
@@ -978,7 +978,7 @@ namespace {
             h = hashMix(h, hashPath(e.path));
             h = hashMix(h, static_cast<size_t>(e.def.tag()));
         }
-        TU_ARMA(Function, e) { h = hashMix(h, ::std::hash<RcString>()(e.mAbi)); h = hashMix(h, e.is_unsafe); h = hashMix(h, e.is_variadic); h = hashMix(h, hashTypeRef(e.mRettype)); for (auto t : e.argTypes) h = hashMix(h, hashTypeRef(t)); }
+        TU_ARMA(Function, e) { h = hashMix(h, ::std::hash<RcString>()(e.mAbi)); h = hashMix(h, e.isUnsafe); h = hashMix(h, e.isVariadic); h = hashMix(h, hashTypeRef(e.mRettype)); for (auto t : e.argTypes) h = hashMix(h, hashTypeRef(t)); }
         TU_ARMA(NodeType, e) { TU_MATCH_HDRA((e), {) TU_ARMA(Closure, p) h = hashMix(h, reinterpret_cast<uintptr_t>(p)); TU_ARMA(Generator, p) h = hashMix(h, reinterpret_cast<uintptr_t>(p)); TU_ARMA(Async, p) h = hashMix(h, reinterpret_cast<uintptr_t>(p)); }
         }
         }
@@ -1169,7 +1169,7 @@ bool ::HIR::TypeData::equalsIgnoringRegions(::HIR::TypeRef x) const {
             return te.path.equalsIgnoringRegions(xe.path);
         }
         TU_ARMA(Function, te, xe) {
-            if (te.is_unsafe != xe.is_unsafe) {
+            if (te.isUnsafe != xe.isUnsafe) {
                 return false;
             }
             if (te.mAbi != xe.mAbi) {
@@ -1251,7 +1251,7 @@ Ordering HIR::TypeData::ordIgnoringRegions(::HIR::TypeRef x) const {
         (Borrow, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
         (Pointer, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
         (NamedFunction, return ::ord(te.path, xe.path);),
-        (Function, ORD(te.is_unsafe, xe.is_unsafe); ORD(te.mAbi, xe.mAbi); ORD(te.argTypes, xe.argTypes); return ::ord(te.mRettype, xe.mRettype);),
+        (Function, ORD(te.isUnsafe, xe.isUnsafe); ORD(te.mAbi, xe.mAbi); ORD(te.argTypes, xe.argTypes); return ::ord(te.mRettype, xe.mRettype);),
         (NodeType, return te.ord(xe);)
     )
     throw "";
@@ -1667,7 +1667,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::pushHrb(const std::unique_ptr<
             return this->cmpPath(sp, te.path, xe.path, resolvePlaceholder);
         }
         TU_ARMA(Function, te, xe) {
-            if (te.is_unsafe != xe.is_unsafe) {
+            if (te.isUnsafe != xe.isUnsafe) {
                 return Compare::Unequal;
             }
             if (te.mAbi != xe.mAbi) {
@@ -1814,7 +1814,7 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
             return TypeData::make_NamedFunction({e.path.clone(), e.def.clone()});
         }
         TU_ARMA(Function, e) {
-            TypeDataFunctionPointer ft{e.hrls.clone(), e.is_unsafe, e.is_variadic, e.mAbi, e.mRettype, {}};
+            TypeDataFunctionPointer ft{e.hrls.clone(), e.isUnsafe, e.isVariadic, e.mAbi, e.mRettype, {}};
             for (const auto& a : e.argTypes) {
                 ft.argTypes.push_back(a);
             }
@@ -2111,7 +2111,7 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
             return le.path.compareWithPlaceholders(sp, re.path, resolvePlaceholder);
         }
         TU_ARMA(Function, le, re) {
-            if (le.mAbi != re.mAbi || le.is_unsafe != re.is_unsafe) {
+            if (le.mAbi != re.mAbi || le.isUnsafe != re.isUnsafe) {
                 return Compare::Unequal;
             }
             if (le.argTypes.size() != re.argTypes.size()) {

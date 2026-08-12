@@ -405,26 +405,26 @@ namespace {
             shortItemName = false;
         }
 
-        virtual void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+        virtual void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) override {
             shortItemName = true;
 
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             incIndent();
-            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(traitPath, impl);
             decIndent();
             os << indent() << "}\n";
 
             shortItemName = false;
         }
 
-        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
+        void visitMarkerImpl(const ::HIR::SimplePath& traitPath, ::HIR::MarkerImpl& impl) override {
             shortItemName = true;
 
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }

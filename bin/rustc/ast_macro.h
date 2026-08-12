@@ -13,7 +13,7 @@ namespace AST {
         AST::Path macroPath;
         RcString ident;
         TokenTree input;
-        bool isExpanded = false;
+        bool mIsExpanded = false;
 
     public:
         MacroInvocation(MacroInvocation&&) = default;
@@ -37,23 +37,23 @@ namespace AST {
             return macroPath;
         }
 
-        bool is_expanded() const {
-            return isExpanded;
+        bool isExpanded() const {
+            return mIsExpanded;
         }
 
         void setExpanded() {
-            isExpanded = true;
+            mIsExpanded = true;
         }
 
         const RcString& inputIdent() const {
             return ident;
         }
 
-        const TokenTree& input_tt() const {
+        const TokenTree& inputTt() const {
             return input;
         }
 
-        TokenTree& input_tt() {
+        TokenTree& inputTt() {
             return input;
         }
 

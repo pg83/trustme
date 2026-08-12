@@ -59,7 +59,7 @@ namespace AST {
         ::std::set<RcString> features;
 
     public:
-        Module rootModule;
+        Module mRootModule;
 
         /// Loaded crates in load order
         ::std::vector<RcString> externCratesOrd;
@@ -106,12 +106,12 @@ namespace AST {
 
         Crate(stl::ObjPool* pool, HIR::TypeInterner& types);
 
-        const Module& root_module() const {
-            return rootModule;
+        const Module& rootModule() const {
+            return mRootModule;
         }
 
-        Module& root_module() {
-            return rootModule;
+        Module& rootModule() {
+            return mRootModule;
         }
 
         void setCrateName(std::string name);

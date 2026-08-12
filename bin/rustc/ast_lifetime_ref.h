@@ -23,7 +23,7 @@ namespace AST {
 
         LifetimeRef(Ident name);
 
-        static LifetimeRef new_static() {
+        static LifetimeRef newStatic() {
             return LifetimeRef("static", BINDING_STATIC);
         }
 

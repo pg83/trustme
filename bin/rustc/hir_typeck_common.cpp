@@ -243,7 +243,7 @@ namespace {
         bool rewritePath(HIR::Path& path) {
             TU_MATCH_HDRA((path.mData), {)
             TU_ARMA(Generic, e) return rewritePathParams(e.mParams);
-            TU_ARMA(UfcsInherent, e) return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.impl_params);
+            TU_ARMA(UfcsInherent, e) return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.implParams);
             TU_ARMA(UfcsKnown, e) return rewriteType(e.type) || rewritePathParams(e.trait.mParams) || rewritePathParams(e.params);
             TU_ARMA(UfcsUnknown, e) return rewriteType(e.type) || rewritePathParams(e.params);
             }
@@ -491,8 +491,8 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
             auto _ = pushHrb(e.hrls);
             ::HIR::TypeDataFunctionPointer ft;
             ft.hrls = e.hrls.clone();
-            ft.is_unsafe = e.is_unsafe;
-            ft.is_variadic = e.is_variadic;
+            ft.isUnsafe = e.isUnsafe;
+            ft.isVariadic = e.isVariadic;
             ft.mAbi = e.mAbi;
             ft.mRettype = this->monomorphType(sp, e.mRettype, allowInfer);
             for (const auto& arg : e.argTypes) {
@@ -542,7 +542,7 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
             return ::HIR::Path::Data::make_UfcsUnknown({this->monomorphType(sp, e2.type, allowInfer), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer)});
         }
         TU_ARMA(UfcsInherent, e2) {
-            return ::HIR::Path::Data::make_UfcsInherent({this->monomorphType(sp, e2.type, allowInfer), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer), this->monomorphPathParams(sp, e2.impl_params, allowInfer)});
+            return ::HIR::Path::Data::make_UfcsInherent({this->monomorphType(sp, e2.type, allowInfer), e2.item, this->monomorphPathParams(sp, e2.params, allowInfer), this->monomorphPathParams(sp, e2.implParams, allowInfer)});
         }
     }
     throw "";
@@ -811,8 +811,8 @@ struct CloneTyWithMonomorph: Monomorphiser {
 //}
 ::std::ostream& operator<<(::std::ostream& os, const MonomorphState& ms) {
     os << "MonomorphState {";
-    if (ms.self_ty != HIR::TypeRef()) {
-        os << " self=" << ms.self_ty;
+    if (ms.selfTy != HIR::TypeRef()) {
+        os << " self=" << ms.selfTy;
     }
     if (ms.ppImpl) {
         os << " I=" << *ms.ppImpl;

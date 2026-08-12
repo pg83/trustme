@@ -29,7 +29,7 @@ class TomlLexer {
 
 protected:
     TomlLexer(const ::std::string& filename);
-    TomlToken get_token();
+    TomlToken getToken();
 
 public:
     friend ::std::ostream& operator<<(::std::ostream& os, const TomlLexer& x);

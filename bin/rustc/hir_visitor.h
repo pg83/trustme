@@ -18,7 +18,7 @@ namespace HIR {
         virtual ~Visitor();
 
     protected:
-        TypeInterner& type_interner() const { return types; }
+        TypeInterner& typeInterner() const { return types; }
         void visitTypeData(TypeData& data);
 
     public:
@@ -28,8 +28,8 @@ namespace HIR {
 
         virtual void visitTypeImpl(::HIR::TypeImpl& impl);
         virtual void visitInherentType(ItemPath p, ::HIR::TypeAlias& item);
-        virtual void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl);
-        virtual void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl);
+        virtual void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl);
+        virtual void visitMarkerImpl(const ::HIR::SimplePath& traitPath, ::HIR::MarkerImpl& impl);
 
         // - Type Items
         virtual void visitTypeAlias(ItemPath p, ::HIR::TypeAlias& item);

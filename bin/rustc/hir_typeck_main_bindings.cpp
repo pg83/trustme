@@ -13,21 +13,21 @@ namespace {
     class ExprVisitorValidate: public ::HIR::ExprVisitor {
         const StaticTraitResolve& mResolve;
         //const t_args&   m_args;
-        const ::HIR::TypeData* real_ret_type;
-        ::HIR::TypeRef ret_type;
+        const ::HIR::TypeData* realRetType;
+        ::HIR::TypeRef retType;
 
         struct RetTarget {
-            const ::HIR::TypeData* ret_type;
+            const ::HIR::TypeData* retType;
             const ::HIR::TypeData* yieldType;
 
-            RetTarget(const ::HIR::TypeData* ret_type)
-                : ret_type(ret_type)
+            RetTarget(const ::HIR::TypeData* retType)
+                : retType(retType)
                 , yieldType(nullptr)
             {
             }
 
-            RetTarget(const ::HIR::TypeData* ret_type, const ::HIR::TypeData* yieldType)
-                : ret_type(ret_type)
+            RetTarget(const ::HIR::TypeData* retType, const ::HIR::TypeData* yieldType)
+                : retType(retType)
                 , yieldType(yieldType)
             {
             }
@@ -42,11 +42,11 @@ namespace {
     public:
         bool expandErasedTypes;
 
-        ExprVisitorValidate(const StaticTraitResolve& res, const tArgs& args, const ::HIR::TypeData* ret_type)
+        ExprVisitorValidate(const StaticTraitResolve& res, const tArgs& args, const ::HIR::TypeData* retType)
             : mResolve(res)
             ,
             //m_args(args),
-            real_ret_type(ret_type)
+            realRetType(retType)
             , expandErasedTypes(true)
         {
             mLangIndex = mResolve.crate.getLangItemPathOpt("index");
@@ -56,7 +56,7 @@ namespace {
             const auto& sp = nodePtr->span();
 
             // Monomorphise erased type
-            ret_type = cloneTyWith(mResolve.crate.types, sp, real_ret_type, [&](const auto& tpl, auto& rv) -> bool {
+            retType = cloneTyWith(mResolve.crate.types, sp, realRetType, [&](const auto& tpl, auto& rv) -> bool {
                 if (const auto* e = tpl->opt_ErasedType()) {
                     if (const auto* ee = e->inner.opt_Fcn()) {
                         ASSERT_BUG(sp, ee->index < nodePtr.erasedTypes.size(), "Erased type index OOB - " << ee->origin << " " << ee->index << " >= " << nodePtr.erasedTypes.size());
@@ -67,11 +67,11 @@ namespace {
                 }
                 return false;
             });
-            mResolve.expandAssociatedTypes(sp, ret_type);
+            mResolve.expandAssociatedTypes(sp, retType);
 
             nodePtr->visit(*this);
 
-            checkTypesEqual(sp, ret_type, nodePtr->resType);
+            checkTypesEqual(sp, retType, nodePtr->resType);
         }
 
         void visit(::HIR::ExprNodeBlock& node) override {
@@ -132,8 +132,8 @@ namespace {
         void visit(::HIR::ExprNodeReturn& node) override {
             TRACE_FUNCTION_F(&node << " return ...");
             // Check against return type
-            const auto* ret_ty = (this->closureRetTypes.size() > 0 ? this->closureRetTypes.back().ret_type : this->ret_type);
-            checkTypesEqual(ret_ty, node.mValue);
+            const auto* retTy = (this->closureRetTypes.size() > 0 ? this->closureRetTypes.back().retType : this->retType);
+            checkTypesEqual(retTy, node.mValue);
             node.mValue->visit(*this);
         }
 
@@ -255,8 +255,8 @@ namespace {
                 }
                 assert(langItem);
                 if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.slot->resType, node.mValue->resType)) {
-                    const auto& trait_path = this->getLangItemPath(node.span(), langItem);
-                    checkTraitBound(node.span(), trait_path, {node.mValue->resType}, node.slot->resType);
+                    const auto& traitPath = this->getLangItemPath(node.span(), langItem);
+                    checkTraitBound(node.span(), traitPath, {node.mValue->resType}, node.slot->resType);
                 }
             }
 
@@ -500,7 +500,7 @@ namespace {
                             // TODO: Check?
                         }
                         TU_ARMA(Function, se) {
-                            if (se.is_unsafe != de.is_unsafe && se.is_unsafe) {
+                            if (se.isUnsafe != de.isUnsafe && se.isUnsafe) {
                                 ERROR(sp, E0000, "Invalid cast to " << dstTy << " from " << srcTy << " - removing unsafe");
                             }
                             if (se.mAbi != de.mAbi) {
@@ -671,7 +671,7 @@ namespace {
                     const auto& var = enm.mData.as_Data()[idx];
 
                     const auto& str = *var.type->as_Path().binding.as_Struct();
-                    ASSERT_BUG(sp, var.is_struct, "Struct literal for enum on non-struct variant");
+                    ASSERT_BUG(sp, var.isStruct, "Struct literal for enum on non-struct variant");
                     fieldsPtr = &str.mData.as_Named();
                 }
                 TU_ARMA(Union, e) {
@@ -760,7 +760,7 @@ namespace {
 
         void checkFunction(const Span& sp, const ::HIR::Path& path, HIR::ExprCallCache& cache) {
             // Do function resolution again, this time with concrete types.
-            const ::HIR::Function* fcn_ptr = nullptr;
+            const ::HIR::Function* fcnPtr = nullptr;
             MonomorphStatePtr monomorphCb(mResolve.crate.types);
 
             TU_MATCH_HDRA( (path.mData), {)
@@ -768,7 +768,7 @@ namespace {
                     const auto& pathParams = e.mParams;
 
                     const auto& fcn = mResolve.crate.getFunctionByPath(sp, e.mPath);
-                    fcn_ptr = &fcn;
+                    fcnPtr = &fcn;
                     cache.fcnParams = &fcn.mParams;
 
                     monomorphCb = MonomorphStatePtr(mResolve.crate.types, nullptr, nullptr, &pathParams);
@@ -789,7 +789,7 @@ namespace {
                     // Add a bound requiring the Self type impl the trait
                     checkTraitBound(sp, e.trait.mPath, e.trait.mParams, e.type);
 
-                    fcn_ptr = &fcn;
+                    fcnPtr = &fcn;
 
                     monomorphCb = MonomorphStatePtr(mResolve.crate.types, e.type, &traitParams, &pathParams);
                 }
@@ -805,29 +805,29 @@ namespace {
                         if (it == impl.methods.end()) {
                             return false;
                         }
-                        fcn_ptr = &it->second.data;
+                        fcnPtr = &it->second.data;
                         implPtr = &impl;
                         return true;
                     });
-                    if (!fcn_ptr) {
+                    if (!fcnPtr) {
                         ERROR(sp, E0000, "Failed to locate function " << path);
                     }
                     assert(implPtr);
 
-                    cache.fcnParams = &fcn_ptr->mParams;
+                    cache.fcnParams = &fcnPtr->mParams;
 
                     // NOTE: Trusts the existing cache.
-                    ASSERT_BUG(sp, e.impl_params.types.size() == implPtr->mParams.types.size(), "Path impl_params cache is missized - " << e.impl_params.types.size() << " != " << implPtr->mParams.types.size());
-                    auto& impl_params = e.impl_params;
+                    ASSERT_BUG(sp, e.implParams.types.size() == implPtr->mParams.types.size(), "Path impl_params cache is missized - " << e.implParams.types.size() << " != " << implPtr->mParams.types.size());
+                    auto& implParams = e.implParams;
 
                     // Create monomorphise callback
-                    const auto& fcn_params = e.params;
-                    monomorphCb = MonomorphStatePtr(mResolve.crate.types, e.type, &impl_params, &fcn_params);
+                    const auto& fcnParams = e.params;
+                    monomorphCb = MonomorphStatePtr(mResolve.crate.types, e.type, &implParams, &fcnParams);
                 }
             }
 
-            assert( fcn_ptr );
-            const auto& fcn = *fcn_ptr;
+            assert( fcnPtr );
+            const auto& fcn = *fcnPtr;
             monomorphCb.setConstevalState(mResolve.crate, HIR::ItemPath(path));
 
             // --- Monomorphise the argument/return types (into current context)
@@ -847,8 +847,8 @@ namespace {
 
                     // Check the origin, because monomorph might end up introducing other erased types
                     if (e.origin == path) {
-                        ASSERT_BUG(sp, e.index < fcn_ptr->mCode.erasedTypes.size(), "");
-                        const auto& erasedTypeReplacement = fcn_ptr->mCode.erasedTypes.at(e.index);
+                        ASSERT_BUG(sp, e.index < fcnPtr->mCode.erasedTypes.size(), "");
+                        const auto& erasedTypeReplacement = fcnPtr->mCode.erasedTypes.at(e.index);
                         ty = monomorphCb.monomorphType(sp, erasedTypeReplacement, false);
                         return true;
                     }
@@ -882,8 +882,8 @@ namespace {
                         DEBUG("= (" << realType << ": " << realTrait << ")");
                         const auto& traitParams = realTrait.mPath.mParams;
 
-                        const auto& trait_path = be.trait.mPath.mPath;
-                        checkTraitBound(sp, trait_path, traitParams, realType);
+                        const auto& traitPath = be.trait.mPath.mPath;
+                        checkTraitBound(sp, traitPath, traitParams, realType);
 
                         // TODO: Either - Don't include the above impl bound, or change the below trait to the one that has that type
                         for (auto& assoc : realTrait.typeBounds) {
@@ -944,7 +944,7 @@ namespace {
                 }
                 auto hrls = e->hrls.makeEmptyParams(true);
                 auto m = MonomorphHrlsOnly(mResolve.crate.types, hrls);
-                if (e->is_variadic ? node.mArgs.size() < e->argTypes.size() : node.mArgs.size() != e->argTypes.size()) {
+                if (e->isVariadic ? node.mArgs.size() < e->argTypes.size() : node.mArgs.size() != e->argTypes.size()) {
                     ERROR(node.span(), E0000, "Incorrect number of arguments to call via " << valTy);
                 }
                 for (unsigned int i = 0; i < e->argTypes.size(); i++) {
@@ -1309,10 +1309,10 @@ namespace {
             }
         }
 
-        void checkPattern(const ::HIR::Pattern& pat, const ::HIR::TypeData* top_ty) const {
+        void checkPattern(const ::HIR::Pattern& pat, const ::HIR::TypeData* topTy) const {
             Span sp;
-            TRACE_FUNCTION_F("pat=" << pat << " ty=" << top_ty);
-            const ::HIR::TypeData* typ = top_ty;
+            TRACE_FUNCTION_F("pat=" << pat << " ty=" << topTy);
+            const ::HIR::TypeData* typ = topTy;
             // Implicit derefs
             for (size_t i = 0; i < pat.implicitDerefCount; i++) {
                 typ = typ->as_Borrow().inner;
@@ -1464,8 +1464,8 @@ namespace {
             if (item.mCode) {
                 DEBUG("Function code " << p);
                 ::HIR::TypeRef tmp;
-                const auto& ret_ty = mResolve.fixTraitDefaultReturn(item.mCode->span(), p, item.returnType, tmp);
-                ExprVisitorValidate ev(mResolve, item.mArgs, ret_ty);
+                const auto& retTy = mResolve.fixTraitDefaultReturn(item.mCode->span(), p, item.returnType, tmp);
+                ExprVisitorValidate ev(mResolve, item.mArgs, retTy);
                 ev.visitRoot(item.mCode);
             } else {
                 DEBUG("Function code " << p << " (none)");
@@ -1520,17 +1520,17 @@ namespace {
             ::HIR::Visitor::visitTypeImpl(impl);
         }
 
-        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
-            TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << trait_path << " for " << impl.mType);
+        void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) override {
+            TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << traitPath << " for " << impl.mType);
             auto _ = this->mResolve.setImplGenerics(impl.mType, impl.mParams);
 
-            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(traitPath, impl);
         }
     };
 }
 
-void TypecheckExpressionsValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeData* ret_ty, const ::HIR::ExprPtr& code) {
-    ExprVisitorValidate ev(resolve, args, ret_ty);
+void TypecheckExpressionsValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeData* retTy, const ::HIR::ExprPtr& code) {
+    ExprVisitorValidate ev(resolve, args, retTy);
     ev.expandErasedTypes = false; // TODO: Make this an argument, we don't want to do this too early
     ev.visitRoot(const_cast<::HIR::ExprPtr&>(code));
 }
@@ -1586,7 +1586,7 @@ namespace {
         StaticTraitResolve mResolve;
 
         const ::HIR::Trait* currentTrait = nullptr;
-        const ::HIR::ItemPath* currentTraitPath = nullptr;
+        const ::HIR::ItemPath* mCurrentTraitPath = nullptr;
 
         ::HIR::GenericParams* curParams = nullptr;
         unsigned curParamsLevel = 0;
@@ -1622,9 +1622,9 @@ namespace {
             static Span sp;
             DEBUG("");
             auto rv = ModTraitsGuard{this, mv$(this->traits)};
-            for (const auto& trait_path : mod.traits) {
-                DEBUG("- " << trait_path);
-                traits.push_back(::std::make_pair(&trait_path, &this->crate.getTraitByPath(sp, trait_path)));
+            for (const auto& traitPath : mod.traits) {
+                DEBUG("- " << traitPath);
+                traits.push_back(::std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
             }
             return rv;
         }
@@ -1836,8 +1836,8 @@ namespace {
             return false;
         }
 
-        static ::HIR::Path::Data getUfcsKnown(::HIR::Path::Data::Data_UfcsUnknown e, ::HIR::GenericPath trait_path, const ::HIR::Trait& trait) {
-            return ::HIR::Path::Data::make_UfcsKnown({mv$(e.type), mv$(trait_path), mv$(e.item), mv$(e.params)});
+        static ::HIR::Path::Data getUfcsKnown(::HIR::Path::Data::Data_UfcsUnknown e, ::HIR::GenericPath traitPath, const ::HIR::Trait& trait) {
+            return ::HIR::Path::Data::make_UfcsKnown({mv$(e.type), mv$(traitPath), mv$(e.item), mv$(e.params)});
         }
 
         static bool locateItemInTrait(::HIR::Visitor::PathContext pc, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
@@ -1860,42 +1860,42 @@ namespace {
             return false;
         }
 
-        bool locateInTraitAndSet(const Span& sp, ::HIR::Visitor::PathContext pc, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
+        bool locateInTraitAndSet(const Span& sp, ::HIR::Visitor::PathContext pc, const ::HIR::GenericPath& traitPath, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
             if (locateItemInTrait(pc, trait, pd)) {
-                pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(trait_path.mPath, trait), trait);
+                pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(traitPath.mPath, trait), trait);
                 return true;
             }
             // Search all supertraits
             for (const auto& pt : trait.allParentTraits) {
                 if (locateItemInTrait(pc, *pt.traitPtr, pd)) {
-                    pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(trait_path.mPath, trait), trait);
+                    pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(traitPath.mPath, trait), trait);
                     return true;
                 }
             }
             return false;
         }
 
-        bool setFromImpl(const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
+        bool setFromImpl(const ::HIR::GenericPath& traitPath, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
             auto& e = pd.as_UfcsUnknown();
             const auto& type = e.type;
-            return this->crate.findTraitImpls(trait_path.mPath, type, HIR::ResolvePlaceholdersNop(), [&](const auto& impl) {
-                DEBUG("FOUND impl" << impl.mParams.fmtArgs() << " " << trait_path.mPath << impl.traitArgs << " for " << impl.mType);
+            return this->crate.findTraitImpls(traitPath.mPath, type, HIR::ResolvePlaceholdersNop(), [&](const auto& impl) {
+                DEBUG("FOUND impl" << impl.mParams.fmtArgs() << " " << traitPath.mPath << impl.traitArgs << " for " << impl.mType);
                 // TODO: Check bounds
                 for (const auto& bound : impl.mParams.bounds) {
                     DEBUG("- TODO: Bound " << bound);
                     return false;
                 }
-                pd = getUfcsKnown(mv$(e), makeGenericPath(trait_path.mPath, trait), trait);
+                pd = getUfcsKnown(mv$(e), makeGenericPath(traitPath.mPath, trait), trait);
                 return true;
             });
         }
 
-        bool locateInTraitImplAndSet(::HIR::Visitor::PathContext pc, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
+        bool locateInTraitImplAndSet(::HIR::Visitor::PathContext pc, const ::HIR::GenericPath& traitPath, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
             auto& e = pd.as_UfcsUnknown();
             if (this->locateItemInTrait(pc, trait, pd)) {
-                return this->setFromImpl(trait_path, trait, pd);
+                return this->setFromImpl(traitPath, trait, pd);
             } else {
-                DEBUG("- Item " << e.item << " not in trait " << trait_path.mPath);
+                DEBUG("- Item " << e.item << " not in trait " << traitPath.mPath);
             }
 
             // Search supertraits (recursively)
@@ -1918,13 +1918,13 @@ namespace {
         }
 
         ::HIR::GenericPath getCurrentTraitGp() const {
-            assert(currentTraitPath);
+            assert(mCurrentTraitPath);
             assert(currentTrait);
-            auto trait_path = ::HIR::GenericPath(currentTraitPath->getSimplePath());
+            auto traitPath = ::HIR::GenericPath(mCurrentTraitPath->getSimplePath());
             for (unsigned int i = 0; i < currentTrait->mParams.types.size(); i++) {
-                trait_path.mParams.types.push_back(crate.types.generic(currentTrait->mParams.types[i].mName, i));
+                traitPath.mParams.types.push_back(crate.types.generic(currentTrait->mParams.types[i].mName, i));
             }
-            return trait_path;
+            return traitPath;
         }
 
         void visitPathUfcsUnknown(const Span& sp, ::HIR::Path& p, ::HIR::Visitor::PathContext pc) {
@@ -1935,10 +1935,10 @@ namespace {
             this->visitPathParams(e.params);
 
             // Search for matching impls in current generic blocks
-            if (mResolve.itemGenerics != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.itemGenerics, p.mData)) {
+            if (mResolve.mItemGenerics != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.mItemGenerics, p.mData)) {
                 return;
             }
-            if (mResolve.implGenerics != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.implGenerics, p.mData)) {
+            if (mResolve.mImplGenerics != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.mImplGenerics, p.mData)) {
                 return;
             }
 
@@ -1946,8 +1946,8 @@ namespace {
                 // If processing a trait, and the type is 'Self', search for the type/method on the trait
                 // - TODO: This could be encoded by a `Self: Trait` bound in the generics, but that may have knock-on issues?
                 if (te->name == "Self" && currentTrait) {
-                    auto trait_path = this->getCurrentTraitGp();
-                    if (this->locateInTraitAndSet(sp, pc, trait_path, *currentTrait, p.mData)) {
+                    auto traitPath = this->getCurrentTraitGp();
+                    if (this->locateInTraitAndSet(sp, pc, traitPath, *currentTrait, p.mData)) {
                         // Success!
                         return;
                     }
@@ -2001,15 +2001,15 @@ namespace {
                     }
                     DEBUG("- Trying trait " << *traitInfo.first);
 
-                    auto trait_path = ::HIR::GenericPath(*traitInfo.first);
+                    auto traitPath = ::HIR::GenericPath(*traitInfo.first);
                     for (unsigned int i = 0; i < trait.mParams.types.size(); i++) {
-                        trait_path.mParams.types.push_back(crate.types.infer());
+                        traitPath.mParams.types.push_back(crate.types.infer());
                     }
 
                     // TODO: Search supertraits
                     // TODO: Should impls be searched first, or item names?
                     // - Item names add complexity, but impls are slower
-                    if (this->locateInTraitImplAndSet(pc, mv$(trait_path), trait, p.mData)) {
+                    if (this->locateInTraitImplAndSet(pc, mv$(traitPath), trait, p.mData)) {
                         return;
                     }
                 }
@@ -2081,7 +2081,7 @@ namespace {
 
         void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             currentTrait = &item;
-            currentTraitPath = &p;
+            mCurrentTraitPath = &p;
 
             auto _ = mResolve.setImplGenerics(MetadataType::TraitObject, item.mParams);
             auto self = crate.types.self();
@@ -2093,7 +2093,7 @@ namespace {
         }
 
         void visitStruct(::HIR::ItemPath p, ::HIR::Struct& item) override {
-            auto _ = mResolve.setImplGenerics(item.structMarkings.dst_type, item.mParams);
+            auto _ = mResolve.setImplGenerics(item.structMarkings.dstType, item.mParams);
             ::HIR::Visitor::visitStruct(p, item);
         }
 
@@ -2185,9 +2185,9 @@ namespace {
             selfTypes.pop_back();
         }
 
-        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
+        void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) override {
             static Span sp;
-            TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType);
+            TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType);
             auto _ = mResolve.setImplGenerics(impl.mType, impl.mParams);
             selfTypes.push_back(impl.mType);
 
@@ -2203,25 +2203,25 @@ namespace {
             // Propagate bounds from the type
             addLifetimeBoundsForImplType(Span(), impl.mParams, impl.mType);
 
-            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(traitPath, impl);
             selfTypes.pop_back();
 
             // TODO: Check that the type+trait is valid
             // - And fix bad elided liftimes (match annotations if they were elided)
             {
-                const auto& trait = mResolve.crate.getTraitByPath(sp, trait_path);
+                const auto& trait = mResolve.crate.getTraitByPath(sp, traitPath);
                 for (auto& e : impl.methods) {
                     auto _ = mResolve.setItemGenerics(e.second.data.mParams);
 
                     const auto vIt = trait.values.find(e.first);
                     if (vIt == trait.values.end() || !vIt->second.is_Function()) {
-                        ERROR(sp, E0000, "Trait " << trait_path << " doesn't have a method named " << e.first);
+                        ERROR(sp, E0000, "Trait " << traitPath << " doesn't have a method named " << e.first);
                     }
                     auto& implFcn = e.second.data;
                     const auto& traitFcn = vIt->second.as_Function();
 
-                    auto fcn_params = traitFcn.mParams.makeNopParams(crate.types, 1);
-                    MonomorphStatePtr ms{crate.types, impl.mType, &impl.traitArgs, &fcn_params};
+                    auto fcnParams = traitFcn.mParams.makeNopParams(crate.types, 1);
+                    MonomorphStatePtr ms{crate.types, impl.mType, &impl.traitArgs, &fcnParams};
                     HIR::TypeRef tmp;
                     auto maybeMonomorph = [&](const HIR::TypeData* ty) -> const HIR::TypeData* {
                         if (monomorphiseTypeNeeded(ty)) {
@@ -2361,7 +2361,7 @@ namespace {
                                              }
                                          )
                                       << "\n"
-                                      << "in impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType
+                                      << "in impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType
                         );
                     }
                     // HACK: Replace all types (which should be functionally identical) so lifetimes match
@@ -2399,13 +2399,13 @@ namespace {
                     }
 
                     // HACK: Clone the expected type, so the lifetimes match.
-                    DEBUG("Updating < " << impl.mType << " as " << trait_path << impl.traitArgs << " >::" << e.first);
+                    DEBUG("Updating < " << impl.mType << " as " << traitPath << impl.traitArgs << " >::" << e.first);
                     implFcn.returnType = expRetTy;
                     for (size_t i = 0; i < std::min(implFcn.mArgs.size(), traitFcn.mArgs.size()); i++) {
                         DEBUG("ARG" << i << "> " << traitFcn.mArgs[i].second);
                         implFcn.mArgs[i].second = mResolve.monomorphExpand(sp, traitFcn.mArgs[i].second, ms);
                     }
-                    DEBUG("Updated < " << impl.mType << " as " << trait_path << impl.traitArgs << " >::" << e.first);
+                    DEBUG("Updated < " << impl.mType << " as " << traitPath << impl.traitArgs << " >::" << e.first);
 
                     DEBUG(FMT_CB(os, {
                         os << "fn " << e.first << implFcn.mParams.fmtArgs() << "(";
@@ -2419,7 +2419,7 @@ namespace {
                 for (const auto& e : impl.constants) {
                     const auto& vi = trait.values.at(e.first);
                     if (!vi.is_Constant()) {
-                        ERROR(sp, E0000, "Trait " << trait_path << " doesn't have a constant named " << e.first);
+                        ERROR(sp, E0000, "Trait " << traitPath << " doesn't have a constant named " << e.first);
                     }
                     const auto& implConst = e.second.data;
                     const auto& traitConst = vi.as_Constant();
@@ -2429,7 +2429,7 @@ namespace {
                 for (const auto& e : impl.statics) {
                     const auto& vi = trait.values.at(e.first);
                     if (!vi.is_Static()) {
-                        ERROR(sp, E0000, "Trait " << trait_path << " doesn't have a static named " << e.first);
+                        ERROR(sp, E0000, "Trait " << traitPath << " doesn't have a static named " << e.first);
                     }
                     const auto& implStatic = e.second.data;
                     const auto& traitStatic = vi.as_Static();
@@ -2438,15 +2438,15 @@ namespace {
                 }
                 for (const auto& e : trait.types) {
                     const auto& traitType = trait.types.at(e.first);
-                    const auto& impl_type = e.second;
+                    const auto& implType = e.second;
 
                     // Check that the bounds fit
                 }
             }
         }
 
-        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.mType << " { }");
+        void visitMarkerImpl(const ::HIR::SimplePath& traitPath, ::HIR::MarkerImpl& impl) override {
+            TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.mType << " { }");
             auto _ = mResolve.setImplGenerics(impl.mType, impl.mParams);
             selfTypes.push_back(impl.mType);
 
@@ -2462,7 +2462,7 @@ namespace {
             // Propagate bounds from the type/trait
             addLifetimeBoundsForImplType(Span(), impl.mParams, impl.mType);
 
-            ::HIR::Visitor::visitMarkerImpl(trait_path, impl);
+            ::HIR::Visitor::visitMarkerImpl(traitPath, impl);
             // TODO: Check that the type+trait is valid
 
             selfTypes.pop_back();

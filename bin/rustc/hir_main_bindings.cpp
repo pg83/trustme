@@ -43,9 +43,9 @@ class HirDeserialiser {
     ::HIR::TypeInterner& typeInterner;
 
 public:
-    HirDeserialiser(::HIR::serialise::Reader& in, ::HIR::TypeInterner& type_interner)
+    HirDeserialiser(::HIR::serialise::Reader& in, ::HIR::TypeInterner& typeInterner)
         : in(in)
-        , typeInterner(type_interner)
+        , typeInterner(typeInterner)
     {
     }
 
@@ -375,9 +375,9 @@ public:
     }
 
     ::MacroRules deserialiseMacrorules() {
-        auto crate_name = in.readIstring();
+        auto crateName = in.readIstring();
         auto edition = static_cast<AST::Edition>(in.readTag());
-        ::MacroRules rv(crate_name, edition);
+        ::MacroRules rv(crateName, edition);
         // NOTE: This is set after loading.
         //rv.m_exported = true;
         rv.isMacroItem = in.readBool();
@@ -740,9 +740,9 @@ public:
         rv.saveCode = false;
         rv.linkage = deserialiseLinkage();
         rv.receiver = static_cast<::HIR::Function::Receiver>(in.readTag());
-        auto receiver_type = deserialiseType();
+        auto receiverType = deserialiseType();
         if (rv.receiver == ::HIR::Function::Receiver::Custom) {
-            rv.receiverType = receiver_type;
+            rv.receiverType = receiverType;
         }
         rv.mAbi = in.readIstring();
         rv.unsafe = in.readBool();
@@ -798,18 +798,18 @@ public:
         auto params = deserialiseGenericparams();
         uint8_t bitflag1 = in.readU8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
-        bool is_mut;
-        bool save_literal;
-        BIT(0, is_mut);
-        BIT(1, save_literal);
+        bool isMut;
+        bool saveLiteral;
+        BIT(0, isMut);
+        BIT(1, saveLiteral);
 #undef BIT
         auto ty = deserialiseType();
-        auto rv = ::HIR::Static(mv$(linkage), is_mut, mv$(ty), {});
+        auto rv = ::HIR::Static(mv$(linkage), isMut, mv$(ty), {});
         if (params.isGeneric()) {
             rv.mValue = deserialiseExprptr();
         }
         rv.mParams = ::std::move(params);
-        if (save_literal) {
+        if (saveLiteral) {
             rv.valueRes = deserialiseEncodedliteral();
             rv.valueGenerated = true;
             rv.noEmitValue = true;
@@ -827,7 +827,7 @@ public:
         uint8_t bitflag1 = in.readU8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         BIT(0, m.hasADeref)
-        BIT(1, m.is_copy)
+        BIT(1, m.isCopy)
         BIT(2, m.hasDropImpl)
 #undef BIT
         // TODO: auto_impls
@@ -843,7 +843,7 @@ public:
         BIT(2, m.boundedMax)
         BIT(3, m.is_fundamental)
 #undef BIT
-        m.dst_type = static_cast<::HIR::StructMarkings::DstType>(in.readTag());
+        m.dstType = static_cast<::HIR::StructMarkings::DstType>(in.readTag());
         m.coerceUnsized = static_cast<::HIR::StructMarkings::Coerce>(in.readTag());
         m.coerceUnsizedIndex = in.readCount();
         m.coerceParam = in.readCount();
@@ -1083,7 +1083,7 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     TRACE_FUNCTION;
     auto rv = ::HIR::SimplePath{deserialiseThinvec<RcString>()};
     // HACK! If the read crate name is empty, replace it with the name we're loaded with
-    if (rv.crate_name() == "" && rv.components().size() > 0) {
+    if (rv.crateName() == "" && rv.components().size() > 0) {
         assert(crateName != "");
         rv.updateCrateName(crateName);
     }
@@ -1253,14 +1253,14 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
         default:
             BUG(Span(), "Bad tag for HIR::Struct::Data - " << tag);
     }
-    unsigned forced_alignment = in.readCount();
-    unsigned max_field_alignment = in.readCount();
-    DEBUG("align = " << forced_alignment);
+    unsigned forcedAlignment = in.readCount();
+    unsigned maxFieldAlignment = in.readCount();
+    DEBUG("align = " << forcedAlignment);
     auto markings = deserialiseMarkings();
     auto strMarkings = deserialiseStrMarkings();
 
-    auto rv = ::HIR::Struct{mv$(params), repr, mv$(data), forced_alignment, mv$(markings), mv$(strMarkings)};
-    rv.maxFieldAlignment = max_field_alignment;
+    auto rv = ::HIR::Struct{mv$(params), repr, mv$(data), forcedAlignment, mv$(markings), mv$(strMarkings)};
+    rv.maxFieldAlignment = maxFieldAlignment;
     return rv;
 }
 
@@ -1279,9 +1279,9 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     };
     rv.lifetime = deserialiseLifetimeref();
     const auto traitFlags = in.readU8();
-    rv.isMarker = traitFlags & 1;
+    rv.mIsMarker = traitFlags & 1;
     rv.isFundamental = traitFlags & 2;
-    rv.isCoinductive = (traitFlags & 4) || rv.isMarker;
+    rv.isCoinductive = (traitFlags & 4) || rv.mIsMarker;
     rv.isConst = traitFlags & 8;
     rv.types = deserialiseIstrumap<::HIR::AssociatedType>();
     rv.values = deserialiseIstrumap<::HIR::TraitValueItem>();
@@ -1574,7 +1574,7 @@ void HirDeserialiser::deserialiseCrate(::HIR::Crate& rv) {
     gVisPrivate = ::HIR::Publicity::newPriv(::HIR::SimplePath(this->crateName));
     rv.crateName = this->crateName;
     rv.edition = static_cast<AST::Edition>(in.readTag());
-    rv.rootModule = deserialiseModule();
+    rv.mRootModule = deserialiseModule();
 
     rv.typeImpls = D<::HIR::Crate::ImplGroup<std::unique_ptr<::HIR::TypeImpl>>>::des(*this);
     rv.traitImpls = deserialisePathmap<::HIR::Crate::ImplGroup<std::unique_ptr<::HIR::TraitImpl>>>();
@@ -1590,10 +1590,10 @@ void HirDeserialiser::deserialiseCrate(::HIR::Crate& rv) {
         for (size_t i = 0; i < n; i++) {
             auto extCrateName = in.readIstring();
             auto extCrateFile = in.readString();
-            auto ext_crate = ::HIR::ExternCrate{};
-            ext_crate.basename = extCrateFile;
-            ext_crate.mPath = extCrateFile;
-            rv.extCrates.insert(::std::make_pair(mv$(extCrateName), mv$(ext_crate)));
+            auto extCrate = ::HIR::ExternCrate{};
+            extCrate.basename = extCrateFile;
+            extCrate.mPath = extCrateFile;
+            rv.extCrates.insert(::std::make_pair(mv$(extCrateName), mv$(extCrate)));
         }
     }
 
@@ -1626,9 +1626,9 @@ RcString HIRDeserialiseJustName(const ::std::string& filename) {
         ::HIR::serialise::Reader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
 
         // NOTE: This is the first item loaded by deserialise_crate
-        auto crate_name = in.readIstring();
-        assert(crate_name != "" && "Empty crate name loaded from metadata");
-        return crate_name;
+        auto crateName = in.readIstring();
+        assert(crateName != "" && "Empty crate name loaded from metadata");
+        return crateName;
     } catch (int) {
         ::std::abort();
     } catch (const ::std::runtime_error& e) {
@@ -1691,8 +1691,8 @@ namespace {
             os << indent() << "}\n";
         }
 
-        virtual void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+        virtual void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) override {
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
@@ -1701,13 +1701,13 @@ namespace {
             for (auto& ent : impl.types) {
                 os << indent() << "type " << ent.first << " = " << ent.second.data << "\n";
             }
-            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
+            ::HIR::Visitor::visitTraitImpl(traitPath, impl);
             decIndent();
             os << indent() << "}\n";
         }
 
-        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+        void visitMarkerImpl(const ::HIR::SimplePath& traitPath, ::HIR::MarkerImpl& impl) override {
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
@@ -1806,8 +1806,8 @@ namespace {
                     incIndent();
                     for (const auto& fld : flds) {
                         os << indent() << fld.vis << " " << fld.name << ": " << fld.ty;
-                        if (fld.default_value) {
-                            os << " = " << *fld.default_value;
+                        if (fld.defaultValue) {
+                            os << " = " << *fld.defaultValue;
                         }
                         os << ",\n";
                     }
@@ -1832,9 +1832,9 @@ namespace {
             } else {
                 for (const auto& var : item.mData.as_Data()) {
                     os << indent() << var.name;
-                    if (var.type == type_interner().unit()) {
+                    if (var.type == typeInterner().unit()) {
                     } else {
-                        os << " " << var.type << (var.is_struct ? "/*struct*/" : "");
+                        os << " " << var.type << (var.isStruct ? "/*struct*/" : "");
                     }
                     os << ",\n";
                 }
@@ -2487,9 +2487,9 @@ class HirSerialiser {
     ::HIR::TypeInterner& typeInterner;
 
 public:
-    HirSerialiser(::HIR::serialise::Writer& out, ::HIR::TypeInterner& type_interner)
+    HirSerialiser(::HIR::serialise::Writer& out, ::HIR::TypeInterner& typeInterner)
         : out(out)
-        , typeInterner(type_interner)
+        , typeInterner(typeInterner)
     {
     }
 
@@ -2760,8 +2760,8 @@ public:
             }
             TU_ARMA(Function, e) {
                 serialiseGenerics(e.hrls);
-                out.writeBool(e.is_unsafe);
-                out.writeBool(e.is_variadic);
+                out.writeBool(e.isUnsafe);
+                out.writeBool(e.isVariadic);
                 out.writeString(e.mAbi);
                 serialiseType(e.mRettype);
                 serialiseVec(e.argTypes);
@@ -2833,7 +2833,7 @@ public:
                 serialiseType(e.type);
                 out.writeString(e.item);
                 serialisePathparams(e.params);
-                serialisePathparams(e.impl_params);
+                serialisePathparams(e.implParams);
             }
             TU_ARMA(UfcsKnown, e) {
                 if (e.hrtbs) {
@@ -2933,7 +2933,7 @@ public:
     void serialiseCrate(const ::HIR::Crate& crate) {
         out.writeString(crate.crateName);
         out.writeTag(static_cast<int>(crate.edition));
-        serialiseModule(crate.rootModule);
+        serialiseModule(crate.mRootModule);
 
         serialise(crate.typeImpls);
         serialisePathmap(crate.traitImpls);
@@ -2944,7 +2944,7 @@ public:
         {
             decltype(crate.mLangItems) langItemsFiltered;
             for (const auto& ent : crate.mLangItems) {
-                if (ent.second.crate_name() == "" || ent.second.crate_name() == crate.crateName) {
+                if (ent.second.crateName() == "" || ent.second.crateName() == crate.crateName) {
                     langItemsFiltered.insert(ent);
                 }
             }
@@ -3086,8 +3086,8 @@ public:
         auto _ = out.openObject(typeid(Ident::Hygiene).name());
         out.writeBool(h.hasModPath());
         if (h.hasModPath()) {
-            out.writeString(h.mod_path().crate);
-            serialiseVec(h.mod_path().ents);
+            out.writeString(h.modPath().crate);
+            serialiseVec(h.modPath().ents);
         }
     }
 
@@ -3621,9 +3621,9 @@ public:
 
     void serialise(const ::HIR::Enum::DataVariant& v) {
         out.writeString(v.name);
-        out.writeBool(v.is_struct);
+        out.writeBool(v.isStruct);
         serialise(v.type);
-        out.writeU64(v.discriminant_value.truncateU64());
+        out.writeU64(v.discriminantValue.truncateU64());
     }
 
     void serialise(const ::HIR::TraitMarkings& m) {
@@ -3632,7 +3632,7 @@ public:
     if (fld)        \
         bitflag1 |= 1 << (i);
         BIT(0, m.hasADeref)
-        BIT(1, m.is_copy)
+        BIT(1, m.isCopy)
         BIT(2, m.hasDropImpl)
 #undef BIT
         out.writeU8(bitflag1);
@@ -3652,7 +3652,7 @@ public:
 #undef BIT
         out.writeU8(bitflag1);
 
-        out.writeTag(static_cast<unsigned int>(m.dst_type));
+        out.writeTag(static_cast<unsigned int>(m.dstType));
         out.writeTag(static_cast<unsigned int>(m.coerceUnsized));
         out.writeCount(m.coerceUnsizedIndex);
         out.writeCount(m.coerceParam);
@@ -3684,9 +3684,9 @@ public:
         serialise(fld.name);
         serialise(fld.vis);
         serialise(fld.ty);
-        out.writeBool(fld.default_value != nullptr);
-        if (fld.default_value) {
-            serialise(*fld.default_value);
+        out.writeBool(fld.defaultValue != nullptr);
+        if (fld.defaultValue) {
+            serialise(*fld.defaultValue);
         }
     }
 
@@ -3715,7 +3715,7 @@ public:
         // Kept as one byte for compatibility with metadata written before
         // the fundamental bit was represented in HIR.
         out.writeU8(
-            (item.isMarker ? 1u : 0u)
+            (item.mIsMarker ? 1u : 0u)
             | (item.isFundamental ? 2u : 0u)
             | (item.isCoinductive ? 4u : 0u)
             | (item.isConst ? 8u : 0u)
@@ -3736,7 +3736,7 @@ public:
 
     void serialise(const ::HIR::AssociatedType& at) {
         serialiseGenerics(at.generics);
-        out.writeBool(at.is_sized);
+        out.writeBool(at.isSized);
         serialise(at.lifetimeBound);
         serialiseVec(at.traitBounds);
         serialiseType(at.defaultValue);

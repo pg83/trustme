@@ -335,7 +335,7 @@ public:
     }
 
     virtual void visit(AST::ExprNodeLoop& n) override {
-        bool expr_root = exprRoot;
+        bool exprRoot = exprRoot;
         exprRoot = false;
 
         if (n.label.name != "") {
@@ -344,7 +344,7 @@ public:
 
         os << "loop";
 
-        if (expr_root) {
+        if (exprRoot) {
             os << "\n";
             os << indent();
         } else {
@@ -355,7 +355,7 @@ public:
     }
 
     virtual void visit(AST::ExprNodeFor& n) override {
-        bool expr_root = exprRoot;
+        bool exprRoot = exprRoot;
         exprRoot = false;
 
         if (n.label.name != "") {
@@ -366,7 +366,7 @@ public:
         os << " in ";
         AST::NodeVisitor::visit(n.mValue);
 
-        if (expr_root) {
+        if (exprRoot) {
             os << "\n";
             os << indent();
         } else {
@@ -393,7 +393,7 @@ public:
     }
 
     void visit(AST::ExprNodeWhile& n) override {
-        bool expr_root = exprRoot;
+        bool exprRoot = exprRoot;
         exprRoot = false;
 
         if (n.label.name != "") {
@@ -402,7 +402,7 @@ public:
 
         os << "while ";
         visitIfletConditions(n.conditions);
-        if (expr_root) {
+        if (exprRoot) {
             os << "\n";
             os << indent();
         } else {
@@ -413,12 +413,12 @@ public:
     }
 
     virtual void visit(AST::ExprNodeMatch& n) override {
-        bool expr_root = exprRoot;
+        bool exprRoot = exprRoot;
         exprRoot = false;
         os << "match ";
         AST::NodeVisitor::visit(n.val);
 
-        if (expr_root) {
+        if (exprRoot) {
             os << "\n";
             os << indent() << "{\n";
         } else {
@@ -448,7 +448,7 @@ public:
             os << ",\n";
         }
 
-        if (expr_root) {
+        if (exprRoot) {
             os << indent() << "}";
         } else {
             os << indent() << "}";
@@ -457,11 +457,11 @@ public:
     }
 
     virtual void visit(AST::ExprNodeIf& n) override {
-        bool expr_root = exprRoot;
+        bool exprRoot = exprRoot;
         exprRoot = false;
         for (auto& arm : n.arms) {
             if (&arm != n.arms.data()) {
-                if (expr_root) {
+                if (exprRoot) {
                     os << indent();
                 }
                 os << "else ";
@@ -478,12 +478,12 @@ public:
             if (!isBlock) {
                 os << " }";
             }
-            if (expr_root) {
+            if (exprRoot) {
                 os << "\n";
             }
         }
         if (n.elseNode) {
-            if (expr_root) {
+            if (exprRoot) {
                 os << indent();
             }
             os << "else";
@@ -1405,7 +1405,7 @@ void RustPrinter::handleFunction(const AST::Visibility& vis, const RcString& nam
     if (f.is_const()) {
         os << "const ";
     }
-    if (f.is_unsafe()) {
+    if (f.isUnsafe()) {
         os << "unsafe ";
     }
     if (f.isAsync()) {
@@ -1461,7 +1461,7 @@ void RustPrinter::decIndent() {
 void DumpRust(const char* filename, const AST::Crate& crate) {
     ::std::ofstream os(filename);
     RustPrinter printer(os);
-    printer.handleModule(crate.root_module());
+    printer.handleModule(crate.rootModule());
 }
 
 void DumpASTNode(::std::ostream& os, const AST::ExprNode& node) {

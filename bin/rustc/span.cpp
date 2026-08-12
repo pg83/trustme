@@ -14,8 +14,8 @@ Span::Span(Span parent, const Position& pos)
 {
 }
 
-Span::Span(Span parent, RcString source_crate, RcString macroName)
-    : ptr(SpanInnerMacro::alloc(parent, source_crate, macroName))
+Span::Span(Span parent, RcString sourceCrate, RcString macroName)
+    : ptr(SpanInnerMacro::alloc(parent, sourceCrate, macroName))
 {
 }
 
@@ -39,8 +39,8 @@ Span::~Span() {
 
 const SpanInnerSource& Span::getTopFileSpan() const {
     auto* topSpan = this;
-    while (topSpan->get() && (*topSpan)->parent_span != Span()) {
-        topSpan = &(*topSpan)->parent_span;
+    while (topSpan->get() && (*topSpan)->parentSpan != Span()) {
+        topSpan = &(*topSpan)->parentSpan;
     }
     if (const auto* ts = cast<const SpanInnerSource>(topSpan->get())) {
         return *ts;
@@ -59,7 +59,7 @@ void Span::printSpanMessage(::std::function<void(::std::ostream&)> tag, ::std::f
     sink << ::std::endl;
 
     if (sp.get()) {
-        for (auto parent = sp->parent_span; parent != Span(); parent = parent->parent_span) {
+        for (auto parent = sp->parentSpan; parent != Span(); parent = parent->parentSpan) {
             sink << parent << ": note: From here" << ::std::endl;
         }
     }
@@ -128,7 +128,7 @@ void SpanInnerMacro::fmt(::std::ostream& os) const {
 /*static*/ SpanInner* SpanInnerMacro::alloc(Span parent, RcString crate, RcString macro) {
     auto rv = new SpanInnerMacro;
     rv->referenceCount = 1;
-    rv->parent_span = std::move(parent);
+    rv->parentSpan = std::move(parent);
     rv->crate = std::move(crate);
     rv->macro = std::move(macro);
     return rv;
@@ -164,7 +164,7 @@ Span& Span::operator=(Span&& x) {
 SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs) {
     auto* rv = new SpanInnerSource();
     rv->referenceCount = 1;
-    rv->parent_span = parent;
+    rv->parentSpan = parent;
     rv->filename = ::std::move(filename);
     rv->startLine = startLine;
     rv->startOfs = startOfs;

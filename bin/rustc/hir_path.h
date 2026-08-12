@@ -109,7 +109,7 @@ namespace HIR {
         SimplePath clone() const;
         SimplePath parent() const;
 
-        const RcString& crate_name() const;
+        const RcString& crateName() const;
 
         ::std::span<const RcString> components() const {
             return members.empty() ? std::span<const RcString>() : std::span<const RcString>(members.begin() + 1, members.end());
@@ -261,7 +261,7 @@ namespace HIR {
 
         TraitPath();
         TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path);
-        TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assocListT type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr = nullptr, BoundConstness constness = BoundConstness::Never);
+        TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const ::HIR::Trait* traitPtr = nullptr, BoundConstness constness = BoundConstness::Never);
         ~TraitPath();
         TraitPath(TraitPath&&);
         TraitPath& operator=(TraitPath&&);
@@ -301,7 +301,7 @@ namespace HIR {
                  TypeRef type;
                  RcString item;
                  PathParams params;
-                 PathParams impl_params;
+                 PathParams implParams;
              }),
             (UfcsKnown,
              struct {
@@ -326,9 +326,9 @@ namespace HIR {
         Path(GenericPath _);
         Path(SimplePath _);
 
-        Path(TypeRef ty, RcString item, PathParams item_params = PathParams());
-        Path(TypeRef ty, GenericPath trait, RcString item, PathParams item_params = PathParams());
-        Path(TypeRef ty, GenericParams hrtbs, GenericPath trait, RcString item, PathParams item_params = PathParams());
+        Path(TypeRef ty, RcString item, PathParams itemParams = PathParams());
+        Path(TypeRef ty, GenericPath trait, RcString item, PathParams itemParams = PathParams());
+        Path(TypeRef ty, GenericParams hrtbs, GenericPath trait, RcString item, PathParams itemParams = PathParams());
 
         Path clone() const;
         Compare compareWithPlaceholders(const Span& sp, const Path& x, tCbResolveType resolvePlaceholder) const;

@@ -13,8 +13,8 @@ namespace typeck {
 
         const ::HIR::GenericPath* currentTrait;
         const ::HIR::TraitImpl* currentTraitImpl;
-        const ::HIR::GenericParams* implGenerics;
-        const ::HIR::GenericParams* itemGenerics;
+        const ::HIR::GenericParams* mImplGenerics;
+        const ::HIR::GenericParams* mItemGenerics;
 
         ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> traits;
         ::std::vector<HIR::SimplePath> modPaths;

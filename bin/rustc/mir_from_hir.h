@@ -71,12 +71,12 @@ struct SplitArm {
     bool alwaysEarlyTerminated = false; // Populated on completion
     //BasicBlockId  source_block;
     ::std::map<unsigned int, VarState> states;
-    ::std::map<unsigned int, VarState> arg_states;
+    ::std::map<unsigned int, VarState> argStates;
 };
 
 struct SplitEnd {
     ::std::map<unsigned int, VarState> states;
-    ::std::map<unsigned int, VarState> arg_states;
+    ::std::map<unsigned int, VarState> argStates;
 };
 
 struct ScopeDropSlot {
@@ -182,7 +182,7 @@ class MirBuilder {
     const ::HIR::SimplePath* mLangBox;
 
     unsigned int currentBlock;
-    bool blockActive;
+    bool mBlockActive;
     bool buildingCleanup = false;
     const MIR::LValue* unwindConsumedValue = nullptr;
 
@@ -220,7 +220,7 @@ class MirBuilder {
 
     ::std::vector<ScopeDef> scopes;
     ::std::vector<unsigned int> scopeStack;
-    ScopeHandle fcnScope;
+    ScopeHandle mFcnScope;
 
     typedef std::pair<HIR::PatternBinding::Type, MIR::LValue> varAliasT;
     ::std::vector<varAliasT> variableAliases;
@@ -231,7 +231,7 @@ class MirBuilder {
     ::MIR::LValue ifCondLval;
 
 public:
-    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ret_ty, const ::HIR::Function::argsT& args, ::MIR::Function& output);
+    MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* retTy, const ::HIR::Function::argsT& args, ::MIR::Function& output);
 
     void finalCleanup();
 
@@ -315,8 +315,8 @@ public:
     void pushStmt(const Span& sp, ::MIR::Statement stmt);
 
     // - Block management
-    bool block_active() const {
-        return blockActive;
+    bool blockActive() const {
+        return mBlockActive;
     }
 
     // Mark a value as initialised (used for Call, because it has to be done after the panic block is populated)
@@ -403,8 +403,8 @@ public:
     /// Allows mutation through a freeze scope (see `new_scope_freeze`)
     void unfreezeScope(const Span& sp, const ScopeHandle&);
 
-    const ScopeHandle& fcn_scope() const {
-        return fcnScope;
+    const ScopeHandle& fcnScope() const {
+        return mFcnScope;
     }
 
     /// Schedule a local's value drop in the current variable scope.
@@ -510,21 +510,21 @@ public:
     virtual void scheduleRegisteredPatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
 
     virtual void destructureFromList(const Span& sp, const ::HIR::TypeData* ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool updateStates = true) = 0;
-    virtual MIR::LValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outerLval, const PatternBinding& b) = 0;
+    virtual MIR::LValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outerTy, const ::MIR::LValue& outerLval, const PatternBinding& b) = 0;
     virtual const HIR::TypeData* getBindingType(const Span& sp, unsigned index) const = 0;
 
     virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
 };
 
 extern void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
-extern void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue val, const ::HIR::ExprNode* else_node);
+extern void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue val, const ::HIR::ExprNode* elseNode);
 
 extern void MIRLowerHIRGetTypeValueForPath(
     const Span& sp,
     MirBuilder& builder,
-    const ::HIR::TypeData* top_ty,
-    const ::MIR::LValue& top_val,
-    const fieldPathT& field_path, // unsigned int field_path_ofs,
+    const ::HIR::TypeData* topTy,
+    const ::MIR::LValue& topVal,
+    const fieldPathT& fieldPath, // unsigned int field_path_ofs,
     /*Out ->*/ ::HIR::TypeRef& outTy,
     ::MIR::LValue& outVal
 );

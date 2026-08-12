@@ -274,7 +274,7 @@ namespace {
                 os << "fn " << TransMangle(te.path);
             }
             TU_ARMA(Function, e) {
-                if (e.is_unsafe) {
+                if (e.isUnsafe) {
                     os << "unsafe ";
                 }
                 if (e.mAbi != "") {
@@ -434,8 +434,8 @@ namespace {
             , outfilePath(outfile)
             , of(outfilePath + ".mir")
         {
-            for (const auto& crate_name : crate.extCratesOrdered) {
-                of << "crate \"" << FmtEscaped(crate.extCrates.at(crate_name).mPath) << ".mir\";\n";
+            for (const auto& crateName : crate.extCratesOrdered) {
+                of << "crate \"" << FmtEscaped(crate.extCrates.at(crateName).mPath) << ".mir\";\n";
             }
         }
 
@@ -540,7 +540,7 @@ namespace {
                 const auto& te = ty->as_Path();
                 switch (te.binding.tag()) {
                     TU_ARM(te.binding, Struct, tpb) {
-                        switch (tpb->structMarkings.dst_type) {
+                        switch (tpb->structMarkings.dstType) {
                             case ::HIR::StructMarkings::DstType::None:
                                 return MetadataType::None;
                             case ::HIR::StructMarkings::DstType::Possible: {
@@ -890,7 +890,7 @@ namespace {
             // If the function is a C external, emit as such
             if (item.linkage.name != "") {
                 ::HIR::TypeRef retTypeTmp;
-                const auto& ret_type = monomorphiseFcnReturn(retTypeTmp, item, params);
+                const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
 
                 of << "/* " << p << " */\n";
                 of << "fn " << fmt(p) << "(";
@@ -900,7 +900,7 @@ namespace {
                     }
                     of << fmt(params.monomorph(mResolve, item.mArgs[i].second));
                 }
-                of << "): " << fmt(ret_type) << " = \"" << item.linkage.name << "\":\"" << item.mAbi << "\";\n";
+                of << "): " << fmt(retType) << " = \"" << item.linkage.name << "\":\"" << item.mAbi << "\";\n";
             }
 
             mirRes = nullptr;
@@ -909,18 +909,18 @@ namespace {
         void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef, const ::MIR::FunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
-            ::MIR::TypeResolve::argsT arg_types;
+            ::MIR::TypeResolve::argsT argTypes;
             for (const auto& ent : item.mArgs) {
-                arg_types.push_back(::std::make_pair(::HIR::Pattern{}, params.monomorph(mResolve, ent.second)));
+                argTypes.push_back(::std::make_pair(::HIR::Pattern{}, params.monomorph(mResolve, ent.second)));
             }
 
             ::HIR::TypeRef retTypeTmp;
-            const auto& ret_type = monomorphiseFcnReturn(retTypeTmp, item, params);
+            const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
 
-            ::MIR::TypeResolve mir_res {
-                sp, mResolve, FMT_CB(ss, ss << p;), ret_type, arg_types, *code
+            ::MIR::TypeResolve localMirRes {
+                sp, mResolve, FMT_CB(ss, ss << p;), retType, argTypes, *code
             };
-            mirRes = &mir_res;
+            mirRes = &localMirRes;
 
             // - Signature
             of << "/* " << p << " */\n";
@@ -931,7 +931,7 @@ namespace {
                 }
                 of << fmt(params.monomorph(mResolve, item.mArgs[i].second));
             }
-            of << "): " << fmt(ret_type);
+            of << "): " << fmt(retType);
             if (item.linkage.name != "") {
                 of << " = \"" << item.linkage.name << "\":\"" << item.mAbi << "\"";
             }
@@ -952,7 +952,7 @@ namespace {
 
                 for (const auto& stmt : code->blocks[i].statements) {
                     of << "\t\t";
-                    mir_res.setCurStmt(i, (&stmt - &code->blocks[i].statements.front()));
+                    localMirRes.setCurStmt(i, (&stmt - &code->blocks[i].statements.front()));
                     DEBUG(stmt);
                     switch (stmt.tag()) {
                         case ::MIR::Statement::TAGDEAD:
@@ -1192,7 +1192,7 @@ namespace {
                     of << ";\n";
                 }
 
-                mir_res.setCurStmtTerm(i);
+                localMirRes.setCurStmtTerm(i);
                 const auto& term = code->blocks[i].terminator;
                 DEBUG("- " << term);
                 of << "\t\t";
@@ -1293,7 +1293,7 @@ namespace {
                         TU_ARM(term, Call, e) {
                             if (const auto* fP = e.fcn.opt_Intrinsic()) {
                                 if (fP->name == "offset_of") {
-                                    size_t val = mir_res.intrinsicOffsetOf(fP->params.types.at(0), e.args);
+                                    size_t val = localMirRes.intrinsicOffsetOf(fP->params.types.at(0), e.args);
                                     of << fmt(e.retVal) << " = " << val << " usize;\n";
                                     of << "\t\tGOTO " << e.retBlock;
                                     break;

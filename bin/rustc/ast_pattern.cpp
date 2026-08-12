@@ -280,9 +280,9 @@ Pattern::Pattern(TagMacro, Span sp, unique_ptr<::AST::MacroInvocation> inv)
     : mSpan(mv$(sp))
     , mData(Data::make_Macro({mv$(inv)})) {
 }
-Pattern::Pattern(TagBind, Span sp, Ident name, PatternBinding::Type ty, bool is_mut)
+Pattern::Pattern(TagBind, Span sp, Ident name, PatternBinding::Type ty, bool isMut)
     : mSpan(mv$(sp)) {
-    mBindings.push_back(PatternBinding(mv$(name), ty, is_mut));
+    mBindings.push_back(PatternBinding(mv$(name), ty, isMut));
 }
 Pattern::Pattern(TagBox, Span sp, Pattern sub)
     : mSpan(mv$(sp))
@@ -292,9 +292,9 @@ Pattern::Pattern(TagValue, Span sp, Value val, Value end)
     : mSpan(mv$(sp))
     , mData(Data::make_Value({::std::move(val), ::std::move(end)})) {
 }
-Pattern::Pattern(TagReference, Span sp, bool is_mutable, Pattern subPattern)
+Pattern::Pattern(TagReference, Span sp, bool isMutable, Pattern subPattern)
     : mSpan(mv$(sp))
-    , mData(Data::make_Ref(/*Data::Data_Ref */ {is_mutable, unique_ptr<Pattern>(new Pattern(::std::move(subPattern)))})) {
+    , mData(Data::make_Ref(/*Data::Data_Ref */ {isMutable, unique_ptr<Pattern>(new Pattern(::std::move(subPattern)))})) {
 }
 Pattern::Pattern(TagTuple, Span sp, ::std::vector<Pattern> pats)
     : mSpan(mv$(sp))

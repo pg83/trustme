@@ -11,7 +11,7 @@ namespace HIR {
         const ::HIR::SimplePath* trait = nullptr;
         const ::HIR::PathParams* traitParams = nullptr;
         const char* name = nullptr;
-        const char* crate_name = nullptr;
+        const char* crateName = nullptr;
         const ::HIR::Path* wrapped = nullptr;
 
         ItemPath(const char* crate);
@@ -30,11 +30,11 @@ namespace HIR {
 
         ItemPath(const ::HIR::SimplePath& path);
 
-        const ::HIR::SimplePath* trait_path() const {
+        const ::HIR::SimplePath* traitPath() const {
             return trait;
         }
 
-        const ::HIR::PathParams* trait_args() const {
+        const ::HIR::PathParams* traitArgs() const {
             return traitParams;
         }
 

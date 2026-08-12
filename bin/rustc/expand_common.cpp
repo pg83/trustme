@@ -128,7 +128,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ::AST::Attribute& a
     if (a.name().elems.empty()) {
         return;
     }
-    if (a.is_inert()) {
+    if (a.isInert()) {
         return;
     }
     DEBUG(a);
@@ -200,7 +200,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ::AST::Attribute& a
                             // NOTE: The rust book isn't very clear on the details of how attribute macros work (especially with other/previous attributes)
 
                             i = AST::Item::make_None({});
-                            lex->parse_state().module = &mod;
+                            lex->parseState().module = &mod;
                             ParseModRootItemsInto(mod, modIdx, *lex);
                         } else {
                             ERROR(sp, E0000, "proc_macro expansion failed");
@@ -215,7 +215,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ::AST::Attribute& a
                         if (lex) {
                             i = AST::Item::make_None({});
                             assert(gCurrentMod);
-                            lex->parse_state().module = gCurrentMod;
+                            lex->parseState().module = gCurrentMod;
                             while (lex->lookahead(0) != TOK_EOF) {
                                 ParseImplItem(*lex, impl);
                             }
@@ -228,7 +228,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ::AST::Attribute& a
 
             // Only run proc macros on first pass (before inner)
             if (stage == AttrStage::Pre) {
-                d.macPath.push_back(procMac->path.crate_name());
+                d.macPath.push_back(procMac->path.crateName());
                 d.macPath.insert(d.macPath.end(), procMac->path.components().begin(), procMac->path.components().end());
                 f(sp, d, a);
                 a.markInert();
@@ -252,7 +252,7 @@ void ExpandAttrs(const ExpandState& es, const ::AST::AttributeList& attrs, AttrS
     // Reduce load on derive etc by visiting `cfg` first.
     for (auto& a : attrs.mItems) {
         static const RcString rcstringCfg = RcString::newInterned("cfg");
-        if (!a.is_inert() && a.name() == rcstringCfg) {
+        if (!a.isInert() && a.name() == rcstringCfg) {
             ExpandAttr(es, a.span(), a, stage, f);
         }
     }
@@ -408,7 +408,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<
     return MacroRef();
 }
 
-::std::unique_ptr<TokenStream> ExpandMacroInner(const ::AST::Crate& crate, LList<const AST::Module*> modstack, ::AST::Module& mod, Span miSpan, const AST::Path& path, const RcString& inputIdent, TokenTree& input_tt) {
+::std::unique_ptr<TokenStream> ExpandMacroInner(const ::AST::Crate& crate, LList<const AST::Module*> modstack, ::AST::Module& mod, Span miSpan, const AST::Path& path, const RcString& inputIdent, TokenTree& inputTt) {
     ASSERT_BUG(miSpan, path.isValid(), "Macro invocation with invalid path");
 
     TRACE_FUNCTION_F("Searching for macro " << path);
@@ -427,13 +427,13 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<
         }
         TU_ARMA(ExternalProcMacro, procMac) {
             ::std::vector<RcString> macPath;
-            macPath.push_back(procMac->path.crate_name());
+            macPath.push_back(procMac->path.crateName());
             macPath.insert(macPath.end(), procMac->path.components().begin(), procMac->path.components().end());
-            rv = ProcMacroInvoke(miSpan, crate, macPath, input_tt);
+            rv = ProcMacroInvoke(miSpan, crate, macPath, inputTt);
         }
         TU_ARMA(BuiltinProcMacro, procMac) {
             ASSERT_BUG(miSpan, procMac, "null BuiltinProcMacro? " << path);
-            rv = inputIdent == "" ? procMac->expand(miSpan, crate, input_tt, mod) : procMac->expandIdent(miSpan, crate, inputIdent, input_tt, mod);
+            rv = inputIdent == "" ? procMac->expand(miSpan, crate, inputTt, mod) : procMac->expandIdent(miSpan, crate, inputIdent, inputTt, mod);
         }
         TU_ARMA(MacroRules, mrPtr) {
             if (inputIdent != "") {
@@ -441,21 +441,21 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<
             }
 
             DEBUG("Invoking macro_rules " << path << " " << mrPtr);
-            rv = MacroInvokeRules(path.is_trivial() ? path.asTrivial() : RcString::newInterned(FMT(path).c_str()), *mrPtr, miSpan, mv$(input_tt), crate, mod);
-            input_tt = TokenTree();
+            rv = MacroInvokeRules(path.is_trivial() ? path.asTrivial() : RcString::newInterned(FMT(path).c_str()), *mrPtr, miSpan, mv$(inputTt), crate, mod);
+            inputTt = TokenTree();
         }
     }
     ASSERT_BUG(miSpan, rv, "Macro invocation returned null tokentree");
     return rv;
 }
 
-::std::unique_ptr<TokenStream> ExpandMacro(const ExpandState& es, ::AST::Module& mod, Span miSpan, const AST::Path& path, const RcString& inputIdent, TokenTree& input_tt) {
-    auto rv = ExpandMacroInner(es.crate, es.modstack, mod, miSpan, path, inputIdent, input_tt);
+::std::unique_ptr<TokenStream> ExpandMacro(const ExpandState& es, ::AST::Module& mod, Span miSpan, const AST::Path& path, const RcString& inputIdent, TokenTree& inputTt) {
+    auto rv = ExpandMacroInner(es.crate, es.modstack, mod, miSpan, path, inputIdent, inputTt);
     if (rv) {
         es.change = true;
         DEBUG("Change flagged");
-        rv->parse_state().crate = &es.crate;
-        rv->parse_state().module = &mod;
+        rv->parseState().crate = &es.crate;
+        rv->parseState().module = &mod;
     } else {
         // HACK: Allow the expansion to happen, even in final (e.g. if from derive)
         if (es.mode == ExpandMode::Final) {
@@ -468,7 +468,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const ::AST::Crate& crate, LList<
 }
 
 ::std::unique_ptr<TokenStream> ExpandMacro(const ExpandState& es, ::AST::Module& mod, ::AST::MacroInvocation& mi) {
-    return ExpandMacro(es, mod, mi.span(), mi.path(), mi.inputIdent(), mi.input_tt());
+    return ExpandMacro(es, mod, mi.span(), mi.path(), mi.inputIdent(), mi.inputTt());
 }
 
 void ExpandPattern(const ExpandState& es, ::AST::Module& mod, ::AST::Pattern& pat, bool isRefutable) {
@@ -717,10 +717,10 @@ struct CExpandExpr: public ::AST::NodeVisitor {
     ::AST::ExprNodeP replacement;
 
     // Stack of `try { ... }` blocks (the string is the loop label for the desugaring)
-    ::std::vector<RcString> tryStack;
+    ::std::vector<RcString> mTryStack;
     unsigned tryIndex = 0;
 
-    AST::ExprNodeBlock* current_block = nullptr;
+    AST::ExprNodeBlock* currentBlock = nullptr;
     bool inAssignLhs = false;
 
     CExpandExpr(const ExpandState& es)
@@ -844,7 +844,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                 // Reparse as expression / item
                 bool addSilenceIfEnd = false;
                 ::std::shared_ptr<AST::Module> tmpLocalMod;
-                auto& localModPtr = (this->current_block ? this->current_block->localMod : tmpLocalMod);
+                auto& localModPtr = (this->currentBlock ? this->currentBlock->localMod : tmpLocalMod);
                 DEBUG("-- Parsing as expression line");
                 auto newexpr = ParseExprBlockLineWithItems(*ttl, localModPtr, addSilenceIfEnd);
 
@@ -914,8 +914,8 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             modItemCount = node.localMod->mItems.size();
         }
 
-        auto saved = this->current_block;
-        this->current_block = &node;
+        auto saved = this->currentBlock;
+        this->currentBlock = &node;
 
         for (auto it = node.nodes.begin(); it != node.nodes.end();) {
             assert(it->node.get());
@@ -934,9 +934,9 @@ struct CExpandExpr: public ::AST::NodeVisitor {
 
                 assert(it->node.get() == nodeMac);
 
-                ::std::vector<::AST::ExprNodeBlock::Line> new_nodes;
-                this->visitMacro(*nodeMac, &new_nodes);
-                for (const auto& n : new_nodes) {
+                ::std::vector<::AST::ExprNodeBlock::Line> newNodes;
+                this->visitMacro(*nodeMac, &newNodes);
+                for (const auto& n : newNodes) {
                     DEBUG("++ " << *n.node << (n.hasSemicolon ? " ;" : ""));
                 }
 
@@ -945,11 +945,11 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                     ++it;
                 } else {
                     // If this has a semicolon, then force the new final node to have a semicolon
-                    if (it->hasSemicolon && !new_nodes.empty()) {
-                        new_nodes.back().hasSemicolon = true;
+                    if (it->hasSemicolon && !newNodes.empty()) {
+                        newNodes.back().hasSemicolon = true;
                     }
                     it = node.nodes.erase(it);
-                    it = node.nodes.insert(it, ::std::make_move_iterator(new_nodes.begin()), ::std::make_move_iterator(new_nodes.end()));
+                    it = node.nodes.insert(it, ::std::make_move_iterator(newNodes.begin()), ::std::make_move_iterator(newNodes.end()));
                     // NOTE: Doesn't advance the iterator above, we want to re-visit the new node
                 }
             } else {
@@ -962,7 +962,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             }
         }
 
-        this->current_block = saved;
+        this->currentBlock = saved;
 
         // HACK! Run Expand_Mod twice on local modules.
         if (node.localMod) {
@@ -988,10 +988,10 @@ struct CExpandExpr: public ::AST::NodeVisitor {
         // }
         // ```
         // NOTE: MIR lowering and HIR typecheck need to know to skip these (OR resolve should handle naming all loop blocks)
-        tryStack.push_back(RcString::newInterned(FMT("#try" << tryIndex++)));
+        mTryStack.push_back(RcString::newInterned(FMT("#try" << tryIndex++)));
         this->visitNodelete(node, node.inner);
-        auto loopName = mv$(tryStack.back());
-        tryStack.pop_back();
+        auto loopName = mv$(mTryStack.back());
+        mTryStack.pop_back();
 
         auto coreCrate = crate.extCratenameCore;
         auto pathTry = getPath(coreCrate, "ops", "Try");
@@ -1043,8 +1043,8 @@ struct CExpandExpr: public ::AST::NodeVisitor {
             v = ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(pathFromResidualFromResidual), ::makeVec1(std::move(v))));
             v->setSpan(node.span());
             replacement = ::AST::ExprNodeP(new ::AST::ExprNodeFlow(
-                (tryStack.empty() ? ::AST::ExprNodeFlow::RETURN : ::AST::ExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
-                (tryStack.empty() ? RcString("") : tryStack.back()),
+                (mTryStack.empty() ? ::AST::ExprNodeFlow::RETURN : ::AST::ExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
+                (mTryStack.empty() ? RcString("") : mTryStack.back()),
                 std::move(v)
             ));
             replacement->setSpan(node.span());
@@ -1319,7 +1319,7 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                 auto rv = new AST::ExprNodeBlock();
                 rv->nodes.push_back({true, AST::ExprNodeP(new AST::ExprNodeLetBinding(std::move(pat), TypeRef(node.span()), std::move(node.mValue)))});
                 for (auto& slots : v.slots) {
-                    rv->nodes.push_back({true, AST::ExprNodeP(new AST::ExprNodeAssign(AST::ExprNodeAssign::NONE, std::move(slots.second), AST::ExprNodeP(new AST::ExprNodeNamedValue(AST::Path::new_local(std::move(slots.first))))))});
+                    rv->nodes.push_back({true, AST::ExprNodeP(new AST::ExprNodeAssign(AST::ExprNodeAssign::NONE, std::move(slots.second), AST::ExprNodeP(new AST::ExprNodeNamedValue(AST::Path::newLocal(std::move(slots.first))))))});
                 }
                 this->replacement = AST::ExprNodeP(rv);
             }
@@ -1489,14 +1489,14 @@ struct CExpandExpr: public ::AST::NodeVisitor {
     }
 
     void visit(::AST::ExprNodeClosure& node) override {
-        auto try_stack = ::std::move(tryStack);
+        auto tryStack = ::std::move(mTryStack);
         for (auto& arg : node.mArgs) {
             ExpandPattern(this->expandState, this->curMod(), arg.first, false);
             ExpandType(this->expandState, this->curMod(), arg.second);
         }
         ExpandType(this->expandState, this->curMod(), node.returnType);
         this->visitNodelete(node, node.mCode);
-        tryStack = std::move(try_stack);
+        mTryStack = std::move(tryStack);
     }
 
     void visit(::AST::ExprNodeStructLiteral& node) override {
@@ -1674,8 +1674,8 @@ struct CExpandExpr: public ::AST::NodeVisitor {
                         ::makeVec1(::AST::Pattern(::AST::Pattern::TagNamedTuple(), node.span(), path_ControlFlow_Break, ::makeVec1(::AST::Pattern(::AST::Pattern::TagBind(), node.span(), rcstringR)))),
                         {},
                         ::AST::ExprNodeP(new ::AST::ExprNodeFlow(
-                            (tryStack.empty() ? ::AST::ExprNodeFlow::RETURN : ::AST::ExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
-                            (tryStack.empty() ? RcString("") : tryStack.back()),
+                            (mTryStack.empty() ? ::AST::ExprNodeFlow::RETURN : ::AST::ExprNodeFlow::BREAK), // NOTE: uses `break 'tryblock` instead of return if in a try block.
+                            (mTryStack.empty() ? RcString("") : mTryStack.back()),
                             ::AST::ExprNodeP(new ::AST::ExprNodeCallPath(::AST::Path(pathFromResidualFromResidual), ::makeVec1(::AST::ExprNodeP(new ::AST::ExprNodeNamedValue(::AST::Path(rcstringR))))))
                         ))
                     )
@@ -1887,7 +1887,7 @@ void Expand_ExternBlock(const ExpandState& es, ::AST::Module& mod, ::AST::Extern
                 // Move out of the module to avoid invalidation if a new macro invocation is added
                 auto miOwned = mv$(e);
 
-                if (!miOwned.is_expanded()) {
+                if (!miOwned.isExpanded()) {
                     assert(miOwned.span());
                     TRACE_FUNCTION_F("Macro invoke " << miOwned.path());
 
@@ -2082,7 +2082,7 @@ void ExpandMod(const ExpandState& es, ::AST::AbsolutePath modpath, ::AST::Module
                 }
                 auto miOwned = mv$(e);
 
-                if (!miOwned.is_expanded()) {
+                if (!miOwned.isExpanded()) {
                     assert(miOwned.span());
                     TRACE_FUNCTION_F("Macro invoke " << miOwned.path());
 
@@ -2525,7 +2525,7 @@ void Expand(::AST::Crate& crate) {
         DEBUG("Macro: " << e.first);
     }
 
-    ExpandState es{crate, LList<const ::AST::Module*>(nullptr, &crate.rootModule), ExpandMode::FirstPass};
+    ExpandState es{crate, LList<const ::AST::Module*>(nullptr, &crate.mRootModule), ExpandMode::FirstPass};
 
     // 1. Crate attributes
     ExpandAttrsCfgAttr(crate.mAttrs);
@@ -2536,8 +2536,8 @@ void Expand(::AST::Crate& crate) {
     // TODO: Crate name and type
 
     std::vector<std::unique_ptr<AST::Named<AST::Item>>> newRootItems;
-    Expand_Mod_Early(crate, crate.rootModule, newRootItems);
-    crate.rootModule.mItems.insert(crate.rootModule.mItems.begin(), std::make_move_iterator(newRootItems.begin()), std::make_move_iterator(newRootItems.end()));
+    Expand_Mod_Early(crate, crate.mRootModule, newRootItems);
+    crate.mRootModule.mItems.insert(crate.mRootModule.mItems.begin(), std::make_move_iterator(newRootItems.begin()), std::make_move_iterator(newRootItems.end()));
 
     // Insert magic for libstd/libcore
     // NOTE: The actual crates are loaded in "LoadCrates" using magic in AST::Crate::load_externs
@@ -2577,9 +2577,9 @@ void Expand(::AST::Crate& crate) {
         attrs.push_back(AST::Attribute(Span(), mv$(name), {}));
         // NOTE: For `macro_use` we want to import this first, but for item lookup, we want it to be last.
         // - Solution, add to the end - but pre-visit the attributes
-        crate.rootModule.mItems.push_back(box$(AST::Named<AST::Item>(Span(), mv$(attrs), AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, AST::AbsolutePath()), stdCrateShortname, AST::Item::make_Crate({stdCrateName}))));
-        auto& i = *crate.rootModule.mItems.back();
-        ExpandAttrs(es, i.attrs, AttrStage::Post, ::AST::AbsolutePath(), crate.rootModule, 0, i.vis, i.data);
+        crate.mRootModule.mItems.push_back(box$(AST::Named<AST::Item>(Span(), mv$(attrs), AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, AST::AbsolutePath()), stdCrateShortname, AST::Item::make_Crate({stdCrateName}))));
+        auto& i = *crate.mRootModule.mItems.back();
+        ExpandAttrs(es, i.attrs, AttrStage::Post, ::AST::AbsolutePath(), crate.mRootModule, 0, i.vis, i.data);
     }
 
     // 2. Module attributes
@@ -2594,42 +2594,42 @@ void Expand(::AST::Crate& crate) {
     // 3. Module tree
     // Loop until no more expansions happen
     // - Combine this with allowing macros to fail to expand, to be caught with a final pass
-    ExpandMod(es, ::AST::AbsolutePath(), crate.rootModule);
+    ExpandMod(es, ::AST::AbsolutePath(), crate.mRootModule);
     DEBUG("(first) es.change = " << es.change << ", es.has_missing=" << es.hasMissing << " (" << &es << ")");
     if (es.hasMissing) {
         for (size_t nIters = 0; nIters < 5 && es.change && es.hasMissing; nIters++) {
             es.mode = ExpandMode::Iterate;
             es.change = false;
             es.hasMissing = false;
-            ExpandMod(es, ::AST::AbsolutePath(), crate.rootModule);
+            ExpandMod(es, ::AST::AbsolutePath(), crate.mRootModule);
             DEBUG("?(Iter) es.change = " << es.change << ", es.has_missing=" << es.hasMissing);
         }
         //ASSERT_BUG(Span(), !es.has_missing, "Expand too too many attempts");
         es.hasMissing = false;
     }
     es.mode = ExpandMode::Final;
-    ExpandMod(es, ::AST::AbsolutePath(), crate.rootModule);
+    ExpandMod(es, ::AST::AbsolutePath(), crate.mRootModule);
     ASSERT_BUG(Span(), !es.hasMissing, "Expand too too many attempts");
 
     //Expand_Attrs(es, crate.m_attrs, AttrStage::Post,  [&](const Span& sp, const auto& d, const auto& a){ d.handle(sp, a, crate); });
 
     // Post-process
-    Expand_Mod_IndexAnon(crate, crate.rootModule);
+    Expand_Mod_IndexAnon(crate, crate.mRootModule);
 
     // Extract exported macros
 
     {
-        auto& exported_macros = crate.exportedMacros;
+        auto& exportedMacros = crate.exportedMacros;
 
         ::std::vector<::AST::Module*> mods;
-        mods.push_back(&crate.rootModule);
+        mods.push_back(&crate.mRootModule);
         do {
             auto& mod = *mods.back();
             mods.pop_back();
 
             for (/*const*/ auto& mac : mod.macros()) {
                 if (mac.data->exported) {
-                    auto res = exported_macros.insert(::std::make_pair(mac.name, &*mac.data));
+                    auto res = exportedMacros.insert(::std::make_pair(mac.name, &*mac.data));
                     if (res.second) {
                         DEBUG("- Define " << mac.name << "!");
                     }
@@ -2647,16 +2647,16 @@ void Expand(::AST::Crate& crate) {
 
         // - Exported macros imported by the root (is this needed?)
         // - Re-exported macros (ignore proc macros for now?)
-        for (const auto& mac : crate.rootModule.macroImports) {
+        for (const auto& mac : crate.mRootModule.macroImports) {
             if (mac.isPub) {
                 if (!mac.ref.is_MacroRules()) {
                     continue;
                 }
                 auto v = ::std::make_pair(mac.name, mac.ref.as_MacroRules());
 
-                auto it = exported_macros.find(mac.name);
-                if (it == exported_macros.end()) {
-                    auto res = exported_macros.insert(mv$(v));
+                auto it = exportedMacros.find(mac.name);
+                if (it == exportedMacros.end()) {
+                    auto res = exportedMacros.insert(mv$(v));
                     DEBUG("- Import " << mac.name << "! (from \"" << res.first->second->sourceCrate << "\")");
                 } else if (v.second->rules.empty()) {
                     // Skip

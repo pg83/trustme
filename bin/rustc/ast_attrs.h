@@ -85,7 +85,7 @@ namespace AST {
         AttributeName mName;
         TokenTree mData;
         /// @brief Indicates that this attribute has been used by a derive, and shouldn't be otherwise resolved
-        mutable bool isInert;
+        mutable bool mIsInert;
         // TODO: Parse as a TT then expand?
     public:
         Attribute(Span sp, AttributeName name, TokenTree data);
@@ -99,11 +99,11 @@ namespace AST {
         void fmt(std::ostream& os) const;
 
         void markInert() const {
-            isInert = true;
+            mIsInert = true;
         }
 
-        bool is_inert() const {
-            return isInert;
+        bool isInert() const {
+            return mIsInert;
         }
 
         const Span& span() const {

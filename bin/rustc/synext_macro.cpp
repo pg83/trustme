@@ -49,7 +49,7 @@ public:
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
-        auto template_text = getString(sp, lex, crate, mod);
+        auto templateText = getString(sp, lex, crate, mod);
         ::std::vector<::AST::ExprNodeAsm::ValRef> outputs;
         ::std::vector<::AST::ExprNodeAsm::ValRef> inputs;
         ::std::vector<::std::string> clobbers;
@@ -166,7 +166,7 @@ public:
         }
 
         // Convert this into an AST node and insert as an intepolated expression
-        ::AST::ExprNodeP rv = ::AST::ExprNodeP(new ::AST::ExprNodeAsm{mv$(template_text), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
+        ::AST::ExprNodeP rv = ::AST::ExprNodeP(new ::AST::ExprNodeAsm{mv$(templateText), mv$(outputs), mv$(inputs), mv$(clobbers), mv$(flags)});
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())))));
     }
 };
@@ -529,7 +529,7 @@ public:
         ASSERT_BUG(sp, nodeAp, "");
         auto& nodeA = *nodeAp;
 
-        auto global_asm = AST::GlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
+        auto globalAsm = AST::GlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
         for (auto& param : nodeA.mParams) {
             if (!(param.is_Sym() || param.is_Const())) {
                 ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
@@ -537,7 +537,7 @@ public:
                 TODO(sp, "sym/const");
             }
         }
-        auto namedItem = AST::Named<AST::Item>(sp, {}, AST::Visibility::makeBarePrivate(), "", AST::Item(std::move(global_asm)));
+        auto namedItem = AST::Named<AST::Item>(sp, {}, AST::Visibility::makeBarePrivate(), "", AST::Item(std::move(globalAsm)));
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(Token::TagTakeIP(), InterpolatedFragment(std::move(namedItem))))));
     }
 };
@@ -567,7 +567,7 @@ class CExpanderAssert: public ExpandProcMacro {
         Token tok;
 
         auto lex = TTStream(sp, ParseState(), tt);
-        lex.parse_state().module = &mod;
+        lex.parseState().module = &mod;
 
         // assertion condition
         auto n = ParseExpr0(lex);
@@ -1376,7 +1376,7 @@ namespace {
 
         auto formatStringNode = ParseExprVal(lex);
         ASSERT_BUG(sp, formatStringNode, "No expression returned");
-        ExpandBareExpr(crate, lex.parse_state().getCurrentMod(), formatStringNode);
+        ExpandBareExpr(crate, lex.parseState().getCurrentMod(), formatStringNode);
 
         auto* formatStringNp = cast<AST::ExprNodeString>(&*formatStringNode);
         if (!formatStringNp) {
@@ -1704,7 +1704,7 @@ class CFormatArgsExpander: public ExpandProcMacro {
         Token tok;
 
         auto lex = TTStream(sp, ParseState(), tt);
-        lex.parse_state().module = &mod;
+        lex.parseState().module = &mod;
 
         return expandFormatArgs(sp, crate, lex, /*add_newline=*/false);
     }
@@ -1715,7 +1715,7 @@ class CConstFormatArgsExpander: public ExpandProcMacro {
         Token tok;
 
         auto lex = TTStream(sp, ParseState(), tt);
-        lex.parse_state().module = &mod;
+        lex.parseState().module = &mod;
 
         return expandFormatArgs(sp, crate, lex, /*add_newline=*/false);
     }
@@ -1726,7 +1726,7 @@ class CFormatArgsNlExpander: public ExpandProcMacro {
         Token tok;
 
         auto lex = TTStream(sp, ParseState(), tt);
-        lex.parse_state().module = &mod;
+        lex.parseState().module = &mod;
 
         return expandFormatArgs(sp, crate, lex, /*add_newline=*/true);
     }
@@ -1866,8 +1866,8 @@ class CExpanderPanic: public ExpandProcMacro {
         Token tok;
 
         auto edition = crate.edition;
-        if (tt.hygiene().hasModPath() && tt.hygiene().mod_path().crate != "") {
-            edition = crate.externCrates.at(tt.hygiene().mod_path().crate).hir->edition;
+        if (tt.hygiene().hasModPath() && tt.hygiene().modPath().crate != "") {
+            edition = crate.externCrates.at(tt.hygiene().modPath().crate).hir->edition;
         }
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_DOUBLE_COLON));
@@ -1901,8 +1901,8 @@ class CExpanderUnreachable: public ExpandProcMacro {
         Token tok;
 
         auto edition = crate.edition;
-        if (tt.hygiene().hasModPath() && tt.hygiene().mod_path().crate != "") {
-            edition = crate.externCrates.at(tt.hygiene().mod_path().crate).hir->edition;
+        if (tt.hygiene().hasModPath() && tt.hygiene().modPath().crate != "") {
+            edition = crate.externCrates.at(tt.hygiene().modPath().crate).hir->edition;
         }
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_DOUBLE_COLON));

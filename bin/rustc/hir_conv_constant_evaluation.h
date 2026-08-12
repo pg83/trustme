@@ -24,7 +24,7 @@ namespace HIR {
     struct Evaluator {
         class Newval {
         public:
-            virtual ::HIR::Path new_static(::HIR::TypeRef type, EncodedLiteral value) = 0;
+            virtual ::HIR::Path newStatic(::HIR::TypeRef type, EncodedLiteral value) = 0;
         };
 
         class CsePtr {
@@ -51,7 +51,7 @@ namespace HIR {
             }
         };
 
-        Span root_span;
+        Span rootSpan;
         // All values and relocations created by one constant evaluation form a
         // single graph. Nothing in that graph escapes `evaluate_constant`:
         // `allocation_to_encoded` deep-copies the result into an EncodedLiteral.

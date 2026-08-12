@@ -23,7 +23,7 @@ namespace {
 }
 
 void ::HIR::Visitor::visitCrate(::HIR::Crate& crate) {
-    this->visitModule(::HIR::ItemPath(crate.crateName), crate.rootModule);
+    this->visitModule(::HIR::ItemPath(crate.crateName), crate.mRootModule);
 
     visitImpls<::HIR::TypeImpl>(crate.typeImpls, [&](::HIR::TypeImpl& tyImpl) {
         this->visitTypeImpl(tyImpl);
@@ -148,16 +148,16 @@ void ::HIR::Visitor::visitInherentType(ItemPath p, ::HIR::TypeAlias& item) {
     }
 }
 
-void ::HIR::Visitor::visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {
-    ::HIR::ItemPath p(impl.mType, trait_path, impl.traitArgs);
-    TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType);
+void ::HIR::Visitor::visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) {
+    ::HIR::ItemPath p(impl.mType, traitPath, impl.traitArgs);
+    TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType);
     if (mResolve) {
         mResolve->setImplGenericsRaw(MetadataType::Unknown, impl.mParams);
     }
     this->visitParams(impl.mParams);
     // Visit trait arguments through GenericPath so path-context checks and rewrites are shared.
     {
-        ::HIR::GenericPath gp{trait_path, mv$(impl.traitArgs)};
+        ::HIR::GenericPath gp{traitPath, mv$(impl.traitArgs)};
         this->visitGenericPath(gp, PathContext::TRAIT);
         impl.traitArgs = mv$(gp.mParams);
     }
@@ -184,7 +184,7 @@ void ::HIR::Visitor::visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::
     }
 }
 
-void ::HIR::Visitor::visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) {
+void ::HIR::Visitor::visitMarkerImpl(const ::HIR::SimplePath& traitPath, ::HIR::MarkerImpl& impl) {
     if (mResolve) {
         mResolve->setImplGenericsRaw(MetadataType::Unknown, impl.mParams);
     }
@@ -225,8 +225,8 @@ void ::HIR::Visitor::visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) {
         mResolve->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
     }
     auto traitSp = p.getSimplePath();
-    auto traitPp = item.mParams.makeNopParams(type_interner(), 0);
-    const HIR::TypeRef tySelf = type_interner().self();
+    auto traitPp = item.mParams.makeNopParams(typeInterner(), 0);
+    const HIR::TypeRef tySelf = typeInterner().self();
     ItemPath traitIp(tySelf, traitSp, traitPp);
     TRACE_FUNCTION;
 
@@ -275,8 +275,8 @@ void ::HIR::Visitor::visitStruct(::HIR::ItemPath p, ::HIR::Struct& item) {
         TU_ARMA(Named, e) {
             for (auto& field : e) {
                 this->visitType(field.ty);
-                if (field.default_value) {
-                    this->visitGenericPath(*field.default_value, PathContext::VALUE);
+                if (field.defaultValue) {
+                    this->visitGenericPath(*field.defaultValue, PathContext::VALUE);
                 }
             }
         }
@@ -317,7 +317,7 @@ void ::HIR::Visitor::visitUnion(::HIR::ItemPath p, ::HIR::Union& item) {
     this->visitParams(item.mParams);
     for (auto& var : item.mVariants) {
         this->visitType(var.ty);
-        assert(!var.default_value);
+        assert(!var.defaultValue);
     }
     if (mResolve) {
         mResolve->clearImplGenerics();
@@ -414,7 +414,7 @@ void ::HIR::Visitor::visitType(::HIR::TypeRef& ty) {
     assert(ty);
     auto data = ty->cloneData();
     visitTypeData(data);
-    ty = type_interner().intern(mv$(data));
+    ty = typeInterner().intern(mv$(data));
 }
 
 void ::HIR::Visitor::visitTypeData(::HIR::TypeData& data) {
@@ -596,7 +596,7 @@ void ::HIR::Visitor::visitPath(::HIR::Path& p, ::HIR::Visitor::PathContext pc) {
         TU_ARMA(UfcsInherent, e) {
             this->visitType(e.type);
             this->visitPathParams(e.params);
-            this->visitPathParams(e.impl_params);
+            this->visitPathParams(e.implParams);
         }
         TU_ARMA(UfcsKnown, e) {
             this->visitType(e.type);

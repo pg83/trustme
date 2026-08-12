@@ -113,11 +113,11 @@ namespace HIR {
             return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0;
         }
 
-        bool is_generator() const {
+        bool isGenerator() const {
             return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(GENERATOR_PATH_PREFIX), GENERATOR_PATH_PREFIX) == 0;
         }
 
-        bool is_future() const {
+        bool isFuture() const {
             return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(PATH_PREFIX_FUTURE), PATH_PREFIX_FUTURE) == 0;
         }
     };
@@ -186,8 +186,8 @@ namespace HIR {
 
     struct TypeDataFunctionPointer {
         GenericParams hrls; // Higher-ranked lifetimes
-        bool is_unsafe;
-        bool is_variadic;
+        bool isUnsafe;
+        bool isVariadic;
         RcString mAbi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
         TypeRef mRettype;
         ::std::vector<TypeRef> argTypes;

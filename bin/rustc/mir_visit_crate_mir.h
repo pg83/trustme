@@ -7,7 +7,7 @@ namespace MIR {
 
     class OuterVisitor: public ::HIR::Visitor {
     public:
-        typedef ::std::function<void(const StaticTraitResolve& resolve, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr, const ::HIR::Function::argsT& args, const ::HIR::TypeData* ret_type)> cbT;
+        typedef ::std::function<void(const StaticTraitResolve& resolve, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr, const ::HIR::Function::argsT& args, const ::HIR::TypeData* retType)> cbT;
 
     private:
         StaticTraitResolve mResolve;
@@ -35,7 +35,7 @@ namespace MIR {
         void visitTrait(::HIR::ItemPath p, ::HIR::Trait& item) override;
         void visitTypeImpl(::HIR::TypeImpl& impl) override;
         void visitInherentType(::HIR::ItemPath p, ::HIR::TypeAlias& item) override;
-        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override;
+        void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) override;
     };
 
 } // namespace MIR

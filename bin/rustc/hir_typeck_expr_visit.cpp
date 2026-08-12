@@ -23,8 +23,8 @@ namespace typeck {
                     const auto& mod = H::getModForIp(crate, *ip.parent);
                     return mod.modItems.at(ip.name)->ent.as_Module();
                 } else {
-                    assert(ip.crate_name);
-                    return (ip.crate_name[0] ? crate.extCrates.at(ip.crate_name).mData->rootModule : crate.rootModule);
+                    assert(ip.crateName);
+                    return (ip.crateName[0] ? crate.extCrates.at(ip.crateName).mData->mRootModule : crate.mRootModule);
                 }
             }
 
@@ -49,13 +49,13 @@ namespace typeck {
             const auto& item = trait.values.at(ip.name);
             TU_MATCH_HDRA( (item), { )
             TU_ARMA(Function, e) {
-                    itemGenerics = &e.mParams;
+                    mItemGenerics = &e.mParams;
                 }
                 TU_ARMA(Constant, e) {
-                    itemGenerics = &e.mParams;
+                    mItemGenerics = &e.mParams;
                 }
                 TU_ARMA(Static, e) {
-                    itemGenerics = nullptr;
+                    mItemGenerics = nullptr;
                 }
             }
         } else if (ip.parent->ty) {
@@ -66,16 +66,16 @@ namespace typeck {
             const auto& mod = H::getModForIp(crate, *ip.parent);
             H::addTraitsFromMod(*this, mod);
             const auto& item = mod.valueItems.at(ip.name)->ent;
-            implGenerics = nullptr;
+            mImplGenerics = nullptr;
             TU_MATCH_HDRA( (item), { )
             TU_ARMA(Constant, e) {
-                    itemGenerics = &e.mParams;
+                    mItemGenerics = &e.mParams;
                 }
                 TU_ARMA(Static, e) {
                     //m_item_generics = &e.m_params;
                 }
                 TU_ARMA(Function, e) {
-                    itemGenerics = &e.mParams;
+                    mItemGenerics = &e.mParams;
                 }
                 TU_ARMA(StructConstant, _e) BUG(sp, ip << " is StructConstant");
                 TU_ARMA(StructConstructor, _e) BUG(sp, ip << " is StructConstructor");
@@ -136,28 +136,28 @@ namespace {
             ms.popTraits(mod);
         }
 
-        void visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << trait_path << impl.traitArgs << " for " << impl.mType);
-            auto traitGpath = ::HIR::GenericPath(trait_path, impl.traitArgs.clone());
+        void visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) override {
+            TRACE_FUNCTION_F("impl " << traitPath << impl.traitArgs << " for " << impl.mType);
+            auto traitGpath = ::HIR::GenericPath(traitPath, impl.traitArgs.clone());
             auto _0 = this->ms.setCurrentTraitImpl(impl);
             auto _1 = this->ms.setCurrentTrait(traitGpath);
             auto _ = this->ms.setImplGenerics(impl.mParams);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.pushTraits(impl.srcModule, mod);
-            ms.traits.push_back(::std::make_pair(&trait_path, &this->ms.crate.getTraitByPath(Span(), trait_path)));
-            ::HIR::Visitor::visitTraitImpl(trait_path, impl);
+            ms.traits.push_back(::std::make_pair(&traitPath, &this->ms.crate.getTraitByPath(Span(), traitPath)));
+            ::HIR::Visitor::visitTraitImpl(traitPath, impl);
             ms.traits.pop_back();
             ms.popTraits(mod);
         }
 
-        void visitMarkerImpl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.mType << " { }");
+        void visitMarkerImpl(const ::HIR::SimplePath& traitPath, ::HIR::MarkerImpl& impl) override {
+            TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.mType << " { }");
             auto _ = this->ms.setImplGenerics(impl.mParams);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.pushTraits(impl.srcModule, mod);
-            ::HIR::Visitor::visitMarkerImpl(trait_path, impl);
+            ::HIR::Visitor::visitMarkerImpl(traitPath, impl);
             ms.popTraits(mod);
         }
 
@@ -239,8 +239,8 @@ ModuleState::ModuleState(const ::HIR::Crate& crate)
     : crate(crate)
     , currentTrait(nullptr)
     , currentTraitImpl(nullptr)
-    , implGenerics(nullptr)
-    , itemGenerics(nullptr) {
+    , mImplGenerics(nullptr)
+    , mItemGenerics(nullptr) {
 }
 ModuleState::NullOnDrop<const ::HIR::GenericPath> ModuleState::setCurrentTrait(const ::HIR::GenericPath& p) {
     assert(!currentTrait);
@@ -253,14 +253,14 @@ ModuleState::NullOnDrop<const ::HIR::TraitImpl> ModuleState::setCurrentTraitImpl
     return NullOnDrop<const ::HIR::TraitImpl>(currentTraitImpl);
 }
 ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::setImplGenerics(const ::HIR::GenericParams& gps) {
-    assert(!implGenerics);
-    implGenerics = &gps;
-    return NullOnDrop<const ::HIR::GenericParams>(implGenerics);
+    assert(!mImplGenerics);
+    mImplGenerics = &gps;
+    return NullOnDrop<const ::HIR::GenericParams>(mImplGenerics);
 }
 ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::setItemGenerics(const ::HIR::GenericParams& gps) {
-    assert(!itemGenerics);
-    itemGenerics = &gps;
-    return NullOnDrop<const ::HIR::GenericParams>(itemGenerics);
+    assert(!mItemGenerics);
+    mItemGenerics = &gps;
+    return NullOnDrop<const ::HIR::GenericParams>(mItemGenerics);
 }
 void ModuleState::pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod) {
     auto sp = Span();
@@ -268,9 +268,9 @@ void ModuleState::pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod) {
     DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     // - Push a NULL entry to prevent parent module import lists being searched
     traits.push_back(::std::make_pair(nullptr, nullptr));
-    for (const auto& trait_path : mod.traits) {
-        DEBUG("Push " << trait_path);
-        traits.push_back(::std::make_pair(&trait_path, &this->crate.getTraitByPath(sp, trait_path)));
+    for (const auto& traitPath : mod.traits) {
+        DEBUG("Push " << traitPath);
+        traits.push_back(::std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
     }
 }
 void ModuleState::popTraits(const ::HIR::Module& mod) {

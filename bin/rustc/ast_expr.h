@@ -65,7 +65,7 @@ namespace AST {
         /// Shortcut for a block that returns a contained node
         ExprNodeBlock(ExprNodeP value);
 
-        ExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> local_mod);
+        ExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> localMod);
 
         void pushStmt(AST::ExprNodeP node) {
             nodes.push_back({true, std::move(node)});
@@ -86,7 +86,7 @@ namespace AST {
         ExprNodeP inner;
         bool isMove;
 
-        ExprNodeAsyncBlock(ExprNodeP inner, bool is_move);
+        ExprNodeAsyncBlock(ExprNodeP inner, bool isMove);
 
         static constexpr unsigned int kind = 2;
         unsigned int nodeKind() const override;
@@ -99,7 +99,7 @@ namespace AST {
         ExprNodeP inner;
         bool isMove;
 
-        ExprNodeGeneratorBlock(ExprNodeP inner, bool is_move);
+        ExprNodeGeneratorBlock(ExprNodeP inner, bool isMove);
 
         static constexpr unsigned int kind = 3;
         unsigned int nodeKind() const override;
@@ -127,7 +127,7 @@ namespace AST {
         bool isBraced;
         Ident::Hygiene definitionHygiene;
 
-        ExprNodeMacro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool is_braced = false, Ident::Hygiene definition_hygiene = {});
+        ExprNodeMacro(AST::Path name, RcString ident, ::TokenTree&& tokens, bool isBraced = false, Ident::Hygiene definitionHygiene = {});
 
         static constexpr unsigned int kind = 5;
         unsigned int nodeKind() const override;
@@ -224,7 +224,7 @@ namespace AST {
         /// Allocated binding slots/indexes for the pattern in `let-else`
         ::std::pair<unsigned, unsigned> letelseSlots;
 
-        ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP elseArm = {}, bool is_super = false);
+        ExprNodeLetBinding(Pattern pat, TypeRef type, ExprNodeP value, ExprNodeP elseArm = {}, bool isSuper = false);
 
         static constexpr unsigned int kind = 9;
         unsigned int nodeKind() const override;
@@ -496,12 +496,12 @@ namespace AST {
         bool isMove;   //< The closure takes ownership of all values
         bool isPinned; //< The closure cannot be moved (this is for generators)
 
-        ExprNodeClosure(argsT args, TypeRef rv, ExprNodeP code, bool is_move, bool is_pinned)
+        ExprNodeClosure(argsT args, TypeRef rv, ExprNodeP code, bool isMove, bool isPinned)
             : mArgs(::std::move(args))
             , returnType(::std::move(rv))
             , mCode(::std::move(code))
-            , isMove(is_move)
-            , isPinned(is_pinned)
+            , isMove(isMove)
+            , isPinned(isPinned)
         {
         }
 
@@ -525,7 +525,7 @@ namespace AST {
         ExprNodeP baseValue;
         tValues values;
 
-        ExprNodeStructLiteral(Path path, ExprNodeP base_value, tValues&& values);
+        ExprNodeStructLiteral(Path path, ExprNodeP baseValue, tValues&& values);
 
         static constexpr unsigned int kind = 27;
         unsigned int nodeKind() const override;
@@ -637,7 +637,7 @@ namespace AST {
         ExprNodeP mValue;
         TypeRef mType;
 
-        ExprNodeCast(ExprNodeP value, TypeRef&& dst_type);
+        ExprNodeCast(ExprNodeP value, TypeRef&& dstType);
 
         static constexpr unsigned int kind = 35;
         unsigned int nodeKind() const override;
@@ -651,7 +651,7 @@ namespace AST {
         ExprNodeP mValue;
         TypeRef mType;
 
-        ExprNodeTypeAnnotation(ExprNodeP value, TypeRef&& dst_type);
+        ExprNodeTypeAnnotation(ExprNodeP value, TypeRef&& dstType);
 
         static constexpr unsigned int kind = 36;
         unsigned int nodeKind() const override;
@@ -737,7 +737,7 @@ namespace AST {
         Ident::Hygiene tokenHygiene;
         Ident::Hygiene definitionHygiene;
 
-        ExprNodeMacroDefinition(unsigned int definition_id, Ident::Hygiene token_hygiene, Ident::Hygiene definition_hygiene);
+        ExprNodeMacroDefinition(unsigned int definitionId, Ident::Hygiene tokenHygiene, Ident::Hygiene definitionHygiene);
 
         static constexpr unsigned int kind = 39;
         unsigned int nodeKind() const override;

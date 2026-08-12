@@ -10,7 +10,7 @@ const bool DEBUG_PRINT_TOKENS = false;
 
 TokenStream::TokenStream(ParseState ps)
     : cacheValid(false)
-    , parseState(ps)
+    , mParseState(ps)
 {
 }
 
@@ -170,7 +170,7 @@ SavedParseState::SavedParseState(TokenStream& lex, ParseState state)
 }
 SavedParseState::~SavedParseState() {
     DEBUG("Restoring " << state);
-    lex.parse_state() = state;
+    lex.parseState() = state;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ParseState& ps) {

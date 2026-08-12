@@ -791,7 +791,7 @@ namespace {
     /// Generate a struct representation using the provided entries
     ///
     /// - Handles (optional) sorting and packing
-    ::std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forced_alignment, unsigned maxAlignment) {
+    ::std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forcedAlignment, unsigned maxAlignment) {
         if (ents.size() > 0) {
             auto sortFields = [&](auto first, auto last) {
                 ::std::stable_sort(first, last, [&](const Ent& a, const Ent& b) {
@@ -866,8 +866,8 @@ namespace {
                 curOfs += e.size;
             }
         }
-        if (forced_alignment > 0) {
-            maxAlign = std::max(maxAlign, static_cast<size_t>(forced_alignment));
+        if (forcedAlignment > 0) {
+            maxAlign = std::max(maxAlign, static_cast<size_t>(forcedAlignment));
             // `repr(align(N))` - this is the root of a user-alignment chain.
             rv.userAlign = true;
         }
@@ -894,7 +894,7 @@ namespace {
         TRACE_FUNCTION_F(ty);
         ::std::vector<Ent> ents;
         StructSorting sorting;
-        unsigned forced_alignment = 0;
+        unsigned forcedAlignment = 0;
         unsigned maxAlignment = 0;
         if (ty->is_Path() && ty->as_Path().binding.is_Struct()) {
             const auto& te = ty->as_Path();
@@ -904,7 +904,7 @@ namespace {
                 return nullptr;
             }
 
-            forced_alignment = str.forcedAlignment;
+            forcedAlignment = str.forcedAlignment;
             maxAlignment = str.maxFieldAlignment;
             sorting = StructSorting::None; // Defensive default for if repr is invalid
             switch (str.repr) {
@@ -915,7 +915,7 @@ namespace {
                     break;
                 case ::HIR::Struct::Repr::Transparent:
                 case ::HIR::Struct::Repr::Rust:
-                    if (str.structMarkings.dst_type != HIR::StructMarkings::DstType::None) {
+                    if (str.structMarkings.dstType != HIR::StructMarkings::DstType::None) {
                         sorting = StructSorting::AllButFinal;
                     } else {
                         sorting = StructSorting::All;
@@ -941,7 +941,7 @@ namespace {
             BUG(sp, "Unexpected type in creating type repr - " << ty);
         }
 
-        return makeTypeReprStructInner(sp, ty, ents, sorting, forced_alignment, maxAlignment);
+        return makeTypeReprStructInner(sp, ty, ents, sorting, forcedAlignment, maxAlignment);
     }
 
     bool boundedMaxIsFullRange(const ::HIR::TypeData* ty, U128 boundedMax) {
@@ -1323,7 +1323,7 @@ namespace {
                         struct Variant {
                             ::HIR::TypeRef type;
                             ::std::vector<Ent> ents;
-                            unsigned forced_alignment;
+                            unsigned forcedAlignment;
                         };
 
                         /// Is there an explicitly specified discriminant value provided?
@@ -1336,8 +1336,8 @@ namespace {
                             }
 
                             auto variantType = monomorph(var.type);
-                            auto forced_alignment = variantType->is_Path() && variantType->as_Path().binding.is_Struct() ? variantType->as_Path().binding.as_Struct()->forcedAlignment : 0;
-                            variants.push_back({mv$(variantType), {}, forced_alignment});
+                            auto forcedAlignment = variantType->is_Path() && variantType->as_Path().binding.is_Struct() ? variantType->as_Path().binding.as_Struct()->forcedAlignment : 0;
+                            variants.push_back({mv$(variantType), {}, forcedAlignment});
                             TRACE_FUNCTION_F("Variant #" << (&var - e.data()));
                             if (var.type == resolve.crate.types.unit()) {
                                 continue;
@@ -1409,7 +1409,7 @@ namespace {
                                 size_t maxAlign = 1;
                                 std::vector<std::unique_ptr<TypeRepr>> reprs;
                                 for (size_t i = 0; i < variants.size(); i++) {
-                                    reprs.push_back(makeTypeReprStructInner(sp, e[i].type, variants[i].ents, StructSorting::All, variants[i].forced_alignment, 0));
+                                    reprs.push_back(makeTypeReprStructInner(sp, e[i].type, variants[i].ents, StructSorting::All, variants[i].forcedAlignment, 0));
                                     maxAlign = std::max(maxAlign, reprs.back()->align);
                                     size_t varSize = reprs.back()->size;
                                     // If larger than current max, update current max and reset
@@ -1585,7 +1585,7 @@ namespace {
                                                 variants[i].ents[0].field = variants[i].ents.size() - 1;
                                                 variants[i].ents[0].ty = nicheTy;
                                                 // Create the new repr
-                                                reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
+                                                reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
                                                 assert(reprs[i]->size <= max_size);
                                                 assert(reprs[i]->align <= maxAlign);
@@ -1615,7 +1615,7 @@ namespace {
                                                 variants[i].ents.back().field = tagFldIdx;
                                                 variants[i].ents.back().ty = nicheTy;
                                                 // Create the new repr
-                                                reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
+                                                reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forcedAlignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
                                                 assert(reprs[i]->size <= max_size);
                                                 assert(reprs[i]->align <= maxAlign);
@@ -1714,7 +1714,7 @@ namespace {
                                     ents[0].ty = tagTy;
 
                                     // - Create repr and assign
-                                    auto repr = makeTypeReprStructInner(sp, varTy, ents, StructSorting::None, variants[varI].forced_alignment, 0);
+                                    auto repr = makeTypeReprStructInner(sp, varTy, ents, StructSorting::None, variants[varI].forcedAlignment, 0);
                                     max_size = std::max(max_size, repr->size);
                                     maxAlign = std::max(maxAlign, repr->align);
                                     setTypeRepr(sp, varTy, std::move(repr));
@@ -1735,7 +1735,7 @@ namespace {
                             if (hasExplcitValue) {
                                 ::std::vector<U128> vals;
                                 for (const auto& v : e) {
-                                    vals.push_back(v.discriminant_value);
+                                    vals.push_back(v.discriminantValue);
                                 }
                                 DEBUG("vals = " << vals);
                                 rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, ::std::move(vals)});

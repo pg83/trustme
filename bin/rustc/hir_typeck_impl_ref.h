@@ -14,9 +14,9 @@ struct ImplRef {
         TraitImpl,
         (TraitImpl,
          struct {
-             HIR::PathParams impl_params;
-             const ::HIR::Trait* trait_ptr;
-             const ::HIR::SimplePath* trait_path;
+             HIR::PathParams implParams;
+             const ::HIR::Trait* traitPtr;
+             const ::HIR::SimplePath* traitPath;
              const ::HIR::TraitImpl* impl;
              mutable ::HIR::TypeRef selfCache;
          }),
@@ -24,25 +24,25 @@ struct ImplRef {
          struct {
              ::HIR::PathParams hrls;
              const ::HIR::TypeData* type;
-             const ::HIR::PathParams* trait_args;
+             const ::HIR::PathParams* traitArgs;
              const ::HIR::TraitPath::assocListT* assoc;
              ::HIR::BoundConstness constness;
          }),
         (Bounded, struct {
             ::HIR::PathParams hrls;
             ::HIR::TypeRef type;
-            ::HIR::PathParams trait_args;
+            ::HIR::PathParams traitArgs;
             ::HIR::TraitPath::assocListT assoc;
             ::HIR::BoundConstness constness;
         })
     );
 
     Data mData;
-    bool isAmbiguousIdentity = false;
+    bool mIsAmbiguousIdentity = false;
 
     ImplRef();
 
-    ImplRef(HIR::PathParams impl_params, const HIR::Trait& traitRef, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl);
+    ImplRef(HIR::PathParams implParams, const HIR::Trait& traitRef, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl);
 
     ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
 
@@ -56,12 +56,12 @@ struct ImplRef {
         return !(mData.is_TraitImpl() && mData.as_TraitImpl().impl == nullptr);
     }
 
-    bool is_ambiguous_identity() const {
-        return isAmbiguousIdentity;
+    bool isAmbiguousIdentity() const {
+        return mIsAmbiguousIdentity;
     }
 
     void markAmbiguousIdentity() {
-        isAmbiguousIdentity = true;
+        mIsAmbiguousIdentity = true;
     }
 
     ::HIR::BoundConstness boundConstness() const;

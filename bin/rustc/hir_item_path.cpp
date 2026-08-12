@@ -3,13 +3,13 @@
 namespace HIR {
 
 ItemPath::ItemPath(const char* crate)
-    : crate_name(crate) {
+    : crateName(crate) {
 }
 ItemPath::ItemPath(const ::std::string& crate)
-    : crate_name(crate.c_str()) {
+    : crateName(crate.c_str()) {
 }
 ItemPath::ItemPath(const RcString& crate)
-    : crate_name(crate.c_str()) {
+    : crateName(crate.c_str()) {
 }
 ItemPath::ItemPath(const ItemPath& p, const char* n)
     : parent(&p)
@@ -40,8 +40,8 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
         return parent->getSimplePath() + RcString::newInterned(name);
     } else {
         assert(!name);
-        assert(crate_name);
-        return ::HIR::SimplePath(RcString::newInterned(crate_name));
+        assert(crateName);
+        return ::HIR::SimplePath(RcString::newInterned(crateName));
     }
 }
 ::HIR::Path ItemPath::getFullPath() const {
@@ -70,7 +70,7 @@ const ItemPath& ItemPath::getTopIp() const {
     return *this;
 }
 bool ItemPath::operator==(const ::HIR::SimplePath& sp) const {
-    if (sp.crate_name() != "") {
+    if (sp.crateName() != "") {
         return false;
     }
 
@@ -114,8 +114,8 @@ namespace HIR {
         os << ">";
     } else if (x.trait) {
         os << "<* as " << *x.trait << ">";
-    } else if (x.crate_name) {
-        os << "::\"" << x.crate_name << "\"";
+    } else if (x.crateName) {
+        os << "::\"" << x.crateName << "\"";
     }
     return os;
 }

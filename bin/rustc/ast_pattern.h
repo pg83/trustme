@@ -138,7 +138,7 @@ namespace AST {
 
         struct TagBind {};
 
-        Pattern(TagBind, Span sp, Ident name, PatternBinding::Type ty = PatternBinding::Type::MOVE, bool is_mut = false);
+        Pattern(TagBind, Span sp, Ident name, PatternBinding::Type ty = PatternBinding::Type::MOVE, bool isMut = false);
 
         struct TagBox {};
 
@@ -150,7 +150,7 @@ namespace AST {
 
         struct TagReference {};
 
-        Pattern(TagReference, Span sp, bool is_mutable, Pattern subPattern);
+        Pattern(TagReference, Span sp, bool isMutable, Pattern subPattern);
 
         struct TagTuple {};
 

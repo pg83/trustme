@@ -283,21 +283,21 @@ namespace MIR {
         class RefCommon {
         protected:
             const LValue* mLv;
-            size_t wrapperCount;
+            size_t mWrapperCount;
 
-            RefCommon(const LValue& lv, size_t wrapper_count);
+            RefCommon(const LValue& lv, size_t wrapperCount);
 
         public:
             LValue clone() const {
-                return ::MIR::LValue(mLv->root.clone(), ::std::vector<Wrapper>(mLv->wrappers.begin(), mLv->wrappers.begin() + wrapperCount));
+                return ::MIR::LValue(mLv->root.clone(), ::std::vector<Wrapper>(mLv->wrappers.begin(), mLv->wrappers.begin() + mWrapperCount));
             }
 
             const LValue& lv() const {
                 return *mLv;
             }
 
-            size_t wrapper_count() const {
-                return wrapperCount;
+            size_t wrapperCount() const {
+                return mWrapperCount;
             }
 
             /// Unwrap one level, returning false if already at the root
@@ -318,35 +318,35 @@ namespace MIR {
             Tag tag() const;
 
             bool is_Local() const {
-                return wrapperCount == 0 && mLv->root.is_Local();
+                return mWrapperCount == 0 && mLv->root.is_Local();
             }
 
             bool is_Return() const {
-                return wrapperCount == 0 && mLv->root.is_Return();
+                return mWrapperCount == 0 && mLv->root.is_Return();
             }
 
             bool is_Argument() const {
-                return wrapperCount == 0 && mLv->root.is_Argument();
+                return mWrapperCount == 0 && mLv->root.is_Argument();
             }
 
             bool is_Static() const {
-                return wrapperCount == 0 && mLv->root.is_Static();
+                return mWrapperCount == 0 && mLv->root.is_Static();
             }
 
             bool is_Deref() const {
-                return wrapperCount >= 1 && mLv->wrappers[wrapperCount - 1].is_Deref();
+                return mWrapperCount >= 1 && mLv->wrappers[mWrapperCount - 1].is_Deref();
             }
 
             bool is_Field() const {
-                return wrapperCount >= 1 && mLv->wrappers[wrapperCount - 1].is_Field();
+                return mWrapperCount >= 1 && mLv->wrappers[mWrapperCount - 1].is_Field();
             }
 
             bool is_Downcast() const {
-                return wrapperCount >= 1 && mLv->wrappers[wrapperCount - 1].is_Downcast();
+                return mWrapperCount >= 1 && mLv->wrappers[mWrapperCount - 1].is_Downcast();
             }
 
             bool is_Index() const {
-                return wrapperCount >= 1 && mLv->wrappers[wrapperCount - 1].is_Index();
+                return mWrapperCount >= 1 && mLv->wrappers[mWrapperCount - 1].is_Index();
             }
 
             unsigned as_Local() const;
@@ -394,7 +394,7 @@ namespace MIR {
             MRef(LValue& lv);
 
             operator CRef() const {
-                return CRef(*mLv, wrapperCount);
+                return CRef(*mLv, mWrapperCount);
             }
 
             MRef innerRef();

@@ -100,8 +100,8 @@ class CMacroUseHandler: public ExpandDecorator {
                     DEBUG("Skip " << name);
                     continue;
                 }
-                ASSERT_BUG(sp, ec.hir->rootModule.macroItems.count(name) == 1, "Macro `" << name << "` missing from crate " << ec.mName);
-                const auto* e = &*ec.hir->rootModule.macroItems.at(name);
+                ASSERT_BUG(sp, ec.hir->mRootModule.macroItems.count(name) == 1, "Macro `" << name << "` missing from crate " << ec.mName);
+                const auto* e = &*ec.hir->mRootModule.macroItems.at(name);
                 if (!e->publicity.isGlobal()) {
                     DEBUG("Not public: " << name);
                     continue;
@@ -109,17 +109,17 @@ class CMacroUseHandler: public ExpandDecorator {
 
                 AST::AbsolutePath path{ecItem->name, {name}};
                 if (const auto* imp = e->ent.opt_Import()) {
-                    if (imp->path.crate_name() == CRATE_BUILTINS) {
+                    if (imp->path.crateName() == CRATE_BUILTINS) {
                         DEBUG("Importing builtin (skip): " << name);
                         continue;
                     }
-                    ASSERT_BUG(sp, crate.externCrates.count(imp->path.crate_name()), "Crate `" << imp->path.crate_name() << "` not loaded");
-                    const ::HIR::Module& mod = crate.externCrates.at(imp->path.crate_name()).hir->getModByPath(sp, imp->path, /*ignore_last_node*/ true, /*ignore_crate_name*/ true);
+                    ASSERT_BUG(sp, crate.externCrates.count(imp->path.crateName()), "Crate `" << imp->path.crateName() << "` not loaded");
+                    const ::HIR::Module& mod = crate.externCrates.at(imp->path.crateName()).hir->getModByPath(sp, imp->path, /*ignore_last_node*/ true, /*ignore_crate_name*/ true);
 
                     ASSERT_BUG(sp, mod.macroItems.count(imp->path.components().back()), "Failed to find final component of " << imp->path);
                     e = &*mod.macroItems.at(imp->path.components().back());
                     if (const auto& imp2 = e->ent.opt_Import()) {
-                        if (imp2->path.crate_name() == CRATE_BUILTINS) {
+                        if (imp2->path.crateName() == CRATE_BUILTINS) {
                             DEBUG("Importing builtin (skip): " << name);
                             continue;
                         } else {
@@ -127,7 +127,7 @@ class CMacroUseHandler: public ExpandDecorator {
                         }
                     } else {
                     }
-                    path = AST::AbsolutePath(imp->path.crate_name(), imp->path.componentsVec());
+                    path = AST::AbsolutePath(imp->path.crateName(), imp->path.componentsVec());
                 }
 
                 MacroRef mr;
@@ -218,7 +218,7 @@ class CMacroExportHandler: public ExpandDecorator {
             const auto& name = p.nodes.front().name();
             mod.macroImports.push_back(AST::Module::MacroImport{true, u->entries.front().name, AST::AbsolutePath(p.crate, {name}), {}});
 
-            crate.rootModule.addItem(sp, AST::Visibility::makeGlobal(), name, i.clone(), {});
+            crate.mRootModule.addItem(sp, AST::Visibility::makeGlobal(), name, i.clone(), {});
         } else if (i.is_MacroInv()) {
             const auto& mac = i.as_MacroInv();
             if (!(mac.path().is_trivial() && mac.path().asTrivial() == "macro_rules")) {
@@ -250,7 +250,7 @@ class CMacroExportHandler: public ExpandDecorator {
 
             e.data->exported = true;
             DEBUG("- Export macro " << name << "!");
-            crate.rootModule.macros().push_back(mv$(e));
+            crate.mRootModule.macros().push_back(mv$(e));
         } else if (i.is_Macro()) {
             const auto& name = path.nodes.back();
             if (i.as_Macro()) {
@@ -275,16 +275,16 @@ class CMacroReexportHandler: public ExpandDecorator {
             ERROR(sp, E0000, "Use of #[macro_reexport] on non-crate - " << i.tagStr());
         }
 
-        const auto& crate_name = i.as_Crate().name;
-        auto& ext_crate = *crate.externCrates.at(crate_name).hir;
+        const auto& crateName = i.as_Crate().name;
+        auto& extCrate = *crate.externCrates.at(crateName).hir;
 
         mi.parseParenIdentList([&](const Span& sp, RcString name) {
-            auto it = ::std::find(ext_crate.exportedMacroNames.begin(), ext_crate.exportedMacroNames.end(), name);
-            if (it == ext_crate.exportedMacroNames.end()) {
-                ERROR(sp, E0000, "Could not find macro " << name << "! in crate " << crate_name);
+            auto it = ::std::find(extCrate.exportedMacroNames.begin(), extCrate.exportedMacroNames.end(), name);
+            if (it == extCrate.exportedMacroNames.end()) {
+                ERROR(sp, E0000, "Could not find macro " << name << "! in crate " << crateName);
             }
             // TODO: Do this differently.
-            ext_crate.rootModule.macroItems.at(name)->ent.as_MacroRules()->exported = true;
+            extCrate.mRootModule.macroItems.at(name)->ent.as_MacroRules()->exported = true;
             //ext_crate.m_root_module.m_macro_items.at(name)->publicity = AST::Publicity::new_global();
         });
     }

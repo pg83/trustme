@@ -40,11 +40,11 @@ class ParameterMappings {
     loopCountsT loopCounts;
 
     ::std::vector<CapturedVar> mMappings;
-    unsigned layerCount;
+    unsigned mLayerCount;
 
 public:
     ParameterMappings()
-        : layerCount(0)
+        : mLayerCount(0)
     {
     }
 
@@ -58,15 +58,15 @@ public:
         DEBUG("m_mappings = {" << mMappings << "}");
     }
 
-    size_t layer_count() const {
-        return layerCount + 1;
+    size_t layerCount() const {
+        return mLayerCount + 1;
     }
 
-    void setLoopCounts(loopCountsT loop_counts) {
-        for (const auto& e : loop_counts) {
+    void setLoopCounts(loopCountsT loopCounts) {
+        for (const auto& e : loopCounts) {
             DEBUG(e.first << ": {" << e.second << "}");
         }
-        loopCounts = std::move(loop_counts);
+        this->loopCounts = std::move(loopCounts);
     }
 
     void insert(unsigned int nameIndex, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data);
@@ -107,7 +107,7 @@ private:
 
 class MacroPatternStream {
     const ::std::vector<SimplePatEnt>& simpleEnts;
-    size_t curPos;
+    size_t mCurPos;
 
     bool lastWasCond;
     bool conditionMet;
@@ -127,17 +127,17 @@ class MacroPatternStream {
     const SimplePatEnt* peekCache;
 
 public:
-    MacroPatternStream(const ::std::vector<SimplePatEnt>& ents, const ::std::vector<bool>* condition_replay = nullptr)
+    MacroPatternStream(const ::std::vector<SimplePatEnt>& ents, const ::std::vector<bool>* conditionReplay = nullptr)
         : simpleEnts(ents)
-        , curPos(0)
+        , mCurPos(0)
         , lastWasCond(false)
-        , conditionReplay(condition_replay)
+        , conditionReplay(conditionReplay)
         , conditionReplayPos(0)
     {
     }
 
-    size_t cur_pos() const {
-        return curPos;
+    size_t curPos() const {
+        return mCurPos;
     }
 
     /// Get the next pattern entry
@@ -331,22 +331,22 @@ const SimplePatEnt& MacroPatternStream::next() {
         }
         lastWasCond = false;
         // End of list? return End entry
-        if (curPos == simpleEnts.size()) {
+        if (mCurPos == simpleEnts.size()) {
             static SimplePatEnt END = SimplePatEnt::make_End({});
             return END;
         }
-        const auto& curEnt = simpleEnts[curPos];
+        const auto& curEnt = simpleEnts[mCurPos];
         // If replaying, and this is a conditional
         if (conditionReplay && curEnt.is_If()) {
             // Skip the conditional (following its target or just skipping over)
             if ((*conditionReplay)[conditionReplayPos++]) {
-                curPos = curEnt.as_If().jumpTarget;
+                mCurPos = curEnt.as_If().jumpTarget;
             } else {
-                curPos += 1;
+                mCurPos += 1;
             }
             continue;
         }
-        curPos += 1;
+        mCurPos += 1;
         TU_MATCH_HDRA( (curEnt), {)
         default:
             if( curEnt.is_If() )
@@ -358,7 +358,7 @@ const SimplePatEnt& MacroPatternStream::next() {
             TU_ARMA(End, _e)
             BUG(Span(), "Unexpected End");
             TU_ARMA(Jump, e)
-            curPos = e.jumpTarget;
+            mCurPos = e.jumpTarget;
             TU_ARMA(LoopStart, e) {
                 currentLoops.push_back(e.index);
                 loopIterations.push_back(0);
@@ -384,14 +384,14 @@ const SimplePatEnt& MacroPatternStream::next() {
 }
 
 void MacroPatternStream::ifSucceeded() {
-    assert(curPos > 0);
-    assert(curPos <= simpleEnts.size());
+    assert(mCurPos > 0);
+    assert(mCurPos <= simpleEnts.size());
     assert(lastWasCond);
-    const auto& ent = simpleEnts[curPos - 1];
+    const auto& ent = simpleEnts[mCurPos - 1];
     ASSERT_BUG(Span(), ent.is_If(), "Expected If when calling `if_succeeded`, got " << ent);
     const auto& e = ent.as_If();
     ASSERT_BUG(Span(), e.jumpTarget < simpleEnts.size(), "Jump target " << e.jumpTarget << " out of range " << simpleEnts.size());
-    curPos = e.jumpTarget;
+    mCurPos = e.jumpTarget;
     conditionMet = true;
 }
 
@@ -467,18 +467,18 @@ class MacroExpander: public TokenStream {
 public:
     MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(const RcString& macroName, const Span& sp, AST::Edition edition, bool is_macro_item, unsigned int definition_id, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crate_name, AST::Edition source_edition)
+    MacroExpander(const RcString& macroName, const Span& sp, AST::Edition edition, bool isMacroItem, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, AST::Edition sourceEdition)
         : TokenStream(ParseState())
         , logIndex(sNextLogIndex++)
-        , thisSpan(sp, crate_name, macroName)
-        , crateName(mv$(crate_name))
+        , thisSpan(sp, crateName, macroName)
+        , crateName(mv$(crateName))
         , invocationSpan(sp)
         , invocationEdition(edition)
         , mMappings(mv$(mappings))
         , state(contents, mMappings)
-        , sourceEdition(source_edition)
-        , isMacroItem(is_macro_item)
-        , mHygiene(Ident::Hygiene::newScopeChained(parentHygiene, definition_id))
+        , sourceEdition(sourceEdition)
+        , isMacroItem(isMacroItem)
+        , mHygiene(Ident::Hygiene::newScopeChained(parentHygiene, definitionId))
         , lastHygiene(mHygiene)
     {
     }
@@ -529,8 +529,8 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                     tok = lex.getToken();
                     return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, tok.takeFragStmtItem());
                 }
-                assert(lex.parse_state().module);
-                const auto& curMod = *lex.parse_state().module;
+                assert(lex.parseState().module);
+                const auto& curMod = *lex.parseState().module;
                 return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, curMod.fileInfo, curMod.path(), AST::AttributeList{}));
             }
             return InterpolatedFragment(InterpolatedFragment::STMT, ParseStmt(lex).release());
@@ -545,8 +545,8 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
         case MacroPatEnt::PAT_META:
             return InterpolatedFragment(ParseMetaItem(lex));
         case MacroPatEnt::PAT_ITEM: {
-            assert(lex.parse_state().module);
-            const auto& curMod = *lex.parse_state().module;
+            assert(lex.parseState().module);
+            const auto& curMod = *lex.parseState().module;
             return InterpolatedFragment(ParseModItemS(lex, curMod.fileInfo, curMod.path(), AST::AttributeList{}));
         } break;
         case MacroPatEnt::PAT_IDENT:
@@ -2039,7 +2039,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
 
     struct Match {
         size_t armIndex;
-        ::std::vector<bool> condition_history;
+        ::std::vector<bool> conditionHistory;
         ::std::vector<bool> stmtIsItemHistory;
     };
     ::std::vector<Match> matches;
@@ -2051,7 +2051,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
 
         bool fail = false;
         for (;;) {
-            const auto pos = armStream.cur_pos();
+            const auto pos = armStream.curPos();
             const auto& pat = armStream.next();
             // NOTE: The positions seen by this aren't fully sequential, as `next` steps over jumps/loop control ops
             DEBUG("Arm " << i << " @" << pos << " " << pat);
@@ -2125,12 +2125,12 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
 
         // NOTE: There can be multiple arms active, take the first.
         auto i = matches[0].armIndex;
-        const auto& history = matches[0].condition_history;
+        const auto& history = matches[0].conditionHistory;
         const auto& stmtIsItemHistory = matches[0].stmtIsItemHistory;
         DEBUG("Evalulating arm " << i);
 
         auto lex = TTStreamO(sp, ParseState(), mv$(input));
-        lex.parse_state().crate = &crate;
+        lex.parseState().crate = &crate;
         SET_MODULE(lex, mod);
         auto armStream = MacroPatternStream(rules.rules[i].pattern, &history);
 
@@ -2895,23 +2895,23 @@ private:
     /// Next loop identifier
     unsigned nextLoopIndex;
     // Stack of current loops (indexes)
-    std::vector<unsigned> loop_stack;
+    std::vector<unsigned> loopStack;
 
 public:
     RuleParseState()
         : names()
         , nextLoopIndex(0)
-        , loop_stack()
+        , loopStack()
     {
     }
 
     unsigned addName(const RcString& name) {
         unsigned idx = this->names.size();
         assert(this->names.count(name) == 0);
-        DEBUG(name << " #" << idx << " @ [" << loop_stack << "]");
+        DEBUG(name << " #" << idx << " @ [" << loopStack << "]");
         auto& e = this->names[name];
         e.idx = idx;
-        e.loops = this->loop_stack;
+        e.loops = this->loopStack;
         return idx;
     }
 
@@ -2925,13 +2925,13 @@ public:
 
     unsigned openLoop() {
         auto rv = nextLoopIndex++;
-        loop_stack.push_back(rv);
+        loopStack.push_back(rv);
         return rv;
     }
 
     void closeLoop() {
-        assert(!loop_stack.empty()); // Impossible given that `()` must be matched in a token tree
-        loop_stack.pop_back();
+        assert(!loopStack.empty()); // Impossible given that `()` must be matched in a token tree
+        loopStack.pop_back();
     }
 };
 
@@ -3079,18 +3079,18 @@ public:
 }
 
 struct ContentLoopVariableUse {
-    std::vector<unsigned> loop_stack;
+    std::vector<unsigned> loopStack;
     bool isOptional;
 
     // Constructor for when added as part of a variable
-    ContentLoopVariableUse(std::vector<unsigned> loop_stack)
-        : loop_stack(std::move(loop_stack))
+    ContentLoopVariableUse(std::vector<unsigned> loopStack)
+        : loopStack(std::move(loopStack))
         , isOptional(true)
     {
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ContentLoopVariableUse& x) {
-        return os << "[" << x.loop_stack << "] " << (x.isOptional ? "optional" : "required");
+        return os << "[" << x.loopStack << "] " << (x.isOptional ? "optional" : "required");
     }
 };
 
@@ -3171,17 +3171,17 @@ struct ContentLoopVariableUse {
                 std::set<unsigned> controllingLoops;
                 for (const auto& v : varUsage) {
                     // Empty stack: Doesn't control anything
-                    if (v.second.loop_stack.size() == 0) {
+                    if (v.second.loopStack.size() == 0) {
                         DEBUG("Root variable");
                     }
                     // We're deeper than the variable's stack, take the deepest point?
-                    else if (loopDepth >= v.second.loop_stack.size()) {
-                        DEBUG("Above this loop (" << loopDepth << " >= " << v.second.loop_stack.size() << ")");
+                    else if (loopDepth >= v.second.loopStack.size()) {
+                        DEBUG("Above this loop (" << loopDepth << " >= " << v.second.loopStack.size() << ")");
                         // Don't take anything
                         //controlling_loops.insert( v.second.loop_stack.back() );
                     } else {
                         // Take the current point in the stack
-                        controllingLoops.insert(v.second.loop_stack[loopDepth]);
+                        controllingLoops.insert(v.second.loopStack[loopDepth]);
                     }
                 }
                 if (controllingLoops.empty()) {
@@ -3428,7 +3428,7 @@ MacroRulesArm ParseMacroRulesMakeArm(Span patSp, ::std::vector<MacroPatEnt> patt
 namespace {
     MacroRulesPtr makeMrPtr(const TokenStream& lex) {
         auto s = lex.pointSpan();
-        auto rv = MacroRulesPtr(new MacroRules(s->crate_name(), lex.getEdition()));
+        auto rv = MacroRulesPtr(new MacroRules(s->crateName(), lex.getEdition()));
         rv->mHygiene = lex.getHygiene();
         return rv;
     }
@@ -3475,13 +3475,13 @@ MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex) {
     auto ps = lex.startSpan();
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
     auto armPat = ParseMacroRulesPat(lex, TOK_PAREN_OPEN, TOK_PAREN_CLOSE, state);
-    auto pat_span = lex.endSpan(ps);
+    auto patSpan = lex.endSpan(ps);
     GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
     // TODO: Pass a flag that annotates all idents with the current module?
     auto body = ParseMacroRulesCont(lex, TOK_BRACE_OPEN, TOK_BRACE_CLOSE, state);
 
     auto rv = makeMrPtr(lex);
-    rv->rules.push_back(ParseMacroRulesMakeArm(pat_span, ::std::move(armPat), ::std::move(body)));
+    rv->rules.push_back(ParseMacroRulesMakeArm(patSpan, ::std::move(armPat), ::std::move(body)));
     return rv;
 }
 
@@ -3936,9 +3936,9 @@ MacroRulesArm::MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<
     : pattern(mv$(pattern))
     , contents(mv$(contents)) {
 }
-MacroRules::MacroRules(RcString source_crate, AST::Edition edition)
+MacroRules::MacroRules(RcString sourceCrate, AST::Edition edition)
     : definitionId(++gNextDefinitionId)
-    , sourceCrate(std::move(source_crate))
+    , sourceCrate(std::move(sourceCrate))
     , edition(edition) {
 }
 

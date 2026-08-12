@@ -87,7 +87,7 @@ namespace MIR {
         unsigned int stmtIdx = 0;
 
     public:
-        TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* ret_type, const argsT& args, const ::MIR::Function& fcn);
+        TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* retType, const argsT& args, const ::MIR::Function& fcn);
 
         void setCurStmt(const ::MIR::BasicBlock& bb, const ::MIR::Statement& stmt);
 
@@ -123,11 +123,11 @@ namespace MIR {
         const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapperSkipCount = 0) const;
 
         const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue::CRef& val) const {
-            return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapper_count());
+            return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapperCount());
         }
 
         const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue::MRef& val) const {
-            return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapper_count());
+            return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapperCount());
         }
 
         const ::HIR::TypeData* getUnwrappedType(::HIR::TypeRef& tmp, const ::MIR::LValue::Wrapper& w, const ::HIR::TypeData* ty) const;

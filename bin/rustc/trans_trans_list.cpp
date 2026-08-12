@@ -129,7 +129,7 @@ TransListConst* TransList::add_const(HIR::TypeInterner& types, ::HIR::Path p) {
                 resolve.expandAssociatedTypes(sp, arg);
             }
             // TODO: impl params too?
-            for (auto& arg : e2.impl_params.types) {
+            for (auto& arg : e2.implParams.types) {
                 resolve.expandAssociatedTypes(sp, arg);
             }
         }
@@ -177,7 +177,7 @@ TransParams::TransParams(HIR::TypeInterner& types, const Span& sp)
     , forceMonomorphisation(false) {
 }
 TransParams::TransParams(TransParams&& x)
-    : TransParams(x.type_interner()) {
+    : TransParams(x.typeInterner()) {
     *this = ::std::move(x);
 }
 TransParams& TransParams::operator=(TransParams&& x) {
@@ -185,14 +185,14 @@ TransParams& TransParams::operator=(TransParams&& x) {
     gdefImpl = x.gdefImpl;
     ppMethod = ::std::move(x.ppMethod);
     ppImpl = ::std::move(x.ppImpl);
-    self_type = x.self_type;
+    selfType = x.selfType;
     forceMonomorphisation = x.forceMonomorphisation;
     return *this;
 }
-TransParams TransParams::newImpl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params) {
+TransParams TransParams::newImpl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams implParams) {
     TransParams tp(types, sp);
-    tp.self_type = std::move(ty);
-    tp.ppImpl = std::move(impl_params);
+    tp.selfType = std::move(ty);
+    tp.ppImpl = std::move(implParams);
     return tp;
 }
 const ::HIR::TypeData* TransParams::maybeMonomorph(const ::StaticTraitResolve& resolve, ::HIR::TypeRef& tmp, const ::HIR::TypeData* p) const {

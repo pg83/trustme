@@ -10,14 +10,14 @@ namespace HIR {
         ::HIR::SimplePath modPath;
         const ::HIR::Module& mModule;
 
-        const ::HIR::GenericParams* implGenerics;
-        const ::HIR::GenericParams* itemGenerics;
+        const ::HIR::GenericParams* mImplGenerics;
+        const ::HIR::GenericParams* mItemGenerics;
 
         // The owner trait implementation is needed when this expression is
         // typechecked or expanded lazily (e.g. while evaluating a const
         // generic).  The normal whole-crate visitors keep this on their
         // traversal stack, but that stack is absent for lazy processing.
-        ::HIR::SimplePath currentTraitPath;
+        ::HIR::SimplePath mCurrentTraitPath;
         const ::HIR::TraitImpl* currentTraitImpl;
 
         ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> traits;
@@ -39,7 +39,7 @@ namespace HIR {
         };
         mutable Stage stage;
 
-        ExprState(::HIR::TypeInterner& types, const ::HIR::Module& modPtr, ::HIR::SimplePath mod_path);
+        ExprState(::HIR::TypeInterner& types, const ::HIR::Module& modPtr, ::HIR::SimplePath modPath);
     };
 
 }

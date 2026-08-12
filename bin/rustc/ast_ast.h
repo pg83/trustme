@@ -46,7 +46,7 @@ namespace AST {
 
         //StructItem() {}
 
-        StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr default_value);
+        StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr defaultValue);
 
         friend ::std::ostream& operator<<(::std::ostream& os, const StructItem& x) {
             return os << x.vis << x.mName << ": " << x.mType;
@@ -82,7 +82,7 @@ namespace AST {
         //TypeAlias() {}
         TypeAlias(GenericParams params, TypeRef type);
 
-        static TypeAlias newAssociatedType(GenericParams params, GenericParams type_bounds, TypeRef defaultType);
+        static TypeAlias newAssociatedType(GenericParams params, GenericParams typeBounds, TypeRef defaultType);
 
         const GenericParams& params() const {
             return mParams;
@@ -180,7 +180,7 @@ namespace AST {
 
         struct Flags {
             bool is_const;
-            bool is_unsafe;
+            bool isUnsafe;
             bool isAsync;
 
             Flags();
@@ -202,7 +202,7 @@ namespace AST {
         Expr mCode;
         TypeRef mRettype;
         Arglist mArgs;
-        bool isVariadic; // extern only
+        bool mIsVariadic; // extern only
 
         ::std::string mAbi;
         Flags flags;
@@ -230,10 +230,10 @@ namespace AST {
         Function(Function&&) = default;
         Function& operator=(Function&&) = default;
 
-        Function(Span sp, ::std::string abi, Flags flags, GenericParams params, TypeRef ret_type, Arglist args, bool is_variadic);
+        Function(Span sp, ::std::string abi, Flags flags, GenericParams params, TypeRef retType, Arglist args, bool isVariadic);
 
         // Helper for derive, defines an ABI_RUST function with no generics
-        Function(Span sp, TypeRef ret_type, Arglist args);
+        Function(Span sp, TypeRef retType, Arglist args);
 
         void setCode(Expr code) {
             mCode = ::std::move(code);
@@ -255,8 +255,8 @@ namespace AST {
             return flags.is_const;
         }
 
-        bool is_unsafe() const {
-            return flags.is_unsafe;
+        bool isUnsafe() const {
+            return flags.isUnsafe;
         }
 
         bool isAsync() const {
@@ -295,8 +295,8 @@ namespace AST {
             return mArgs;
         }
 
-        bool is_variadic() const {
-            return isVariadic;
+        bool isVariadic() const {
+            return mIsVariadic;
         }
 
         Function clone() const;
@@ -307,8 +307,8 @@ namespace AST {
         ::std::vector<Spanned<TypeTraitPath>> mSupertraits;
         ::std::vector<Spanned<LifetimeRef>> mLifetimes;
 
-        bool isMarker;
-        bool isUnsafe;
+        bool mIsMarker;
+        bool mIsUnsafe;
         NamedList<Item> mItems;
 
     public:
@@ -355,14 +355,14 @@ namespace AST {
         void addStatic(Span sp, RcString name, AttributeList attrs, Static v);
 
         void setIsMarker();
-        bool is_marker() const;
+        bool isMarker() const;
 
         void setIsUnsafe() {
-            isUnsafe = true;
+            mIsUnsafe = true;
         }
 
-        bool is_unsafe() const {
-            return isUnsafe;
+        bool isUnsafe() const {
+            return mIsUnsafe;
         }
 
         bool hasNamedItem(const RcString& name, bool& outIsFcn) const;
@@ -512,24 +512,24 @@ namespace AST {
     };
 
     class ImplDef {
-        bool isUnsafe;
+        bool mIsUnsafe;
         bool isConst;
         GenericParams mParams;
         Spanned<Path> mTrait;
         TypeRef mType;
 
     public:
-        ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef impl_type);
+        ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef implType);
 
         ImplDef(ImplDef&&) /*noexcept*/ = default;
         ImplDef& operator=(ImplDef&&) = default;
 
         void setIsUnsafe() {
-            isUnsafe = true;
+            mIsUnsafe = true;
         }
 
-        bool is_unsafe() const {
-            return isUnsafe;
+        bool isUnsafe() const {
+            return mIsUnsafe;
         }
 
         void setIsConst() {

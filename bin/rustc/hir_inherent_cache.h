@@ -13,7 +13,7 @@ namespace HIR {
     /// </summary>
     class InherentCache {
     private:
-        typedef ::std::function<void(const HIR::TypeData* self_ty, const HIR::TypeImpl& impl)> innerCallbackT;
+        typedef ::std::function<void(const HIR::TypeData* selfTy, const HIR::TypeImpl& impl)> innerCallbackT;
 
         struct Lowest {
             // Same as HIR::Crate::ImplGroup
@@ -51,7 +51,7 @@ namespace HIR {
         /// Callback arguments:
         /// `self_ty`: Type for `Self` within the `impl` block
         /// `impl`: TypeImpl containing this method
-        typedef ::std::function<void(const HIR::TypeData* self_ty, const HIR::TypeImpl& impl)> callbackT;
+        typedef ::std::function<void(const HIR::TypeData* selfTy, const HIR::TypeImpl& impl)> callbackT;
 
         void insertAll(const Span& sp, const HIR::TypeImpl& impl, const HIR::SimplePath& langBox);
         /// Locates methods matching the specifided type

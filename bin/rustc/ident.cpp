@@ -10,7 +10,7 @@ bool Ident::Hygiene::isVisible(const Hygiene& src) const {
         return false;
     }
     for (size_t i = 0; i < inner->contexts.size(); i++) {
-        if (inner->contexts[i] != src->contexts[i] || inner->macro_definitions[i] != src->macro_definitions[i]) {
+        if (inner->contexts[i] != src->contexts[i] || inner->macroDefinitions[i] != src->macroDefinitions[i]) {
             return false;
         }
     }
@@ -18,7 +18,7 @@ bool Ident::Hygiene::isVisible(const Hygiene& src) const {
     // semi-opaque rib: it must be removed at its definition boundary before
     // bindings outside that definition become visible.
     for (size_t i = inner->contexts.size(); i < src->contexts.size(); i++) {
-        if (src->macro_definitions[i] != 0) {
+        if (src->macroDefinitions[i] != 0) {
             return false;
         }
     }
@@ -37,8 +37,8 @@ bool Ident::Hygiene::isVisible(const Hygiene& src) const {
             os << ", ";
         }
         os << x->contexts[i];
-        if (x->macro_definitions[i] != 0) {
-            os << "@" << x->macro_definitions[i];
+        if (x->macroDefinitions[i] != 0) {
+            os << "@" << x->macroDefinitions[i];
         }
     }
     os << "]";
@@ -60,7 +60,7 @@ std::ostream& operator<<(std::ostream& os, const Ident::ModPath& x) {
 Ident::Hygiene::Hygiene(unsigned int index)
     : inner(new Inner()) {
     inner->contexts.push_back(index);
-    inner->macro_definitions.push_back(0);
+    inner->macroDefinitions.push_back(0);
 }
 Ident::Hygiene::Hygiene()
     : inner(new Inner()) {
@@ -87,19 +87,19 @@ Ident::Hygiene Ident::Hygiene::newScopeChained(const Hygiene& parent, unsigned i
     Hygiene rv;
     rv->searchModule = parent->searchModule;
     rv->contexts.reserve(parent->contexts.size() + 1);
-    rv->macro_definitions.reserve(parent->macro_definitions.size() + 1);
+    rv->macroDefinitions.reserve(parent->macroDefinitions.size() + 1);
     rv->contexts.insert(rv->contexts.begin(), parent->contexts.begin(), parent->contexts.end());
-    rv->macro_definitions.insert(rv->macro_definitions.begin(), parent->macro_definitions.begin(), parent->macro_definitions.end());
+    rv->macroDefinitions.insert(rv->macroDefinitions.begin(), parent->macroDefinitions.begin(), parent->macroDefinitions.end());
     rv->contexts.push_back(++gNextScope);
-    rv->macro_definitions.push_back(macroDefinition);
+    rv->macroDefinitions.push_back(macroDefinition);
     return rv;
 }
 Ident::Hygiene Ident::Hygiene::withTailScope(const Hygiene& scope, bool inheritModPath) const {
     assert(!scope->contexts.empty());
-    assert(scope->contexts.size() == scope->macro_definitions.size());
+    assert(scope->contexts.size() == scope->macroDefinitions.size());
     Hygiene rv(*this);
     rv->contexts.push_back(scope->contexts.back());
-    rv->macro_definitions.push_back(scope->macro_definitions.back());
+    rv->macroDefinitions.push_back(scope->macroDefinitions.back());
     if (inheritModPath && scope->searchModule) {
         rv->searchModule = scope->searchModule;
     }
@@ -109,28 +109,28 @@ Ident::Hygiene Ident::Hygiene::getParent() const {
     //assert(this->contexts.size() > 1);
     Hygiene rv;
     rv->contexts.insert(rv->contexts.begin(), inner->contexts.begin(), inner->contexts.end() - 1);
-    rv->macro_definitions.insert(rv->macro_definitions.begin(), inner->macro_definitions.begin(), inner->macro_definitions.end() - 1);
+    rv->macroDefinitions.insert(rv->macroDefinitions.begin(), inner->macroDefinitions.begin(), inner->macroDefinitions.end() - 1);
     return rv;
 }
 bool Ident::Hygiene::leaveMacroDefinition(unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext) {
-    assert(inner->contexts.size() == inner->macro_definitions.size());
-    if (inner->macro_definitions.empty() || inner->macro_definitions.back() != definition) {
+    assert(inner->contexts.size() == inner->macroDefinitions.size());
+    if (inner->macroDefinitions.empty() || inner->macroDefinitions.back() != definition) {
         return false;
     }
     inner->contexts.pop_back();
-    inner->macro_definitions.pop_back();
+    inner->macroDefinitions.pop_back();
     if (*this == tokenContext) {
         *this = definitionContext;
     }
     return true;
 }
-const Ident::ModPath& Ident::Hygiene::mod_path() const {
+const Ident::ModPath& Ident::Hygiene::modPath() const {
     assert(inner->searchModule);
     return *inner->searchModule;
 }
 Ordering Ident::Hygiene::ord(const Hygiene& x) const {
     ORD(inner->contexts, x->contexts);
-    ORD(inner->macro_definitions, x->macro_definitions); /*ORD(*m_inner->search_module, *x->search_module);*/
+    ORD(inner->macroDefinitions, x->macroDefinitions); /*ORD(*m_inner->search_module, *x->search_module);*/
     return OrdEqual;
 }
 Ident::Ident(const char* name)

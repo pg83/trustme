@@ -12,7 +12,7 @@ namespace AST {
         Span mSpan;
         // TODO: use an Ident?
         RcString mName;
-        ::TypeRef defaultValue;
+        ::TypeRef mDefaultValue;
 
     public:
         TypeParam(TypeParam&& x) = default;
@@ -37,11 +37,11 @@ namespace AST {
         }
 
         const TypeRef& getDefault() const {
-            return defaultValue;
+            return mDefaultValue;
         }
 
         TypeRef& getDefault() {
-            return defaultValue;
+            return mDefaultValue;
         }
 
         friend ::std::ostream& operator<<(::std::ostream& os, const TypeParam& tp);
@@ -79,7 +79,7 @@ namespace AST {
         Span mSpan;
         Ident mName;
         TypeRef mType;
-        Expr defaultValue;
+        Expr mDefaultValue;
 
     public:
         ValueParam(Span sp, ::AST::AttributeList attrs, Ident name, TypeRef type, Expr val);
@@ -109,12 +109,12 @@ namespace AST {
             return mType;
         }
 
-        const Expr& default_value() const {
-            return defaultValue;
+        const Expr& defaultValue() const {
+            return mDefaultValue;
         }
 
-        Expr& default_value() {
-            return defaultValue;
+        Expr& defaultValue() {
+            return mDefaultValue;
         }
 
         friend ::std::ostream& operator<<(::std::ostream& os, const ValueParam& p);

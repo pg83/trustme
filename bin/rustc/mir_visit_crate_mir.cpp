@@ -37,8 +37,8 @@ void MIR::OuterVisitor::visitFunction(::HIR::ItemPath p, ::HIR::Function& item) 
 
         ::HIR::TypeRef tmp;
         const auto& sp = item.mCode ? item.mCode->span() : Span();
-        const auto& ret_ty = mResolve.fixTraitDefaultReturn(sp, p, item.returnType, tmp);
-        cb(mResolve, p, item.mCode, item.mArgs, ret_ty);
+        const auto& retTy = mResolve.fixTraitDefaultReturn(sp, p, item.returnType, tmp);
+        cb(mResolve, p, item.mCode, item.mArgs, retTy);
     }
 }
 
@@ -59,7 +59,7 @@ void MIR::OuterVisitor::visitConstant(::HIR::ItemPath p, ::HIR::Constant& item) 
 }
 
 void MIR::OuterVisitor::visitStruct(::HIR::ItemPath p, ::HIR::Struct& item) {
-    auto _ = this->mResolve.setImplGenerics(item.structMarkings.dst_type, item.mParams);
+    auto _ = this->mResolve.setImplGenerics(item.structMarkings.dstType, item.mParams);
     ::HIR::Visitor::visitStruct(p, item);
 }
 
@@ -97,9 +97,9 @@ void MIR::OuterVisitor::visitInherentType(::HIR::ItemPath p, ::HIR::TypeAlias& i
     ::HIR::Visitor::visitInherentType(p, item);
 }
 
-void MIR::OuterVisitor::visitTraitImpl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {
+void MIR::OuterVisitor::visitTraitImpl(const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) {
     auto _ = this->mResolve.setImplGenerics(impl.mType, impl.mParams);
-    ::HIR::Visitor::visitTraitImpl(trait_path, impl);
+    ::HIR::Visitor::visitTraitImpl(traitPath, impl);
 }
 
 namespace MIR {

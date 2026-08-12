@@ -43,7 +43,7 @@ namespace AST {
     Crate::Crate(stl::ObjPool* pool, HIR::TypeInterner& types)
         : pool(pool)
         , types(types)
-        , rootModule(AST::AbsolutePath())
+        , mRootModule(AST::AbsolutePath())
         , loadStd(LOAD_STD)
     {
     }
@@ -62,7 +62,7 @@ namespace AST {
                 }
             }
         };
-        iterateModule(rootModule, cb);
+        iterateModule(mRootModule, cb);
 
         // Check for no_std or no_core, and load libstd/libcore
         // - Duplicates some of the logic in "Expand", but also helps keep crate loading separate to most of expand
@@ -223,10 +223,10 @@ namespace AST {
             return realName;
         } else {
         }
-        auto& ext_crate = res.first->second;
+        auto& extCrate = res.first->second;
         // Move the external list out (doesn't need to be kept in the nested crate)
         //auto crate_ext_list = mv$( ext_crate.m_hir->m_ext_crates );
-        const auto& crateExtList = ext_crate.hir->extCrates;
+        const auto& crateExtList = extCrate.hir->extCrates;
 
         // Load referenced crates
         for (const auto& ext : crateExtList) {
@@ -241,28 +241,28 @@ namespace AST {
         // NOTE: Add the crate to the ordered list AFTER its dependencies
         externCratesOrd.push_back(realName);
 
-        if (ext_crate.shortName == "core") {
+        if (extCrate.shortName == "core") {
             if (this->extCratenameCore == "") {
-                this->extCratenameCore = ext_crate.mName;
+                this->extCratenameCore = extCrate.mName;
             }
         }
-        if (ext_crate.shortName == "std") {
+        if (extCrate.shortName == "std") {
             if (this->extCratenameStd == "") {
-                this->extCratenameStd = ext_crate.mName;
+                this->extCratenameStd = extCrate.mName;
             }
         }
-        if (ext_crate.shortName == "proc_macro") {
+        if (extCrate.shortName == "proc_macro") {
             if (this->extCratenameProcmacro == "") {
-                this->extCratenameProcmacro = ext_crate.mName;
+                this->extCratenameProcmacro = extCrate.mName;
             }
         }
-        if (ext_crate.shortName == "test") {
+        if (extCrate.shortName == "test") {
             if (this->extCratenameTest == "") {
-                this->extCratenameTest = ext_crate.mName;
+                this->extCratenameTest = extCrate.mName;
             }
         }
 
-        DEBUG("Loaded '" << name << "' from '" << basename << "' (actual name is '" << realName << "' aka `" << ext_crate.shortName << "`)");
+        DEBUG("Loaded '" << name << "' from '" << basename << "' (actual name is '" << realName << "' aka `" << extCrate.shortName << "`)");
         return realName;
     }
 

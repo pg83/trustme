@@ -164,7 +164,7 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
     newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
     newmod.addItem(Span(), visPrivate, "MACROS", mv$(testsList), {});
 
-    crate.rootModule.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
+    crate.mRootModule.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
     crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"proc_macro#", "main"});
 }
 
@@ -227,7 +227,7 @@ struct ProcMacroInv: public TokenStream {
     bool eofHit = false;
 
 public:
-    ProcMacroInv(const Span& sp, AST::Edition edition, const char* executable, const ::HIR::ProcMacro& proc_macro_desc);
+    ProcMacroInv(const Span& sp, AST::Edition edition, const char* executable, const ::HIR::ProcMacro& procMacroDesc);
     ProcMacroInv(const ProcMacroInv&) = delete;
     ProcMacroInv(ProcMacroInv&&) = default;
     ProcMacroInv& operator=(const ProcMacroInv&) = delete;
@@ -432,12 +432,12 @@ private:
 ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath) {
     TRACE_FUNCTION_F(macPath);
     // 1. Locate macro in HIR list
-    const auto& crate_name = macPath.front();
-    ASSERT_BUG(sp, crate.externCrates.count(crate_name), "Crate not loaded for macro: [" << macPath << "]");
-    const auto& ext_crate = crate.externCrates.at(crate_name);
+    const auto& crateName = macPath.front();
+    ASSERT_BUG(sp, crate.externCrates.count(crateName), "Crate not loaded for macro: [" << macPath << "]");
+    const auto& extCrate = crate.externCrates.at(crateName);
     // TODO: Ensure that this macro is in the listed crate.
     const ::HIR::ProcMacro* pmp = nullptr;
-    for (const auto& mi : ext_crate.hir->rootModule.macroItems) {
+    for (const auto& mi : extCrate.hir->mRootModule.macroItems) {
         if (!mi.second->ent.is_ProcMacro()) {
             continue;
         }
@@ -459,11 +459,11 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const
     }
 
     // 2. Get executable and macro name
-    ::std::string procMacroExeName = ext_crate.filename;
+    ::std::string procMacroExeName = extCrate.filename;
 
     // 3. Create ProcMacroInv
-    auto rv = ProcMacroInv(sp, ext_crate.hir->edition, procMacroExeName.c_str(), *pmp);
-    rv.parse_state().crate = &crate;
+    auto rv = ProcMacroInv(sp, extCrate.hir->edition, procMacroExeName.c_str(), *pmp);
+    rv.parseState().crate = &crate;
 
     return rv;
 
@@ -994,7 +994,7 @@ namespace {
                 (Any, pmi.sendRword("_");),
                 (Bang, pmi.sendSymbol("!");),
                 (Unit, pmi.sendSymbol("("); pmi.sendSymbol(")");),
-                (Macro, visitPath(te.inv->path()); pmi.sendSymbol("!"); pmi.sendSymbol("("); visitTokentree(te.inv->input_tt()); pmi.sendSymbol(")");),
+                (Macro, visitPath(te.inv->path()); pmi.sendSymbol("!"); pmi.sendSymbol("("); visitTokentree(te.inv->inputTt()); pmi.sendSymbol(")");),
                 (Primitive, TODO(sp, "proc_macro send primitive - " << ty);),
                 (Function, ::std::stringstream ss; ss << ty << " "; DEBUG("STRING: " << ss.str());
 
@@ -1005,8 +1005,8 @@ namespace {
                         pmi.sendSymbol(",");
                     } pmi.sendSymbol(")");
                 ),
-                (Borrow, pmi.sendSymbol("&"); this->visitLifetime(te.lifetime); if (te.is_mut) pmi.sendRword("mut"); pmi.sendSymbol("("); this->visitType(*te.inner); pmi.sendSymbol(")");),
-                (Pointer, pmi.sendSymbol("*"); if (te.is_mut) pmi.sendRword("mut"); else pmi.sendRword("const"); pmi.sendSymbol("("); this->visitType(*te.inner); pmi.sendSymbol(")");),
+                (Borrow, pmi.sendSymbol("&"); this->visitLifetime(te.lifetime); if (te.isMut) pmi.sendRword("mut"); pmi.sendSymbol("("); this->visitType(*te.inner); pmi.sendSymbol(")");),
+                (Pointer, pmi.sendSymbol("*"); if (te.isMut) pmi.sendRword("mut"); else pmi.sendRword("const"); pmi.sendSymbol("("); this->visitType(*te.inner); pmi.sendSymbol(")");),
                 (Array, pmi.sendSymbol("["); this->visitType(*te.inner); pmi.sendSymbol(";"); if (te.size) { this->visitNode(*te.size); } else { pmi.sendRword("_"); } pmi.sendSymbol("]");),
                 (Slice, pmi.sendSymbol("["); this->visitType(*te.inner); pmi.sendSymbol("]");),
                 (Generic,
@@ -1479,7 +1479,7 @@ namespace {
                     pmi.sendRword("pub");
                     pmi.sendSymbol("(");
                     pmi.sendRword("in");
-                    visitPath(vis.in_path());
+                    visitPath(vis.inPath());
                     pmi.sendSymbol(")");
                     break;
             }
@@ -1580,7 +1580,7 @@ namespace {
         void visitFunction(const RcString& name, const AST::Visibility& vis, const ::AST::Function& fcn) {
             this->visitVis(vis);
 
-            if (fcn.is_unsafe()) {
+            if (fcn.isUnsafe()) {
                 pmi.sendRword("unsafe");
             }
             if (fcn.is_const()) {
@@ -1604,7 +1604,7 @@ namespace {
                 this->visitType(arg.ty);
                 pmi.sendSymbol(",");
             }
-            if (fcn.is_variadic()) {
+            if (fcn.isVariadic()) {
                 pmi.sendSymbol("...");
             }
             pmi.sendSymbol(")");
@@ -1686,7 +1686,7 @@ namespace {
         /// Send a trait definition to the proc macro.
         void visitTrait(const RcString& name, const AST::Visibility& vis, const ::AST::Trait& trait) {
             this->visitVis(vis);
-            if (trait.is_unsafe()) {
+            if (trait.isUnsafe()) {
                 pmi.sendRword("unsafe");
             }
             pmi.sendRword("trait");
@@ -1871,11 +1871,11 @@ namespace {
     });
 }
 
-ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* executable, const ::HIR::ProcMacro& proc_macro_desc)
+ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* executable, const ::HIR::ProcMacro& procMacroDesc)
     : TokenStream(ParseState())
     , parentSpan(sp)
-    , thisSpan(Span(parentSpan, proc_macro_desc.path.crate_name(), proc_macro_desc.name))
-    , procMacroDesc(proc_macro_desc)
+    , thisSpan(Span(parentSpan, procMacroDesc.path.crateName(), procMacroDesc.name))
+    , procMacroDesc(procMacroDesc)
     , edition(edition)
 {
     if (getenv("MRUSTC_DUMP_PROCMACRO") && getenv("MRUSTC_DUMP_PROCMACRO")[0]) {
@@ -1910,7 +1910,7 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
     posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[0]);
     posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[1]);
 
-    char* argv[3] = {const_cast<char*>(executable), const_cast<char*>(proc_macro_desc.name.c_str()), nullptr};
+    char* argv[3] = {const_cast<char*>(executable), const_cast<char*>(procMacroDesc.name.c_str()), nullptr};
     DEBUG(argv[0] << " " << argv[1]);
     //char*   envp[] = { nullptr };
     int rv = posix_spawn(&this->handles.childPid, executable, &file_actions, nullptr, argv, environ);

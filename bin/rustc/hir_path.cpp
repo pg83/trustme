@@ -20,13 +20,13 @@ namespace HIR {
     {
     }
 
-    TraitPath::TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assocListT type_bounds, ::std::map<RcString, AtyBound> trait_bounds, const ::HIR::Trait* trait_ptr, BoundConstness constness)
+    TraitPath::TraitPath(::std::unique_ptr<GenericParams> hrtbs, GenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const ::HIR::Trait* traitPtr, BoundConstness constness)
         : hrtbs(::std::move(hrtbs))
         , mPath(::std::move(path))
-        , typeBounds(::std::move(type_bounds))
-        , traitBounds(::std::move(trait_bounds))
+        , typeBounds(::std::move(typeBounds))
+        , traitBounds(::std::move(traitBounds))
         , constness(constness)
-        , traitPtr(trait_ptr)
+        , traitPtr(traitPtr)
     {
     }
 
@@ -35,8 +35,8 @@ namespace HIR {
     TraitPath& TraitPath::operator=(TraitPath&&) = default;
 
     ::std::ostream& operator<<(::std::ostream& os, const ::HIR::SimplePath& x) {
-        if (x.crate_name() != "") {
-            os << "::\"" << x.crate_name() << "\"";
+        if (x.crateName() != "") {
+            os << "::\"" << x.crateName() << "\"";
         } else if (x.components().size() == 0) {
             os << "::";
         } else {
@@ -112,7 +112,7 @@ namespace HIR {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Path& x) {
-        TU_MATCH(::HIR::Path::Data, (x.mData), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.impl_params << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; if (e.hrtbs) { os << "for" << e.hrtbs->fmtArgs() << " "; } os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
+        TU_MATCH(::HIR::Path::Data, (x.mData), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; if (e.hrtbs) { os << "for" << e.hrtbs->fmtArgs() << " "; } os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
         return os;
     }
 }
@@ -181,7 +181,7 @@ void HIR::SimplePath::updateLastComponent(RcString v) {
 
 bool HIR::SimplePath::starts_with(const HIR::SimplePath& p, bool skipLast /*=false*/) const {
     if (p.members.empty()) {
-        return crate_name() == RcString();
+        return crateName() == RcString();
     }
     // This path can't start with `p` if it's shorter than `p`
     if (members.size() < p.members.size() - (skipLast ? 1 : 0)) {
@@ -355,18 +355,18 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
 {
 }
 
-::HIR::Path::Path(TypeRef ty, RcString item, PathParams item_params)
-    : mData(Data::make_UfcsInherent({mv$(ty), mv$(item), mv$(item_params)}))
+::HIR::Path::Path(TypeRef ty, RcString item, PathParams itemParams)
+    : mData(Data::make_UfcsInherent({mv$(ty), mv$(item), mv$(itemParams)}))
 {
 }
 
-::HIR::Path::Path(TypeRef ty, GenericPath trait, RcString item, PathParams item_params)
-    : mData(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(item_params)}))
+::HIR::Path::Path(TypeRef ty, GenericPath trait, RcString item, PathParams itemParams)
+    : mData(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(itemParams)}))
 {
 }
 
-::HIR::Path::Path(TypeRef ty, GenericParams hrtbs, GenericPath trait, RcString item, PathParams item_params)
-    : mData(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(item_params), box$(hrtbs)}))
+::HIR::Path::Path(TypeRef ty, GenericParams hrtbs, GenericPath trait, RcString item, PathParams itemParams)
+    : mData(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(itemParams), box$(hrtbs)}))
 {
 }
 
@@ -376,7 +376,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             return Path(Data::make_Generic(e.clone()));
         }
         TU_ARMA(UfcsInherent, e) {
-            return Path(Data::make_UfcsInherent({e.type, e.item, e.params.clone(), e.impl_params.clone()}));
+            return Path(Data::make_UfcsInherent({e.type, e.item, e.params.clone(), e.implParams.clone()}));
         }
         TU_ARMA(UfcsKnown, e) {
             return Path(
@@ -672,7 +672,7 @@ bool HIR::Path::equalsIgnoringRegions(const Path& x) const {
         return lhs.item == rhs.item
             && (lhs.type == rhs.type || lhs.type->equalsIgnoringRegions(rhs.type))
             && lhs.params.equalsIgnoringRegions(rhs.params)
-            && lhs.impl_params.equalsIgnoringRegions(rhs.impl_params);
+            && lhs.implParams.equalsIgnoringRegions(rhs.implParams);
     }
     TU_ARMA(UfcsKnown, lhs, rhs) {
         return lhs.item == rhs.item
@@ -757,7 +757,7 @@ SimplePath::SimplePath(RcString crate, ::std::span<const RcString> components) {
 SimplePath::SimplePath(RcString crate, ::std::initializer_list<RcString> components)
     : SimplePath(std::move(crate), ::std::span<const RcString>(components.begin(), components.end())) {
 }
-const RcString& SimplePath::crate_name() const {
+const RcString& SimplePath::crateName() const {
     static RcString empty;
     return members.empty() ? empty : members.front();
 }

@@ -11,7 +11,7 @@ class TTStream: public TokenStream {
     const Ident::Hygiene* hygienePtr = nullptr;
 
 public:
-    TTStream(Span parent, ParseState ps, const TokenTree& input_tt);
+    TTStream(Span parent, ParseState ps, const TokenTree& inputTt);
     ~TTStream();
 
     Position getPosition() const override;
@@ -36,7 +36,7 @@ class TTStreamO: public TokenStream {
     const Ident::Hygiene* hygienePtr = nullptr;
 
 public:
-    TTStreamO(Span parent, ParseState ps, TokenTree input_tt);
+    TTStreamO(Span parent, ParseState ps, TokenTree inputTt);
     ~TTStreamO();
 
     TTStreamO(TTStreamO&& x) = default;

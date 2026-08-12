@@ -28,9 +28,9 @@
 ::HIR::ExprStatePtr HIR::ExprStatePtr::clone(stl::ObjPool* pool) const {
     auto rv = ::HIR::ExprStatePtr(pool, ::HIR::ExprState((*this)->types, (*this)->mModule, (*this)->modPath));
     rv->traits = (*this)->traits;
-    rv->implGenerics = (*this)->implGenerics;
-    rv->itemGenerics = (*this)->itemGenerics;
-    rv->currentTraitPath = (*this)->currentTraitPath;
+    rv->mImplGenerics = (*this)->mImplGenerics;
+    rv->mItemGenerics = (*this)->mItemGenerics;
+    rv->mCurrentTraitPath = (*this)->mCurrentTraitPath;
     rv->currentTraitImpl = (*this)->currentTraitImpl;
     rv->stage = (*this)->stage;
     return rv;

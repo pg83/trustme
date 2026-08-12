@@ -151,10 +151,10 @@ class TraitResolution: public TraitResolveCommon {
     const HMTypeInferrence& ivars;
 
 public:
-    const ::HIR::SimplePath& visPath;
+    const ::HIR::SimplePath& mVisPath;
 
 private:
-    const ::HIR::GenericPath* currentTraitPath;
+    const ::HIR::GenericPath* mCurrentTraitPath;
     const ::HIR::Trait* currentTraitPtr;
 
     // A legacy solver invocation only needs this stack while it is actively
@@ -195,17 +195,17 @@ private:
     ::std::function<void(const Span&, const ::HIR::TypeData*, const ::HIR::TypeData*)> inherentTypeConstraint;
 
 public:
-    TraitResolution(const HMTypeInferrence& ivars, const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& vis_path, const ::HIR::GenericPath* current_trait);
+    TraitResolution(const HMTypeInferrence& ivars, const ::HIR::Crate& crate, const ::HIR::GenericParams* implParams, const ::HIR::GenericParams* itemParams, const ::HIR::SimplePath& visPath, const ::HIR::GenericPath* currentTrait);
     ~TraitResolution();
 
-    void setGenericContext(const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params);
+    void setGenericContext(const ::HIR::GenericParams* implParams, const ::HIR::GenericParams* itemParams);
 
     void setInherentTypeConstraint(::std::function<void(const Span&, const ::HIR::TypeData*, const ::HIR::TypeData*)> constraint) {
         inherentTypeConstraint = mv$(constraint);
     }
 
-    const ::HIR::GenericPath* current_trait_path() const {
-        return currentTraitPath;
+    const ::HIR::GenericPath* currentTraitPath() const {
+        return mCurrentTraitPath;
     }
 
     ::HIR::Compare comparePp(const Span& sp, const ::HIR::PathParams& left, const ::HIR::PathParams& right) const;
@@ -237,7 +237,7 @@ public:
 
     void expandAssociatedTypesParams(const Span& sp, ::HIR::PathParams& params) const;
 
-    typedef ::std::function<bool(HIR::Compare cmp, const ::HIR::TypeData*, const ::HIR::GenericPath& trait_path, const CachedBound& info)> tCbBound;
+    typedef ::std::function<bool(HIR::Compare cmp, const ::HIR::TypeData*, const ::HIR::GenericPath& traitPath, const CachedBound& info)> tCbBound;
     bool iterateBoundsTraits(const Span& sp, const HIR::TypeData* type, const HIR::SimplePath& trait, tCbBound cb) const;
     bool iterateBoundsTraits(const Span& sp, const HIR::TypeData* type, tCbBound cb) const;
     bool iterateBoundsTraits(const Span& sp, tCbBound cb) const;
@@ -276,7 +276,7 @@ public:
 
     typedef ::std::function<bool(const ::HIR::TraitPath&)> tCbFindTrait;
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
-    bool findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& params, const ::HIR::Trait& trait_ptr, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& pp, const ::HIR::TypeData* self_type, tCbFindTrait callback) const;
+    bool findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& params, const ::HIR::Trait& traitPtr, const ::HIR::SimplePath& traitPath, const ::HIR::PathParams& pp, const ::HIR::TypeData* selfType, tCbFindTrait callback) const;
     /// Search for a trait implementation in current bounds
     bool findTraitImplsBound(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeData* type, tCbTraitImplR callback) const;
 
@@ -327,13 +327,13 @@ public:
         const HIR::tTraitList& traits,
         const ::std::vector<unsigned>& ivars,
         unsigned int typeIvarCount,
-        const ::HIR::TypeData* top_ty,
-        const RcString& method_name,
+        const ::HIR::TypeData* topTy,
+        const RcString& methodName,
         /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, ::HIR::Path>>& possibilities
     ) const;
     /// Locate the named field by applying auto-dereferencing.
     /// \return Number of times deref was applied (or ~0 if _ was hit)
-    unsigned int autoderefFindField(const Span& sp, const ::HIR::TypeData* top_ty, const RcString& name, /* Out -> */ ::HIR::TypeRef& fieldType) const;
+    unsigned int autoderefFindField(const Span& sp, const ::HIR::TypeData* topTy, const RcString& name, /* Out -> */ ::HIR::TypeRef& fieldType) const;
 
     enum class AutoderefResult {
         NoMatch,
@@ -348,7 +348,7 @@ public:
         const Span& sp,
         const ::HIR::TypeData* ty,
         ::HIR::TypeRef& target,
-        ::std::optional<::HIR::TypeRef>* impl_type = nullptr
+        ::std::optional<::HIR::TypeRef>* implType = nullptr
     ) const;
 
     /// Apply an automatic dereference
@@ -374,11 +374,11 @@ public:
         Box,
     };
     friend ::std::ostream& operator<<(::std::ostream& os, const AllowedReceivers& x);
-    bool findMethod(const Span& sp, const HIR::tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const ::HIR::TypeData* ty, const RcString& method_name, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, ::HIR::Path>>& possibilities) const;
+    bool findMethod(const Span& sp, const HIR::tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const ::HIR::TypeData* ty, const RcString& methodName, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, ::HIR::Path>>& possibilities) const;
 
     /// Locates a named method in a trait, and returns the path of the trait that contains it (with fixed parameters)
-    const ::HIR::Function* traitContainsMethod(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const ::HIR::TypeData* self, const RcString& name, ::HIR::GenericPath& outPath) const;
-    bool traitContainsType(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const char* name, ::HIR::GenericPath& outPath) const;
+    const ::HIR::Function* traitContainsMethod(const Span& sp, const ::HIR::GenericPath& traitPath, const ::HIR::Trait& traitPtr, const ::HIR::TypeData* self, const RcString& name, ::HIR::GenericPath& outPath) const;
+    bool traitContainsType(const Span& sp, const ::HIR::GenericPath& traitPath, const ::HIR::Trait& traitPtr, const char* name, ::HIR::GenericPath& outPath) const;
 
     ::HIR::Compare typeIsSized(const Span& sp, const ::HIR::TypeData* ty) const;
     ::HIR::Compare typeIsCopy(const Span& sp, const ::HIR::TypeData* ty) const;

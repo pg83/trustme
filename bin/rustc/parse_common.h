@@ -51,7 +51,7 @@ extern AST::Pattern ParsePattern(TokenStream& lex, AllowOrPattern allowOr = Allo
 extern void ParseImplItem(TokenStream& lex, AST::Impl& impl);
 extern AST::Named<AST::Item> ParseTraitItem(TokenStream& lex);
 extern void ParseModItem(TokenStream& lex, AST::Module& mod, AST::AttributeList metaItems);
-extern ::AST::Named<::AST::Item> ParseModItemS(TokenStream& lex, const AST::Module::FileInfo& modFileinfo, const ::AST::AbsolutePath& mod_path, AST::AttributeList metaItems);
+extern ::AST::Named<::AST::Item> ParseModItemS(TokenStream& lex, const AST::Module::FileInfo& modFileinfo, const ::AST::AbsolutePath& modPath, AST::AttributeList metaItems);
 extern void ParseModRootItems(TokenStream& lex, AST::Module& mod);
 extern ::AST::Named<::AST::Item> ParseExternBlockItem(TokenStream& lex, const std::string& abi);
 
@@ -63,7 +63,7 @@ extern AST::ExprNodeP ParseExprVal(TokenStream& lex);
 //extern AST::ExprNodeP Parse_ExprBlockNode(TokenStream& lex, AST::ExprNodeBlock::Type ty=AST::ExprNodeBlock::Type::Bare, Ident label=Ident(""));
 extern AST::ExprNodeP ParseExprBlockNode(TokenStream& lex);
 extern AST::ExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence);
-extern AST::ExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST::Module>& local_mod, bool& addSilenceIfEnd);
+extern AST::ExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST::Module>& localMod, bool& addSilenceIfEnd);
 extern AST::ExprNodeP ParseStmt(TokenStream& lex);
 
 // unwrapped = Exclude the enclosing brackets (used by macro parse code)

@@ -3,7 +3,7 @@
 #include "hir_typeck_static.h" // for monomorphise_type_with
 
 bool ImplRef::moreSpecificThan(HIR::TypeInterner& types, const ImplRef& other) const {
-    TU_MATCH(Data, (this->mData), (te), (TraitImpl, if (te.impl == nullptr) { return false; } TU_MATCH(Data, (other.mData), (oe), (TraitImpl, if (oe.impl == nullptr) { return true; } return te.impl->moreSpecificThan(types, *oe.impl);), (BoundedPtr, return false;), (Bounded, return false;))), (BoundedPtr, if (!other.mData.is_BoundedPtr()) return false; const auto& oe = other.mData.as_BoundedPtr(); assert(te.type == oe.type); assert(*te.trait_args == *oe.trait_args); if (te.assoc->size() > oe.assoc->size()) return true; return false;), (Bounded, if (!other.mData.is_Bounded()) return false; const auto& oe = other.mData.as_Bounded(); assert(te.type == oe.type); assert(te.trait_args == oe.trait_args); if (te.assoc.size() > oe.assoc.size()) return true; return false;))
+    TU_MATCH(Data, (this->mData), (te), (TraitImpl, if (te.impl == nullptr) { return false; } TU_MATCH(Data, (other.mData), (oe), (TraitImpl, if (oe.impl == nullptr) { return true; } return te.impl->moreSpecificThan(types, *oe.impl);), (BoundedPtr, return false;), (Bounded, return false;))), (BoundedPtr, if (!other.mData.is_BoundedPtr()) return false; const auto& oe = other.mData.as_BoundedPtr(); assert(te.type == oe.type); assert(*te.traitArgs == *oe.traitArgs); if (te.assoc->size() > oe.assoc->size()) return true; return false;), (Bounded, if (!other.mData.is_Bounded()) return false; const auto& oe = other.mData.as_Bounded(); assert(te.type == oe.type); assert(te.traitArgs == oe.traitArgs); if (te.assoc.size() > oe.assoc.size()) return true; return false;))
     throw "";
 }
 
@@ -19,10 +19,10 @@ bool ImplRef::overlapsWith(const ::HIR::Crate& crate, const ImplRef& other) cons
         (BoundedPtr,
          // TODO: Bounded and BoundedPtr are compatible
          if (te.type != oe.type) return false;
-         if (*te.trait_args != *oe.trait_args) return false;
+         if (*te.traitArgs != *oe.traitArgs) return false;
          // Don't check associated types
          return true;),
-        (Bounded, if (te.type != oe.type) return false; if (te.trait_args != oe.trait_args) return false;
+        (Bounded, if (te.type != oe.type) return false; if (te.traitArgs != oe.traitArgs) return false;
          // Don't check associated types
          return true;)
     )
@@ -31,14 +31,14 @@ bool ImplRef::overlapsWith(const ::HIR::Crate& crate, const ImplRef& other) cons
 
 bool ImplRef::hasMagicParams() const {
     if (const auto* e = mData.opt_TraitImpl()) {
-        for (const auto& t : e->impl_params.types) {
+        for (const auto& t : e->implParams.types) {
             if (visitTyWith(t, [](const ::HIR::TypeData* t) {
                 return t->is_Generic() && t->as_Generic().is_placeholder();
             })) {
                 return true;
             }
         }
-        for (const auto& v : e->impl_params.values) {
+        for (const auto& v : e->implParams.values) {
             if (v.is_Generic() && v.as_Generic().is_placeholder()) {
                 return true;
             }
@@ -91,16 +91,16 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
         }
         return this->ti.selfCache;
     }
-    return MonomorphStatePtr(types, nullptr, &this->ti.impl_params, &this->params).getType(sp, ge);
+    return MonomorphStatePtr(types, nullptr, &this->ti.implParams, &this->params).getType(sp, ge);
 }
 
 ::HIR::ConstGeneric ImplRef::Monomorph::getValue(const Span& sp, const ::HIR::GenericRef& val) const /*override*/
 {
-    return MonomorphStatePtr(types, nullptr, &this->ti.impl_params, &this->params).getValue(sp, val);
+    return MonomorphStatePtr(types, nullptr, &this->ti.implParams, &this->params).getValue(sp, val);
 }
 
 ::HIR::LifetimeRef ImplRef::Monomorph::getLifetime(const Span& sp, const ::HIR::GenericRef& g) const /*override*/ {
-    return MonomorphStatePtr(types, nullptr, &this->ti.impl_params, &this->params).getLifetime(sp, g);
+    return MonomorphStatePtr(types, nullptr, &this->ti.implParams, &this->params).getLifetime(sp, g);
 }
 
 ::HIR::TypeRef ImplRef::getImplType(HIR::TypeInterner& types) const {
@@ -133,10 +133,10 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
             return this->getCbMonomorphTraitimpl(types, sp, {}).monomorphPathParams(sp, e.impl->traitArgs, true);
         }
         TU_ARMA(BoundedPtr, e) {
-            return MonomorphHrlsOnly(types, e.hrls).monomorphPathParams(sp, *e.trait_args, true);
+            return MonomorphHrlsOnly(types, e.hrls).monomorphPathParams(sp, *e.traitArgs, true);
         }
         TU_ARMA(Bounded, e) {
-            return MonomorphHrlsOnly(types, e.hrls).monomorphPathParams(sp, e.trait_args, true);
+            return MonomorphHrlsOnly(types, e.hrls).monomorphPathParams(sp, e.traitArgs, true);
         }
     }
     throw "";
@@ -155,16 +155,16 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
             return this->getCbMonomorphTraitimpl(types, sp, {}).monomorphType(sp, e.impl->traitArgs.types[idx]);
         }
         TU_ARMA(BoundedPtr, e) {
-            if (idx >= e.trait_args->types.size()) {
+            if (idx >= e.traitArgs->types.size()) {
                 return ::HIR::TypeRef();
             }
-            return MonomorphHrlsOnly(types, e.hrls).monomorphType(sp, e.trait_args->types.at(idx), true);
+            return MonomorphHrlsOnly(types, e.hrls).monomorphType(sp, e.traitArgs->types.at(idx), true);
         }
         TU_ARMA(Bounded, e) {
-            if (idx >= e.trait_args.types.size()) {
+            if (idx >= e.traitArgs.types.size()) {
                 return ::HIR::TypeRef();
             }
-            return MonomorphHrlsOnly(types, e.hrls).monomorphType(sp, e.trait_args.types.at(idx), true);
+            return MonomorphHrlsOnly(types, e.hrls).monomorphType(sp, e.traitArgs.types.at(idx), true);
         }
     }
     throw "";
@@ -179,10 +179,10 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
     TU_ARMA(TraitImpl, e) {
             auto it = e.impl->types.find(name);
             if (it == e.impl->types.end()) {
-                const HIR::TypeRef ty_self = types.self();
-                if (e.trait_ptr->types.count(name) && e.trait_ptr->types.at(name).hasDefault) {
+                const HIR::TypeRef tySelf = types.self();
+                if (e.traitPtr->types.count(name) && e.traitPtr->types.at(name).hasDefault) {
                     // Monomorph twice, first from trait to trait impl, second from trait impl to current
-                    auto def = MonomorphStatePtr(types, ty_self, &e.impl->traitArgs, nullptr).monomorphType(sp, e.trait_ptr->types.at(name).defaultValue);
+                    auto def = MonomorphStatePtr(types, tySelf, &e.impl->traitArgs, nullptr).monomorphType(sp, e.traitPtr->types.at(name).defaultValue);
                     return this->getCbMonomorphTraitimpl(types, sp, params).monomorphType(sp, def);
                 }
                 return ::HIR::TypeRef();
@@ -220,13 +220,13 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
                 os << "impl";
                 os << "(" << e.impl << ")";
                 os << e.impl->mParams.fmtArgs();
-                os << " " << *e.trait_path << e.impl->traitArgs << " for " << e.impl->mType << e.impl->mParams.fmtBounds();
+                os << " " << *e.traitPath << e.impl->traitArgs << " for " << e.impl->mType << e.impl->mParams.fmtBounds();
                 os << " {";
                 for (unsigned int i = 0; i < e.impl->mParams.mLifetimes.size(); i++) {
                     const auto& d = e.impl->mParams.mLifetimes[i];
                     os << d.mName << " = ";
-                    if (e.impl_params.mLifetimes[i] != HIR::LifetimeRef()) {
-                        os << e.impl_params.mLifetimes[i];
+                    if (e.implParams.mLifetimes[i] != HIR::LifetimeRef()) {
+                        os << e.implParams.mLifetimes[i];
                     } else {
                         os << "?";
                     }
@@ -235,8 +235,8 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
                 for (unsigned int i = 0; i < e.impl->mParams.types.size(); i++) {
                     const auto& tyD = e.impl->mParams.types[i];
                     os << tyD.mName << " = ";
-                    if (e.impl_params.types[i] != HIR::TypeRef()) {
-                        os << e.impl_params.types[i];
+                    if (e.implParams.types[i] != HIR::TypeRef()) {
+                        os << e.implParams.types[i];
                     } else {
                         os << "?";
                     }
@@ -245,8 +245,8 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
                 for (unsigned int i = 0; i < e.impl->mParams.values.size(); i++) {
                     const auto& d = e.impl->mParams.values[i];
                     os << d.mName << " = ";
-                    if (e.impl_params.values[i] != HIR::ConstGeneric()) {
-                        os << e.impl_params.values[i];
+                    if (e.implParams.values[i] != HIR::ConstGeneric()) {
+                        os << e.implParams.values[i];
                     } else {
                         os << "?";
                     }
@@ -260,12 +260,12 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
         }
         TU_ARM(x.mData, BoundedPtr, e) {
             assert(e.type);
-            assert(e.trait_args);
+            assert(e.traitArgs);
             assert(e.assoc);
-            os << "bound (ptr) for" << e.hrls << " " << e.type << " : ?" << *e.trait_args << " + {" << *e.assoc << "}";
+            os << "bound (ptr) for" << e.hrls << " " << e.type << " : ?" << *e.traitArgs << " + {" << *e.assoc << "}";
         }
         TU_ARM(x.mData, Bounded, e) {
-            os << "bound for" << e.hrls << " " << e.type << " : ?" << e.trait_args << " + {" << e.assoc << "}";
+            os << "bound for" << e.hrls << " " << e.type << " : ?" << e.traitArgs << " + {" << e.assoc << "}";
         }
     }
     return os;
@@ -274,8 +274,8 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
 ImplRef::ImplRef()
     : mData(Data::make_TraitImpl({{}, nullptr, nullptr, nullptr})) {
 }
-ImplRef::ImplRef(HIR::PathParams impl_params, const HIR::Trait& traitRef, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl)
-    : mData(Data::make_TraitImpl({mv$(impl_params), &traitRef, &trait, &impl})) {
+ImplRef::ImplRef(HIR::PathParams implParams, const HIR::Trait& traitRef, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl)
+    : mData(Data::make_TraitImpl({mv$(implParams), &traitRef, &trait, &impl})) {
 }
 ImplRef::ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness)
     : mData(Data::make_BoundedPtr({HIR::PathParams(), type, args, assoc, constness})) {

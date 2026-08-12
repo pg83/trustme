@@ -63,14 +63,14 @@ public:
 
 struct TypeFunction {
     AST::HigherRankedBounds hrbs;
-    bool is_unsafe;
+    bool isUnsafe;
     ::std::string mAbi;
     ::std::unique_ptr<TypeRef> mRettype;
     ::std::vector<TypeRef> argTypes;
-    bool is_variadic;
+    bool isVariadic;
 
     TypeFunction();
-    TypeFunction(AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool is_variadic);
+    TypeFunction(AST::HigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool isVariadic);
     ~TypeFunction();
     TypeFunction(TypeFunction&& other);
     TypeFunction(const TypeFunction& other);
@@ -115,12 +115,12 @@ TAGGED_UNION_OUT_OF_LINE(
     (Borrow,
      struct {
          AST::LifetimeRef lifetime;
-         bool is_mut;
+         bool isMut;
          ::std::unique_ptr<TypeRef> inner;
      }),
     (Pointer,
      struct {
-         bool is_mut;
+         bool isMut;
          ::std::unique_ptr<TypeRef> inner;
      }),
     (Array,
@@ -200,15 +200,15 @@ public:
 
     struct TagFunction {};
 
-    TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool is_unsafe, ::std::string abi, ::std::vector<TypeRef> args, bool is_variadic, TypeRef ret);
+    TypeRef(TagFunction, Span sp, AST::HigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret);
 
     struct TagReference {};
 
-    TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool is_mut, TypeRef innerType);
+    TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool isMut, TypeRef innerType);
 
     struct TagPointer {};
 
-    TypeRef(TagPointer, Span sp, bool is_mut, TypeRef innerType);
+    TypeRef(TagPointer, Span sp, bool isMut, TypeRef innerType);
 
     struct TagSizedArray {};
 

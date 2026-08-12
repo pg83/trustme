@@ -22,7 +22,7 @@ struct Ident {
             ::std::vector<unsigned int> contexts;
             // Zero for lexical scopes, otherwise the macro definition whose
             // invocation introduced the corresponding context.
-            ::std::vector<unsigned int> macro_definitions;
+            ::std::vector<unsigned int> macroDefinitions;
             ::std::shared_ptr<ModPath> searchModule;
         };
 
@@ -68,7 +68,7 @@ struct Ident {
             return inner->searchModule != 0;
         }
 
-        const ModPath& mod_path() const;
+        const ModPath& modPath() const;
 
         void setModPath(ModPath p) {
             inner->searchModule.reset(new ModPath(::std::move(p)));

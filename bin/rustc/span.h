@@ -25,7 +25,7 @@ public:
 
     Span(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs);
     Span(Span parent, const Position& position);
-    Span(Span parent, RcString source_crate, RcString macroName);
+    Span(Span parent, RcString sourceCrate, RcString macroName);
     ~Span();
 
     Span(const Span& x);
@@ -86,11 +86,11 @@ protected:
     size_t referenceCount;
 
 public:
-    Span parent_span;
+    Span parentSpan;
 
     virtual ~SpanInner() = 0;
     virtual void fmt(::std::ostream& os) const = 0;
-    virtual RcString crate_name() const = 0;
+    virtual RcString crateName() const = 0;
     virtual unsigned int nodeKind() const = 0;
 };
 
@@ -110,7 +110,7 @@ public:
     ~SpanInnerSource() override;
     void fmt(::std::ostream& os) const override;
 
-    RcString crate_name() const override {
+    RcString crateName() const override {
         return RcString();
     }
 
@@ -128,7 +128,7 @@ struct SpanInnerMacro: public SpanInner {
     ~SpanInnerMacro() override;
     void fmt(::std::ostream& os) const override;
 
-    RcString crate_name() const override {
+    RcString crateName() const override {
         return crate;
     }
 

@@ -10,12 +10,12 @@ Visibility Visibility::makeBarePrivate() {
     rv.mTy = Ty::Private;
     return rv;
 }
-const AST::Path& Visibility::in_path() const {
-    assert(inPath);
-    return *inPath;
+const AST::Path& Visibility::inPath() const {
+    assert(mInPath);
+    return *mInPath;
 }
-const AST::AbsolutePath& Visibility::vis_path() const {
-    assert(visPath);
-    return *visPath;
+const AST::AbsolutePath& Visibility::visPath() const {
+    assert(mVisPath);
+    return *mVisPath;
 }
 }

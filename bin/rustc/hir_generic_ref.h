@@ -79,7 +79,7 @@ namespace HIR {
 
         LifetimeRef(uint32_t binding);
 
-        static LifetimeRef new_static();
+        static LifetimeRef newStatic();
 
         bool isParam() const {
             return binding < 0xFF00;

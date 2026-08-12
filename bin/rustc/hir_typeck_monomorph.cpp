@@ -19,27 +19,27 @@ const ::HIR::TypeData* Monomorphiser::maybeMonomorphType(const Span& sp, ::HIR::
 MonomorphiserPP::MonomorphiserPP(HIR::TypeInterner& types): Monomorphiser(types) {}
 MonomorphStatePtr::MonomorphStatePtr(HIR::TypeInterner& types)
     : MonomorphiserPP(types)
-    , self_ty(nullptr)
+    , selfTy(nullptr)
     , ppImpl(nullptr)
     , ppMethod(nullptr)
     , ppHrb(nullptr) {
 }
-MonomorphStatePtr::MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeData* self_ty, const ::HIR::PathParams* paramsI, const ::HIR::PathParams* paramsM, const ::HIR::PathParams* paramsP, const ::HIR::PathParams* paramsH)
+MonomorphStatePtr::MonomorphStatePtr(HIR::TypeInterner& types, const ::HIR::TypeData* selfTy, const ::HIR::PathParams* paramsI, const ::HIR::PathParams* paramsM, const ::HIR::PathParams* paramsP, const ::HIR::PathParams* paramsH)
     : MonomorphiserPP(types)
-    , self_ty(self_ty)
+    , selfTy(selfTy)
     , ppImpl(paramsI)
     , ppMethod(paramsM)
     //, pp_placeholder(params_p)
     , ppHrb(paramsH) {
 }
 MonomorphStatePtr::MonomorphStatePtr(MonomorphStatePtr&& x)
-    : MonomorphStatePtr(x.type_interner(), x.self_ty, x.ppImpl, x.ppMethod, nullptr, x.ppHrb) {
+    : MonomorphStatePtr(x.typeInterner(), x.selfTy, x.ppImpl, x.ppMethod, nullptr, x.ppHrb) {
 }
 MonomorphStatePtr::MonomorphStatePtr(const MonomorphStatePtr& x)
-    : MonomorphStatePtr(x.type_interner(), x.self_ty, x.ppImpl, x.ppMethod, nullptr, x.ppHrb) {
+    : MonomorphStatePtr(x.typeInterner(), x.selfTy, x.ppImpl, x.ppMethod, nullptr, x.ppHrb) {
 }
 MonomorphStatePtr& MonomorphStatePtr::operator=(MonomorphStatePtr&& x) {
-    self_ty = x.self_ty;
+    selfTy = x.selfTy;
     ppImpl = x.ppImpl;
     ppMethod = x.ppMethod;
     ppHrb = x.ppHrb;
@@ -51,24 +51,24 @@ MonomorphHrlsOnly::MonomorphHrlsOnly(HIR::TypeInterner& types, const ::HIR::Path
 }
 MonomorphState::MonomorphState(HIR::TypeInterner& types)
     : MonomorphiserPP(types)
-    , self_ty()
+    , selfTy()
     , ppImpl(nullptr)
     , ppMethod(nullptr) {
 }
 MonomorphState::MonomorphState(MonomorphState&& x)
-    : MonomorphState(x.type_interner()) {
+    : MonomorphState(x.typeInterner()) {
     *this = ::std::move(x);
 }
 MonomorphState& MonomorphState::operator=(MonomorphState&& x) {
-    this->self_ty = ::std::move(x.self_ty);
+    this->selfTy = ::std::move(x.selfTy);
     this->ppImpl = (x.ppImpl == &x.ppImplData ? &this->ppImplData : x.ppImpl);
     this->ppImplData = ::std::move(x.ppImplData);
     this->ppMethod = x.ppMethod;
     return *this;
 }
 MonomorphState MonomorphState::clone() const {
-    MonomorphState rv(this->type_interner());
-    rv.self_ty = this->self_ty;
+    MonomorphState rv(this->typeInterner());
+    rv.selfTy = this->selfTy;
     rv.ppImpl = (this->ppImpl == &this->ppImplData ? &rv.ppImplData : this->ppImpl);
     rv.ppImplData = this->ppImplData.clone();
     rv.ppMethod = this->ppMethod;

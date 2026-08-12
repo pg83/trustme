@@ -141,7 +141,7 @@ public:
     void fmtSimplePath(const ::HIR::SimplePath& sp) {
         os << sp.components().size();
         os << "c"; // Needed to separate the component count from the crate name
-        this->fmtName(sp.crate_name());
+        this->fmtName(sp.crateName());
         for (const auto& c : sp.components()) {
             this->fmtName(c);
         }
@@ -290,7 +290,7 @@ public:
             TU_ARMA(Function, e) {
                 // - Function: 'F' <abi:RcString> <nargs> [args: <TypeRef> ...] <ret:TypeRef>
                 os << "F";
-                os << (e.is_unsafe ? "u" : ""); // Optional allowed, next is a number
+                os << (e.isUnsafe ? "u" : ""); // Optional allowed, next is a number
                 if (e.mAbi != ABI_RUST) {
                     os << "e";
                     this->fmtName(e.mAbi.c_str());

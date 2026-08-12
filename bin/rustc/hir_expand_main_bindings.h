@@ -24,10 +24,10 @@ extern void HIRExpandStaticBorrowConstants(::HIR::Crate& crate);
 
 extern void HIRExpandAnnotateUsageExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);
 extern void HIRExpandClosuresExpr(const ::HIR::Crate& crate, ::HIR::TypeRef& expTy, ::HIR::ExprPtr& exp);
-extern void HIRExpandUfcsEverythingExpr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp, const ::HIR::TraitImpl* current_trait_impl = nullptr);
+extern void HIRExpandUfcsEverythingExpr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp, const ::HIR::TraitImpl* currentTraitImpl = nullptr);
 extern void HIRExpandReborrowsExpr(const ::HIR::Crate& crate, ::HIR::ExprPtr& exp);
 extern void HIRExpandStaticBorrowConstantsMarkExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);
 extern void HIRExpandStaticBorrowConstantsExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);
 extern void HIRExpandLifetimeInfer(::HIR::Crate& crate);
 extern void HIRExpandLifetimeInferValidate(::HIR::Crate& crate);
-extern void HIRExpandLifetimeInferExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const HIR::TypeData* ret_ty, ::HIR::ExprPtr& exp);
+extern void HIRExpandLifetimeInferExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const HIR::TypeData* retTy, ::HIR::ExprPtr& exp);

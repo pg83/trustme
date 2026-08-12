@@ -124,7 +124,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     auto listItemTy = TypeRef(Span(), ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}));
     // NOTE: 1.39+ needs &TestDescAndFn here
     {
-        listItemTy = TypeRef(TypeRef::TagReference(), Span(), AST::LifetimeRef::new_static(), false, mv$(listItemTy));
+        listItemTy = TypeRef(TypeRef::TagReference(), Span(), AST::LifetimeRef::newStatic(), false, mv$(listItemTy));
     }
     auto testsList = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(testCount), CORETYPE_UINT))), ::AST::Expr(mv$(testsArray))};
 
@@ -139,7 +139,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
     newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
 
-    crate.rootModule.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
+    crate.mRootModule.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
     crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"test#", "main"});
 }
 
@@ -177,9 +177,9 @@ struct ProgramParams {
     ::std::string emitDepfile;
 
     AST::Edition edition = AST::Edition::Rust2015;
-    ::AST::Crate::Type crate_type = ::AST::Crate::Type::Unknown;
-    ::std::string crate_name;
-    ::std::string crate_name_suffix;
+    ::AST::Crate::Type crateType = ::AST::Crate::Type::Unknown;
+    ::std::string crateName;
+    ::std::string crateNameSuffix;
 
     OptimizationLevel optLevel = OptimizationLevel::None;
     bool debugAssertions = false;
@@ -191,7 +191,7 @@ struct ProgramParams {
     bool mirOptLevelExplicit = false;
     DebugInfoLevel debugInfo = DebugInfoLevel::None;
 
-    bool test_harness = false;
+    bool testHarness = false;
 
     // NOTE: If populated, nothing happens except for loading the target
     ::std::string targetSaveback;
@@ -366,7 +366,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (params.test_harness) {
+    if (params.testHarness) {
         CfgSetFlag("test");
     }
 
@@ -387,8 +387,8 @@ int main(int argc, char* argv[]) {
             return ParseCrate(pool, *types, params.infile, params.edition);
         });
         AST::Crate& crate = *cratePtr;
-        crate.testHarness = params.test_harness;
-        crate.crateNameSuffix = params.crate_name_suffix;
+        crate.testHarness = params.testHarness;
+        crate.crateNameSuffix = params.crateNameSuffix;
         //crate.m_crate_name = params.crate_name;
 
         if (params.lastStage == ProgramParams::STAGE_PARSE) {
@@ -404,25 +404,25 @@ int main(int argc, char* argv[]) {
                 AST::gCrateLoadDirs.push_back(ld);
             }
             crate.loadExterns();
-            if (params.test_harness) {
+            if (params.testHarness) {
                 auto testCrateName = RcString::newInterned("test");
                 AST::gImplicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(Span(), testCrateName)));
             }
         });
 
-        if (params.crate_name != "") {
+        if (params.crateName != "") {
             // Extract the crate type and name from the crate attributes
-            auto crate_type = params.crate_type;
-            if (crate_type == ::AST::Crate::Type::Unknown) {
-                crate_type = crate.crateType;
+            auto crateType = params.crateType;
+            if (crateType == ::AST::Crate::Type::Unknown) {
+                crateType = crate.crateType;
             }
-            if (crate_type == ::AST::Crate::Type::Unknown) {
+            if (crateType == ::AST::Crate::Type::Unknown) {
                 // Assume to be executable
-                crate_type = ::AST::Crate::Type::Executable;
+                crateType = ::AST::Crate::Type::Executable;
             }
-            crate.crateType = crate_type;
+            crate.crateType = crateType;
 
-            crate.setCrateName(params.crate_name);
+            crate.setCrateName(params.crateName);
             crate.crateType = ::AST::Crate::Type::Unknown;
         }
 
@@ -430,31 +430,31 @@ int main(int argc, char* argv[]) {
         CompilePhaseV("Expand", [&]() {
             Expand(crate);
 
-            if (params.test_harness) {
+            if (params.testHarness) {
                 ExpandTestHarness(crate);
             }
         });
 
         // Extract the crate type and name from the crate attributes
-        auto crate_type = params.crate_type;
-        if (crate_type == ::AST::Crate::Type::Unknown) {
-            crate_type = crate.crateType;
+        auto crateType = params.crateType;
+        if (crateType == ::AST::Crate::Type::Unknown) {
+            crateType = crate.crateType;
         }
-        if (crate_type == ::AST::Crate::Type::Unknown) {
+        if (crateType == ::AST::Crate::Type::Unknown) {
             // Assume to be executable
-            crate_type = ::AST::Crate::Type::Executable;
+            crateType = ::AST::Crate::Type::Executable;
         }
-        crate.crateType = crate_type;
+        crate.crateType = crateType;
 
         if (crate.crateType == ::AST::Crate::Type::ProcMacro) {
             ExpandProcMacroHarness(crate);
         }
 
-        auto crate_name = params.crate_name;
-        if (crate_name == "") {
-            crate_name = crate.crateNameSet;
+        auto crateName = params.crateName;
+        if (crateName == "") {
+            crateName = crate.crateNameSet;
         }
-        if (crate_name == "") {
+        if (crateName == "") {
             auto s = params.infile.find_last_of('/');
             if (s == ::std::string::npos) {
                 s = 0;
@@ -473,8 +473,8 @@ int main(int argc, char* argv[]) {
                 e = params.infile.size() - s;
             }
 
-            crate_name = ::std::string(params.infile.begin() + s, params.infile.begin() + e);
-            for (auto& b : crate_name) {
+            crateName = ::std::string(params.infile.begin() + s, params.infile.begin() + e);
+            for (auto& b : crateName) {
                 if ('0' <= b && b <= '9') {
                 } else if ('A' <= b && b <= 'Z') {
                 } else if (b == '_') {
@@ -485,10 +485,10 @@ int main(int argc, char* argv[]) {
                 }
             }
         }
-        if (params.test_harness) {
-            crate_name += "$test";
+        if (params.testHarness) {
+            crateName += "$test";
         }
-        crate.setCrateName(crate_name);
+        crate.setCrateName(crateName);
 
         if (params.outfile == "") {
             switch (crate.crateType) {
@@ -521,7 +521,7 @@ int main(int argc, char* argv[]) {
 
         // Allocator and panic strategies
         CompilePhaseV("Implicit Crates", [&]() {
-            if (crate.crateType == ::AST::Crate::Type::Executable || params.test_harness || crate.crateType == ::AST::Crate::Type::ProcMacro) {
+            if (crate.crateType == ::AST::Crate::Type::Executable || params.testHarness || crate.crateType == ::AST::Crate::Type::ProcMacro) {
                 bool allocatorCrateLoaded = false;
                 RcString allocCrateName;
                 bool panicRuntimeLoaded = false;
@@ -594,13 +594,13 @@ int main(int argc, char* argv[]) {
             };
 
             PathEnumerator pe;
-            pe.visitModule(crate.rootModule);
+            pe.visitModule(crate.mRootModule);
 
             ::std::ofstream of{params.emitDepfile};
             // TODO: Escape spaces and colons in these paths
             of << params.outfile << ": " << params.infile;
-            for (const auto& mod_path : pe.out) {
-                of << " " << mod_path;
+            for (const auto& modPath : pe.out) {
+                of << " " << modPath;
             }
             of << ::std::endl;
 
@@ -861,22 +861,22 @@ int main(int argc, char* argv[]) {
         transOpt.debugInfo = params.debugInfo;
 
         // Generate code for non-generic public items (if requested)
-        if (params.test_harness) {
+        if (params.testHarness) {
             // If the test harness is enabled, override crate type to "Executable"
-            crate_type = ::AST::Crate::Type::Executable;
+            crateType = ::AST::Crate::Type::Executable;
         }
 
         // TODO: For 1.29 executables/dylibs, add oom/panic shims
-        if (crate_type == ::AST::Crate::Type::ProcMacro) {
+        if (crateType == ::AST::Crate::Type::ProcMacro) {
             // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `mrustc-main`)
             CompilePhaseV("HIR Serialise", [&]() {
                 HIR::Crate crateForSer(pool, *types);
                 crateForSer.crateName = hirCrate->crateName;
                 crateForSer.edition = hirCrate->edition;
-                for (const auto& i : hirCrate->rootModule.macroItems) {
+                for (const auto& i : hirCrate->mRootModule.macroItems) {
                     DEBUG(i.first << ": " << i.second->ent.tagStr());
                     if (const auto* e = i.second->ent.opt_ProcMacro()) {
-                        crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, box$(HIR::VisEnt<HIR::MacroItem>{i.second->publicity, *e})));
+                        crateForSer.mRootModule.macroItems.insert(std::make_pair(i.first, box$(HIR::VisEnt<HIR::MacroItem>{i.second->publicity, *e})));
                     }
                 }
                 crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;
@@ -886,7 +886,7 @@ int main(int argc, char* argv[]) {
 
         // Enumerate items to be passed to codegen
         TransList items = CompilePhase<TransList>("Trans Enumerate", [&]() {
-            switch (crate_type) {
+            switch (crateType) {
                 case ::AST::Crate::Type::Unknown:
                     ::std::cerr << "BUG? Unknown crate type" << ::std::endl;
                     exit(1);
@@ -924,7 +924,7 @@ int main(int argc, char* argv[]) {
         memoryDump("Trans");
 
         std::string hirFile;
-        switch (crate_type) {
+        switch (crateType) {
             case ::AST::Crate::Type::RustLib:
                 // Save a loadable HIR dump
                 hirFile = params.outfile + ".hir";
@@ -953,7 +953,7 @@ int main(int argc, char* argv[]) {
             TransEnumerateCleanup(*hirCrate, items);
         });
 
-        switch (crate_type) {
+        switch (crateType) {
             case ::AST::Crate::Type::Unknown:
                 throw "";
             case ::AST::Crate::Type::RustLib:
@@ -1396,22 +1396,22 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
             }
             // --crate-tag <name>  >> Specify a version/identifier suffix for the crate
             else if (const auto* nameStr = checkWithArg("crate-tag")) {
-                this->crate_name_suffix = nameStr;
+                this->crateNameSuffix = nameStr;
             }
             // --crate-name <name>  >> Specify the crate name (overrides `#![crate_name="<name>"]`)
             else if (const auto* nameStr = checkWithArg("crate-name")) {
-                this->crate_name = nameStr;
+                this->crateName = nameStr;
             }
             // `--crate-type <name>`    - Specify the crate type (overrides `#![crate_type="<name>"]`)
             else if (const char* typeStr = checkWithArg("crate-type")) {
                 if (strcmp(typeStr, "lib") == 0 || strcmp(typeStr, "rlib") == 0) {
-                    this->crate_type = ::AST::Crate::Type::RustLib;
+                    this->crateType = ::AST::Crate::Type::RustLib;
                 } else if (strcmp(typeStr, "dylib") == 0) {
-                    this->crate_type = ::AST::Crate::Type::RustDylib;
+                    this->crateType = ::AST::Crate::Type::RustDylib;
                 } else if (strcmp(typeStr, "bin") == 0) {
-                    this->crate_type = ::AST::Crate::Type::Executable;
+                    this->crateType = ::AST::Crate::Type::Executable;
                 } else if (strcmp(typeStr, "proc-macro") == 0) {
-                    this->crate_type = ::AST::Crate::Type::ProcMacro;
+                    this->crateType = ::AST::Crate::Type::ProcMacro;
                 } else {
                     ::std::cerr << "Unknown value for --crate-type: " << typeStr << ::std::endl;
                     exit(1);
@@ -1477,7 +1477,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 }
                 this->targetSaveback = argv[++i];
             } else if (strcmp(arg, "--test") == 0) {
-                this->test_harness = true;
+                this->testHarness = true;
             } else if (const char* editionStr = checkWithArg("edition")) {
                 if (strcmp(editionStr, "2015") == 0) {
                     this->edition = AST::Edition::Rust2015;

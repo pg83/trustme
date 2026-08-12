@@ -39,7 +39,7 @@ LifetimeRef::LifetimeRef()
 LifetimeRef::LifetimeRef(uint32_t binding)
     : binding(binding) {
 }
-LifetimeRef LifetimeRef::new_static() {
+LifetimeRef LifetimeRef::newStatic() {
     LifetimeRef rv;
     rv.binding = LifetimeRef::STATIC;
     return rv;

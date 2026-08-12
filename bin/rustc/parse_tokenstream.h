@@ -50,7 +50,7 @@ class TokenStream {
     };
 
     ::std::vector<LookaheadEnt> mLookahead;
-    ParseState parseState;
+    ParseState mParseState;
 
 public:
     TokenStream(ParseState ps);
@@ -76,8 +76,8 @@ public:
     virtual void popHygine() {
     }
 
-    ParseState& parse_state() {
-        return parseState;
+    ParseState& parseState() {
+        return mParseState;
     }
 
     AST::Edition getEdition() const {
@@ -126,19 +126,19 @@ public:
 };
 
 #define SET_MODULE(lex, mod)                      \
-    SavedParseState _sps(lex, lex.parse_state()); \
-    lex.parse_state().module = &(mod)
+    SavedParseState _sps(lex, lex.parseState()); \
+    lex.parseState().module = &(mod)
 #define SET_ATTRS(lex, attrs)                     \
-    SavedParseState _sps(lex, lex.parse_state()); \
-    lex.parse_state().parentAttrs = &(attrs)
+    SavedParseState _sps(lex, lex.parseState()); \
+    lex.parseState().parentAttrs = &(attrs)
 #define SET_PARSE_FLAG(lex, flag)                 \
-    SavedParseState _sps(lex, lex.parse_state()); \
-    lex.parse_state().flag = true
+    SavedParseState _sps(lex, lex.parseState()); \
+    lex.parseState().flag = true
 #define CLEAR_PARSE_FLAG(lex, flag)               \
-    SavedParseState _sps(lex, lex.parse_state()); \
-    lex.parse_state().flag = false
+    SavedParseState _sps(lex, lex.parseState()); \
+    lex.parseState().flag = false
 #define CLEAR_PARSE_FLAGS_EXPR(lex)                    \
-    SavedParseState _sps(lex, lex.parse_state());      \
-    lex.parse_state().disallowStructLiteral = false; \
-    lex.parse_state().disallowCallOrIndex = false
-#define CHECK_PARSE_FLAG(lex, flag) (lex.parse_state().flag == true)
+    SavedParseState _sps(lex, lex.parseState());      \
+    lex.parseState().disallowStructLiteral = false; \
+    lex.parseState().disallowCallOrIndex = false
+#define CHECK_PARSE_FLAG(lex, flag) (lex.parseState().flag == true)

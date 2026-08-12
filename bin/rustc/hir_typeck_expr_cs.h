@@ -16,7 +16,7 @@ struct Context {
         virtual ~Revisitor() = default;
         virtual const Span& span() const = 0;
         virtual void fmt(::std::ostream& os) const = 0;
-        virtual bool revisit(Context& context, bool is_fallback) = 0;
+        virtual bool revisit(Context& context, bool isFallback) = 0;
     };
 
     struct Binding {
@@ -145,7 +145,7 @@ struct Context {
 
     const ::HIR::SimplePath mLangBox;
 
-    Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* impl_params, const ::HIR::GenericParams* item_params, const ::HIR::SimplePath& mod_path, const ::HIR::GenericPath* current_trait, const ::HIR::TraitImpl* current_trait_impl);
+    Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* implParams, const ::HIR::GenericParams* itemParams, const ::HIR::SimplePath& modPath, const ::HIR::GenericPath* currentTrait, const ::HIR::TraitImpl* currentTraitImpl);
 
     void dump() const;
 
@@ -235,7 +235,7 @@ struct Context {
     // ----
 
     // - Add a pattern binding (forcing the type to match)
-    void handlePattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type, bool is_irrefutable = false);
+    void handlePattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type, bool isIrrefutable = false);
     void handlePatternDirectInner(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type);
     void addBindingInner(const Span& sp, const ::HIR::PatternBinding& pb, ::HIR::TypeRef type);
 

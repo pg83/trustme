@@ -46,7 +46,7 @@ namespace HIR {
 
     class Publicity {
         static ::std::shared_ptr<::HIR::SimplePath> nonePath;
-        ::std::shared_ptr<::HIR::SimplePath> vis_path;
+        ::std::shared_ptr<::HIR::SimplePath> visPath;
 
         Publicity(::std::shared_ptr<::HIR::SimplePath> p);
 
@@ -62,7 +62,7 @@ namespace HIR {
         static Publicity newPriv(::HIR::SimplePath p);
 
         bool isGlobal() const {
-            return !vis_path;
+            return !visPath;
         }
 
         bool isVisible(const ::HIR::SimplePath& p) const;
@@ -120,7 +120,7 @@ namespace HIR {
 
         mutable ::std::map<::HIR::Path, EncodedLiteral> monomorphCache;
 
-        Static(Linkage linkage, bool is_mut, TypeRef type, ExprPtr value);
+        Static(Linkage linkage, bool isMut, TypeRef type, ExprPtr value);
     };
 
     class Constant {
@@ -195,7 +195,7 @@ namespace HIR {
 
         Function();
 
-        Function(Receiver receiver, GenericParams params, argsT args, TypeRef ret_ty, ExprPtr code);
+        Function(Receiver receiver, GenericParams params, argsT args, TypeRef retTy, ExprPtr code);
 
         ::HIR::TypeRef makePtrTy(const Span& sp, const Monomorphiser& ms) const;
     };
@@ -220,12 +220,12 @@ namespace HIR {
         Publicity vis;
         HIR::TypeRef ty;
         /// @brief Default value for this field
-        ::std::unique_ptr<HIR::GenericPath> default_value;
+        ::std::unique_ptr<HIR::GenericPath> defaultValue;
     };
 
     typedef ::std::vector<StructField> tStructFields;
 
-    extern HIR::TypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const tTupleFields& types);
+    extern HIR::TypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef retTy, const tTupleFields& types);
 
     /// Cache of the state of various language traits on an enum/struct
     struct TraitMarkings {
@@ -237,7 +237,7 @@ namespace HIR {
         bool hasDropImpl = false;
 
         /// `true` if there is a Copy impl
-        bool is_copy = false;
+        bool isCopy = false;
 
         struct AutoMarking {
             // If present, this impl is conditionally true based on the listed type parameters
@@ -267,7 +267,7 @@ namespace HIR {
             Possible,    // A ?Sized parameter
             Slice,       // [T]
             TraitObject, // (Trait)
-        } dst_type = DstType::None;
+        } dstType = DstType::None;
         unsigned int unsizedField = ~0u;
 
         enum class Coerce {
@@ -299,13 +299,13 @@ namespace HIR {
     public:
         struct DataVariant {
             RcString name;
-            bool is_struct; // Indicates that the variant does not show up in the value namespace
+            bool isStruct; // Indicates that the variant does not show up in the value namespace
             ::HIR::TypeRef type;
 
             /// Optional explicit descriminant value, only valid when repr isn't Repr::Auto
             ::HIR::ExprPtr discriminantExpr;
             // Constant-evaluated descriminant value
-            U128 discriminant_value = U128(0);
+            U128 discriminantValue = U128(0);
         };
         enum class Repr {
             Auto,
@@ -370,7 +370,7 @@ namespace HIR {
         struct FieldDefault {
             size_t index;
             HIR::ExprPtr expr;
-            EncodedLiteral value_res;
+            EncodedLiteral valueRes;
             Constant::ValueState state = Constant::ValueState::Unknown;
 
             FieldDefault(size_t index, HIR::ExprPtr v);
@@ -411,7 +411,7 @@ namespace HIR {
 
     struct AssociatedType {
         ::HIR::GenericParams generics;
-        bool is_sized;
+        bool isSized;
         LifetimeRef lifetimeBound;
         ::std::vector<::HIR::TraitPath> traitBounds;
         bool hasDefault;
@@ -419,9 +419,9 @@ namespace HIR {
 
         AssociatedType(
             ::HIR::GenericParams generics,
-            bool is_sized,
-            LifetimeRef lifetime_bound,
-            ::std::vector<::HIR::TraitPath> trait_bounds,
+            bool isSized,
+            LifetimeRef lifetimeBound,
+            ::std::vector<::HIR::TraitPath> traitBounds,
             ::HIR::TypeRef defaultType
         );
     };
@@ -435,7 +435,7 @@ namespace HIR {
         // NOTE: Not serialised!
         ::std::vector<::HIR::TraitPath> parentTraits;
 
-        bool isMarker; // aka auto trait/OIBIT
+        bool mIsMarker; // aka auto trait/OIBIT
         bool isConst;
         /// Auto traits and traits carrying `#[rustc_coinductive]` admit
         /// productive recursive goals in the trait solver.
@@ -463,8 +463,8 @@ namespace HIR {
         Trait(GenericParams gps, LifetimeRef lifetime, ::std::vector<::HIR::TraitPath> parents);
 
         ::HIR::TypeRef getVtableType(const Span& sp, const ::HIR::Crate& crate, const ::HIR::TypeData::Data_TraitObject& te) const;
-        unsigned getVtableValueIndex(const HIR::GenericPath& trait_path, const RcString& name) const;
-        unsigned getVtableParentIndex(TypeInterner& types, const Span& sp, const HIR::PathParams& thisParams, const HIR::GenericPath& trait_path) const;
+        unsigned getVtableValueIndex(const HIR::GenericPath& traitPath, const RcString& name) const;
+        unsigned getVtableParentIndex(TypeInterner& types, const Span& sp, const HIR::PathParams& thisParams, const HIR::GenericPath& traitPath) const;
         ::std::pair<const ::HIR::AssociatedType*, const ::HIR::PathParams*> getAtyDef(const RcString& name) const;
     };
 
@@ -655,7 +655,7 @@ namespace HIR {
         // consumers of its metadata use their own feature set.
         ::std::set<RcString> features;
 
-        Module rootModule;
+        Module mRootModule;
 
         // Placeholder for types created during constant evaluation
         mutable std::vector<std::pair<RcString, std::unique_ptr<VisEnt<TypeItem>>>> newTypes;
@@ -765,7 +765,7 @@ namespace HIR {
         bool findAutoTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
         bool findTypeImpls(const ::HIR::TypeData* type, tCbResolveType tyRes, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
 
-        const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& ret_ty) const;
+        const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& retTy) const;
 
         const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const;
 

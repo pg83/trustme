@@ -6,7 +6,7 @@ Attribute::Attribute(Span sp, AttributeName name, TokenTree data)
     : mSpan(::std::move(sp))
     , mName(::std::move(name))
     , mData(::std::move(data))
-    , isInert(false) {
+    , mIsInert(false) {
 }
 }
 
