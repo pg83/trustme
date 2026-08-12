@@ -208,53 +208,53 @@ namespace {
                 // Type inferrence using the +=
                 // - "" as type name to indicate that it's just using the trait magic?
                 const char* langItem = nullptr;
-                auto operatorKind = typeck::PrimitiveOperator::None;
+                auto operatorKind = TypeckPrimitiveOperator::None;
                 switch (node.op) {
                     case ::HIR::ExprNodeAssign::Op::None:
                         throw "";
                     case ::HIR::ExprNodeAssign::Op::Add:
                         langItem = "add_assign";
-                        operatorKind = typeck::PrimitiveOperator::AddAssign;
+                        operatorKind = TypeckPrimitiveOperator::AddAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Sub:
                         langItem = "sub_assign";
-                        operatorKind = typeck::PrimitiveOperator::SubAssign;
+                        operatorKind = TypeckPrimitiveOperator::SubAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Mul:
                         langItem = "mul_assign";
-                        operatorKind = typeck::PrimitiveOperator::MulAssign;
+                        operatorKind = TypeckPrimitiveOperator::MulAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Div:
                         langItem = "div_assign";
-                        operatorKind = typeck::PrimitiveOperator::DivAssign;
+                        operatorKind = TypeckPrimitiveOperator::DivAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Mod:
                         langItem = "rem_assign";
-                        operatorKind = typeck::PrimitiveOperator::RemAssign;
+                        operatorKind = TypeckPrimitiveOperator::RemAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::And:
                         langItem = "bitand_assign";
-                        operatorKind = typeck::PrimitiveOperator::BitAndAssign;
+                        operatorKind = TypeckPrimitiveOperator::BitAndAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Or:
                         langItem = "bitor_assign";
-                        operatorKind = typeck::PrimitiveOperator::BitOrAssign;
+                        operatorKind = TypeckPrimitiveOperator::BitOrAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Xor:
                         langItem = "bitxor_assign";
-                        operatorKind = typeck::PrimitiveOperator::BitXorAssign;
+                        operatorKind = TypeckPrimitiveOperator::BitXorAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Shr:
                         langItem = "shr_assign";
-                        operatorKind = typeck::PrimitiveOperator::ShrAssign;
+                        operatorKind = TypeckPrimitiveOperator::ShrAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Shl:
                         langItem = "shl_assign";
-                        operatorKind = typeck::PrimitiveOperator::ShlAssign;
+                        operatorKind = TypeckPrimitiveOperator::ShlAssign;
                         break;
                 }
                 assert(langItem);
-                if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.slot->resType, node.mValue->resType)) {
+                if (!primitiveOperatorHasBuiltin(operatorKind, node.slot->resType, node.mValue->resType)) {
                     const auto& traitPath = this->getLangItemPath(node.span(), langItem);
                     checkTraitBound(node.span(), traitPath, {node.mValue->resType}, node.slot->resType);
                 }
@@ -301,9 +301,9 @@ namespace {
                     }
                     assert(itemName);
                     auto operatorKind = node.op == ::HIR::ExprNodeBinOp::Op::CmpEqu || node.op == ::HIR::ExprNodeBinOp::Op::CmpNEqu
-                        ? typeck::PrimitiveOperator::Equal
-                        : typeck::PrimitiveOperator::Order;
-                    if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.left->resType, node.right->resType)) {
+                        ? TypeckPrimitiveOperator::Equal
+                        : TypeckPrimitiveOperator::Order;
+                    if (!primitiveOperatorHasBuiltin(operatorKind, node.left->resType, node.right->resType)) {
                         const auto& opTrait = this->getLangItemPath(node.span(), itemName);
                         checkTraitBound(node.span(), opTrait, {node.right->resType}, node.left->resType);
                     }
@@ -316,7 +316,7 @@ namespace {
                     break;
                 default: {
                     const char* itemName = nullptr;
-                    auto operatorKind = typeck::PrimitiveOperator::None;
+                    auto operatorKind = TypeckPrimitiveOperator::None;
                     switch (node.op) {
                         case ::HIR::ExprNodeBinOp::Op::CmpEqu:
                             throw "";
@@ -337,49 +337,49 @@ namespace {
 
                         case ::HIR::ExprNodeBinOp::Op::Add:
                             itemName = "add";
-                            operatorKind = typeck::PrimitiveOperator::Add;
+                            operatorKind = TypeckPrimitiveOperator::Add;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Sub:
                             itemName = "sub";
-                            operatorKind = typeck::PrimitiveOperator::Sub;
+                            operatorKind = TypeckPrimitiveOperator::Sub;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Mul:
                             itemName = "mul";
-                            operatorKind = typeck::PrimitiveOperator::Mul;
+                            operatorKind = TypeckPrimitiveOperator::Mul;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Div:
                             itemName = "div";
-                            operatorKind = typeck::PrimitiveOperator::Div;
+                            operatorKind = TypeckPrimitiveOperator::Div;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Mod:
                             itemName = "rem";
-                            operatorKind = typeck::PrimitiveOperator::Rem;
+                            operatorKind = TypeckPrimitiveOperator::Rem;
                             break;
 
                         case ::HIR::ExprNodeBinOp::Op::And:
                             itemName = "bitand";
-                            operatorKind = typeck::PrimitiveOperator::BitAnd;
+                            operatorKind = TypeckPrimitiveOperator::BitAnd;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Or:
                             itemName = "bitor";
-                            operatorKind = typeck::PrimitiveOperator::BitOr;
+                            operatorKind = TypeckPrimitiveOperator::BitOr;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Xor:
                             itemName = "bitxor";
-                            operatorKind = typeck::PrimitiveOperator::BitXor;
+                            operatorKind = TypeckPrimitiveOperator::BitXor;
                             break;
 
                         case ::HIR::ExprNodeBinOp::Op::Shr:
                             itemName = "shr";
-                            operatorKind = typeck::PrimitiveOperator::Shr;
+                            operatorKind = TypeckPrimitiveOperator::Shr;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Shl:
                             itemName = "shl";
-                            operatorKind = typeck::PrimitiveOperator::Shl;
+                            operatorKind = TypeckPrimitiveOperator::Shl;
                             break;
                     }
                     assert(itemName);
-                    if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.left->resType, node.right->resType)) {
+                    if (!primitiveOperatorHasBuiltin(operatorKind, node.left->resType, node.right->resType)) {
                         const auto& opTrait = this->getLangItemPath(node.span(), itemName);
                         checkAssociatedType(node.span(), node.resType, opTrait, {node.right->resType}, node.left->resType, "Output");
                     }
@@ -393,17 +393,17 @@ namespace {
 
         void visit(::HIR::ExprNodeUniOp& node) override {
             TRACE_FUNCTION_F(&node << " " << ::HIR::ExprNodeUniOp::opname(node.op) << "...");
-            auto operatorKind = typeck::PrimitiveOperator::None;
+            auto operatorKind = TypeckPrimitiveOperator::None;
             switch (node.op) {
                 case ::HIR::ExprNodeUniOp::Op::Invert:
-                    operatorKind = typeck::PrimitiveOperator::Not;
-                    if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.mValue->resType)) {
+                    operatorKind = TypeckPrimitiveOperator::Not;
+                    if (!primitiveOperatorHasBuiltin(operatorKind, node.mValue->resType)) {
                         checkAssociatedType(node.span(), node.resType, this->getLangItemPath(node.span(), "not"), {}, node.mValue->resType, "Output");
                     }
                     break;
                 case ::HIR::ExprNodeUniOp::Op::Negate:
-                    operatorKind = typeck::PrimitiveOperator::Neg;
-                    if (!typeck::primitiveOperatorHasBuiltin(operatorKind, node.mValue->resType)) {
+                    operatorKind = TypeckPrimitiveOperator::Neg;
+                    if (!primitiveOperatorHasBuiltin(operatorKind, node.mValue->resType)) {
                         checkAssociatedType(node.span(), node.resType, this->getLangItemPath(node.span(), "neg"), {}, node.mValue->resType, "Output");
                     }
                     break;
@@ -579,7 +579,7 @@ namespace {
 
             const bool builtin = node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Builtin
                 || (node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Unknown
-                    && typeck::primitiveOperatorHasBuiltin(typeck::PrimitiveOperator::Deref, ty));
+                    && primitiveOperatorHasBuiltin(TypeckPrimitiveOperator::Deref, ty));
             if (builtin && ty->is_Pointer()) {
                 checkTypesEqual(node.span(), node.resType, ty->as_Pointer().inner);
             } else if (builtin && ty->is_Borrow()) {

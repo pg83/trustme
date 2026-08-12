@@ -510,7 +510,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
 
         case MacroPatEnt::PAT_TT:
             if (GET_TOK(tok, lex) == TOK_EOF) {
-                throw ParseError::Unexpected(lex, TOK_EOF);
+                throw ParseErrorUnexpected(lex, TOK_EOF);
             } else {
                 PUTBACK(tok, lex);
             }
@@ -573,7 +573,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                         toks.push_back(tok);
                         break;
                     default:
-                        throw ParseError::Unexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
+                        throw ParseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT});
                 }
                 GET_TOK(tok, lex);
                 toks.push_back(tok);
@@ -589,7 +589,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                 case TOK_RWORD_FALSE:
                     break;
                 default:
-                    throw ParseError::Unexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
+                    throw ParseErrorUnexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
             }
             return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
     }
@@ -2950,7 +2950,7 @@ public:
             depth++;
         } else if (tok.type() == close) {
             if (depth == 0) {
-                throw ParseError::Generic(FMT("Unmatched " << Token(close) << " in macro pattern"));
+                throw CompileErrorGeneric(FMT("Unmatched " << Token(close) << " in macro pattern"));
             }
             depth--;
         }
@@ -2964,11 +2964,11 @@ public:
                         PUTBACK(tok, lex);
                         break;
                     case TOK_RWORD_CRATE: // Not valid, as `$crate` already has meaning
-                        throw ParseError::Unexpected(lex, tok);
+                        throw ParseErrorUnexpected(lex, tok);
                     default:
                         // NOTE: Allow any reserved word
                         if (!Token::typeIsRword(tok.type())) {
-                            throw ParseError::Unexpected(lex, tok);
+                            throw ParseErrorUnexpected(lex, tok);
                         }
                     case TOK_UNDERSCORE:
                     case TOK_IDENT: {
@@ -3054,9 +3054,9 @@ public:
                                 break;
                             default:
                                 if (lex.editionAfter(AST::Edition::Rust2018)) {
-                                    throw ParseError::Unexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
+                                    throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
                                 } else {
-                                    throw ParseError::Unexpected(lex, tok, {TOK_PLUS, TOK_STAR});
+                                    throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
                                 }
                         }
                         assert(sepFlag);
@@ -3067,7 +3067,7 @@ public:
                 }
                 break;
             case TOK_EOF:
-                throw ParseError::Unexpected(lex, tok);
+                throw ParseErrorUnexpected(lex, tok);
             default:
                 ret.push_back(MacroPatEnt(lex.endSpan(ps), tok));
                 break;
@@ -3104,7 +3104,7 @@ struct ContentLoopVariableUse {
     int depth = 0;
     while (GET_TOK(tok, lex) != close || depth > 0) {
         if (tok.type() == TOK_EOF) {
-            throw ParseError::Unexpected(lex, tok);
+            throw ParseErrorUnexpected(lex, tok);
         }
         if (tok.type() == TOK_NULL) {
             continue;
@@ -3159,9 +3159,9 @@ struct ContentLoopVariableUse {
                         break;
                     default:
                         if (lex.editionAfter(AST::Edition::Rust2018)) {
-                            throw ParseError::Unexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
+                            throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR, TOK_QMARK});
                         } else {
-                            throw ParseError::Unexpected(lex, tok, {TOK_PLUS, TOK_STAR});
+                            throw ParseErrorUnexpected(lex, tok, {TOK_PLUS, TOK_STAR});
                         }
                 }
                 bool isOptional = (loopType != '+'); // Only '+' has to be entered
@@ -3342,7 +3342,7 @@ struct ContentLoopVariableUse {
                 ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
             } else {
                 // Expected reserved word, ident, or `(`
-                throw ParseError::Unexpected(lex, tok);
+                throw ParseErrorUnexpected(lex, tok);
             }
         } else {
             ret.push_back(MacroExpansionEnt(mv$(tok)));
@@ -3372,7 +3372,7 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
             close = TOK_SQUARE_CLOSE;
             break;
         default:
-            throw ParseError::Unexpected(lex, tok);
+            throw ParseErrorUnexpected(lex, tok);
     }
     // - Pattern entries
     RuleParseState state;
@@ -3393,7 +3393,7 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
             close = TOK_PAREN_CLOSE;
             break;
         default:
-            throw ParseError::Unexpected(lex, tok);
+            throw ParseErrorUnexpected(lex, tok);
     }
     rule.contents = ParseMacroRulesCont(lex, tok.type(), close, state);
 
@@ -3453,7 +3453,7 @@ MacroRulesPtr ParseMacroRules(TokenStream& lex) {
     }
     GET_TOK(tok, lex);
     if (tok.type() != TOK_EOF && tok.type() != TOK_BRACE_CLOSE) {
-        throw ParseError::Unexpected(lex, tok, {TOK_EOF, TOK_BRACE_CLOSE});
+        throw ParseErrorUnexpected(lex, tok, {TOK_EOF, TOK_BRACE_CLOSE});
     }
     DEBUG("- " << rules.size() << " rules");
 

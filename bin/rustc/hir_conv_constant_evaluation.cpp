@@ -4269,7 +4269,7 @@ namespace {
     // an early module can cast a variant of an enum that the main pass visits later.
     struct EnumValueExpander: public ::HIR::Visitor {
         const ::HIR::Crate& crate;
-        ::typeck::ModuleState mTypeck;
+        TypeckModuleState mTypeck;
         const ::HIR::Module* mMod;
         const ::HIR::ItemPath* modPath;
 

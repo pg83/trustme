@@ -39,7 +39,7 @@ namespace {
         if (Token::typeIsRword(tok.type())) {
             return tok.toStr().c_str();
         }
-        throw ParseError::Unexpected(lex, tok, TOK_IDENT);
+        throw ParseErrorUnexpected(lex, tok, TOK_IDENT);
     }
 }
 
@@ -172,42 +172,42 @@ public:
 };
 
 namespace {
-    AsmCommon::RegisterClass getRegClassX8664(const Span& sp, const RcString& str) {
+    AsmRegisterClass getRegClassX8664(const Span& sp, const RcString& str) {
         if (str == "reg") {
-            return AsmCommon::RegisterClass::x86Reg;
+            return AsmRegisterClass::x86Reg;
         }
         if (str == "reg_abcd") {
-            return AsmCommon::RegisterClass::x86RegAbcd;
+            return AsmRegisterClass::x86RegAbcd;
         }
         if (str == "reg_byte") {
-            return AsmCommon::RegisterClass::x86RegByte;
+            return AsmRegisterClass::x86RegByte;
         }
         if (str == "kreg") {
-            return AsmCommon::RegisterClass::x86Kreg;
+            return AsmRegisterClass::x86Kreg;
         }
         if (str == "xmm_reg") {
-            return AsmCommon::RegisterClass::x86Xmm;
+            return AsmRegisterClass::x86Xmm;
         }
         if (str == "ymm_reg") {
-            return AsmCommon::RegisterClass::x86Ymm;
+            return AsmRegisterClass::x86Ymm;
         }
         if (str == "zmm_reg") {
-            return AsmCommon::RegisterClass::x86Zmm;
+            return AsmRegisterClass::x86Zmm;
         }
         ERROR(sp, E0000, "Unknown register for x86/x86-64 - `" << str << "`");
     }
 
-    AsmCommon::RegisterClass getRegClassRiscv(const Span& sp, const RcString& str) {
+    AsmRegisterClass getRegClassRiscv(const Span& sp, const RcString& str) {
         if (str == "reg") {
-            return AsmCommon::RegisterClass::riscvReg;
+            return AsmRegisterClass::riscvReg;
         }
         if (str == "freg") {
-            return AsmCommon::RegisterClass::riscvFreg;
+            return AsmRegisterClass::riscvFreg;
         }
         ERROR(sp, E0000, "Unknown register for riscv64 - `" << str << "`");
     }
 
-    AsmCommon::RegisterClass getRegClass(const Span& sp, const RcString& str) {
+    AsmRegisterClass getRegClass(const Span& sp, const RcString& str) {
         if (TargetGetCurSpec().arch.mName == "x86_64") {
             return getRegClassX8664(sp, str);
         }
@@ -248,7 +248,7 @@ public:
 
         std::vector<AST::ExprNodeAsm2::Param> params;
         std::vector<RcString> names;
-        AsmCommon::Options options;
+        AsmOptions options;
         while (tok.type() == TOK_COMMA) {
             if (lex.lookahead(0) == TOK_EOF) {
                 GET_TOK(tok, lex);
@@ -327,31 +327,31 @@ public:
                 auto p = ParsePath(lex, PATH_GENERIC_EXPR);
                 paramSpec = AST::ExprNodeAsm2::Param::make_Sym(std::move(p));
             } else {
-                AsmCommon::Direction dir;
+                AsmDirection dir;
                 if (v == "inlateout") {
-                    dir = AsmCommon::Direction::InLateOut;
+                    dir = AsmDirection::InLateOut;
                 } else if (v == "in") {
-                    dir = AsmCommon::Direction::In;
+                    dir = AsmDirection::In;
                 } else if (v == "out") {
-                    dir = AsmCommon::Direction::Out;
+                    dir = AsmDirection::Out;
                 } else if (v == "lateout") {
-                    dir = AsmCommon::Direction::LateOut;
+                    dir = AsmDirection::LateOut;
                 } else if (v == "inout") {
-                    dir = AsmCommon::Direction::InOut;
+                    dir = AsmDirection::InOut;
                 } else {
                     ERROR(sp, E0000, "Unknown asm fragment - `" << tok.ident().name << "`");
                 }
 
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
                 GET_TOK(tok, lex);
-                AsmCommon::RegisterSpec regSpec;
+                AsmRegisterSpec regSpec;
                 if (tok.type() == TOK_IDENT) {
                     //Target_GetCurSpec().m_arch
-                    regSpec = AsmCommon::RegisterSpec::make_Class(getRegClass(lex.pointSpan(), tok.ident().name));
+                    regSpec = AsmRegisterSpec::make_Class(getRegClass(lex.pointSpan(), tok.ident().name));
                 } else if (tok.type() == TOK_STRING) {
-                    regSpec = AsmCommon::RegisterSpec::make_Explicit(tok.str());
+                    regSpec = AsmRegisterSpec::make_Explicit(tok.str());
                 } else {
-                    throw ParseError::Unexpected(lex, tok, {TOK_IDENT, TOK_STRING});
+                    throw ParseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_STRING});
                 }
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
@@ -359,8 +359,8 @@ public:
                     GET_TOK(tok, lex);
                     // out or lateout only
                     switch (dir) {
-                        case AsmCommon::Direction::LateOut:
-                        case AsmCommon::Direction::Out:
+                        case AsmDirection::LateOut:
+                        case AsmDirection::Out:
                             break;
                         default:
                             ERROR(sp, E0000, "Invalid use of _ in asm!");
@@ -372,8 +372,8 @@ public:
                     if (lex.lookahead(0) == TOK_FATARROW) {
                         // inout or inlateout only
                         switch (dir) {
-                            case AsmCommon::Direction::InLateOut:
-                            case AsmCommon::Direction::InOut:
+                            case AsmDirection::InLateOut:
+                            case AsmDirection::InOut:
                                 break;
                             default:
                                 ERROR(sp, E0000, "Invalid use of => in asm!");
@@ -413,12 +413,12 @@ public:
         //}
 
         unsigned nextIndex = 0;
-        std::vector<AsmCommon::Line> lines;
+        std::vector<AsmLine> lines;
         for (const auto& e : rawLines) {
             const auto& sp = e.first;
             const auto& text = e.second;
 
-            AsmCommon::Line line;
+            AsmLine line;
 
             const char* c = text.c_str();
             std::string curString;
@@ -452,7 +452,7 @@ public:
                     if (!*c) {
                         ERROR(sp, E0000, "Unexpected EOF in asm! format string");
                     }
-                    AsmCommon::LineFragment frag;
+                    AsmLineFragment frag;
                     if (name.empty()) {
                         frag.index = nextIndex;
                         if (frag.index >= params.size()) {
@@ -632,7 +632,7 @@ class CExpanderAssert: public ExpandProcMacro {
             toks.push_back(Token(TOK_STRING, ss.str(), {}));
             toks.push_back(Token(TOK_PAREN_CLOSE));
         } else {
-            throw ParseError::Unexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+            throw ParseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
         }
 
         toks.push_back(Token(TOK_BRACE_CLOSE));
@@ -690,7 +690,7 @@ class CConcatExpander: public ExpandProcMacro {
             }
         } while (GET_TOK(tok, lex) == TOK_COMMA);
         if (tok.type() != TOK_EOF) {
-            throw ParseError::Unexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+            throw ParseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
         }
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_STRING, mv$(rv), {}))));
@@ -715,7 +715,7 @@ class CConcatIdentsExpander: public ExpandProcMacro {
 
         } while (GET_TOK(tok, lex) == TOK_COMMA);
         if (tok.type() != TOK_EOF) {
-            throw ParseError::Unexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+            throw ParseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
         }
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_IDENT, Ident(lex.getHygiene(), RcString::newInterned(rv))))));

@@ -1,12 +1,11 @@
 #include "hir_asm.h"
 
-namespace AsmCommon {
 
-LineFragment::LineFragment()
+AsmLineFragment::AsmLineFragment()
     : index(UINT_MAX)
     , modifier('\0') {
 }
-Options::Options()
+AsmOptions::AsmOptions()
     : pure(0)
     , nomem(0)
     , readonly(0)
@@ -15,7 +14,7 @@ Options::Options()
     , nostack(0)
     , attSyntax(0) {
 }
-bool Options::any() const {
+bool AsmOptions::any() const {
 #define _(n) \
     if (n)   \
     return true
@@ -30,7 +29,7 @@ bool Options::any() const {
 #undef _
     return false;
 }
-void Options::fmt(std::ostream& os) const {
+void AsmOptions::fmt(std::ostream& os) const {
     os << "options(";
 #define _(n) \
     if (n)   \
@@ -46,7 +45,7 @@ void Options::fmt(std::ostream& os) const {
 #undef _
     os << ")";
 }
-bool Options::operator==(const Options& x) const {
+bool AsmOptions::operator==(const AsmOptions& x) const {
 #define _(n)      \
     if (n != x.n) \
     return false
@@ -61,26 +60,24 @@ bool Options::operator==(const Options& x) const {
 #undef _
     return true;
 }
-}
 
-namespace AsmCommon {
 
-std::ostream& operator<<(std::ostream& os, const Direction& d) {
+std::ostream& operator<<(std::ostream& os, const AsmDirection& d) {
     switch (d) {
-        case Direction::In:
+        case AsmDirection::In:
             return os << "in";
-        case Direction::Out:
+        case AsmDirection::Out:
             return os << "out";
-        case Direction::LateOut:
+        case AsmDirection::LateOut:
             return os << "lateout";
-        case Direction::InOut:
+        case AsmDirection::InOut:
             return os << "inout";
-        case Direction::InLateOut:
+        case AsmDirection::InLateOut:
             return os << "inlateout";
     }
     return os;
 }
-bool operator==(const RegisterSpec& a, const RegisterSpec& b) {
+bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
     if (a.tag() != b.tag()) {
         return false;
     }
@@ -92,30 +89,30 @@ bool operator==(const RegisterSpec& a, const RegisterSpec& b) {
     }
     return true;
 }
-const char* to_string(const RegisterClass& c) {
+const char* to_string(const AsmRegisterClass& c) {
     switch (c) {
-        case RegisterClass::x86Reg:
+        case AsmRegisterClass::x86Reg:
             return "reg";
-        case RegisterClass::x86RegAbcd:
+        case AsmRegisterClass::x86RegAbcd:
             return "reg_abcd";
-        case RegisterClass::x86RegByte:
+        case AsmRegisterClass::x86RegByte:
             return "reg_byte";
-        case RegisterClass::x86Xmm:
+        case AsmRegisterClass::x86Xmm:
             return "xmm_reg";
-        case RegisterClass::x86Ymm:
+        case AsmRegisterClass::x86Ymm:
             return "ymm_reg";
-        case RegisterClass::x86Zmm:
+        case AsmRegisterClass::x86Zmm:
             return "zmm_reg";
-        case RegisterClass::x86Kreg:
+        case AsmRegisterClass::x86Kreg:
             return "kreg";
-        case RegisterClass::riscvReg:
+        case AsmRegisterClass::riscvReg:
             return "reg";
-        case RegisterClass::riscvFreg:
+        case AsmRegisterClass::riscvFreg:
             return "freg";
     }
     throw "";
 }
-std::ostream& operator<<(std::ostream& os, const RegisterSpec& s) {
+std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s) {
     TU_MATCH_HDRA((s), {)
     TU_ARMA(Class, c) {
             os << to_string(c);
@@ -125,5 +122,4 @@ std::ostream& operator<<(std::ostream& os, const RegisterSpec& s) {
         }
     }
     return os;
-}
 }

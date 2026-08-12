@@ -25,12 +25,11 @@ extern ::HIR::PathParams clonePathParamsWith(::HIR::TypeInterner& types, const S
 
 extern void checkTypeClassPrimitive(const Span& sp, const ::HIR::TypeData* type, ::HIR::InferClass ic, ::HIR::CoreType ct);
 
-namespace typeck {
     // The primitive operation is a language candidate, separate from an
     // implementation of the operator trait.  Keeping this classification in
     // one place makes type checking, UFCS expansion, and validation agree on
     // which expressions may remain as MIR primitive operations.
-    enum class PrimitiveOperator {
+    enum class TypeckPrimitiveOperator {
         None,
 
         Add,
@@ -61,21 +60,20 @@ namespace typeck {
         ShrAssign,
     };
 
-    bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right);
+    bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right);
 
     // For these binary language operations, once the left-hand type is known
     // it also fixes an otherwise untyped right-hand operand. Shifts are
     // deliberately excluded: their right-hand side need only be an integer
     // and may have a different type.
-    bool primitiveOperatorLhsDeterminesRhs(PrimitiveOperator op, const ::HIR::TypeData* left);
+    bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const ::HIR::TypeData* left);
 
     // A binary language candidate is available either when both operands are
     // already known to be valid primitive inputs, or when the known lhs
     // determines the still-inferred rhs.
-    bool primitiveOperatorHasLanguageCandidate(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right);
+    bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right);
 
-    bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* value);
-}
+    bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const ::HIR::TypeData* value);
 
 class StaticTraitResolve;
 extern void TypecheckExpressionsValidateOne(const StaticTraitResolve& resolve, const ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>>& args, const ::HIR::TypeData* retTy, const ::HIR::ExprPtr& code);

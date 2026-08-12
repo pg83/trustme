@@ -4,7 +4,7 @@
 #include "hir_visitor.h"
 #include "hir_expr_state.h"
 
-void TypecheckCode(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr) {
+void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr) {
     if (expr.state->stage < ::HIR::ExprState::Stage::Typecheck) {
         //Typecheck_Code_Simple(ms, args, result_type, expr);
         TypecheckCodeCS(ms, args, resultType, expr);
@@ -12,8 +12,7 @@ void TypecheckCode(const typeck::ModuleState& ms, tArgs& args, const ::HIR::Type
     }
 }
 
-namespace typeck {
-    void ModuleState::prepareFromPath(const ::HIR::ItemPath& ip) {
+    void TypeckModuleState::prepareFromPath(const ::HIR::ItemPath& ip) {
         static Span sp;
         ASSERT_BUG(sp, ip.parent, "prepare_from_path with too-short path - " << ip);
 
@@ -28,7 +27,7 @@ namespace typeck {
                 }
             }
 
-            static void addTraitsFromMod(ModuleState& ms, const ::HIR::Module& mod) {
+            static void addTraitsFromMod(TypeckModuleState& ms, const ::HIR::Module& mod) {
                 // In-scope traits.
                 ms.traits.clear();
                 for (const auto& tp : mod.traits) {
@@ -83,12 +82,11 @@ namespace typeck {
             }
         }
     }
-} // namespace typeck
 
 namespace {
 
     class OuterVisitor: public ::HIR::Visitor {
-        ::typeck::ModuleState ms;
+        TypeckModuleState ms;
 
     public:
         OuterVisitor(::HIR::Crate& crate)
@@ -233,36 +231,35 @@ void TypecheckExpressions(::HIR::Crate& crate) {
     visitor.visitCrate(crate);
 }
 
-namespace typeck {
 
-ModuleState::ModuleState(const ::HIR::Crate& crate)
+TypeckModuleState::TypeckModuleState(const ::HIR::Crate& crate)
     : crate(crate)
     , currentTrait(nullptr)
     , currentTraitImpl(nullptr)
     , mImplGenerics(nullptr)
     , mItemGenerics(nullptr) {
 }
-ModuleState::NullOnDrop<const ::HIR::GenericPath> ModuleState::setCurrentTrait(const ::HIR::GenericPath& p) {
+TypeckModuleState::NullOnDrop<const ::HIR::GenericPath> TypeckModuleState::setCurrentTrait(const ::HIR::GenericPath& p) {
     assert(!currentTrait);
     currentTrait = &p;
     return NullOnDrop<const ::HIR::GenericPath>(currentTrait);
 }
-ModuleState::NullOnDrop<const ::HIR::TraitImpl> ModuleState::setCurrentTraitImpl(const ::HIR::TraitImpl& impl) {
+TypeckModuleState::NullOnDrop<const ::HIR::TraitImpl> TypeckModuleState::setCurrentTraitImpl(const ::HIR::TraitImpl& impl) {
     assert(!currentTraitImpl);
     currentTraitImpl = &impl;
     return NullOnDrop<const ::HIR::TraitImpl>(currentTraitImpl);
 }
-ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::setImplGenerics(const ::HIR::GenericParams& gps) {
+TypeckModuleState::NullOnDrop<const ::HIR::GenericParams> TypeckModuleState::setImplGenerics(const ::HIR::GenericParams& gps) {
     assert(!mImplGenerics);
     mImplGenerics = &gps;
     return NullOnDrop<const ::HIR::GenericParams>(mImplGenerics);
 }
-ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::setItemGenerics(const ::HIR::GenericParams& gps) {
+TypeckModuleState::NullOnDrop<const ::HIR::GenericParams> TypeckModuleState::setItemGenerics(const ::HIR::GenericParams& gps) {
     assert(!mItemGenerics);
     mItemGenerics = &gps;
     return NullOnDrop<const ::HIR::GenericParams>(mItemGenerics);
 }
-void ModuleState::pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod) {
+void TypeckModuleState::pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod) {
     auto sp = Span();
     modPaths.push_back(p.getSimplePath());
     DEBUG("Module has " << mod.traits.size() << " in-scope traits");
@@ -273,12 +270,11 @@ void ModuleState::pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod) {
         traits.push_back(::std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
     }
 }
-void ModuleState::popTraits(const ::HIR::Module& mod) {
+void TypeckModuleState::popTraits(const ::HIR::Module& mod) {
     DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     for (unsigned int i = 0; i < mod.traits.size(); i++) {
         traits.pop_back();
     }
     traits.pop_back();
     modPaths.pop_back();
-}
 }

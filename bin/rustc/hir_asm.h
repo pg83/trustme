@@ -12,9 +12,8 @@
 #define ABI_RUST "Rust"
 #define CRATE_BUILTINS "#builtins" // used for macro re-exports of builtins
 
-namespace AsmCommon {
 
-    enum class Direction {
+    enum class AsmDirection {
         In,
         Out,
         LateOut,
@@ -22,9 +21,9 @@ namespace AsmCommon {
         InLateOut
     };
 
-    std::ostream& operator<<(std::ostream& os, const Direction& d);
+    std::ostream& operator<<(std::ostream& os, const AsmDirection& d);
 
-    enum class RegisterClass {
+    enum class AsmRegisterClass {
         x86Reg,
         x86RegAbcd,
         x86RegByte,
@@ -64,7 +63,7 @@ namespace AsmCommon {
         //bpf_wreg,
     };
 
-    TAGGED_UNION_EX(RegisterSpec, (), Explicit, ((Class, RegisterClass), (Explicit, std::string)), (), (), (RegisterSpec clone() const {
+    TAGGED_UNION_EX(AsmRegisterSpec, (), Explicit, ((Class, AsmRegisterClass), (Explicit, std::string)), (), (), (AsmRegisterSpec clone() const {
                 TU_MATCH_HDRA((*this),{)
                 TU_ARMA(Class, e)   return e;
             TU_ARMA(Explicit, e) return e;
@@ -72,41 +71,41 @@ namespace AsmCommon {
                 throw "";
                     }));
 
-    bool operator==(const RegisterSpec& a, const RegisterSpec& b);
+    bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b);
 
-    static inline bool operator!=(const RegisterSpec& a, const RegisterSpec& b) {
+    static inline bool operator!=(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
         return !(a == b);
     }
 
-    const char* to_string(const RegisterClass& c);
+    const char* to_string(const AsmRegisterClass& c);
 
-    std::ostream& operator<<(std::ostream& os, const RegisterSpec& s);
+    std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s);
 
-    struct LineFragment {
+    struct AsmLineFragment {
         std::string before;
 
         unsigned index;
         char modifier;
 
-        LineFragment();
+        AsmLineFragment();
 
-        bool operator==(const LineFragment& x) const {
+        bool operator==(const AsmLineFragment& x) const {
             return before == x.before && index == x.index && modifier == x.modifier;
         }
     };
 
-    struct Line {
-        std::vector<LineFragment> frags;
+    struct AsmLine {
+        std::vector<AsmLineFragment> frags;
         std::string trailing;
 
         void fmt(std::ostream& os) const;
 
-        bool operator==(const Line& x) const {
+        bool operator==(const AsmLine& x) const {
             return frags == x.frags && trailing == x.trailing;
         }
     };
 
-    struct Options {
+    struct AsmOptions {
         unsigned pure : 1;
         unsigned nomem : 1;
         unsigned readonly : 1;
@@ -117,12 +116,11 @@ namespace AsmCommon {
         // Indicates `naked_asm!`
         unsigned naked : 1;
 
-        Options();
+        AsmOptions();
 
         bool any() const;
 
         void fmt(std::ostream& os) const;
 
-        bool operator==(const Options& x) const;
+        bool operator==(const AsmOptions& x) const;
     };
-}

@@ -4510,7 +4510,7 @@ namespace {
                                 return FMT(getDirText(e.dir) << "=" << n);
                             }
                             TU_ARMA(Class, c) {
-                                return FMT(getDirText(e.dir) << ":" << AsmCommon::to_string(c));
+                                return FMT(getDirText(e.dir) << ":" << to_string(c));
                             }
                     }
                     }
@@ -4522,17 +4522,17 @@ namespace {
                 throw "";
             }
 
-            static const char* getDirText(const AsmCommon::Direction& d) {
+            static const char* getDirText(const AsmDirection& d) {
                 switch (d) {
-                    case AsmCommon::Direction::In:
+                    case AsmDirection::In:
                         return "in";
-                    case AsmCommon::Direction::Out:
+                    case AsmDirection::Out:
                         return "out";
-                    case AsmCommon::Direction::InOut:
+                    case AsmDirection::InOut:
                         return "inout";
-                    case AsmCommon::Direction::LateOut:
+                    case AsmDirection::LateOut:
                         return "lateout";
-                    case AsmCommon::Direction::InLateOut:
+                    case AsmDirection::InLateOut:
                         return "inlateout";
                 }
                 throw "";
@@ -4796,32 +4796,32 @@ namespace {
                         switch(c)
                         {
                             // x86
-                            case AsmCommon::RegisterClass::x86Reg:
+                            case AsmRegisterClass::x86Reg:
                                 of << "r";
                                 break;
-                            case AsmCommon::RegisterClass::x86RegAbcd:
+                            case AsmRegisterClass::x86RegAbcd:
                                 of << "Q";
                                 break;
-                            case AsmCommon::RegisterClass::x86RegByte:
+                            case AsmRegisterClass::x86RegByte:
                                 of << "q";
                                 break;
-                            case AsmCommon::RegisterClass::x86Xmm:
+                            case AsmRegisterClass::x86Xmm:
                                 of << "x";
                                 break;
-                            case AsmCommon::RegisterClass::x86Ymm:
+                            case AsmRegisterClass::x86Ymm:
                                 of << "x";
                                 break;
-                            case AsmCommon::RegisterClass::x86Zmm:
+                            case AsmRegisterClass::x86Zmm:
                                 of << "v";
                                 break;
-                            case AsmCommon::RegisterClass::x86Kreg:
+                            case AsmRegisterClass::x86Kreg:
                                 of << "Yk";
                                 break;
                             // riscv
-                            case AsmCommon::RegisterClass::riscvReg:
+                            case AsmRegisterClass::riscvReg:
                                 of << "r";
                                 break;
-                            case AsmCommon::RegisterClass::riscvFreg:
+                            case AsmRegisterClass::riscvFreg:
                                 of << "f";
                                 break;
                         }
@@ -4856,32 +4856,32 @@ namespace {
                             switch(c)
                             {
                                     // x86
-                                    case AsmCommon::RegisterClass::x86Reg:
+                                    case AsmRegisterClass::x86Reg:
                                         of << "r";
                                         break;
-                                    case AsmCommon::RegisterClass::x86RegAbcd:
+                                    case AsmRegisterClass::x86RegAbcd:
                                         of << "Q";
                                         break;
-                                    case AsmCommon::RegisterClass::x86RegByte:
+                                    case AsmRegisterClass::x86RegByte:
                                         of << "q";
                                         break;
-                                    case AsmCommon::RegisterClass::x86Xmm:
+                                    case AsmRegisterClass::x86Xmm:
                                         of << "x";
                                         break;
-                                    case AsmCommon::RegisterClass::x86Ymm:
+                                    case AsmRegisterClass::x86Ymm:
                                         of << "x";
                                         break;
-                                    case AsmCommon::RegisterClass::x86Zmm:
+                                    case AsmRegisterClass::x86Zmm:
                                         of << "v";
                                         break;
-                                    case AsmCommon::RegisterClass::x86Kreg:
+                                    case AsmRegisterClass::x86Kreg:
                                         of << "Yk";
                                         break;
                                     // riscv
-                                    case AsmCommon::RegisterClass::riscvReg:
+                                    case AsmRegisterClass::riscvReg:
                                         of << "r";
                                         break;
-                                    case AsmCommon::RegisterClass::riscvFreg:
+                                    case AsmRegisterClass::riscvFreg:
                                         of << "f";
                                         break;
                                 }

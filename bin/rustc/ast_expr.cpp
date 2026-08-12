@@ -219,7 +219,7 @@ namespace {
     }
 }
 
-void AsmCommon::Line::fmt(std::ostream& os) const {
+void AsmLine::fmt(std::ostream& os) const {
     os << "\"";
     for (const auto& f : this->frags) {
         printFmtString(os, f.before);
@@ -1022,7 +1022,7 @@ ExprNodeAsm::ExprNodeAsm(::std::string text, ::std::vector<ValRef> output, ::std
     , clobbers(::std::move(clobbers))
     , flags(::std::move(flags)) {
 }
-ExprNodeAsm2::ExprNodeAsm2(AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params)
+ExprNodeAsm2::ExprNodeAsm2(AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params)
     : options(options)
     , lines(::std::move(lines))
     , mParams(::std::move(params)) {

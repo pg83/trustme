@@ -1760,7 +1760,7 @@ const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const 
                 // TODO: Set debug/timing stage
                 //Debug_SetStagePre("HIR Typecheck");
                 // - Can store that on the Expr, OR get it from the item path
-                typeck::ModuleState ms{const_cast<::HIR::Crate&>(*this)};
+                TypeckModuleState ms{const_cast<::HIR::Crate&>(*this)};
                 //ms.prepare_from_path( ip );   // <- Ideally would use this, but it's a lot of code for one usage
                 ms.mImplGenerics = ep.state->mImplGenerics;
                 ms.mItemGenerics = ep.state->mItemGenerics;

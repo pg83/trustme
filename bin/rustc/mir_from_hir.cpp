@@ -524,18 +524,18 @@ namespace {
                         std::unique_ptr<MIR::LValue> output;
                         this->visitNodePtr(e.val);
                         switch (e.dir) {
-                            case AsmCommon::Direction::In:
+                            case AsmDirection::In:
                                 ASSERT_BUG(node.span(), e.val, "`in` register with no value");
                                 input = box$(builder.getResultInParam(e.val->span(), e.val->resType));
                                 break;
-                            case AsmCommon::Direction::Out:
-                            case AsmCommon::Direction::LateOut:
+                            case AsmDirection::Out:
+                            case AsmDirection::LateOut:
                                 if (e.val) {
                                     output = box$(builder.getResultUnwrapLvalue(e.val->span()));
                                 }
                                 break;
-                            case AsmCommon::Direction::InOut:
-                            case AsmCommon::Direction::InLateOut:
+                            case AsmDirection::InOut:
+                            case AsmDirection::InLateOut:
                                 ASSERT_BUG(node.span(), e.val, "`inout` register with no value");
                                 output = box$(builder.getResultUnwrapLvalue(e.val->span()));
                                 input = std::make_unique<MIR::Param>(output->clone());
@@ -550,22 +550,22 @@ namespace {
                         std::unique_ptr<MIR::Param> input;
                         std::unique_ptr<MIR::LValue> output;
                         switch (e.dir) {
-                            case AsmCommon::Direction::In:
+                            case AsmDirection::In:
                                 ASSERT_BUG(node.span(), e.valIn, "`in` register with no input");
                                 this->visitNodePtr(e.valIn);
                                 input = box$(builder.getResultInParam(e.valIn->span(), e.valIn->resType));
                                 assert(!e.valOut);
                                 break;
-                            case AsmCommon::Direction::Out:
-                            case AsmCommon::Direction::LateOut:
+                            case AsmDirection::Out:
+                            case AsmDirection::LateOut:
                                 ASSERT_BUG(node.span(), !e.valIn, "`[late]out` register with input value");
                                 if (e.valOut) {
                                     this->visitNodePtr(e.valOut);
                                     output = box$(builder.getResultUnwrapLvalue(e.valOut->span()));
                                 }
                                 break;
-                            case AsmCommon::Direction::InOut:
-                            case AsmCommon::Direction::InLateOut:
+                            case AsmDirection::InOut:
+                            case AsmDirection::InLateOut:
                                 ASSERT_BUG(node.span(), e.valIn, "`in[late]out` register with no input");
                                 this->visitNodePtr(e.valIn);
                                 input = box$(builder.getResultInParam(e.valIn->span(), e.valIn->resType));

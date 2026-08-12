@@ -98,7 +98,7 @@ struct Context {
 
         // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
         bool isOperator;
-        typeck::PrimitiveOperator operatorKind;
+        TypeckPrimitiveOperator operatorKind;
         bool isAmbiguous = false;
 
         ::std::vector<StallDependency> stalledOn;
@@ -172,7 +172,7 @@ struct Context {
 
     const ::HIR::TypeData* coercionHint(const ::HIR::ExprNode& node) const;
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
-    void equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* implTy, const char* name, const ::HIR::PathParams& atyPp, bool isOp = false, typeck::PrimitiveOperator operatorKind = typeck::PrimitiveOperator::None);
+    void equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* implTy, const char* name, const ::HIR::PathParams& atyPp, bool isOp = false, TypeckPrimitiveOperator operatorKind = TypeckPrimitiveOperator::None);
 
     bool isCurrentOperatorImpl(const ImplRef& impl) const;
 
@@ -259,8 +259,6 @@ private:
     }
 };
 
-namespace typecheck {
     extern bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warnUnusedResult));
-}
 
-extern void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);
+extern void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);

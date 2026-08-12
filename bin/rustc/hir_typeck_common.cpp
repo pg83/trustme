@@ -863,9 +863,8 @@ void checkTypeClassPrimitive(const Span& sp, const ::HIR::TypeData* type, ::HIR:
     }
 }
 
-namespace typeck {
 
-bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
+bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
     const auto* leftPrimitive = left->opt_Primitive();
     const auto* rightPrimitive = right->opt_Primitive();
 
@@ -886,40 +885,40 @@ bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* le
     };
 
     switch (op) {
-        case PrimitiveOperator::Add:
-        case PrimitiveOperator::Sub:
-        case PrimitiveOperator::Mul:
-        case PrimitiveOperator::Div:
-        case PrimitiveOperator::Rem:
-        case PrimitiveOperator::AddAssign:
-        case PrimitiveOperator::SubAssign:
-        case PrimitiveOperator::MulAssign:
-        case PrimitiveOperator::DivAssign:
-        case PrimitiveOperator::RemAssign:
+        case TypeckPrimitiveOperator::Add:
+        case TypeckPrimitiveOperator::Sub:
+        case TypeckPrimitiveOperator::Mul:
+        case TypeckPrimitiveOperator::Div:
+        case TypeckPrimitiveOperator::Rem:
+        case TypeckPrimitiveOperator::AddAssign:
+        case TypeckPrimitiveOperator::SubAssign:
+        case TypeckPrimitiveOperator::MulAssign:
+        case TypeckPrimitiveOperator::DivAssign:
+        case TypeckPrimitiveOperator::RemAssign:
             return sameNumeric();
 
-        case PrimitiveOperator::BitAnd:
-        case PrimitiveOperator::BitOr:
-        case PrimitiveOperator::BitXor:
-        case PrimitiveOperator::BitAndAssign:
-        case PrimitiveOperator::BitOrAssign:
-        case PrimitiveOperator::BitXorAssign:
+        case TypeckPrimitiveOperator::BitAnd:
+        case TypeckPrimitiveOperator::BitOr:
+        case TypeckPrimitiveOperator::BitXor:
+        case TypeckPrimitiveOperator::BitAndAssign:
+        case TypeckPrimitiveOperator::BitOrAssign:
+        case TypeckPrimitiveOperator::BitXorAssign:
             return sameBitwise();
 
-        case PrimitiveOperator::Shl:
-        case PrimitiveOperator::Shr:
-        case PrimitiveOperator::ShlAssign:
-        case PrimitiveOperator::ShrAssign:
+        case TypeckPrimitiveOperator::Shl:
+        case TypeckPrimitiveOperator::Shr:
+        case TypeckPrimitiveOperator::ShlAssign:
+        case TypeckPrimitiveOperator::ShrAssign:
             return shift();
 
-        case PrimitiveOperator::Equal:
-        case PrimitiveOperator::Order:
+        case TypeckPrimitiveOperator::Equal:
+        case TypeckPrimitiveOperator::Order:
             return comparison();
 
-        case PrimitiveOperator::None:
-        case PrimitiveOperator::Not:
-        case PrimitiveOperator::Neg:
-        case PrimitiveOperator::Deref:
+        case TypeckPrimitiveOperator::None:
+        case TypeckPrimitiveOperator::Not:
+        case TypeckPrimitiveOperator::Neg:
+        case TypeckPrimitiveOperator::Deref:
             return false;
     }
     throw "";
@@ -928,45 +927,45 @@ bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* le
 // it also fixes an otherwise untyped right-hand operand. Shifts are
 // deliberately excluded: their right-hand side need only be an integer
 // and may have a different type.
-bool primitiveOperatorLhsDeterminesRhs(PrimitiveOperator op, const ::HIR::TypeData* left) {
+bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const ::HIR::TypeData* left) {
     const auto* primitive = left->opt_Primitive();
     const auto numeric = primitive && (::HIR::isInteger(*primitive) || ::HIR::isFloat(*primitive));
     const auto bitwise = primitive && (::HIR::isInteger(*primitive) || *primitive == ::HIR::CoreType::Bool);
     const auto comparison = left->is_Pointer() || (primitive && *primitive != ::HIR::CoreType::Str);
 
     switch (op) {
-        case PrimitiveOperator::Add:
-        case PrimitiveOperator::Sub:
-        case PrimitiveOperator::Mul:
-        case PrimitiveOperator::Div:
-        case PrimitiveOperator::Rem:
-        case PrimitiveOperator::AddAssign:
-        case PrimitiveOperator::SubAssign:
-        case PrimitiveOperator::MulAssign:
-        case PrimitiveOperator::DivAssign:
-        case PrimitiveOperator::RemAssign:
+        case TypeckPrimitiveOperator::Add:
+        case TypeckPrimitiveOperator::Sub:
+        case TypeckPrimitiveOperator::Mul:
+        case TypeckPrimitiveOperator::Div:
+        case TypeckPrimitiveOperator::Rem:
+        case TypeckPrimitiveOperator::AddAssign:
+        case TypeckPrimitiveOperator::SubAssign:
+        case TypeckPrimitiveOperator::MulAssign:
+        case TypeckPrimitiveOperator::DivAssign:
+        case TypeckPrimitiveOperator::RemAssign:
             return numeric;
 
-        case PrimitiveOperator::BitAnd:
-        case PrimitiveOperator::BitOr:
-        case PrimitiveOperator::BitXor:
-        case PrimitiveOperator::BitAndAssign:
-        case PrimitiveOperator::BitOrAssign:
-        case PrimitiveOperator::BitXorAssign:
+        case TypeckPrimitiveOperator::BitAnd:
+        case TypeckPrimitiveOperator::BitOr:
+        case TypeckPrimitiveOperator::BitXor:
+        case TypeckPrimitiveOperator::BitAndAssign:
+        case TypeckPrimitiveOperator::BitOrAssign:
+        case TypeckPrimitiveOperator::BitXorAssign:
             return bitwise;
 
-        case PrimitiveOperator::Equal:
-        case PrimitiveOperator::Order:
+        case TypeckPrimitiveOperator::Equal:
+        case TypeckPrimitiveOperator::Order:
             return comparison;
 
-        case PrimitiveOperator::Shl:
-        case PrimitiveOperator::Shr:
-        case PrimitiveOperator::ShlAssign:
-        case PrimitiveOperator::ShrAssign:
-        case PrimitiveOperator::None:
-        case PrimitiveOperator::Not:
-        case PrimitiveOperator::Neg:
-        case PrimitiveOperator::Deref:
+        case TypeckPrimitiveOperator::Shl:
+        case TypeckPrimitiveOperator::Shr:
+        case TypeckPrimitiveOperator::ShlAssign:
+        case TypeckPrimitiveOperator::ShrAssign:
+        case TypeckPrimitiveOperator::None:
+        case TypeckPrimitiveOperator::Not:
+        case TypeckPrimitiveOperator::Neg:
+        case TypeckPrimitiveOperator::Deref:
             return false;
     }
     throw "";
@@ -974,12 +973,12 @@ bool primitiveOperatorLhsDeterminesRhs(PrimitiveOperator op, const ::HIR::TypeDa
 // A binary language candidate is available either when both operands are
 // already known to be valid primitive inputs, or when the known lhs
 // determines the still-inferred rhs.
-bool primitiveOperatorHasLanguageCandidate(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
+bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
     return primitiveOperatorHasBuiltin(op, left, right)
         || (right->is_Infer() && primitiveOperatorLhsDeterminesRhs(op, left));
 }
-bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* value) {
-    if (op == PrimitiveOperator::Deref) {
+bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const ::HIR::TypeData* value) {
+    if (op == TypeckPrimitiveOperator::Deref) {
         return value->is_Borrow() || value->is_Pointer();
     }
 
@@ -989,9 +988,9 @@ bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* va
     }
 
     switch (op) {
-        case PrimitiveOperator::Not:
+        case TypeckPrimitiveOperator::Not:
             return *primitive == ::HIR::CoreType::Bool || ::HIR::isInteger(*primitive);
-        case PrimitiveOperator::Neg:
+        case TypeckPrimitiveOperator::Neg:
             if (::HIR::isFloat(*primitive)) {
                 return true;
             }
@@ -1006,10 +1005,9 @@ bool primitiveOperatorHasBuiltin(PrimitiveOperator op, const ::HIR::TypeData* va
                 default:
                     return false;
             }
-        case PrimitiveOperator::Deref:
+        case TypeckPrimitiveOperator::Deref:
             return false;
         default:
             return false;
     }
-}
 }

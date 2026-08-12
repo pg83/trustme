@@ -667,7 +667,7 @@ struct EscapedString {
         case TOK_RWORD_TRY:
             return "try";
     }
-    throw ParseError::BugCheck("Reached end of Token::to_str");
+    throw CompileErrorBugCheck("Reached end of Token::to_str");
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Token& tok) {

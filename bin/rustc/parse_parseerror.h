@@ -4,33 +4,28 @@
 #include "parse_tokenstream.h"
 #include "compile_error.h"
 
-namespace ParseError {
 
-    using CompileError::BugCheck;
-    using CompileError::Generic;
-    using CompileError::Todo;
 
-    class BadChar: public CompileError::Base {
+    class ParseErrorBadChar: public CompileErrorBase {
         //char    m_char;
     public:
-        BadChar(const TokenStream& lex, char character);
-        virtual ~BadChar() throw();
+        ParseErrorBadChar(const TokenStream& lex, char character);
+        virtual ~ParseErrorBadChar() throw();
     };
 
-    class Unexpected: public CompileError::Base {
+    class ParseErrorUnexpected: public CompileErrorBase {
         Token mTok;
 
     public:
-        Unexpected(const TokenStream& lex, const Token& tok);
-        Unexpected(const TokenStream& lex, const Token& tok, Token exp);
-        Unexpected(const TokenStream& lex, const Token& tok, ::std::vector<eTokenType> exp);
-        virtual ~Unexpected() throw();
+        ParseErrorUnexpected(const TokenStream& lex, const Token& tok);
+        ParseErrorUnexpected(const TokenStream& lex, const Token& tok, Token exp);
+        ParseErrorUnexpected(const TokenStream& lex, const Token& tok, ::std::vector<eTokenType> exp);
+        virtual ~ParseErrorUnexpected() throw();
     };
 
 #define ASSERT(lex, cnd)                                                                 \
     do {                                                                                 \
         if (!(cnd))                                                                      \
-            throw CompileError::BugCheck(lex, "Assertion failed: " __FILE__ " - " #cnd); \
+            throw CompileErrorBugCheck(lex, "Assertion failed: " __FILE__ " - " #cnd); \
     } while (0)
 
-}

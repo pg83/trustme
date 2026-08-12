@@ -7,8 +7,7 @@ namespace HIR {
     class TraitImpl;
 }
 
-namespace typeck {
-    struct ModuleState {
+    struct TypeckModuleState {
         const ::HIR::Crate& crate;
 
         const ::HIR::GenericPath* currentTrait;
@@ -19,7 +18,7 @@ namespace typeck {
         ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> traits;
         ::std::vector<HIR::SimplePath> modPaths;
 
-        ModuleState(const ::HIR::Crate& crate);
+        TypeckModuleState(const ::HIR::Crate& crate);
 
         template <typename T>
         class NullOnDrop {
@@ -50,10 +49,9 @@ namespace typeck {
 
         void popTraits(const ::HIR::Module& mod);
     };
-}
 
 typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> tArgs;
 // Needs to mutate the pattern
-extern void TypecheckCode(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
-extern void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
-extern void TypecheckCodeSimple(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
+extern void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
+extern void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);
+extern void TypecheckCodeSimple(const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr);

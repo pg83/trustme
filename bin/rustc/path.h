@@ -13,20 +13,19 @@
 #include <string_view>
 #include <stdexcept>
 
-namespace helpers {
 
     /// Path helper class (because I don't want to include boost)
-    class path {
+    class FsPath {
         static const char SEP = '/';
 
         ::std::string mStr;
 
     public:
-        path();
+        FsPath();
 
-        path(const ::std::string& s);
+        FsPath(const ::std::string& s);
 
-        path(const char* s);
+        FsPath(const char* s);
 
         bool isValid() const {
             return mStr != "";
@@ -36,33 +35,33 @@ namespace helpers {
             return mStr != "" && mStr[0] == '/';
         }
 
-        bool operator==(const path& p) const {
+        bool operator==(const FsPath& p) const {
             return mStr == p.mStr;
         }
 
-        bool operator!=(const path& p) const {
+        bool operator!=(const FsPath& p) const {
             return mStr != p.mStr;
         }
 
-        path& operator/=(const path& p);
+        FsPath& operator/=(const FsPath& p);
 
-        path& operator/=(const char* o);
+        FsPath& operator/=(const char* o);
 
-        path& operator/=(::std::string_view o);
+        FsPath& operator/=(::std::string_view o);
 
-        path operator/(const path& p) const;
+        FsPath operator/(const FsPath& p) const;
 
         /// Append a relative path
-        path operator/(const char* o) const;
+        FsPath operator/(const char* o) const;
 
         /// Add an arbitary string to the final component
-        path operator+(const char* o) const;
+        FsPath operator+(const char* o) const;
 
         bool popComponent();
 
-        path parent() const;
+        FsPath parent() const;
 
-        path toAbsolute() const;
+        FsPath toAbsolute() const;
 
         ::std::string basename() const;
 
@@ -75,13 +74,13 @@ namespace helpers {
         }
 
         class ComponentsIter {
-            const path& p;
+            const FsPath& p;
             size_t pos;
             size_t end;
 
-            friend class path;
+            friend class FsPath;
 
-            ComponentsIter(const path& p, size_t i);
+            ComponentsIter(const FsPath& p, size_t i);
 
         public:
             ::std::string_view operator*() const {
@@ -103,13 +102,12 @@ namespace helpers {
             return ComponentsIter(*this, mStr.size());
         }
 
-        path normalise() const;
+        FsPath normalise() const;
 
         //void normalise_in_place();
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const path& p) {
+        friend ::std::ostream& operator<<(::std::ostream& os, const FsPath& p) {
             return os << p.mStr;
         }
     };
 
-}

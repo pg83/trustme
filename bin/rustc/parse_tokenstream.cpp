@@ -62,7 +62,7 @@ Token TokenStream::getToken() {
 Token TokenStream::getTokenCheck(eTokenType exp) {
     auto tok = getToken();
     if (tok.type() != exp) {
-        throw ParseError::Unexpected(*this, tok, Token(exp));
+        throw ParseErrorUnexpected(*this, tok, Token(exp));
     }
     return tok;
 }
@@ -70,7 +70,7 @@ Token TokenStream::getTokenCheck(eTokenType exp) {
 void TokenStream::putback(Token tok) {
     if (cacheValid) {
         DEBUG("" << getPosition() << " - Double putback: " << tok << " but " << cache);
-        throw ParseError::BugCheck("Double putback");
+        throw CompileErrorBugCheck("Double putback");
     } else {
 #ifdef FULL_TRACE
         DEBUG(">>> " << tok);
@@ -91,7 +91,7 @@ eTokenType TokenStream::lookahead(unsigned int i) {
     }
 
     if (i >= MAX_LOOKAHEAD) {
-        throw ParseError::BugCheck("Excessive lookahead");
+        throw CompileErrorBugCheck("Excessive lookahead");
     }
 
     while (i >= mLookahead.size()) {

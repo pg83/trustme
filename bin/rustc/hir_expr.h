@@ -113,23 +113,23 @@ namespace HIR {
             (Sym, HIR::Path),
             (RegSingle,
              struct {
-                 AsmCommon::Direction dir;
-                 AsmCommon::RegisterSpec spec;
+                 AsmDirection dir;
+                 AsmRegisterSpec spec;
                  HIR::ExprNodeP val;
              }),
             (Reg, struct {
-                AsmCommon::Direction dir;
-                AsmCommon::RegisterSpec spec;
+                AsmDirection dir;
+                AsmRegisterSpec spec;
                 HIR::ExprNodeP valIn;
                 HIR::ExprNodeP valOut;
             })
         );
 
-        AsmCommon::Options options;
-        std::vector<AsmCommon::Line> lines;
+        AsmOptions options;
+        std::vector<AsmLine> lines;
         std::vector<Param> mParams;
 
-        ExprNodeAsm2(Span sp, AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params);
+        ExprNodeAsm2(Span sp, AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params);
 
         static constexpr unsigned int kind = 4;
         unsigned int nodeKind() const override;

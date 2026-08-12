@@ -553,10 +553,10 @@ public:
     ::MIR::FunctionPointer deserialiseMir();
     ::MIR::BasicBlock deserialiseMirBasicblock();
     ::MIR::Statement deserialiseMirStatement();
-    AsmCommon::Options deserialiseAsmOptions();
-    AsmCommon::LineFragment deserialiseAsmLineFrag();
-    AsmCommon::Line deserialiseAsmLine();
-    AsmCommon::RegisterSpec deserialiseAsmSpec();
+    AsmOptions deserialiseAsmOptions();
+    AsmLineFragment deserialiseAsmLineFrag();
+    AsmLine deserialiseAsmLine();
+    AsmRegisterSpec deserialiseAsmSpec();
     ::MIR::AsmParam deserialiseAsmParam();
     ::MIR::Terminator deserialiseMirTerminator();
     ::MIR::Terminator deserialise_mir_terminator_();
@@ -967,9 +967,9 @@ DEF_D(::MIR::LValue::Wrapper, return d.deserialiseMirLvalueWrapper();)
 template <>
 DEF_D(::MIR::LValue, return d.deserialiseMirLvalue();)
 template <>
-DEF_D(AsmCommon::LineFragment, return d.deserialiseAsmLineFrag();)
+DEF_D(AsmLineFragment, return d.deserialiseAsmLineFrag();)
 template <>
-DEF_D(AsmCommon::Line, return d.deserialiseAsmLine();)
+DEF_D(AsmLine, return d.deserialiseAsmLine();)
 template <>
 DEF_D(::MIR::AsmParam, return d.deserialiseAsmParam();)
 template <>
@@ -1362,8 +1362,8 @@ EncodedLiteral HirDeserialiser::deserialiseEncodedliteral() {
     return ::MIR::BasicBlock{mv$(statements), mv$(terminator), isCleanup};
 }
 
-AsmCommon::Options HirDeserialiser::deserialiseAsmOptions() {
-    AsmCommon::Options o;
+AsmOptions HirDeserialiser::deserialiseAsmOptions() {
+    AsmOptions o;
     const uint16_t bitflag1 = in.readU16();
 #define BIT(i, fld)             \
     if (bitflag1 & (1 << (i))) \
@@ -1379,26 +1379,26 @@ AsmCommon::Options HirDeserialiser::deserialiseAsmOptions() {
     return o;
 }
 
-AsmCommon::LineFragment HirDeserialiser::deserialiseAsmLineFrag() {
-    AsmCommon::LineFragment lf;
+AsmLineFragment HirDeserialiser::deserialiseAsmLineFrag() {
+    AsmLineFragment lf;
     lf.before = in.readString();
     lf.index = in.readCount();
     lf.modifier = static_cast<char>(in.readI64c());
     return lf;
 }
 
-AsmCommon::Line HirDeserialiser::deserialiseAsmLine() {
-    AsmCommon::Line l;
-    l.frags = deserialiseVec<AsmCommon::LineFragment>();
+AsmLine HirDeserialiser::deserialiseAsmLine() {
+    AsmLine l;
+    l.frags = deserialiseVec<AsmLineFragment>();
     l.trailing = in.readString();
     return l;
 }
 
-AsmCommon::RegisterSpec HirDeserialiser::deserialiseAsmSpec() {
+AsmRegisterSpec HirDeserialiser::deserialiseAsmSpec() {
     switch (auto tag = in.readTag()) {
-        case AsmCommon::RegisterSpec::TAG_Class:
-            return static_cast<AsmCommon::RegisterClass>(in.readTag());
-        case AsmCommon::RegisterSpec::TAG_Explicit:
+        case AsmRegisterSpec::TAG_Class:
+            return static_cast<AsmRegisterClass>(in.readTag());
+        case AsmRegisterSpec::TAG_Explicit:
             return in.readString();
         default:
             BUG(Span(), "Bad tag for AsmCommon::RegisterSpec - " << tag);
@@ -1412,7 +1412,7 @@ AsmCommon::RegisterSpec HirDeserialiser::deserialiseAsmSpec() {
         case ::MIR::AsmParam::TAG_Const:
             return ::MIR::AsmParam::make_Const(deserialiseMirConstant());
         case ::MIR::AsmParam::TAG_Reg:
-            return ::MIR::AsmParam::make_Reg({static_cast<AsmCommon::Direction>(in.readTag()), deserialiseAsmSpec(), in.readBool() ? ::std::make_unique<MIR::Param>(deserialiseMirParam()) : std::unique_ptr<MIR::Param>(), in.readBool() ? ::std::make_unique<MIR::LValue>(deserialiseMirLvalue()) : std::unique_ptr<MIR::LValue>()});
+            return ::MIR::AsmParam::make_Reg({static_cast<AsmDirection>(in.readTag()), deserialiseAsmSpec(), in.readBool() ? ::std::make_unique<MIR::Param>(deserialiseMirParam()) : std::unique_ptr<MIR::Param>(), in.readBool() ? ::std::make_unique<MIR::LValue>(deserialiseMirLvalue()) : std::unique_ptr<MIR::LValue>()});
         default:
             BUG(Span(), "Bad tag for MIR::AsmParam - " << tag);
     }
@@ -1443,7 +1443,7 @@ AsmCommon::RegisterSpec HirDeserialiser::deserialiseAsmSpec() {
             rv = ::MIR::Statement::make_ScopeEnd({deserialiseVec<unsigned int>()});
             break;
         case 5:
-            rv = ::MIR::Statement::make_Asm2({deserialiseAsmOptions(), deserialiseVec<AsmCommon::Line>(), deserialiseVec<MIR::AsmParam>()});
+            rv = ::MIR::Statement::make_Asm2({deserialiseAsmOptions(), deserialiseVec<AsmLine>(), deserialiseVec<MIR::AsmParam>()});
             break;
         case 6:
             rv = ::MIR::Statement::make_SaveDropFlag({deserialiseMirLvalue(), static_cast<unsigned>(in.readCount()), static_cast<unsigned>(in.readCount())});
@@ -3295,18 +3295,18 @@ public:
         out.writeBool(block.isCleanup);
     }
 
-    void serialise(const ::AsmCommon::LineFragment& l) {
+    void serialise(const AsmLineFragment& l) {
         serialise(l.before);
         out.writeCount(l.index);
         out.writeI64c(l.modifier);
     }
 
-    void serialise(const ::AsmCommon::Line& l) {
+    void serialise(const AsmLine& l) {
         serialiseVec(l.frags);
         serialise(l.trailing);
     }
 
-    void serialise(const ::AsmCommon::RegisterSpec& r) {
+    void serialise(const AsmRegisterSpec& r) {
         out.writeTag(static_cast<unsigned>(r.tag()));
             TU_MATCH_HDRA( (r), {)
             TU_ARMA(Class, e) {
@@ -3342,7 +3342,7 @@ public:
             }
     }
 
-    void serialise(const ::AsmCommon::Options& o) {
+    void serialise(const AsmOptions& o) {
         uint16_t bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \

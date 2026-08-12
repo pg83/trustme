@@ -673,9 +673,9 @@ namespace AST {
 
     class GlobalAsm {
     public:
-        ::std::vector<AsmCommon::Line> lines;
+        ::std::vector<AsmLine> lines;
         ::std::vector<AST::Path> symbols;
-        AsmCommon::Options options;
+        AsmOptions options;
     };
 
     /// Representation of a parsed (and being converted) function

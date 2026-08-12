@@ -722,8 +722,8 @@ namespace MIR {
     }
 
     TAGGED_UNION(AsmParam, Const, (Const, ::MIR::Constant), (Sym, ::HIR::Path), (Reg, struct {
-                     AsmCommon::Direction dir;
-                     AsmCommon::RegisterSpec spec;
+                     AsmDirection dir;
+                     AsmRegisterSpec spec;
                      std::unique_ptr<MIR::Param> input;
                      std::unique_ptr<MIR::LValue> output;
                  }));
@@ -750,8 +750,8 @@ namespace MIR {
         // Inline assembly (stabilised)
         (Asm2,
          struct {
-             AsmCommon::Options options;
-             std::vector<AsmCommon::Line> lines;
+             AsmOptions options;
+             std::vector<AsmLine> lines;
              ::std::vector<AsmParam> params;
          }),
         // Update the state of a drop flag

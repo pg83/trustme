@@ -5,40 +5,38 @@
 
 class TokenStream;
 
-namespace CompileError {
 
-    class Base: public ::std::exception {
+    class CompileErrorBase: public ::std::exception {
     public:
-        virtual ~Base() throw();
+        virtual ~CompileErrorBase() throw();
     };
 
-    class Generic: public Base {
+    class CompileErrorGeneric: public CompileErrorBase {
         ::std::string message;
 
     public:
-        Generic(::std::string message);
-        Generic(const TokenStream& lex, ::std::string message);
+        CompileErrorGeneric(::std::string message);
+        CompileErrorGeneric(const TokenStream& lex, ::std::string message);
 
-        virtual ~Generic() throw();
+        virtual ~CompileErrorGeneric() throw();
     };
 
-    class BugCheck: public Base {
+    class CompileErrorBugCheck: public CompileErrorBase {
         ::std::string message;
 
     public:
-        BugCheck(::std::string message);
-        BugCheck(const TokenStream& lex, ::std::string message);
+        CompileErrorBugCheck(::std::string message);
+        CompileErrorBugCheck(const TokenStream& lex, ::std::string message);
 
-        virtual ~BugCheck() throw();
+        virtual ~CompileErrorBugCheck() throw();
     };
 
-    class Todo: public Base {
+    class CompileErrorTodo: public CompileErrorBase {
         ::std::string message;
 
     public:
-        Todo(::std::string message);
-        Todo(const TokenStream& lex, ::std::string message);
-        virtual ~Todo() throw();
+        CompileErrorTodo(::std::string message);
+        CompileErrorTodo(const TokenStream& lex, ::std::string message);
+        virtual ~CompileErrorTodo() throw();
     };
 
-}

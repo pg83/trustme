@@ -564,7 +564,7 @@ ExprNodeConstBlock::ExprNodeConstBlock(Span sp, ExprNodeP inner)
     : ExprNode(mv$(sp))
     , inner(mv$(inner)) {
 }
-ExprNodeAsm2::ExprNodeAsm2(Span sp, AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params)
+ExprNodeAsm2::ExprNodeAsm2(Span sp, AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params)
     : ExprNode(mv$(sp))
     , options(options)
     , lines(::std::move(lines))

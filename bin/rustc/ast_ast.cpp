@@ -118,7 +118,7 @@ namespace AST {
         if (auto* v = cast<::AST::ExprNodeString>(&*n)) {
             rv = v->mValue;
         } else {
-            throw ParseError::Unexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
+            throw ParseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
         }
         lex.getTokenCheck(TOK_EOF);
         return rv;

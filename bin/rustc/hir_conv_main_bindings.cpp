@@ -134,7 +134,7 @@ namespace {
     class BindVisitor: public ::HIR::Visitor {
         const ::HIR::Crate& crate;
 
-        typeck::ModuleState ms;
+        TypeckModuleState ms;
 
         struct CurMod {
             const ::HIR::Module* ptr;
@@ -1004,7 +1004,7 @@ namespace {
     class VisitorPost: public ::HIR::Visitor {
         const ::HIR::Crate& crate;
 
-        typeck::ModuleState ms;
+        TypeckModuleState ms;
 
     public:
         VisitorPost(const ::HIR::Crate& crate)
@@ -3565,7 +3565,6 @@ void ConvertHIRMarkings(::HIR::Crate& crate) {
 }
 
 
-namespace resolveUfcs {
     void expandTraitImplTypeDefaults(const ::HIR::Crate& crate, const ::HIR::SimplePath& traitPath, ::HIR::TraitImpl& impl) {
         Span sp;
         const auto& trait = crate.getTraitByPath(sp, traitPath);
@@ -4681,9 +4680,7 @@ namespace resolveUfcs {
         pushIndexInherentMethodsList(icache, langBox, src.typeImpls.nonNamed);
         pushIndexInherentMethodsList(icache, langBox, src.typeImpls.generic);
     }
-} // namespace ""
 
-using namespace resolveUfcs;
 
 void ConvertHIRResolveUFCSOuter(::HIR::Crate& crate) {
     for (auto& implGroup : crate.traitImpls) {

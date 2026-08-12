@@ -167,23 +167,23 @@ namespace AST {
             (Sym, AST::Path),
             (RegSingle,
              struct {
-                 AsmCommon::Direction dir;
-                 AsmCommon::RegisterSpec spec;
+                 AsmDirection dir;
+                 AsmRegisterSpec spec;
                  AST::ExprNodeP val;
              }),
             (Reg, struct {
-                AsmCommon::Direction dir;
-                AsmCommon::RegisterSpec spec;
+                AsmDirection dir;
+                AsmRegisterSpec spec;
                 AST::ExprNodeP valIn;
                 AST::ExprNodeP valOut;
             })
         );
 
-        AsmCommon::Options options;
-        std::vector<AsmCommon::Line> lines;
+        AsmOptions options;
+        std::vector<AsmLine> lines;
         std::vector<Param> mParams;
 
-        ExprNodeAsm2(AsmCommon::Options options, std::vector<AsmCommon::Line> lines, std::vector<Param> params);
+        ExprNodeAsm2(AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params);
 
         static constexpr unsigned int kind = 7;
         unsigned int nodeKind() const override;

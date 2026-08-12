@@ -6743,7 +6743,6 @@ namespace {
 
 #define NEWNODE(TY, CLASS, ...) mkExprnodep(mResolve.crate.pool->make<HIR::ExprNode##CLASS>(__VA_ARGS__), TY)
 
-namespace staticBorrowConstants {
 
     /// <summary>
     /// Mark borrows of promotable statics
@@ -8025,14 +8024,13 @@ namespace staticBorrowConstants {
             }
         }
     };
-} // namespace
 
 void HIRExpandStaticBorrowConstantsMarkExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp) {
     TRACE_FUNCTION_F(ip);
     StaticTraitResolve resolve(crate);
 
     // TODO: Get `Self` type
-    staticBorrowConstants::StaticBorrowExprVisitorMark evm(resolve, nullptr, exp);
+    StaticBorrowExprVisitorMark evm(resolve, nullptr, exp);
     evm.visitNodePtr(exp);
     if (!evm.allConstant()) {
         //WARNING(exp->span(), W0000, "`static`/`const` " << ip << " is not constant?");
@@ -8065,7 +8063,7 @@ void HIRExpandStaticBorrowConstantsExpr(const ::HIR::Crate& crate, const ::HIR::
         DEBUG("self_type = NONE");
     }
 
-    staticBorrowConstants::StaticBorrowExprVisitorMutate ev(resolve, selfType, [&](Span sp, HIR::TypeRef ty, HIR::ExprPtr valExpr, HIR::GenericParams generics, bool isConst) -> HIR::SimplePath {
+    StaticBorrowExprVisitorMutate ev(resolve, selfType, [&](Span sp, HIR::TypeRef ty, HIR::ExprPtr valExpr, HIR::GenericParams generics, bool isConst) -> HIR::SimplePath {
         auto name = RcString::newInterned(FMT("lifted#C_" << staticCount++));
 
         auto path = ::HIR::SimplePath(crate.crateName, {name});
@@ -8147,12 +8145,12 @@ void HIRExpandStaticBorrowConstantsExpr(const ::HIR::Crate& crate, const ::HIR::
 }
 
 void HIRExpandStaticBorrowConstantsMark(::HIR::Crate& crate) {
-    staticBorrowConstants::StaticBorrowOuterVisitorMark ov(crate);
+    StaticBorrowOuterVisitorMark ov(crate);
     ov.visitCrate(crate);
 }
 
 void HIRExpandStaticBorrowConstants(::HIR::Crate& crate) {
-    staticBorrowConstants::StaticBorrowOuterVisitor ov(crate);
+    StaticBorrowOuterVisitor ov(crate);
     ov.visitCrate(crate);
 
     // Consteval can run again, creating new items
@@ -8351,8 +8349,8 @@ namespace {
             replacement->cache = mv$(node.cache);
         }
 
-        bool isBuiltinOperator(const Span& sp, typeck::PrimitiveOperator op, const char* langitem, const ::HIR::TypeData* tyL, const ::HIR::TypeData* tyR) const {
-            if (!typeck::primitiveOperatorHasBuiltin(op, tyL, tyR)) {
+        bool isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const ::HIR::TypeData* tyL, const ::HIR::TypeData* tyR) const {
+            if (!primitiveOperatorHasBuiltin(op, tyL, tyR)) {
                 return false;
             }
 
@@ -8367,8 +8365,8 @@ namespace {
             });
         }
 
-        bool isBuiltinOperator(const Span& sp, typeck::PrimitiveOperator op, const char* langitem, const ::HIR::TypeData* ty) const {
-            if (!typeck::primitiveOperatorHasBuiltin(op, ty)) {
+        bool isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const ::HIR::TypeData* ty) const {
+            if (!primitiveOperatorHasBuiltin(op, ty)) {
                 return false;
             }
 
@@ -8395,7 +8393,7 @@ namespace {
 
             const char* langitem = nullptr;
             const char* opname = nullptr;
-            auto operatorKind = typeck::PrimitiveOperator::None;
+            auto operatorKind = TypeckPrimitiveOperator::None;
 #define _(opname) case ::HIR::ExprNodeAssign::Op::opname
             switch (node.op) {
                 _(None)
@@ -8405,7 +8403,7 @@ namespace {
                     : {
                     langitem = "shr_assign";
                     opname = "shr_assign";
-                    operatorKind = typeck::PrimitiveOperator::ShrAssign;
+                    operatorKind = TypeckPrimitiveOperator::ShrAssign;
                 }
                 if (0)
                 {
@@ -8413,7 +8411,7 @@ namespace {
                         : {
                         langitem = "shl_assign";
                         opname = "shl_assign";
-                        operatorKind = typeck::PrimitiveOperator::ShlAssign;
+                        operatorKind = TypeckPrimitiveOperator::ShlAssign;
                     }
                 }
                 if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal)) {
@@ -8425,14 +8423,14 @@ namespace {
                     : {
                     langitem = "bitand_assign";
                     opname = "bitand_assign";
-                    operatorKind = typeck::PrimitiveOperator::BitAndAssign;
+                    operatorKind = TypeckPrimitiveOperator::BitAndAssign;
                 }
                 if (0) {
                     _(Or)
                         : {
                         langitem = "bitor_assign";
                         opname = "bitor_assign";
-                        operatorKind = typeck::PrimitiveOperator::BitOrAssign;
+                        operatorKind = TypeckPrimitiveOperator::BitOrAssign;
                     }
                 }
                 if (0) {
@@ -8440,7 +8438,7 @@ namespace {
                         : {
                         langitem = "bitxor_assign";
                         opname = "bitxor_assign";
-                        operatorKind = typeck::PrimitiveOperator::BitXorAssign;
+                        operatorKind = TypeckPrimitiveOperator::BitXorAssign;
                     }
                 }
                 if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal)) {
@@ -8452,14 +8450,14 @@ namespace {
                     : {
                     langitem = "add_assign";
                     opname = "add_assign";
-                    operatorKind = typeck::PrimitiveOperator::AddAssign;
+                    operatorKind = TypeckPrimitiveOperator::AddAssign;
                 }
                 if (0) {
                     _(Sub)
                         : {
                         langitem = "sub_assign";
                         opname = "sub_assign";
-                        operatorKind = typeck::PrimitiveOperator::SubAssign;
+                        operatorKind = TypeckPrimitiveOperator::SubAssign;
                     }
                 }
                 if (0) {
@@ -8467,7 +8465,7 @@ namespace {
                         : {
                         langitem = "mul_assign";
                         opname = "mul_assign";
-                        operatorKind = typeck::PrimitiveOperator::MulAssign;
+                        operatorKind = TypeckPrimitiveOperator::MulAssign;
                     }
                 }
                 if (0) {
@@ -8475,7 +8473,7 @@ namespace {
                         : {
                         langitem = "div_assign";
                         opname = "div_assign";
-                        operatorKind = typeck::PrimitiveOperator::DivAssign;
+                        operatorKind = TypeckPrimitiveOperator::DivAssign;
                     }
                 }
                 if (0) {
@@ -8483,7 +8481,7 @@ namespace {
                         : {
                         langitem = "rem_assign";
                         opname = "rem_assign";
-                        operatorKind = typeck::PrimitiveOperator::RemAssign;
+                        operatorKind = TypeckPrimitiveOperator::RemAssign;
                     }
                 }
                 if (isBuiltinOperator(sp, operatorKind, langitem, tySlot, tyVal)) {
@@ -8523,92 +8521,92 @@ namespace {
             const char* langitem = nullptr;
             const char* method = nullptr;
             bool isComparison = false;
-            auto operatorKind = typeck::PrimitiveOperator::None;
+            auto operatorKind = TypeckPrimitiveOperator::None;
             switch (node.op) {
                 case ::HIR::ExprNodeBinOp::Op::CmpEqu:
                     langitem = "eq";
                     method = "eq";
                     isComparison = true;
-                    operatorKind = typeck::PrimitiveOperator::Equal;
+                    operatorKind = TypeckPrimitiveOperator::Equal;
                     break;
                 case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
                     langitem = "eq";
                     method = "ne";
                     isComparison = true;
-                    operatorKind = typeck::PrimitiveOperator::Equal;
+                    operatorKind = TypeckPrimitiveOperator::Equal;
                     break;
                 case ::HIR::ExprNodeBinOp::Op::CmpLt:
                     langitem = "partial_ord";
                     method = "lt";
                     isComparison = true;
-                    operatorKind = typeck::PrimitiveOperator::Order;
+                    operatorKind = TypeckPrimitiveOperator::Order;
                     break;
                 case ::HIR::ExprNodeBinOp::Op::CmpLtE:
                     langitem = "partial_ord";
                     method = "le";
                     isComparison = true;
-                    operatorKind = typeck::PrimitiveOperator::Order;
+                    operatorKind = TypeckPrimitiveOperator::Order;
                     break;
                 case ::HIR::ExprNodeBinOp::Op::CmpGt:
                     langitem = "partial_ord";
                     method = "gt";
                     isComparison = true;
-                    operatorKind = typeck::PrimitiveOperator::Order;
+                    operatorKind = TypeckPrimitiveOperator::Order;
                     break;
                 case ::HIR::ExprNodeBinOp::Op::CmpGtE:
                     langitem = "partial_ord";
                     method = "ge";
                     isComparison = true;
-                    operatorKind = typeck::PrimitiveOperator::Order;
+                    operatorKind = TypeckPrimitiveOperator::Order;
                     break;
 
                 case ::HIR::ExprNodeBinOp::Op::Xor:
                     langitem = method = "bitxor";
-                    operatorKind = typeck::PrimitiveOperator::BitXor;
+                    operatorKind = TypeckPrimitiveOperator::BitXor;
                     if (0) {
                         case ::HIR::ExprNodeBinOp::Op::Or:
                             langitem = method = "bitor";
-                            operatorKind = typeck::PrimitiveOperator::BitOr;
+                            operatorKind = TypeckPrimitiveOperator::BitOr;
                     }
                     if (0) {
                         case ::HIR::ExprNodeBinOp::Op::And:
                             langitem = method = "bitand";
-                            operatorKind = typeck::PrimitiveOperator::BitAnd;
+                            operatorKind = TypeckPrimitiveOperator::BitAnd;
                     }
                     break;
 
                 case ::HIR::ExprNodeBinOp::Op::Shr:
                     langitem = method = "shr";
-                    operatorKind = typeck::PrimitiveOperator::Shr;
+                    operatorKind = TypeckPrimitiveOperator::Shr;
                     if (0) {
                         case ::HIR::ExprNodeBinOp::Op::Shl:
                             langitem = method = "shl";
-                            operatorKind = typeck::PrimitiveOperator::Shl;
+                            operatorKind = TypeckPrimitiveOperator::Shl;
                     }
                     break;
 
                 case ::HIR::ExprNodeBinOp::Op::Add:
                     langitem = method = "add";
-                    operatorKind = typeck::PrimitiveOperator::Add;
+                    operatorKind = TypeckPrimitiveOperator::Add;
                     if (0) {
                         case ::HIR::ExprNodeBinOp::Op::Sub:
                             langitem = method = "sub";
-                            operatorKind = typeck::PrimitiveOperator::Sub;
+                            operatorKind = TypeckPrimitiveOperator::Sub;
                     }
                     if (0) {
                         case ::HIR::ExprNodeBinOp::Op::Mul:
                             langitem = method = "mul";
-                            operatorKind = typeck::PrimitiveOperator::Mul;
+                            operatorKind = TypeckPrimitiveOperator::Mul;
                     }
                     if (0) {
                         case ::HIR::ExprNodeBinOp::Op::Div:
                             langitem = method = "div";
-                            operatorKind = typeck::PrimitiveOperator::Div;
+                            operatorKind = TypeckPrimitiveOperator::Div;
                     }
                     if (0) {
                         case ::HIR::ExprNodeBinOp::Op::Mod:
                             langitem = method = "rem";
-                            operatorKind = typeck::PrimitiveOperator::Rem;
+                            operatorKind = TypeckPrimitiveOperator::Rem;
                     }
                     break;
 
@@ -8683,15 +8681,15 @@ namespace {
 
             const char* langitem = nullptr;
             const char* method = nullptr;
-            auto operatorKind = typeck::PrimitiveOperator::None;
+            auto operatorKind = TypeckPrimitiveOperator::None;
             switch (node.op) {
                 case ::HIR::ExprNodeUniOp::Op::Invert:
                     langitem = method = "not";
-                    operatorKind = typeck::PrimitiveOperator::Not;
+                    operatorKind = TypeckPrimitiveOperator::Not;
                     break;
                 case ::HIR::ExprNodeUniOp::Op::Negate:
                     langitem = method = "neg";
-                    operatorKind = typeck::PrimitiveOperator::Neg;
+                    operatorKind = TypeckPrimitiveOperator::Neg;
                     break;
             }
             assert(langitem);

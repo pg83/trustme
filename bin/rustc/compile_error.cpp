@@ -1,9 +1,7 @@
 #include "compile_error.h"
 
-namespace CompileError {
 
-Generic::~Generic() throw() {
+CompileErrorGeneric::~CompileErrorGeneric() throw() {
 }
-BugCheck::~BugCheck() throw() {
-}
+CompileErrorBugCheck::~CompileErrorBugCheck() throw() {
 }

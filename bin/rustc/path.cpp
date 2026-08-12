@@ -9,7 +9,7 @@
 #include <unistd.h> // getcwd/chdir
 #include <limits.h> // PATH_MAX
 
-helpers::path::path(const char* s)
+FsPath::FsPath(const char* s)
     : mStr(s)
 {
     // 1. Normalise path separators to the system specified separator
@@ -32,7 +32,7 @@ helpers::path::path(const char* s)
     }
 }
 
-helpers::path helpers::path::toAbsolute() const {
+FsPath FsPath::toAbsolute() const {
     if (!this->isValid()) {
         throw ::std::runtime_error("Calling to_absolute() on an invalid path");
     }
@@ -45,7 +45,7 @@ helpers::path helpers::path::toAbsolute() const {
     if (!getcwd(cwd, sizeof(cwd))) {
         throw ::std::runtime_error("Calling getcwd() failed in path::to_absolute()");
     }
-    auto rv = path(cwd);
+    auto rv = FsPath(cwd);
     for (auto comp : *this) {
         if (comp == ".")
             ;
@@ -58,8 +58,8 @@ helpers::path helpers::path::toAbsolute() const {
     return rv;
 }
 
-helpers::path helpers::path::normalise() const {
-    path rv;
+FsPath FsPath::normalise() const {
+    FsPath rv;
     rv.mStr.reserve(mStr.size() + 1);
 
     for (auto comp : *this) {
@@ -92,7 +92,7 @@ helpers::path helpers::path::normalise() const {
 }
 
 
-void helpers::path::ComponentsIter::operator++() {
+void FsPath::ComponentsIter::operator++() {
     if (end == p.mStr.size()) {
         pos = end;
     } else {
@@ -104,21 +104,20 @@ void helpers::path::ComponentsIter::operator++() {
     }
 }
 
-namespace helpers {
 
-path::path() {
+FsPath::FsPath() {
 }
-path::path(const ::std::string& s)
-    : path(s.c_str()) {
+FsPath::FsPath(const ::std::string& s)
+    : FsPath(s.c_str()) {
 }
-path& path::operator/=(const path& p) {
+FsPath& FsPath::operator/=(const FsPath& p) {
     if (!p.isValid()) {
         throw ::std::runtime_error("Appending from an invalid path");
     }
 
     return *this /= p.mStr.c_str();
 }
-path& path::operator/=(const char* o) {
+FsPath& FsPath::operator/=(const char* o) {
     if (!this->isValid()) {
         throw ::std::runtime_error("Appending to an invalid path");
     }
@@ -129,7 +128,7 @@ path& path::operator/=(const char* o) {
     this->mStr.append(o);
     return *this;
 }
-path& path::operator/=(::std::string_view o) {
+FsPath& FsPath::operator/=(::std::string_view o) {
     if (!this->isValid()) {
         throw ::std::runtime_error("Appending to an invalid path");
     }
@@ -140,19 +139,19 @@ path& path::operator/=(::std::string_view o) {
     this->mStr.append(o);
     return *this;
 }
-path path::operator/(const path& p) const {
+FsPath FsPath::operator/(const FsPath& p) const {
     auto rv = *this;
     rv /= p;
     return rv;
 }
 /// Append a relative path
-path path::operator/(const char* o) const {
+FsPath FsPath::operator/(const char* o) const {
     auto rv = *this;
     rv /= o;
     return rv;
 }
 /// Add an arbitary string to the  component
-path path::operator+(const char* o) const {
+FsPath FsPath::operator+(const char* o) const {
     if (!this->isValid()) {
         throw ::std::runtime_error("Appending a string to an invalid path");
     }
@@ -163,7 +162,7 @@ path path::operator+(const char* o) const {
     rv.mStr.append(o);
     return rv;
 }
-bool path::popComponent() {
+bool FsPath::popComponent() {
     if (!this->isValid()) {
         throw ::std::runtime_error("Calling pop_component() on an invalid path");
     }
@@ -175,20 +174,20 @@ bool path::popComponent() {
         return true;
     }
 }
-path path::parent() const {
+FsPath FsPath::parent() const {
     if (!this->isValid()) {
         throw ::std::runtime_error("Calling parent() on an invalid path");
     }
     auto pos = mStr.find_last_of(SEP);
     if (pos == ::std::string::npos) {
-        return path();
+        return FsPath();
     } else {
-        path rv;
+        FsPath rv;
         rv.mStr = mStr.substr(0, pos);
         return rv;
     }
 }
-::std::string path::basename() const {
+::std::string FsPath::basename() const {
     if (!this->isValid()) {
         throw ::std::runtime_error("Calling basename() on an invalid path");
     }
@@ -200,12 +199,11 @@ path path::parent() const {
         return mStr.substr(pos + 1);
     }
 }
-path::ComponentsIter::ComponentsIter(const path& p, size_t i)
+FsPath::ComponentsIter::ComponentsIter(const FsPath& p, size_t i)
     : p(p)
     , pos(i) {
     end = p.mStr.find(SEP, pos);
     if (end == ::std::string::npos) {
         end = p.mStr.size();
     }
-}
 }

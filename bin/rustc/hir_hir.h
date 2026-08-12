@@ -621,9 +621,9 @@ namespace HIR {
 
     class GlobalAssembly {
     public:
-        ::std::vector<AsmCommon::Line> lines;
+        ::std::vector<AsmLine> lines;
         ::std::vector<HIR::Path> symbols;
-        AsmCommon::Options options;
+        AsmOptions options;
     };
 
     class ExternCrate {

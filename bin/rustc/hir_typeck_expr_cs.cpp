@@ -593,7 +593,7 @@ namespace {
             };
             auto useTrait = [&]() {
                 node.traitUsed = ::HIR::ExprNodeDeref::TraitUsed::Trait;
-                this->context.equateTypesAssoc(node.span(), node.resType, opTrait, {}, node.mValue->resType, "Target", {}, true, typeck::PrimitiveOperator::Deref);
+                this->context.equateTypesAssoc(node.span(), node.resType, opTrait, {}, node.mValue->resType, "Target", {}, true, TypeckPrimitiveOperator::Deref);
             };
 
             TU_MATCH_HDRA( (*ty), {)
@@ -680,7 +680,7 @@ namespace {
         void visit(::HIR::ExprNodeCallPath& node) override {
             TRACE_FUNCTION_F(node.mPath << "(...)");
             // Retry the cache now inference may have advanced; the main pass deferred here because the callee was ambiguous.
-            if (!typecheck::visitCallPopulateCache(this->context, node.span(), node.mPath, node.cache)) {
+            if (!visitCallPopulateCache(this->context, node.span(), node.mPath, node.cache)) {
                 DEBUG("- CallPath still ambiguous - trying again later");
                 return;
             }
@@ -1085,7 +1085,7 @@ namespace {
                 )
 
                 // TODO: If this is ambigious, and it's an inherent, and in fallback mode - fall down to the next trait method.
-                if (!typecheck::visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache)) {
+                if (!visitCallPopulateCache(this->context, node.span(), node.methodPath, node.cache)) {
                     // Move the params back
                     TU_MATCH(::HIR::Path::Data, (node.methodPath.mData), (e), (Generic, ), (UfcsUnknown, ), (UfcsKnown, node.mParams = mv$(e.params);), (UfcsInherent, node.mParams = mv$(e.params);))
                     if (this->isFallback && node.methodPath.mData.is_UfcsInherent()) {
@@ -1156,7 +1156,7 @@ namespace {
                                 "Target",
                                 {},
                                 true,
-                                typeck::PrimitiveOperator::Deref
+                                TypeckPrimitiveOperator::Deref
                             );
                         }
                         curTy = tmpTy;
@@ -3985,7 +3985,7 @@ void Context::possibleEquateTypeUnknown(const Span& sp, const ::HIR::TypeData* t
     }
 }
 
-void Context::equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams pp, const ::HIR::TypeData* implTy, const char* name, const ::HIR::PathParams& atyPp, bool isOp, typeck::PrimitiveOperator operatorKind) {
+void Context::equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams pp, const ::HIR::TypeData* implTy, const char* name, const ::HIR::PathParams& atyPp, bool isOp, TypeckPrimitiveOperator operatorKind) {
     for (const auto& a : this->linkAssoc) {
         if (a.leftTy != l) {
             continue;
@@ -5490,7 +5490,7 @@ namespace {
         const bool hasPendingDerefTarget = ::std::any_of(
             context.linkAssoc.begin(), context.linkAssoc.end(),
             [&](const Context::Associated& rule) {
-                return rule.operatorKind == typeck::PrimitiveOperator::Deref
+                return rule.operatorKind == TypeckPrimitiveOperator::Deref
                     && context.ivars.typesEqual(rule.leftTy, tySrc);
             }
         );
@@ -5625,9 +5625,9 @@ namespace {
             }
 
             const bool hasBuiltinInputs = implParams.types.size() == 0
-                ? typeck::primitiveOperatorHasBuiltin(v.operatorKind, implTy)
+                ? primitiveOperatorHasBuiltin(v.operatorKind, implTy)
                 : implParams.types.size() == 1
-                    && typeck::primitiveOperatorHasBuiltin(
+                    && primitiveOperatorHasBuiltin(
                         v.operatorKind, implTy, implParams.types.front()
                     );
             if (!hasBuiltinInputs) {
@@ -5647,7 +5647,7 @@ namespace {
             output = context.mResolve.expandAssociatedTypes(sp, mv$(output));
 
             auto builtinOutput = implTy;
-            if (v.operatorKind == typeck::PrimitiveOperator::Deref) {
+            if (v.operatorKind == TypeckPrimitiveOperator::Deref) {
                 if (const auto* e = implTy->opt_Pointer()) {
                     builtinOutput = e->inner;
                 } else if (const auto* e = implTy->opt_Borrow()) {
@@ -5685,7 +5685,7 @@ namespace {
         bool hasSemanticOperatorImpl = false;
         bool sawCurrentOperatorImpl = false;
         bool currentOperatorImplHasBuiltinSignature = false;
-        if (v.operatorKind != typeck::PrimitiveOperator::None) {
+        if (v.operatorKind != TypeckPrimitiveOperator::None) {
             auto probeParams = v.params.clone();
             if (probeParams.types.size() == 1) {
                 if (const auto* source = concreteCoercionSource(probeParams.types.front())) {
@@ -5723,7 +5723,7 @@ namespace {
             && (!sawCurrentOperatorImpl || currentOperatorImplHasBuiltinSignature)
             && v.params.types.size() == 1
             && !context.ivars.typeContainsIvars(v.implTy, /*only_unbound=*/true)
-            && typeck::primitiveOperatorLhsDeterminesRhs(v.operatorKind, context.getType(v.implTy))
+            && primitiveOperatorLhsDeterminesRhs(v.operatorKind, context.getType(v.implTy))
             && v.params.types.front()->is_Infer()
             && v.params.types.front()->as_Infer().index == ~0u;
         if (canContextualisePrimitiveRhs) {
@@ -5763,7 +5763,7 @@ namespace {
                 const auto& rightTy = context.getType(right);
                 const bool primitiveOrLiteralPair = H::typeIsNum(leftTy) && H::typeIsNum(rightTy);
                 const bool languagePrimitiveCandidate =
-                    typeck::primitiveOperatorHasLanguageCandidate(
+                    primitiveOperatorHasLanguageCandidate(
                         v.operatorKind, leftTy, rightTy
                     );
                 if (primitiveOrLiteralPair || languagePrimitiveCandidate) {
@@ -5773,10 +5773,10 @@ namespace {
                     } else {
                         context.equateTypes(sp, res, left);
                     }
-                    const bool isShift = v.operatorKind == typeck::PrimitiveOperator::Shl
-                        || v.operatorKind == typeck::PrimitiveOperator::Shr
-                        || v.operatorKind == typeck::PrimitiveOperator::ShlAssign
-                        || v.operatorKind == typeck::PrimitiveOperator::ShrAssign;
+                    const bool isShift = v.operatorKind == TypeckPrimitiveOperator::Shl
+                        || v.operatorKind == TypeckPrimitiveOperator::Shr
+                        || v.operatorKind == TypeckPrimitiveOperator::ShlAssign
+                        || v.operatorKind == TypeckPrimitiveOperator::ShrAssign;
                     if (isShift) {
                         // Shifts can have mismatched types on each side.
                     } else {
@@ -5834,17 +5834,17 @@ namespace {
         // Target used by its own `deref` body.
         const auto currentOperatorUsesLanguagePrimitive = [&]() {
             if (!v.isOperator
-                || v.operatorKind == typeck::PrimitiveOperator::None
+                || v.operatorKind == TypeckPrimitiveOperator::None
                 || (sawCurrentOperatorImpl && !currentOperatorImplHasBuiltinSignature)) {
                 return false;
             }
 
             const auto& implTy = context.getType(v.implTy);
             if (v.params.types.size() == 0) {
-                return typeck::primitiveOperatorHasBuiltin(v.operatorKind, implTy);
+                return primitiveOperatorHasBuiltin(v.operatorKind, implTy);
             }
             if (v.params.types.size() == 1) {
-                return typeck::primitiveOperatorHasLanguageCandidate(
+                return primitiveOperatorHasLanguageCandidate(
                     v.operatorKind, implTy, context.getType(v.params.types.front())
                 );
             }
@@ -5875,7 +5875,7 @@ namespace {
                     sawAmbiguousIdentity = true;
                     return false;
                 }
-                if (v.operatorKind != typeck::PrimitiveOperator::None && context.isCurrentOperatorImpl(impl)) {
+                if (v.operatorKind != TypeckPrimitiveOperator::None && context.isCurrentOperatorImpl(impl)) {
                     if (currentOperatorUsesLanguagePrimitive()) {
                         DEBUG("[check_associated] - language primitive wins over current trait impl");
                         return false;
@@ -6074,11 +6074,11 @@ namespace {
 
                     context.equateTypes(sp, dstTy, srcTy);
                     return AssociatedCheckResult::Complete;
-                } else if (v.operatorKind != typeck::PrimitiveOperator::None
+                } else if (v.operatorKind != TypeckPrimitiveOperator::None
                            && (v.params.types.size() == 0
-                               ? typeck::primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy))
+                               ? primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy))
                                : v.params.types.size() == 1
-                                   && typeck::primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy), context.getType(v.params.types.at(0))))) {
+                                   && primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy), context.getType(v.params.types.at(0))))) {
                     // No trait implementation matched this expression.  The
                     // language-defined primitive candidate therefore wins.
                     return AssociatedCheckResult::Complete;
@@ -8346,7 +8346,7 @@ namespace {
     }
 }
 
-void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr) {
+void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr) {
     TRACE_FUNCTION;
 
     auto rootPtr = expr.takeNode();
@@ -8735,10 +8735,10 @@ void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::Ty
         DEBUG("=== Method const params ===");
 
         struct VisitMethodConst: public HIR::ExprVisitorDef {
-            const typeck::ModuleState& ms;
+            const TypeckModuleState& ms;
             const StaticTraitResolve& staticResolve;
 
-            VisitMethodConst(const typeck::ModuleState& ms, const StaticTraitResolve& staticResolve)
+            VisitMethodConst(const TypeckModuleState& ms, const StaticTraitResolve& staticResolve)
                 : HIR::ExprVisitorDef(ms.crate.types)
                 , ms(ms)
                 , staticResolve(staticResolve)
@@ -8792,7 +8792,6 @@ namespace {
     }
 }
 
-namespace typecheck {
     bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warnUnusedResult));
     bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache, const ::HIR::Function*& fcnPtr);
 
@@ -9676,49 +9675,49 @@ namespace typecheck {
                 // Type inferrence using the +=
                 // - "" as type name to indicate that it's just using the trait magic?
                 const char* langItem = nullptr;
-                auto operatorKind = typeck::PrimitiveOperator::None;
+                auto operatorKind = TypeckPrimitiveOperator::None;
                 switch (node.op) {
                     case ::HIR::ExprNodeAssign::Op::None:
                         throw "";
                     case ::HIR::ExprNodeAssign::Op::Add:
                         langItem = "add_assign";
-                        operatorKind = typeck::PrimitiveOperator::AddAssign;
+                        operatorKind = TypeckPrimitiveOperator::AddAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Sub:
                         langItem = "sub_assign";
-                        operatorKind = typeck::PrimitiveOperator::SubAssign;
+                        operatorKind = TypeckPrimitiveOperator::SubAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Mul:
                         langItem = "mul_assign";
-                        operatorKind = typeck::PrimitiveOperator::MulAssign;
+                        operatorKind = TypeckPrimitiveOperator::MulAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Div:
                         langItem = "div_assign";
-                        operatorKind = typeck::PrimitiveOperator::DivAssign;
+                        operatorKind = TypeckPrimitiveOperator::DivAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Mod:
                         langItem = "rem_assign";
-                        operatorKind = typeck::PrimitiveOperator::RemAssign;
+                        operatorKind = TypeckPrimitiveOperator::RemAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::And:
                         langItem = "bitand_assign";
-                        operatorKind = typeck::PrimitiveOperator::BitAndAssign;
+                        operatorKind = TypeckPrimitiveOperator::BitAndAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Or:
                         langItem = "bitor_assign";
-                        operatorKind = typeck::PrimitiveOperator::BitOrAssign;
+                        operatorKind = TypeckPrimitiveOperator::BitOrAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Xor:
                         langItem = "bitxor_assign";
-                        operatorKind = typeck::PrimitiveOperator::BitXorAssign;
+                        operatorKind = TypeckPrimitiveOperator::BitXorAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Shr:
                         langItem = "shr_assign";
-                        operatorKind = typeck::PrimitiveOperator::ShrAssign;
+                        operatorKind = TypeckPrimitiveOperator::ShrAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Shl:
                         langItem = "shl_assign";
-                        operatorKind = typeck::PrimitiveOperator::ShlAssign;
+                        operatorKind = TypeckPrimitiveOperator::ShlAssign;
                         break;
                 }
                 assert(langItem);
@@ -9728,7 +9727,7 @@ namespace typecheck {
                 this->context.equateTypesCoerce(node.span(), ty, node.mValue);
                 if (!traitPath.components().empty()) {
                     this->context.equateTypesAssoc(node.span(), this->context.crate.types.infer(), traitPath, HIR::PathParams(mv$(ty)), node.slot->resType, "", {}, true, operatorKind);
-                } else if (operatorKind != typeck::PrimitiveOperator::ShlAssign && operatorKind != typeck::PrimitiveOperator::ShrAssign) {
+                } else if (operatorKind != TypeckPrimitiveOperator::ShlAssign && operatorKind != TypeckPrimitiveOperator::ShrAssign) {
                     this->context.equateTypes(node.span(), node.slot->resType, ty);
                 }
             }
@@ -9791,8 +9790,8 @@ namespace typecheck {
                     const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
 
                     auto operatorKind = node.op == ::HIR::ExprNodeBinOp::Op::CmpEqu || node.op == ::HIR::ExprNodeBinOp::Op::CmpNEqu
-                        ? typeck::PrimitiveOperator::Equal
-                        : typeck::PrimitiveOperator::Order;
+                        ? TypeckPrimitiveOperator::Equal
+                        : TypeckPrimitiveOperator::Order;
                     if (!opTrait.components().empty()) {
                         this->context.equateTypesAssoc(node.span(), this->context.crate.types.infer(), opTrait, HIR::PathParams(rightTy), leftTy, "", {}, true, operatorKind);
                     } else {
@@ -9809,7 +9808,7 @@ namespace typecheck {
                     break;
                 default: {
                     const char* itemName = nullptr;
-                    auto operatorKind = typeck::PrimitiveOperator::None;
+                    auto operatorKind = TypeckPrimitiveOperator::None;
                     switch (node.op) {
                         case ::HIR::ExprNodeBinOp::Op::CmpEqu:
                             throw "";
@@ -9830,45 +9829,45 @@ namespace typecheck {
 
                         case ::HIR::ExprNodeBinOp::Op::Add:
                             itemName = "add";
-                            operatorKind = typeck::PrimitiveOperator::Add;
+                            operatorKind = TypeckPrimitiveOperator::Add;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Sub:
                             itemName = "sub";
-                            operatorKind = typeck::PrimitiveOperator::Sub;
+                            operatorKind = TypeckPrimitiveOperator::Sub;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Mul:
                             itemName = "mul";
-                            operatorKind = typeck::PrimitiveOperator::Mul;
+                            operatorKind = TypeckPrimitiveOperator::Mul;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Div:
                             itemName = "div";
-                            operatorKind = typeck::PrimitiveOperator::Div;
+                            operatorKind = TypeckPrimitiveOperator::Div;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Mod:
                             itemName = "rem";
-                            operatorKind = typeck::PrimitiveOperator::Rem;
+                            operatorKind = TypeckPrimitiveOperator::Rem;
                             break;
 
                         case ::HIR::ExprNodeBinOp::Op::And:
                             itemName = "bitand";
-                            operatorKind = typeck::PrimitiveOperator::BitAnd;
+                            operatorKind = TypeckPrimitiveOperator::BitAnd;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Or:
                             itemName = "bitor";
-                            operatorKind = typeck::PrimitiveOperator::BitOr;
+                            operatorKind = TypeckPrimitiveOperator::BitOr;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Xor:
                             itemName = "bitxor";
-                            operatorKind = typeck::PrimitiveOperator::BitXor;
+                            operatorKind = TypeckPrimitiveOperator::BitXor;
                             break;
 
                         case ::HIR::ExprNodeBinOp::Op::Shr:
                             itemName = "shr";
-                            operatorKind = typeck::PrimitiveOperator::Shr;
+                            operatorKind = TypeckPrimitiveOperator::Shr;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Shl:
                             itemName = "shl";
-                            operatorKind = typeck::PrimitiveOperator::Shl;
+                            operatorKind = TypeckPrimitiveOperator::Shl;
                             break;
                     }
                     assert(itemName);
@@ -9879,7 +9878,7 @@ namespace typecheck {
                         this->context.equateTypesAssoc(node.span(), node.resType, opTrait, HIR::PathParams(rightTy), leftTy, "Output", {}, true, operatorKind);
                     } else {
                         this->context.equateTypes(node.span(), node.resType, leftTy);
-                        if (operatorKind != typeck::PrimitiveOperator::Shl && operatorKind != typeck::PrimitiveOperator::Shr) {
+                        if (operatorKind != TypeckPrimitiveOperator::Shl && operatorKind != TypeckPrimitiveOperator::Shr) {
                             this->context.equateTypes(node.span(), leftTy, rightTy);
                         }
                     }
@@ -9897,15 +9896,15 @@ namespace typecheck {
             TRACE_FUNCTION_F(&node << " " << ::HIR::ExprNodeUniOp::opname(node.op) << "...");
             this->context.addIvars(node.mValue->resType);
             const char* itemName = nullptr;
-            auto operatorKind = typeck::PrimitiveOperator::None;
+            auto operatorKind = TypeckPrimitiveOperator::None;
             switch (node.op) {
                 case ::HIR::ExprNodeUniOp::Op::Invert:
                     itemName = "not";
-                    operatorKind = typeck::PrimitiveOperator::Not;
+                    operatorKind = TypeckPrimitiveOperator::Not;
                     break;
                 case ::HIR::ExprNodeUniOp::Op::Negate:
                     itemName = "neg";
-                    operatorKind = typeck::PrimitiveOperator::Neg;
+                    operatorKind = TypeckPrimitiveOperator::Neg;
                     break;
             }
             assert(itemName);
@@ -10012,7 +10011,7 @@ namespace typecheck {
                 node.traitUsed = ::HIR::ExprNodeDeref::TraitUsed::Trait;
                 this->context.equateTypesAssoc(
                     node.span(), node.resType, opTrait, {}, node.mValue->resType,
-                    "Target", {}, true, typeck::PrimitiveOperator::Deref
+                    "Target", {}, true, TypeckPrimitiveOperator::Deref
                 );
             } else {
                 node.traitUsed = ::HIR::ExprNodeDeref::TraitUsed::Builtin;
@@ -10955,9 +10954,8 @@ namespace typecheck {
             }
         }
     };
-}
 
-void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr) {
+void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr) {
     TRACE_FUNCTION;
 
     const Span& sp = rootPtr->span();
@@ -11057,14 +11055,14 @@ void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& 
 
     if (true) {
         DEBUG("--- Pre-adding ivars");
-        typecheck::ExprVisitorAddIvars visitor(context);
+        ExprVisitorAddIvars visitor(context);
         context.addIvars(rootPtr->resType);
         rootPtr->visit(visitor);
     }
 
     DEBUG("--- Enumerating");
     context.recordCoercionHint(newResTy, rootPtr);
-    typecheck::ExprVisitorEnum visitor(context, ms.traits, newResTy);
+    ExprVisitorEnum visitor(context, ms.traits, newResTy);
     context.addIvars(rootPtr->resType);
     rootPtr->visit(visitor);
 
@@ -11184,7 +11182,7 @@ bool Context::isCurrentNativeDerefReceiver(const ::HIR::SimplePath& derefTrait, 
         && currentTrait
         && currentTrait->mPath == derefTrait
         && borrow
-        && typeck::primitiveOperatorHasBuiltin(typeck::PrimitiveOperator::Deref, borrow->inner)
+        && primitiveOperatorHasBuiltin(TypeckPrimitiveOperator::Deref, borrow->inner)
         && currentTraitImpl->matchesType(borrow->inner, ivars.callbackResolveInfer());
 }
 
