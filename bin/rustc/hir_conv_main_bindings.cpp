@@ -57,13 +57,6 @@ namespace {
     }
 
     void fixTypeParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, HIRPathParams& params) {
-        if (params.mLifetimes.size() == 0) {
-            params.mLifetimes.resize(paramsDef.mLifetimes.size());
-        }
-        if (params.mLifetimes.size() != paramsDef.mLifetimes.size()) {
-            ERROR(sp, E0000, "Incorrect lifetime param count, expected " << paramsDef.mLifetimes.size() << ", got " << params.mLifetimes.size());
-        }
-
         if (params.types.size() == 0) {
             while (params.types.size() < paramsDef.types.size()) {
                 params.types.push_back(types.infer());
@@ -84,11 +77,6 @@ namespace {
 
     void fixParamCount(HIRTypeInterner& types, const Span& sp, const HIRGenericPath& path, const HIRGenericParams& paramDefs, HIRPathParams& params, bool fillInfer = true, const HIRTypeData* selfTy = nullptr) {
         TRACE_FUNCTION_FR(paramDefs.fmtArgs() << " -> " << params << " (fill_infer=" << fillInfer << ")", params);
-        if (params.mLifetimes.size() != paramDefs.mLifetimes.size()) {
-            if (params.mLifetimes.size() == 0 && fillInfer) {
-                params.mLifetimes.resize(paramDefs.mLifetimes.size());
-            }
-        }
         if (params.types.size() != paramDefs.types.size()) {
             TRACE_FUNCTION_FR(path, params);
 
@@ -1301,14 +1289,6 @@ HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& 
         pp.values.resize(paramsDef.values.size());
     }
 
-    // Shouldn't this error out if not in an expression?
-    if (pp.mLifetimes.empty()) {
-        pp.mLifetimes.resize(paramsDef.mLifetimes.size());
-    }
-    if (pp.mLifetimes.size() != paramsDef.mLifetimes.size()) {
-        ERROR(sp, E0000, "Mismatched lifetime-generic count in " << path << ", expected " << paramsDef.mLifetimes.size() << " got " << pp.mLifetimes.size());
-    }
-
     pp.types.reserve(paramsDef.types.size());
     while (pp.types.size() < paramsDef.types.size() && paramsDef.types[pp.types.size()].defaultValue != HIRTypeRef()) {
         auto monomorph = MonomorphStatePtr(types, nullptr, &pp, nullptr);
@@ -1582,7 +1562,6 @@ public:
 
             auto gp2 = gp.clone();
             gp2.mPath += name;
-            gp2.mParams.mLifetimes.resize(enm.mParams.mLifetimes.size());
             resizeTypeParams(gp2.mParams, enm.mParams.types.size());
             gp2.mParams.values.resize(enm.mParams.values.size());
 
@@ -1619,7 +1598,6 @@ public:
                 // Enum variant!
                 const auto& enm = ti.as_Enum();
 
-                gp.mParams.mLifetimes.resize(enm.mParams.mLifetimes.size());
                 resizeTypeParams(gp.mParams, enm.mParams.types.size());
                 gp.mParams.values.resize(enm.mParams.values.size());
 
@@ -1632,7 +1610,6 @@ public:
         if (ti.is_Union()) {
             const auto& unn = ti.as_Union();
 
-            gp.mParams.mLifetimes.resize(unn.mParams.mLifetimes.size());
             resizeTypeParams(gp.mParams, unn.mParams.types.size());
             gp.mParams.values.resize(unn.mParams.values.size());
 
@@ -1642,7 +1619,6 @@ public:
         ASSERT_BUG(sp, ti.is_Struct(), "Pattern path " << gp.mPath << " didn't point to a struct or union (" << ti.tagStr() << ")");
         const auto& str = ti.as_Struct();
 
-        gp.mParams.mLifetimes.resize(str.mParams.mLifetimes.size());
         resizeTypeParams(gp.mParams, str.mParams.types.size());
         gp.mParams.values.resize(str.mParams.values.size());
 
@@ -2656,13 +2632,6 @@ public:
                 return g;
             }
 
-            HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-                if (g.group() == 3) {
-                    return HIRLifetimeRef();
-                } else {
-                    return HIRLifetimeRef(g.binding);
-                }
-            }
         };
 
         auto traitPath = MonomorphEraseHrls(crate.types).monomorphGenericpath(Span(), traitPathReal);
@@ -2670,9 +2639,6 @@ public:
             // If the trait has missing type argumenst, replace them with the defaults
             // Get trait, check if the type has ATCs
             const auto& aty = trait.types.at(e.item);
-            if (e.params.mLifetimes.size() < aty.generics.mLifetimes.size()) {
-                e.params.mLifetimes.resize(aty.generics.mLifetimes.size());
-            }
         }
         // TODO: Only do this when there's multiple options?
         if (inExpr) {
@@ -2790,9 +2756,6 @@ public:
                 }
                 HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override {
                     return val.isPlaceholder() ? HIRConstGeneric() : HIRConstGeneric(val);
-                }
-                HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-                    return HIRLifetimeRef(g.binding);
                 }
             };
 

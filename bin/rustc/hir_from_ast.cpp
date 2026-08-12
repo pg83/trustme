@@ -78,7 +78,6 @@ HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsS
         TU_ARMA(None, _) {
             }
             TU_ARMA(Lifetime, lftDef) {
-                rv.mLifetimes.push_back(HIRLifetimeDef{lftDef.name().name});
             }
             TU_ARMA(Type, tp) {
                 rv.types.push_back({tp.name(), LowerHIRType(tp.getDefault()), true});
@@ -509,7 +508,6 @@ HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams,
         }
     }
 
-    params.mLifetimes.reserveInit(numLft);
     params.types.reserveInit(numTy);
     params.values.reserveInit(numVal);
     for (const auto& param : srcParams.entries) {
@@ -517,7 +515,6 @@ HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams,
         TU_ARMA(Null, ty) {
             }
             TU_ARMA(Lifetime, lft) {
-                params.mLifetimes.push_back(LowerHIRLifetimeRef(lft));
             }
             TU_ARMA(Type, ty) {
                 params.types.push_back(LowerHIRType(ty));
@@ -589,11 +586,7 @@ HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTP
 }
 
 HIRGenericParams LowerHIRHigherRankedBounds(const ASTHigherRankedBounds& hrbs) {
-    HIRGenericParams params;
-    for (const auto& lftDef : hrbs.mLifetimes) {
-        params.mLifetimes.push_back(HIRLifetimeDef{lftDef.name().name});
-    }
-    return params;
+    return HIRGenericParams();
 }
 
 HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds /*=false*/, ASTBoundConstness constness /*=Never*/) {
@@ -611,10 +604,6 @@ HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHig
         HIRGenericParams params;
         rv.hrtbs = box$(params);
     }
-    if (rv.hrtbs && path.nodes().back().args().isParen) {
-        rv.lifetimeElision = true;
-    }
-
     if (rv.hrtbs) {
         DEBUG("HRLS = " << rv.hrtbs->fmtArgs());
     } else {
@@ -824,40 +813,7 @@ namespace {
         const Span& mSpan;
         HIRTypeData::Data_TraitObject& out;
         ::std::unordered_set<const void*> activeAliases;
-        ::std::vector<HIRLifetimeDef> activeHrtbs;
 
-        HIRTraitPath rebaseBoundHrtbs(HIRTraitPath trait) const {
-            if (activeHrtbs.empty() || !trait.hrtbs) {
-                return trait;
-            }
-
-            HIRPathParams shifted;
-            shifted.mLifetimes.reserve(trait.hrtbs->mLifetimes.size());
-            for (size_t i = 0; i < trait.hrtbs->mLifetimes.size(); i++) {
-                const auto binding = HIRGenericRef(RcString(), GENERICHrtb, static_cast<uint16_t>(activeHrtbs.size() + i)).binding;
-                shifted.mLifetimes.push_back(HIRLifetimeRef(binding));
-            }
-            return MonomorphHrlsOnly(gCratePtr->types, shifted).monomorphTraitpath(mSpan, trait, false, true);
-        }
-
-        void attachActiveHrtbs(HIRTraitPath& trait) const {
-            if (activeHrtbs.empty()) {
-                return;
-            }
-
-            HIRGenericParams merged;
-            merged.mLifetimes.reserve(activeHrtbs.size() + (trait.hrtbs ? trait.hrtbs->mLifetimes.size() : 0));
-            for (const auto& lifetime : activeHrtbs) {
-                merged.mLifetimes.push_back(lifetime);
-            }
-            if (trait.hrtbs) {
-                ASSERT_BUG(mSpan, trait.hrtbs->types.empty() && trait.hrtbs->values.empty() && trait.hrtbs->bounds.empty(), "Non-lifetime parameters in higher-ranked trait bound");
-                for (const auto& lifetime : trait.hrtbs->mLifetimes) {
-                    merged.mLifetimes.push_back(lifetime);
-                }
-            }
-            trait.hrtbs = box$(mv$(merged));
-        }
 
         bool hasPrincipal() const {
             return !out.mTrait.mPath.mPath.components().empty();
@@ -872,7 +828,6 @@ namespace {
                 return;
             }
 
-            attachActiveHrtbs(trait);
             if (hasPrincipal()) {
                 ERROR(mSpan, E0000, "Multiple data traits in trait object: " << out.mTrait.mPath << " and " << trait.mPath);
             }
@@ -910,28 +865,6 @@ namespace {
             return ActiveAlias{activeAliases, key};
         }
 
-        struct ActiveHrtbs {
-            ::std::vector<HIRLifetimeDef>& lifetimes;
-            size_t oldSize;
-
-            ~ActiveHrtbs() {
-                lifetimes.resize(oldSize);
-            }
-        };
-
-        ActiveHrtbs enterHrtbs(HIRTraitPath& path) {
-            const size_t oldSize = activeHrtbs.size();
-            if (path.hrtbs) {
-                ASSERT_BUG(mSpan, path.hrtbs->types.empty() && path.hrtbs->values.empty() && path.hrtbs->bounds.empty(), "Non-lifetime parameters in higher-ranked trait alias");
-                activeHrtbs.reserve(oldSize + path.hrtbs->mLifetimes.size());
-                for (const auto& lifetime : path.hrtbs->mLifetimes) {
-                    activeHrtbs.push_back(lifetime);
-                }
-                path.hrtbs.reset();
-            }
-            return ActiveHrtbs{activeHrtbs, oldSize};
-        }
-
         void addAstPath(HIRTraitPath path, const ASTPathBindingType& binding) {
             if (const auto* trait = binding.opt_Trait()) {
                 ASSERT_BUG(mSpan, trait->trait_ || trait->hir, "Null trait binding for " << path.mPath);
@@ -958,7 +891,6 @@ namespace {
             const void* key = binding.trait_ ? static_cast<const void*>(binding.trait_) : static_cast<const void*>(binding.hir);
             ASSERT_BUG(mSpan, key, "Null trait alias binding for " << aliasPath.mPath);
             auto active = enterAlias(key, aliasPath.mPath);
-            auto activeHrtbs = enterHrtbs(aliasPath);
             const bool hadPrincipal = hasPrincipal();
 
             if (binding.trait_) {
@@ -967,7 +899,7 @@ namespace {
                 auto params = ConvertHIRCompleteAliasParams(gCratePtr->types, mSpan, paramsDef, aliasPath.mPath, false);
                 auto monomorph = MonomorphStatePtr(gCratePtr->types, nullptr, &params, nullptr);
                 for (const auto& bound : binding.trait_->traits) {
-                    auto trait = rebaseBoundHrtbs(LowerHIRTraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs, false, bound.ent.constness));
+                    auto trait = LowerHIRTraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs, false, bound.ent.constness);
                     addAstPath(monomorph.monomorphTraitpath(mSpan, trait, false), bound.ent.path->mBindings.type.binding);
                 }
             } else {
@@ -982,14 +914,13 @@ namespace {
             auto params = ConvertHIRCompleteAliasParams(gCratePtr->types, mSpan, alias.mParams, aliasPath.mPath, false);
             auto monomorph = MonomorphStatePtr(gCratePtr->types, nullptr, &params, nullptr);
             for (const auto& bound : alias.traits) {
-                auto trait = rebaseBoundHrtbs(bound.clone());
+                auto trait = bound.clone();
                 addHirPath(monomorph.monomorphTraitpath(mSpan, trait, false));
             }
         }
 
         void expandHirAlias(HIRTraitPath aliasPath, const HIRTraitAlias& alias) {
             auto active = enterAlias(&alias, aliasPath.mPath);
-            auto activeHrtbs = enterHrtbs(aliasPath);
             const bool hadPrincipal = hasPrincipal();
             expandHirAliasContents(aliasPath, alias);
             applyAliasBounds(aliasPath, hadPrincipal);
@@ -1180,9 +1111,6 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
         }
         TU_ARMA(Function, e) {
             HIRGenericParams params;
-            for (const auto& lftDef : e.info.hrbs.mLifetimes) {
-                params.mLifetimes.push_back(HIRLifetimeDef{lftDef.name().name});
-            }
             ::std::vector<HIRTypeRef> args;
             for (const auto& arg : e.info.argTypes) {
                 args.push_back(LowerHIRType(arg));
@@ -1575,18 +1503,12 @@ HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttr
     bool traitReqiresSized = false;
     auto params = LowerHIRGenericParams(f.params(), &traitReqiresSized);
 
-    HIRLifetimeRef lifetime;
-    if (!f.lifetimes().empty()) {
-        ASSERT_BUG(f.lifetimes()[0].sp, f.lifetimes().size() == 1, "");
-        lifetime = LowerHIRLifetimeRef(f.lifetimes()[0].ent);
-        DEBUG("Lifetime " << lifetime << " (" << f.lifetimes()[0].ent << " " << f.lifetimes()[0].ent.binding() << ")");
-    }
     ::std::vector<HIRTraitPath> supertraits;
     for (const auto& st : f.supertraits()) {
         supertraits.push_back(LowerHIRTraitPath(st.sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness));
         DEBUG("Supertrait " << supertraits.back());
     }
-    HIRTrait rv{mv$(params), mv$(lifetime), mv$(supertraits)};
+    HIRTrait rv{mv$(params), mv$(supertraits)};
     rv.isConst = attrs.has("const_trait");
 
     // HACK: Add a bound of Self: ThisTrait for parts of typeck (TODO: Remove this, it's evil)
@@ -1612,7 +1534,6 @@ HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttr
             TU_ARMA(Type, i) {
                 bool isSized = true;
                 ::std::vector<HIRTraitPath> traitBounds;
-                HIRLifetimeRef lifetimeBound;
                 auto gps = LowerHIRGenericParams(i.params(), &isSized);
 
                 auto selfBounds = LowerHIRGenericParams(i.selfBounds, &isSized);
@@ -1627,7 +1548,7 @@ HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttr
                         }
                 }
                 }
-                rv.types.insert(::std::make_pair(item.name, HIRAssociatedType{mv$(gps), isSized, mv$(lifetimeBound), mv$(traitBounds), LowerHIRType(i.type())}));
+                rv.types.insert(::std::make_pair(item.name, HIRAssociatedType{mv$(gps), isSized, mv$(traitBounds), LowerHIRType(i.type())}));
             }
             TU_ARMA(Function, i) {
                 auto fcn = LowerHIRFunction(itemPath, item.attrs, i, gCratePtr->types.self());

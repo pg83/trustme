@@ -407,12 +407,11 @@ public:
 struct HIRAssociatedType {
     HIRGenericParams generics;
     bool isSized;
-    HIRLifetimeRef lifetimeBound;
     ::std::vector<HIRTraitPath> traitBounds;
     bool hasDefault;
     HIRTypeRef defaultValue;
 
-    HIRAssociatedType(HIRGenericParams generics, bool isSized, HIRLifetimeRef lifetimeBound, ::std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType);
+    HIRAssociatedType(HIRGenericParams generics, bool isSized, ::std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType);
 };
 
 TAGGED_UNION(HIRTraitValueItem, Constant, (Constant, HIRConstant), (Static, HIRStatic), (Function, HIRFunction));
@@ -420,7 +419,6 @@ TAGGED_UNION(HIRTraitValueItem, Constant, (Constant, HIRConstant), (Static, HIRS
 class HIRTrait {
 public:
     HIRGenericParams mParams;
-    HIRLifetimeRef lifetime;
     // NOTE: Not serialised!
     ::std::vector<HIRTraitPath> parentTraits;
 
@@ -449,7 +447,7 @@ public:
     // VTable path
     HIRSimplePath vtablePath;
 
-    HIRTrait(HIRGenericParams gps, HIRLifetimeRef lifetime, ::std::vector<HIRTraitPath> parents);
+    HIRTrait(HIRGenericParams gps, ::std::vector<HIRTraitPath> parents);
 
     HIRTypeRef getVtableType(const Span& sp, const HIRCrate& crate, const HIRTypeData::Data_TraitObject& te) const;
     unsigned getVtableValueIndex(const HIRGenericPath& traitPath, const RcString& name) const;

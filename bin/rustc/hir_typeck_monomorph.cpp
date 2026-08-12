@@ -120,28 +120,12 @@ HIRConstGeneric MonomorphHrlsOnly::getValue(const Span& sp, const HIRGenericRef&
     return HIRConstGeneric(val);
 }
 
-HIRLifetimeRef MonomorphHrlsOnly::getLifetime(const Span& sp, const HIRGenericRef& lftRef) const {
-    if (lftRef.group() == 3) {
-        // If the HRL batch does not cover this index, pass the lifetime through rather than abort: not reliably in range for nested binders, and erased before codegen.
-        if (lftRef.idx() >= ppHrb->mLifetimes.size()) {
-            DEBUG("HRL " << lftRef << " out of bounds (" << ppHrb->mLifetimes.size() << ") - passthrough");
-            return HIRLifetimeRef(lftRef.binding);
-        }
-        return ppHrb->mLifetimes.at(lftRef.idx());
-    }
-    return HIRLifetimeRef(lftRef.binding);
-}
-
 HIRTypeRef MonomorphiserNop::getType(const Span& sp, const HIRGenericRef& ty) const {
     return types.generic(ty.name, ty.binding);
 }
 
 HIRConstGeneric MonomorphiserNop::getValue(const Span& sp, const HIRGenericRef& val) const {
     return HIRConstGeneric(val);
-}
-
-HIRLifetimeRef MonomorphiserNop::getLifetime(const Span& sp, const HIRGenericRef& lftRef) const {
-    return HIRLifetimeRef(lftRef.binding);
 }
 
 const HIRTypeData* MonomorphStatePtr::getSelfType() const {

@@ -82,7 +82,6 @@ namespace {
             auto& bb = cloneOpenBlock(mirFcn);
             bb.statements.push_back(MIRStatement::make_Assign({borrowLv.clone(), MIRRValue::make_Borrow({HIRBorrowType::Shared, false, mv$(fldLvalue)})}));
             HIRPathParams pp;
-            pp.mLifetimes.push_back(HIRLifetimeRef(1 * 256 + 0)); // 'M:0
             const auto callBlock = static_cast<MIRBasicBlockId>(mirFcn.blocks.size() - 1);
             const auto retBlock = static_cast<MIRBasicBlockId>(mirFcn.blocks.size());
             bb.terminator = MIRTerminator::make_Call({retBlock, MIRUnwindAction::make_Continue({}), resLv.clone(), MIRCallTarget(HIRPath(subty, langClone, rcstringCloneLower, std::move(pp))), ::makeVec1<MIRParam>(::std::move(borrowLv))});
@@ -211,7 +210,6 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
         /*m_return=*/ty,
         HIRExprPtr{}
     };
-    fcn.mParams.mLifetimes.push_back(HIRLifetimeDef()); // 'M:0 - for the `&self` argument
     fcn.mCode.mir = MIRFunctionPointer(new MIRFunction(mv$(mirFcn)));
 
     // Impl
@@ -523,7 +521,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             unsigned vtableIdx = tyDyn.mTrait.traitPtr->getVtableValueIndex(traitPath, name);
             ASSERT_BUG(sp, vtableIdx > 0, "Calling method '" << name << "' from " << traitPath << " through " << pe.type << " which isn't in the vtable");
 
-            auto pp = fcnDef.mParams.makeNopParams(crate.types, 1, true);
+            auto pp = fcnDef.mParams.makeNopParams(crate.types, 1);
             MonomorphStatePtr ms(crate.types, pe.type, &traitPath.mParams, &pp);
 
             HIRFunction newFcn;
@@ -1501,7 +1499,7 @@ namespace {
     void TransEnumerateGenericFunctionItems(EnumState& state, const Span& sp, const HIRFunction& e, MonomorphStatePtr ms) {
         if (e.mCode.mir) {
             const auto& mirFcn = *e.mCode.mir;
-            auto params = e.mParams.makeEmptyParams(true);
+            auto params = HIRPathParams();
             ms.ppMethod = &params;
             if (!mirFcn.transEnumState) {
                 auto* esp = new MIREnumCache();
@@ -1611,7 +1609,7 @@ namespace {
                     } else {
                         if (isVisible) {
                             TransParams pp(state.crate.types);
-                            pp.ppMethod = e.mParams.makeEmptyParams(/*lifetimes_only=*/true);
+                            pp.ppMethod = HIRPathParams();
                             state.enumFcn(getPath(), e, mv$(pp));
 
                             state.rv.roots.push_back(getPath());
@@ -1669,7 +1667,7 @@ namespace {
             if (auto* e = ti.second->ent.opt_Module()) {
                 TransEnumeratePublicMod(state, *e, modPath + ti.first, ti.second->publicity.isGlobal());
             } else if (const HIRTrait* e = ti.second->ent.opt_Trait()) {
-                auto params = e->mParams.makeEmptyParams(true);
+                auto params = HIRPathParams();
                 MonomorphStatePtr ms(state.crate.types);
                 ms.ppImpl = &params;
                 for (const auto& vi : e->values) {
@@ -1686,11 +1684,11 @@ namespace {
         const auto& implTy = impl.mType;
         TRACE_FUNCTION_F("Impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << implTy);
 
-        auto paramsImpl = impl.mParams.makeEmptyParams(true);
+        auto paramsImpl = HIRPathParams();
         MonomorphStatePtr ms(state.crate.types);
         ms.ppImpl = &paramsImpl;
         if (!impl.mParams.isGeneric()) {
-            auto implParams = impl.mParams.makeEmptyParams(true);
+            auto implParams = HIRPathParams();
             auto cbMonomorph = MonomorphStatePtr(state.crate.types, implTy, &impl.traitArgs, nullptr);
             auto cbMonomorph2 = MonomorphStatePtr(state.crate.types, nullptr, &implParams, nullptr);
 
@@ -1749,10 +1747,6 @@ namespace {
                         }
 
                         DEBUG("Params = " << fcn.mParams.fmtArgs());
-                        for (const auto& lft : fcn.mParams.mLifetimes) {
-                            (void)lft;
-                            pp.mLifetimes.push_back(HIRLifetimeRef());
-                        }
                     }
                     auto path = HIRPath(cbMonomorph2.monomorphType(sp, implTy), HIRGenericPath(traitPath, cbMonomorph2.monomorphPathParams(sp, impl.traitArgs, false)), vi.first, mv$(pp));
                     state.rv.roots.push_back(path.clone());
@@ -1801,7 +1795,7 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
     struct H1 {
         static void enumerateTypeImpl(EnumState& state, HIRTypeImpl& impl) {
             TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << impl.mType);
-            HIRPathParams implParams = impl.mParams.makeEmptyParams(/*allow_lifetimes_only=*/true);
+            HIRPathParams implParams = HIRPathParams();
             MonomorphStatePtr ms(state.crate.types);
             ms.ppImpl = &implParams;
             if (!impl.mParams.isGeneric()) {
@@ -1810,7 +1804,7 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
                     if (!fcn.second.data.mParams.isGeneric()) {
                         TransParams pp(state.crate.types);
                         pp.ppImpl = implParams.clone();
-                        pp.ppMethod = fcn.second.data.mParams.makeEmptyParams(/*allow_lifetimes_only=*/true);
+                        pp.ppMethod = HIRPathParams();
                         auto path = HIRPath(MonomorphStatePtr(state.crate.types, nullptr, &implParams, nullptr).monomorphType(Span(), impl.mType), fcn.first);
                         path.mData.as_UfcsInherent().implParams = pp.ppImpl.clone();
                         path.mData.as_UfcsInherent().params = pp.ppMethod.clone();
@@ -1833,11 +1827,11 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
             }
             for (auto& e : impl.constants) {
                 TransParams tp(state.crate.types);
-                tp.ppImpl = impl.mParams.makeEmptyParams(/*allow_lifetimes_only=*/true);
+                tp.ppImpl = HIRPathParams();
                 TransEnumerateFillFromLiteral(state, e.second.data.valueRes, std::move(tp));
 
                 if (e.second.publicity.isGlobal() && !impl.mParams.isGeneric() && !e.second.data.mParams.isGeneric()) {
-                    auto ppMethod = e.second.data.mParams.makeEmptyParams(/*allow_lifetimes_only=*/true);
+                    auto ppMethod = HIRPathParams();
                     for (const auto& r : e.second.data.valueRes.relocations) {
                         if (r.p) {
                             // Still need to monomorph, as lifetimes aren't counted in `is_generic`
@@ -1867,7 +1861,7 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
         if (it != crate.mLangItems.end()) {
             HIRGenericPath p = it->second;
             const auto& f = crate.getFunctionByPath(Span(), p.mPath);
-            p.mParams = f.mParams.makeEmptyParams(true);
+            p.mParams = HIRPathParams();
             TransEnumerateFillFromPathMono(state, std::move(p));
         }
     }
@@ -1949,7 +1943,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
             default:
                 break;
                 TU_ARMA(Generic, e) {
-                    e.mParams.mLifetimes.resize((*f)->mParams.mLifetimes.size());
                 }
                 //    }
             }
@@ -2589,7 +2582,7 @@ void TransEnumerateTypes(EnumState& state) {
                 // If the type has a drop impl, and it's either defined in this crate or has params (and thus was monomorphised)
                 if (markingsPtr->hasDropImpl && (gp.mPath.crateName() == state.crate.crateName || gp.mParams.hasParams())) {
                     // Add the Drop impl to the codegen list
-                    TransEnumerateFillFromPathMono(state, HIRPath(ty, state.crate.getLangItemPath(sp, "drop"), enumerateRcstringDrop, HIRPathParams(HIRLifetimeRef())));
+                    TransEnumerateFillFromPathMono(state, HIRPath(ty, state.crate.getLangItemPath(sp, "drop"), enumerateRcstringDrop, HIRPathParams()));
                     constructorsAdded = true;
                 }
             }
@@ -2850,10 +2843,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 if (!resolve.typeIsCopy(sp, innerTy)) {
                     auto enumImpl = [&](const HIRTypeData* ity) {
                         if (!resolve.typeIsCopy(sp, ity)) {
-                            auto innerPp = HIRPathParams(HIRLifetimeRef());
-                            if (pe.item == "clone_from") {
-                                innerPp.mLifetimes.push_back(HIRLifetimeRef());
-                            }
+                            auto innerPp = HIRPathParams();
                             TransEnumerateFillFromPathMono(state, HIRPath(ity, pe.trait.clone(), pe.item, mv$(innerPp)));
                         }
                     };
@@ -3037,7 +3027,7 @@ void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, const Tr
         DEBUG("- " << m.second.first << " = " << m.second.second << " :: " << m.first);
         auto gpath = monomorphCbTrait.monomorphGenericpath(sp, m.second.second, false);
         const auto& fcn = state.crate.getTraitByPath(sp, gpath.mPath).values.at(m.first).as_Function();
-        TransEnumerateFillFromPathMono(state, HIRPath(type, mv$(gpath), m.first, fcn.mParams.makeEmptyParams(true)));
+        TransEnumerateFillFromPathMono(state, HIRPath(type, mv$(gpath), m.first, HIRPathParams()));
     }
     for (const auto& ptPath : tr.allParentTraits) {
         ASSERT_BUG(sp, ptPath.traitPtr, "Unset trait pointer - " << ptPath);
@@ -3103,9 +3093,6 @@ void TransEnumerateFillFromFunction(EnumState& state, const HIRPath& p, const HI
 }
 
 void TransEnumerateFillFromStatic(EnumState& state, const HIRStatic& item, TransListStatic& outStat, TransParams pp) {
-    // HACK: Ensure that lifetimes are populated.
-    pp.ppMethod.mLifetimes.resize(item.mParams.mLifetimes.size());
-
     if (item.mParams.isGeneric()) {
         MIREnumCache es;
         TransEnumerateFillFromMIR(es, *item.mValue.mir);

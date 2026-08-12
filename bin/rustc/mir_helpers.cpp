@@ -406,7 +406,6 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vec
 std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
     if (ty->is_Path() && ty->as_Path().path.mData.is_Generic()) {
         auto p = ty->as_Path().path.mData.as_Generic().clone();
-        p.mParams.mLifetimes.resize(0);
         return FMT(p);
     }
     return FMT(ty);

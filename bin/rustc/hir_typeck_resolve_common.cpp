@@ -126,7 +126,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const HIRGener
         ASSERT_BUG(sp, !aTy.second.generics.isGeneric(), "prep_indexes__add_trait_bound: Handle type generic ATYs - " << aTy.first << aTy.second.generics.fmtArgs() << " in " << traitPath);
         auto tyA = crate.types.path(
             // TODO: Empty params works for now, as there's no type generics (yet)
-            HIRPath(type, traitPath.mPath.clone(), aTy.first, aTy.second.generics.makeEmptyParams(true)),
+            HIRPath(type, traitPath.mPath.clone(), aTy.first, HIRPathParams()),
             HIRTypePathBinding::make_Opaque({})
         );
         monomorph.ppMethod = &tyA->as_Path().path.mData.as_UfcsKnown().params;

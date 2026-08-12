@@ -79,7 +79,6 @@ struct ImplRef {
 
         HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
-        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& val) const override;
     };
 
     Monomorph getCbMonomorphTraitimpl(HIRTypeInterner& types, const Span& sp, const HIRPathParams& params) const;

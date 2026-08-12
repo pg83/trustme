@@ -229,8 +229,6 @@ public:
         return box$(D<T>::des(*this));
     }
 
-    HIRLifetimeDef deserialiseLifetimedef();
-    HIRLifetimeRef deserialiseLifetimeref();
     HIRArraySize deserialiseArraysize();
     HIRGenericRef deserialiseGenericref();
     HIRTypeRef deserialiseType();
@@ -876,7 +874,7 @@ public:
     }
 
     HIRAssociatedType deserialiseAssociatedtype() {
-        return HIRAssociatedType{deserialiseGenericparams(), in.readBool(), deserialiseLifetimeref(), deserialiseVec<HIRTraitPath>(), deserialiseType()};
+        return HIRAssociatedType{deserialiseGenericparams(), in.readBool(), deserialiseVec<HIRTraitPath>(), deserialiseType()};
     }
 };
 
@@ -912,10 +910,6 @@ struct D<::std::pair<T, U>> {
 template <typename T>
 DEF_D(HIRVisEnt<T>, return d.deserialiseVisent<T>();)
 
-template <>
-DEF_D(HIRLifetimeDef, return d.deserialiseLifetimedef();)
-template <>
-DEF_D(HIRLifetimeRef, return d.deserialiseLifetimeref();)
 template <>
 DEF_D(HIRTypeRef, return d.deserialiseType();)
 template <>
@@ -994,18 +988,6 @@ DEF_D(HIRCrate::ImplGroup<std::unique_ptr<T>>, HIRCrate::ImplGroup<std::unique_p
 template <>
 DEF_D(HIRExternLibrary, return d.deserialiseExtlib();)
 
-HIRLifetimeDef HirDeserialiser::deserialiseLifetimedef() {
-    HIRLifetimeDef rv;
-    rv.mName = in.readIstring();
-    return rv;
-}
-
-HIRLifetimeRef HirDeserialiser::deserialiseLifetimeref() {
-    HIRLifetimeRef rv;
-    rv.binding = static_cast<uint32_t>(in.readCount());
-    return rv;
-}
-
 HIRGenericRef HirDeserialiser::deserialiseGenericref() {
     return HIRGenericRef{in.readIstring(), in.readU16()};
 }
@@ -1081,7 +1063,6 @@ HIRSimplePath HirDeserialiser::deserialiseSimplepath() {
 HIRPathParams HirDeserialiser::deserialisePathparams() {
     HIRPathParams rv;
     TRACE_FUNCTION_FR("", rv);
-    rv.mLifetimes = deserialiseThinvec<HIRLifetimeRef>();
     rv.types = deserialiseThinvec<HIRTypeRef>();
     rv.values = deserialiseThinvec<HIRConstGeneric>();
     return rv;
@@ -1133,7 +1114,6 @@ HIRGenericParams HirDeserialiser::deserialiseGenericparams() {
     HIRGenericParams params;
     params.types = deserialiseVec<HIRTypeParamDef>();
     params.values = deserialiseVec<HIRValueParamDef>();
-    params.mLifetimes = deserialiseVec<HIRLifetimeDef>();
     params.bounds = deserialiseVec<HIRGenericBound>();
     DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
     return params;
@@ -1257,10 +1237,8 @@ HIRTrait HirDeserialiser::deserialiseTrait() {
 
     HIRTrait rv{
         deserialiseGenericparams(),
-        HIRLifetimeRef(), // TODO: Better type for lifetime
         {}
     };
-    rv.lifetime = deserialiseLifetimeref();
     const auto traitFlags = in.readU8();
     rv.mIsMarker = traitFlags & 1;
     rv.isFundamental = traitFlags & 2;
@@ -1702,7 +1680,7 @@ namespace {
         }
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
-            os << indent() << "trait " << p.getName() << item.mParams.fmtArgs() << " : " << item.lifetime << "\n";
+            os << indent() << "trait " << p.getName() << item.mParams.fmtArgs() << "\n";
             if (!item.parentTraits.empty()) {
                 os << indent() << "  " << ": ";
                 bool isFirst = true;
@@ -2628,14 +2606,6 @@ public:
         out.writeI64c(v);
     };
 
-    void serialise(const HIRLifetimeDef& ld) {
-        out.writeString(ld.mName);
-    }
-
-    void serialise(const HIRLifetimeRef& lr) {
-        out.writeCount(lr.binding);
-    }
-
     void serialise(const HIRGenericRef& ge) {
         out.writeString(ge.name);
         out.writeU16(ge.binding);
@@ -2746,7 +2716,6 @@ public:
     }
 
     void serialisePathparams(const HIRPathParams& pp) {
-        serialiseVec(pp.mLifetimes);
         serialiseVec(pp.types);
         serialiseVec(pp.values);
     }
@@ -2763,7 +2732,6 @@ public:
 
     void serialiseTraitpath(const HIRTraitPath& path) {
         auto _ = out.openObject("HIR::TraitPath");
-        assert(!path.lifetimeElision);
         out.writeBool(static_cast<bool>(path.hrtbs));
         if (path.hrtbs) {
             serialiseGenerics(*path.hrtbs);
@@ -2823,7 +2791,6 @@ public:
         DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
         serialiseVec(params.types);
         serialiseVec(params.values);
-        serialiseVec(params.mLifetimes);
         serialiseVec(params.bounds);
     }
 
@@ -3662,7 +3629,6 @@ public:
         auto _ = out.openObject("HIR::Trait");
 
         serialiseGenerics(item.mParams);
-        serialise(item.lifetime);
         // Kept as one byte for compatibility with metadata written before
         // the fundamental bit was represented in HIR.
         out.writeU8((item.mIsMarker ? 1u : 0u) | (item.isFundamental ? 2u : 0u) | (item.isCoinductive ? 4u : 0u) | (item.isConst ? 8u : 0u));
@@ -3683,7 +3649,6 @@ public:
     void serialise(const HIRAssociatedType& at) {
         serialiseGenerics(at.generics);
         out.writeBool(at.isSized);
-        serialise(at.lifetimeBound);
         serialiseVec(at.traitBounds);
         serialiseType(at.defaultValue);
     }

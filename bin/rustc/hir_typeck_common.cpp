@@ -365,11 +365,6 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
 
     bool visitPathParams(const HIRPathParams& pp) override {
         if (!this->ignoreLifetimes) {
-            for (const auto& lft : pp.mLifetimes) {
-                if (isGenericLft(lft)) {
-                    return true;
-                }
-            }
         }
         for (const auto& v : pp.values) {
             if (v.is_Generic()) {
@@ -521,11 +516,6 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
     throw "";
 }
 
-HIRLifetimeRef Monomorphiser::monomorphLifetime(const Span& sp, const HIRLifetimeRef& lft) const {
-    // Lifetimes are erased
-    return HIRLifetimeRef();
-}
-
 HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer /*=true*/) const {
     TU_MATCH_HDRA( (tpl.mData), {)
     TU_ARMA(Generic, e2) {
@@ -553,7 +543,6 @@ HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPat
     }
 
     HIRTraitPath rv{tpl.hrtbs ? box$(tpl.hrtbs->clone()) : nullptr, this->monomorphGenericpath(sp, tpl.mPath, allowInfer, true), {}, {}, tpl.traitPtr, tpl.constness};
-    rv.lifetimeElision = tpl.lifetimeElision;
 
     for (const auto& assoc : tpl.typeBounds) {
         rv.typeBounds.insert(::std::make_pair(assoc.first, this->monomorphTpAtyEqual(sp, assoc.second, allowInfer)));
@@ -587,11 +576,6 @@ HIRConstGeneric Monomorphiser::monomorphConstgeneric(const Span& sp, const HIRCo
 
 HIRPathParams Monomorphiser::monomorphPathParams(const Span& sp, const HIRPathParams& tpl, bool allowInfer) const {
     HIRPathParams rv;
-
-    rv.mLifetimes.reserve(tpl.mLifetimes.size());
-    for (const auto& lft : tpl.mLifetimes) {
-        rv.mLifetimes.push_back(this->monomorphLifetime(sp, lft));
-    }
 
     rv.types.reserve(tpl.types.size());
     for (const auto& ty : tpl.types) {
@@ -658,10 +642,6 @@ struct CloneTyWithMonomorph: Monomorphiser {
         return g;
     }
 
-    HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-        return HIRLifetimeRef(g.binding);
-    }
-
     HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const {
         HIRTypeRef rv;
 
@@ -674,9 +654,6 @@ struct CloneTyWithMonomorph: Monomorphiser {
 
 HIRPathParams clonePathParamsWith(HIRTypeInterner& types, const Span& sp, const HIRPathParams& tpl, tCbCloneTy callback) {
     HIRPathParams rv;
-    for (const auto& v : tpl.mLifetimes) {
-        rv.mLifetimes.push_back(v);
-    }
     rv.types.reserve(tpl.types.size());
     for (const auto& ty : tpl.types) {
         rv.types.push_back(cloneTyWith(types, sp, ty, callback));
@@ -749,59 +726,6 @@ HIRConstGeneric MonomorphiserPP::getValue(const Span& sp, const HIRGenericRef& v
     }
 }
 
-HIRLifetimeRef MonomorphiserPP::getLifetime(const Span& sp, const HIRGenericRef& lftRef) const /*override*/
-{
-    // HACK: If no params are present at all, just return unchanged
-    // - Note: Equality on PathParams ignores lifetimes, hence the second check
-    if ((!this->getImplParams() || (*this->getImplParams() == HIRPathParams() && this->getImplParams()->mLifetimes.empty())) && (!this->getMethodParams() || (*this->getMethodParams() == HIRPathParams() && this->getMethodParams()->mLifetimes.empty())) && (!this->getHrbParams() || (*this->getHrbParams() == HIRPathParams() && this->getHrbParams()->mLifetimes.empty()))) {
-        DEBUG("Passthrough " << lftRef);
-        return HIRLifetimeRef(lftRef.binding);
-    }
-
-    switch (lftRef.group()) {
-        // HACK: Pass through when no lifetimes were recorded at all (e.g. a trait-declared lifetime in a default method body)
-        case 0:
-            if (const auto* p = this->getImplParams()) {
-                if (p->mLifetimes.empty()) {
-                    DEBUG("No impl lifetimes recorded - passthrough " << lftRef);
-                    return HIRLifetimeRef(lftRef.binding);
-                }
-                ASSERT_BUG(sp, lftRef.idx() < p->mLifetimes.size(), "Lifetime param " << lftRef << " out of range for (max " << p->mLifetimes.size() << ")");
-                return p->mLifetimes[lftRef.idx()];
-            } else {
-                BUG(sp, "Impl lifetime parameters were not expected (got " << lftRef << ")");
-            }
-            break;
-        case 1:
-            if (const auto* p = this->getMethodParams()) {
-                if (p->mLifetimes.empty()) {
-                    DEBUG("No method lifetimes recorded - passthrough " << lftRef);
-                    return HIRLifetimeRef(lftRef.binding);
-                }
-                ASSERT_BUG(sp, lftRef.idx() < p->mLifetimes.size(), "Lifetime param " << lftRef << " out of range for (max " << p->mLifetimes.size() << ")");
-                return p->mLifetimes[lftRef.idx()];
-            } else {
-                BUG(sp, "Method lifetime parameters were not expected (got " << lftRef << ")");
-            }
-            break;
-        case 2: // Placeholders, just pass through
-            DEBUG("Placeholder " << lftRef);
-            return HIRLifetimeRef(lftRef.binding);
-        case 3: // HRLs
-            if (const auto* p = this->getHrbParams()) {
-                if (lftRef.idx() >= p->mLifetimes.size()) {
-                    DEBUG("HRL " << lftRef << " out of range (max " << p->mLifetimes.size() << ") - passthrough");
-                    return HIRLifetimeRef(lftRef.binding);
-                }
-                return p->mLifetimes[lftRef.idx()];
-            } else {
-                BUG(sp, "Higher-ranked lifetime parameters were not expected (got " << lftRef << ")");
-            }
-            break;
-        default:
-            BUG(sp, "Unexpected lifetime param " << lftRef);
-    }
-}
 
 //t_cb_generic MonomorphState::get_cb(const Span& sp) const
 //{

@@ -77,7 +77,6 @@ public:
     virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) = 0;
     virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) = 0;
 
-    virtual HIRCompare matchLft(const HIRGenericRef&, const HIRLifetimeRef&);
 };
 
 enum class HIRInferClass {

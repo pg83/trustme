@@ -8,11 +8,8 @@
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRGenericParams::PrintArgs& x) {
-    if (x.gp.mLifetimes.size() > 0 || x.gp.types.size() > 0 || x.gp.values.size() > 0) {
+    if (x.gp.types.size() > 0 || x.gp.values.size() > 0) {
         os << "<";
-        for (const auto& lft : x.gp.mLifetimes) {
-            os << "'" << lft.mName << ",";
-        }
         for (const auto& typ : x.gp.types) {
             os << typ.mName;
             if (!typ.isSized) {
@@ -60,17 +57,10 @@ Ordering HIRGenericBound::ord(const HIRGenericBound& b) const {
     return OrdEqual;
 }
 
-HIRPathParams HIRGenericParams::makeNopParams(HIRTypeInterner& types, unsigned level, bool lifetimesOnly /*=false*/) const {
-    assert(!lifetimesOnly || this->types.empty());
-    assert(!lifetimesOnly || this->values.empty());
-
+HIRPathParams HIRGenericParams::makeNopParams(HIRTypeInterner& types, unsigned level) const {
     HIRPathParams rv;
-    rv.mLifetimes = ThinVector<HIRLifetimeRef>(this->mLifetimes.size());
     rv.types = ThinVector<HIRTypeRef>(this->types.size());
     rv.values = ThinVector<HIRConstGeneric>(this->values.size());
-    for (size_t i = 0; i < this->mLifetimes.size(); i++) {
-        rv.mLifetimes[i] = HIRLifetimeRef(256 * level + i);
-    }
     for (size_t i = 0; i < this->types.size(); i++) {
         rv.types[i] = types.generic(this->types[i].mName, 256 * level + i);
     }
@@ -90,7 +80,6 @@ HIRGenericParams HIRGenericParams::clone() const {
     for (const auto& type : values) {
         rv.values.push_back(HIRValueParamDef{type.mName, type.mType, type.defaultValue.clone()});
     }
-    rv.mLifetimes = mLifetimes;
     rv.bounds.reserve(bounds.size());
     for (const auto& bound : bounds) {
         rv.bounds.push_back(bound.clone());
@@ -117,11 +106,6 @@ Ordering HIRTypeParamDef::ord(const HIRTypeParamDef& x) const {
     return OrdEqual;
 }
 
-Ordering HIRLifetimeDef::ord(const HIRLifetimeDef& x) const {
-    ORD(mName, x.mName);
-    return OrdEqual;
-}
-
 Ordering HIRValueParamDef::ord(const HIRValueParamDef& x) const {
     ORD(mName, x.mName);
     ORD(mType, x.mType);
@@ -130,9 +114,6 @@ Ordering HIRValueParamDef::ord(const HIRValueParamDef& x) const {
 
 bool HIRGenericParams::isEmpty() const {
     if (!types.empty()) {
-        return false;
-    }
-    if (!mLifetimes.empty()) {
         return false;
     }
     if (!values.empty()) {
@@ -155,13 +136,6 @@ bool HIRGenericParams::isGeneric() const {
     return false;
 }
 
-HIRPathParams HIRGenericParams::makeEmptyParams(bool lifetimesOnly) const {
-    assert(lifetimesOnly);
-    HIRPathParams rv;
-    rv.mLifetimes = ThinVector<HIRLifetimeRef>(mLifetimes.size());
-    return rv;
-}
-
 HIRGenericParams::PrintArgs::PrintArgs(const HIRGenericParams& gp)
     : gp(gp)
 {
@@ -174,7 +148,6 @@ HIRGenericParams::PrintBounds::PrintBounds(const HIRGenericParams& gp)
 
 Ordering HIRGenericParams::ord(const HIRGenericParams& x) const {
     ORD(types, x.types);
-    ORD(mLifetimes, x.mLifetimes);
     ORD(values, x.values);
     ORD(bounds, x.bounds);
     return OrdEqual;

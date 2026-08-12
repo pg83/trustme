@@ -100,10 +100,6 @@ HIRConstGeneric ImplRef::Monomorph::getValue(const Span& sp, const HIRGenericRef
     return MonomorphStatePtr(types, nullptr, &this->ti.implParams, &this->params).getValue(sp, val);
 }
 
-HIRLifetimeRef ImplRef::Monomorph::getLifetime(const Span& sp, const HIRGenericRef& g) const /*override*/ {
-    return MonomorphStatePtr(types, nullptr, &this->ti.implParams, &this->params).getLifetime(sp, g);
-}
-
 HIRTypeRef ImplRef::getImplType(HIRTypeInterner& types) const {
     Span sp;
     TU_MATCH_HDRA( (this->mData), {)
@@ -223,16 +219,6 @@ HIRTypeRef ImplRef::getType(HIRTypeInterner& types, const char* name, const HIRP
                 os << e.impl->mParams.fmtArgs();
                 os << " " << *e.traitPath << e.impl->traitArgs << " for " << e.impl->mType << e.impl->mParams.fmtBounds();
                 os << " {";
-                for (unsigned int i = 0; i < e.impl->mParams.mLifetimes.size(); i++) {
-                    const auto& d = e.impl->mParams.mLifetimes[i];
-                    os << d.mName << " = ";
-                    if (e.implParams.mLifetimes[i] != HIRLifetimeRef()) {
-                        os << e.implParams.mLifetimes[i];
-                    } else {
-                        os << "?";
-                    }
-                    os << ",";
-                }
                 for (unsigned int i = 0; i < e.impl->mParams.types.size(); i++) {
                     const auto& tyD = e.impl->mParams.types[i];
                     os << tyD.mName << " = ";

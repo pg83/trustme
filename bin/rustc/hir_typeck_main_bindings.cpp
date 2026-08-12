@@ -931,7 +931,7 @@ namespace {
                     mResolve.expandAssociatedTypes(node.span(), tmpFt);
                     e = &tmpFt->as_Function();
                 }
-                auto hrls = e->hrls.makeEmptyParams(true);
+                auto hrls = HIRPathParams();
                 auto m = MonomorphHrlsOnly(mResolve.crate.types, hrls);
                 if (e->isVariadic ? node.mArgs.size() < e->argTypes.size() : node.mArgs.size() != e->argTypes.size()) {
                     ERROR(node.span(), E0000, "Incorrect number of arguments to call via " << valTy);
@@ -1605,13 +1605,6 @@ namespace {
         void checkParameters(const Span& sp, const HIRGenericParams& paramDef, HIRPathParams& paramVals) {
             MonomorphStatePtr ms(crate.types, selfTypes.empty() ? nullptr : selfTypes.back(), &paramVals, nullptr);
 
-            if (paramVals.mLifetimes.size() == 0) {
-                paramVals.mLifetimes.resize(paramDef.mLifetimes.size());
-            }
-            if (paramVals.mLifetimes.size() != paramDef.mLifetimes.size()) {
-                ERROR(sp, E0000, "Incorrect lifetime param count, expected " << paramDef.mLifetimes.size() << ", got " << paramVals.mLifetimes.size());
-            }
-
             while (paramVals.types.size() < paramDef.types.size()) {
                 unsigned int i = paramVals.types.size();
                 const auto& tyDef = paramDef.types[i];
@@ -2259,9 +2252,6 @@ namespace {
                     // REF: rustc-1.29.0/src/vendor/serde/src/private/de.rs:1379
                     // Counter-ref: rustc-1.54.0
                     // Update AFTER the checks
-                    DEBUG("Replace generic block's lifetimes with " << traitFcn.mParams.fmtArgs());
-                    implFcn.mParams.mLifetimes = traitFcn.mParams.mLifetimes;
-
                     // HACK: Clone the expected type, so the lifetimes match.
                     DEBUG("Updating < " << impl.mType << " as " << traitPath << impl.traitArgs << " >::" << e.first);
                     implFcn.returnType = expRetTy;

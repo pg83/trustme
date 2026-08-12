@@ -1715,7 +1715,6 @@ namespace {
             HIRGenericPath trait{builder.resolve().crate.getLangItemPath(node.span(), langitem), std::move(ppTrait)};
 
             HIRPathParams ppMethod;
-            ppMethod.mLifetimes.push_back(HIRLifetimeRef());
             auto methodPath = HIRPath(tyVal, std::move(trait), RcString::newInterned(method), std::move(ppMethod));
 
             // Store a borrow of the input value
@@ -1867,7 +1866,7 @@ namespace {
                 assert(langitem);
                 assert(method);
 
-                auto methodPath = HIRPath(tyVal, HIRGenericPath(builder.resolve().crate.getLangItemPath(node.span(), langitem), {}), method, HIRPathParams(HIRLifetimeRef()));
+                auto methodPath = HIRPath(tyVal, HIRGenericPath(builder.resolve().crate.getLangItemPath(node.span(), langitem), {}), method, HIRPathParams());
 
                 ::std::vector<MIRParam> args;
                 args.push_back(builder.lvalueOrTemp(sp, builder.resolve().crate.types.borrow(bt, node.mValue->resType), MIRRValue::make_Borrow({bt, false, mv$(val)})));

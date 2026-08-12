@@ -36,6 +36,3 @@ const HIRConstGeneric& HIRResolvePlaceholdersNop::getVal(const Span&, const HIRC
     return v;
 }
 
-HIRCompare HIRMatchGenerics::matchLft(const HIRGenericRef&, const HIRLifetimeRef&) {
-    return HIRCompare::Equal;
-}

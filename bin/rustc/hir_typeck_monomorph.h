@@ -37,10 +37,8 @@ public:
 
     virtual HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const = 0;
     virtual HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const = 0;
-    virtual HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const = 0;
 
     virtual HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* ty, bool allowInfer = true) const;
-    virtual HIRLifetimeRef monomorphLifetime(const Span& sp, const HIRLifetimeRef& tpl) const;
     HIRPath monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer = true) const;
     HIRTraitPath monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer, bool ignoreHrls = false) const;
     HIRTraitPath::AtyEqual monomorphTpAtyEqual(const Span& sp, const HIRTraitPath::AtyEqual& tpl, bool allowInfer) const;
@@ -64,7 +62,6 @@ public:
 
     HIRTypeRef getType(const Span& sp, const HIRGenericRef& ty) const override;
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
-    HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override;
 };
 
 class MonomorphiserNop: public Monomorphiser {
@@ -75,7 +72,6 @@ public:
 
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 
-    HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override;
 };
 
 // Wrappers to only monomorphise if required
@@ -135,7 +131,6 @@ struct MonomorphHrlsOnly: public Monomorphiser {
 
     HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& val) const override;
 
-    HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override;
 };
 
 // Helper for passing a group of params around

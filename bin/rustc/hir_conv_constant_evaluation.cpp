@@ -3578,16 +3578,7 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
             if (innerAlloc->isWritable()) {
                 auto innerVal = allocationToEncoded(innerAlloc->getType(), *innerAlloc);
 
-                // Clone type with all lifetimes set to `'static`
-                struct M: MonomorphiserNop {
-                    using MonomorphiserNop::MonomorphiserNop;
-
-                    HIRLifetimeRef monomorphLifetime(const Span& sp, const HIRLifetimeRef& tpl) const override {
-                        return HIRLifetimeRef::newStatic();
-                    }
-                };
-
-                auto itemPath = nvs.newStatic(M(resolve.crate.types).monomorphType(Span(), innerAlloc->getType()), mv$(innerVal));
+                auto itemPath = nvs.newStatic(MonomorphiserNop(resolve.crate.types).monomorphType(Span(), innerAlloc->getType()), mv$(innerVal));
 
                 rv.relocations.push_back(Reloc::newNamed(r.offset, TargetGetPointerBits() / 8, mv$(itemPath)));
             } else {

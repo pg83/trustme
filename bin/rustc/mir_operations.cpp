@@ -2200,9 +2200,6 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
             return HIRConstGeneric(val);
         }
 
-        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override {
-            return HIRLifetimeRef();
-        }
     } monomorphEraseLifetimes(state.crate.types);
 
     TRACE_FUNCTION_F(ty << " <= " << lit);
@@ -2622,7 +2619,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
     HIRTypeRef tmp;
     const auto& ty = state.getLvalueType(tmp, fcnLval);
     DEBUG("callable type " << ty);
-    auto receiver = MonomorphHrlsOnly(state.crate.types, ty->as_Function().hrls.makeEmptyParams(true)).monomorphType(state.sp, ty->as_Function().argTypes.at(0));
+    auto receiver = MonomorphHrlsOnly(state.crate.types, HIRPathParams()).monomorphType(state.sp, ty->as_Function().argTypes.at(0));
 
     struct H {
         static MIRLValue getUnitPtr(const MIRTypeResolve& state, MirMutator& mutator, HIRTypeRef ty, MIRLValue lv, MIRLValue& outInnerPtr) {

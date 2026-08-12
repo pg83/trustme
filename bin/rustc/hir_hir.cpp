@@ -1064,7 +1064,6 @@ namespace {
     struct ImplTyMatcher: public HIRMatchGenerics, public Monomorphiser {
         ::std::vector<::std::optional<HIRTypeRef>> implTys;
         ::std::vector<::std::optional<HIRConstGeneric>> implVals;
-        ::std::vector<::std::optional<HIRLifetimeRef>> implLfts;
 
         explicit ImplTyMatcher(HIRTypeInterner& types)
             : Monomorphiser(types)
@@ -1093,17 +1092,6 @@ namespace {
             }
         }
 
-        HIRCompare matchLft(const HIRGenericRef& g, const HIRLifetimeRef& lft) override {
-            assert(g.binding < implLfts.size());
-            if (implLfts.at(g.binding)) {
-                DEBUG("Compare " << lft << " and " << *implLfts.at(g.binding));
-                return (lft == *implLfts.at(g.binding) ? HIRCompare::Equal : HIRCompare::Unequal);
-            } else {
-                implLfts.at(g.binding) = lft;
-                return HIRCompare::Equal;
-            }
-        }
-
         HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const override {
             ASSERT_BUG(sp, g.group() == 0, "");
             ASSERT_BUG(sp, g.idx() < implTys.size(), "");
@@ -1121,23 +1109,11 @@ namespace {
             return implVals[g.idx()]->clone();
         }
 
-        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-            ASSERT_BUG(sp, g.group() == 0, "");
-            ASSERT_BUG(sp, g.idx() < implLfts.size(), "");
-            if (!implLfts[g.idx()]) {
-                DEBUG("WARNING: Assuming an empty lifetime");
-                return HIRLifetimeRef();
-            }
-            return *implLfts[g.idx()];
-        }
-
         void reinit(const HIRGenericParams& params) {
             this->implTys.clear();
             this->implVals.clear();
-            this->implLfts.clear();
             this->implTys.resize(params.types.size());
             this->implVals.resize(params.values.size());
-            this->implLfts.resize(params.mLifetimes.size());
         }
 
         void fmt(::std::ostream& os) const {
@@ -1150,14 +1126,6 @@ namespace {
                 os << ",";
             }
             for (const auto& p : this->implVals) {
-                if (p) {
-                    os << *p;
-                } else {
-                    os << "?";
-                }
-                os << ",";
-            }
-            for (const auto& p : this->implLfts) {
                 if (p) {
                     os << *p;
                 } else {
@@ -1777,9 +1745,6 @@ HIRTypeRef HIRTrait::getVtableType(const Span& sp, const HIRCrate& crate, const 
     const auto& vtableTySpath = this->vtablePath;
     const auto& vtableRef = crate.getStructByPath(sp, vtableTySpath);
     HIRPathParams ppHrls;
-    if (te.mTrait.hrtbs) {
-        ppHrls = te.mTrait.hrtbs->makeEmptyParams(true);
-    }
     // Copy the param set from the trait in the trait object
     HIRPathParams vtableParams = MonomorphHrlsOnly(crate.types, ppHrls).monomorphPathParams(sp, te.mTrait.mPath.mParams, false);
     vtableParams.types.resize(te.mTrait.mPath.mParams.types.size() + this->typeIndexes.size());
@@ -2179,10 +2144,9 @@ HIRStruct::HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned ali
 {
 }
 
-HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, HIRLifetimeRef lifetimeBound, ::std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType)
+HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, ::std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType)
     : generics(::std::move(generics))
     , isSized(isSized)
-    , lifetimeBound(lifetimeBound)
     , traitBounds(::std::move(traitBounds))
     , hasDefault(defaultType && !defaultType->is_Infer())
     , defaultValue(defaultType)
@@ -2190,9 +2154,8 @@ HIRAssociatedType::HIRAssociatedType(HIRGenericParams generics, bool isSized, HI
     assert(defaultType);
 }
 
-HIRTrait::HIRTrait(HIRGenericParams gps, HIRLifetimeRef lifetime, ::std::vector<HIRTraitPath> parents)
+HIRTrait::HIRTrait(HIRGenericParams gps, ::std::vector<HIRTraitPath> parents)
     : mParams(mv$(gps))
-    , lifetime(mv$(lifetime))
     , parentTraits(mv$(parents))
     , mIsMarker(false)
     , isConst(false)

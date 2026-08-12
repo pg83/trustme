@@ -13,71 +13,6 @@
 namespace {
     const HIRGenericParams emptyParams;
 
-    struct MatchHrls: public HIRMatchGenerics, public Monomorphiser {
-        HIRPathParams hrls;
-
-        MatchHrls(HIRTypeInterner& types, const std::unique_ptr<HIRGenericParams>& x)
-            : MatchHrls(types, x ? *x : emptyParams)
-        {
-        }
-
-        MatchHrls(HIRTypeInterner& types, const HIRGenericParams& x)
-            : Monomorphiser(types)
-            , hrls(x.makeEmptyParams(true))
-        {
-        }
-
-        virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) {
-            return (ty->is_Generic() && ty->as_Generic().binding == g.binding) ? HIRCompare::Equal : HIRCompare::Unequal;
-        }
-
-        virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) {
-            return sz == g ? HIRCompare::Equal : HIRCompare::Unequal;
-        }
-
-        virtual HIRCompare matchLft(const HIRGenericRef& g, const HIRLifetimeRef& lft) {
-            if (!HIRMatchGenerics::hasHrb() && g.group() == GENERICHrtb) {
-                ASSERT_BUG(Span(), g.idx() < hrls.mLifetimes.size(), "HRL index out of range");
-                hrls.mLifetimes.at(g.idx()) = lft;
-                return HIRCompare::Equal;
-            }
-            return lft.binding == g.binding ? HIRCompare::Equal : HIRCompare::Unequal;
-        }
-
-        // Monomorphiser
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const {
-            return types.generic(g.name, g.binding);
-        }
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const {
-            return g;
-        }
-
-        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const {
-            if (g.group() == GENERICHrtb) {
-                return hrls.mLifetimes.at(g.idx());
-            }
-            return HIRLifetimeRef(g.binding);
-        }
-    };
-
-    HIRPathParams getHrls(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& x, const HIRPathParams& traitPps, const HIRPathParams* desPps) {
-        MatchHrls m{types, x};
-        if (desPps) {
-            traitPps.matchTestGenericsFuzz(sp, *desPps, HIRResolvePlaceholdersNop(), m);
-            DEBUG("from " << *desPps);
-        }
-        DEBUG("hrls = " << m.hrls << " for trait_pps = " << traitPps);
-        return std::move(m.hrls);
-    }
-
-    HIRPathParams getHrls(HIRTypeInterner& types, const Span& sp, const ::std::unique_ptr<HIRGenericParams>& x, const HIRPathParams& traitPps, const HIRPathParams* desPps) {
-        MatchHrls m{types, x};
-        if (desPps) {
-            traitPps.matchTestGenericsFuzz(sp, *desPps, HIRResolvePlaceholdersNop(), m);
-        }
-        return std::move(m.hrls);
-    }
 }
 
 class StaticTraitResolve::NextSolverBridge {
@@ -102,7 +37,6 @@ public:
             // This resolver owns m_ivars, so its inference indexes must not
             // escape into HIR and be mistaken for indexes in expression typeck.
             const auto placeholderName = RcString::newInterned(FMT("static_find_impl_" << &inferredParams));
-            inferredParams.mLifetimes = ThinVector<HIRLifetimeRef>(traitDef.mParams.mLifetimes.size());
             inferredParams.types.reserve(traitDef.mParams.types.size());
             for (size_t i = 0; i < traitDef.mParams.types.size(); i++) {
                 inferredParams.types.push_back(mResolve.crate.types.generic(placeholderName, GENERICPlaceholder * 256 + i));
@@ -337,8 +271,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 params.types.push_back(crate.types.tuple(std::move(argTypes)));
                 HIRTraitPath::assocListT assoc;
                 assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, params.clone()), {}, e.mRettype}));
-                auto hrls = getHrls(crate.types, sp, e.hrls, params, traitParams);
-                return foundCb(ImplRef(std::move(hrls), type, mv$(params), mv$(assoc)), false);
+                                return foundCb(ImplRef(HIRPathParams(), type, mv$(params), mv$(assoc)), false);
             }
             // 1.74: Magic impls of `eq` for function pointers
             if (traitPath == this->crate.getLangItemPathOpt("fn_ptr_trait")) {
@@ -367,8 +300,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 params.types.push_back(crate.types.tuple(std::move(argTypes)));
                 HIRTraitPath::assocListT assoc;
                 assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, params.clone()), {}, e.mRettype}));
-                auto hrls = getHrls(crate.types, sp, e.hrls, params, traitParams);
-                return foundCb(ImplRef(std::move(hrls), type, mv$(params), mv$(assoc)), false);
+                                return foundCb(ImplRef(HIRPathParams(), type, mv$(params), mv$(assoc)), false);
             }
         }
         TU_ARMA(NodeType, e) {
@@ -435,8 +367,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         TU_ARMA(TraitObject, e) {
             if (traitPath == e.mTrait.mPath.mPath) {
                 if (H::checkParams(sp, e.mTrait.mPath.mParams, traitParams)) {
-                    auto hrls = getHrls(crate.types, sp, e.mTrait.hrtbs, e.mTrait.mPath.mParams, traitParams);
-                    return foundCb(ImplRef(std::move(hrls), type, &e.mTrait.mPath.mParams, &e.mTrait.typeBounds, e.mTrait.constness), false);
+                                        return foundCb(ImplRef(HIRPathParams(), type, &e.mTrait.mPath.mParams, &e.mTrait.typeBounds, e.mTrait.constness), false);
                 }
             }
             // Markers too
@@ -452,24 +383,20 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             // TODO: What if `trait_params` is nullptr?
             bool rv = false;
             bool isSupertrait = traitParams && e.mTrait.traitPtr && this->findNamedTraitInTrait(sp, traitPath, *traitParams, *e.mTrait.traitPtr, e.mTrait.mPath.mPath, e.mTrait.mPath.mParams, type, [&](const HIRPathParams& iParams, HIRTraitPath::assocListT iAssoc) -> bool {
-                // Match the input trait params and the output trait params, to resolve HRLs
-                MatchHrls matchHrls{crate.types, e.mTrait.hrtbs ? *e.mTrait.hrtbs : emptyParams};
-                iParams.matchTestGenericsFuzz(sp, *traitParams, HIRResolvePlaceholdersNop(), matchHrls);
-
                 // Invoke callback with a proper ImplRef
                 HIRTraitPath::assocListT assocClone;
                 for (const auto& e : iAssoc) {
-                    assocClone.insert(::std::make_pair(e.first, matchHrls.monomorphTpAtyEqual(sp, e.second, true)));
+                    assocClone.insert(::std::make_pair(e.first, e.second.clone()));
                 }
                 // HACK! Just add all the associated type bounds (only inserted if not already present)
                 for (const auto& e2 : e.mTrait.typeBounds) {
-                    assocClone.insert(::std::make_pair(e2.first, matchHrls.monomorphTpAtyEqual(sp, e2.second, true)));
+                    assocClone.insert(::std::make_pair(e2.first, e2.second.clone()));
                 }
 
                 ImplRef ir{
                     HIRPathParams(), // HRLs already handled
                     type,
-                    matchHrls.monomorphPathParams(sp, iParams, true),
+                    iParams.clone(),
                     std::move(assocClone)
                 };
                 DEBUG("[TraitObject] - ir = " << ir);
@@ -495,8 +422,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     for (const auto& e2 : trait.typeBounds) {
                         assocClone.insert(::std::make_pair(e2.first, e2.second.clone()));
                     }
-                    auto hrls = getHrls(crate.types, sp, trait.hrtbs, iParams, traitParams);
-                    auto ir = ImplRef(std::move(hrls), type, iParams.clone(), mv$(assocClone));
+                                        auto ir = ImplRef(HIRPathParams(), type, iParams.clone(), mv$(assocClone));
                     DEBUG("[ErasedType] - ir = " << ir);
                     rv = foundCb(mv$(ir), false);
                     return true;
@@ -532,8 +458,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
 
                     if (bound.mPath.mPath == traitPath) {
                         if (H::checkParams(sp, bParamsMono, traitParams)) {
-                            auto hrls = getHrls(crate.types, sp, bound.hrtbs, bParamsMono, traitParams);
-                            // Optimisation: If this was a monomorphised path, then move ownership into the ImplRef
+                                                        // Optimisation: If this was a monomorphised path, then move ownership into the ImplRef
                             if (&bParamsMono == &paramsMonoO || ::std::any_of(bound.typeBounds.begin(), bound.typeBounds.end(), [&](const auto& x) {
                                 return monomorphiseTypeNeeded(x.second.type);
                             })) {
@@ -547,12 +472,12 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                                         atys.insert(::std::make_pair(tb.first, HIRTraitPath::AtyEqual{mv$(src), {}, mv$(aty)}));
                                     }
                                 }
-                                if (foundCb(ImplRef(std::move(hrls), type, mv$(paramsMonoO), mv$(atys), bound.constness), false)) {
+                                if (foundCb(ImplRef(HIRPathParams(), type, mv$(paramsMonoO), mv$(atys), bound.constness), false)) {
                                     return true;
                                 }
                                 paramsMonoO = monomorphCb.monomorphPathParams(sp, bParams, false);
                             } else {
-                                if (foundCb(ImplRef(std::move(hrls), type, &bound.mPath.mParams, &bound.typeBounds, bound.constness), false)) {
+                                if (foundCb(ImplRef(HIRPathParams(), type, &bound.mPath.mParams, &bound.typeBounds, bound.constness), false)) {
                                     return true;
                                 }
                             }
@@ -808,8 +733,7 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const HIRSimplePath& tra
             }
         }
         // Hand off to the closure, and return true if it does
-        auto hrls = getHrls(crate.types, sp, it->second.hrbs, bParams, traitParams);
-        if (foundCb(ImplRef(std::move(hrls), bType, &bParams, &it->second.assoc, it->second.constness), false)) {
+                if (foundCb(ImplRef(HIRPathParams(), bType, &bParams, &it->second.assoc, it->second.constness), false)) {
             return true;
         }
     }
@@ -841,8 +765,7 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const HIRSimplePath& tra
                         }
                         DEBUG("- tp_mono = " << tpMono);
                         // TODO: Instead of using `type` here, build the real type
-                        auto hrls = getHrls(crate.types, sp, bound.hrtbs, tpMono.mPath.mParams, traitParams);
-                        if (foundCb(ImplRef(std::move(hrls), type, mv$(tpMono.mPath.mParams), mv$(tpMono.typeBounds), tpMono.constness), false)) {
+                                                if (foundCb(ImplRef(HIRPathParams(), type, mv$(tpMono.mPath.mParams), mv$(tpMono.typeBounds), tpMono.constness), false)) {
                             return true;
                         }
                     }
@@ -860,7 +783,6 @@ namespace {
     public:
         struct ParamsSet {
             std::vector<bool> types;
-            std::vector<bool> mLifetimes;
             std::vector<bool> values;
         };
 
@@ -875,10 +797,8 @@ namespace {
             , implParams(implParams)
             , paramsSet(paramsSet)
         {
-            implParams.mLifetimes.resize(implParamsDef.mLifetimes.size());
             implParams.types.resize(implParamsDef.types.size());
             implParams.values.resize(implParamsDef.values.size());
-            paramsSet.mLifetimes.resize(implParamsDef.mLifetimes.size());
             paramsSet.types.resize(implParamsDef.types.size());
             paramsSet.values.resize(implParamsDef.values.size());
         }
@@ -911,25 +831,6 @@ namespace {
             }
         }
 
-        HIRCompare matchLft(const HIRGenericRef& g, const HIRLifetimeRef& lft) override {
-            if (g.binding >= 2 * 256) {
-                return HIRCompare::Equal;
-            }
-            ASSERT_BUG(sp, g.binding < implParams.mLifetimes.size(), "[GetParams] Lifetime generic " << g << " out of range (" << implParams.mLifetimes.size() << ")");
-            if (!paramsSet.mLifetimes[g.binding]) {
-                paramsSet.mLifetimes[g.binding] = true;
-                implParams.mLifetimes[g.binding] = lft;
-                DEBUG("[GetParams] Set impl lifetime param " << g << " to " << lft);
-                return HIRCompare::Equal;
-            } else {
-                DEBUG("[GetParams] Compare  " << g << " (" << implParams.mLifetimes[g.binding] << ") with " << lft);
-                if (implParams.mLifetimes[g.binding] != lft) {
-                    return HIRCompare::Unequal;
-                } else {
-                    return HIRCompare::Equal;
-                }
-            }
-        }
     };
 }
 
@@ -980,12 +881,6 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
 
         unsigned maxImplIdxTy = 0;
         unsigned maxImplIdxVal = 0;
-        unsigned maxImplIdxLft = 0;
-        auto visitLft = [&](const HIRLifetimeRef& l) {
-            if (l.isParam() && l.asParam().isPlaceholder()) {
-                maxImplIdxLft = ::std::max(maxImplIdxLft, l.asParam().idx());
-            }
-        };
         // TODO: Get a generic visitor (running the same way as `Monomorphiser`)
         for (const auto& r : desTraitParams->types) {
             visitTyWith(r, [&](const HIRTypeData* t) -> bool {
@@ -997,29 +892,16 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
                 return false;
             });
         }
-        for (const auto& l : desTraitParams->mLifetimes) {
-            visitLft(l);
-        }
         baseImplPlaceholderIdx.ty = maxImplIdxTy + 1;
         baseImplPlaceholderIdx.val = maxImplIdxVal + 1;
-        baseImplPlaceholderIdx.lft = maxImplIdxLft + 1;
 
         size_t nPlaceholderTysNeeded = ::std::count(paramsSet.types.begin(), paramsSet.types.end(), false);
         size_t nPlaceholderValsNeeded = ::std::count(paramsSet.values.begin(), paramsSet.values.end(), false);
-        size_t nPlaceholderLftsNeeded = 0;
-        for (unsigned int i = 0; i < implParams.mLifetimes.size(); i++) {
-            if (!paramsSet.mLifetimes[i]) {
-                nPlaceholderLftsNeeded++;
-            }
-        }
         if (nPlaceholderTysNeeded > 0) {
             ASSERT_BUG(sp, baseImplPlaceholderIdx.ty + implParams.types.size() <= 256, "Out of impl placeholder types");
         }
         if (nPlaceholderValsNeeded > 0) {
             ASSERT_BUG(sp, baseImplPlaceholderIdx.val + implParams.values.size() <= 256, "Out of impl placeholder values");
-        }
-        if (nPlaceholderTysNeeded > 0) {
-            ASSERT_BUG(sp, baseImplPlaceholderIdx.lft + implParams.mLifetimes.size() <= 256, "Out of impl placeholder lifetimes");
         }
     }
     if (match == HIRCompare::Unequal) {
@@ -1047,15 +929,6 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
                 placeholdersSet.values.resize(implParams.values.size());
             }
             placeholders.values[i] = HIRConstGeneric::make_Generic(HIRGenericRef(placeholderName, 2 * 256 + baseImplPlaceholderIdx.val + i));
-        }
-    }
-    for (size_t i = 0; i < implParams.mLifetimes.size(); i++) {
-        if (!paramsSet.mLifetimes[i]) {
-            if (placeholders.mLifetimes.size() == 0) {
-                placeholders.mLifetimes.resize(implParams.mLifetimes.size());
-                placeholdersSet.mLifetimes.resize(implParams.mLifetimes.size());
-            }
-            placeholders.mLifetimes[i] = HIRLifetimeRef(2 * 256 + baseImplPlaceholderIdx.lft + i);
         }
     }
 
@@ -1139,34 +1012,6 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
             return HIRCompare::Unequal;
         }
 
-        HIRCompare matchLft(const HIRGenericRef& g, const HIRLifetimeRef& lft) override {
-            if (lft.isParam() && lft.binding == g.binding) {
-                return Equal;
-            }
-            if (g.isPlaceholder()) {
-                if (g.idx() >= baseImplPlaceholderIdx.lft) {
-                    auto i = g.idx() - baseImplPlaceholderIdx.lft;
-                    ASSERT_BUG(sp, !paramsSet.mLifetimes[i], "Placeholder to populated lifetime returned. new " << lft << ", existing " << implParams.mLifetimes[i]);
-                    auto& ph = placeholders.mLifetimes[i];
-                    if (!placeholdersSet.mLifetimes[i]) {
-                        DEBUG("[find_impl__check_crate_raw] Bind placeholder lifetime " << i << " to " << lft);
-                        placeholdersSet.mLifetimes[i] = true;
-                        ph = lft;
-                        return HIRCompare::Equal;
-                    } else if (ph == lft) {
-                        return HIRCompare::Equal;
-                    } else {
-                        TODO(sp, "[find_impl__check_crate_raw] Compare placeholder lifetime " << i << " " << ph << " == " << lft);
-                    }
-                } else {
-                    return HIRCompare::Fuzzy;
-                }
-            }
-            if (lft == HIRLifetimeRef()) {
-                return Equal;
-            }
-            return Unequal;
-        }
 
         HIRTypeRef getType(const Span& sp, const HIRGenericRef& ge) const override {
             if (ge.isSelf()) {
@@ -1191,18 +1036,6 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
             return placeholders.values.at(val.binding).clone();
         }
 
-        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-            if (g.group() == 3) {
-                return HIRLifetimeRef(g.binding);
-            }
-            ASSERT_BUG(sp, g.group() == 0, "Generic lifetime binding in " << g << " out of range (must be impl)");
-            ASSERT_BUG(sp, g.idx() < implParams.mLifetimes.size(), "Generic lifetime binding in " << g << " out of range (>= " << implParams.mLifetimes.size() << ")");
-            if (paramsSet.mLifetimes.at(g.binding)) {
-                return implParams.mLifetimes.at(g.binding);
-            }
-            ASSERT_BUG(sp, placeholders.mLifetimes.size() == implParams.mLifetimes.size(), "Placeholder (lifetime) size mismatch: " << placeholders.mLifetimes.size() << " != " << implParams.mLifetimes.size());
-            return placeholders.mLifetimes.at(g.binding);
-        }
     };
 
     Matcher matcher{crate.types, sp, implParams, paramsSet, placeholderName, baseImplPlaceholderIdx, placeholders, placeholdersSet};
@@ -1297,17 +1130,6 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
             if (!placeholdersSet.types[i]) {
             }
             implParams.types[i] = std::move(placeholders.types[i]);
-        }
-    }
-    for (size_t i = 0; i < implParams.mLifetimes.size(); i++) {
-        if (!paramsSet.mLifetimes[i]) {
-            if (desTraitParams) {
-                if (!placeholdersSet.mLifetimes[i]) {
-                    implParams.mLifetimes[i] = HIRLifetimeRef();
-                    continue;
-                }
-            }
-            implParams.mLifetimes[i] = std::move(placeholders.mLifetimes[i]);
         }
     }
     DEBUG("impl_params = " << implParams);
@@ -1789,10 +1611,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, implParamsDef, implParams);
 
     auto itemParams = pe.params.clone();
-    if (itemParams.mLifetimes.empty()) {
-        itemParams.mLifetimes.resize(alias->mParams.mLifetimes.size());
-    }
-    if (itemParams.mLifetimes.size() != alias->mParams.mLifetimes.size() || itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
+    if (itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
         ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
     }
     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, &alias->mParams, itemParams);
@@ -2137,17 +1956,7 @@ bool StaticTraitResolve::replaceEqualities(HIRTypeRef& input) const {
     });
     if (a != typeEqualities.end()) {
         // HACK: Shouldn't need this, but works around some missing cases
-        if (a->second.hrbs.isEmpty()) {
-            input = a->second.ty;
-            return true;
-        }
-        // Match HRLs in the source, and expand them into the output
-        MatchHrls matchHrls{crate.types, a->second.hrbs};
-        DEBUG("Found for" << a->second.hrbs.fmtArgs() << " " << a->second.ty);
-        a->first->matchTestGenerics(sp, input, HIRResolvePlaceholdersNop(), matchHrls);
-        DEBUG("HRLs resolved to: " << matchHrls.hrls);
-        input = matchHrls.monomorphType(sp, a->second.ty);
-        DEBUG("- Replace with " << input);
+        input = a->second.ty;
         return true;
     } else {
         return false;
@@ -3492,10 +3301,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
 
                     auto cbIdent = HIRResolvePlaceholdersNop();
                     impl.mType->matchTestGenericsFuzz(sp, pe.type, cbIdent, getParams);
-
-                    if (!pe.implParams.mLifetimes.empty()) {
-                        outParams.ppImplData.mLifetimes = pe.implParams.mLifetimes;
-                    }
 
                     const auto& implParams = outParams.ppImplData;
 

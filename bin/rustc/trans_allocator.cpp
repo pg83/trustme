@@ -35,5 +35,5 @@ HIRPath TransAllocatorMethodPath(const HIRCrate& crate, const HIRTypeData* alloc
     const auto traitPath = TransAllocatorTraitPath(crate);
     const auto& trait = crate.getTraitByPath(Span(), traitPath);
     const auto& function = trait.values.at(method.name).as_Function();
-    return HIRPath(allocatorType, HIRGenericPath(traitPath), RcString::newInterned(method.name), function.mParams.makeEmptyParams(true));
+    return HIRPath(allocatorType, HIRGenericPath(traitPath), RcString::newInterned(method.name), HIRPathParams());
 }

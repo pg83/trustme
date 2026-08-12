@@ -144,13 +144,11 @@ public:
 };
 
 struct HIRPathParams {
-    ThinVector<HIRLifetimeRef> mLifetimes;
     ThinVector<HIRTypeRef> types;
     ThinVector<HIRConstGeneric> values;
 
     HIRPathParams();
     HIRPathParams(HIRTypeRef);
-    HIRPathParams(HIRLifetimeRef);
     HIRPathParams clone() const;
     HIRPathParams(const HIRPathParams&) = delete;
     HIRPathParams& operator=(const HIRPathParams&) = delete;
@@ -253,7 +251,6 @@ public:
     HIRBoundConstness constness = HIRBoundConstness::Never;
     // Parenthesised Fn-trait syntax uses function lifetime-elision rules.
     // This is consumed and cleared by ConvertHIR_LifetimeElision.
-    bool lifetimeElision = false;
 
     const HIRTrait* traitPtr;
 

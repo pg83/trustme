@@ -49,13 +49,10 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRPathParams& x) {
-    bool hasArgs = (x.mLifetimes.size() > 0 || x.types.size() > 0 || x.values.size() > 0);
+    bool hasArgs = (x.types.size() > 0 || x.values.size() > 0);
 
     if (hasArgs) {
         os << "<";
-    }
-    for (const auto& lft : x.mLifetimes) {
-        os << lft << ",";
     }
     for (const auto& ty : x.types) {
         os << ty << ",";
@@ -84,13 +81,10 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
         os << "for" << x.hrtbs->fmtArgs() << " ";
     }
     os << x.mPath.mPath;
-    bool hasArgs = (x.mPath.mParams.mLifetimes.size() > 0 || x.mPath.mParams.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
+    bool hasArgs = (x.mPath.mParams.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
 
     if (hasArgs) {
         os << "<";
-    }
-    for (const auto& lft : x.mPath.mParams.mLifetimes) {
-        os << lft << ",";
     }
     for (const auto& ty : x.mPath.mParams.types) {
         os << ty << ",";
@@ -203,14 +197,8 @@ HIRPathParams::HIRPathParams(HIRTypeRef ty0) {
     types[0] = std::move(ty0);
 }
 
-HIRPathParams::HIRPathParams(HIRLifetimeRef lft) {
-    mLifetimes = ThinVector<HIRLifetimeRef>(1);
-    mLifetimes[0] = std::move(lft);
-}
-
 HIRPathParams HIRPathParams::clone() const {
     HIRPathParams rv;
-    rv.mLifetimes = this->mLifetimes;
     rv.types.reserve(types.size());
     for (const auto& t : types) {
         rv.types.push_back(t);
@@ -276,7 +264,6 @@ Ordering HIRGenericPath::ord(const HIRGenericPath& x) const {
 
 HIRTraitPath HIRTraitPath::clone() const {
     HIRTraitPath rv{hrtbs ? box$(hrtbs->clone()) : nullptr, mPath.clone(), {}, {}, traitPtr, constness};
-    rv.lifetimeElision = lifetimeElision;
 
     for (const auto& assoc : typeBounds) {
         rv.typeBounds.insert(::std::make_pair(assoc.first, assoc.second.clone()));
@@ -325,7 +312,6 @@ Ordering HIRTraitPath::ord(const HIRTraitPath& x) const {
     if (gCompareHrls) {
         ORD(hrtbs.get() && !hrtbs->isEmpty(), x.hrtbs.get() && !x.hrtbs->isEmpty());
         if (hrtbs && x.hrtbs) {
-            ORD(hrtbs->mLifetimes.size(), x.hrtbs->mLifetimes.size());
             ORD(hrtbs->bounds, x.hrtbs->bounds);
         }
     }
@@ -504,17 +490,6 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
         }
     }
 
-    if (this->mLifetimes.size() != x.mLifetimes.size()) {
-    }
-    for (unsigned int i = 0; i < std::min(this->mLifetimes.size(), x.mLifetimes.size()); i++) {
-        if (this->mLifetimes[i].isParam()) {
-            /*rv &=*/match.matchLft(this->mLifetimes[i].asParam(), x.mLifetimes[i]);
-            //if(rv == Compare::Unequal)
-        } else {
-            //}
-        }
-    }
-
     return rv;
 }
 
@@ -560,11 +535,6 @@ HIRCompare HIRTraitPath::compareWithPlaceholders(const Span& sp, const HIRTraitP
     if (gCompareHrls) {
         if ((this->hrtbs && !this->hrtbs->isEmpty()) != (x.hrtbs && !x.hrtbs->isEmpty())) {
             return HIRCompare::Unequal;
-        }
-        if (this->hrtbs && x.hrtbs) {
-            if (this->hrtbs->mLifetimes.size() != x.hrtbs->mLifetimes.size()) {
-                return HIRCompare::Unequal;
-            }
         }
     }
 

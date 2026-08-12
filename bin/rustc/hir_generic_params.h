@@ -16,12 +16,6 @@ struct HIRTypeParamDef {
     Ordering ord(const HIRTypeParamDef& x) const;
 };
 
-struct HIRLifetimeDef {
-    RcString mName;
-
-    Ordering ord(const HIRLifetimeDef& x) const;
-};
-
 struct HIRValueParamDef {
     RcString mName;
     HIRTypeRef mType;
@@ -58,7 +52,6 @@ extern ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x);
 class HIRGenericParams {
 public:
     ::std::vector<HIRTypeParamDef> types;
-    ::std::vector<HIRLifetimeDef> mLifetimes;
     ::std::vector<HIRValueParamDef> values;
 
     ::std::vector<HIRGenericBound> bounds;
@@ -72,9 +65,7 @@ public:
     bool isGeneric() const;
 
     /// Create a PathParams instance that doesn't monomorphise at all
-    HIRPathParams makeNopParams(HIRTypeInterner& types, unsigned level, bool lifetimesOnly = false) const;
-
-    HIRPathParams makeEmptyParams(bool lifetimesOnly = false) const;
+    HIRPathParams makeNopParams(HIRTypeInterner& types, unsigned level) const;
 
     struct PrintArgs {
         const HIRGenericParams& gp;

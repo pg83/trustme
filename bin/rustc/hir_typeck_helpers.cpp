@@ -48,9 +48,6 @@ namespace {
             return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(canonicalPlaceholderName(generic.name), generic.binding) : generic);
         }
 
-        HIRLifetimeRef getLifetime(const Span&, const HIRGenericRef& generic) const override {
-            return HIRLifetimeRef(generic.binding);
-        }
 
         const ::std::vector<::std::pair<RcString, RcString>>& placeholderNames() const {
             return mPlaceholderNames;
@@ -94,9 +91,6 @@ namespace {
             return HIRConstGeneric(generic.isPlaceholder() ? HIRGenericRef(instantiatePlaceholderName(generic.name), generic.binding) : generic);
         }
 
-        HIRLifetimeRef getLifetime(const Span&, const HIRGenericRef& generic) const override {
-            return HIRLifetimeRef(generic.binding);
-        }
     };
 
     // Canonical query variables created while evaluating a goal are
@@ -155,72 +149,8 @@ namespace {
             return fresh;
         }
 
-        HIRLifetimeRef getLifetime(const Span&, const HIRGenericRef& generic) const override {
-            return HIRLifetimeRef(generic.binding);
-        }
     };
 
-    struct MatchHrls: public HIRMatchGenerics, public Monomorphiser {
-        HIRPathParams hrls;
-
-        MatchHrls(HIRTypeInterner& types, const HIRGenericParams* x)
-            : MatchHrls(types, x ? *x : emptyParams)
-        {
-        }
-
-        MatchHrls(HIRTypeInterner& types, const HIRGenericParams& x)
-            : Monomorphiser(types)
-            , hrls(x.makeEmptyParams(true))
-        {
-        }
-
-        virtual HIRCompare matchTy(const HIRGenericRef& g, const HIRTypeData* ty, tCbResolveType resolveCb) {
-            return (ty->is_Generic() && ty->as_Generic().binding == g.binding) ? HIRCompare::Equal : HIRCompare::Unequal;
-        }
-
-        virtual HIRCompare matchVal(const HIRGenericRef& g, const HIRConstGeneric& sz) {
-            return sz == g ? HIRCompare::Equal : HIRCompare::Unequal;
-        }
-
-        virtual HIRCompare matchLft(const HIRGenericRef& g, const HIRLifetimeRef& lft) {
-            if (!HIRMatchGenerics::hasHrb() && g.group() == GENERICHrtb) {
-                ASSERT_BUG(Span(), g.idx() < hrls.mLifetimes.size(), "HRL index out of range");
-                hrls.mLifetimes.at(g.idx()) = lft;
-                return HIRCompare::Equal;
-            }
-            return lft.binding == g.binding ? HIRCompare::Equal : HIRCompare::Unequal;
-        }
-
-        // Monomorphiser
-        HIRTypeRef getType(const Span& sp, const HIRGenericRef& g) const {
-            return types.generic(g.name, g.binding);
-        }
-
-        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& g) const {
-            return g;
-        }
-
-        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const {
-            if (g.group() == GENERICHrtb) {
-                return hrls.mLifetimes.at(g.idx());
-            }
-            return HIRLifetimeRef(g.binding);
-        }
-    };
-
-    HIRPathParams getHrls(HIRTypeInterner& types, const Span& sp, const HIRGenericParams* x, const HIRPathParams& traitPps, const HIRPathParams& desPps) {
-        MatchHrls m{types, x};
-        traitPps.matchTestGenericsFuzz(sp, desPps, HIRResolvePlaceholdersNop(), m);
-        return std::move(m.hrls);
-    }
-
-    HIRPathParams getHrls(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& x, const HIRPathParams& traitPps, const HIRPathParams& desPps) {
-        return getHrls(types, sp, &x, traitPps, desPps);
-    }
-
-    HIRPathParams getHrls(HIRTypeInterner& types, const Span& sp, const ::std::unique_ptr<HIRGenericParams>& x, const HIRPathParams& traitPps, const HIRPathParams& desPps) {
-        return getHrls(types, sp, x.get(), traitPps, desPps);
-    }
 }
 
 // --------------------------------------------------------------------
@@ -536,12 +466,8 @@ void HMTypeInferrence::printGenericpath(::std::ostream& os, const HIRGenericPath
 }
 
 void HMTypeInferrence::printPathparams(::std::ostream& os, const HIRPathParams& pps, LList<const HIRTypeData*> stack) const {
-    if (pps.hasParams() || !pps.mLifetimes.empty()) {
+    if (pps.hasParams()) {
         os << "<";
-        for (const auto& ppL : pps.mLifetimes) {
-            os << ppL;
-            os << ",";
-        }
         for (const auto& ppT : pps.types) {
             this->printType(os, ppT, stack);
             os << ",";
@@ -908,16 +834,6 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
                 return g;
             }
 
-            HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-                return HIRLifetimeRef();
-            }
-
-            HIRLifetimeRef monomorphLifetime(const Span& sp, const HIRLifetimeRef& tpl) const override {
-                if (tpl.isParam()) {
-                    return Monomorphiser::monomorphLifetime(sp, tpl);
-                }
-                return HIRLifetimeRef();
-            }
         };
 
         type = MonomorphAddLifetimes(types).monomorphType(sp, type, true);
@@ -1716,7 +1632,7 @@ TU_ARMA(Alias, ee) {
                 pp.types.push_back(crate.types.tuple(mv$(args)));
                 HIRTraitPath::assocListT types;
                 types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
-                auto hrls = getHrls(crate.types, sp, e.hrls, pp, params);
+                auto hrls = HIRPathParams();
                 return callback(ImplRef(std::move(hrls), type, mv$(pp), mv$(types)), cmp);
             }
         }
@@ -1761,7 +1677,7 @@ TU_ARMA(Alias, ee) {
                 pp.types.push_back(crate.types.tuple(mv$(args)));
                 HIRTraitPath::assocListT types;
                 types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
-                auto hrls = getHrls(crate.types, sp, e.hrls, pp, params);
+                auto hrls = HIRPathParams();
                 return callback(ImplRef(std::move(hrls), type, mv$(pp), mv$(types)), cmp);
             }
         }
@@ -1810,7 +1726,7 @@ TU_ARMA(Alias, ee) {
                 auto cmp = comparePp(sp, e.mTrait.mPath.mParams, params);
                 if (cmp != HIRCompare::Unequal) {
                     DEBUG("TraitObject impl params" << e.mTrait.mPath.mParams);
-                    auto hrls = getHrls(crate.types, sp, e.mTrait.hrtbs, e.mTrait.mPath.mParams, params);
+                    auto hrls = HIRPathParams();
                     return callback(ImplRef(std::move(hrls), type, &e.mTrait.mPath.mParams, &e.mTrait.typeBounds, e.mTrait.constness), cmp);
                 }
             }
@@ -1845,7 +1761,7 @@ TU_ARMA(Alias, ee) {
                             }
                         }
                         ASSERT_BUG(sp, !e.mTrait.hrtbs || !iTp.hrtbs, "TODO: Handle two layers of HRTBs - " << e.mTrait << " and " << iTp);
-                        auto hrls = getHrls(crate.types, sp, e.mTrait.hrtbs, iTp.mPath.mParams, params);
+                        auto hrls = HIRPathParams();
                         auto ir = ImplRef(std::move(hrls), type, iTp.mPath.mParams.clone(), mv$(assocClone));
                         DEBUG("TraitObject: - ir = " << ir);
                         isSupertrait = true;
@@ -1865,7 +1781,7 @@ TU_ARMA(Alias, ee) {
                     auto cmp = comparePp(sp, traitPath.mPath.mParams, params);
                     if (cmp != HIRCompare::Unequal) {
                         DEBUG("TraitObject impl params" << traitPath.mPath.mParams);
-                        auto hrls = getHrls(crate.types, sp, traitPath.hrtbs, traitPath.mPath.mParams, params);
+                        auto hrls = HIRPathParams();
                         return callback(ImplRef(std::move(hrls), type, &traitPath.mPath.mParams, &traitPath.typeBounds, traitPath.constness), cmp);
                     }
                 }
@@ -1895,8 +1811,7 @@ TU_ARMA(Alias, ee) {
                             }
                         }
                         ASSERT_BUG(sp, !traitPath.hrtbs || !iTp.hrtbs, "TODO: Handle two layers of HRTBs - " << traitPath << " and " << iTp);
-                        auto hrls = traitPath.hrtbs ? getHrls(crate.types, sp, traitPath.hrtbs, iTp.mPath.mParams, params) : getHrls(crate.types, sp, iTp.hrtbs, iTp.mPath.mParams, params);
-                        auto ir = ImplRef(std::move(hrls), type, iTp.mPath.mParams.clone(), mv$(assocClone));
+                        auto ir = ImplRef(HIRPathParams(), type, iTp.mPath.mParams.clone(), mv$(assocClone));
                         DEBUG("ErasedType: - ir = " << ir);
                         isSupertrait = true;
                         rv = callback(mv$(ir), cmp);
@@ -1930,7 +1845,7 @@ TU_ARMA(Alias, ee) {
                     DEBUG("Bound on ATY: " << bound);
                     static const HIRGenericParams emptyParams;
                     const auto& hrlsDef = (bound.hrtbs && !bound.hrtbs->isEmpty()) ? *bound.hrtbs : emptyParams;
-                    auto ppHrb = hrlsDef.makeEmptyParams(true);
+                    auto ppHrb = HIRPathParams();
                     monomorphCb.ppHrb = &ppHrb;
                     const auto& bParams = bound.mPath.mParams;
                     HIRPathParams paramsMonoO;
@@ -1972,7 +1887,7 @@ TU_ARMA(Alias, ee) {
                                     return true;
                                 }
                             } else {
-                                auto hrls = getHrls(crate.types, sp, bound.hrtbs, bound.mPath.mParams, params);
+                                auto hrls = HIRPathParams();
                                 if (callback(ImplRef(std::move(hrls), type, &bound.mPath.mParams, &nullAssoc, bound.constness), cmp)) {
                                     return true;
                                 }
@@ -1988,7 +1903,7 @@ TU_ARMA(Alias, ee) {
                         DEBUG("Opaque Path: cmp=" << cmp << ", impl " << iTp.mPath << " for " << type << " -- desired " << trait << params);
                         ASSERT_BUG(sp, !bound.hrtbs || !iTp.hrtbs, "TODO: Handle two layers of HRTBs - " << bound.mPath << " and " << iTp);
                         const HIRGenericParams* hrtbs = bound.hrtbs ? bound.hrtbs.get() : iTp.hrtbs.get();
-                        auto hrls = getHrls(crate.types, sp, hrtbs, iTp.mPath.mParams, params);
+                        auto hrls = HIRPathParams();
                         auto ir = ImplRef(std::move(hrls), type, iTp.mPath.mParams.clone(), {}, iTp.constness);
                         rv |= (cmp != HIRCompare::Unequal && callback(std::move(ir), cmp));
                         ret = true;
@@ -3453,21 +3368,11 @@ TU_ARMA(Alias, ee) {
                             auto boundType = ms.monomorphType(span(), be->type);
                             auto boundTrait = ms.monomorphTraitpath(span(), be->trait, true);
 
-                            // Unlike the legacy solver, keep higher-ranked
-                            // lifetimes as placeholders while evaluating this
-                            // nested goal. Erasing them to `'#omitted` here loses
-                            // the universe boundary and makes leak checking
-                            // impossible (`for<'b> 'b: 'a` appears unconstrained).
-                            const auto hrlParams = outerPresent ? be->hrtbs->makeNopParams(crate.types, GENERICHrtb, true) : (boundTrait.hrtbs ? boundTrait.hrtbs->makeNopParams(crate.types, GENERICHrtb, true) : HIRPathParams());
-                            auto hrlMonomorph = MonomorphHrlsOnly(crate.types, hrlParams);
-                            nestedType = hrlMonomorph.monomorphType(span(), boundType, true);
+                            nestedType = mv$(boundType);
                             nestedTrait = boundTrait.mPath.mPath;
-                            nestedParams = hrlMonomorph.monomorphPathParams(span(), boundTrait.mPath.mParams, true);
+                            nestedParams = boundTrait.mPath.mParams.clone();
                             for (const auto& aty : boundTrait.typeBounds) {
-                                auto value = aty.second.clone();
-                                value.type = hrlMonomorph.monomorphType(span(), value.type, true);
-                                value.atyParams = hrlMonomorph.monomorphPathParams(span(), value.atyParams, true);
-                                nestedAssociated.insert({aty.first, ::std::move(value)});
+                                nestedAssociated.insert({aty.first, aty.second.clone()});
                             }
                         };
                         if (markerImpl) {
@@ -3781,7 +3686,7 @@ TU_ARMA(Alias, ee) {
                     return resolvedLhs == resolvedRhs || resolvedLhs->equalsIgnoringRegions(resolvedRhs);
                 };
                 auto paramsEqualAfterNormalization = [&](const HIRPathParams& lhs, const HIRPathParams& rhs) {
-                    if (lhs.mLifetimes.size() != rhs.mLifetimes.size() || lhs.types.size() != rhs.types.size() || lhs.values.size() != rhs.values.size()) {
+                    if (lhs.types.size() != rhs.types.size() || lhs.values.size() != rhs.values.size()) {
                         return false;
                     }
                     // Ordinary regions are deliberately erased when a type is
@@ -4294,7 +4199,6 @@ TU_ARMA(Alias, ee) {
         HIRPathParams TraitResolution::makeFreshImplParams(const HIRGenericParams& params) const {
             auto& mutIvars = const_cast<HMTypeInferrence&>(this->ivars);
             HIRPathParams result;
-            result.mLifetimes = ThinVector<HIRLifetimeRef>(params.mLifetimes.size());
             result.types.reserve(params.types.size());
             for (size_t i = 0; i < params.types.size(); i++) {
                 result.types.push_back(mutIvars.newIvarTr());
@@ -4726,10 +4630,7 @@ TU_ARMA(Alias, ee) {
             }
 
             auto itemParams = pe.params.clone();
-            if (itemParams.mLifetimes.empty()) {
-                itemParams.mLifetimes.resize(alias->mParams.mLifetimes.size());
-            }
-            if (itemParams.mLifetimes.size() != alias->mParams.mLifetimes.size() || itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
+            if (itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
                 ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
             }
             ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, mVisPath, mImplGenerics, mItemGenerics, &alias->mParams, itemParams);
@@ -4865,7 +4766,7 @@ TU_ARMA(Alias, ee) {
                         TODO(sp, "Handle unconstrained associate type " << pe.item << " from " << pe.type);
                     }
 
-                    auto hrlPps = te.mTrait.hrtbs ? te.mTrait.hrtbs->makeEmptyParams(true) : HIRPathParams();
+                    auto hrlPps = HIRPathParams();
                     input = MonomorphHrlsOnly(crate.types, hrlPps).monomorphType(sp, it->second.type);
                     return;
                 }
@@ -4885,7 +4786,7 @@ TU_ARMA(Alias, ee) {
                     }
                     if (it != te.mTrait.typeBounds.end()) {
                         // Remove HRLs (TODO: Match them? not really needed in this stage I think)
-                        auto hrlPps = te.mTrait.hrtbs ? te.mTrait.hrtbs->makeEmptyParams(true) : iTp.hrtbs ? iTp.hrtbs->makeEmptyParams(true) : HIRPathParams();
+                        auto hrlPps = HIRPathParams();
                         input = MonomorphHrlsOnly(crate.types, hrlPps).monomorphType(sp, it->second.type);
                         return true;
                     }
@@ -4914,7 +4815,7 @@ TU_ARMA(Alias, ee) {
                         }
                     }
                     if (cmp != HIRCompare::Unequal) {
-                        auto hrls = getHrls(crate.types, sp, trait.hrtbs, traitGp.mParams, traitPath.mParams);
+                        auto hrls = HIRPathParams();
                         {
                             auto it = trait.typeBounds.find(pe.item);
                             if (it != trait.typeBounds.end()) {
@@ -4951,7 +4852,7 @@ TU_ARMA(Alias, ee) {
                             it = trait.typeBounds.find(pe.item);
                         }
                         if (it != trait.typeBounds.end()) {
-                            auto hrls = getHrls(crate.types, sp, (trait.hrtbs && !trait.hrtbs->isEmpty()) ? trait.hrtbs.get() : iTp.hrtbs.get(), iTp.mPath.mParams, traitPath.mParams);
+                            auto hrls = HIRPathParams();
                             DEBUG("hrls = " << hrls);
                             input = MonomorphHrlsOnly(crate.types, hrls).monomorphType(sp, it->second.type);
                             return true;
@@ -4987,9 +4888,7 @@ TU_ARMA(Alias, ee) {
         if (it != typeEqualities.end()) {
             resultType = ResultType::Recurse;
             DEBUG("Equality: for" << it->second.hrbs.fmtArgs());
-            MatchHrls m{crate.types, &it->second.hrbs};
-            input->matchTestGenericsFuzz(sp, it->first, HIRResolvePlaceholdersNop(), m);
-            input = MonomorphHrlsOnly(crate.types, m.hrls).monomorphType(sp, it->second.ty);
+            input = it->second.ty;
             rv = true;
         }
     }
@@ -5418,7 +5317,7 @@ TU_ARMA(Alias, ee) {
                     DEBUG("[find_trait_impls_bound] Match for" << boundInfo.hrbs.fmtArgs() << " " << boundTy << " : " << boundTrait);
                     // Hand off to the closure, and return true if it does
                     // TODO: The type bounds are only the types that are specified.
-                    auto hrls = getHrls(crate.types, sp, boundInfo.hrbs, *bParams, params);
+                    auto hrls = HIRPathParams();
                     if (callback(ImplRef(std::move(hrls), boundTy, &boundTrait.mParams, &boundInfo.assoc, boundInfo.constness), ord)) {
                         return true;
                     }
@@ -5466,7 +5365,7 @@ TU_ARMA(Alias, ee) {
 
                             auto tpMono = monomorphCb.monomorphTraitpath(sp, bound, false);
                             if (tpMono.hrtbs) {
-                                auto p = tpMono.hrtbs->makeEmptyParams(true);
+                                auto p = HIRPathParams();
                                 tpMono = MonomorphHrlsOnly(crate.types, p).monomorphTraitpath(sp, tpMono, true, true);
                             }
                             // - Expand associated types
@@ -5937,27 +5836,10 @@ TU_ARMA(Alias, ee) {
                     }
                 }
 
-                HIRCompare matchLft(const HIRGenericRef& g, const HIRLifetimeRef& lifetime) override {
-                    // Region equality is deliberately not part of impl-head
-                    // selection, but the candidate substitution must retain
-                    // a higher-ranked placeholder. It marks a fresh universe
-                    // and is needed later to reject leaking outlives bounds.
-                    // Elided/inferred regions carry no such information.
-                    if (g.group() != GENERICImpl || lifetime.binding == HIRLifetimeRef::UNKNOWN || lifetime.binding == HIRLifetimeRef::INFER) {
-                        return HIRCompare::Equal;
-                    }
-                    ASSERT_BUG(sp, g.binding < outImplParams.mLifetimes.size(), "Lifetime generic " << g << " out of range (" << outImplParams.mLifetimes.size() << ")");
-                    auto& current = outImplParams.mLifetimes[g.binding];
-                    if (current.binding == HIRLifetimeRef::UNKNOWN || current.binding == HIRLifetimeRef::INFER || (!current.isHrl() && lifetime.isHrl())) {
-                        current = lifetime;
-                    }
-                    return HIRCompare::Equal;
-                }
             };
 
             GetParams getParams{sp, outImplParams};
 
-            outImplParams.mLifetimes.resize(implParamsDef.mLifetimes.size());
             outImplParams.types.resize(implParamsDef.types.size());
             outImplParams.values.resize(implParamsDef.values.size());
 
@@ -6152,11 +6034,6 @@ TU_ARMA(Alias, ee) {
                     return placeholders.values.at(val.binding).clone();
                 }
 
-                HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-                    ASSERT_BUG(sp, g.binding < 256, "Generic lifetime binding in " << g << " out of range (>=256)");
-                    ASSERT_BUG(sp, g.binding < implParams.mLifetimes.size(), "Generic lifetime binding in " << g << " out of range (>= " << implParams.mLifetimes.size() << ")");
-                    return implParams.mLifetimes.at(g.binding);
-                }
             };
 
             Matcher matcher{crate.types, sp, outImplParams, placeholderName, placeholders};
@@ -6183,7 +6060,7 @@ TU_ARMA(Alias, ee) {
                     auto realTrait = matcher.monomorphTraitpath(sp, be.trait, false);
                     // TODO: If `real_trait` has HRLs, replace them?
                     if (realTrait.hrtbs) {
-                        auto p = realTrait.hrtbs->makeEmptyParams(true);
+                        auto p = HIRPathParams();
                         realTrait.hrtbs.reset();
                         realTrait = MonomorphHrlsOnly(crate.types, p).monomorphTraitpath(sp, realTrait, true);
                     }
@@ -7470,12 +7347,6 @@ TU_ARMA(Alias, ee) {
                             return HIRConstGeneric(val);
                         }
 
-                        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& lftRef) const override {
-                            if (lftRef.group() == 3) {
-                                return HIRLifetimeRef();
-                            }
-                            return HIRLifetimeRef(lftRef.binding);
-                        }
                     };
 
                     finalTraitPath = MonomorphEraseHrls(crate.types).monomorphGenericpath(sp, finalTraitPath, true);
@@ -7592,7 +7463,7 @@ TU_ARMA(Alias, ee) {
                     // - If the receiver is valid, then it's correct (no need to check the type again)
                     if (auto selfTyP = checkMethodReceiver(sp, fcn, ty, access)) {
                         if (e.mTrait.hrtbs) {
-                            auto pps = e.mTrait.hrtbs->makeEmptyParams(true);
+                            auto pps = HIRPathParams();
                             finalTraitPath.mParams = MonomorphHrlsOnly(crate.types, pps).monomorphPathParams(sp, finalTraitPath.mParams, true);
                         }
                         possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTyP, mv$(finalTraitPath), methodName, {})));
@@ -7680,7 +7551,7 @@ TU_ARMA(Alias, ee) {
 
                         if (auto selfTyP = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
                             if (*selfTyP == ityp) {
-                                auto ppHrb = bound.hrtbs ? bound.hrtbs->makeEmptyParams(true) : HIRPathParams();
+                                auto ppHrb = HIRPathParams();
                                 monomorphCb.ppHrb = &ppHrb;
                                 finalTraitPath = monomorphCb.monomorphGenericpath(sp, finalTraitPath, false);
                                 DEBUG("- Monomorph to " << finalTraitPath);

@@ -183,14 +183,6 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
             ms.monomorphType(sp, f.returnType),
             {}
         };
-        HIRPathParams methodPpTrimmed;
-        if( !f.mParams.mLifetimes.empty() )
-        {
-                ft.hrls.mLifetimes = f.mParams.mLifetimes;
-                methodPpTrimmed = ms.ppMethod->clone();
-                methodPpTrimmed.mLifetimes = std::move(ft.hrls.makeNopParams(types, 3, /*lifetimes_only*/ true).mLifetimes);
-                ms.ppMethod = &methodPpTrimmed;
-        }
         for( const auto& arg : f.mArgs )
         {
                 ft.argTypes.push_back(ms.monomorphType(sp, arg.second));
@@ -372,9 +364,6 @@ void HIRTypeData::fmt(::std::ostream& os) const {
             os << "fn{" << (e.def.is_Function() && !e.def.as_Function() ? "!" : "") << e.path << "}";
         }
         TU_ARMA(Function, e) {
-            if (!e.hrls.mLifetimes.empty()) {
-                os << "for" << e.hrls.fmtArgs() << " ";
-            }
             if (e.isUnsafe) {
                 os << "unsafe ";
             }
@@ -471,13 +460,8 @@ namespace {
     }
 
     bool exactPathParamsEqual(const HIRPathParams& a, const HIRPathParams& b) {
-        if (a.mLifetimes.size() != b.mLifetimes.size() || a.types.size() != b.types.size() || a.values.size() != b.values.size()) {
+        if (a.types.size() != b.types.size() || a.values.size() != b.values.size()) {
             return false;
-        }
-        for (size_t i = 0; i < a.mLifetimes.size(); i++) {
-            if (a.mLifetimes[i] != b.mLifetimes[i]) {
-                return false;
-            }
         }
         for (size_t i = 0; i < a.types.size(); i++) {
             if (a.types[i] != b.types[i]) {
@@ -520,7 +504,7 @@ namespace {
     }
 
     bool exactTraitPathEqual(const HIRTraitPath& a, const HIRTraitPath& b) {
-        if (!exactOptionalGenericParamsEqual(a.hrtbs, b.hrtbs) || !exactGenericPathEqual(a.mPath, b.mPath) || a.lifetimeElision != b.lifetimeElision || a.traitPtr != b.traitPtr || a.typeBounds.size() != b.typeBounds.size() || a.traitBounds.size() != b.traitBounds.size()) {
+        if (!exactOptionalGenericParamsEqual(a.hrtbs, b.hrtbs) || !exactGenericPathEqual(a.mPath, b.mPath) || a.traitPtr != b.traitPtr || a.typeBounds.size() != b.typeBounds.size() || a.traitBounds.size() != b.traitBounds.size()) {
             return false;
         }
         auto ai = a.typeBounds.begin();
@@ -559,16 +543,11 @@ namespace {
     }
 
     bool exactGenericParamsEqual(const HIRGenericParams& a, const HIRGenericParams& b) {
-        if (a.types.size() != b.types.size() || a.mLifetimes.size() != b.mLifetimes.size() || a.values.size() != b.values.size() || a.bounds.size() != b.bounds.size()) {
+        if (a.types.size() != b.types.size() || a.values.size() != b.values.size() || a.bounds.size() != b.bounds.size()) {
             return false;
         }
         for (size_t i = 0; i < a.types.size(); i++) {
             if (a.types[i].mName != b.types[i].mName || a.types[i].defaultValue != b.types[i].defaultValue || a.types[i].isSized != b.types[i].isSized) {
-                return false;
-            }
-        }
-        for (size_t i = 0; i < a.mLifetimes.size(); i++) {
-            if (a.mLifetimes[i].mName != b.mLifetimes[i].mName) {
                 return false;
             }
         }
@@ -716,9 +695,6 @@ namespace {
 
     uint32_t typeFlags(const HIRPathParams& params) {
         uint32_t flags = 0;
-        for (const auto lifetime : params.mLifetimes) {
-            addLifetimeFlags(flags, lifetime);
-        }
         for (const auto type : params.types) {
             addTypeFlags(flags, type);
         }
@@ -867,12 +843,7 @@ namespace {
     }
 
     size_t hashPathParams(const HIRPathParams& params) {
-        size_t h = params.mLifetimes.size();
-        h = hashMix(h, params.types.size());
-        h = hashMix(h, params.values.size());
-        for (const auto& lifetime : params.mLifetimes) {
-            h = hashMix(h, lifetime.binding);
-        }
+        size_t h = hashMix(params.types.size(), params.values.size());
         for (const auto type : params.types) {
             h = hashMix(h, hashTypeRef(type));
         }

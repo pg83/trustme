@@ -87,13 +87,6 @@ namespace {
             return g;
         }
 
-        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-            if (g.group() == 3) {
-                return HIRLifetimeRef();
-            } else {
-                return HIRLifetimeRef(g.binding);
-            }
-        }
     };
 }
 
@@ -460,7 +453,7 @@ namespace {
                         }
                         TU_ARMA(NodeType, sE) {
                             if (const auto* const* snPp = sE.opt_Closure()) {
-                                auto pp = e.hrls.makeEmptyParams(true);
+                                auto pp = HIRPathParams();
                                 auto ms = MonomorphHrlsOnly(context.crate.types, pp);
                                 // Valid cast here, downstream code will check if its a non-capturing closure
                                 if ((*snPp)->mArgs.size() != e.argTypes.size()) {
@@ -766,7 +759,7 @@ namespace {
                         tmpFt = this->context.mResolve.expandAssociatedTypes(node.span(), tmpFt);
                         e = &tmpFt->as_Function();
                     }
-                    auto hrls = e->hrls.makeEmptyParams(true);
+                    auto hrls = HIRPathParams();
                     DEBUG("hrls=" << hrls);
                     auto m = MonomorphHrlsOnly(context.crate.types, hrls);
                     for (const auto& arg : e->argTypes) {
@@ -4579,7 +4572,7 @@ namespace {
                 if (trait.mPath != HIRSimplePath()) {
                     // Just call equate_types_assoc to add the required bounds.
                     if (contextMut) {
-                        auto pp = dep->mTrait.hrtbs ? dep->mTrait.hrtbs->makeEmptyParams(true) : HIRPathParams();
+                        auto pp = HIRPathParams();
                         MonomorphHrlsOnly ms(context.crate.types, pp);
                         for (const auto& tyb : dep->mTrait.typeBounds) {
                             contextMut->equateTypesAssoc(sp, tyb.second.type, trait.mPath, ms.monomorphPathParams(sp, trait.mParams, true), src, tyb.first.c_str(), tyb.second.atyParams, false);
@@ -5272,7 +5265,7 @@ namespace {
                         ERROR(span, E0000, "Mismatched argument count coercing closure to fn(...)");
                     }
                     if (contextMut) {
-                        auto pp = de.hrls.makeEmptyParams(true);
+                        auto pp = HIRPathParams();
                         MonomorphHrlsOnly ms(context.crate.types, pp);
                         for (size_t i = 0; i < de.argTypes.size(); i++) {
                             contextMut->equateTypes(sp, ms.monomorphType(sp, de.argTypes[i]), nodeP->mArgs[i].second);
@@ -5320,9 +5313,9 @@ namespace {
                     auto& nodePtr = *nodePtrPtr;
                     auto span = nodePtr->span();
 
-                    auto sPp = se->hrls.makeEmptyParams(true);
+                    auto sPp = HIRPathParams();
                     MonomorphHrlsOnly sMs(context.crate.types, sPp);
-                    auto dPp = de->hrls.makeEmptyParams(true);
+                    auto dPp = HIRPathParams();
                     MonomorphHrlsOnly dMs(context.crate.types, dPp);
                     for (size_t i = 0; i < de->argTypes.size(); i++) {
                         contextMut->equateTypes(sp, dMs.monomorphType(span, de->argTypes[i]), sMs.monomorphType(span, se->argTypes[i]));
@@ -5361,9 +5354,9 @@ namespace {
                     return CoerceResult::Equality;
                 }
                 if (contextMut) {
-                    auto sPp = se->hrls.makeEmptyParams(true);
+                    auto sPp = HIRPathParams();
                     MonomorphHrlsOnly sMs(context.crate.types, sPp);
-                    auto dPp = de->hrls.makeEmptyParams(true);
+                    auto dPp = HIRPathParams();
                     MonomorphHrlsOnly dMs(context.crate.types, dPp);
                     for (size_t i = 0; i < de->argTypes.size(); i++) {
                         contextMut->equateTypes(sp, dMs.monomorphType(span, de->argTypes[i]), sMs.monomorphType(span, se->argTypes[i]));
@@ -5454,7 +5447,7 @@ namespace {
                     auto bTpMono = ms.monomorphTraitpath(sp, be.trait, true);
                     DEBUG("- " << bTyMono << " : " << bTpMono);
                     ASSERT_BUG(sp, !outerPresent || !static_cast<bool>(bTpMono.hrtbs), "Two layers of HRTBs not allowed (should have been disallowed in HIR lower)");
-                    auto ppHrl = outerPresent ? be.hrtbs->makeEmptyParams(true) : (bTpMono.hrtbs ? bTpMono.hrtbs->makeEmptyParams(true) : HIRPathParams());
+                    auto ppHrl = outerPresent ? HIRPathParams() : (HIRPathParams());
                     if (outerPresent) {
                         DEBUG("be.hrtbs = " << be.hrtbs->fmtArgs());
                     }
@@ -6019,13 +6012,6 @@ namespace {
                             }
                         }
 
-                        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-                            if (g.group() == GENERICPlaceholder) {
-                                TODO(sp, "get_lifetime");
-                            } else {
-                                return HIRLifetimeRef(g.binding);
-                            }
-                        }
                     } m{context};
 
                     m.cmpType(sp, v.implTy, possibleImplTy, context.ivars.callbackResolveInfer());
@@ -8646,13 +8632,6 @@ void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr&
 
 template <typename T>
 void fix_param_count_(const Span& sp, Context& context, const HIRTypeData* selfTy, bool useDefaults, const T& path, const HIRGenericParams& paramDefs, HIRPathParams& params) {
-    if (params.mLifetimes.size() == paramDefs.mLifetimes.size()) {
-    } else if (params.mLifetimes.size() > paramDefs.mLifetimes.size()) {
-        ERROR(sp, E0000, "Too many lifetime parameters passed to " << path);
-    } else {
-        params.mLifetimes.resize(paramDefs.mLifetimes.size());
-    }
-
     if (params.types.size() == paramDefs.types.size()) {
         // Nothing to do, all good
     } else if (params.types.size() > paramDefs.types.size()) {
@@ -8731,7 +8710,7 @@ void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams
                 auto realTrait = ms.monomorphTraitpath(sp, be.trait, false);
                 DEBUG("= (" << realType << ": " << realTrait << ")");
                 // Replace any HRLs with unbound/empty lifetimes
-                auto ppHrl = (realTrait.hrtbs && !realTrait.hrtbs->isEmpty()) ? realTrait.hrtbs->makeEmptyParams(true) : outerHrtb.makeEmptyParams(true);
+                auto ppHrl = (realTrait.hrtbs && !realTrait.hrtbs->isEmpty()) ? HIRPathParams() : HIRPathParams();
                 DEBUG("outer_hrb = " << outerHrtb.fmtArgs() << ", pp_hrl = " << ppHrl);
                 auto msHrl = MonomorphHrlsOnly(context.crate.types, ppHrl);
                 applyBoundsAsRulesTrait(context, sp, realType, realTrait, msHrl);
@@ -8818,29 +8797,6 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
             }
         }
 
-        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& e) const override {
-            if (e.group() == 0) {
-                ASSERT_BUG(sp, implParams, "Impl-level lifetime parameter on free function (" << e << ")");
-                auto idx = e.idx();
-                ASSERT_BUG(sp, idx < implParams->mLifetimes.size(), "Generic lifetime (impl) out of input range - " << e << " >= " << implParams->mLifetimes.size());
-                // If this resolves to a HRL (group 3) then return an empty lifetime
-                auto rv = implParams->mLifetimes[idx];
-                if (rv.isHrl()) {
-                    return HIRLifetimeRef();
-                }
-                return rv;
-            } else if (e.group() == 1) {
-                auto idx = e.idx();
-                ASSERT_BUG(sp, idx < fcnParams.mLifetimes.size(), "Generic lifetime out of input range - " << e << " >= " << fcnParams.mLifetimes.size());
-                return fcnParams.mLifetimes[idx];
-            } else if (e.group() == 3) {
-                auto idx = e.idx();
-                ASSERT_BUG(sp, idx < fcnParams.mLifetimes.size(), "Generic lifetime out of input range - " << e << " >= " << hrlParams.mLifetimes.size());
-                return hrlParams.mLifetimes[idx];
-            } else {
-                BUG(sp, "Generic lifetime bounding out of total range (" << e << ")");
-            }
-        }
     };
 
     cache.topParams = nullptr;
@@ -8941,7 +8897,6 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
     // If the impl block has parameters, figure out what types they map to
     // - The function params are already mapped (from fix_param_count)
     auto& implParams = e.implParams;
-    implParams.mLifetimes.resize(implPtr->mParams.mLifetimes.size());
     if (implPtr->mParams.isGeneric()) {
         while (implParams.types.size() < implPtr->mParams.types.size()) {
             implParams.types.push_back(context.crate.types.infer());
@@ -10516,7 +10471,6 @@ public:
                 // If the impl block has parameters, figure out what types they map to
                 // - The function params are already mapped (from fix_param_count)
                 auto& implParams = e.implParams;
-                implParams.mLifetimes.resize(implPtr->mParams.mLifetimes.size());
                 if (implPtr->mParams.isGeneric()) {
                     while (implParams.types.size() < implPtr->mParams.types.size()) {
                         implParams.types.push_back(this->context.crate.types.infer());
@@ -10748,15 +10702,6 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
             return g;
         }
 
-        HIRLifetimeRef getLifetime(const Span& sp, const HIRGenericRef& g) const override {
-            if (hrls) {
-                if (g.group() == 3) {
-                    ASSERT_BUG(sp, g.idx() < hrls->mLifetimes.size(), g);
-                    return hrls->mLifetimes.at(g.idx());
-                }
-            }
-            return HIRLifetimeRef(g.binding);
-        }
 
         HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer = true) const override {
             if (const auto* e = tpl->opt_ErasedType()) {
@@ -10777,7 +10722,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
 
                     auto prevHrls = this->hrls;
                     for (const auto& trait : e->traits) {
-                        auto ppHrl = trait.hrtbs ? trait.hrtbs->makeEmptyParams(true) : HIRPathParams();
+                        auto ppHrl = HIRPathParams();
                         this->hrls = &ppHrl;
                         if (trait.typeBounds.size() == 0) {
                             context.equateTypesAssoc(sp, context.crate.types.infer(), trait.mPath.mPath, this->monomorphPathParams(sp, trait.mPath.mParams, allowInfer), rv, "", {}, false);
