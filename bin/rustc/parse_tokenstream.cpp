@@ -19,7 +19,7 @@ TokenStream::~TokenStream() {
 
 Token TokenStream::innerGetToken() {
     Token ret = this->realGetToken();
-    if (ret != TOK_EOF && ret.get_pos().filename == "") {
+    if (ret != TOK_EOF && ret.getPos().filename == "") {
         ret.set_pos(this->getPosition());
     }
     //DEBUG("ret.get_pos() = " << ret.get_pos());
@@ -42,7 +42,7 @@ Token TokenStream::getToken() {
         DEBUG("<= " << ret << " (lookahead)");
 #endif
         if (DEBUG_PRINT_TOKENS) {
-            ::std::cout << "getToken[" << typeid(*this).name() << "] - " << ret.get_pos() << "-" << ret << ::std::endl;
+            ::std::cout << "getToken[" << typeid(*this).name() << "] - " << ret.getPos() << "-" << ret << ::std::endl;
         }
         return ret;
     } else {
@@ -53,7 +53,7 @@ Token TokenStream::getToken() {
         DEBUG("<= " << ret << " (new)");
 #endif
         if (DEBUG_PRINT_TOKENS) {
-            ::std::cout << "getToken[" << typeid(*this).name() << "] - " << ret.get_pos() << "-" << ret << ::std::endl;
+            ::std::cout << "getToken[" << typeid(*this).name() << "] - " << ret.getPos() << "-" << ret << ::std::endl;
         }
         return ret;
     }
@@ -105,7 +105,7 @@ eTokenType TokenStream::lookahead(unsigned int i) {
     return mLookahead[i].tok.type();
 }
 
-Ident::Hygiene TokenStream::get_hygiene() const {
+Ident::Hygiene TokenStream::getHygiene() const {
     return mHygiene;
 }
 
@@ -142,7 +142,7 @@ Span TokenStream::point_span() const {
 
 ParseState::ParseState() {
 }
-::AST::Module& ParseState::get_current_mod() {
+::AST::Module& ParseState::getCurrentMod() {
     assert(this->module);
     return *this->module;
 }

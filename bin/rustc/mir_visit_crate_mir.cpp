@@ -37,7 +37,7 @@ void MIR::OuterVisitor::visit_function(::HIR::ItemPath p, ::HIR::Function& item)
 
         ::HIR::TypeRef tmp;
         const auto& sp = item.mCode ? item.mCode->span() : Span();
-        const auto& ret_ty = mResolve.fix_trait_default_return(sp, p, item.returnType, tmp);
+        const auto& ret_ty = mResolve.fixTraitDefaultReturn(sp, p, item.returnType, tmp);
         cb(mResolve, p, item.mCode, item.mArgs, ret_ty);
     }
 }
@@ -72,7 +72,7 @@ void MIR::OuterVisitor::visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) {
     auto _ = this->mResolve.set_impl_generics(MetadataType::None, item.mParams);
 
     if (auto* e = item.mData.opt_Value()) {
-        auto enumType = mResolve.crate.types.primitive(::HIR::Enum::get_repr_type(item.tagRepr));
+        auto enumType = mResolve.crate.types.primitive(::HIR::Enum::getReprType(item.tagRepr));
 
         for (auto& var : e->variants) {
             if (var.expr) {

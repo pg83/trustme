@@ -117,7 +117,7 @@ namespace HIR {
     }
 
     namespace {
-        const ::HIR::ConstGeneric* get_unevaluated_param(const ::HIR::ConstGenericUnevaluated& value, unsigned int binding) {
+        const ::HIR::ConstGeneric* getUnevaluatedParam(const ::HIR::ConstGenericUnevaluated& value, unsigned int binding) {
             const ::HIR::PathParams* params = nullptr;
             switch (binding >> 8) {
                 case ::HIR::GENERICImpl:
@@ -154,8 +154,8 @@ namespace HIR {
                 if (!r) {
                     return false;
                 }
-                const auto* l_param = get_unevaluated_param(left_value, l->mBinding);
-                const auto* r_param = get_unevaluated_param(right_value, r->mBinding);
+                const auto* l_param = getUnevaluatedParam(left_value, l->mBinding);
+                const auto* r_param = getUnevaluatedParam(right_value, r->mBinding);
                 return l_param && r_param ? *l_param == *r_param : l->mBinding == r->mBinding;
             }
             if (const auto* l = cast<const ::HIR::ExprNodeLiteral>(&left)) {
@@ -343,7 +343,7 @@ bool HIR::Publicity::is_visible(const ::HIR::SimplePath& p) const {
     return ms.type_interner().function(std::move(ft));
 }
 
-::HIR::TypeRef HIR::fn_ptr_tuple_constructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const t_tuple_fields& fields) {
+::HIR::TypeRef HIR::fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const t_tuple_fields& fields) {
     ::HIR::TypeDataFunctionPointer ft;
     ft.is_unsafe = false;
     ft.is_variadic = false;
@@ -356,7 +356,7 @@ bool HIR::Publicity::is_visible(const ::HIR::SimplePath& p) const {
     return ms.type_interner().function(std::move(ft));
 }
 
-size_t HIR::Enum::find_variant(const RcString& name) const {
+size_t HIR::Enum::findVariant(const RcString& name) const {
     if (mData.is_Value()) {
         const auto& e = mData.as_Value();
         auto it = ::std::find_if(e.variants.begin(), e.variants.end(), [&](const auto& x) {
@@ -383,7 +383,7 @@ bool HIR::Enum::is_value() const {
     return this->mData.is_Value();
 }
 
-U128 HIR::Enum::get_value(size_t idx) const {
+U128 HIR::Enum::getValue(size_t idx) const {
     if (mData.is_Value()) {
         const auto& e = mData.as_Value();
         assert(idx < e.variants.size());
@@ -395,7 +395,7 @@ U128 HIR::Enum::get_value(size_t idx) const {
     }
 }
 
-/*static*/ ::HIR::CoreType HIR::Enum::get_repr_type(Repr r) {
+/*static*/ ::HIR::CoreType HIR::Enum::getReprType(Repr r) {
     switch (r) {
         case ::HIR::Enum::Repr::Auto:
             return ::HIR::CoreType::Isize;
@@ -440,7 +440,7 @@ U128 HIR::Enum::get_value(size_t idx) const {
     throw "";
 }
 
-const ::HIR::SimplePath& ::HIR::Crate::get_lang_item_path(const Span& sp, const char* name) const {
+const ::HIR::SimplePath& ::HIR::Crate::getLangItemPath(const Span& sp, const char* name) const {
     auto it = this->mLangItems.find(name);
     if (it == this->mLangItems.end()) {
         ERROR(sp, E0000, "Undefined language item '" << name << "' required");
@@ -448,7 +448,7 @@ const ::HIR::SimplePath& ::HIR::Crate::get_lang_item_path(const Span& sp, const 
     return it->second;
 }
 
-const ::HIR::SimplePath& ::HIR::Crate::get_lang_item_path_opt(const char* name) const {
+const ::HIR::SimplePath& ::HIR::Crate::getLangItemPathOpt(const char* name) const {
     static ::HIR::SimplePath emptyPath;
     auto it = this->mLangItems.find(name);
     if (it == this->mLangItems.end()) {
@@ -458,7 +458,7 @@ const ::HIR::SimplePath& ::HIR::Crate::get_lang_item_path_opt(const char* name) 
 }
 
 namespace {
-    const ::HIR::Module& get_containing_module(const ::HIR::Crate& crate, const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) {
+    const ::HIR::Module& getContainingModule(const ::HIR::Crate& crate, const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) {
         ASSERT_BUG(sp, path.components().size() > 0u, "Invalid path (no nodes) - " << path);
         ASSERT_BUG(sp, path.components().size() > (ignore_last_node ? 1u : 0u), "Invalid path (only one node with `ignore_last_node` - " << path);
 
@@ -485,8 +485,8 @@ namespace {
     }
 }
 
-const ::HIR::MacroItem& ::HIR::Crate::get_macroitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) const {
-    const auto& mod = get_containing_module(*this, sp, path, ignore_crate_name, ignore_last_node);
+const ::HIR::MacroItem& ::HIR::Crate::getMacroitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) const {
+    const auto& mod = getContainingModule(*this, sp, path, ignore_crate_name, ignore_last_node);
 
     auto it = mod.macroItems.find(ignore_last_node ? path.components()[path.components().size() - 2] : path.components().back());
     if (it == mod.macroItems.end()) {
@@ -496,8 +496,8 @@ const ::HIR::MacroItem& ::HIR::Crate::get_macroitem_by_path(const Span& sp, cons
     return it->second->ent;
 }
 
-const ::HIR::TypeItem& ::HIR::Crate::get_typeitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) const {
-    const auto& mod = get_containing_module(*this, sp, path, ignore_crate_name, ignore_last_node);
+const ::HIR::TypeItem& ::HIR::Crate::getTypeitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) const {
+    const auto& mod = getContainingModule(*this, sp, path, ignore_crate_name, ignore_last_node);
 
     auto it = mod.modItems.find(ignore_last_node ? path.components()[path.components().size() - 2] : path.components().back());
     if (it == mod.modItems.end()) {
@@ -507,7 +507,7 @@ const ::HIR::TypeItem& ::HIR::Crate::get_typeitem_by_path(const Span& sp, const 
     return it->second->ent;
 }
 
-const ::HIR::Module& ::HIR::Crate::get_mod_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_last_node /*=false*/, bool ignore_crate_name /*=false*/) const {
+const ::HIR::Module& ::HIR::Crate::getModByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_last_node /*=false*/, bool ignore_crate_name /*=false*/) const {
     if (ignore_last_node) {
         ASSERT_BUG(sp, path.components().size() > 0, "get_mod_by_path received invalid path with ignore_last_node=true - " << path);
     }
@@ -520,7 +520,7 @@ const ::HIR::Module& ::HIR::Crate::get_mod_by_path(const Span& sp, const ::HIR::
             return this->rootModule;
         }
     } else {
-        const auto& ti = this->get_typeitem_by_path(sp, path, ignore_crate_name, ignore_last_node);
+        const auto& ti = this->getTypeitemByPath(sp, path, ignore_crate_name, ignore_last_node);
         if (auto* e = ti.opt_Module()) {
             return *e;
         } else {
@@ -533,36 +533,36 @@ const ::HIR::Module& ::HIR::Crate::get_mod_by_path(const Span& sp, const ::HIR::
     }
 }
 
-const ::HIR::Trait& ::HIR::Crate::get_trait_by_path(const Span& sp, const ::HIR::SimplePath& path) const {
-    const auto& ti = this->get_typeitem_by_path(sp, path);
+const ::HIR::Trait& ::HIR::Crate::getTraitByPath(const Span& sp, const ::HIR::SimplePath& path) const {
+    const auto& ti = this->getTypeitemByPath(sp, path);
     TU_IFLET(::HIR::TypeItem, ti, Trait, e, return e;)
     else {
         BUG(sp, "Trait path " << path << " didn't point to a trait (" << ti.tag_str() << ")");
     }
 }
 
-::std::optional<size_t> HIR::Crate::find_most_specific_trait(
+::std::optional<size_t> HIR::Crate::findMostSpecificTrait(
     const Span& sp,
     const ::std::vector<::HIR::SimplePath>& candidates
 ) const {
     ::std::optional<size_t> selected;
     for (size_t candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
         const auto& candidate = candidates[candidateIndex];
-        const auto& trait = this->get_trait_by_path(sp, candidate);
+        const auto& trait = this->getTraitByPath(sp, candidate);
         bool is_subtrait_of_all = true;
 
         for (const auto& other : candidates) {
             if (candidate == other) {
                 continue;
             }
-            const bool has_supertrait = ::std::any_of(
+            const bool hasSupertrait = ::std::any_of(
                 trait.allParentTraits.begin(),
                 trait.allParentTraits.end(),
                 [&](const auto& parent) {
                     return parent.mPath.mPath == other;
                 }
             );
-            if (!has_supertrait) {
+            if (!hasSupertrait) {
                 is_subtrait_of_all = false;
                 break;
             }
@@ -581,31 +581,31 @@ const ::HIR::Trait& ::HIR::Crate::get_trait_by_path(const Span& sp, const ::HIR:
     return selected;
 }
 
-const ::HIR::Struct& ::HIR::Crate::get_struct_by_path(const Span& sp, const ::HIR::SimplePath& path) const {
-    const auto& ti = this->get_typeitem_by_path(sp, path);
+const ::HIR::Struct& ::HIR::Crate::getStructByPath(const Span& sp, const ::HIR::SimplePath& path) const {
+    const auto& ti = this->getTypeitemByPath(sp, path);
     TU_IFLET(::HIR::TypeItem, ti, Struct, e, return e;)
     else {
         BUG(sp, "Struct path " << path << " didn't point to a struct (" << ti.tag_str() << ")");
     }
 }
 
-const ::HIR::Union& ::HIR::Crate::get_union_by_path(const Span& sp, const ::HIR::SimplePath& path) const {
-    const auto& ti = this->get_typeitem_by_path(sp, path);
+const ::HIR::Union& ::HIR::Crate::getUnionByPath(const Span& sp, const ::HIR::SimplePath& path) const {
+    const auto& ti = this->getTypeitemByPath(sp, path);
     TU_IFLET(::HIR::TypeItem, ti, Union, e, return e;)
     else {
         BUG(sp, "Path " << path << " didn't point to a union (" << ti.tag_str() << ")");
     }
 }
 
-const ::HIR::Enum& ::HIR::Crate::get_enum_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) const {
-    const auto& ti = this->get_typeitem_by_path(sp, path, ignore_crate_name, ignore_last_node);
+const ::HIR::Enum& ::HIR::Crate::getEnumByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) const {
+    const auto& ti = this->getTypeitemByPath(sp, path, ignore_crate_name, ignore_last_node);
     TU_IFLET(::HIR::TypeItem, ti, Enum, e, return e;)
     else {
         BUG(sp, "Enum path " << path << " didn't point to an enum (" << ti.tag_str() << ")");
     }
 }
 
-const ::HIR::ValueItem& ::HIR::Crate::get_valitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name) const {
+const ::HIR::ValueItem& ::HIR::Crate::getValitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name) const {
     if (path.crate_name() == "#intrinsics") {
         ASSERT_BUG(sp, path.components().size() == 1, "");
         if (path.components().back() == "offset_of") {
@@ -626,7 +626,7 @@ const ::HIR::ValueItem& ::HIR::Crate::get_valitem_by_path(const Span& sp, const 
             return i->second->ent;
         }
     }
-    const auto& mod = get_containing_module(*this, sp, path, ignore_crate_name, /*ignore_last_node=*/false);
+    const auto& mod = getContainingModule(*this, sp, path, ignore_crate_name, /*ignore_last_node=*/false);
 
     auto it = mod.valueItems.find(path.components().back());
     if (it == mod.valueItems.end()) {
@@ -636,16 +636,16 @@ const ::HIR::ValueItem& ::HIR::Crate::get_valitem_by_path(const Span& sp, const 
     return it->second->ent;
 }
 
-const ::HIR::Function& ::HIR::Crate::get_function_by_path(const Span& sp, const ::HIR::SimplePath& path) const {
-    const auto& ti = this->get_valitem_by_path(sp, path);
+const ::HIR::Function& ::HIR::Crate::getFunctionByPath(const Span& sp, const ::HIR::SimplePath& path) const {
+    const auto& ti = this->getValitemByPath(sp, path);
     TU_IFLET(::HIR::ValueItem, ti, Function, e, return e;)
     else {
         BUG(sp, "Function path " << path << " didn't point to an function (" << ti.tag_str() << ")");
     }
 }
 
-const ::HIR::Static& ::HIR::Crate::get_static_by_path(const Span& sp, const ::HIR::SimplePath& path) const {
-    const auto& m = this->get_mod_by_path(sp, path, /*ignore_last*/ true);
+const ::HIR::Static& ::HIR::Crate::getStaticByPath(const Span& sp, const ::HIR::SimplePath& path) const {
+    const auto& m = this->getModByPath(sp, path, /*ignore_last*/ true);
     auto it = m.valueItems.find(path.components().back());
     if (it != m.valueItems.end()) {
         ASSERT_BUG(sp, it->second->ent.is_Static(), "`static` path " << path << " didn't point to a static - " << it->second->ent.tag_str());
@@ -972,7 +972,7 @@ namespace {
         // TODO: Move associated types to the source trait.
     }
 
-    ::std::vector<::HIR::GenericBound> flatten_bounds(HIR::TypeInterner& types, const ::std::vector<::HIR::GenericBound>& bounds) {
+    ::std::vector<::HIR::GenericBound> flattenBounds(HIR::TypeInterner& types, const ::std::vector<::HIR::GenericBound>& bounds) {
         ::std::vector<::HIR::GenericBound> rv;
         for (const auto& b : bounds) {
             rv.push_back(b.clone());
@@ -1020,8 +1020,8 @@ bool ::HIR::TraitImpl::more_specific_than(HIR::TypeInterner& types, const ::HIR:
     //}
     // 3. Compare bound set, if there is a rule in oe that is missing from te; return false
     // TODO: Cache these lists (calculate after outer typecheck?)
-    auto boundsT = flatten_bounds(types, mParams.bounds);
-    auto boundsO = flatten_bounds(types, other.mParams.bounds);
+    auto boundsT = flattenBounds(types, mParams.bounds);
+    auto boundsO = flattenBounds(types, other.mParams.bounds);
 
     DEBUG("bounds_t = " << boundsT);
     DEBUG("bounds_o = " << boundsO);
@@ -1133,7 +1133,7 @@ namespace {
             }
         }
 
-        ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
+        ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& g) const override {
             ASSERT_BUG(sp, g.group() == 0, "");
             ASSERT_BUG(sp, g.idx() < impl_tys.size(), "");
             if (!impl_tys[g.idx()]) {
@@ -1143,14 +1143,14 @@ namespace {
             return *impl_tys[g.idx()];
         }
 
-        ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& g) const override {
+        ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& g) const override {
             ASSERT_BUG(sp, g.group() == 0, "");
             ASSERT_BUG(sp, g.idx() < impl_vals.size(), "");
             ASSERT_BUG(sp, impl_vals[g.idx()], "");
             return impl_vals[g.idx()]->clone();
         }
 
-        ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
+        ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
             ASSERT_BUG(sp, g.group() == 0, "");
             ASSERT_BUG(sp, g.idx() < impl_lfts.size(), "");
             if (!impl_lfts[g.idx()]) {
@@ -1417,7 +1417,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
             }
         }
 
-        static bool checkBounds(const ::HIR::Crate& crate, const ::HIR::TraitImpl& id, const Monomorphiser& ms, const ::HIR::TraitImpl& g_src) {
+        static bool checkBounds(const ::HIR::Crate& crate, const ::HIR::TraitImpl& id, const Monomorphiser& ms, const ::HIR::TraitImpl& gSrc) {
             TRACE_FUNCTION;
             static Span sp;
             for (const auto& tb : id.mParams.bounds) {
@@ -1432,7 +1432,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
                     // Determine if `ty` would be bounded (it's an ATY or generic)
                     if (ty->is_Generic()) {
                         bool found = false;
-                        for (const auto& bound : g_src.mParams.bounds) {
+                        for (const auto& bound : gSrc.mParams.bounds) {
                             if (const auto* be = bound.opt_TraitBound()) {
                                 if (be->type != ty) {
                                     continue;
@@ -1444,7 +1444,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
                             }
                         }
                         if (!found) {
-                            DEBUG("No matching bound for " << ty << " : " << trait << " in source bounds - " << g_src.mParams.fmt_bounds());
+                            DEBUG("No matching bound for " << ty << " : " << trait << " in source bounds - " << gSrc.mParams.fmtBounds());
                             return false;
                         }
                     } else if (TU_TEST1((*ty), Path, .binding.is_Opaque())) {
@@ -1452,8 +1452,8 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
                     } else {
                         // Search the crate for an impl
                         auto cbIdent = ResolvePlaceholdersNop();
-                        bool rv = crate.find_trait_impls(trait.mPath.mPath, ty, cbIdent, [&](const ::HIR::TraitImpl& ti) -> bool {
-                            DEBUG("impl" << ti.mParams.fmt_args() << " " << trait.mPath.mPath << ti.traitArgs << " for " << ti.mType << ti.mParams.fmt_bounds());
+                        bool rv = crate.findTraitImpls(trait.mPath.mPath, ty, cbIdent, [&](const ::HIR::TraitImpl& ti) -> bool {
+                            DEBUG("impl" << ti.mParams.fmtArgs() << " " << trait.mPath.mPath << ti.traitArgs << " for " << ti.mType << ti.mParams.fmtBounds());
 
                             ImplTyMatcher matcher(crate.types);
                             matcher.reinit(ti.mParams);
@@ -1469,7 +1469,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
                                 }
                             }
                             // 3. Check bounds on the impl
-                            if (!H2::checkBounds(crate, ti, matcher, g_src)) {
+                            if (!H2::checkBounds(crate, ti, matcher, gSrc)) {
                                 return false;
                             }
                             // 4. Check ATY bounds on the trait path
@@ -1514,7 +1514,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
 
 namespace {
     template <typename ImplType>
-    bool find_impls_list(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::list_t& impl_list, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
+    bool findImplsList(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::list_t& impl_list, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
         for (const auto& impl : impl_list) {
             if (impl->matches_type(type, ty_res)) {
                 if (callback(*impl)) {
@@ -1526,7 +1526,7 @@ namespace {
     }
 
     template <typename ImplType>
-    bool find_impls_list(const typename ::HIR::Crate::ImplGroup<const ImplType*>::list_t& impl_list, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
+    bool findImplsList(const typename ::HIR::Crate::ImplGroup<const ImplType*>::list_t& impl_list, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
         for (const auto& impl : impl_list) {
             if (impl->matches_type(type, ty_res)) {
                 if (callback(*impl)) {
@@ -1539,12 +1539,12 @@ namespace {
 }
 
 namespace {
-    bool find_trait_impls_int(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) {
+    bool findTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) {
         auto it = crate.traitImpls.find(trait);
         if (it != crate.traitImpls.end()) {
             // 1. Find named impls (associated with named types)
-            if (const auto* impl_list = it->second.get_list_for_type(type)) {
-                if (find_impls_list(*impl_list, type, ty_res, callback)) {
+            if (const auto* impl_list = it->second.getListForType(type)) {
+                if (findImplsList(*impl_list, type, ty_res, callback)) {
                     return true;
                 }
             }
@@ -1552,14 +1552,14 @@ namespace {
             if (type->is_Infer() && !type->as_Infer().is_lit()) {
                 DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
-                    if (find_impls_list(list.second, type, ty_res, callback)) {
+                    if (findImplsList(list.second, type, ty_res, callback)) {
                         return true;
                     }
                 }
             }
 
             // 2. Search fully generic list.
-            if (find_impls_list(it->second.generic, type, ty_res, callback)) {
+            if (findImplsList(it->second.generic, type, ty_res, callback)) {
                 return true;
             }
         }
@@ -1569,13 +1569,13 @@ namespace {
 
 }
 
-bool ::HIR::Crate::find_trait_impls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const {
+bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const {
     if (this->allTraitImpls.size() > 0) {
         auto it = this->allTraitImpls.find(trait);
         if (it != this->allTraitImpls.end()) {
             // 1. Find named impls (associated with named types)
-            if (const auto* impl_list = it->second.get_list_for_type(type)) {
-                if (find_impls_list(*impl_list, type, ty_res, callback)) {
+            if (const auto* impl_list = it->second.getListForType(type)) {
+                if (findImplsList(*impl_list, type, ty_res, callback)) {
                     return true;
                 }
             }
@@ -1583,14 +1583,14 @@ bool ::HIR::Crate::find_trait_impls(const ::HIR::SimplePath& trait, const ::HIR:
             if (type->is_Infer() && !type->as_Infer().is_lit()) {
                 DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
-                    if (find_impls_list(list.second, type, ty_res, callback)) {
+                    if (findImplsList(list.second, type, ty_res, callback)) {
                         return true;
                     }
                 }
             }
 
             // 2. Search fully generic list.
-            if (find_impls_list(it->second.generic, type, ty_res, callback)) {
+            if (findImplsList(it->second.generic, type, ty_res, callback)) {
                 return true;
             }
         }
@@ -1599,11 +1599,11 @@ bool ::HIR::Crate::find_trait_impls(const ::HIR::SimplePath& trait, const ::HIR:
     }
 
     // TODO: Determine the source crates for this type and trait (coherence) and only search those
-    if (find_trait_impls_int(*this, trait, type, ty_res, callback)) {
+    if (findTraitImplsInt(*this, trait, type, ty_res, callback)) {
         return true;
     }
     for (const auto& ec : this->extCrates) {
-        if (find_trait_impls_int(*ec.second.mData, trait, type, ty_res, callback)) {
+        if (findTraitImplsInt(*ec.second.mData, trait, type, ty_res, callback)) {
             return true;
         }
     }
@@ -1611,18 +1611,18 @@ bool ::HIR::Crate::find_trait_impls(const ::HIR::SimplePath& trait, const ::HIR:
 }
 
 namespace {
-    bool find_auto_trait_impls_int(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) {
+    bool findAutoTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) {
         auto it = crate.markerImpls.find(trait);
         if (it != crate.markerImpls.end()) {
             // 1. Find named impls (associated with named types)
-            if (const auto* impl_list = it->second.get_list_for_type(type)) {
-                if (find_impls_list(*impl_list, type, ty_res, callback)) {
+            if (const auto* impl_list = it->second.getListForType(type)) {
+                if (findImplsList(*impl_list, type, ty_res, callback)) {
                     return true;
                 }
             }
 
             // 2. Search fully generic list.
-            if (find_impls_list(it->second.generic, type, ty_res, callback)) {
+            if (findImplsList(it->second.generic, type, ty_res, callback)) {
                 return true;
             }
         }
@@ -1631,19 +1631,19 @@ namespace {
     }
 }
 
-bool ::HIR::Crate::find_auto_trait_impls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const {
+bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const {
     if (this->allMarkerImpls.size() > 0) {
         auto it = this->allMarkerImpls.find(trait);
         if (it != this->allMarkerImpls.end()) {
             // 1. Find named impls (associated with named types)
-            if (const auto* impl_list = it->second.get_list_for_type(type)) {
-                if (find_impls_list(*impl_list, type, ty_res, callback)) {
+            if (const auto* impl_list = it->second.getListForType(type)) {
+                if (findImplsList(*impl_list, type, ty_res, callback)) {
                     return true;
                 }
             }
 
             // 2. Search fully generic list.
-            if (find_impls_list(it->second.generic, type, ty_res, callback)) {
+            if (findImplsList(it->second.generic, type, ty_res, callback)) {
                 return true;
             }
         }
@@ -1651,11 +1651,11 @@ bool ::HIR::Crate::find_auto_trait_impls(const ::HIR::SimplePath& trait, const :
         return false;
     }
 
-    if (find_auto_trait_impls_int(*this, trait, type, ty_res, callback)) {
+    if (findAutoTraitImplsInt(*this, trait, type, ty_res, callback)) {
         return true;
     }
     for (const auto& ec : this->extCrates) {
-        if (find_auto_trait_impls_int(*ec.second.mData, trait, type, ty_res, callback)) {
+        if (findAutoTraitImplsInt(*ec.second.mData, trait, type, ty_res, callback)) {
             return true;
         }
     }
@@ -1663,16 +1663,16 @@ bool ::HIR::Crate::find_auto_trait_impls(const ::HIR::SimplePath& trait, const :
 }
 
 namespace {
-    bool find_type_impls_int(const ::HIR::Crate& crate, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) {
+    bool findTypeImplsInt(const ::HIR::Crate& crate, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) {
         // 1. Find named impls (associated with named types)
-        if (const auto* impl_list = crate.typeImpls.get_list_for_type(type)) {
-            if (find_impls_list(*impl_list, type, ty_res, callback)) {
+        if (const auto* impl_list = crate.typeImpls.getListForType(type)) {
+            if (findImplsList(*impl_list, type, ty_res, callback)) {
                 return true;
             }
         }
 
         // 2. Search fully generic list?
-        if (find_impls_list(crate.typeImpls.generic, type, ty_res, callback)) {
+        if (findImplsList(crate.typeImpls.generic, type, ty_res, callback)) {
             return true;
         }
 
@@ -1680,17 +1680,17 @@ namespace {
     }
 }
 
-bool ::HIR::Crate::find_type_impls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const {
+bool ::HIR::Crate::findTypeImpls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const {
     if (allTraitImpls.size() > 0) {
         // 1. Find named impls (associated with named types)
-        if (const auto* impl_list = this->allTypeImpls.get_list_for_type(type)) {
-            if (find_impls_list(*impl_list, type, ty_res, callback)) {
+        if (const auto* impl_list = this->allTypeImpls.getListForType(type)) {
+            if (findImplsList(*impl_list, type, ty_res, callback)) {
                 return true;
             }
         }
 
         // 2. Search fully generic list?
-        if (find_impls_list(this->allTypeImpls.generic, type, ty_res, callback)) {
+        if (findImplsList(this->allTypeImpls.generic, type, ty_res, callback)) {
             return true;
         }
 
@@ -1699,19 +1699,19 @@ bool ::HIR::Crate::find_type_impls(const ::HIR::TypeData* type, t_cb_resolve_typ
     // TODO: Determine the source crate for this type (coherence) and only search that
 
     // > Current crate
-    if (find_type_impls_int(*this, type, ty_res, callback)) {
+    if (findTypeImplsInt(*this, type, ty_res, callback)) {
         return true;
     }
     for (const auto& ec : this->extCrates) {
         //DEBUG("- " << ec.first);
-        if (find_type_impls_int(*ec.second.mData, type, ty_res, callback)) {
+        if (findTypeImplsInt(*ec.second.mData, type, ty_res, callback)) {
             return true;
         }
     }
     return false;
 }
 
-const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& ret_ty) const {
+const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& ret_ty) const {
     if (!ep) {
         // No HIR, so has to just have MIR - from a extern crate most likely
         ASSERT_BUG(Span(), ep.mir, "No HIR (!ep) and no MIR (!ep.m_mir) for " << ip);
@@ -1824,11 +1824,11 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
     }
 }
 
-::HIR::TypeRef HIR::Trait::get_vtable_type(const Span& sp, const ::HIR::Crate& crate, const ::HIR::TypeData::Data_TraitObject& te) const {
+::HIR::TypeRef HIR::Trait::getVtableType(const Span& sp, const ::HIR::Crate& crate, const ::HIR::TypeData::Data_TraitObject& te) const {
     assert(te.mTrait.traitPtr == this);
 
     const auto& vtable_ty_spath = this->vtablePath;
-    const auto& vtable_ref = crate.get_struct_by_path(sp, vtable_ty_spath);
+    const auto& vtable_ref = crate.getStructByPath(sp, vtable_ty_spath);
     HIR::PathParams pp_hrls;
     if (te.mTrait.hrtbs) {
         pp_hrls = te.mTrait.hrtbs->make_empty_params(true);
@@ -1848,7 +1848,7 @@ const ::MIR::Function* HIR::Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, con
     return crate.types.path(::HIR::GenericPath(vtable_ty_spath, mv$(vtable_params)), &vtable_ref);
 }
 
-unsigned HIR::Trait::get_vtable_value_index(const HIR::GenericPath& trait_path, const RcString& name) const {
+unsigned HIR::Trait::getVtableValueIndex(const HIR::GenericPath& trait_path, const RcString& name) const {
     auto its = this->valueIndexes.equal_range(name);
     for (auto it = its.first; it != its.second; ++it) {
         DEBUG(trait_path << " :: " << name << " - " << it->second.second);
@@ -1861,7 +1861,7 @@ unsigned HIR::Trait::get_vtable_value_index(const HIR::GenericPath& trait_path, 
     return 0;
 }
 
-unsigned HIR::Trait::get_vtable_parent_index(HIR::TypeInterner& types, const Span& sp, const HIR::PathParams& this_params, const HIR::GenericPath& trait_path) const {
+unsigned HIR::Trait::getVtableParentIndex(HIR::TypeInterner& types, const Span& sp, const HIR::PathParams& this_params, const HIR::GenericPath& trait_path) const {
     for (const auto& pt : this->allParentTraits) {
         if (pt.mPath.mPath == trait_path.mPath) {
             auto p = MonomorphStatePtr(types, nullptr, &this_params, nullptr).monomorph_genericpath(sp, pt.mPath);
@@ -1873,7 +1873,7 @@ unsigned HIR::Trait::get_vtable_parent_index(HIR::TypeInterner& types, const Spa
     return 0;
 }
 
-::std::pair<const ::HIR::AssociatedType*, const ::HIR::PathParams*> HIR::Trait::get_aty_def(const RcString& name) const {
+::std::pair<const ::HIR::AssociatedType*, const ::HIR::PathParams*> HIR::Trait::getAtyDef(const RcString& name) const {
     auto it = types.find(name);
     if (it != types.end()) {
         return std::make_pair(&it->second, nullptr);
@@ -2052,7 +2052,7 @@ FloatValue EncodedLiteralSlice::read_float(size_t size /*=0*/) const {
     }
 }
 
-const Reloc* EncodedLiteralSlice::get_reloc() const {
+const Reloc* EncodedLiteralSlice::getReloc() const {
     for (const auto& r : base.relocations) {
         if (r.ofs == ofs) {
             return &r;
@@ -2251,19 +2251,19 @@ Crate::Crate(stl::ObjPool* pool, TypeInterner& types)
     , types(types)
     , intrinsicOffsetof(Function{Function::Receiver::Free, GenericParams{}, {}, types.primitive(CoreType::Usize), {}}) {
 }
-const ::HIR::Constant& Crate::get_constant_by_path(const Span& sp, const ::HIR::SimplePath& path) const {
-    const auto& ti = this->get_valitem_by_path(sp, path);
+const ::HIR::Constant& Crate::getConstantByPath(const Span& sp, const ::HIR::SimplePath& path) const {
+    const auto& ti = this->getValitemByPath(sp, path);
     TU_IFLET(::HIR::ValueItem, ti, Constant, e, return e;)
     else {
         BUG(sp, "`const` path " << path << " didn't point to an enum");
     }
 }
-const ::MIR::Function* Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const {
+const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const {
     auto ty = fcn.returnType;
-    return get_or_gen_mir(ip, fcn.mCode, fcn.mArgs, ty);
+    return getOrGenMir(ip, fcn.mCode, fcn.mArgs, ty);
 }
-const ::MIR::Function* Crate::get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const {
+const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const {
     static ::HIR::Function::argsT s_args;
-    return get_or_gen_mir(ip, ep, s_args, expTy);
+    return getOrGenMir(ip, ep, s_args, expTy);
 }
 }

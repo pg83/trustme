@@ -62,12 +62,12 @@ TAGGED_UNION_EX(
     (),
     (VarState clone() const; bool operator==(const VarState & x) const; bool operator!=(const VarState & x) const { return !(*this == x); }
      /// Returns `true` if any drop flags were present (i.e. this is possibly optional)
-     bool get_used_drop_flags(std::set<unsigned>* out) const;)
+     bool getUsedDropFlags(std::set<unsigned>* out) const;)
 );
 extern ::std::ostream& operator<<(::std::ostream& os, const VarState& x);
 
 struct SplitArm {
-    bool has_early_terminated = false;
+    bool hasEarlyTerminated = false;
     bool alwaysEarlyTerminated = false; // Populated on completion
     //BasicBlockId  source_block;
     ::std::map<unsigned int, VarState> states;
@@ -120,7 +120,7 @@ TAGGED_UNION(
 #define FIELD_DEREF 0xFFFF
 #define FIELD_INDEX_MAX 0x8000 // Above this is a negative field offset
 
-struct field_path_t {
+struct fieldPathT {
     ::std::vector<uint16_t> data;
 
     size_t size() const {
@@ -139,24 +139,24 @@ struct field_path_t {
         return data.back();
     }
 
-    bool operator==(const field_path_t& x) const {
+    bool operator==(const fieldPathT& x) const {
         return data == x.data;
     }
 
-    Ordering ord(const field_path_t& x) const {
+    Ordering ord(const fieldPathT& x) const {
         return ::ord(data, x.data);
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const field_path_t& x);
+    friend ::std::ostream& operator<<(::std::ostream& os, const fieldPathT& x);
 };
 
 /// Binding from an expanded pattern
 struct PatternBinding {
-    field_path_t field;
+    fieldPathT field;
     const ::HIR::PatternBinding* binding;
     std::pair<size_t, size_t> split_slice;
 
-    PatternBinding(field_path_t field, const ::HIR::PatternBinding& binding);
+    PatternBinding(fieldPathT field, const ::HIR::PatternBinding& binding);
 
     bool is_split_slice() const {
         return split_slice.first != SIZE_MAX;
@@ -233,7 +233,7 @@ class MirBuilder {
 public:
     MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ret_ty, const ::HIR::Function::argsT& args, ::MIR::Function& output);
 
-    void final_cleanup();
+    void finalCleanup();
 
     const ::HIR::SimplePath* langBox() const {
         return mLangBox;
@@ -264,10 +264,10 @@ public:
     // Variable aliases (used for match guards)
     void addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv);
 
-    const var_alias_t* get_variable_alias(const Span& sp, unsigned idx) const;
+    const var_alias_t* getVariableAlias(const Span& sp, unsigned idx) const;
 
     // - Values
-    ::MIR::LValue get_variable(const Span& sp, unsigned idx) const;
+    ::MIR::LValue getVariable(const Span& sp, unsigned idx) const;
 
     ::MIR::LValue new_temporary(const ::HIR::TypeData* ty);
     ::MIR::LValue lvalue_or_temp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val);
@@ -275,27 +275,27 @@ public:
         return output.locals.size();
     }
 
-    bool has_result() const {
+    bool hasResult() const {
         return resultValid;
     }
 
     void set_result(const Span& sp, ::MIR::RValue val);
-    ::MIR::RValue get_result(const Span& sp);
+    ::MIR::RValue getResult(const Span& sp);
     /// Obtains the result, unwrapping into a LValue (and erroring if not)
-    ::MIR::LValue get_result_unwrap_lvalue(const Span& sp);
+    ::MIR::LValue getResultUnwrapLvalue(const Span& sp);
     /// Obtains the result, copying into a temporary if required
-    ::MIR::LValue get_result_in_lvalue(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
+    ::MIR::LValue getResultInLvalue(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
     /// Obtains a result in a param (or a lvalue)
-    ::MIR::Param get_result_in_param(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
+    ::MIR::Param getResultInParam(const Span& sp, const ::HIR::TypeData* ty, bool allowMissingValue = false);
 
-    ::MIR::LValue get_if_cond() const {
+    ::MIR::LValue getIfCond() const {
         return ifCondLval.clone();
     }
 
-    ::MIR::LValue get_rval_in_if_cond(const Span& sp, ::MIR::RValue val);
+    ::MIR::LValue getRvalInIfCond(const Span& sp, ::MIR::RValue val);
 
-    ::MIR::LValue get_result_in_if_cond(const Span& sp) {
-        return get_rval_in_if_cond(sp, get_result(sp));
+    ::MIR::LValue getResultInIfCond(const Span& sp) {
+        return getRvalInIfCond(sp, getResult(sp));
     }
 
     // - Statements
@@ -372,7 +372,7 @@ public:
 
     unsigned int new_drop_flag(bool defaultState);
     unsigned int new_drop_flag_and_set(const Span& sp, bool set_state);
-    bool get_drop_flag_default(const Span& sp, unsigned int index);
+    bool getDropFlagDefault(const Span& sp, unsigned int index);
     /// Add a drop flag to be set when another is also set (used to rewrite drop flags after the fact)
     void dropFlagAlias(unsigned int old_idx, unsigned int new_idx);
 
@@ -431,10 +431,10 @@ private:
         /// Function argument. Maps to `LValue::Argument`
         Argument
     };
-    const VarState& get_slot_state(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* aboveScope = nullptr) const;
-    VarState& get_slot_state_mut(const Span& sp, unsigned int idx, SlotType type);
+    const VarState& getSlotState(const Span& sp, unsigned int idx, SlotType type, const ScopeHandle* aboveScope = nullptr) const;
+    VarState& getSlotStateMut(const Span& sp, unsigned int idx, SlotType type);
 
-    VarState* get_val_state_mut_p(const Span& sp, const ::MIR::LValue& lv, bool expectValid = false);
+    VarState* getValStateMutP(const Span& sp, const ::MIR::LValue& lv, bool expectValid = false);
 
     void merge_split_lists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type);
 
@@ -452,7 +452,7 @@ public:
     bool lvalue_is_copy(const Span& sp, const ::MIR::LValue& lv) const;
 
     // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer
-    ::MIR::LValue get_ptr_to_dst(const Span& sp, const ::MIR::LValue& lv) const;
+    ::MIR::LValue getPtrToDst(const Span& sp, const ::MIR::LValue& lv) const;
 
     /// Get the set of currently valid (fully,optional,partial) variables
     class SavedActiveLocal {
@@ -462,12 +462,12 @@ public:
         SavedActiveLocal(VarState vs);
 
     public:
-        const VarState& get_state() const {
+        const VarState& getState() const {
             return state;
         }
     };
 
-    std::map<unsigned, SavedActiveLocal> get_active_locals(const Span& sp, std::set<unsigned>& saved_drop_flags) const;
+    std::map<unsigned, SavedActiveLocal> getActiveLocals(const Span& sp, std::set<unsigned>& saved_drop_flags) const;
 
     // Calls `drop_value_from_state` on the value
     void dropActveLocal(const Span& sp, ::MIR::LValue lv, const SavedActiveLocal& loc);
@@ -510,8 +510,8 @@ public:
     virtual void schedule_registered_pattern_drops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) = 0;
 
     virtual void destructureFromList(const Span& sp, const ::HIR::TypeData* ty, ::MIR::LValue lval, const ::std::vector<PatternBinding>& bindings, bool update_states = true) = 0;
-    virtual MIR::LValue get_value_for_binding_path(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) = 0;
-    virtual const HIR::TypeData* get_binding_type(const Span& sp, unsigned index) const = 0;
+    virtual MIR::LValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outer_ty, const ::MIR::LValue& outer_lval, const PatternBinding& b) = 0;
+    virtual const HIR::TypeData* getBindingType(const Span& sp, unsigned index) const = 0;
 
     virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
 };
@@ -524,7 +524,7 @@ extern void MIRLowerHIRGetTypeValueForPath(
     MirBuilder& builder,
     const ::HIR::TypeData* top_ty,
     const ::MIR::LValue& top_val,
-    const field_path_t& field_path, // unsigned int field_path_ofs,
+    const fieldPathT& field_path, // unsigned int field_path_ofs,
     /*Out ->*/ ::HIR::TypeRef& out_ty,
     ::MIR::LValue& out_val
 );

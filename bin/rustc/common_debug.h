@@ -54,13 +54,13 @@ template <typename T>
 ::std::ostream& operator<<(::std::ostream& os, const ::std::vector<T>& v);
 
 namespace {
-    static inline void format_to_stream(::std::ostream& os) {
+    static inline void formatToStream(::std::ostream& os) {
     }
 
     template <typename T, typename... A>
-    static inline void format_to_stream(::std::ostream& os, const T& v, const A&... a) {
+    static inline void formatToStream(::std::ostream& os, const T& v, const A&... a) {
         os << v;
-        format_to_stream(os, a...);
+        formatToStream(os, a...);
     }
 }
 
@@ -75,7 +75,7 @@ struct DebugFunctionScope {
 template <typename... T>
 ::std::string format(const T&... v) {
     ::std::stringstream ss;
-    format_to_stream(ss, v...);
+    formatToStream(ss, v...);
     return ss.str();
 }
 

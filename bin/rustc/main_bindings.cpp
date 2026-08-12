@@ -91,7 +91,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
         }
         {
             descVals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ::AST::Path(crate.extCratenameStd, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
-            auto sp = test.span.get_top_file_span();
+            auto sp = test.span.getTopFileSpan();
             descVals.push_back({{}, "source_file", NEWNODE(String, sp.filename.c_str())});
             descVals.push_back({{}, "start_line", NEWNODE(Integer, U128(sp.start_line), CORETYPE_UINT)});
             descVals.push_back({{}, "start_col", NEWNODE(Integer, U128(sp.start_ofs), CORETYPE_UINT)});
@@ -213,8 +213,8 @@ struct ProgramParams {
         /// Debugger aid: pause just after startup so a debugger can attach.
         bool pause = false;
 
-        bool full_validate = false;
-        bool full_validate_early = false;
+        bool fullValidate = false;
+        bool fullValidateEarly = false;
 
         bool dumpAst = false;
         bool dumpHir = false;
@@ -399,14 +399,14 @@ int main(int argc, char* argv[]) {
         // Load external crates.
         CompilePhaseV("LoadCrates", [&]() {
             // Hacky!
-            AST::g_crate_overrides = params.crateOverrides;
+            AST::gCrateOverrides = params.crateOverrides;
             for (const auto& ld : params.lib_search_dirs) {
-                AST::g_crate_load_dirs.push_back(ld);
+                AST::gCrateLoadDirs.push_back(ld);
             }
             crate.load_externs();
             if (params.test_harness) {
                 auto test_crate_name = RcString::new_interned("test");
-                AST::g_implicit_crates.insert(std::make_pair(test_crate_name, crate.load_extern_crate(Span(), test_crate_name)));
+                AST::gImplicitCrates.insert(std::make_pair(test_crate_name, crate.load_extern_crate(Span(), test_crate_name)));
             }
         });
 
@@ -640,72 +640,72 @@ int main(int argc, char* argv[]) {
         // HIR Section
         // --------------------------------------
         // Construct the HIR beside the AST in the compilation object pool.
-        ::HIR::Crate* hir_crate = CompilePhase<::HIR::Crate*>("HIR Lower", [&]() {
+        ::HIR::Crate* hirCrate = CompilePhase<::HIR::Crate*>("HIR Lower", [&]() {
             return LowerHIRFromAST(pool, crate);
         });
         memory_dump("HIR Gen");
         if (params.debug.dumpHir) {
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
-                HIRDump(os, *hir_crate);
+                HIRDump(os, *hirCrate);
             });
         }
         memory_dump("HIR");
 
         CompilePhaseV("Lifetime Elision", [&]() {
-            ConvertHIRLifetimeElision(*hir_crate);
+            ConvertHIRLifetimeElision(*hirCrate);
         });
 
         // Replace type aliases (`type`) into the actual type
         // - Does simple replacements
         // - Done before bind so type alises can be used in patterns?
         CompilePhaseV("Resolve Type Aliases", [&]() {
-            ConvertHIRExpandAliases(*hir_crate);
+            ConvertHIRExpandAliases(*hirCrate);
         });
         // Set up bindings and other useful information.
         CompilePhaseV("Resolve Bind", [&]() {
-            ConvertHIRBind(*hir_crate);
+            ConvertHIRBind(*hirCrate);
         });
 
         // Determine what trait to use for <T>::Foo in outer scope
         // - Also inserts defaults in trait impls
         CompilePhaseV("Resolve UFCS Outer", [&]() {
-            ConvertHIRResolveUFCSOuter(*hir_crate);
+            ConvertHIRResolveUFCSOuter(*hirCrate);
         });
         // Expand `Self` into the true type
         // - TODO: Move this later on, but that requires fixing some of the resolve logic around trait impl lookup
         CompilePhaseV("Resolve HIR Self Type", [&]() {
-            ConvertHIRExpandAliasesSelf(*hir_crate);
+            ConvertHIRExpandAliasesSelf(*hirCrate);
         });
         // Enumerate marker impls on types and other useful metadata
         CompilePhaseV("Resolve HIR Markings", [&]() {
-            ConvertHIRMarkings(*hir_crate);
+            ConvertHIRMarkings(*hirCrate);
         });
         CompilePhaseV("Sort Impls", [&]() {
-            ConvertHIRResolveUFCSSortImpls(*hir_crate);
+            ConvertHIRResolveUFCSSortImpls(*hirCrate);
         });
         // Determine what trait to use for <T>::Foo (and does some associated type expansion)
         CompilePhaseV("Resolve UFCS paths", [&]() {
-            ConvertHIRResolveUFCS(*hir_crate);
+            ConvertHIRResolveUFCS(*hirCrate);
         });
         if (params.debug.dumpHir) {
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
-                HIRDump(os, *hir_crate);
+                HIRDump(os, *hirCrate);
             });
         }
         // TODO: Expand vtables here?
         // - Some parts of constant evaluate require it
         // Basic constant evalulation (intergers/floats only)
         CompilePhaseV("Constant Evaluate", [&]() {
-            ConvertHIRConstantEvaluate(*hir_crate);
+            ConvertHIRConstantEvaluate(*hirCrate);
         });
 
         if (params.debug.dumpHir) {
             // DUMP after initial consteval
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
-                HIRDump(os, *hir_crate);
+                HIRDump(os, *hirCrate);
             });
         }
 
@@ -715,58 +715,58 @@ int main(int argc, char* argv[]) {
         // Check outer items first (types of constants/functions/statics/impls/...)
         // - Doesn't do any expressions except those in types
         CompilePhaseV("Typecheck Outer", [&]() {
-            TypecheckModuleLevel(*hir_crate);
+            TypecheckModuleLevel(*hirCrate);
         });
         // Check the rest of the expressions (including function bodies)
         CompilePhaseV("Typecheck Expressions", [&]() {
-            TypecheckExpressions(*hir_crate);
+            TypecheckExpressions(*hirCrate);
         });
         // === HIR Expansion ===
         // Annotate how each node's result is used
         CompilePhaseV("Expand HIR Annotate", [&]() {
-            HIRExpandAnnotateUsage(*hir_crate);
+            HIRExpandAnnotateUsage(*hirCrate);
         });
         CompilePhaseV("Expand HIR Static Borrow Mark", [&]() {
-            HIRExpandStaticBorrowConstantsMark(*hir_crate);
+            HIRExpandStaticBorrowConstantsMark(*hirCrate);
         });
         // - Needs to be done after static borrows, but before closures
         CompilePhaseV("Expand HIR Lifetimes", [&]() {
-            HIRExpandLifetimeInfer(*hir_crate);
+            HIRExpandLifetimeInfer(*hirCrate);
         });
         // - Now that all types are known, closures can be desugared
         CompilePhaseV("Expand HIR Closures", [&]() {
-            HIRExpandClosures(*hir_crate);
+            HIRExpandClosures(*hirCrate);
         });
         CompilePhaseV("Expand HIR Static Borrow", [&]() {
-            HIRExpandStaticBorrowConstants(*hir_crate);
+            HIRExpandStaticBorrowConstants(*hirCrate);
         });
         // - Construct VTables for all traits and impls.
         //  TODO: How early can this be done?
         //  > Requires consteval completed for types to be fully valid?
         //  TODO: Would prefer to have this done before consteval, as consteval might reference a vtable
         CompilePhaseV("Expand HIR VTables", [&]() {
-            HIRExpandVTables(*hir_crate);
+            HIRExpandVTables(*hirCrate);
         });
         // - And calls can be turned into UFCS
         CompilePhaseV("Expand HIR Calls", [&]() {
-            HIRExpandUfcsEverything(*hir_crate);
+            HIRExpandUfcsEverything(*hirCrate);
         });
         CompilePhaseV("Expand HIR Reborrows", [&]() {
-            HIRExpandReborrows(*hir_crate);
+            HIRExpandReborrows(*hirCrate);
         });
         CompilePhaseV("Expand HIR ErasedType", [&]() {
-            HIRExpandErasedType(*hir_crate);
+            HIRExpandErasedType(*hirCrate);
         });
         if (params.debug.dumpHir) {
             // DUMP after typecheck (before validation)
             CompilePhaseV("Dump HIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_2_hir.rs"));
-                HIRDump(os, *hir_crate);
+                HIRDump(os, *hirCrate);
             });
         }
         // - Ensure that typeck worked (including Fn trait call insertion etc)
         CompilePhaseV("Typecheck Expressions (validate)", [&]() {
-            TypecheckExpressionsValidate(*hir_crate);
+            TypecheckExpressionsValidate(*hirCrate);
         });
         // HACK?: Run lifetime inference again, so that bad closures are caught
         // - Doesn't quite work, can't seem to run this twice?
@@ -781,14 +781,14 @@ int main(int argc, char* argv[]) {
 
         // Lower expressions into MIR
         CompilePhaseV("Lower MIR", [&]() {
-            HIRGenerateMIR(*hir_crate);
+            HIRGenerateMIR(*hirCrate);
         });
 
         if (params.debug.dumpMir) {
             // DUMP after generation
             CompilePhaseV("Dump MIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
-                MIRDump(os, *hir_crate);
+                MIRDump(os, *hirCrate);
             });
         }
         memory_dump("MIR Gen");
@@ -798,41 +798,41 @@ int main(int argc, char* argv[]) {
 
         // - Expand constants in HIR and virtualise calls
         CompilePhaseV("MIR Cleanup", [&]() {
-            MIRCleanupCrate(*hir_crate);
+            MIRCleanupCrate(*hirCrate);
         });
-        if (params.debug.full_validate_early || getenv("MRUSTC_FULL_VALIDATE_PREOPT")) {
+        if (params.debug.fullValidateEarly || getenv("MRUSTC_FULL_VALIDATE_PREOPT")) {
             CompilePhaseV("MIR Validate Full Early", [&]() {
-                MIRCheckCrateFull(*hir_crate);
+                MIRCheckCrateFull(*hirCrate);
             });
         }
 
         // Optional for now
         if (params.run_borrowcheck) {
             CompilePhaseV("MIR Borrowcheck", [&]() {
-                MIRBorrowCheckCrate(*hir_crate);
+                MIRBorrowCheckCrate(*hirCrate);
             });
         }
 
         // Optimise the MIR
         CompilePhaseV("MIR Optimise", [&]() {
-            MIROptimiseCrate(*hir_crate, mir_opt_level, enableMirInlining);
+            MIROptimiseCrate(*hirCrate, mir_opt_level, enableMirInlining);
         });
 
         if (params.debug.dumpMir) {
             // DUMP: After optimisation
             CompilePhaseV("Dump MIR", [&]() {
                 ::std::ofstream os(FMT(params.outfile << "_3_mir.rs"));
-                MIRDump(os, *hir_crate);
+                MIRDump(os, *hirCrate);
             });
         }
         CompilePhaseV("MIR Validate PO", [&]() {
-            MIRCheckCrate(*hir_crate);
+            MIRCheckCrate(*hirCrate);
         });
         // - Exhaustive MIR validation (follows every code path and checks variable validity)
         // > DEBUGGING ONLY
         CompilePhaseV("MIR Validate Full", [&]() {
-            if (params.debug.full_validate || getenv("MRUSTC_FULL_VALIDATE")) {
-                MIRCheckCrateFull(*hir_crate);
+            if (params.debug.fullValidate || getenv("MRUSTC_FULL_VALIDATE")) {
+                MIRCheckCrateFull(*hirCrate);
             }
         });
 
@@ -853,10 +853,10 @@ int main(int argc, char* argv[]) {
         trans_opt.panic_crate = "panic_" + params.codegen.panic_type;
         for (const char* libdir : params.lib_search_dirs) {
             // Store these paths for use in final linking.
-            hir_crate->linkPaths.push_back(libdir);
+            hirCrate->linkPaths.push_back(libdir);
         }
         for (const char* libname : params.libraries) {
-            hir_crate->extLibs.push_back(::HIR::ExternLibrary{libname});
+            hirCrate->extLibs.push_back(::HIR::ExternLibrary{libname});
         }
         trans_opt.debugInfo = params.debugInfo;
 
@@ -871,15 +871,15 @@ int main(int argc, char* argv[]) {
             // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `mrustc-main`)
             CompilePhaseV("HIR Serialise", [&]() {
                 HIR::Crate crateForSer(pool, *types);
-                crateForSer.crateName = hir_crate->crateName;
-                crateForSer.edition = hir_crate->edition;
-                for (const auto& i : hir_crate->rootModule.macroItems) {
+                crateForSer.crateName = hirCrate->crateName;
+                crateForSer.edition = hirCrate->edition;
+                for (const auto& i : hirCrate->rootModule.macroItems) {
                     DEBUG(i.first << ": " << i.second->ent.tag_str());
                     if (const auto* e = i.second->ent.opt_ProcMacro()) {
                         crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, box$(HIR::VisEnt<HIR::MacroItem>{i.second->publicity, *e})));
                     }
                 }
-                crateForSer.exportedMacroNames = hir_crate->exportedMacroNames;
+                crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;
                 HIRSerialise(params.outfile + ".hir", crateForSer);
             });
         }
@@ -894,49 +894,49 @@ int main(int argc, char* argv[]) {
                 case ::AST::Crate::Type::RustLib:
                 case ::AST::Crate::Type::RustDylib:
                 case ::AST::Crate::Type::CDylib:
-                    return TransEnumeratePublic(*hir_crate);
+                    return TransEnumeratePublic(*hirCrate);
                 case ::AST::Crate::Type::ProcMacro:
                 case ::AST::Crate::Type::Executable:
-                    return TransEnumerateMain(*hir_crate);
+                    return TransEnumerateMain(*hirCrate);
             }
             throw ::std::runtime_error("Invalid crate_type value");
         });
         // - Generate automatic impls (mainly Clone for 1.29)
         CompilePhaseV("Trans Auto Impls", [&]() {
             // TODO: Drop glue generation?
-            TransAutoImpls(*hir_crate, items);
+            TransAutoImpls(*hirCrate, items);
         });
         // - Generate monomorphised versions of all functions
         CompilePhaseV("Trans Monomorph", [&]() {
-            TransMonomorphiseList(*hir_crate, items, mir_opt_level);
+            TransMonomorphiseList(*hirCrate, items, mir_opt_level);
         });
         // - Do post-monomorph inlining
         CompilePhaseV("MIR Optimise Inline", [&]() {
-            MIROptimiseCrateInlining(*hir_crate, items, false, mir_opt_level, enableMirInlining);
+            MIROptimiseCrateInlining(*hirCrate, items, false, mir_opt_level, enableMirInlining);
         });
 
         // - Expand constants in HIR (using ones that were monomorphised above)
         CompilePhaseV("MIR Cleanup 2", [&]() {
             MIRCleanupSetPostMonomorph();
-            MIRCleanupCrate(*hir_crate);
+            MIRCleanupCrate(*hirCrate);
         });
 
         memory_dump("Trans");
 
-        std::string hir_file;
+        std::string hirFile;
         switch (crate_type) {
             case ::AST::Crate::Type::RustLib:
                 // Save a loadable HIR dump
-                hir_file = params.outfile + ".hir";
+                hirFile = params.outfile + ".hir";
                 CompilePhaseV("HIR Serialise", [&]() {
-                    HIRSerialise(hir_file, *hir_crate);
+                    HIRSerialise(hirFile, *hirCrate);
                 });
                 break;
             case ::AST::Crate::Type::RustDylib:
                 // Save a loadable HIR dump
                 CompilePhaseV("HIR Serialise", [&]() {
                     //auto saved_ext_crates = ::std::move(hir_crate->m_ext_crates);
-                    HIRSerialise(hir_file, *hir_crate);
+                    HIRSerialise(hirFile, *hirCrate);
                     //hir_crate->m_ext_crates = ::std::move(saved_ext_crates);
                 });
                 break;
@@ -946,11 +946,11 @@ int main(int argc, char* argv[]) {
 
         // - Do post-monomorph inlining
         CompilePhaseV("MIR Optimise Inline PostSave", [&]() {
-            MIROptimiseCrateInlining(*hir_crate, items, true, mir_opt_level, enableMirInlining);
+            MIROptimiseCrateInlining(*hirCrate, items, true, mir_opt_level, enableMirInlining);
         });
         // - Clean up ununused functions
         CompilePhaseV("Trans Enumerate Cleanup", [&]() {
-            TransEnumerateCleanup(*hir_crate, items);
+            TransEnumerateCleanup(*hirCrate, items);
         });
 
         switch (crate_type) {
@@ -959,27 +959,27 @@ int main(int argc, char* argv[]) {
             case ::AST::Crate::Type::RustLib:
                 // Generate a linkable .o
                 CompilePhaseV("Trans Codegen", [&]() {
-                    TransCodegen(params.outfile, CodegenOutput::StaticLibrary, trans_opt, hir_crate, std::move(items), hir_file);
+                    TransCodegen(params.outfile, CodegenOutput::StaticLibrary, trans_opt, hirCrate, std::move(items), hirFile);
                 });
                 break;
             case ::AST::Crate::Type::RustDylib:
             case ::AST::Crate::Type::CDylib:
                 // Generate a shared library
                 CompilePhaseV("Trans Codegen", [&]() {
-                    TransCodegen(params.outfile, CodegenOutput::DynamicLibrary, trans_opt, hir_crate, std::move(items), hir_file);
+                    TransCodegen(params.outfile, CodegenOutput::DynamicLibrary, trans_opt, hirCrate, std::move(items), hirFile);
                 });
                 break;
             case ::AST::Crate::Type::ProcMacro: {
                 // Needs: An executable (the actual macro handler), metadata (for `extern crate foo;`)
                 // - Metadata was done before enumerate
                 CompilePhaseV("Trans Codegen", [&]() {
-                    TransCodegen(params.outfile, CodegenOutput::Executable, trans_opt, hir_crate, std::move(items), hir_file);
+                    TransCodegen(params.outfile, CodegenOutput::Executable, trans_opt, hirCrate, std::move(items), hirFile);
                 });
                 break;
             }
             case ::AST::Crate::Type::Executable:
                 CompilePhaseV("Trans Codegen", [&]() {
-                    TransCodegen(params.outfile, CodegenOutput::Executable, trans_opt, hir_crate, std::move(items), "");
+                    TransCodegen(params.outfile, CodegenOutput::Executable, trans_opt, hirCrate, std::move(items), "");
                 });
                 break;
         }
@@ -1105,7 +1105,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         optval = optname.substr(eqPos + 1);
                         optname.resize(eqPos);
                     }
-                    auto get_optval = [&]() {
+                    auto getOptval = [&]() {
                         if (eqPos == ::std::string::npos) {
                             ::std::cerr << "Flag -C " << optname << " requires an argument" << ::std::endl;
                             exit(1);
@@ -1119,22 +1119,22 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     //    };
 
                     if (optname == "emit-build-command") {
-                        get_optval();
+                        getOptval();
                         this->codegen.emitBuildCommand = optval;
                     } else if (optname == "codegen-type") {
-                        get_optval();
+                        getOptval();
                         this->codegen.codegenType = optval;
                     } else if (optname == "emit-depfile") {
-                        get_optval();
+                        getOptval();
                         this->emitDepfile = optval;
                     } else if (optname == "panic") {
-                        get_optval();
+                        getOptval();
                         this->codegen.panic_type = optval;
                     } else if (optname == "link-arg") {
-                        get_optval();
+                        getOptval();
                         this->codegen.linker_args.push_back(optval);
                     } else if (optname == "overflow-checks" || optname == "overflow_checks") {
-                        get_optval();
+                        getOptval();
                         if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
                             // The current MIR pipeline performs wrapping integer
                             // arithmetic, which is exactly the requested mode.
@@ -1146,7 +1146,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                             exit(1);
                         }
                     } else if (optname == "opt-level") {
-                        get_optval();
+                        getOptval();
                         if (optval == "0") {
                             this->opt_level = OptimizationLevel::None;
                         } else if (optval == "1") {
@@ -1174,7 +1174,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         }
                         this->debugAssertionsExplicit = true;
                     } else if (optname == "debuginfo") {
-                        get_optval();
+                        getOptval();
                         if (optval == "0" || optval == "none") {
                             this->debugInfo = DebugInfoLevel::None;
                         } else if (optval == "line-directives-only") {
@@ -1212,7 +1212,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         optval = optname.substr(eqPos + 1);
                         optname.resize(eqPos);
                     }
-                    auto get_optval = [&]() {
+                    auto getOptval = [&]() {
                         if (eqPos == ::std::string::npos) {
                             ::std::cerr << "Flag -Z " << optname << " requires an argument" << ::std::endl;
                             exit(1);
@@ -1230,7 +1230,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->mir_opt_level = 0;
                         this->mir_opt_level_explicit = true;
                     } else if (optname == "mir-opt-level") {
-                        get_optval();
+                        getOptval();
                         if (optval.empty()) {
                             ::std::cerr << "Invalid number for -Z mir-opt-level: '" << optval << "'" << ::std::endl;
                             exit(1);
@@ -1268,10 +1268,10 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         }
                     } else if (optname == "full-validate") {
                         no_optval();
-                        this->debug.full_validate = true;
+                        this->debug.fullValidate = true;
                     } else if (optname == "full-validate-early") {
                         no_optval();
-                        this->debug.full_validate_early = true;
+                        this->debug.fullValidateEarly = true;
                     } else if (optname == "dump-ast") {
                         no_optval();
                         this->debug.dumpAst = true;
@@ -1282,7 +1282,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         no_optval();
                         this->debug.dumpMir = true;
                     } else if (optname == "stop-after") {
-                        get_optval();
+                        getOptval();
                         if (optval == "parse") {
                             this->last_stage = STAGE_PARSE;
                         } else if (optval == "expand") {
@@ -1443,12 +1443,12 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     ::std::cerr << "invalid `--check-cfg` argument: `" << checkCfgSpec << "`: " << error << ::std::endl;
                     exit(1);
                 }
-            } else if (const char* force_warn = checkWithArg("force-warn")) {
-                if (force_warn[0] == '\0') {
+            } else if (const char* forceWarn = checkWithArg("force-warn")) {
+                if (forceWarn[0] == '\0') {
                     ::std::cerr << "Flag --force-warn requires an argument" << ::std::endl;
                     exit(1);
                 }
-                CfgSetLintLevel(force_warn, CfgLintLevel::ForceWarn);
+                CfgSetLintLevel(forceWarn, CfgLintLevel::ForceWarn);
             } else if (const char* lint_cap = checkWithArg("cap-lints")) {
                 CfgLintLevel level;
                 if (strcmp(lint_cap, "allow") == 0) {

@@ -32,16 +32,16 @@ namespace HIR {
 
     class ResolvePlaceholders {
     public:
-        virtual const ::HIR::TypeData* get_type(const Span& sp, const HIR::TypeData* ty) const = 0;
-        virtual const ::HIR::ConstGeneric& get_val(const Span& sp, const HIR::ConstGeneric& v) const = 0;
+        virtual const ::HIR::TypeData* getType(const Span& sp, const HIR::TypeData* ty) const = 0;
+        virtual const ::HIR::ConstGeneric& getVal(const Span& sp, const HIR::ConstGeneric& v) const = 0;
     };
 
     class ResolvePlaceholdersNop: public ResolvePlaceholders {
-        const ::HIR::TypeData* get_type(const Span&, const ::HIR::TypeData* ty) const override {
+        const ::HIR::TypeData* getType(const Span&, const ::HIR::TypeData* ty) const override {
             return ty;
         }
 
-        const ::HIR::ConstGeneric& get_val(const Span&, const ::HIR::ConstGeneric& v) const override {
+        const ::HIR::ConstGeneric& getVal(const Span&, const ::HIR::ConstGeneric& v) const override {
             return v;
         }
     };
@@ -68,7 +68,7 @@ namespace HIR {
 
         PopOnDrop push_hrb(const std::unique_ptr<HIR::GenericParams>& params) const;
         PopOnDrop push_hrb(const HIR::GenericParams& params) const;
-        const HIR::GenericParams* has_hrb() const {
+        const HIR::GenericParams* hasHrb() const {
             return hrbStack.empty() ? nullptr : hrbStack.back();
         }
     };

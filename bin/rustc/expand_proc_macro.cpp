@@ -107,7 +107,7 @@ STATIC_DECORATOR("proc_macro", DecoratorProcMacro)
 
 void ExpandProcMacroHarness(::AST::Crate& crate) {
     auto pm_crate_name = RcString::new_interned("proc_macro");
-    AST::g_implicit_crates.insert(std::make_pair(pm_crate_name, crate.load_extern_crate(Span(), pm_crate_name)));
+    AST::gImplicitCrates.insert(std::make_pair(pm_crate_name, crate.load_extern_crate(Span(), pm_crate_name)));
 
     // Create the following module:
     // ```
@@ -511,7 +511,7 @@ namespace {
                     BUG(sp, "Unexpected whitepace in tokenstream");
                     break;
                 case TOK_INTERPOLATED_TYPE:
-                    visit_type(const_cast<::Token&>(tok).frag_type());
+                    visit_type(const_cast<::Token&>(tok).fragType());
                     break;
                 case TOK_INTERPOLATED_PATH:
                     TODO(sp, "TOK_INTERPOLATED_PATH");
@@ -520,7 +520,7 @@ namespace {
                 case TOK_INTERPOLATED_STMT:
                 case TOK_INTERPOLATED_BLOCK:
                 case TOK_INTERPOLATED_EXPR:
-                    visit_node(const_cast<::Token&>(tok).frag_node());
+                    visit_node(const_cast<::Token&>(tok).fragNode());
                     break;
                 case TOK_INTERPOLATED_META:
                 case TOK_INTERPOLATED_STMT_ITEM:
@@ -963,7 +963,7 @@ namespace {
                 visit_pattern(p);
                 pmi.send_symbol(",");
             }
-            if (v.has_wildcard) {
+            if (v.hasWildcard) {
                 pmi.send_symbol("..");
                 pmi.send_symbol(",");
                 for (const auto& p : v.end) {
@@ -1267,9 +1267,9 @@ namespace {
                                     }
                             }
                             }
-                            if (!p.get_default().is_wildcard()) {
+                            if (!p.getDefault().is_wildcard()) {
                                 pmi.send_symbol("=");
-                                this->visit_type(p.get_default());
+                                this->visit_type(p.getDefault());
                             }
                         }
                         TU_ARMA(Value, p) {
@@ -1434,7 +1434,7 @@ namespace {
         }
 
         void visit_meta_item(const ::AST::Attribute& i) {
-            if (i.name().has_leading) {
+            if (i.name().hasLeading) {
                 pmi.send_symbol("::");
             }
             for (const auto& e : i.name().elems) {
@@ -2123,11 +2123,11 @@ Token ProcMacroInv::realGetToken_() {
         }
         case TokenClass::String: {
             auto val = this->recv_bytes();
-            return Token(TOK_STRING, mv$(val), this->get_hygiene());
+            return Token(TOK_STRING, mv$(val), this->getHygiene());
         }
         case TokenClass::ByteString: {
             auto val = this->recv_bytes();
-            return Token(TOK_BYTESTRING, mv$(val), this->get_hygiene());
+            return Token(TOK_BYTESTRING, mv$(val), this->getHygiene());
         }
         case TokenClass::CharLit: {
             auto val = this->recv_v128u();

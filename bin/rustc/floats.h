@@ -11,17 +11,17 @@
 using FloatValue = Float128;
 
 FloatValue parse_float_value(const char* text);
-bool float_value_is_nan(FloatValue value);
-bool float_value_is_infinite(FloatValue value);
-FloatValue float_value_abs(FloatValue value);
-FloatValue float_value_trunc(FloatValue value);
-FloatValue float_value_floor(FloatValue value);
-FloatValue float_value_ceil(FloatValue value);
-FloatValue float_value_round(FloatValue value);
-FloatValue float_value_round_even(FloatValue value);
-FloatValue float_value_remainder(FloatValue lhs, FloatValue rhs);
-FloatValue float_value_minimum_number(FloatValue lhs, FloatValue rhs);
-FloatValue float_value_maximum_number(FloatValue lhs, FloatValue rhs);
+bool floatValueIsNan(FloatValue value);
+bool floatValueIsInfinite(FloatValue value);
+FloatValue floatValueAbs(FloatValue value);
+FloatValue floatValueTrunc(FloatValue value);
+FloatValue floatValueFloor(FloatValue value);
+FloatValue floatValueCeil(FloatValue value);
+FloatValue floatValueRound(FloatValue value);
+FloatValue floatValueRoundEven(FloatValue value);
+FloatValue floatValueRemainder(FloatValue lhs, FloatValue rhs);
+FloatValue floatValueMinimumNumber(FloatValue lhs, FloatValue rhs);
+FloatValue floatValueMaximumNumber(FloatValue lhs, FloatValue rhs);
 FloatValue positive_nan_float_value();
 
 std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value);

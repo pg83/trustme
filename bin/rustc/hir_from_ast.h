@@ -36,6 +36,6 @@ extern ::HIR::PathParams LowerHIRPathParams(const Span& sp, const ::AST::PathPar
 extern ::HIR::TypeRef LowerHIRType(const ::TypeRef& ty);
 extern ::HIR::Pattern LowerHIRPattern(const ::AST::Pattern& pat);
 
-extern RcString g_core_crate;
-extern RcString g_crate_name;
-extern ::HIR::Crate* g_crate_ptr;
+extern RcString gCoreCrate;
+extern RcString gCrateName;
+extern ::HIR::Crate* gCratePtr;

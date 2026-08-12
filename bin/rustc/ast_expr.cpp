@@ -135,14 +135,14 @@ namespace AST {
         {
             os << "{";
             for (const auto& n : nodes) {
-                os << *n.node << (n.has_semicolon ? ";" : "");
+                os << *n.node << (n.hasSemicolon ? ";" : "");
             }
             os << "}";
         },
         {
             ::std::vector<Line> newNodes;
             for (const auto& n : nodes) {
-                newNodes.push_back({n.has_semicolon, n.node->clone()});
+                newNodes.push_back({n.hasSemicolon, n.node->clone()});
             }
             return NEWNODE(ExprNodeBlock, blockType, mv$(newNodes), localMod);
         }
@@ -405,7 +405,7 @@ namespace AST {
     )
 
     namespace {
-        void fmt_iflet_conditions(::std::ostream& os, const ::std::vector<AST::IfLetCondition>& conditions) {
+        void fmtIfletConditions(::std::ostream& os, const ::std::vector<AST::IfLetCondition>& conditions) {
             for (const auto& cond : conditions) {
                 if (&cond != &conditions.front()) {
                     os << " && ";
@@ -440,7 +440,7 @@ namespace AST {
                 os << "'" << label << ": ";
             }
             os << "while ";
-            fmt_iflet_conditions(os, conditions);
+            fmtIfletConditions(os, conditions);
             os << " { " << *mCode << " }";
         },
         {
@@ -459,7 +459,7 @@ namespace AST {
                 }
                 if (arm.guard.size() > 0) {
                     os << " if ";
-                    fmt_iflet_conditions(os, arm.guard);
+                    fmtIfletConditions(os, arm.guard);
                 }
 
                 os << " => " << *arm.mCode << ",";
@@ -488,7 +488,7 @@ namespace AST {
                     os << " else ";
                 }
                 os << "if ";
-                fmt_iflet_conditions(os, arm.conditions);
+                fmtIfletConditions(os, arm.conditions);
                 os << " { " << *arm.body << " }";
             }
             if (elseNode) {

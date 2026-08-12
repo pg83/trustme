@@ -13,9 +13,9 @@
 #include <set>
 #include <stdexcept>
 
-::std::multimap<::std::string, ::std::string> g_cfg_values;
-::std::map<::std::string, ::std::function<bool(const ::std::string&)>> g_cfg_value_fcns;
-::std::set<::std::string> g_cfg_flags;
+::std::multimap<::std::string, ::std::string> gCfgValues;
+::std::map<::std::string, ::std::function<bool(const ::std::string&)>> gCfgValueFcns;
+::std::set<::std::string> gCfgFlags;
 
 namespace {
     struct ExpectedCfgValues {
@@ -36,7 +36,7 @@ namespace {
         LintSetting warnings;
         LintSetting unexpected_cfgs;
         LintSetting cap;
-    } g_check_cfg;
+    } gCheckCfg;
 
     class CfgSpecParser {
         const ::std::string& input;
@@ -104,7 +104,7 @@ namespace {
             return input.substr(start, pos - start);
         }
 
-        static unsigned hex_digit(char c) {
+        static unsigned hexDigit(char c) {
             if ('0' <= c && c <= '9') {
                 return c - '0';
             }
@@ -148,8 +148,8 @@ namespace {
                         if (pos + 2 > input.size()) {
                             fail("incomplete hexadecimal string escape");
                         }
-                        const auto hi = hex_digit(input[pos]);
-                        const auto lo = hex_digit(input[pos + 1]);
+                        const auto hi = hexDigit(input[pos]);
+                        const auto lo = hexDigit(input[pos + 1]);
                         if (hi >= 16 || lo >= 16) {
                             fail("invalid hexadecimal string escape");
                         }
@@ -305,12 +305,12 @@ namespace {
     }
 
     CfgLintLevel unexpected_cfg_level() {
-        auto level = g_check_cfg.unexpected_cfgs.is_set
-            ? g_check_cfg.unexpected_cfgs.level
-            : (g_check_cfg.warnings.is_set ? g_check_cfg.warnings.level : CfgLintLevel::Warn);
-        if (level != CfgLintLevel::ForceWarn && g_check_cfg.cap.is_set
-            && lint_level_rank(level) > lint_level_rank(g_check_cfg.cap.level)) {
-            level = g_check_cfg.cap.level;
+        auto level = gCheckCfg.unexpected_cfgs.is_set
+            ? gCheckCfg.unexpected_cfgs.level
+            : (gCheckCfg.warnings.is_set ? gCheckCfg.warnings.level : CfgLintLevel::Warn);
+        if (level != CfgLintLevel::ForceWarn && gCheckCfg.cap.is_set
+            && lint_level_rank(level) > lint_level_rank(gCheckCfg.cap.level)) {
+            level = gCheckCfg.cap.level;
         }
         return level;
     }
@@ -369,11 +369,11 @@ namespace {
     }
 
     void validate_cfg_use(const Span& span, const ::std::string& name, const ::std::optional<::std::string>& value) {
-        if (!g_check_cfg.active) {
+        if (!gCheckCfg.active) {
             return;
         }
-        const auto it = g_check_cfg.expected.find(name);
-        if (it != g_check_cfg.expected.end()) {
+        const auto it = gCheckCfg.expected.find(name);
+        if (it != gCheckCfg.expected.end()) {
             const auto& expected = it->second;
             const auto valid = expected.any || (value ? expected.values.count(*value) != 0 : expected.none);
             if (!valid) {
@@ -388,7 +388,7 @@ namespace {
                 report_unexpected_cfg(span, name, value, true);
                 return;
             case BuiltinExpectation::UnknownName:
-                if (g_check_cfg.exhaustiveNames) {
+                if (gCheckCfg.exhaustiveNames) {
                     report_unexpected_cfg(span, name, value, false);
                 }
                 return;
@@ -399,25 +399,25 @@ namespace {
 static const RcString rcstring_cfg = RcString::new_interned("cfg");
 
 void CfgDump(::std::ostream& os) {
-    for (const auto& v : g_cfg_values) {
+    for (const auto& v : gCfgValues) {
         os << ">" << v.first << "=" << v.second << std::endl;
     }
-    for (const auto& f : g_cfg_flags) {
+    for (const auto& f : gCfgFlags) {
         os << ">" << f << std::endl;
     }
     // NOTE: `g_cfg_value_fcns` is only used for feature flags, which minicargo doesn't need
 }
 
 void CfgSetFlag(::std::string name) {
-    g_cfg_flags.insert(mv$(name));
+    gCfgFlags.insert(mv$(name));
 }
 
 void CfgSetValue(::std::string name, ::std::string val) {
-    g_cfg_values.insert(::std::make_pair(mv$(name), mv$(val)));
+    gCfgValues.insert(::std::make_pair(mv$(name), mv$(val)));
 }
 
 void CfgSetValueCb(::std::string name, ::std::function<bool(const ::std::string&)> cb) {
-    g_cfg_value_fcns.insert(::std::make_pair(mv$(name), mv$(cb)));
+    gCfgValueFcns.insert(::std::make_pair(mv$(name), mv$(cb)));
 }
 
 bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& has_value, ::std::string& value, ::std::string& error) {
@@ -436,12 +436,12 @@ bool CfgParseOption(const ::std::string& spec, ::std::string& name, bool& has_va
 bool CfgSetCheckSpec(const ::std::string& spec, ::std::string& error) {
     try {
         auto parsed = CfgSpecParser(spec).parse_check_spec();
-        g_check_cfg.active = true;
+        gCheckCfg.active = true;
         if (parsed.anyNames) {
-            g_check_cfg.exhaustiveNames = false;
+            gCheckCfg.exhaustiveNames = false;
         }
         for (auto& name : parsed.names) {
-            auto& expected = g_check_cfg.expected[name];
+            auto& expected = gCheckCfg.expected[name];
             if (parsed.values.any) {
                 expected.any = true;
                 expected.none = false;
@@ -465,15 +465,15 @@ void CfgSetLintLevel(::std::string name, CfgLintLevel level) {
         }
     }
     if (name == "warnings") {
-        update_lint_setting(g_check_cfg.warnings, level);
+        update_lint_setting(gCheckCfg.warnings, level);
     } else if (name == "unexpected_cfgs") {
-        update_lint_setting(g_check_cfg.unexpected_cfgs, level);
+        update_lint_setting(gCheckCfg.unexpected_cfgs, level);
     }
 }
 
 void CfgSetLintCap(CfgLintLevel level) {
-    g_check_cfg.cap.is_set = true;
-    g_check_cfg.cap.level = level;
+    gCheckCfg.cap.is_set = true;
+    gCheckCfg.cap.level = level;
 }
 
 namespace {
@@ -482,7 +482,7 @@ namespace {
     bool checkCfgInner(TokenStream& lex) {
         TRACE_FUNCTION;
         if (lex.lookahead(0) == TOK_INTERPOLATED_META) {
-            auto meta = std::move(lex.getTokenCheck(TOK_INTERPOLATED_META).frag_meta());
+            auto meta = std::move(lex.getTokenCheck(TOK_INTERPOLATED_META).fragMeta());
             auto ilex = TTStream(meta.span(), ParseState(), meta.data());
             return checkCfgInner1(meta.name().asTrivial(), ilex);
         } else if (lex.lookahead(0) == TOK_RWORD_TRUE) {
@@ -500,7 +500,7 @@ namespace {
     bool checkCfgInner1(const RcString& name, TokenStream& lex) {
         // Some compiler-generated cfg streams have no source parent.  They do
         // not need a diagnostic span unless check-cfg is actually enabled.
-        const auto conditionSpan = g_check_cfg.active ? lex.point_span() : Span();
+        const auto conditionSpan = gCheckCfg.active ? lex.point_span() : Span();
         Token tok;
         switch (lex.lookahead(0)) {
             case TOK_EQUAL: {
@@ -517,7 +517,7 @@ namespace {
                 }
                 validate_cfg_use(conditionSpan, name.c_str(), val);
                 // Equality
-                auto its = g_cfg_values.equal_range(name.c_str());
+                auto its = gCfgValues.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
                     DEBUG(name << ": '" << it->second << "' == '" << val << "'");
                     if (it->second == val) {
@@ -528,8 +528,8 @@ namespace {
                     return false;
                 }
 
-                auto it2 = g_cfg_value_fcns.find(name.c_str());
-                if (it2 != g_cfg_value_fcns.end()) {
+                auto it2 = gCfgValueFcns.find(name.c_str());
+                if (it2 != gCfgValueFcns.end()) {
                     DEBUG(name << ": ('" << val << "')?");
                     return it2->second(val);
                 }
@@ -597,13 +597,13 @@ namespace {
                 break;
             default:
                 validate_cfg_use(conditionSpan, name.c_str(), ::std::nullopt);
-                auto its = g_cfg_values.equal_range(name.c_str());
+                auto its = gCfgValues.equal_range(name.c_str());
                 for (auto it = its.first; it != its.second; ++it) {
                     return true;
                 }
                 // Flag
-                auto it = g_cfg_flags.find(name.c_str());
-                return (it != g_cfg_flags.end());
+                auto it = gCfgFlags.find(name.c_str());
+                return (it != gCfgFlags.end());
         }
     }
 }

@@ -44,28 +44,28 @@ const Span& HIR::ExprPtr::span() const {
     return static_sp;
 }
 
-const ::MIR::Function* HIR::ExprPtr::get_mir_opt() const {
+const ::MIR::Function* HIR::ExprPtr::getMirOpt() const {
     if (!this->mir) {
         return nullptr;
     }
     return &*this->mir;
 }
 
-const ::MIR::Function& HIR::ExprPtr::get_mir_or_error(const Span& sp) const {
+const ::MIR::Function& HIR::ExprPtr::getMirOrError(const Span& sp) const {
     if (!this->mir) {
         BUG(sp, "No MIR");
     }
     return *this->mir;
 }
 
-::MIR::Function& HIR::ExprPtr::get_mir_or_error_mut(const Span& sp) {
+::MIR::Function& HIR::ExprPtr::getMirOrErrorMut(const Span& sp) {
     if (!this->mir) {
         BUG(sp, "No MIR");
     }
     return *this->mir;
 }
 
-const ::MIR::Function* HIR::ExprPtr::get_ext_mir() const {
+const ::MIR::Function* HIR::ExprPtr::getExtMir() const {
     if (this->node) {
         return nullptr;
     }
@@ -75,7 +75,7 @@ const ::MIR::Function* HIR::ExprPtr::get_ext_mir() const {
     return &*this->mir;
 }
 
-::MIR::Function* HIR::ExprPtr::get_ext_mir_mut() {
+::MIR::Function* HIR::ExprPtr::getExtMirMut() {
     if (this->node) {
         return nullptr;
     }

@@ -88,10 +88,10 @@ private:
     void pop_hygine() override;
 
     void ungetc();
-    Codepoint getc_num();
+    Codepoint getcNum();
     Codepoint getc();
-    Codepoint getc_cp();
-    char getc_byte();
+    Codepoint getcCp();
+    char getcByte();
 
     class EndOfFile {};
 };

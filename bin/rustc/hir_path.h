@@ -165,7 +165,7 @@ namespace HIR {
 
         /// Indicates that params exist (and thus the target requires monomorphisation)
         /// - Ignores lifetime params
-        bool has_params() const {
+        bool hasParams() const {
             return !types.empty() || !values.empty();
         }
 

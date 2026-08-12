@@ -136,7 +136,7 @@ HIR::ArraySize HIR::ArraySize::clone() const {
 }
 
 ::HIR::TypeDataErasedTypeAliasInner::TypeDataErasedTypeAliasInner(const HIR::ItemPath& p, const HIR::GenericParams& params)
-    : path(p.get_simple_path())
+    : path(p.getSimplePath())
     , type()
 {
     this->generics = params.clone();
@@ -382,7 +382,7 @@ void ::HIR::TypeData::fmt(::std::ostream& os) const {
         }
         TU_ARMA(Function, e) {
             if (!e.hrls.mLifetimes.empty()) {
-                os << "for" << e.hrls.fmt_args() << " ";
+                os << "for" << e.hrls.fmtArgs() << " ";
             }
             if (e.is_unsafe) {
                 os << "unsafe ";
@@ -825,38 +825,38 @@ namespace {
         return flags;
     }
 
-    size_t hash_mix(size_t state, size_t value) {
+    size_t hashMix(size_t state, size_t value) {
         return state ^ (value + 0x9e3779b97f4a7c15ULL + (state << 6) + (state >> 2));
     }
 
-    size_t hash_simple_path(const SimplePath& path) {
+    size_t hashSimplePath(const SimplePath& path) {
         size_t h = ::std::hash<RcString>()(path.crate_name());
-        for (const auto& component : path.components()) h = hash_mix(h, ::std::hash<RcString>()(component));
+        for (const auto& component : path.components()) h = hashMix(h, ::std::hash<RcString>()(component));
         return h;
     }
 
-    size_t hash_type_ref(TypeRef type) {
+    size_t hashTypeRef(TypeRef type) {
         return ::std::hash<const void*>()(type);
     }
 
-    size_t hash_path_params(const PathParams& params);
+    size_t hashPathParams(const PathParams& params);
 
-    size_t hash_generic_ref(const GenericRef& generic) {
+    size_t hashGenericRef(const GenericRef& generic) {
         size_t h = generic.binding;
         if (generic.group() == GENERICPlaceholder) {
-            h = hash_mix(h, ::std::hash<RcString>()(generic.name));
+            h = hashMix(h, ::std::hash<RcString>()(generic.name));
         }
         return h;
     }
 
-    size_t hash_const_generic(const ConstGeneric& value) {
+    size_t hashConstGeneric(const ConstGeneric& value) {
         size_t h = static_cast<size_t>(value.tag());
         TU_MATCH_HDRA((value), {)
         TU_ARMA(Infer, e) {
-            h = hash_mix(h, e.index);
+            h = hashMix(h, e.index);
         }
         TU_ARMA(Generic, e) {
-            h = hash_mix(h, hash_generic_ref(e));
+            h = hashMix(h, hashGenericRef(e));
         }
         TU_ARMA(Evaluated, e) {
             // The evaluated value does not expose a cheap scalar hash for
@@ -864,122 +864,122 @@ namespace {
             // overwhelmingly more common generic and inferred constants.
         }
         TU_ARMA(Unevaluated, e) {
-            h = hash_mix(h, reinterpret_cast<uintptr_t>(e->expr.get()));
-            h = hash_mix(h, hash_path_params(e->params_impl));
-            h = hash_mix(h, hash_path_params(e->params_item));
+            h = hashMix(h, reinterpret_cast<uintptr_t>(e->expr.get()));
+            h = hashMix(h, hashPathParams(e->params_impl));
+            h = hashMix(h, hashPathParams(e->params_item));
         }
         }
         return h;
     }
 
-    size_t hash_path_params(const PathParams& params) {
+    size_t hashPathParams(const PathParams& params) {
         size_t h = params.mLifetimes.size();
-        h = hash_mix(h, params.types.size());
-        h = hash_mix(h, params.values.size());
+        h = hashMix(h, params.types.size());
+        h = hashMix(h, params.values.size());
         for (const auto& lifetime : params.mLifetimes) {
-            h = hash_mix(h, lifetime.binding);
+            h = hashMix(h, lifetime.binding);
         }
         for (const auto type : params.types) {
-            h = hash_mix(h, hash_type_ref(type));
+            h = hashMix(h, hashTypeRef(type));
         }
         for (const auto& value : params.values) {
-            h = hash_mix(h, hash_const_generic(value));
+            h = hashMix(h, hashConstGeneric(value));
         }
         return h;
     }
 
-    size_t hash_generic_path(const GenericPath& path) {
-        return hash_mix(hash_simple_path(path.mPath), hash_path_params(path.mParams));
+    size_t hashGenericPath(const GenericPath& path) {
+        return hashMix(hashSimplePath(path.mPath), hashPathParams(path.mParams));
     }
 
-    size_t hash_path(const Path& path) {
+    size_t hashPath(const Path& path) {
         size_t h = static_cast<size_t>(path.mData.tag());
         TU_MATCH_HDRA((path.mData), {)
         TU_ARMA(Generic, e) {
-            h = hash_mix(h, hash_generic_path(e));
+            h = hashMix(h, hashGenericPath(e));
         }
         TU_ARMA(UfcsInherent, e) {
-            h = hash_mix(h, hash_type_ref(e.type));
-            h = hash_mix(h, ::std::hash<RcString>()(e.item));
-            h = hash_mix(h, hash_path_params(e.params));
-            h = hash_mix(h, hash_path_params(e.impl_params));
+            h = hashMix(h, hashTypeRef(e.type));
+            h = hashMix(h, ::std::hash<RcString>()(e.item));
+            h = hashMix(h, hashPathParams(e.params));
+            h = hashMix(h, hashPathParams(e.impl_params));
         }
         TU_ARMA(UfcsKnown, e) {
-            h = hash_mix(h, hash_type_ref(e.type));
-            h = hash_mix(h, hash_generic_path(e.trait));
-            h = hash_mix(h, ::std::hash<RcString>()(e.item));
-            h = hash_mix(h, hash_path_params(e.params));
-            h = hash_mix(h, static_cast<bool>(e.hrtbs));
+            h = hashMix(h, hashTypeRef(e.type));
+            h = hashMix(h, hashGenericPath(e.trait));
+            h = hashMix(h, ::std::hash<RcString>()(e.item));
+            h = hashMix(h, hashPathParams(e.params));
+            h = hashMix(h, static_cast<bool>(e.hrtbs));
         }
         TU_ARMA(UfcsUnknown, e) {
-            h = hash_mix(h, hash_type_ref(e.type));
-            h = hash_mix(h, ::std::hash<RcString>()(e.item));
-            h = hash_mix(h, hash_path_params(e.params));
+            h = hashMix(h, hashTypeRef(e.type));
+            h = hashMix(h, ::std::hash<RcString>()(e.item));
+            h = hashMix(h, hashPathParams(e.params));
         }
         }
         return h;
     }
 
-    size_t hash_binding(const TypePathBinding& binding) {
+    size_t hashBinding(const TypePathBinding& binding) {
         size_t h = static_cast<size_t>(binding.tag());
         TU_MATCH_HDRA((binding), {)
         TU_ARMA(Unbound, e) {}
         TU_ARMA(Opaque, e) {}
-        TU_ARMA(ExternType, e) { h = hash_mix(h, reinterpret_cast<uintptr_t>(e)); }
-        TU_ARMA(Struct, e) { h = hash_mix(h, reinterpret_cast<uintptr_t>(e)); }
-        TU_ARMA(Union, e) { h = hash_mix(h, reinterpret_cast<uintptr_t>(e)); }
-        TU_ARMA(Enum, e) { h = hash_mix(h, reinterpret_cast<uintptr_t>(e)); }
+        TU_ARMA(ExternType, e) { h = hashMix(h, reinterpret_cast<uintptr_t>(e)); }
+        TU_ARMA(Struct, e) { h = hashMix(h, reinterpret_cast<uintptr_t>(e)); }
+        TU_ARMA(Union, e) { h = hashMix(h, reinterpret_cast<uintptr_t>(e)); }
+        TU_ARMA(Enum, e) { h = hashMix(h, reinterpret_cast<uintptr_t>(e)); }
         }
         return h;
     }
 
-    size_t hash_type_data(const TypeData& type) {
+    size_t hashTypeData(const TypeData& type) {
         size_t h = static_cast<size_t>(type.tag());
         TU_MATCH_HDRA((type), {)
-        TU_ARMA(Infer, e) { h = hash_mix(h, e.index); h = hash_mix(h, static_cast<size_t>(e.ty_class)); }
+        TU_ARMA(Infer, e) { h = hashMix(h, e.index); h = hashMix(h, static_cast<size_t>(e.ty_class)); }
         TU_ARMA(Diverge, e) {}
-        TU_ARMA(Primitive, e) h = hash_mix(h, static_cast<size_t>(e));
+        TU_ARMA(Primitive, e) h = hashMix(h, static_cast<size_t>(e));
         TU_ARMA(Path, e) {
-            h = hash_mix(h, hash_path(e.path));
-            h = hash_mix(h, hash_binding(e.binding));
-            h = hash_mix(h, static_cast<bool>(e.hrtbs));
+            h = hashMix(h, hashPath(e.path));
+            h = hashMix(h, hashBinding(e.binding));
+            h = hashMix(h, static_cast<bool>(e.hrtbs));
         }
         TU_ARMA(Generic, e) {
-            h = hash_mix(h, hash_generic_ref(e));
+            h = hashMix(h, hashGenericRef(e));
         }
         TU_ARMA(TraitObject, e) {
-            h = hash_mix(h, hash_generic_path(e.mTrait.mPath));
-            h = hash_mix(h, reinterpret_cast<uintptr_t>(e.mTrait.traitPtr));
-            h = hash_mix(h, e.lifetime.binding);
+            h = hashMix(h, hashGenericPath(e.mTrait.mPath));
+            h = hashMix(h, reinterpret_cast<uintptr_t>(e.mTrait.traitPtr));
+            h = hashMix(h, e.lifetime.binding);
             for (const auto& marker : e.markers) {
-                h = hash_mix(h, hash_generic_path(marker));
+                h = hashMix(h, hashGenericPath(marker));
             }
             for (const auto& bound : e.mTrait.typeBounds) {
-                h = hash_mix(h, ::std::hash<RcString>()(bound.first));
-                h = hash_mix(h, hash_generic_path(bound.second.source_trait));
-                h = hash_mix(h, hash_path_params(bound.second.atyParams));
-                h = hash_mix(h, hash_type_ref(bound.second.type));
+                h = hashMix(h, ::std::hash<RcString>()(bound.first));
+                h = hashMix(h, hashGenericPath(bound.second.source_trait));
+                h = hashMix(h, hashPathParams(bound.second.atyParams));
+                h = hashMix(h, hashTypeRef(bound.second.type));
             }
         }
-        TU_ARMA(ErasedType, e) { h = hash_mix(h, static_cast<size_t>(e.inner.tag())); h = hash_mix(h, e.traits.size()); }
+        TU_ARMA(ErasedType, e) { h = hashMix(h, static_cast<size_t>(e.inner.tag())); h = hashMix(h, e.traits.size()); }
         TU_ARMA(Array, e) {
-            h = hash_mix(h, hash_type_ref(e.inner));
-            h = hash_mix(h, static_cast<size_t>(e.size.tag()));
+            h = hashMix(h, hashTypeRef(e.inner));
+            h = hashMix(h, static_cast<size_t>(e.size.tag()));
             TU_MATCH_HDRA((e.size), {)
-            TU_ARMA(Known, size) { h = hash_mix(h, size); }
-            TU_ARMA(Unevaluated, size) { h = hash_mix(h, hash_const_generic(size)); }
+            TU_ARMA(Known, size) { h = hashMix(h, size); }
+            TU_ARMA(Unevaluated, size) { h = hashMix(h, hashConstGeneric(size)); }
             }
         }
-        TU_ARMA(Slice, e) h = hash_mix(h, hash_type_ref(e.inner));
-        TU_ARMA(Tuple, e) { for (auto t : e) h = hash_mix(h, hash_type_ref(t)); }
-        TU_ARMA(Borrow, e) { h = hash_mix(h, e.lifetime.binding); h = hash_mix(h, static_cast<size_t>(e.type)); h = hash_mix(h, hash_type_ref(e.inner)); }
-        TU_ARMA(Pointer, e) { h = hash_mix(h, static_cast<size_t>(e.type)); h = hash_mix(h, hash_type_ref(e.inner)); }
+        TU_ARMA(Slice, e) h = hashMix(h, hashTypeRef(e.inner));
+        TU_ARMA(Tuple, e) { for (auto t : e) h = hashMix(h, hashTypeRef(t)); }
+        TU_ARMA(Borrow, e) { h = hashMix(h, e.lifetime.binding); h = hashMix(h, static_cast<size_t>(e.type)); h = hashMix(h, hashTypeRef(e.inner)); }
+        TU_ARMA(Pointer, e) { h = hashMix(h, static_cast<size_t>(e.type)); h = hashMix(h, hashTypeRef(e.inner)); }
         TU_ARMA(NamedFunction, e) {
-            h = hash_mix(h, hash_path(e.path));
-            h = hash_mix(h, static_cast<size_t>(e.def.tag()));
+            h = hashMix(h, hashPath(e.path));
+            h = hashMix(h, static_cast<size_t>(e.def.tag()));
         }
-        TU_ARMA(Function, e) { h = hash_mix(h, ::std::hash<RcString>()(e.mAbi)); h = hash_mix(h, e.is_unsafe); h = hash_mix(h, e.is_variadic); h = hash_mix(h, hash_type_ref(e.mRettype)); for (auto t : e.argTypes) h = hash_mix(h, hash_type_ref(t)); }
-        TU_ARMA(NodeType, e) { TU_MATCH_HDRA((e), {) TU_ARMA(Closure, p) h = hash_mix(h, reinterpret_cast<uintptr_t>(p)); TU_ARMA(Generator, p) h = hash_mix(h, reinterpret_cast<uintptr_t>(p)); TU_ARMA(Async, p) h = hash_mix(h, reinterpret_cast<uintptr_t>(p)); }
+        TU_ARMA(Function, e) { h = hashMix(h, ::std::hash<RcString>()(e.mAbi)); h = hashMix(h, e.is_unsafe); h = hashMix(h, e.is_variadic); h = hashMix(h, hashTypeRef(e.mRettype)); for (auto t : e.argTypes) h = hashMix(h, hashTypeRef(t)); }
+        TU_ARMA(NodeType, e) { TU_MATCH_HDRA((e), {) TU_ARMA(Closure, p) h = hashMix(h, reinterpret_cast<uintptr_t>(p)); TU_ARMA(Generator, p) h = hashMix(h, reinterpret_cast<uintptr_t>(p)); TU_ARMA(Async, p) h = hashMix(h, reinterpret_cast<uintptr_t>(p)); }
         }
         }
         return h;
@@ -988,7 +988,7 @@ namespace {
 
 ::HIR::TypeRef HIR::TypeInterner::intern(TypeData data) {
     data.flags = type_flags(data);
-    const auto hash = hash_type_data(data);
+    const auto hash = hashTypeData(data);
     const auto range = nodes.equal_range(hash);
     for (auto it = range.first; it != range.second; ++it) {
         if (exactTypeDataEqual(*it->second, data)) {
@@ -1073,7 +1073,7 @@ namespace {
     return intern(TypeData::make_NodeType(TypeDataNodeType::make_Async(node)));
 }
 
-const ::HIR::SimplePath* HIR::TypeData::get_sort_path() const {
+const ::HIR::SimplePath* HIR::TypeData::getSortPath() const {
     if (TU_TEST1(*this, Path, .path.mData.is_Generic())) {
         return &as_Path().path.mData.as_Generic().mPath;
     }
@@ -1363,8 +1363,8 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
     if (const auto* e = ty_l->opt_Generic()) {
         return this->match_ty(*e, ty_r, resolve_placeholder);
     }
-    const auto& v = (ty_l->is_Infer() ? resolve_placeholder.get_type(sp, ty_l) : ty_l);
-    const auto& x = (ty_r->is_Infer() || ty_r->is_Generic() ? resolve_placeholder.get_type(sp, ty_r) : ty_r);
+    const auto& v = (ty_l->is_Infer() ? resolve_placeholder.getType(sp, ty_l) : ty_l);
+    const auto& x = (ty_r->is_Infer() || ty_r->is_Generic() ? resolve_placeholder.getType(sp, ty_r) : ty_r);
     TRACE_FUNCTION_F(ty_l << ", " << ty_r << " -- " << v << ", " << x);
     // If `x` is an ivar - This can be a fuzzy match.
     if (const auto* xep = x->opt_Infer()) {
@@ -1708,13 +1708,13 @@ bool HIR::TypePathBinding::operator==(const HIR::TypePathBinding& x) const {
     throw "";
 }
 
-const ::HIR::TraitMarkings* HIR::TypePathBinding::get_trait_markings() const {
+const ::HIR::TraitMarkings* HIR::TypePathBinding::getTraitMarkings() const {
     const ::HIR::TraitMarkings* markings_ptr = nullptr;
     TU_MATCHA((*this), (tpb), (Unbound, ), (Opaque, ), (ExternType, markings_ptr = &tpb->markings;), (Struct, markings_ptr = &tpb->markings;), (Union, markings_ptr = &tpb->markings;), (Enum, markings_ptr = &tpb->markings;))
     return markings_ptr;
 }
 
-const ::HIR::GenericParams* HIR::TypePathBinding::get_generics() const {
+const ::HIR::GenericParams* HIR::TypePathBinding::getGenerics() const {
     const ::HIR::GenericParams* rv = nullptr;
     TU_MATCH_HDRA( (*this), {)
     TU_ARMA(Unbound, tpb) {
@@ -1830,9 +1830,9 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
 ::HIR::Compare HIR::TypeData::compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const {
     //TRACE_FUNCTION_F(*this << " ?= " << x);
     const TypeRef self = this;
-    const auto& left = resolve_placeholder.get_type(sp, self);
+    const auto& left = resolve_placeholder.getType(sp, self);
     //const auto& left = *this;
-    const auto& right = resolve_placeholder.get_type(sp, x);
+    const auto& right = resolve_placeholder.getType(sp, x);
 
     // If the two types are the same ivar, return equal
     if (left->is_Infer() && left == right) {

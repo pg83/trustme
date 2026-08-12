@@ -149,12 +149,12 @@ namespace HIR {
 
         //void ensure_typechecked(const ::HIR::Crate& crate) const;
         /// Get MIR (checks if the MIR should be available)
-        const ::MIR::Function* get_mir_opt() const;
-        const ::MIR::Function& get_mir_or_error(const Span& sp) const;
-        ::MIR::Function& get_mir_or_error_mut(const Span& sp);
+        const ::MIR::Function* getMirOpt() const;
+        const ::MIR::Function& getMirOrError(const Span& sp) const;
+        ::MIR::Function& getMirOrErrorMut(const Span& sp);
         /// Get external MIR, returns nullptr if none
-        const ::MIR::Function* get_ext_mir() const;
-        ::MIR::Function* get_ext_mir_mut();
+        const ::MIR::Function* getExtMir() const;
+        ::MIR::Function* getExtMirMut();
 
         void set_mir(::MIR::FunctionPointer mir);
     };

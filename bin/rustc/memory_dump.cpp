@@ -26,13 +26,13 @@ void memory_dump(const char* phase) {
         struct RangeEnt {
             uint64_t v_start = 0;
             uint64_t v_end = 0;
-            char flags_str[5];
-            uint64_t file_ofs = 0;
+            char flagsStr[5];
+            uint64_t fileOfs = 0;
             int devMaj = 0;
             int devMin = 0;
             int inode = 0;
             ::std::string name;
-            uint32_t first_chunk;
+            uint32_t firstChunk;
         };
 
         size_t chunkSize = 1 << 20;
@@ -44,7 +44,7 @@ void memory_dump(const char* phase) {
             FILE* fp = ::std::fopen("/proc/self/maps", "r");
             while (!feof(fp)) {
                 RangeEnt e;
-                if (fscanf(fp, "%lx-%lx %4s %lx %d:%d %d", &e.v_start, &e.v_end, e.flags_str, &e.file_ofs, &e.devMaj, &e.devMin, &e.inode) != 7) {
+                if (fscanf(fp, "%lx-%lx %4s %lx %d:%d %d", &e.v_start, &e.v_end, e.flagsStr, &e.fileOfs, &e.devMaj, &e.devMin, &e.inode) != 7) {
                     // Uh-oh
                 }
                 //::std::cout << "e.inode=" << e.inode << "\n";
@@ -67,7 +67,7 @@ void memory_dump(const char* phase) {
 
                 //printf("%i : %s\n", chunk_count, e.name.c_str());
                 // Chunk count
-                if (e.flags_str[0] != 'r') {
+                if (e.flagsStr[0] != 'r') {
                     continue;
                 }
 
@@ -78,7 +78,7 @@ void memory_dump(const char* phase) {
                     }
                     // Otherwise, the chunk would have already been flushed
                 }
-                e.first_chunk = chunkCount;
+                e.firstChunk = chunkCount;
                 if (e.v_start / chunkSize == (e.v_end - 1) / chunkSize) {
                     // No chunk used
                     if (e.v_end % chunkSize == 0) {
@@ -86,11 +86,11 @@ void memory_dump(const char* phase) {
                     }
                 } else {
                     // uses at least one chunk
-                    auto head_size = (chunkSize - e.v_start % chunkSize) % chunkSize;
-                    if (head_size > 0) {
+                    auto headSize = (chunkSize - e.v_start % chunkSize) % chunkSize;
+                    if (headSize > 0) {
                         chunkCount += 1;
                     }
-                    chunkCount += (e.v_end - (e.v_start + head_size)) / chunkSize;
+                    chunkCount += (e.v_end - (e.v_start + headSize)) / chunkSize;
                 }
                 last_vaddr = e.v_end;
                 // Add entry
@@ -117,19 +117,19 @@ void memory_dump(const char* phase) {
             uint32_t n_ranges;
             uint32_t n_chunks;
             uint32_t chunkSize;
-        } file_hdr;
+        } fileHdr;
 
-        strcpy(file_hdr.magic, "FullDump\x97\r\n");
-        file_hdr.n_ranges = range_ents.size();
-        file_hdr.n_chunks = chunkCount;
-        file_hdr.chunkSize = chunkSize;
-        fwrite(&file_hdr, sizeof(file_hdr), 1, out_fp);
+        strcpy(fileHdr.magic, "FullDump\x97\r\n");
+        fileHdr.n_ranges = range_ents.size();
+        fileHdr.n_chunks = chunkCount;
+        fileHdr.chunkSize = chunkSize;
+        fwrite(&fileHdr, sizeof(fileHdr), 1, out_fp);
 
         // - Write out the parsed maps
         struct DumpRangeHdr {
             uint64_t v_start;
             uint64_t size;
-            uint64_t file_ofs;
+            uint64_t fileOfs;
 
             uint16_t name_length;
             uint16_t _flags;
@@ -140,9 +140,9 @@ void memory_dump(const char* phase) {
             DumpRangeHdr hdr;
             hdr.v_start = r.v_start;
             hdr.size = r.v_end - r.v_start;
-            hdr.file_ofs = r.file_ofs;
+            hdr.fileOfs = r.fileOfs;
             hdr.name_length = r.name.size();
-            hdr._flags = 0 | (r.flags_str[0] == 'r' ? 1 : 0);
+            hdr._flags = 0 | (r.flagsStr[0] == 'r' ? 1 : 0);
             hdr._pad[0] = 0;
             hdr._pad[1] = 0;
             fwrite(&hdr, sizeof(hdr), 1, out_fp);
@@ -152,7 +152,7 @@ void memory_dump(const char* phase) {
         ::std::vector<unsigned char> zlib_buffer(16 * 1024);
         ::std::vector<uint8_t> buf(chunkSize);
         size_t chunkCountFlushed = 0;
-        auto flush_chunk = [&](uint64_t chunkAddr) {
+        auto flushChunk = [&](uint64_t chunkAddr) {
     #if DEBUG_MEM_DUMP
             printf("FLUSH %zi @ %li (0x%lx)\n", chunkCountFlushed, ftell(out_fp), chunkAddr);
     #endif
@@ -215,37 +215,37 @@ void memory_dump(const char* phase) {
         };
         uint64_t last_vaddr = 0;
         for (const auto& r : range_ents) {
-            if (r.flags_str[0] == 'r') {
+            if (r.flagsStr[0] == 'r') {
                 if (last_vaddr / chunkSize != r.v_start / chunkSize) {
                     // Flush chunk, if the last end was not aligned
                     if (last_vaddr % chunkSize != 0) {
-                        flush_chunk(last_vaddr / chunkSize * chunkSize);
+                        flushChunk(last_vaddr / chunkSize * chunkSize);
                     }
                 }
-                assert(chunkCountFlushed == r.first_chunk);
+                assert(chunkCountFlushed == r.firstChunk);
     #if DEBUG_MEM_DUMP
-                ::std::cout << chunkCountFlushed << "/" << chunkCount << ": " << std::hex << r.v_start << " -- " << r.v_end << "(" << (r.v_end - r.v_start) << ")" << std::dec << " " << r.flags_str << " : " << r.name << "\n";
+                ::std::cout << chunkCountFlushed << "/" << chunkCount << ": " << std::hex << r.v_start << " -- " << r.v_end << "(" << (r.v_end - r.v_start) << ")" << std::dec << " " << r.flagsStr << " : " << r.name << "\n";
     #endif
                 if (r.v_start / chunkSize == (r.v_end - 1) / chunkSize) {
                     // Small
                     memcpy(buf.data() + r.v_start % chunkSize, (const void*)r.v_start, r.v_end - r.v_start);
                     // Flush if this has just finished a chunk
                     if (r.v_end % chunkSize == 0) {
-                        flush_chunk(r.v_start / chunkSize * chunkSize);
+                        flushChunk(r.v_start / chunkSize * chunkSize);
                     }
                 } else {
                     // Leading partial
-                    const auto head_size = chunkSize - r.v_start % chunkSize;
-                    memcpy(buf.data() + r.v_start % chunkSize, (const void*)r.v_start, head_size);
-                    flush_chunk(r.v_start / chunkSize * chunkSize);
+                    const auto headSize = chunkSize - r.v_start % chunkSize;
+                    memcpy(buf.data() + r.v_start % chunkSize, (const void*)r.v_start, headSize);
+                    flushChunk(r.v_start / chunkSize * chunkSize);
                     // Fill whole chunks
                     const auto tail_size = r.v_end % chunkSize;
                     const auto tail_pos = r.v_end - tail_size;
-                    uint64_t va = r.v_start + head_size;
+                    uint64_t va = r.v_start + headSize;
                     while (va < tail_pos) {
                         //printf("%lx+%lx (mid)\n", va, chunk_size);
                         memcpy(buf.data(), (const void*)va, chunkSize);
-                        flush_chunk(va / chunkSize * chunkSize);
+                        flushChunk(va / chunkSize * chunkSize);
                         va += chunkSize;
                     }
                     // Fill tail chunk (no flush)
@@ -258,7 +258,7 @@ void memory_dump(const char* phase) {
             }
         }
         if (last_vaddr % chunkSize != 0) {
-            flush_chunk(last_vaddr / chunkSize * chunkSize);
+            flushChunk(last_vaddr / chunkSize * chunkSize);
         }
         if (chunkCountFlushed != chunkCount) {
             //printf("BUG: flushed %i chunks, but expected %i\n", chunk_count_flushed, chunk_count);

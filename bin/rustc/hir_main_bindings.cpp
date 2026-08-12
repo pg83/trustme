@@ -28,7 +28,7 @@ namespace {
         return enabled > 1;
     }
 
-    ::HIR::Publicity g_vis_private = ::HIR::Publicity::new_none();
+    ::HIR::Publicity gVisPrivate = ::HIR::Publicity::new_none();
 }
 
 //namespace {
@@ -166,7 +166,7 @@ public:
 
     template <typename T>
     ::std::vector<T> deserialiseVecC(::std::function<T()> cb) {
-        TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.get_pos());
+        TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
         auto _ = in.open_object(typeid(::std::vector<T>).name());
         size_t n = in.read_count();
         DEBUG("n = " << n);
@@ -187,7 +187,7 @@ public:
 
     template <typename T>
     ThinVector<T> deserialiseThinvecC(::std::function<T()> cb) {
-        TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.get_pos());
+        TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
         auto _ = in.open_object(typeid(ThinVector<T>).name());
         size_t n = in.read_count();
         DEBUG("n = " << n);
@@ -208,7 +208,7 @@ public:
 
     template <typename T>
     ::std::set<T> deserialiseSet() {
-        TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.get_pos());
+        TRACE_FUNCTION_FR("<" << typeid(T).name() << ">", in.getPos());
         auto _ = in.open_object(typeid(::std::set<T>).name());
         size_t n = in.read_count();
         DEBUG("n = " << n);
@@ -221,7 +221,7 @@ public:
     }
 
     ::HIR::Publicity deserialisePub() {
-        return (in.read_bool() ? ::HIR::Publicity::new_global() : g_vis_private);
+        return (in.read_bool() ? ::HIR::Publicity::new_global() : gVisPrivate);
     }
 
     template <typename T>
@@ -277,7 +277,7 @@ public:
 
     ::HIR::TypeImpl deserialiseTypeimpl() {
         ::HIR::TypeImpl rv;
-        TRACE_FUNCTION_FR("", "impl" << rv.mParams.fmt_args() << " " << rv.mType);
+        TRACE_FUNCTION_FR("", "impl" << rv.mParams.fmtArgs() << " " << rv.mType);
 
         rv.mParams = deserialiseGenericparams();
         rv.mType = deserialiseType();
@@ -303,13 +303,13 @@ public:
 
     ::HIR::TraitImpl deserialiseTraitimpl() {
         ::HIR::TraitImpl rv;
-        TRACE_FUNCTION_FR("", "impl" << rv.mParams.fmt_args() << " ?" << rv.traitArgs << " for " << rv.mType);
+        TRACE_FUNCTION_FR("", "impl" << rv.mParams.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.mType);
 
         rv.mParams = deserialiseGenericparams();
         rv.traitArgs = deserialisePathparams();
         rv.mType = deserialiseType();
         rv.isConst = in.read_bool();
-        DEBUG("impl" << rv.mParams.fmt_args() << " ?" << rv.traitArgs << " for " << rv.mType);
+        DEBUG("impl" << rv.mParams.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.mType);
 
         size_t method_count = in.read_count();
         for (size_t i = 0; i < method_count; i++) {
@@ -355,8 +355,8 @@ public:
     Ident::Hygiene deserialiseHygine() {
         auto _ = in.open_object(typeid(Ident::Hygiene).name());
         Ident::Hygiene rv;
-        bool has_mod_path = in.read_bool();
-        if (has_mod_path) {
+        bool hasModPath = in.read_bool();
+        if (hasModPath) {
             Ident::ModPath mp;
             mp.crate = in.read_istring();
             mp.ents = deserialiseVec<RcString>();
@@ -585,12 +585,12 @@ public:
     }
 
     ::MIR::LValue::Wrapper deserialiseMirLvalueWrapper() {
-        return ::MIR::LValue::Wrapper::from_inner(in.read_count());
+        return ::MIR::LValue::Wrapper::fromInner(in.read_count());
     }
 
     ::MIR::LValue deserialise_mir_lvalue_() {
         auto root_v = in.read_count();
-        auto root = (root_v == 3 ? ::MIR::LValue::Storage::newStatic(deserialisePath()) : ::MIR::LValue::Storage::from_inner(root_v));
+        auto root = (root_v == 3 ? ::MIR::LValue::Storage::newStatic(deserialisePath()) : ::MIR::LValue::Storage::fromInner(root_v));
         return ::MIR::LValue(mv$(root), deserialiseVec<::MIR::LValue::Wrapper>());
     }
 
@@ -826,9 +826,9 @@ public:
         ::HIR::TraitMarkings m;
         uint8_t bitflag1 = in.read_u8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
-        BIT(0, m.has_a_deref)
+        BIT(0, m.hasADeref)
         BIT(1, m.is_copy)
-        BIT(2, m.has_drop_impl)
+        BIT(2, m.hasDropImpl)
 #undef BIT
         // TODO: auto_impls
         return m;
@@ -1147,7 +1147,7 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     params.values = deserialiseVec<::HIR::ValueParamDef>();
     params.mLifetimes = deserialiseVec<::HIR::LifetimeDef>();
     params.bounds = deserialiseVec<::HIR::GenericBound>();
-    DEBUG("params = " << params.fmt_args() << ", " << params.fmt_bounds());
+    DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
     return params;
 }
 
@@ -1230,10 +1230,10 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
 }
 
 ::HIR::Struct HirDeserialiser::deserialiseStruct() {
-    TRACE_FUNCTION_FR("", in.get_pos());
+    TRACE_FUNCTION_FR("", in.getPos());
     auto _ = in.open_object("HIR::Struct");
     auto params = deserialiseGenericparams();
-    DEBUG("params = " << params.fmt_args() << params.fmt_bounds());
+    DEBUG("params = " << params.fmtArgs() << params.fmtBounds());
     auto repr = static_cast<::HIR::Struct::Repr>(in.read_tag());
 
     ::HIR::Struct::Data data;
@@ -1571,7 +1571,7 @@ void HirDeserialiser::deserialiseCrate(::HIR::Crate& rv) {
     // NOTE: This MUST be the first item
     this->crateName = in.read_istring();
     assert(this->crateName != "" && "Empty crate name loaded from metadata");
-    g_vis_private = ::HIR::Publicity::new_priv(::HIR::SimplePath(this->crateName));
+    gVisPrivate = ::HIR::Publicity::new_priv(::HIR::SimplePath(this->crateName));
     rv.crateName = this->crateName;
     rv.edition = static_cast<AST::Edition>(in.read_tag());
     rv.rootModule = deserialiseModule();
@@ -1659,8 +1659,8 @@ namespace {
         }
 
         void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
-            if (p.get_name()[0]) {
-                os << indent() << "mod " << p.get_name() << " {\n";
+            if (p.getName()[0]) {
+                os << indent() << "mod " << p.getName() << " {\n";
                 inc_indent();
             }
 
@@ -1673,16 +1673,16 @@ namespace {
             // TODO: Print publicitiy.
             ::HIR::Visitor::visit_module(p, mod);
 
-            if (p.get_name()[0]) {
+            if (p.getName()[0]) {
                 decIndent();
                 os << indent() << "}\n";
             }
         }
 
         void visit_type_impl(::HIR::TypeImpl& impl) override {
-            os << indent() << "impl" << impl.mParams.fmt_args() << " " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             inc_indent();
@@ -1692,9 +1692,9 @@ namespace {
         }
 
         virtual void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
-            os << indent() << "impl" << impl.mParams.fmt_args() << " " << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             inc_indent();
@@ -1707,16 +1707,16 @@ namespace {
         }
 
         void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
-            os << indent() << "impl" << impl.mParams.fmt_args() << " " << (impl.is_positive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.is_positive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{ }\n";
         }
 
         // - Type Items
         void visit_type_alias(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
-            os << indent() << "type " << p.get_name() << item.mParams.fmt_args() << " = " << item.mType << item.mParams.fmt_bounds() << "\n";
+            os << indent() << "type " << p.getName() << item.mParams.fmtArgs() << " = " << item.mType << item.mParams.fmtBounds() << "\n";
         }
 
         void visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) override {
@@ -1724,7 +1724,7 @@ namespace {
         }
 
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
-            os << indent() << "trait " << p.get_name() << item.mParams.fmt_args() << " : " << item.lifetime << "\n";
+            os << indent() << "trait " << p.getName() << item.mParams.fmtArgs() << " : " << item.lifetime << "\n";
             if (!item.parentTraits.empty()) {
                 os << indent() << "  " << ": ";
                 bool is_first = true;
@@ -1737,7 +1737,7 @@ namespace {
                 }
             }
             if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << item.mParams.fmtBounds() << "\n";
             }
             if (!item.allParentTraits.empty()) {
                 os << indent() << "/* All parent traits:\n";
@@ -1773,14 +1773,14 @@ namespace {
         }
 
         void visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) override {
-            os << indent() << "struct " << p.get_name() << item.mParams.fmt_args();
+            os << indent() << "struct " << p.getName() << item.mParams.fmtArgs();
             TU_MATCH_HDRA( (item.mData), {)
             TU_ARMA(Unit, flds) {
                     if (item.mParams.bounds.empty()) {
                         os << ";\n";
                     } else {
                         os << "\n";
-                        os << indent() << " " << item.mParams.fmt_bounds() << "\n";
+                        os << indent() << " " << item.mParams.fmtBounds() << "\n";
                         os << indent() << "    ;\n";
                     }
                 }
@@ -1793,14 +1793,14 @@ namespace {
                         os << ");\n";
                     } else {
                         os << ")\n";
-                        os << indent() << " " << item.mParams.fmt_bounds() << "\n";
+                        os << indent() << " " << item.mParams.fmtBounds() << "\n";
                         os << indent() << "    ;\n";
                     }
                 }
                 TU_ARMA(Named, flds) {
                     os << "\n";
                     if (!item.mParams.bounds.empty()) {
-                        os << indent() << " " << item.mParams.fmt_bounds() << "\n";
+                        os << indent() << " " << item.mParams.fmtBounds() << "\n";
                     }
                     os << indent() << "{\n";
                     inc_indent();
@@ -1818,9 +1818,9 @@ namespace {
         }
 
         void visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) override {
-            os << indent() << "enum " << p.get_name() << item.mParams.fmt_args() << "\n";
+            os << indent() << "enum " << p.getName() << item.mParams.fmtArgs() << "\n";
             if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << item.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             inc_indent();
@@ -1855,13 +1855,13 @@ namespace {
             if (item.mAbi != ABI_RUST) {
                 os << "extern \"" << item.mAbi << "\" ";
             }
-            os << "fn " << p.get_name() << item.mParams.fmt_args() << "(";
+            os << "fn " << p.getName() << item.mParams.fmtArgs() << "(";
             for (const auto& arg : item.mArgs) {
                 os << arg.first << ": " << arg.second << ", ";
             }
             os << ") -> " << item.returnType << "\n";
             if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << item.mParams.fmtBounds() << "\n";
             }
 
             if (item.mCode) {
@@ -1891,20 +1891,20 @@ namespace {
                 os << indent() << "#[link_name=\"" << item.linkage.name << "\"]\n";
             }
             if (item.mValue) {
-                os << indent() << "static " << p.get_name() << item.mParams.fmt_args() << ": " << item.mType << " = " << item.valueRes;
+                os << indent() << "static " << p.getName() << item.mParams.fmtArgs() << ": " << item.mType << " = " << item.valueRes;
             } else if (item.valueGenerated) {
-                os << indent() << "static " << p.get_name() << item.mParams.fmt_args() << ": " << item.mType << " = /*magic*/ " << item.valueRes;
+                os << indent() << "static " << p.getName() << item.mParams.fmtArgs() << ": " << item.mType << " = /*magic*/ " << item.valueRes;
             } else {
-                os << indent() << "extern static " << p.get_name() << ": " << item.mType;
+                os << indent() << "extern static " << p.getName() << ": " << item.mType;
             }
             if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << item.mParams.fmtBounds() << "\n";
             }
             os << ";\n";
         }
 
         void visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) override {
-            os << indent() << "const " << p.get_name() << ": " << item.mType << " = " << item.valueRes;
+            os << indent() << "const " << p.getName() << ": " << item.mType << " = " << item.valueRes;
             if (item.mValue /*&& item.m_value_state != HIR::Constant::ValueState::Known*/) {
                 os << " /*= ";
                 item.mValue->visit(*this);
@@ -2855,7 +2855,7 @@ public:
     }
 
     void serialise_generics(const ::HIR::GenericParams& params) {
-        DEBUG("params = " << params.fmt_args() << ", " << params.fmt_bounds());
+        DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
         serialise_vec(params.types);
         serialise_vec(params.values);
         serialise_vec(params.mLifetimes);
@@ -2977,7 +2977,7 @@ public:
     }
 
     void serialise_typeimpl(const ::HIR::TypeImpl& impl) {
-        TRACE_FUNCTION_F("impl" << impl.mParams.fmt_args() << " " << impl.mType);
+        TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << impl.mType);
         serialise_generics(impl.mParams);
         serialise_type(impl.mType);
 
@@ -3010,7 +3010,7 @@ public:
     }
 
     void serialise_traitimpl(const ::HIR::TraitImpl& impl) {
-        TRACE_FUNCTION_F("impl" << impl.mParams.fmt_args() << " ?" << impl.traitArgs << " for " << impl.mType);
+        TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " ?" << impl.traitArgs << " for " << impl.mType);
         serialise_generics(impl.mParams);
         serialise_pathparams(impl.traitArgs);
         serialise_type(impl.mType);
@@ -3084,8 +3084,8 @@ public:
 
     void serialise(const Ident::Hygiene& h) {
         auto _ = out.open_object(typeid(Ident::Hygiene).name());
-        out.write_bool(h.has_mod_path());
-        if (h.has_mod_path()) {
+        out.write_bool(h.hasModPath());
+        if (h.hasModPath()) {
             out.write_string(h.mod_path().crate);
             serialise_vec(h.mod_path().ents);
         }
@@ -3427,7 +3427,7 @@ public:
             (If, serialise(e.cond); out.write_count(e.bbTrue); out.write_count(e.bbFalse);),
             (Switch, serialise(e.val); serialise_vec(e.targets); out.write_count(e.valid_flag); out.write_count(e.invalid_target);),
             (SwitchValue, serialise(e.val); out.write_count(e.defTarget); serialise_vec(e.targets); serialise(e.values);),
-            (Drop, out.write_tag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.write_count(e.flag_idx); out.write_count(e.target); serialise_unwind(e.unwind);),
+            (Drop, out.write_tag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.write_count(e.flagIdx); out.write_count(e.target); serialise_unwind(e.unwind);),
             (Call, out.write_count(e.ret_block); serialise_unwind(e.unwind); serialise(e.ret_val); serialise(e.fcn); serialise_vec(e.args);)
         )
     }
@@ -3467,13 +3467,13 @@ public:
             out.write_count(3);
             serialise_path(lv.root.as_Static());
         } else {
-            out.write_count(lv.root.get_inner());
+            out.write_count(lv.root.getInner());
         }
         serialise_vec(lv.wrappers);
     }
 
     void serialise(const ::MIR::LValue::Wrapper& w) {
-        out.write_count(w.get_inner());
+        out.write_count(w.getInner());
     }
 
     void serialise(const ::MIR::RValue& val) {
@@ -3484,7 +3484,7 @@ public:
 
     void serialise(const ::MIR::Constant& v) {
         out.write_tag(v.tag());
-        TU_MATCHA((v), (e), (Int, out.write_u128(e.v.get_inner()); out.write_tag(static_cast<unsigned>(e.t));), (Uint, out.write_u128(e.v); out.write_tag(static_cast<unsigned>(e.t));), (Float, out.write_float_value(e.v); out.write_tag(static_cast<unsigned>(e.t));), (Bool, out.write_bool(e.v);), (Bytes, out.write_count(e.size()); out.write(e.data(), e.size());), (StaticString, out.write_string(e);), (Const, ASSERT_BUG(Span(), monomorphise_path_needed(*e.p), "Unexpected Constant: " << *e.p); serialise_path(*e.p);), (Generic, serialise(e);), (Function, serialise_path(*e.p);), (ItemAddr, serialise_path(*e); out.write_u128(e.offset);))
+        TU_MATCHA((v), (e), (Int, out.write_u128(e.v.getInner()); out.write_tag(static_cast<unsigned>(e.t));), (Uint, out.write_u128(e.v); out.write_tag(static_cast<unsigned>(e.t));), (Float, out.write_float_value(e.v); out.write_tag(static_cast<unsigned>(e.t));), (Bool, out.write_bool(e.v);), (Bytes, out.write_count(e.size()); out.write(e.data(), e.size());), (StaticString, out.write_string(e);), (Const, ASSERT_BUG(Span(), monomorphise_path_needed(*e.p), "Unexpected Constant: " << *e.p); serialise_path(*e.p);), (Generic, serialise(e);), (Function, serialise_path(*e.p);), (ItemAddr, serialise_path(*e); out.write_u128(e.offset);))
     }
 
     void serialise(const ::HIR::TypeItem& item) {
@@ -3631,9 +3631,9 @@ public:
 #define BIT(i, fld) \
     if (fld)        \
         bitflag1 |= 1 << (i);
-        BIT(0, m.has_a_deref)
+        BIT(0, m.hasADeref)
         BIT(1, m.is_copy)
-        BIT(2, m.has_drop_impl)
+        BIT(2, m.hasDropImpl)
 #undef BIT
         out.write_u8(bitflag1);
 

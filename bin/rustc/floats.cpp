@@ -4,47 +4,47 @@ FloatValue parse_float_value(const char* text) {
     return Float128::parse_decimal(text);
 }
 
-bool float_value_is_nan(FloatValue value) {
+bool floatValueIsNan(FloatValue value) {
     return value.is_nan();
 }
 
-bool float_value_is_infinite(FloatValue value) {
+bool floatValueIsInfinite(FloatValue value) {
     return value.is_infinite();
 }
 
-FloatValue float_value_abs(FloatValue value) {
+FloatValue floatValueAbs(FloatValue value) {
     return value.abs();
 }
 
-FloatValue float_value_trunc(FloatValue value) {
+FloatValue floatValueTrunc(FloatValue value) {
     return value.trunc();
 }
 
-FloatValue float_value_floor(FloatValue value) {
+FloatValue floatValueFloor(FloatValue value) {
     return value.floor();
 }
 
-FloatValue float_value_ceil(FloatValue value) {
+FloatValue floatValueCeil(FloatValue value) {
     return value.ceil();
 }
 
-FloatValue float_value_round(FloatValue value) {
+FloatValue floatValueRound(FloatValue value) {
     return value.round();
 }
 
-FloatValue float_value_round_even(FloatValue value) {
+FloatValue floatValueRoundEven(FloatValue value) {
     return value.round_even();
 }
 
-FloatValue float_value_remainder(FloatValue lhs, FloatValue rhs) {
+FloatValue floatValueRemainder(FloatValue lhs, FloatValue rhs) {
     return Float128::remainder(lhs, rhs);
 }
 
-FloatValue float_value_minimum_number(FloatValue lhs, FloatValue rhs) {
+FloatValue floatValueMinimumNumber(FloatValue lhs, FloatValue rhs) {
     return Float128::minimum_number(lhs, rhs);
 }
 
-FloatValue float_value_maximum_number(FloatValue lhs, FloatValue rhs) {
+FloatValue floatValueMaximumNumber(FloatValue lhs, FloatValue rhs) {
     return Float128::maximum_number(lhs, rhs);
 }
 
@@ -84,28 +84,28 @@ F16::F16(float f) {
         v = sign | 0x7C00;
     } else if (exponent >= -14) {
         auto rounded = mantissa + 0xFFF + ((mantissa >> 13) & 1);
-        auto half_exponent = exponent + 15;
+        auto halfExponent = exponent + 15;
         if (rounded & 0x800000) {
             rounded = 0;
-            half_exponent++;
+            halfExponent++;
         }
-        if (half_exponent >= 31) {
+        if (halfExponent >= 31) {
             v = sign | 0x7C00;
         } else {
-            v = sign | static_cast<uint16_t>(half_exponent << 10) | static_cast<uint16_t>(rounded >> 13);
+            v = sign | static_cast<uint16_t>(halfExponent << 10) | static_cast<uint16_t>(rounded >> 13);
         }
     } else if (exponent < -25) {
         v = sign;
     } else {
         mantissa |= 0x800000;
         const auto shift = static_cast<unsigned>(-exponent - 1);
-        auto half_mantissa = mantissa >> shift;
+        auto halfMantissa = mantissa >> shift;
         const auto remainder = mantissa & ((uint32_t(1) << shift) - 1);
         const auto halfway = uint32_t(1) << (shift - 1);
-        if (remainder > halfway || (remainder == halfway && (half_mantissa & 1))) {
-            half_mantissa++;
+        if (remainder > halfway || (remainder == halfway && (halfMantissa & 1))) {
+            halfMantissa++;
         }
-        v = sign | static_cast<uint16_t>(half_mantissa);
+        v = sign | static_cast<uint16_t>(halfMantissa);
     }
 }
 
@@ -153,5 +153,5 @@ F128::F128(FloatValue value)
 }
 
 F128::operator FloatValue() const {
-    return Float128::from_bits(hi, lo);
+    return Float128::fromBits(hi, lo);
 }

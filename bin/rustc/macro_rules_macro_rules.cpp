@@ -79,12 +79,12 @@ public:
     /// <summary>
     /// Given a current iteration and a loop index, return how many times this loop will run
     /// </summary>
-    unsigned int get_loop_repeats(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int loop_idx) const;
+    unsigned int getLoopRepeats(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int loop_idx) const;
 
     /// <summary>
     /// Return the number of times this level of a given name/variable will loop
     /// </summary>
-    unsigned int get_variable_count(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) const;
+    unsigned int getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) const;
 
     /// Increment the number of times a particular fragment will be used
     void inc_count(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
@@ -102,7 +102,7 @@ public:
     }
 
 private:
-    CapturedVal& get_cap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
+    CapturedVal& getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx);
 };
 
 class MacroPatternStream {
@@ -155,7 +155,7 @@ public:
     void if_succeeded();
 
     /// Get the current loop iteration count
-    const ::std::vector<unsigned int>& get_loop_iters() const {
+    const ::std::vector<unsigned int>& getLoopIters() const {
         return loopIterations;
     }
 
@@ -212,7 +212,7 @@ void ParameterMappings::insert(unsigned int name_index, const ::std::vector<unsi
     layer->as_Vals().push_back(CapturedVal{0, 0, mv$(data)});
 }
 
-ParameterMappings::CapturedVal& ParameterMappings::get_cap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
+ParameterMappings::CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
     DEBUG("(iterations=[" << iterations << "], name_idx=" << name_idx << ")");
     auto& e = mMappings.at(name_idx);
     //DEBUG("- e = " << e);
@@ -245,10 +245,10 @@ ParameterMappings::CapturedVal& ParameterMappings::get_cap(const Span& sp, const
 }
 
 InterpolatedFragment* ParameterMappings::get(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
-    return &get_cap(sp, iterations, name_idx).frag;
+    return &getCap(sp, iterations, name_idx).frag;
 }
 
-unsigned int ParameterMappings::get_loop_repeats(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int loop_idx) const {
+unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int loop_idx) const {
     const auto& list = loopCounts.at(loop_idx);
     // Iterate the list, find the first prefix match of `iterations`
     // - `iterations` should always be longer or equal in length to every entry in `list`
@@ -262,7 +262,7 @@ unsigned int ParameterMappings::get_loop_repeats(const Span& sp, const ::std::ve
     BUG(sp, "Loop " << loop_idx << " cannot find an iteration count for path [" << iterations << "]");
 }
 
-unsigned int ParameterMappings::get_variable_count(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) const {
+unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) const {
     DEBUG("(iterations=[" << iterations << "], name_idx=" << name_idx << ")");
     auto& e = mMappings.at(name_idx);
     //DEBUG("- e = " << e);
@@ -302,13 +302,13 @@ unsigned int ParameterMappings::get_variable_count(const Span& sp, const ::std::
 }
 
 void ParameterMappings::inc_count(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
-    auto& cap = get_cap(sp, iterations, name_idx);
+    auto& cap = getCap(sp, iterations, name_idx);
     assert(cap.num_used == 0);
     cap.num_uses += 1;
 }
 
 bool ParameterMappings::decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int name_idx) {
-    auto& cap = get_cap(sp, iterations, name_idx);
+    auto& cap = getCap(sp, iterations, name_idx);
     assert(cap.num_used < cap.num_uses);
     cap.num_used += 1;
     return (cap.num_used < cap.num_uses);
@@ -495,7 +495,7 @@ public:
 };
 
 unsigned MacroExpander::s_next_log_index = 0;
-unsigned int MacroRules::g_next_definition_id = 0;
+unsigned int MacroRules::gNextDefinitionId = 0;
 
 void MacroInitDefaults() {
 }
@@ -537,7 +537,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
         case MacroPatEnt::PAT_PATH:
             // HACK for `rustc-1.90.0-src/vendor/icu_locid_transform_data-1.5.0/data/macros.rs::23`
             if (lex.lookahead(0) == TOK_INTERPOLATED_TYPE) {
-                return InterpolatedFragment(std::move(lex.getToken().frag_type()));
+                return InterpolatedFragment(std::move(lex.getToken().fragType()));
             }
             return InterpolatedFragment(ParsePath(lex, PATH_GENERIC_TYPE)); // non-expr mode
         case MacroPatEnt::PAT_BLOCK:
@@ -553,16 +553,16 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
             // NOTE: Any reserved word is also valid as an ident
             GET_TOK(tok, lex);
             if (Token::type_is_rword(tok.type())) {
-                return InterpolatedFragment(TokenTree(lex.get_edition(), lex.get_hygiene(), tok));
+                return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
             } else {
                 CHECK_TOK(tok, TOK_IDENT);
-                return InterpolatedFragment(TokenTree(lex.get_edition(), lex.get_hygiene(), tok));
+                return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
             }
         case MacroPatEnt::PAT_VIS:
             return InterpolatedFragment(ParsePublicity(lex, /*allow_restricted=*/true));
         case MacroPatEnt::PAT_LIFETIME:
             GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
-            return InterpolatedFragment(TokenTree(lex.get_edition(), lex.get_hygiene(), tok));
+            return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
         case MacroPatEnt::PAT_LITERAL:
             GET_TOK(tok, lex);
             if (tok.type() == TOK_DASH) {
@@ -577,7 +577,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                 }
                 GET_TOK(tok, lex);
                 toks.push_back(tok);
-                return InterpolatedFragment(TokenTree(lex.get_edition(), lex.get_hygiene(), std::move(toks)));
+                return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), std::move(toks)));
             }
             switch (tok.type()) {
                 case TOK_INTEGER:
@@ -591,7 +591,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                 default:
                     throw ParseError::Unexpected(lex, tok, {TOK_INTEGER, TOK_FLOAT, TOK_STRING, TOK_BYTESTRING, TOK_CSTRING, TOK_RWORD_TRUE, TOK_RWORD_FALSE});
             }
-            return InterpolatedFragment(TokenTree(lex.get_edition(), lex.get_hygiene(), tok));
+            return InterpolatedFragment(TokenTree(lex.getEdition(), lex.getHygiene(), tok));
     }
     throw "";
 }
@@ -2170,7 +2170,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
 
                 unsigned int capIdx = captures.size();
                 captures.push_back(mv$(cap));
-                captureInfo.push_back(Capture{e->idx, armStream.get_loop_iters(), capIdx});
+                captureInfo.push_back(Capture{e->idx, armStream.getLoopIters(), capIdx});
             } else {
                 // Unreachable.
             }
@@ -2239,7 +2239,7 @@ Position MacroExpander::getPosition() const {
 
 AST::Edition MacroExpander::realGetEdition() const {
     if (ttstream) {
-        return ttstream->get_edition();
+        return ttstream->getEdition();
     } else {
         return sourceEdition;
     }
@@ -2247,7 +2247,7 @@ AST::Edition MacroExpander::realGetEdition() const {
 
 Ident::Hygiene MacroExpander::realGetHygiene() const {
     if (ttstream) {
-        return ttstream->get_hygiene();
+        return ttstream->getHygiene();
     } else {
         return lastHygiene;
     }
@@ -2305,7 +2305,7 @@ Token MacroExpander::realGetToken() {
                     default:
                         BUG(this->point_span(), "Unknown macro metavar - 0x" << std::hex << e);
                     case NAMEDVALUE_TY_COUNT: { // `${count(VarName)}`
-                        auto count = mMappings.get_variable_count(this->point_span(), state.iterations(), e & NAMEDVALUE_VALMASK);
+                        auto count = mMappings.getVariableCount(this->point_span(), state.iterations(), e & NAMEDVALUE_VALMASK);
                         return Token(U128(count), CORETYPE_ANY);
                         break;
                     }
@@ -2425,13 +2425,13 @@ const MacroExpansionEnt* MacroExpandState::next_ent() {
                 }
                 TU_ARMA(Loop, e) {
                     assert(!e.controllingInputLoops.empty());
-                    unsigned int num_repeats = mMappings.get_loop_repeats(Span(), mIterations, *e.controllingInputLoops.begin());
+                    unsigned int num_repeats = mMappings.getLoopRepeats(Span(), mIterations, *e.controllingInputLoops.begin());
                     for (auto loop_ident : e.controllingInputLoops) {
                         if (loop_ident == *e.controllingInputLoops.begin()) {
                             continue;
                         }
 
-                        unsigned int this_repeats = mMappings.get_loop_repeats(Span(), mIterations, loop_ident);
+                        unsigned int this_repeats = mMappings.getLoopRepeats(Span(), mIterations, loop_ident);
                         if (this_repeats != num_repeats) {
                             // TODO: Get the variables involved, or the pattern+output spans
                             ERROR(Span(), E0000, "Mismatch in loop iterations: " << this_repeats << " != " << num_repeats);
@@ -2915,7 +2915,7 @@ public:
         return idx;
     }
 
-    const NameState* find_name(const RcString& name) const {
+    const NameState* findName(const RcString& name) const {
         auto it = this->names.find(name);
         if (it == this->names.end()) {
             return nullptr;
@@ -3032,7 +3032,7 @@ public:
                             // `+` and `*` were present at 1.0 (2015)
                         } else {
                             DEBUG("joiner = " << tok);
-                            if (tok.has_data()) {
+                            if (tok.hasData()) {
                                 ERROR(lex.point_span(), E0000, "Invalid macro joiner " << tok << ", must be punctuation");
                             }
                             joiner = tok.type();
@@ -3220,7 +3220,7 @@ struct ContentLoopVariableUse {
                     }
                     auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::new_interned(tok.to_str());
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    const auto* ns = state.find_name(name);
+                    const auto* ns = state.findName(name);
                     if (!ns) {
                         TODO(lex.point_span(), "Handle ${ignore(" << name << ")} - Missing");
                     }
@@ -3245,7 +3245,7 @@ struct ContentLoopVariableUse {
                     }
                     auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::new_interned(tok.to_str());
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    const auto* ns = state.find_name(name);
+                    const auto* ns = state.findName(name);
                     if (!ns) {
                         TODO(lex.point_span(), "Handle ${count(" << name << ")} - Missing");
                     }
@@ -3277,7 +3277,7 @@ struct ContentLoopVariableUse {
                             } else {
                                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
                                 auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::new_interned(tok.to_str());
-                                const auto* ns = state.find_name(name);
+                                const auto* ns = state.findName(name);
                                 if (!ns) {
                                     TODO(lex.point_span(), "concat - unmapped name");
                                 } else {
@@ -3316,7 +3316,7 @@ struct ContentLoopVariableUse {
             } else if (tok.type() == TOK_IDENT || Token::type_is_rword(tok.type())) {
                 // Look up the named parameter in the list of param names for this arm
                 auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::new_interned(tok.to_str());
-                const auto* ns = state.find_name(name);
+                const auto* ns = state.findName(name);
                 if (!ns) {
                     // NOTE: `error-chain`'s quick_error macro has an arm which refers to an undefined metavar.
                     // - Would emit a warning and use a marker index, but that's FAR too noisy
@@ -3428,8 +3428,8 @@ MacroRulesArm ParseMacroRulesMakeArm(Span pat_sp, ::std::vector<MacroPatEnt> pat
 namespace {
     MacroRulesPtr make_mr_ptr(const TokenStream& lex) {
         auto s = lex.point_span();
-        auto rv = MacroRulesPtr(new MacroRules(s->crate_name(), lex.get_edition()));
-        rv->mHygiene = lex.get_hygiene();
+        auto rv = MacroRulesPtr(new MacroRules(s->crate_name(), lex.getEdition()));
+        rv->mHygiene = lex.getHygiene();
         return rv;
     }
 }
@@ -3937,7 +3937,7 @@ MacroRulesArm::MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<
     , contents(mv$(contents)) {
 }
 MacroRules::MacroRules(RcString source_crate, AST::Edition edition)
-    : definitionId(++g_next_definition_id)
+    : definitionId(++gNextDefinitionId)
     , sourceCrate(std::move(source_crate))
     , edition(edition) {
 }

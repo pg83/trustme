@@ -54,7 +54,7 @@ namespace AST {
         ::std::shared_ptr<AST::Module> localMod;
 
         struct Line {
-            bool has_semicolon;
+            bool hasSemicolon;
             ExprNodeP node;
         };
 

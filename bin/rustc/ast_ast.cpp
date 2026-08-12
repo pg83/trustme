@@ -201,16 +201,16 @@ namespace AST {
         return os;
     }
 
-    bool Visibility::is_visible(const ::AST::AbsolutePath& from_mod) const {
+    bool Visibility::is_visible(const ::AST::AbsolutePath& fromMod) const {
         if (visPath) {
-            if (visPath->crate != from_mod.crate) {
+            if (visPath->crate != fromMod.crate) {
                 return false;
             }
-            if (visPath->nodes.size() > from_mod.nodes.size()) {
+            if (visPath->nodes.size() > fromMod.nodes.size()) {
                 return false;
             }
             for (size_t i = 0; i < visPath->nodes.size(); i++) {
-                if (visPath->nodes[i] != from_mod.nodes[i]) {
+                if (visPath->nodes[i] != fromMod.nodes[i]) {
                     return false;
                 }
             }
@@ -299,7 +299,7 @@ namespace AST {
         return isMarker;
     }
 
-    bool Trait::has_named_item(const RcString& name, bool& out_is_fcn) const {
+    bool Trait::hasNamedItem(const RcString& name, bool& out_is_fcn) const {
         for (const auto& i : mItems) {
             if (i.name == name) {
                 out_is_fcn = i.data.is_Function();
@@ -361,7 +361,7 @@ namespace AST {
         mItems.push_back(ImplItem{item.span(), {}, AST::Visibility::make_global(), false, "", box$(Item::make_MacroInv(mv$(item)))});
     }
 
-    bool Impl::has_named_item(const RcString& name) const {
+    bool Impl::hasNamedItem(const RcString& name) const {
         for (const auto& it : this->items()) {
             if (it.name == name) {
                 return true;

@@ -839,11 +839,11 @@ static inline ::std::vector<T> vec$(T v1, T v2, T v3, T v4, T v5) {
     return mv$(tmp);
 }
 
-static AST::Path get_path(const RcString& coreName, const char* c1, const char* c2) {
+static AST::Path getPath(const RcString& coreName, const char* c1, const char* c2) {
     return AST::AbsolutePath(coreName, {RcString::new_interned(c1), RcString::new_interned(c2)});
 }
 
-static AST::Path get_path(const RcString& coreName, const char* c1, const char* c2, const char* c3) {
+static AST::Path getPath(const RcString& coreName, const char* c1, const char* c2, const char* c3) {
     return AST::AbsolutePath(coreName, {RcString::new_interned(c1), RcString::new_interned(c2), RcString::new_interned(c3)});
 }
 
@@ -910,10 +910,10 @@ struct DeriveOpts {
 struct Deriver {
     virtual ~Deriver() = default;
     virtual const char* trait_name() const = 0;
-    virtual AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const = 0;
-    virtual AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const = 0;
+    virtual AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const = 0;
+    virtual AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const = 0;
 
-    virtual AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Union& unn) const {
+    virtual AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Union& unn) const {
         ERROR(sp, E0000, "Cannot derive(" << trait_name() << ") on union");
     }
 
@@ -928,14 +928,14 @@ struct Deriver {
             }
             TU_ARMA(Tuple, e) {
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    auto fld_name = RcString::new_interned(FMT(idx));
-                    cb(fld_name);
+                    auto fldName = RcString::new_interned(FMT(idx));
+                    cb(fldName);
                 }
             }
         }
     }
 
-    AST::GenericParams get_params_with_bounds(const Span& sp, const AST::GenericParams& p, const AST::Path& trait_path, ::std::vector<TypeRef> additionalBoundedTypes) const {
+    AST::GenericParams getParamsWithBounds(const Span& sp, const AST::GenericParams& p, const AST::Path& trait_path, ::std::vector<TypeRef> additionalBoundedTypes) const {
         AST::GenericParams params = p.clone();
 
         // TODO: Get bounds based on generic (or similar) types used within the type.
@@ -959,13 +959,13 @@ struct Deriver {
         return params;
     }
 
-    ::std::vector<TypeRef> get_field_bounds(const AST::Struct& str) const {
+    ::std::vector<TypeRef> getFieldBounds(const AST::Struct& str) const {
         ::std::vector<TypeRef> ret;
         TU_MATCH(AST::StructData, (str.mData), (e), (Unit, ), (Struct, for (const auto& fld : e.ents) { addFieldBoundFromTy(str.params(), ret, fld.mType); }), (Tuple, for (const auto& ent : e.ents) { addFieldBoundFromTy(str.params(), ret, ent.mType); }))
         return ret;
     }
 
-    ::std::vector<TypeRef> get_field_bounds(const AST::Enum& enm) const {
+    ::std::vector<TypeRef> getFieldBounds(const AST::Enum& enm) const {
         ::std::vector<TypeRef> ret;
 
         for (const auto& v : enm.variants()) {
@@ -975,7 +975,7 @@ struct Deriver {
         return ret;
     }
 
-    ::std::vector<TypeRef> get_field_bounds(const AST::Union& unn) const {
+    ::std::vector<TypeRef> getFieldBounds(const AST::Union& unn) const {
         ::std::vector<TypeRef> ret;
         for (const auto& fld : unn.mVariants) {
             addFieldBoundFromTy(unn.params(), ret, fld.mType);
@@ -1095,12 +1095,12 @@ struct Deriver {
 /// 'Debug' derive handler
 class DeriverDebug: public Deriver {
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
-        const AST::Path debugTrait = get_path(coreName, "fmt", "Debug");
+        const AST::Path debugTrait = getPath(coreName, "fmt", "Debug");
 
-        AST::Function fcn(sp, TypeRef(sp, get_path(coreName, "fmt", "Result")), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_f), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), true, TypeRef(sp, get_path(coreName, "fmt", "Formatter"))))));
+        AST::Function fcn(sp, TypeRef(sp, getPath(coreName, "fmt", "Result")), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_f), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), true, TypeRef(sp, getPath(coreName, "fmt", "Formatter"))))));
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, debugTrait, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, debugTrait, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, debugTrait), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, rcstring_fmt, mv$(fcn));
@@ -1112,7 +1112,7 @@ public:
         return "Debug";
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
         ::std::string name = type.path().nodes().back().name().c_str();
 
         // Generate code for Debug
@@ -1142,10 +1142,10 @@ public:
             }
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(str), mv$(node));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
         AST::Path basePath = *type.mData.as_Path();
         basePath.nodes().back() = basePath.nodes().back().name();
 
@@ -1201,9 +1201,9 @@ public:
         }
         AST::ExprNodeP node = NEWNODE(Match, NEWNODE(NamedValue, AST::Path(rcstring_self)), mv$(arms));
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(enm), mv$(node));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
     }
-} g_derive_debug;
+} gDeriveDebug;
 
 // ---- Comparisons
 
@@ -1220,19 +1220,19 @@ protected:
 
 public:
     // Struct
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
         auto block = new_block(sp);
 
-        this->iterate_struct_fields(str, [&](RcString fld_name) {
-            block->push_stmt(this->compareAndRet(sp, opts.coreName, NEWNODE(Field, NEWNODE(NamedValue, AST::Path(rcstring_self)), fld_name), NEWNODE(Field, NEWNODE(NamedValue, AST::Path(rcstring_v)), fld_name)));
+        this->iterate_struct_fields(str, [&](RcString fldName) {
+            block->push_stmt(this->compareAndRet(sp, opts.coreName, NEWNODE(Field, NEWNODE(NamedValue, AST::Path(rcstring_self)), fldName), NEWNODE(Field, NEWNODE(NamedValue, AST::Path(rcstring_v)), fldName)));
         });
         block->push_tail_expr(this->equalValue(sp, opts.coreName));
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(str), mk_exprnodep(block.release()));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(str), mk_exprnodep(block.release()));
     }
 
     // Enum
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
         AST::Path basePath = *type.mData.as_Path();
         basePath.nodes().back().args() = ::AST::PathParams();
         ::std::vector<AST::ExprNodeMatchArm> arms;
@@ -1302,18 +1302,18 @@ public:
         ::std::vector<AST::ExprNodeP> vals;
         vals.push_back(NEWNODE(NamedValue, AST::Path(rcstring_self)));
         vals.push_back(NEWNODE(NamedValue, AST::Path(rcstring_v)));
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(enm), NEWNODE(Match, NEWNODE(Tuple, mv$(vals)), mv$(arms)));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(Tuple, mv$(vals)), mv$(arms)));
     }
 };
 
 class DeriverPartialEq: public DeriverInnerCompare {
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const override {
-        const AST::Path trait_path = get_path(coreName, "cmp", "PartialEq");
+        const AST::Path trait_path = getPath(coreName, "cmp", "PartialEq");
 
         AST::Function fcn(sp, TypeRef(sp, CORETYPE_BOOL), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_v), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, RcString::new_interned("eq"), mv$(fcn));
@@ -1338,20 +1338,20 @@ public:
     const char* trait_name() const override {
         return "PartialEq";
     }
-} g_derive_partialeq;
+} gDerivePartialeq;
 
 class DeriverPartialOrd: public DeriverInnerCompare {
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const override {
-        const AST::Path trait_path = get_path(coreName, "cmp", "PartialOrd");
-        const AST::Path path_ordering = get_path(coreName, "cmp", "Ordering");
+        const AST::Path trait_path = getPath(coreName, "cmp", "PartialOrd");
+        const AST::Path path_ordering = getPath(coreName, "cmp", "Ordering");
 
-        AST::Path path_option_ordering = get_path(coreName, "option", "Option");
+        AST::Path path_option_ordering = getPath(coreName, "option", "Option");
         path_option_ordering.nodes().back().args().entries.push_back(TypeRef(sp, path_ordering));
 
         AST::Function fcn(sp, TypeRef(sp, path_option_ordering), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_v), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, RcString::new_interned("partial_cmp"), mv$(fcn));
@@ -1359,35 +1359,35 @@ class DeriverPartialOrd: public DeriverInnerCompare {
     }
 
     AST::ExprNodeP compareAndRet(Span sp, const RcString& coreName, AST::ExprNodeP v1, AST::ExprNodeP v2) const override {
-        return NEWNODE(Match, NEWNODE(CallPath, get_path(coreName, "cmp", "PartialOrd", "partial_cmp"), ::make_vec2(NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(v2)))), ::make_vec3(::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagValue(), sp, get_path(coreName, "option", "Option", "None"))), {}, NEWNODE(Flow, AST::ExprNodeFlow::RETURN, "", NEWNODE(NamedValue, get_path(coreName, "option", "Option", "None")))), ::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagNamedTuple(), sp, get_path(coreName, "option", "Option", "Some"), ::make_vec1(AST::Pattern(AST::Pattern::TagValue(), sp, get_path(coreName, "cmp", "Ordering", "Equal"))))), {}, NEWNODE(Tuple, ::std::vector<AST::ExprNodeP>())), ::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_res)), {}, NEWNODE(Flow, AST::ExprNodeFlow::RETURN, "", NEWNODE(NamedValue, AST::Path(rcstring_res))))));
+        return NEWNODE(Match, NEWNODE(CallPath, getPath(coreName, "cmp", "PartialOrd", "partial_cmp"), ::make_vec2(NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(v2)))), ::make_vec3(::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagValue(), sp, getPath(coreName, "option", "Option", "None"))), {}, NEWNODE(Flow, AST::ExprNodeFlow::RETURN, "", NEWNODE(NamedValue, getPath(coreName, "option", "Option", "None")))), ::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagNamedTuple(), sp, getPath(coreName, "option", "Option", "Some"), ::make_vec1(AST::Pattern(AST::Pattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))))), {}, NEWNODE(Tuple, ::std::vector<AST::ExprNodeP>())), ::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_res)), {}, NEWNODE(Flow, AST::ExprNodeFlow::RETURN, "", NEWNODE(NamedValue, AST::Path(rcstring_res))))));
     }
 
     AST::ExprNodeP equalValue(Span sp, const RcString& coreName) const override {
-        return NEWNODE(CallPath, get_path(coreName, "option", "Option", "Some"), ::make_vec1(NEWNODE(NamedValue, get_path(coreName, "cmp", "Ordering", "Equal"))));
+        return NEWNODE(CallPath, getPath(coreName, "option", "Option", "Some"), ::make_vec1(NEWNODE(NamedValue, getPath(coreName, "cmp", "Ordering", "Equal"))));
     }
 
     AST::ExprNodeP enumMismatch(Span sp, const RcString& coreName) const override {
-        return NEWNODE(CallPath, get_path(coreName, "cmp", "PartialOrd", "partial_cmp"), ::make_vec2(NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(CallPath, get_path(coreName, "intrinsics", "discriminant_value"), make_vec1(NEWNODE(NamedValue, AST::Path(rcstring_self))))), NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(CallPath, get_path(coreName, "intrinsics", "discriminant_value"), make_vec1(NEWNODE(NamedValue, AST::Path(rcstring_v)))))));
+        return NEWNODE(CallPath, getPath(coreName, "cmp", "PartialOrd", "partial_cmp"), ::make_vec2(NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), make_vec1(NEWNODE(NamedValue, AST::Path(rcstring_self))))), NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), make_vec1(NEWNODE(NamedValue, AST::Path(rcstring_v)))))));
     }
 
 public:
     const char* trait_name() const override {
         return "PartialOrd";
     }
-} g_derive_partialord;
+} gDerivePartialord;
 
 class DeriverEq: public Deriver {
-    AST::Path get_trait_path(const RcString& coreName) const {
-        return get_path(coreName, "cmp", "Eq");
+    AST::Path getTraitPath(const RcString& coreName) const {
+        return getPath(coreName, "cmp", "Eq");
     }
 
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
-        const AST::Path trait_path = this->get_trait_path(coreName);
+        const AST::Path trait_path = this->getTraitPath(coreName);
 
         AST::Function fcn(sp, TypeRef(TypeRef::TagUnit(), sp), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, rcstring_assert_receiver_is_total_eq, mv$(fcn));
@@ -1411,19 +1411,19 @@ public:
         return "Eq";
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
-        const AST::Path assertMethodPath = this->get_trait_path(opts.coreName) + rcstring_assert_receiver_is_total_eq;
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+        const AST::Path assertMethodPath = this->getTraitPath(opts.coreName) + rcstring_assert_receiver_is_total_eq;
 
         auto block = new_block(sp);
         this->iterate_struct_fields(str, [&](RcString name) {
             block->push_stmt(this->assertIsEq(assertMethodPath, this->field(name)));
         });
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(str), mk_exprnodep(block.release()));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(str), mk_exprnodep(block.release()));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
-        const AST::Path assertMethodPath = this->get_trait_path(opts.coreName) + rcstring_assert_receiver_is_total_eq;
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+        const AST::Path assertMethodPath = this->getTraitPath(opts.coreName) + rcstring_assert_receiver_is_total_eq;
 
         AST::Path basePath = *type.mData.as_Path();
         basePath.nodes().back().args() = ::AST::PathParams();
@@ -1471,31 +1471,31 @@ public:
                 ));
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(enm), NEWNODE(Match, NEWNODE(NamedValue, AST::Path(rcstring_self)), mv$(arms)));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, AST::Path(rcstring_self)), mv$(arms)));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Union& unn) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Union& unn) const override {
         // Eq is just a marker, so it's valid to derive for union
-        const AST::Path assertMethodPath = this->get_trait_path(opts.coreName) + rcstring_assert_receiver_is_total_eq;
+        const AST::Path assertMethodPath = this->getTraitPath(opts.coreName) + rcstring_assert_receiver_is_total_eq;
         auto block = new_block(sp);
 
         for (const auto& fld : unn.mVariants) {
             block->push_stmt(this->assertIsEq(assertMethodPath, this->field(fld.mName)));
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(unn), mk_exprnodep(block.release()));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(unn), mk_exprnodep(block.release()));
     }
-} g_derive_eq;
+} gDeriveEq;
 
 class DeriverOrd: public DeriverInnerCompare {
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const override {
-        const AST::Path trait_path = get_path(coreName, "cmp", "Ord");
-        const AST::Path path_ordering = get_path(coreName, "cmp", "Ordering");
+        const AST::Path trait_path = getPath(coreName, "cmp", "Ord");
+        const AST::Path path_ordering = getPath(coreName, "cmp", "Ordering");
 
         AST::Function fcn(sp, TypeRef(sp, path_ordering), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_v), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, RcString::new_interned("cmp"), mv$(fcn));
@@ -1507,44 +1507,44 @@ class DeriverOrd: public DeriverInnerCompare {
             Match,
             NEWNODE(
                 CallPath,
-                get_path(coreName, "cmp", "Ord", "cmp"),
+                getPath(coreName, "cmp", "Ord", "cmp"),
                 // TODO: Optional Ref?
                 ::make_vec2(NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(v1)), NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(v2)))
             ),
-            ::make_vec2(::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagValue(), sp, get_path(coreName, "cmp", "Ordering", "Equal"))), {}, NEWNODE(Tuple, ::std::vector<AST::ExprNodeP>())), ::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_res)), {}, NEWNODE(Flow, AST::ExprNodeFlow::RETURN, "", NEWNODE(NamedValue, AST::Path(rcstring_res)))))
+            ::make_vec2(::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagValue(), sp, getPath(coreName, "cmp", "Ordering", "Equal"))), {}, NEWNODE(Tuple, ::std::vector<AST::ExprNodeP>())), ::AST::ExprNodeMatchArm(::make_vec1(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_res)), {}, NEWNODE(Flow, AST::ExprNodeFlow::RETURN, "", NEWNODE(NamedValue, AST::Path(rcstring_res)))))
         );
     }
 
     AST::ExprNodeP equalValue(Span sp, const RcString& coreName) const override {
-        return NEWNODE(NamedValue, get_path(coreName, "cmp", "Ordering", "Equal"));
+        return NEWNODE(NamedValue, getPath(coreName, "cmp", "Ordering", "Equal"));
     }
 
     AST::ExprNodeP enumMismatch(Span sp, const RcString& coreName) const override {
-        return NEWNODE(CallPath, get_path(coreName, "cmp", "Ord", "cmp"), ::make_vec2(NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(CallPath, get_path(coreName, "intrinsics", "discriminant_value"), make_vec1(NEWNODE(NamedValue, AST::Path(rcstring_self))))), NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(CallPath, get_path(coreName, "intrinsics", "discriminant_value"), make_vec1(NEWNODE(NamedValue, AST::Path(rcstring_v)))))));
+        return NEWNODE(CallPath, getPath(coreName, "cmp", "Ord", "cmp"), ::make_vec2(NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), make_vec1(NEWNODE(NamedValue, AST::Path(rcstring_self))))), NEWNODE(UniOp, AST::ExprNodeUniOp::REF, NEWNODE(CallPath, getPath(coreName, "intrinsics", "discriminant_value"), make_vec1(NEWNODE(NamedValue, AST::Path(rcstring_v)))))));
     }
 
 public:
     const char* trait_name() const override {
         return "Ord";
     }
-} g_derive_ord;
+} gDeriveOrd;
 
 class DeriverClone: public Deriver {
-    AST::Path get_trait_path(const RcString& coreName) const {
+    AST::Path getTraitPath(const RcString& coreName) const {
         return AST::Path(coreName, {AST::PathNode(rcstring_clone, {}), AST::PathNode(rcstringClone, {})});
     }
 
-    AST::Path get_method_path(const RcString& coreName) const {
-        return get_trait_path(coreName) + rcstring_clone;
+    AST::Path getMethodPath(const RcString& coreName) const {
+        return getTraitPath(coreName) + rcstring_clone;
     }
 
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
-        const AST::Path trait_path = this->get_trait_path(coreName);
+        const AST::Path trait_path = this->getTraitPath(coreName);
 
         AST::Function fcn(sp, mktypeSelf(sp), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp)))));
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, rcstring_clone, mv$(fcn));
@@ -1553,11 +1553,11 @@ class DeriverClone: public Deriver {
 
     AST::ExprNodeP cloneValRef(const RcString& coreName, AST::ExprNodeP val) const {
         // TODO: Hack for zero-sized arrays? (Not a 1.19 feature)
-        return NEWNODE(CallPath, this->get_method_path(coreName), vec$(NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(val))));
+        return NEWNODE(CallPath, this->getMethodPath(coreName), vec$(NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(val))));
     }
 
     AST::ExprNodeP cloneValDirect(const RcString& coreName, AST::ExprNodeP val) const {
-        return NEWNODE(CallPath, this->get_method_path(coreName), vec$(mv$(val)));
+        return NEWNODE(CallPath, this->getMethodPath(coreName), vec$(mv$(val)));
     }
 
     AST::ExprNodeP field(const RcString& name) const {
@@ -1573,7 +1573,7 @@ public:
         return "Clone";
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
         const AST::Path& ty_path = *type.mData.as_Path();
 
         AST::ExprNodeP node;
@@ -1597,10 +1597,10 @@ public:
             }
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(str), NEWNODE(Block, mv$(node)));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, mv$(node)));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
         AST::Path basePath = *type.mData.as_Path();
         basePath.nodes().back().args() = ::AST::PathParams();
         ::std::vector<AST::ExprNodeMatchArm> arms;
@@ -1652,40 +1652,40 @@ public:
                 ));
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(enm), NEWNODE(Match, NEWNODE(NamedValue, AST::Path(rcstring_self)), mv$(arms)));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, AST::Path(rcstring_self)), mv$(arms)));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Union& unn) const override {
-        return make_copy_clone(sp, opts, p, type, this->get_field_bounds(unn));
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Union& unn) const override {
+        return make_copy_clone(sp, opts, p, type, this->getFieldBounds(unn));
     }
 
 private:
-    AST::Impl make_copy_clone(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> field_bounds) const {
+    AST::Impl make_copy_clone(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> fieldBounds) const {
         // Clone on a union can only be a bitwise copy.
         // - This requires a Copy impl. That's up to the user
-        auto ret = this->make_ret(sp, opts.coreName, p, type, ::std::move(field_bounds), NEWNODE(Deref, NEWNODE(NamedValue, AST::Path(rcstring_self))));
+        auto ret = this->make_ret(sp, opts.coreName, p, type, ::std::move(fieldBounds), NEWNODE(Deref, NEWNODE(NamedValue, AST::Path(rcstring_self))));
 
         // TODO: What if the type is only conditionally copy? (generic over something)
         // - Could abuse specialisation support...
         // TODO: Are these bounds needed?
         for (auto& b : ret.def().params().bounds) {
             auto& be = b.as_IsTrait();
-            be.trait = get_path(opts.coreName, "marker", "Copy");
+            be.trait = getPath(opts.coreName, "marker", "Copy");
         }
 
         return ret;
     }
-} g_derive_clone;
+} gDeriveClone;
 
 class DeriverCopy: public Deriver {
-    AST::Path get_trait_path(const RcString& coreName) const {
-        return get_path(coreName, "marker", "Copy");
+    AST::Path getTraitPath(const RcString& coreName) const {
+        return getPath(coreName, "marker", "Copy");
     }
 
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
-        const AST::Path trait_path = this->get_trait_path(coreName);
+        const AST::Path trait_path = this->getTraitPath(coreName);
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         return mv$(rv);
@@ -1696,35 +1696,35 @@ public:
         return "Copy";
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(str), nullptr);
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(str), nullptr);
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(enm), nullptr);
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(enm), nullptr);
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Union& unn) const override {
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(unn), nullptr);
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Union& unn) const override {
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(unn), nullptr);
     }
-} g_derive_copy;
+} gDeriveCopy;
 
 class DeriverDefault: public Deriver {
-    AST::Path get_trait_path(const RcString& coreName) const {
-        return get_path(coreName, "default", "Default");
+    AST::Path getTraitPath(const RcString& coreName) const {
+        return getPath(coreName, "default", "Default");
     }
 
-    AST::Path get_method_path(const RcString& coreName) const {
-        return AST::Path::new_ufcs_trait(::TypeRef(Span()), get_trait_path(coreName), {AST::PathNode(RcString::new_interned("default"), {})});
+    AST::Path getMethodPath(const RcString& coreName) const {
+        return AST::Path::new_ufcs_trait(::TypeRef(Span()), getTraitPath(coreName), {AST::PathNode(RcString::new_interned("default"), {})});
     }
 
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
-        const AST::Path trait_path = this->get_trait_path(coreName);
+        const AST::Path trait_path = this->getTraitPath(coreName);
 
         AST::Function fcn(sp, mktypeSelf(sp), {});
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, RcString::new_interned("default"), mv$(fcn));
@@ -1732,7 +1732,7 @@ class DeriverDefault: public Deriver {
     }
 
     AST::ExprNodeP defaultCall(const RcString& coreName) const {
-        return NEWNODE(CallPath, this->get_method_path(coreName), {});
+        return NEWNODE(CallPath, this->getMethodPath(coreName), {});
     }
 
 public:
@@ -1740,7 +1740,7 @@ public:
         return "Default";
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
         const AST::Path& ty_path = *type.mData.as_Path();
         AST::ExprNodeP node;
 
@@ -1773,10 +1773,10 @@ public:
             }
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(str), NEWNODE(Block, mv$(node)));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, mv$(node)));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
         // 1.74: #[default]
         const AST::EnumVariant* defaultVar = nullptr;
         for (const auto& v : enm.variants()) {
@@ -1821,42 +1821,42 @@ public:
         }
         return this->make_ret(sp, opts.coreName, p, type, std::move(boundTys), std::move(node));
     }
-} g_derive_default;
+} gDeriveDefault;
 
 class DeriverHash: public Deriver {
-    AST::Path get_trait_path(const RcString& coreName) const {
-        return get_path(coreName, "hash", "Hash");
+    AST::Path getTraitPath(const RcString& coreName) const {
+        return getPath(coreName, "hash", "Hash");
     }
 
     AST::Path getTraitPathHasher(const RcString& coreName) const {
-        return get_path(coreName, "hash", "Hasher");
+        return getPath(coreName, "hash", "Hasher");
     }
 
-    AST::Path get_method_path(const RcString& coreName) const {
-        return get_trait_path(coreName) + RcString::new_interned("hash");
+    AST::Path getMethodPath(const RcString& coreName) const {
+        return getTraitPath(coreName) + RcString::new_interned("hash");
     }
 
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
-        const AST::Path trait_path = this->get_trait_path(coreName);
+        const AST::Path trait_path = this->getTraitPath(coreName);
 
         AST::Function fcn(sp, TypeRef(TypeRef::TagUnit(), sp), vec$(AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), false, mktypeSelf(sp))), AST::Function::Arg(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_state), TypeRef(TypeRef::TagReference(), sp, AST::LifetimeRef(), true, TypeRef(sp, rcstringH, 0x100 | 0)))));
         fcn.params().addTyParam(AST::TypeParam(sp, {}, rcstringH));
         fcn.params().addBound(AST::GenericBound::make_IsTrait({sp, {}, TypeRef(sp, rcstringH, 0x100 | 0), {}, this->getTraitPathHasher(coreName)}));
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, RcString::new_interned("hash"), mv$(fcn));
         return mv$(rv);
     }
 
-    AST::ExprNodeP hash_val_ref(const RcString& coreName, AST::ExprNodeP val) const {
-        return this->hash_val_direct(coreName, NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(val)));
+    AST::ExprNodeP hashValRef(const RcString& coreName, AST::ExprNodeP val) const {
+        return this->hashValDirect(coreName, NEWNODE(UniOp, AST::ExprNodeUniOp::REF, mv$(val)));
     }
 
-    AST::ExprNodeP hash_val_direct(const RcString& coreName, AST::ExprNodeP val) const {
-        return NEWNODE(CallPath, this->get_method_path(coreName), vec$(mv$(val), NEWNODE(NamedValue, AST::Path(rcstring_state))));
+    AST::ExprNodeP hashValDirect(const RcString& coreName, AST::ExprNodeP val) const {
+        return NEWNODE(CallPath, this->getMethodPath(coreName), vec$(mv$(val), NEWNODE(NamedValue, AST::Path(rcstring_state))));
     }
 
     AST::ExprNodeP field(const RcString& name) const {
@@ -1872,7 +1872,7 @@ public:
         return "Hash";
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
         auto block = new_block(sp);
 
         TU_MATCH_HDRA( (str.mData), {)
@@ -1880,20 +1880,20 @@ public:
             }
             TU_ARMA(Struct, e) {
                 for (const auto& fld : e.ents) {
-                    block->push_stmt(this->hash_val_ref(opts.coreName, this->field(fld.mName)));
+                    block->push_stmt(this->hashValRef(opts.coreName, this->field(fld.mName)));
                 }
             }
             TU_ARMA(Tuple, e) {
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    block->push_stmt(this->hash_val_ref(opts.coreName, this->field(FMT(idx))));
+                    block->push_stmt(this->hashValRef(opts.coreName, this->field(FMT(idx))));
                 }
             }
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(str), mk_exprnodep(block.release()));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(str), mk_exprnodep(block.release()));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
         AST::Path basePath = *type.mData.as_Path();
         basePath.nodes().back().args() = ::AST::PathParams();
         ::std::vector<AST::ExprNodeMatchArm> arms;
@@ -1903,7 +1903,7 @@ public:
             AST::Pattern pat_a;
 
             auto var_path = basePath + v.mName;
-            auto var_idx_hash = enm.variants().size() > 1 ? this->hash_val_ref(opts.coreName, NEWNODE(Integer, U128(var_idx), CORETYPE_UINT)) : NEWNODE(Tuple, {});
+            auto var_idx_hash = enm.variants().size() > 1 ? this->hashValRef(opts.coreName, NEWNODE(Integer, U128(var_idx), CORETYPE_UINT)) : NEWNODE(Tuple, {});
 
             auto block = new_block(sp);
             block->push_stmt(mv$(var_idx_hash));
@@ -1914,14 +1914,14 @@ public:
                 TU_ARMA(Tuple, e) {
                     ::std::vector<AST::Pattern> pats_a;
                     make_refpat_a(sp, *block, pats_a, e.mItems, [&](size_t, auto a) {
-                        return this->hash_val_direct(opts.coreName, mv$(a));
+                        return this->hashValDirect(opts.coreName, mv$(a));
                     });
                     pat_a = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, var_path, mv$(pats_a));
                 }
                 TU_ARMA(Struct, e) {
                     ::std::vector<AST::StructPatternEntry> pats_a;
                     make_refpat_a(sp, *block, pats_a, e.fields, [&](size_t, auto a) {
-                        return this->hash_val_direct(opts.coreName, mv$(a));
+                        return this->hashValDirect(opts.coreName, mv$(a));
                     });
                     pat_a = AST::Pattern(AST::Pattern::TagStruct(), sp, var_path, mv$(pats_a), true);
                 }
@@ -1937,13 +1937,13 @@ public:
                 ));
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(enm), NEWNODE(Match, NEWNODE(NamedValue, AST::Path(rcstring_self)), mv$(arms)));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, AST::Path(rcstring_self)), mv$(arms)));
     }
-} g_derive_hash;
+} gDeriveHash;
 
 class DeriverRustcEncodable: public Deriver {
     // NOTE: This emits paths like `::rustc_serialize::Encodable` - rustc and crates.io have subtly different crate names
-    AST::Path get_trait_path() const {
+    AST::Path getTraitPath() const {
         return AST::Path(RcString::new_interned("=rustc_serialize"), {AST::PathNode(RcString::new_interned("Encodable"), {})});
     }
 
@@ -1951,14 +1951,14 @@ class DeriverRustcEncodable: public Deriver {
         return AST::Path(RcString::new_interned("=rustc_serialize"), {AST::PathNode(RcString::new_interned("Encoder"), {})});
     }
 
-    AST::Path get_method_path() const {
-        return get_trait_path() + "encode";
+    AST::Path getMethodPath() const {
+        return getTraitPath() + "encode";
     }
 
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
-        const AST::Path trait_path = this->get_trait_path();
+        const AST::Path trait_path = this->getTraitPath();
 
-        AST::Path result_path = get_path(coreName, "result", "Result");
+        AST::Path result_path = getPath(coreName, "result", "Result");
         result_path.nodes()[1].args().entries.push_back(TypeRef(TypeRef::TagUnit(), sp));
         result_path.nodes()[1].args().entries.push_back(TypeRef(sp, AST::Path::new_ufcs_trait(TypeRef(sp, "S", 0x100 | 0), this->getTraitPathEncoder(), {AST::PathNode("Error", {})})));
 
@@ -1967,7 +1967,7 @@ class DeriverRustcEncodable: public Deriver {
         fcn.params().addBound(AST::GenericBound::make_IsTrait({sp, {}, TypeRef(sp, "S", 0x100 | 0), {}, this->getTraitPathEncoder()}));
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, "encode", mv$(fcn));
@@ -1975,7 +1975,7 @@ class DeriverRustcEncodable: public Deriver {
     }
 
     AST::ExprNodeP encValDirect(AST::ExprNodeP val) const {
-        return NEWNODE(CallPath, this->get_method_path(), vec$(mv$(val), NEWNODE(NamedValue, AST::Path(rcstring_s))));
+        return NEWNODE(CallPath, this->getMethodPath(), vec$(mv$(val), NEWNODE(NamedValue, AST::Path(rcstring_s))));
     }
 
     AST::ExprNodeP encValRef(AST::ExprNodeP val) const {
@@ -1994,8 +1994,8 @@ class DeriverRustcEncodable: public Deriver {
         return NEWNODE(Closure, vec$(::std::make_pair(AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_s), ::TypeRef(sp))), ::TypeRef(sp), mv$(code), false, false);
     }
 
-    AST::ExprNodeP get_val_ok(const RcString& coreName) const {
-        return NEWNODE(CallPath, get_path(coreName, "result", "Result", "Ok"), vec$(NEWNODE(Tuple, {})));
+    AST::ExprNodeP getValOk(const RcString& coreName) const {
+        return NEWNODE(CallPath, getPath(coreName, "result", "Result", "Ok"), vec$(NEWNODE(Tuple, {})));
     }
 
 public:
@@ -2003,7 +2003,7 @@ public:
         return "RustcEncodable";
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
         ::std::string struct_name = type.mData.as_Path()->nodes().back().name().c_str();
 
         auto block = new_block(sp);
@@ -2024,13 +2024,13 @@ public:
             }
         }
 
-        block->push_tail_expr( this->get_val_ok(opts.coreName) );
+        block->push_tail_expr( this->getValOk(opts.coreName) );
         auto closure = this->encClosure( sp, mk_exprnodep(block.release()) );
 
         ::AST::ExprNodeP    node;
         TU_MATCH_HDRA( (str.mData), {)
         TU_ARMA(Unit, e) {
-                node = get_val_ok(opts.coreName);
+                node = getValOk(opts.coreName);
             }
             TU_ARMA(Struct, e) {
                 node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_struct", vec$(NEWNODE(NamedValue, AST::Path(rcstring_s)), NEWNODE(String, struct_name), NEWNODE(Integer, U128(e.ents.size()), CORETYPE_UINT), mv$(closure)));
@@ -2040,10 +2040,10 @@ public:
             }
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(str), mv$(node));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
         AST::Path basePath = *type.mData.as_Path();
         basePath.nodes().back().args() = ::AST::PathParams();
         ::std::vector<AST::ExprNodeMatchArm> arms;
@@ -2057,7 +2057,7 @@ public:
 
             TU_MATCH_HDRA((v.mData), {)
             TU_ARMA(Unit, e) {
-                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(s_ent->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(var_idx), CORETYPE_UINT), NEWNODE(Integer, U128(0), CORETYPE_UINT), this->encClosure(sp, this->get_val_ok(opts.coreName))));
+                    code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(s_ent->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(var_idx), CORETYPE_UINT), NEWNODE(Integer, U128(0), CORETYPE_UINT), this->encClosure(sp, this->getValOk(opts.coreName))));
                     pat_a = AST::Pattern(AST::Pattern::TagValue(), sp, AST::Pattern::Value::make_Named(basePath + v.mName));
                 }
                 TU_ARMA(Tuple, e) {
@@ -2066,7 +2066,7 @@ public:
                     make_refpat_a(sp, *block, pats_a, e.mItems, [&](size_t idx, auto a) {
                         return NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::new_interned("emit_enum_variant_arg"), vec$(s_ent->clone(), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(sp, this->encValDirect(mv$(a)))));
                     });
-                    block->push_tail_expr(this->get_val_ok(opts.coreName));
+                    block->push_tail_expr(this->getValOk(opts.coreName));
 
                     code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(s_ent->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(var_idx), CORETYPE_UINT), NEWNODE(Integer, U128(e.mItems.size()), CORETYPE_UINT), this->encClosure(sp, mk_exprnodep(block.release()))));
                     pat_a = AST::Pattern(AST::Pattern::TagNamedTuple(), sp, basePath + v.mName, mv$(pats_a));
@@ -2077,7 +2077,7 @@ public:
                     make_refpat_a(sp, *block, pats_a, e.fields, [&](size_t idx, auto a) {
                         return NEWNODE(CallPath, this->getTraitPathEncoder() + RcString::new_interned("emit_enum_struct_variant_field"), vec$(s_ent->clone(), NEWNODE(String, e.fields[idx].mName.c_str()), NEWNODE(Integer, U128(idx), CORETYPE_UINT), this->encClosure(sp, this->encValDirect(mv$(a)))));
                     });
-                    block->push_tail_expr(this->get_val_ok(opts.coreName));
+                    block->push_tail_expr(this->getValOk(opts.coreName));
 
                     pat_a = AST::Pattern(AST::Pattern::TagStruct(), sp, basePath + v.mName, mv$(pats_a), true);
                     code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_struct_variant", vec$(s_ent->clone(), NEWNODE(String, v.mName.c_str()), NEWNODE(Integer, U128(var_idx), CORETYPE_UINT), NEWNODE(Integer, U128(e.fields.size()), CORETYPE_UINT), this->encClosure(sp, mk_exprnodep(block.release()))));
@@ -2099,13 +2099,13 @@ public:
         ::std::string enumName = type.mData.as_Path()->nodes().back().name().c_str();
         auto node = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum", vec$(mv$(s_ent), NEWNODE(String, enumName), this->encClosure(sp, mv$(node_match))));
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(enm), mv$(node));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
     }
-} g_derive_rustc_encodable;
+} gDeriveRustcEncodable;
 
 class DeriverRustcDecodable: public Deriver {
     // NOTE: This emits paths like `::rustc_serialize::Encodable` - rustc and crates.io have subtly different crate names
-    AST::Path get_trait_path() const {
+    AST::Path getTraitPath() const {
         return AST::Path(RcString::new_interned("=rustc_serialize"), {AST::PathNode(RcString::new_interned("Decodable"), {})});
     }
 
@@ -2113,14 +2113,14 @@ class DeriverRustcDecodable: public Deriver {
         return AST::Path(RcString::new_interned("=rustc_serialize"), {AST::PathNode(RcString::new_interned("Decoder"), {})});
     }
 
-    AST::Path get_method_path() const {
-        return get_trait_path() + "decode";
+    AST::Path getMethodPath() const {
+        return getTraitPath() + "decode";
     }
 
     AST::Impl make_ret(Span sp, const RcString& coreName, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound, AST::ExprNodeP node) const {
-        const AST::Path trait_path = this->get_trait_path();
+        const AST::Path trait_path = this->getTraitPath();
 
-        AST::Path result_path = get_path(coreName, "result", "Result");
+        AST::Path result_path = getPath(coreName, "result", "Result");
         result_path.nodes()[1].args().entries.push_back(mktypeSelf(sp));
         result_path.nodes()[1].args().entries.push_back(TypeRef(sp, AST::Path::new_ufcs_trait(TypeRef(sp, "D", 0x100 | 0), this->getTraitPathDecoder(), {AST::PathNode("Error", {})})));
 
@@ -2136,7 +2136,7 @@ class DeriverRustcDecodable: public Deriver {
         fcn.params().addBound(AST::GenericBound::make_IsTrait({sp, {}, TypeRef(sp, "D", 0x100 | 0), {}, this->getTraitPathDecoder()}));
         fcn.set_code(NEWNODE(Block, mv$(node)));
 
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
 
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         rv.addFunction(sp, {}, AST::Visibility::make_bare_private(), false, "decode", mv$(fcn));
@@ -2144,7 +2144,7 @@ class DeriverRustcDecodable: public Deriver {
     }
 
     AST::ExprNodeP decVal() const {
-        return NEWNODE(CallPath, this->get_method_path(), vec$(NEWNODE(NamedValue, AST::Path("d"))));
+        return NEWNODE(CallPath, this->getMethodPath(), vec$(NEWNODE(NamedValue, AST::Path("d"))));
     }
 
     AST::ExprNodeP field(const ::std::string& name) const {
@@ -2155,16 +2155,16 @@ class DeriverRustcDecodable: public Deriver {
         return NEWNODE(Closure, vec$(::std::make_pair(AST::Pattern(AST::Pattern::TagBind(), sp, "d"), ::TypeRef(sp))), ::TypeRef(sp), mv$(code), false, false);
     }
 
-    AST::ExprNodeP get_val_err_str(const RcString& coreName, ::std::string errStr) const {
-        return NEWNODE(CallPath, get_path(coreName, "result", "Result", "Err"), vec$(NEWNODE(CallMethod, NEWNODE(NamedValue, AST::Path("d")), AST::PathNode("error"), vec$(NEWNODE(String, errStr)))));
+    AST::ExprNodeP getValErrStr(const RcString& coreName, ::std::string errStr) const {
+        return NEWNODE(CallPath, getPath(coreName, "result", "Result", "Err"), vec$(NEWNODE(CallMethod, NEWNODE(NamedValue, AST::Path("d")), AST::PathNode("error"), vec$(NEWNODE(String, errStr)))));
     }
 
-    AST::ExprNodeP get_val_ok(const RcString& coreName, AST::ExprNodeP inner) const {
-        return NEWNODE(CallPath, get_path(coreName, "result", "Result", "Ok"), vec$(mv$(inner)));
+    AST::ExprNodeP getValOk(const RcString& coreName, AST::ExprNodeP inner) const {
+        return NEWNODE(CallPath, getPath(coreName, "result", "Result", "Ok"), vec$(mv$(inner)));
     }
 
-    AST::ExprNodeP get_val_ok_unit(const RcString& coreName) const {
-        return get_val_ok(coreName, NEWNODE(Tuple, {}));
+    AST::ExprNodeP getValOkUnit(const RcString& coreName) const {
+        return getValOk(coreName, NEWNODE(Tuple, {}));
     }
 
 public:
@@ -2172,7 +2172,7 @@ public:
         return "RustcDecodable";
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
         AST::Path basePath = *type.mData.as_Path();
         ::std::string struct_name = basePath.nodes().back().name().c_str();
 
@@ -2198,14 +2198,14 @@ public:
             }
         }
 
-        auto closure = this->decClosure( sp, this->get_val_ok(opts.coreName, mv$(node_v)) );
+        auto closure = this->decClosure( sp, this->getValOk(opts.coreName, mv$(node_v)) );
 
         auto args = vec$( NEWNODE(NamedValue, AST::Path("d")), NEWNODE(String, struct_name), AST::ExprNodeP(), mv$(closure) );
 
         ::AST::ExprNodeP    node;
         TU_MATCH_HDRA((str.mData), {)
         TU_ARMA(Unit, e) {
-                node = this->get_val_ok(opts.coreName, NEWNODE(NamedValue, mv$(basePath)));
+                node = this->getValOk(opts.coreName, NEWNODE(NamedValue, mv$(basePath)));
             }
             TU_ARMA(Struct, e) {
                 assert(!args[2]);
@@ -2219,10 +2219,10 @@ public:
             }
         }
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(str), mv$(node));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
         AST::Path basePath = *type.mData.as_Path();
         basePath.nodes().back().args() = ::AST::PathParams();
         ::std::vector<AST::ExprNodeMatchArm> arms;
@@ -2266,14 +2266,14 @@ public:
             arms.push_back(AST::ExprNodeMatchArm(
                 mv$(pats),
                 {},
-                this->get_val_ok(opts.coreName, mv$(code))
+                this->getValOk(opts.coreName, mv$(code))
                 ));
             var_name_strs.push_back( NEWNODE(String, v.mName.c_str()) );
         }
 
         // Default arm
         {
-            arms.push_back(AST::ExprNodeMatchArm(::make_vec1(AST::Pattern()), {}, this->get_val_err_str(opts.coreName, "enum value unknown")));
+            arms.push_back(AST::ExprNodeMatchArm(::make_vec1(AST::Pattern()), {}, this->getValErrStr(opts.coreName, "enum value unknown")));
         }
 
         auto node_match = NEWNODE(Match, NEWNODE(NamedValue, AST::Path("idx")), mv$(arms));
@@ -2284,14 +2284,14 @@ public:
 
         auto node = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum", vec$(NEWNODE(NamedValue, AST::Path("d")), NEWNODE(String, enumName), this->decClosure(sp, mv$(node_rev))));
 
-        return this->make_ret(sp, opts.coreName, p, type, this->get_field_bounds(enm), mv$(node));
+        return this->make_ret(sp, opts.coreName, p, type, this->getFieldBounds(enm), mv$(node));
     }
-} g_derive_rustc_decodable;
+} gDeriveRustcDecodable;
 
 class DeriverConstParamTy: public Deriver {
-    AST::Impl handle_generic(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound) const {
-        const AST::Path trait_path = get_path(opts.coreName, "marker", "StructuralPartialEq");
-        AST::GenericParams params = get_params_with_bounds(sp, p, trait_path, mv$(types_to_bound));
+    AST::Impl handleGeneric(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, ::std::vector<TypeRef> types_to_bound) const {
+        const AST::Path trait_path = getPath(opts.coreName, "marker", "StructuralPartialEq");
+        AST::GenericParams params = getParamsWithBounds(sp, p, trait_path, mv$(types_to_bound));
         AST::Impl rv(AST::ImplDef(mv$(params), make_spanned(sp, trait_path), type.clone()));
         return mv$(rv);
     }
@@ -2301,40 +2301,40 @@ public:
         return "ConstParamTy";
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
-        return handle_generic(sp, opts, p, type, this->get_field_bounds(str));
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Struct& str) const override {
+        return handleGeneric(sp, opts, p, type, this->getFieldBounds(str));
     }
 
-    AST::Impl handle_item(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
-        return handle_generic(sp, opts, p, type, this->get_field_bounds(enm));
+    AST::Impl handleItem(Span sp, const DeriveOpts& opts, const AST::GenericParams& p, const TypeRef& type, const AST::Enum& enm) const override {
+        return handleGeneric(sp, opts, p, type, this->getFieldBounds(enm));
     }
-} g_derive_const_param_ty;
+} gDeriveConstParamTy;
 
 // --------------------------------------------------------------------
 // Select and dispatch the correct derive() handler
 // --------------------------------------------------------------------
-static const Deriver* find_impl(const RcString& trait_name) {
+static const Deriver* findImpl(const RcString& trait_name) {
 #define _(obj)                          \
     if (trait_name == obj.trait_name()) \
         return &obj;
-    _(g_derive_debug)
-    _(g_derive_partialeq)
-    _(g_derive_partialord)
-    _(g_derive_eq)
-    _(g_derive_ord)
-    _(g_derive_clone)
-    _(g_derive_copy)
-    _(g_derive_default)
-    _(g_derive_hash)
-    _(g_derive_rustc_encodable)
-    _(g_derive_rustc_decodable)
-    _(g_derive_const_param_ty)
+    _(gDeriveDebug)
+    _(gDerivePartialeq)
+    _(gDerivePartialord)
+    _(gDeriveEq)
+    _(gDeriveOrd)
+    _(gDeriveClone)
+    _(gDeriveCopy)
+    _(gDeriveDefault)
+    _(gDeriveHash)
+    _(gDeriveRustcEncodable)
+    _(gDeriveRustcDecodable)
+    _(gDeriveConstParamTy)
 #undef _
     return nullptr;
 }
 
 namespace {
-    std::vector<AST::Path> get_derive_items(const AST::Attribute& attr) {
+    std::vector<AST::Path> getDeriveItems(const AST::Attribute& attr) {
         Token tok;
         std::vector<AST::Path> rv;
 
@@ -2349,7 +2349,7 @@ namespace {
                 } while (lex.getTokenIf(TOK_DOUBLE_COLON));
                 rv.push_back(std::move(item));
             } else if (lex.getTokenIf(TOK_INTERPOLATED_TYPE, tok)) {
-                const auto& ty = tok.frag_type();
+                const auto& ty = tok.fragType();
                 ASSERT_BUG(lex.point_span(), ty.is_path(), "TODO: No path :ty in derive, " << ty);
                 ASSERT_BUG(lex.point_span(), ty.mData.as_Path(), "" << ty);
                 rv.push_back(*ty.mData.as_Path());
@@ -2385,7 +2385,7 @@ namespace {
         return type;
     }
 
-    std::vector<RcString> find_macro(const Span& sp, const AST::Crate& crate, const AST::Module& mod, const AST::Path& trait_path) {
+    std::vector<RcString> findMacro(const Span& sp, const AST::Crate& crate, const AST::Module& mod, const AST::Path& trait_path) {
         std::vector<RcString> mac_path;
 
         if (trait_path.is_trivial()) {
@@ -2434,7 +2434,7 @@ namespace {
 
 template <typename T>
 static void deriveItem(const Span& sp, const AST::Crate& crate, AST::Module& mod, const AST::Attribute& attr, const AST::AbsolutePath& path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const T& item) {
-    auto deriveItems = get_derive_items(attr);
+    auto deriveItems = getDeriveItems(attr);
     if (deriveItems.empty()) {
         //ERROR(sp, E0000, "#[derive()] requires a list of known traits to derive");
         return;
@@ -2451,16 +2451,16 @@ static void deriveItem(const Span& sp, const AST::Crate& crate, AST::Module& mod
         DEBUG("- " << trait_path);
 
         if (trait_path.is_trivial()) {
-            auto dp = find_impl(trait_path.asTrivial());
+            auto dp = findImpl(trait_path.asTrivial());
             if (dp) {
-                mod.addItem(sp, AST::Visibility::make_bare_private(), "", dp->handle_item(sp, opts, item.params(), type, item), {});
+                mod.addItem(sp, AST::Visibility::make_bare_private(), "", dp->handleItem(sp, opts, item.params(), type, item), {});
                 continue;
             }
         }
 
         // TODO: Handle full paths to standard library traits
 
-        std::vector<RcString> mac_path = find_macro(sp, crate, mod, trait_path);
+        std::vector<RcString> mac_path = findMacro(sp, crate, mod, trait_path);
         if (!mac_path.empty()) {
             auto lex = ProcMacroInvoke(sp, crate, mac_path, attrs, vis, path.nodes.back(), item);
             if (lex) {
@@ -2480,9 +2480,9 @@ static void deriveItem(const Span& sp, const AST::Crate& crate, AST::Module& mod
             // For `::core` (encoded as `=core` due to how it's parsed in `get_derive_items`)
             if (ap->crate == "=core") {
                 // And if the last node (ignore intermediate nodes) returns a valid builtin
-                if (auto dp = find_impl(ap->nodes.back().name())) {
+                if (auto dp = findImpl(ap->nodes.back().name())) {
                     // Use that
-                    mod.addItem(sp, AST::Visibility::make_bare_private(), "", dp->handle_item(sp, opts, item.params(), type, item), {});
+                    mod.addItem(sp, AST::Visibility::make_bare_private(), "", dp->handleItem(sp, opts, item.params(), type, item), {});
                     continue;
                 }
             }
@@ -2596,9 +2596,9 @@ struct StrcmpTy {
     }
 };
 
-static std::map<const char*, Handler, StrcmpTy> g_handlers;
+static std::map<const char*, Handler, StrcmpTy> gHandlers;
 
-void handle_save(const Span& sp, AST::Crate& crate, const std::string& name, const AST::AbsolutePath& path) {
+void handleSave(const Span& sp, AST::Crate& crate, const std::string& name, const AST::AbsolutePath& path) {
     auto rv = crate.mLangItems.insert(::std::make_pair(name, path));
     if (!rv.second) {
         const auto& other_path = rv.first->second;
@@ -2611,225 +2611,225 @@ void handle_save(const Span& sp, AST::Crate& crate, const std::string& name, con
     }
 }
 
-void handle_lang_item(const Span& sp, AST::Crate& crate, const AST::AbsolutePath& path, const ::std::string& name, eItemType type, AST::Item& item) {
-    if (g_handlers.empty()) {
+void handleLangItem(const Span& sp, AST::Crate& crate, const AST::AbsolutePath& path, const ::std::string& name, eItemType type, AST::Item& item) {
+    if (gHandlers.empty()) {
         struct H {
             static void add(const char* n, Handler h) {
-                g_handlers.insert(std::make_pair(n, std::move(h)));
+                gHandlers.insert(std::make_pair(n, std::move(h)));
             }
         };
 
-        H::add("phantom_fn", Handler(ITEM_FN, handle_save));
-        H::add("send", Handler(ITEM_TRAIT, handle_save));
-        H::add("sync", Handler(ITEM_TRAIT, handle_save));
-        H::add("sized", Handler(ITEM_TRAIT, handle_save));
-        H::add("copy", Handler(ITEM_TRAIT, handle_save));
+        H::add("phantom_fn", Handler(ITEM_FN, handleSave));
+        H::add("send", Handler(ITEM_TRAIT, handleSave));
+        H::add("sync", Handler(ITEM_TRAIT, handleSave));
+        H::add("sized", Handler(ITEM_TRAIT, handleSave));
+        H::add("copy", Handler(ITEM_TRAIT, handleSave));
         {
-            H::add("clone", Handler(ITEM_TRAIT, handle_save));
+            H::add("clone", Handler(ITEM_TRAIT, handleSave));
         }
         // ops traits
-        H::add("drop", Handler(ITEM_TRAIT, handle_save));
-        H::add("add", Handler(ITEM_TRAIT, handle_save));
-        H::add("sub", Handler(ITEM_TRAIT, handle_save));
-        H::add("mul", Handler(ITEM_TRAIT, handle_save));
-        H::add("div", Handler(ITEM_TRAIT, handle_save));
-        H::add("rem", Handler(ITEM_TRAIT, handle_save));
+        H::add("drop", Handler(ITEM_TRAIT, handleSave));
+        H::add("add", Handler(ITEM_TRAIT, handleSave));
+        H::add("sub", Handler(ITEM_TRAIT, handleSave));
+        H::add("mul", Handler(ITEM_TRAIT, handleSave));
+        H::add("div", Handler(ITEM_TRAIT, handleSave));
+        H::add("rem", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("neg", Handler(ITEM_TRAIT, handle_save));
-        H::add("not", Handler(ITEM_TRAIT, handle_save));
+        H::add("neg", Handler(ITEM_TRAIT, handleSave));
+        H::add("not", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("bitand", Handler(ITEM_TRAIT, handle_save));
-        H::add("bitor", Handler(ITEM_TRAIT, handle_save));
-        H::add("bitxor", Handler(ITEM_TRAIT, handle_save));
-        H::add("shl", Handler(ITEM_TRAIT, handle_save));
-        H::add("shr", Handler(ITEM_TRAIT, handle_save));
+        H::add("bitand", Handler(ITEM_TRAIT, handleSave));
+        H::add("bitor", Handler(ITEM_TRAIT, handleSave));
+        H::add("bitxor", Handler(ITEM_TRAIT, handleSave));
+        H::add("shl", Handler(ITEM_TRAIT, handleSave));
+        H::add("shr", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("add_assign", Handler(ITEM_TRAIT, handle_save));
-        H::add("sub_assign", Handler(ITEM_TRAIT, handle_save));
-        H::add("div_assign", Handler(ITEM_TRAIT, handle_save));
-        H::add("rem_assign", Handler(ITEM_TRAIT, handle_save));
-        H::add("mul_assign", Handler(ITEM_TRAIT, handle_save));
-        H::add("bitand_assign", Handler(ITEM_TRAIT, handle_save));
-        H::add("bitor_assign", Handler(ITEM_TRAIT, handle_save));
-        H::add("bitxor_assign", Handler(ITEM_TRAIT, handle_save));
-        H::add("shl_assign", Handler(ITEM_TRAIT, handle_save));
-        H::add("shr_assign", Handler(ITEM_TRAIT, handle_save));
+        H::add("add_assign", Handler(ITEM_TRAIT, handleSave));
+        H::add("sub_assign", Handler(ITEM_TRAIT, handleSave));
+        H::add("div_assign", Handler(ITEM_TRAIT, handleSave));
+        H::add("rem_assign", Handler(ITEM_TRAIT, handleSave));
+        H::add("mul_assign", Handler(ITEM_TRAIT, handleSave));
+        H::add("bitand_assign", Handler(ITEM_TRAIT, handleSave));
+        H::add("bitor_assign", Handler(ITEM_TRAIT, handleSave));
+        H::add("bitxor_assign", Handler(ITEM_TRAIT, handleSave));
+        H::add("shl_assign", Handler(ITEM_TRAIT, handleSave));
+        H::add("shr_assign", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("index", Handler(ITEM_TRAIT, handle_save));
-        H::add("deref", Handler(ITEM_TRAIT, handle_save));
-        H::add("index_mut", Handler(ITEM_TRAIT, handle_save));
-        H::add("deref_mut", Handler(ITEM_TRAIT, handle_save));
-        H::add("fn", Handler(ITEM_TRAIT, handle_save));
-        H::add("fn_mut", Handler(ITEM_TRAIT, handle_save));
-        H::add("fn_once", Handler(ITEM_TRAIT, handle_save));
+        H::add("index", Handler(ITEM_TRAIT, handleSave));
+        H::add("deref", Handler(ITEM_TRAIT, handleSave));
+        H::add("index_mut", Handler(ITEM_TRAIT, handleSave));
+        H::add("deref_mut", Handler(ITEM_TRAIT, handleSave));
+        H::add("fn", Handler(ITEM_TRAIT, handleSave));
+        H::add("fn_mut", Handler(ITEM_TRAIT, handleSave));
+        H::add("fn_once", Handler(ITEM_TRAIT, handleSave));
 
-        H::add("eq", Handler(ITEM_TRAIT, handle_save));
-        H::add("ord", Handler(ITEM_TRAIT, handle_save)); // In 1.29 this is Ord, before it was PartialOrd
+        H::add("eq", Handler(ITEM_TRAIT, handleSave));
+        H::add("ord", Handler(ITEM_TRAIT, handleSave)); // In 1.29 this is Ord, before it was PartialOrd
         {
-            H::add("partial_ord", Handler(ITEM_TRAIT, handle_save)); // New name for v1.29
+            H::add("partial_ord", Handler(ITEM_TRAIT, handleSave)); // New name for v1.29
         }
 
-        H::add("unsize", Handler(ITEM_TRAIT, handle_save));
-        H::add("coerce_unsized", Handler(ITEM_TRAIT, handle_save));
-        H::add("freeze", Handler(ITEM_TRAIT, handle_save)); // TODO: What version?
+        H::add("unsize", Handler(ITEM_TRAIT, handleSave));
+        H::add("coerce_unsized", Handler(ITEM_TRAIT, handleSave));
+        H::add("freeze", Handler(ITEM_TRAIT, handleSave)); // TODO: What version?
 
-        H::add("iterator", Handler(ITEM_TRAIT, handle_save));    /* mrustc just desugars? */
-        H::add("debug_trait", Handler(ITEM_TRAIT, handle_save)); /* TODO: Poke derive() with this */
+        H::add("iterator", Handler(ITEM_TRAIT, handleSave));    /* mrustc just desugars? */
+        H::add("debug_trait", Handler(ITEM_TRAIT, handleSave)); /* TODO: Poke derive() with this */
 
         {
-            H::add("termination", Handler(ITEM_TRAIT, handle_save)); // 1.29 - trait used for non-() main
+            H::add("termination", Handler(ITEM_TRAIT, handleSave)); // 1.29 - trait used for non-() main
         }
 
         {
-            H::add("pointee_trait", Handler(ITEM_TRAIT, handle_save));     // 1.54 - pointer metadata trait
-            H::add("dyn_metadata", Handler(ITEM_STRUCT, handle_save));     // 1.54 - `dyn Trait` metadata structure
-            H::add("structural_peq", Handler(ITEM_TRAIT, handle_save));    // 1.54 - Structural equality trait (partial)
-            H::add("structural_teq", Handler(ITEM_TRAIT, handle_save));    // 1.54 - Structural equality trait (total)
-            H::add("discriminant_kind", Handler(ITEM_TRAIT, handle_save)); // 1.54 - trait: used for the `discriminant_kind` intrinsic
+            H::add("pointee_trait", Handler(ITEM_TRAIT, handleSave));     // 1.54 - pointer metadata trait
+            H::add("dyn_metadata", Handler(ITEM_STRUCT, handleSave));     // 1.54 - `dyn Trait` metadata structure
+            H::add("structural_peq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (partial)
+            H::add("structural_teq", Handler(ITEM_TRAIT, handleSave));    // 1.54 - Structural equality trait (total)
+            H::add("discriminant_kind", Handler(ITEM_TRAIT, handleSave)); // 1.54 - trait: used for the `discriminant_kind` intrinsic
         }
 
-        H::add("non_zero", Handler(ITEM_STRUCT, handle_save));
-        H::add("phantom_data", Handler(ITEM_STRUCT, handle_save));
+        H::add("non_zero", Handler(ITEM_STRUCT, handleSave));
+        H::add("phantom_data", Handler(ITEM_STRUCT, handleSave));
 
         {
             H::add("RangeFull", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handle_save(sp, crate, "range_full", p);
+                handleSave(sp, crate, "range_full", p);
             }));
             H::add("Range", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handle_save(sp, crate, "range", p);
+                handleSave(sp, crate, "range", p);
             }));
             H::add("RangeFrom", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handle_save(sp, crate, "range_from", p);
+                handleSave(sp, crate, "range_from", p);
             }));
             H::add("RangeTo", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handle_save(sp, crate, "range_to", p);
+                handleSave(sp, crate, "range_to", p);
             }));
             H::add("RangeInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handle_save(sp, crate, "range_inclusive", p);
+                handleSave(sp, crate, "range_inclusive", p);
             }));
             H::add("RangeToInclusive", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
-                handle_save(sp, crate, "range_to_inclusive", p);
+                handleSave(sp, crate, "range_to_inclusive", p);
             }));
         }
 
         {
-            H::add("unwind_safe", Handler(ITEM_TRAIT, handle_save));     // 1.54 - UnwindSafe trait
-            H::add("ref_unwind_safe", Handler(ITEM_TRAIT, handle_save)); // 1.54 - RefUnwindSafe trait
+            H::add("unwind_safe", Handler(ITEM_TRAIT, handleSave));     // 1.54 - UnwindSafe trait
+            H::add("ref_unwind_safe", Handler(ITEM_TRAIT, handleSave)); // 1.54 - RefUnwindSafe trait
         }
         {
-            H::add("transmute_trait", Handler(ITEM_TRAIT, handle_save)); // 1.74 - `BikeshedIntrinsicFrom` trait
+            H::add("transmute_trait", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `BikeshedIntrinsicFrom` trait
             // - Markers
-            H::add("destruct", Handler(ITEM_TRAIT, handle_save));       // 1.74 - `Destruct` trait
-            H::add("tuple_trait", Handler(ITEM_TRAIT, handle_save));    // 1.74 - `Tuple` trait (must be implemented for all tuples)
-            H::add("pointer_like", Handler(ITEM_TRAIT, handle_save));   // 1.74 - `PointerLike` trait
-            H::add("const_param_ty", Handler(ITEM_TRAIT, handle_save)); // 1.74 - `ConstParamTy` trait
-            H::add("fn_ptr_trait", Handler(ITEM_TRAIT, handle_save));   // 1.74 - `FnPtr` trait
+            H::add("destruct", Handler(ITEM_TRAIT, handleSave));       // 1.74 - `Destruct` trait
+            H::add("tuple_trait", Handler(ITEM_TRAIT, handleSave));    // 1.74 - `Tuple` trait (must be implemented for all tuples)
+            H::add("pointer_like", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `PointerLike` trait
+            H::add("const_param_ty", Handler(ITEM_TRAIT, handleSave)); // 1.74 - `ConstParamTy` trait
+            H::add("fn_ptr_trait", Handler(ITEM_TRAIT, handleSave));   // 1.74 - `FnPtr` trait
 
             // Structs
-            H::add("transmute_opts", Handler(ITEM_STRUCT, handle_save)); // 1.74 - `Assume` struct
-            H::add("ptr_unique", Handler(ITEM_STRUCT, handle_save));     // 1.74 - `::core::ptr::Unique`
-            H::add("CStr", Handler(ITEM_STRUCT, handle_save));           // 1.74 - `::core::ffi::CStr` - Why? (miri?)
-            H::add("String", Handler(ITEM_STRUCT, handle_save));         // 1.74 - `::alloc::string::String` - Why? (miri?)
+            H::add("transmute_opts", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `Assume` struct
+            H::add("ptr_unique", Handler(ITEM_STRUCT, handleSave));     // 1.74 - `::core::ptr::Unique`
+            H::add("CStr", Handler(ITEM_STRUCT, handleSave));           // 1.74 - `::core::ffi::CStr` - Why? (miri?)
+            H::add("String", Handler(ITEM_STRUCT, handleSave));         // 1.74 - `::alloc::string::String` - Why? (miri?)
 
-            H::add("from_yeet", Handler(ITEM_FN, handle_save));                            // 1.74 - `::core::try_trait::from_yeet`
-            H::add("panic_nounwind", Handler(ITEM_FN, handle_save));                       // 1.74 - `::core::panicking::panic`
-            H::add("panic_display", Handler(ITEM_FN, handle_save));                        // 1.74 - `::core::panicking::panic_display`
-            H::add("panic_bounds_check", Handler(ITEM_FN, handle_save));                   // 1.74 - `::core::panicking::panic_bounds_check`
-            H::add("panic_misaligned_pointer_dereference", Handler(ITEM_FN, handle_save)); // 1.74 - `::core::panicking::panic_misaligned_pointer_dereference`
-            H::add("panic_cannot_unwind", Handler(ITEM_FN, handle_save));                  // 1.74 - `::core::panicking::panic_cannot_unwind`
-            H::add("panic_in_cleanup", Handler(ITEM_FN, handle_save));                     // 1.74 - `::core::panicking::panic_in_cleanup `
-            H::add("const_panic_fmt", Handler(ITEM_FN, handle_save));                      // 1.74 - `::core::panicking::const_panic_fmt`
+            H::add("from_yeet", Handler(ITEM_FN, handleSave));                            // 1.74 - `::core::try_trait::from_yeet`
+            H::add("panic_nounwind", Handler(ITEM_FN, handleSave));                       // 1.74 - `::core::panicking::panic`
+            H::add("panic_display", Handler(ITEM_FN, handleSave));                        // 1.74 - `::core::panicking::panic_display`
+            H::add("panic_bounds_check", Handler(ITEM_FN, handleSave));                   // 1.74 - `::core::panicking::panic_bounds_check`
+            H::add("panic_misaligned_pointer_dereference", Handler(ITEM_FN, handleSave)); // 1.74 - `::core::panicking::panic_misaligned_pointer_dereference`
+            H::add("panic_cannot_unwind", Handler(ITEM_FN, handleSave));                  // 1.74 - `::core::panicking::panic_cannot_unwind`
+            H::add("panic_in_cleanup", Handler(ITEM_FN, handleSave));                     // 1.74 - `::core::panicking::panic_in_cleanup `
+            H::add("const_panic_fmt", Handler(ITEM_FN, handleSave));                      // 1.74 - `::core::panicking::const_panic_fmt`
 
             // Enums
-            H::add("c_void", Handler(ITEM_ENUM, handle_save)); // 1.74 - `::core::ffi::c_void` - Why? (miri?)
-            H::add("Option", Handler(ITEM_ENUM, handle_save)); // 1.74 - `::core::option::Option`
+            H::add("c_void", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::ffi::c_void` - Why? (miri?)
+            H::add("Option", Handler(ITEM_ENUM, handleSave)); // 1.74 - `::core::option::Option`
 
             // - Formatting
-            H::add("format_arguments", Handler(ITEM_STRUCT, handle_save));   // 1.74 - `::core::fmt::Arguments`
-            H::add("format_placeholder", Handler(ITEM_STRUCT, handle_save)); // 1.74 - `::core::fmt::rt::Placeholder`
-            H::add("format_argument", Handler(ITEM_STRUCT, handle_save));    // 1.74 - `::core::fmt::rt::Argument`
-            H::add("format_unsafe_arg", Handler(ITEM_STRUCT, handle_save));  // 1.74 - `::core::fmt::rt::UnsafeArg`
-            H::add("format_alignment", Handler(ITEM_ENUM, handle_save));     // 1.74 - `::core::fmt::rt::Alignment`
-            H::add("format_count", Handler(ITEM_ENUM, handle_save));         // 1.74 - `::core::fmt::rt::Count`
+            H::add("format_arguments", Handler(ITEM_STRUCT, handleSave));   // 1.74 - `::core::fmt::Arguments`
+            H::add("format_placeholder", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::fmt::rt::Placeholder`
+            H::add("format_argument", Handler(ITEM_STRUCT, handleSave));    // 1.74 - `::core::fmt::rt::Argument`
+            H::add("format_unsafe_arg", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::fmt::rt::UnsafeArg`
+            H::add("format_alignment", Handler(ITEM_ENUM, handleSave));     // 1.74 - `::core::fmt::rt::Alignment`
+            H::add("format_count", Handler(ITEM_ENUM, handleSave));         // 1.74 - `::core::fmt::rt::Count`
 
             // - Futures
-            H::add("ResumeTy", Handler(ITEM_STRUCT, handle_save)); // 1.74 - `::core::future::ResumeTy`
-            H::add("Poll", Handler(ITEM_ENUM, handle_save));       // 1.74 - `::core::task::poll::Poll`
-            H::add("Context", Handler(ITEM_STRUCT, handle_save));  // 1.74 - `::core::task::wake::Context`
+            H::add("ResumeTy", Handler(ITEM_STRUCT, handleSave)); // 1.74 - `::core::future::ResumeTy`
+            H::add("Poll", Handler(ITEM_ENUM, handleSave));       // 1.74 - `::core::task::poll::Poll`
+            H::add("Context", Handler(ITEM_STRUCT, handleSave));  // 1.74 - `::core::task::wake::Context`
         }
         {
-            H::add("contract_build_check_ensures", Handler(ITEM_FN, handle_save)); // 1.90 - `::core::contracts::build_check_ensures`
-            H::add("contract_check_requires", Handler(ITEM_FN, handle_save));      // 1.90 - `::core::intrinsics::contract_check_requires`
-            H::add("contract_check_ensures", Handler(ITEM_FN, handle_save));       // 1.90 - `::core::intrinsics::contract_check_ensures`
-            H::add("use_cloned", Handler(ITEM_TRAIT, handle_save));                // 1.90 - `::core::clone::use_cloned` - for the `.use` syntax
+            H::add("contract_build_check_ensures", Handler(ITEM_FN, handleSave)); // 1.90 - `::core::contracts::build_check_ensures`
+            H::add("contract_check_requires", Handler(ITEM_FN, handleSave));      // 1.90 - `::core::intrinsics::contract_check_requires`
+            H::add("contract_check_ensures", Handler(ITEM_FN, handleSave));       // 1.90 - `::core::intrinsics::contract_check_ensures`
+            H::add("use_cloned", Handler(ITEM_TRAIT, handleSave));                // 1.90 - `::core::clone::use_cloned` - for the `.use` syntax
 
-            H::add("Ordering", Handler(ITEM_ENUM, handle_save)); // comparison ordering
+            H::add("Ordering", Handler(ITEM_ENUM, handleSave)); // comparison ordering
 
-            H::add("meta_sized", Handler(ITEM_TRAIT, handle_save));                  // ::core::marker::MetaSized
-            H::add("pointee_sized", Handler(ITEM_TRAIT, handle_save));               // ::core::marker::PointeeSized
-            H::add("bikeshed_guaranteed_no_drop", Handler(ITEM_TRAIT, handle_save)); // ::core::marker::BikeshedGuaranteedNoDrop
-            H::add("unsafe_unpin", Handler(ITEM_TRAIT, handle_save));                // ::core::marker::UnsafeUnpin
-            H::add("unsized_const_param_ty", Handler(ITEM_TRAIT, handle_save));      // ::core::marker::UnsizedConstParamTy
-            H::add("coerce_pointee_validated", Handler(ITEM_TRAIT, handle_save));    // ::core::marker::CoercePointeeValidated
+            H::add("meta_sized", Handler(ITEM_TRAIT, handleSave));                  // ::core::marker::MetaSized
+            H::add("pointee_sized", Handler(ITEM_TRAIT, handleSave));               // ::core::marker::PointeeSized
+            H::add("bikeshed_guaranteed_no_drop", Handler(ITEM_TRAIT, handleSave)); // ::core::marker::BikeshedGuaranteedNoDrop
+            H::add("unsafe_unpin", Handler(ITEM_TRAIT, handleSave));                // ::core::marker::UnsafeUnpin
+            H::add("unsized_const_param_ty", Handler(ITEM_TRAIT, handleSave));      // ::core::marker::UnsizedConstParamTy
+            H::add("coerce_pointee_validated", Handler(ITEM_TRAIT, handleSave));    // ::core::marker::CoercePointeeValidated
 
-            H::add("async_fn", Handler(ITEM_TRAIT, handle_save));
-            H::add("async_fn_mut", Handler(ITEM_TRAIT, handle_save));
-            H::add("async_fn_once", Handler(ITEM_TRAIT, handle_save));
+            H::add("async_fn", Handler(ITEM_TRAIT, handleSave));
+            H::add("async_fn_mut", Handler(ITEM_TRAIT, handleSave));
+            H::add("async_fn_once", Handler(ITEM_TRAIT, handleSave));
 
-            H::add("async_fn_kind_helper", Handler(ITEM_TRAIT, handle_save)); // ::core::ops::async_function::internal_implementation_detail::AsyncFnKindHelper
-            H::add("coroutine_state", Handler(ITEM_ENUM, handle_save));       // ::core::ops::coroutine::CoroutineState
-            H::add("coroutine", Handler(ITEM_TRAIT, handle_save));            // ::core::ops::coroutine::Coroutine
-            H::add("deref_pure", Handler(ITEM_TRAIT, handle_save));           // ::core::ops::deref::DerefPure
-            H::add("legacy_receiver", Handler(ITEM_TRAIT, handle_save));      // ::core::ops::deref::LegacyReceiver
+            H::add("async_fn_kind_helper", Handler(ITEM_TRAIT, handleSave)); // ::core::ops::async_function::internal_implementation_detail::AsyncFnKindHelper
+            H::add("coroutine_state", Handler(ITEM_ENUM, handleSave));       // ::core::ops::coroutine::CoroutineState
+            H::add("coroutine", Handler(ITEM_TRAIT, handleSave));            // ::core::ops::coroutine::Coroutine
+            H::add("deref_pure", Handler(ITEM_TRAIT, handleSave));           // ::core::ops::deref::DerefPure
+            H::add("legacy_receiver", Handler(ITEM_TRAIT, handleSave));      // ::core::ops::deref::LegacyReceiver
 
-            H::add("type_id", Handler(ITEM_STRUCT, handle_save)); // ::core::any::TypeId
+            H::add("type_id", Handler(ITEM_STRUCT, handleSave)); // ::core::any::TypeId
 
-            H::add("async_iterator", Handler(ITEM_TRAIT, handle_save)); // ::core::async_iter::async_iter::AsyncIterator
-            H::add("fused_iterator", Handler(ITEM_TRAIT, handle_save)); // ::core::iter::traits::marker::FusedIterator
+            H::add("async_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::async_iter::async_iter::AsyncIterator
+            H::add("fused_iterator", Handler(ITEM_TRAIT, handleSave)); // ::core::iter::traits::marker::FusedIterator
 
             // Various panic handlers
-            H::add("panic_const_add_overflow", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_sub_overflow", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_mul_overflow", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_div_overflow", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_rem_overflow", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_neg_overflow", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_shr_overflow", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_shl_overflow", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_div_by_zero", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_rem_by_zero", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_coroutine_resumed", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_async_fn_resumed", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_async_gen_fn_resumed", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_gen_fn_none", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_coroutine_resumed_panic", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_async_fn_resumed_panic", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_async_gen_fn_resumed_panic", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_gen_fn_none_panic", Handler(ITEM_FN, handle_save));
+            H::add("panic_const_add_overflow", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_sub_overflow", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_mul_overflow", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_div_overflow", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_rem_overflow", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_neg_overflow", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_shr_overflow", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_shl_overflow", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_div_by_zero", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_rem_by_zero", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_coroutine_resumed", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_async_fn_resumed", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_async_gen_fn_resumed", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_gen_fn_none", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_coroutine_resumed_panic", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_async_fn_resumed_panic", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_async_gen_fn_resumed_panic", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_gen_fn_none_panic", Handler(ITEM_FN, handleSave));
 
-            H::add("panic_const_coroutine_resumed_drop", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_async_fn_resumed_drop", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_async_gen_fn_resumed_drop", Handler(ITEM_FN, handle_save));
-            H::add("panic_const_gen_fn_none_drop", Handler(ITEM_FN, handle_save));
+            H::add("panic_const_coroutine_resumed_drop", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_async_fn_resumed_drop", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_async_gen_fn_resumed_drop", Handler(ITEM_FN, handleSave));
+            H::add("panic_const_gen_fn_none_drop", Handler(ITEM_FN, handleSave));
 
-            H::add("panic_null_pointer_dereference", Handler(ITEM_FN, handle_save));
-            H::add("panic_invalid_enum_construction", Handler(ITEM_FN, handle_save));
+            H::add("panic_null_pointer_dereference", Handler(ITEM_FN, handleSave));
+            H::add("panic_invalid_enum_construction", Handler(ITEM_FN, handleSave));
 
-            H::add("unsafe_pinned", Handler(ITEM_STRUCT, handle_save)); // ::core::pin::unsafe_pinned::UnsafePinned
+            H::add("unsafe_pinned", Handler(ITEM_STRUCT, handleSave)); // ::core::pin::unsafe_pinned::UnsafePinned
 
-            H::add("RangeCopy", Handler(ITEM_STRUCT, handle_save));          // ::core::range::Range
-            H::add("RangeInclusiveCopy", Handler(ITEM_STRUCT, handle_save)); // ::core::range::RangeInclusive
-            H::add("RangeFromCopy", Handler(ITEM_STRUCT, handle_save));      // ::core::range::RangeFrom
+            H::add("RangeCopy", Handler(ITEM_STRUCT, handleSave));          // ::core::range::Range
+            H::add("RangeInclusiveCopy", Handler(ITEM_STRUCT, handleSave)); // ::core::range::RangeInclusive
+            H::add("RangeFromCopy", Handler(ITEM_STRUCT, handleSave));      // ::core::range::RangeFrom
 
-            H::add("async_drop", Handler(ITEM_TRAIT, handle_save));       // ::core::future::async_drop::AsyncDrop
-            H::add("async_drop_in_place", Handler(ITEM_FN, handle_save)); // ::core::future::async_drop::async_drop_in_place
+            H::add("async_drop", Handler(ITEM_TRAIT, handleSave));       // ::core::future::async_drop::AsyncDrop
+            H::add("async_drop_in_place", Handler(ITEM_FN, handleSave)); // ::core::future::async_drop::async_drop_in_place
 
-            H::add("global_alloc_ty", Handler(ITEM_STRUCT, handle_save)); // ::alloc::alloc::Global
+            H::add("global_alloc_ty", Handler(ITEM_STRUCT, handleSave)); // ::alloc::alloc::Global
         }
     }
     const char* real_name = nullptr; // For when lang items have their name changed
-    auto it = g_handlers.find(name.c_str());
-    if (it != g_handlers.end()) {
+    auto it = gHandlers.find(name.c_str());
+    if (it != gHandlers.end()) {
         if (type != it->second.type) {
             ERROR(sp, E0000, "Language item '" << name << "' " << path << " - on incorrect item type " << type << " != " << it->second.type);
         }
@@ -3031,28 +3031,28 @@ public:
             }
             TU_ARMA(Function, e) {
                 if (e.code().is_valid()) {
-                    handle_lang_item(sp, crate, path, name, ITEM_FN, i);
+                    handleLangItem(sp, crate, path, name, ITEM_FN, i);
                 } else {
-                    handle_lang_item(sp, crate, path, name, ITEM_EXTERN_FN, i);
+                    handleLangItem(sp, crate, path, name, ITEM_EXTERN_FN, i);
                 }
             }
             TU_ARMA(Type, e) {
-                handle_lang_item(sp, crate, path, name, ITEM_TYPE_ALIAS, i);
+                handleLangItem(sp, crate, path, name, ITEM_TYPE_ALIAS, i);
             }
             TU_ARMA(Static, e) {
-                handle_lang_item(sp, crate, path, name, ITEM_STATIC, i);
+                handleLangItem(sp, crate, path, name, ITEM_STATIC, i);
             }
             TU_ARMA(Struct, e) {
-                handle_lang_item(sp, crate, path, name, ITEM_STRUCT, i);
+                handleLangItem(sp, crate, path, name, ITEM_STRUCT, i);
             }
             TU_ARMA(Enum, e) {
-                handle_lang_item(sp, crate, path, name, ITEM_ENUM, i);
+                handleLangItem(sp, crate, path, name, ITEM_ENUM, i);
             }
             TU_ARMA(Union, e) {
-                handle_lang_item(sp, crate, path, name, ITEM_UNION, i);
+                handleLangItem(sp, crate, path, name, ITEM_UNION, i);
             }
             TU_ARMA(Trait, e) {
-                handle_lang_item(sp, crate, path, name, ITEM_TRAIT, i);
+                handleLangItem(sp, crate, path, name, ITEM_TRAIT, i);
             }
         }
     }

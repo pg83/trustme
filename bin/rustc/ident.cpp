@@ -3,7 +3,7 @@
 #include "debug.h"
 #include "common.h" // vector print
 
-unsigned int Ident::Hygiene::g_next_scope = 0;
+unsigned int Ident::Hygiene::gNextScope = 0;
 
 bool Ident::Hygiene::is_visible(const Hygiene& src) const {
     if (inner->contexts.size() > src->contexts.size()) {
@@ -90,7 +90,7 @@ Ident::Hygiene Ident::Hygiene::new_scope_chained(const Hygiene& parent, unsigned
     rv->macro_definitions.reserve(parent->macro_definitions.size() + 1);
     rv->contexts.insert(rv->contexts.begin(), parent->contexts.begin(), parent->contexts.end());
     rv->macro_definitions.insert(rv->macro_definitions.begin(), parent->macro_definitions.begin(), parent->macro_definitions.end());
-    rv->contexts.push_back(++g_next_scope);
+    rv->contexts.push_back(++gNextScope);
     rv->macro_definitions.push_back(macro_definition);
     return rv;
 }
@@ -105,7 +105,7 @@ Ident::Hygiene Ident::Hygiene::with_tail_scope(const Hygiene& scope, bool inheri
     }
     return rv;
 }
-Ident::Hygiene Ident::Hygiene::get_parent() const {
+Ident::Hygiene Ident::Hygiene::getParent() const {
     //assert(this->contexts.size() > 1);
     Hygiene rv;
     rv->contexts.insert(rv->contexts.begin(), inner->contexts.begin(), inner->contexts.end() - 1);

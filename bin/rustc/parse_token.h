@@ -106,7 +106,7 @@ public:
         return mType;
     }
 
-    bool has_data() const {
+    bool hasData() const {
         return !mData.is_None();
     }
 
@@ -139,15 +139,15 @@ public:
     }
 
     // TODO: Replace these with a way of getting a InterpolatedFragment&
-    TypeRef& frag_type();
+    TypeRef& fragType();
 
-    AST::Path& frag_path();
+    AST::Path& fragPath();
 
-    AST::Pattern& frag_pattern();
+    AST::Pattern& fragPattern();
 
-    AST::Attribute& frag_meta();
+    AST::Attribute& fragMeta();
 
-    AST::ExprNode& frag_node();
+    AST::ExprNode& fragNode();
 
     ::std::unique_ptr<AST::ExprNode> take_frag_node();
     ::AST::Named<AST::Item> take_frag_item();
@@ -175,7 +175,7 @@ public:
         this->pos = pos;
     }
 
-    const Position& get_pos() const {
+    const Position& getPos() const {
         return pos;
     }
 

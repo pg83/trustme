@@ -79,7 +79,7 @@ namespace HIR {
             require_const_calls = true;
         }
 
-        StaticTraitResolve& get_resolve() {
+        StaticTraitResolve& getResolve() {
             return this->resolve;
         }
 

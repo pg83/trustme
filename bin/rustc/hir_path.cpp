@@ -4,7 +4,7 @@
 #include <algorithm>
 
 namespace {
-    bool g_compare_hrls = false;
+    bool gCompareHrls = false;
 }
 
 namespace HIR {
@@ -48,9 +48,9 @@ namespace HIR {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const PathParams& x) {
-        bool has_args = (x.mLifetimes.size() > 0 || x.types.size() > 0 || x.values.size() > 0);
+        bool hasArgs = (x.mLifetimes.size() > 0 || x.types.size() > 0 || x.values.size() > 0);
 
-        if (has_args) {
+        if (hasArgs) {
             os << "<";
         }
         for (const auto& lft : x.mLifetimes) {
@@ -62,7 +62,7 @@ namespace HIR {
         for (const auto& v : x.values) {
             os << "{" << v << "},";
         }
-        if (has_args) {
+        if (hasArgs) {
             os << ">";
         }
         return os;
@@ -80,12 +80,12 @@ namespace HIR {
             os << "[const] ";
         }
         if (x.hrtbs) {
-            os << "for" << x.hrtbs->fmt_args() << " ";
+            os << "for" << x.hrtbs->fmtArgs() << " ";
         }
         os << x.mPath.mPath;
-        bool has_args = (x.mPath.mParams.mLifetimes.size() > 0 || x.mPath.mParams.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
+        bool hasArgs = (x.mPath.mParams.mLifetimes.size() > 0 || x.mPath.mParams.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
 
-        if (has_args) {
+        if (hasArgs) {
             os << "<";
         }
         for (const auto& lft : x.mPath.mParams.mLifetimes) {
@@ -105,14 +105,14 @@ namespace HIR {
                 os << assoc.first << "{" << assoc.second.source_trait << "}: " << trait << ",";
             }
         }
-        if (has_args) {
+        if (hasArgs) {
             os << ">";
         }
         return os;
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Path& x) {
-        TU_MATCH(::HIR::Path::Data, (x.mData), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.impl_params << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; if (e.hrtbs) { os << "for" << e.hrtbs->fmt_args() << " "; } os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
+        TU_MATCH(::HIR::Path::Data, (x.mData), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.impl_params << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; if (e.hrtbs) { os << "for" << e.hrtbs->fmtArgs() << " "; } os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
         return os;
     }
 }
@@ -331,7 +331,7 @@ bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
 
 Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     // NOTE: An empty set is treated as the same as none
-    if (g_compare_hrls) {
+    if (gCompareHrls) {
         ORD(hrtbs.get() && !hrtbs->is_empty(), x.hrtbs.get() && !x.hrtbs->is_empty());
         if (hrtbs && x.hrtbs) {
             ORD(hrtbs->mLifetimes.size(), x.hrtbs->mLifetimes.size());
@@ -420,8 +420,8 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             return Compare::Unequal;
         }
         for (unsigned int i = 0; i < x.values.size(); i++) {
-            const auto& val_t = resolve_placeholder.get_val(sp, this->values[i]);
-            const auto& val_x = resolve_placeholder.get_val(sp, x.values[i]);
+            const auto& val_t = resolve_placeholder.getVal(sp, this->values[i]);
+            const auto& val_x = resolve_placeholder.getVal(sp, x.values[i]);
             /*if( const auto* ge = val_t.opt_Generic() ) {
                 rv &= match.match_val(*ge, val_x);
                 if(rv == Compare::Unequal)
@@ -467,8 +467,8 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
         return Compare::Unequal;
     }
     for (unsigned int i = 0; i < x.values.size(); i++) {
-        const auto& val_t = resolve_placeholder.get_val(sp, this->values[i]);
-        const auto& val_x = resolve_placeholder.get_val(sp, x.values[i]);
+        const auto& val_t = resolve_placeholder.getVal(sp, this->values[i]);
+        const auto& val_x = resolve_placeholder.getVal(sp, x.values[i]);
         if (const auto* ge = val_t.opt_Generic()) {
             rv &= match.match_val(*ge, val_x);
             if (rv == Compare::Unequal) {
@@ -484,7 +484,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             // exactly; treating it as fuzzy made impl selection on const generics pick the
             // first candidate (harfrust's `SelectAtomic<8/16/32>`).
             struct H2 {
-                static bool get_literal(const ::HIR::ConstGeneric& v, U128& out) {
+                static bool getLiteral(const ::HIR::ConstGeneric& v, U128& out) {
                     if (const auto* ev = v.opt_Evaluated()) {
                         auto sl = EncodedLiteralSlice(**ev);
                         if (sl.mSize == 0 || sl.mSize > 16) {
@@ -511,7 +511,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
             };
 
             U128 lit_t, lit_x;
-            if (H2::get_literal(val_t, lit_t) && H2::get_literal(val_x, lit_x)) {
+            if (H2::getLiteral(val_t, lit_t) && H2::getLiteral(val_x, lit_x)) {
                 if (lit_t != lit_x) {
                     return Compare::Unequal;
                 }
@@ -585,7 +585,7 @@ namespace {
     // TODO: HRLs
 
 #if 1
-    if (g_compare_hrls) {
+    if (gCompareHrls) {
         if ((this->hrtbs && !this->hrtbs->is_empty()) != (x.hrtbs && !x.hrtbs->is_empty())) {
             return Compare::Unequal;
         }

@@ -367,8 +367,8 @@ void Writer::write_i64c(int64_t v) {
     write_u64c(va);
 }
 void Writer::write_u128(U128 v) {
-    write_u64(v.get_lo());
-    write_u64(v.get_hi());
+    write_u64(v.getLo());
+    write_u64(v.getHi());
 }
 void Writer::write_double(double v) {
     // - Just raw-writes the double

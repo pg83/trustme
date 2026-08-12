@@ -140,8 +140,8 @@ namespace AST {
         ExternCrate& operator=(const ExternCrate&) = delete;
     };
 
-    extern ::std::vector<::std::string> g_crate_load_dirs;
-    extern ::std::map<::std::string, ::std::string> g_crate_overrides;
-    extern ::std::map<RcString, RcString> g_implicit_crates;
+    extern ::std::vector<::std::string> gCrateLoadDirs;
+    extern ::std::map<::std::string, ::std::string> gCrateOverrides;
+    extern ::std::map<RcString, RcString> gImplicitCrates;
 
 } // namespace AST

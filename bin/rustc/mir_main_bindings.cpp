@@ -27,7 +27,7 @@ namespace {
                 os << indent() << "let df$" << i << " = " << fcn.dropFlags[i] << ";\n";
             }
 
-#define FMT_M(x) FMT_CB(os, this->fmt_val(os, x);)
+#define FMT_M(x) FMT_CB(os, this->fmtVal(os, x);)
             for (unsigned int i = 0; i < fcn.blocks.size(); i++) {
                 const auto& block = fcn.blocks[i];
                 //DEBUG("BB" << i);
@@ -127,7 +127,7 @@ namespace {
                 }
 
                 os << indent();
-                auto fmt_unwind = [this](const ::MIR::UnwindAction& action) {
+                auto fmtUnwind = [this](const ::MIR::UnwindAction& action) {
                     TU_MATCHA((action), (ue),
                         (Continue, os << "continue";),
                         (Cleanup, os << "cleanup bb" << ue;),
@@ -179,8 +179,8 @@ namespace {
                                                                                   })
                                                                              ) os
                                                                              << "_ => bb" << e.defTarget << "}\n";),
-                    (Drop, os << "drop(" << FMT_M(e.slot); if (e.kind == ::MIR::eDropKind::SHALLOW) os << " SHALLOW"; if (e.flag_idx != ~0u) os << " IF df$" << e.flag_idx; os << ") goto bb" << e.target << " unwind "; fmt_unwind(e.unwind); os << "\n";),
-                    (Call, os << FMT_M(e.ret_val) << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ") goto bb" << e.ret_block << " unwind "; fmt_unwind(e.unwind); os << "\n";)
+                    (Drop, os << "drop(" << FMT_M(e.slot); if (e.kind == ::MIR::eDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") goto bb" << e.target << " unwind "; fmtUnwind(e.unwind); os << "\n";),
+                    (Call, os << FMT_M(e.ret_val) << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ") goto bb" << e.ret_block << " unwind "; fmtUnwind(e.unwind); os << "\n";)
                 )
                 decIndent();
                 os << indent() << "}\n";
@@ -190,19 +190,19 @@ namespace {
 #undef FMT
         }
 
-        void fmt_val(::std::ostream& os, const ::MIR::LValue& lval) {
+        void fmtVal(::std::ostream& os, const ::MIR::LValue& lval) {
             os << lval;
         }
 
-        void fmt_val(::std::ostream& os, const ::MIR::Constant& e) {
+        void fmtVal(::std::ostream& os, const ::MIR::Constant& e) {
             os << e;
         }
 
-        void fmt_val(::std::ostream& os, const ::MIR::Param& param) {
+        void fmtVal(::std::ostream& os, const ::MIR::Param& param) {
             TU_MATCHA(
                 (param),
                 (e),
-                (LValue, fmt_val(os, e);),
+                (LValue, fmtVal(os, e);),
                 (
                     Borrow, os << "&"; switch (e.type) {
                         case ::HIR::BorrowType::Shared:
@@ -214,20 +214,20 @@ namespace {
                             os << "move ";
                             break;
                     } os << "(";
-                    fmt_val(os, e.val);
+                    fmtVal(os, e.val);
                     os << ")";
                 ),
-                (Constant, fmt_val(os, e);)
+                (Constant, fmtVal(os, e);)
             )
         }
 
-        void fmt_val(::std::ostream& os, const ::MIR::RValue& rval) {
+        void fmtVal(::std::ostream& os, const ::MIR::RValue& rval) {
             TU_MATCHA(
                 (rval),
                 (e),
-                (Use, fmt_val(os, e);),
-                (Constant, fmt_val(os, e);),
-                (SizedArray, os << "["; fmt_val(os, e.val); os << ";" << e.count << "]";),
+                (Use, fmtVal(os, e);),
+                (Constant, fmtVal(os, e);),
+                (SizedArray, os << "["; fmtVal(os, e.val); os << ";" << e.count << "]";),
                 (
                     Borrow, os << "&";
                     //os << e.region;
@@ -242,10 +242,10 @@ namespace {
                             break;
                     } os
                     << "(";
-                    fmt_val(os, e.val);
+                    fmtVal(os, e.val);
                     os << ")";
                 ),
-                (Cast, os << "("; fmt_val(os, e.val); os << ") as " << e.type;),
+                (Cast, os << "("; fmtVal(os, e.val); os << ") as " << e.type;),
                 (BinOp,
                  switch (e.op) {
                      case ::MIR::eBinOp::ADD:
@@ -313,9 +313,9 @@ namespace {
                          os << "LE";
                          break;
                  } os << "(";
-                 fmt_val(os, e.val_l);
+                 fmtVal(os, e.val_l);
                  os << ", ";
-                 fmt_val(os, e.val_r);
+                 fmtVal(os, e.val_r);
                  os << ")";),
                 (UniOp,
                  switch (e.op) {
@@ -326,32 +326,32 @@ namespace {
                          os << "NEG";
                          break;
                  } os << "(";
-                 fmt_val(os, e.val);
+                 fmtVal(os, e.val);
                  os << ")";),
-                (DstMeta, os << "META("; fmt_val(os, e.val); os << ")";),
-                (DstPtr, os << "PTR("; fmt_val(os, e.val); os << ")";),
-                (MakeDst, os << "DST("; fmt_val(os, e.ptr_val); os << ", "; fmt_val(os, e.meta_val); os << ")";),
+                (DstMeta, os << "META("; fmtVal(os, e.val); os << ")";),
+                (DstPtr, os << "PTR("; fmtVal(os, e.val); os << ")";),
+                (MakeDst, os << "DST("; fmtVal(os, e.ptr_val); os << ", "; fmtVal(os, e.meta_val); os << ")";),
                 (
                     Tuple, os << "("; for (const auto& v : e.vals) {
-                        fmt_val(os, v);
+                        fmtVal(os, v);
                         os << ", ";
                     } os << ")";
                 ),
                 (
                     Array, os << "["; for (const auto& v : e.vals) {
-                        fmt_val(os, v);
+                        fmtVal(os, v);
                         os << ", ";
                     } os << "]";
                 ),
-                (UnionVariant, os << e.path << " #" << e.index << " ("; fmt_val(os, e.val); os << ")";),
+                (UnionVariant, os << e.path << " #" << e.index << " ("; fmtVal(os, e.val); os << ")";),
                 (
                     EnumVariant, os << e.path << " #" << e.index << " { "; for (const auto& v : e.vals) {
-                        fmt_val(os, v);
+                        fmtVal(os, v);
                         os << ", ";
                     } os << "}";
                 ),
                 (Struct, os << e.path << " { "; for (const auto& v : e.vals) {
-                    fmt_val(os, v);
+                    fmtVal(os, v);
                     os << ", ";
                 } os << "}";)
             )
@@ -392,9 +392,9 @@ namespace {
         void visit_type_impl(::HIR::TypeImpl& impl) override {
             shortItemName = true;
 
-            os << indent() << "impl" << impl.mParams.fmt_args() << " " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             inc_indent();
@@ -408,9 +408,9 @@ namespace {
         virtual void visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) override {
             shortItemName = true;
 
-            os << indent() << "impl" << impl.mParams.fmt_args() << " " << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             inc_indent();
@@ -424,9 +424,9 @@ namespace {
         void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
             shortItemName = true;
 
-            os << indent() << "impl" << impl.mParams.fmt_args() << " " << (impl.is_positive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.is_positive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{ }\n";
 
@@ -437,9 +437,9 @@ namespace {
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             shortItemName = true;
 
-            os << indent() << "trait " << p << item.mParams.fmt_args() << "\n";
+            os << indent() << "trait " << p << item.mParams.fmtArgs() << "\n";
             if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << item.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             inc_indent();
@@ -463,11 +463,11 @@ namespace {
             }
             os << "fn ";
             if (shortItemName) {
-                os << p.get_name();
+                os << p.getName();
             } else {
                 os << p;
             }
-            os << item.mParams.fmt_args() << "(";
+            os << item.mParams.fmtArgs() << "(";
             for (unsigned int i = 0; i < item.mArgs.size(); i++) {
                 if (i == 0 && item.mArgs[i].first.mBindings.size() > 0 && item.mArgs[i].first.mBindings[0].mName == "self") {
                     os << "self=";
@@ -476,13 +476,13 @@ namespace {
             }
             os << ") -> " << item.returnType << "\n";
             if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmt_bounds() << "\n";
+                os << indent() << " " << item.mParams.fmtBounds() << "\n";
             }
 
             if (item.mCode) {
                 os << indent() << "{\n";
                 inc_indent();
-                dumpMir(os, indentLevel, item.mCode.get_mir_or_error(Span()));
+                dumpMir(os, indentLevel, item.mCode.getMirOrError(Span()));
                 decIndent();
                 os << indent() << "}\n";
             } else {
@@ -494,7 +494,7 @@ namespace {
             os << indent();
             os << "const ";
             if (shortItemName) {
-                os << p.get_name();
+                os << p.getName();
             } else {
                 os << p;
             }
@@ -503,7 +503,7 @@ namespace {
                 inc_indent();
                 os << " = {\n";
                 inc_indent();
-                dumpMir(os, indentLevel, item.mValue.get_mir_or_error(Span()));
+                dumpMir(os, indentLevel, item.mValue.getMirOrError(Span()));
                 decIndent();
                 os << indent() << "} /* = " << item.valueRes << "*/;\n";
                 decIndent();
@@ -516,7 +516,7 @@ namespace {
             os << indent();
             os << "static ";
             if (shortItemName) {
-                os << p.get_name();
+                os << p.getName();
             } else {
                 os << p;
             }
@@ -525,7 +525,7 @@ namespace {
                 inc_indent();
                 os << " = {\n";
                 inc_indent();
-                dumpMir(os, indentLevel, item.mValue.get_mir_or_error(Span()));
+                dumpMir(os, indentLevel, item.mValue.getMirOrError(Span()));
                 decIndent();
                 os << indent() << "} /* = " << item.valueRes << "*/;\n";
                 decIndent();

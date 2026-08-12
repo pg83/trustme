@@ -117,7 +117,7 @@ TomlFileIter TomlFile::end() {
     return TomlFileIter{*this};
 }
 
-TomlKeyValue TomlFile::get_next_value() {
+TomlKeyValue TomlFile::getNextValue() {
     auto t = mLexer.get_token();
 
     if (currentComposite.empty()) {
@@ -167,7 +167,7 @@ TomlKeyValue TomlFile::get_next_value() {
                 }
                 DEBUG("Start block " << currentBlock);
                 // Recurse!
-                return get_next_value();
+                return getNextValue();
             }
             default:
                 break;
@@ -209,12 +209,12 @@ TomlKeyValue TomlFile::get_next_value() {
     switch (t.mType) {
         // String: Return the string value
         case TomlToken::Type::String:
-            rv.path = this->get_path(std::move(key_name));
+            rv.path = this->getPath(std::move(key_name));
             rv.value = TomlValue{t.mData};
             break;
         // Array: Parse the entire list and return as Type::List
         case TomlToken::Type::SquareOpen: {
-            rv.path = this->get_path(std::move(key_name));
+            rv.path = this->getPath(std::move(key_name));
             rv.value.mType = TomlValue::Type::List;
             bool skipped_nested = false;
             while ((t = mLexer.get_token()).mType != TomlToken::Type::SquareClose) {
@@ -280,17 +280,17 @@ TomlKeyValue TomlFile::get_next_value() {
             currentComposite.push_back(std::move(key_name));
             DEBUG("Enter composite block " << currentBlock << ", " << currentComposite);
             // Recurse to restart parse
-            return get_next_value();
+            return getNextValue();
         case TomlToken::Type::Integer:
-            rv.path = this->get_path(std::move(key_name));
+            rv.path = this->getPath(std::move(key_name));
             rv.value = TomlValue{t.intval};
             break;
         case TomlToken::Type::Ident:
             if (t.mData == "true") {
-                rv.path = this->get_path(std::move(key_name));
+                rv.path = this->getPath(std::move(key_name));
                 rv.value = TomlValue{true};
             } else if (t.mData == "false") {
-                rv.path = this->get_path(std::move(key_name));
+                rv.path = this->getPath(std::move(key_name));
 
                 rv.value = TomlValue{false};
             } else {
@@ -343,7 +343,7 @@ void TomlFile::skip_composite_value() {
     }
 }
 
-std::vector<std::string> TomlFile::get_path(std::vector<std::string> tail) const {
+std::vector<std::string> TomlFile::getPath(std::vector<std::string> tail) const {
     std::vector<std::string> path;
     path = currentBlock;
     for (const auto& compositeEnt : currentComposite) {
@@ -383,7 +383,7 @@ TomlToken TomlToken::lex_from(::std::ifstream& is, unsigned& line) {
 }
 
 namespace {
-    void handle_escape(::std::string& str, ::std::ifstream& is, unsigned& line) {
+    void handleEscape(::std::string& str, ::std::ifstream& is, unsigned& line) {
         int c = is.get();
         switch (c) {
             case '"':
@@ -565,7 +565,7 @@ TomlToken TomlToken::lex_from_inner(::std::ifstream& is, unsigned& line) {
                             throw ::std::runtime_error("Unexpected EOF in triple-quoted string");
                         }
                         if (c == '\\') {
-                            handle_escape(str, is, line);
+                            handleEscape(str, is, line);
                         } else {
                             str += (char)c;
                             if (c == '\n') {
@@ -581,7 +581,7 @@ TomlToken TomlToken::lex_from_inner(::std::ifstream& is, unsigned& line) {
                         throw ::std::runtime_error("Unexpected EOF in double-quoted string");
                     }
                     if (c == '\\') {
-                        handle_escape(str, is, line);
+                        handleEscape(str, is, line);
                         c = is.get();
                         continue;
                     }

@@ -58,7 +58,7 @@ public:
         return mHygiene;
     }
 
-    const AST::Edition& get_edition() const {
+    const AST::Edition& getEdition() const {
         return edition;
     }
 

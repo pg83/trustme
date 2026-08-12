@@ -151,7 +151,7 @@ struct MacroRulesArm {
 
 /// A sigle 'macro_rules!' block
 class MacroRules {
-    static unsigned int g_next_definition_id;
+    static unsigned int gNextDefinitionId;
 
 public:
     unsigned int definitionId;

@@ -128,11 +128,11 @@ class JobServerServer: public JobServer {
             }
         }
 
-        int get_client_read_fd() const {
+        int getClientReadFd() const {
             return rdFd == -1 ? wrFd : rdFd;
         }
 
-        int get_client_write_fd() const {
+        int getClientWriteFd() const {
             return wrFd;
         }
 
@@ -151,7 +151,7 @@ class JobServerServer: public JobServer {
 public:
     JobServerServer(size_t max_jobs)
         : server(max_jobs)
-        , client(server.get_client_read_fd(), server.get_client_write_fd())
+        , client(server.getClientReadFd(), server.getClientWriteFd())
     {
         ::std::stringstream ss;
         if (const auto* makeflags = getenv("MAKEFLAGS")) {
@@ -205,13 +205,13 @@ public:
         }
         // - Unix pipe pair: `<fd_r>,<fd_w>`
         else {
-            int fd_r = -1, fd_w = -1;
-            if (::std::sscanf(authStr.c_str(), "%d,%d", &fd_r, &fd_w) == 2) {
-                if (fd_r >= 0 && fd_w >= 0) {
-                    if (fcntl(fd_r, F_GETFL) == -1 || fcntl(fd_w, F_GETFL) == -1) {
+            int fdR = -1, fdW = -1;
+            if (::std::sscanf(authStr.c_str(), "%d,%d", &fdR, &fdW) == 2) {
+                if (fdR >= 0 && fdW >= 0) {
+                    if (fcntl(fdR, F_GETFL) == -1 || fcntl(fdW, F_GETFL) == -1) {
                         ::std::cerr << "JobServer: Pipe FDs aren't open, likely missing `+` in makefile" << std::endl;
                     } else {
-                        return ::std::make_unique<JobServerClient>(fd_r, fd_w);
+                        return ::std::make_unique<JobServerClient>(fdR, fdW);
                     }
                 } else {
                 }

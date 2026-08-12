@@ -136,7 +136,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         auto ty = pp.monomorph(resolve, c.mType);
         // 1. Evaluate the constant
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
-        eval.resolve.set_both_generics_raw(pp.gdef_impl, &c.mParams);
+        eval.resolve.set_both_generics_raw(pp.gdefImpl, &c.mParams);
         MonomorphState ms(crate.types);
         ms.self_ty = pp.self_type;
         ms.pp_impl = &pp.pp_impl;
@@ -165,7 +165,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         auto ty = pp.monomorph(resolve, s.mType);
         // 1. Evaluate the constant
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
-        eval.resolve.set_both_generics_raw(pp.gdef_impl, &s.mParams);
+        eval.resolve.set_both_generics_raw(pp.gdefImpl, &s.mParams);
         MonomorphState ms(crate.types);
         ms.self_ty = pp.self_type;
         ms.pp_impl = &pp.pp_impl;
@@ -187,7 +187,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         bool is_method = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
             return x == crate.types.self();
         }));
-        bool monomorph_needed = fcnEnt.second->pp.has_types() || is_method;
+        bool monomorph_needed = fcnEnt.second->pp.hasTypes() || is_method;
 
         if (monomorph_needed) {
             const auto& path = fcnEnt.first;
@@ -196,10 +196,10 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
             ASSERT_BUG(Span(), fcn.mCode.mir, "No code for " << path);
 
             // TODO: Get the item params too
-            if (fcnEnt.second->pp.pp_impl.has_params()) {
-                assert(pp.gdef_impl);
+            if (fcnEnt.second->pp.pp_impl.hasParams()) {
+                assert(pp.gdefImpl);
             }
-            resolve.set_both_generics_raw(pp.gdef_impl, &fcn.mParams);
+            resolve.set_both_generics_raw(pp.gdefImpl, &fcn.mParams);
 
             auto mir = TransMonomorphise(resolve, fcnEnt.second->pp, fcn.mCode.mir);
 

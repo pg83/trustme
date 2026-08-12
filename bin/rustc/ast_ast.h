@@ -365,7 +365,7 @@ namespace AST {
             return isUnsafe;
         }
 
-        bool has_named_item(const RcString& name, bool& out_is_fcn) const;
+        bool hasNamedItem(const RcString& name, bool& out_is_fcn) const;
 
         Trait clone() const;
     };
@@ -614,7 +614,7 @@ namespace AST {
             return mItems;
         }
 
-        bool has_named_item(const RcString& name) const;
+        bool hasNamedItem(const RcString& name) const;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Impl& impl);
 

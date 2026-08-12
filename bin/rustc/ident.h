@@ -16,7 +16,7 @@ struct Ident {
     // TODO: make this a reference-counted pointer instead (so it's cheaper to copy)
     // - Presents challenges with setting the module path, and how this is used in macros.
     class Hygiene {
-        static unsigned g_next_scope;
+        static unsigned gNextScope;
 
         struct Inner {
             ::std::vector<unsigned int> contexts;
@@ -53,18 +53,18 @@ struct Ident {
         Hygiene& operator=(Hygiene&& x);
 
         static Hygiene new_scope() {
-            return Hygiene(++g_next_scope);
+            return Hygiene(++gNextScope);
         }
 
         static Hygiene new_scope_chained(const Hygiene& parent, unsigned int macro_definition = 0);
 
         Hygiene with_tail_scope(const Hygiene& scope, bool inherit_mod_path = false) const;
 
-        Hygiene get_parent() const;
+        Hygiene getParent() const;
 
         bool leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definitionContext);
 
-        bool has_mod_path() const {
+        bool hasModPath() const {
             return inner->search_module != 0;
         }
 

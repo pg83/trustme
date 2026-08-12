@@ -65,7 +65,7 @@ namespace AST {
 
         struct TuplePat {
             ::std::vector<Pattern> start;
-            bool has_wildcard;
+            bool hasWildcard;
             ::std::vector<Pattern> end;
         };
 

@@ -256,7 +256,7 @@ Token Token::clone() const {
     return rv;
 }
 
-AST::ExprNode& Token::frag_node() {
+AST::ExprNode& Token::fragNode() {
     assert(mType == TOK_INTERPOLATED_EXPR || mType == TOK_INTERPOLATED_STMT || mType == TOK_INTERPOLATED_BLOCK);
     auto ptr = mData.as_Fragment();
     return *reinterpret_cast<AST::ExprNode*>(ptr);
@@ -783,19 +783,19 @@ Token& Token::operator=(const Token& t) {
     return *this;
 }
 // TODO: Replace these with a way of getting a InterpolatedFragment&
-TypeRef& Token::frag_type() {
+TypeRef& Token::fragType() {
     assert(mType == TOK_INTERPOLATED_TYPE);
     return *reinterpret_cast<TypeRef*>(mData.as_Fragment());
 }
-AST::Path& Token::frag_path() {
+AST::Path& Token::fragPath() {
     assert(mType == TOK_INTERPOLATED_PATH);
     return *reinterpret_cast<AST::Path*>(mData.as_Fragment());
 }
-AST::Pattern& Token::frag_pattern() {
+AST::Pattern& Token::fragPattern() {
     assert(mType == TOK_INTERPOLATED_PATTERN);
     return *reinterpret_cast<AST::Pattern*>(mData.as_Fragment());
 }
-AST::Attribute& Token::frag_meta() {
+AST::Attribute& Token::fragMeta() {
     assert(mType == TOK_INTERPOLATED_META);
     return *reinterpret_cast<AST::Attribute*>(mData.as_Fragment());
 }

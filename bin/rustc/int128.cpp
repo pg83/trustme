@@ -47,7 +47,7 @@ void U128::to_be_bytes(uint8_t* dst, size_t max_len) {
         dst[max_len - 1 - i] = static_cast<uint8_t>((*this >> static_cast<unsigned>(i * 8)).truncate_u64());
     }
 }
-void U128::from_be_bytes(const uint8_t* src, size_t max_len) {
+void U128::fromBeBytes(const uint8_t* src, size_t max_len) {
     max_len = max_len > 16 ? 16 : max_len;
     *this = U128();
     for (size_t i = 0; i < max_len; i++) {
@@ -286,12 +286,12 @@ void S128::sign_extend(size_t n_bytes) {
         inner |= U128::max() << static_cast<unsigned>(n_bytes * 8);
     }
 }
-void S128::from_le_bytes(const uint8_t* src, size_t max_len) {
-    inner.from_le_bytes(src, max_len);
+void S128::fromLeBytes(const uint8_t* src, size_t max_len) {
+    inner.fromLeBytes(src, max_len);
     sign_extend(max_len);
 }
-void S128::from_be_bytes(const uint8_t* src, size_t max_len) {
-    inner.from_be_bytes(src, max_len);
+void S128::fromBeBytes(const uint8_t* src, size_t max_len) {
+    inner.fromBeBytes(src, max_len);
     sign_extend(max_len);
 }
 S128 S128::operator*(S128 x) const {

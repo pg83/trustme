@@ -150,7 +150,7 @@ void ::HIR::Visitor::visit_inherent_type(ItemPath p, ::HIR::TypeAlias& item) {
 
 void ::HIR::Visitor::visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {
     ::HIR::ItemPath p(impl.mType, trait_path, impl.traitArgs);
-    TRACE_FUNCTION_F("impl" << impl.mParams.fmt_args() << " " << trait_path << impl.traitArgs << " for " << impl.mType);
+    TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << trait_path << impl.traitArgs << " for " << impl.mType);
     if (mResolve) {
         mResolve->set_impl_generics_raw(MetadataType::Unknown, impl.mParams);
     }
@@ -224,7 +224,7 @@ void ::HIR::Visitor::visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) {
     if (mResolve) {
         mResolve->set_impl_generics_raw(MetadataType::Unknown, item.mParams);
     }
-    auto trait_sp = p.get_simple_path();
+    auto trait_sp = p.getSimplePath();
     auto trait_pp = item.mParams.make_nop_params(type_interner(), 0);
     const HIR::TypeRef tySelf = type_interner().self();
     ItemPath trait_ip(tySelf, trait_sp, trait_pp);
@@ -375,7 +375,7 @@ void ::HIR::Visitor::visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) {
 }
 
 void ::HIR::Visitor::visit_params(::HIR::GenericParams& params) {
-    TRACE_FUNCTION_F(params.fmt_args() << params.fmt_bounds());
+    TRACE_FUNCTION_F(params.fmtArgs() << params.fmtBounds());
     for (auto& tps : params.types) {
         this->visit_type(tps.defaultValue);
     }

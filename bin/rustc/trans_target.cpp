@@ -55,7 +55,7 @@ const TargetArch ARCH_POWERPC = {
     TargetArch::Alignments(2, 4, 8, 8, 4, 8, 4)
 };
 const TargetArch ARCH_RISCV64 = {"riscv64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
-TargetSpec g_target;
+TargetSpec gTarget;
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size, size_t& out_align);
 
@@ -378,97 +378,97 @@ namespace {
 }
 
 const TargetSpec& TargetGetCurSpec() {
-    return g_target;
+    return gTarget;
 }
 
 void TargetExportCurSpec(const ::std::string& filename) {
-    save_spec_to_file(filename, g_target);
+    save_spec_to_file(filename, gTarget);
 }
 
 void TargetSetCfg(const ::std::string& target_name) {
-    g_target = init_from_spec_name(target_name);
+    gTarget = init_from_spec_name(target_name);
 
-    if (g_target.family == "unix") {
+    if (gTarget.family == "unix") {
         CfgSetFlag("unix");
     }
-    CfgSetValue("target_family", g_target.family);
+    CfgSetValue("target_family", gTarget.family);
 
-    if (g_target.osName == "linux") {
+    if (gTarget.osName == "linux") {
         CfgSetFlag("linux");
         CfgSetValue("target_vendor", "gnu");
     }
 
-    if (g_target.osName == "macos") {
+    if (gTarget.osName == "macos") {
         CfgSetFlag("apple");
         CfgSetValue("target_vendor", "apple");
     }
 
-    if (g_target.osName == "freebsd") {
+    if (gTarget.osName == "freebsd") {
         CfgSetFlag("freebsd");
         CfgSetValue("target_vendor", "unknown");
     }
 
-    if (g_target.osName == "netbsd") {
+    if (gTarget.osName == "netbsd") {
         CfgSetFlag("netbsd");
         CfgSetValue("target_vendor", "unknown");
     }
 
-    if (g_target.osName == "openbsd") {
+    if (gTarget.osName == "openbsd") {
         CfgSetFlag("openbsd");
         CfgSetValue("target_vendor", "unknown");
     }
 
-    if (g_target.osName == "dragonfly") {
+    if (gTarget.osName == "dragonfly") {
         CfgSetFlag("dragonfly");
         CfgSetValue("target_vendor", "unknown");
     }
 
     CfgSetValue("target_vendor", ""); // NOTE: Doesn't override a pre-set value
-    CfgSetValue("target_env", g_target.envName);
-    CfgSetValue("target_os", g_target.osName);
-    CfgSetValue("target_pointer_width", FMT(g_target.arch.pointerBits));
-    CfgSetValue("target_endian", g_target.arch.bigEndian ? "big" : "little");
-    CfgSetValue("target_arch", g_target.arch.mName);
+    CfgSetValue("target_env", gTarget.envName);
+    CfgSetValue("target_os", gTarget.osName);
+    CfgSetValue("target_pointer_width", FMT(gTarget.arch.pointerBits));
+    CfgSetValue("target_endian", gTarget.arch.bigEndian ? "big" : "little");
+    CfgSetValue("target_arch", gTarget.arch.mName);
     CfgSetValue("target_abi", "llvm"); // This is a lie, but hopefully works?
     // target_has_atomic_equal_alignment="N" means align_of::<AtomicN>() == align_of::<N>().
     // Since libcore declares AtomicN with repr(align(sizeof(N))), only set it when the
     // primitive's natural alignment already matches its size (e.g. u64 on x86 has align 4,
     // so target_has_atomic_equal_alignment="64" must be unset there even with cmpxchg8b).
-    if (g_target.arch.atomics.u8) {
+    if (gTarget.arch.atomics.u8) {
         CfgSetValue("target_has_atomic", "8");
         CfgSetValue("target_has_atomic_load_store", "8");
         CfgSetValue("target_has_atomic_equal_alignment", "8");
     }
-    if (g_target.arch.atomics.u16) {
+    if (gTarget.arch.atomics.u16) {
         CfgSetValue("target_has_atomic", "16");
         CfgSetValue("target_has_atomic_load_store", "16");
-        if (g_target.arch.alignments.u16 >= 2) {
+        if (gTarget.arch.alignments.u16 >= 2) {
             CfgSetValue("target_has_atomic_equal_alignment", "16");
         }
     }
-    if (g_target.arch.atomics.u32) {
+    if (gTarget.arch.atomics.u32) {
         CfgSetValue("target_has_atomic", "32");
         CfgSetValue("target_has_atomic_load_store", "32");
-        if (g_target.arch.alignments.u32 >= 4) {
+        if (gTarget.arch.alignments.u32 >= 4) {
             CfgSetValue("target_has_atomic_equal_alignment", "32");
         }
     }
-    if (g_target.arch.atomics.u64) {
+    if (gTarget.arch.atomics.u64) {
         CfgSetValue("target_has_atomic", "64");
         CfgSetValue("target_has_atomic_load_store", "64");
-        if (g_target.arch.alignments.u64 >= 8) {
+        if (gTarget.arch.alignments.u64 >= 8) {
             CfgSetValue("target_has_atomic_equal_alignment", "64");
         }
     }
-    if (g_target.arch.atomics.ptr) {
+    if (gTarget.arch.atomics.ptr) {
         CfgSetValue("target_has_atomic", "ptr");
         CfgSetValue("target_has_atomic_load_store", "ptr");
-        if (g_target.arch.alignments.ptr * 8u >= g_target.arch.pointerBits) {
+        if (gTarget.arch.alignments.ptr * 8u >= gTarget.arch.pointerBits) {
             CfgSetValue("target_has_atomic_equal_alignment", "ptr");
         }
     }
     // TODO: Atomic compare-and-set option
-    if (g_target.arch.atomics.ptr) {
+    if (gTarget.arch.atomics.ptr) {
         CfgSetValue("target_has_atomic", "cas");
     }
     CfgSetValueCb("target_feature", [](const ::std::string& s) {
@@ -499,33 +499,33 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 case ::HIR::CoreType::U16:
                 case ::HIR::CoreType::I16:
                     out_size = 2;
-                    out_align = g_target.arch.alignments.u16;
+                    out_align = gTarget.arch.alignments.u16;
                     return true;
                 case ::HIR::CoreType::U32:
                 case ::HIR::CoreType::I32:
                 case ::HIR::CoreType::Char:
                     out_size = 4;
-                    out_align = g_target.arch.alignments.u32;
+                    out_align = gTarget.arch.alignments.u32;
                     return true;
                 case ::HIR::CoreType::U64:
                 case ::HIR::CoreType::I64:
                     out_size = 8;
-                    out_align = g_target.arch.alignments.u64;
+                    out_align = gTarget.arch.alignments.u64;
                     return true;
                 case ::HIR::CoreType::U128:
                 case ::HIR::CoreType::I128:
                     out_size = 16;
                     // TODO: If i128 is emulated, this can be 8 (as it is on x86, where it's actually 4 due to the above comment)
-                    if (g_target.backendC.emulatedI128) {
-                        out_align = g_target.arch.alignments.u64;
+                    if (gTarget.backendC.emulatedI128) {
+                        out_align = gTarget.arch.alignments.u64;
                     } else {
-                        out_align = g_target.arch.alignments.u128;
+                        out_align = gTarget.arch.alignments.u128;
                     }
                     return true;
                 case ::HIR::CoreType::Usize:
                 case ::HIR::CoreType::Isize:
-                    out_size = g_target.arch.pointerBits / 8;
-                    out_align = g_target.arch.alignments.ptr;
+                    out_size = gTarget.arch.pointerBits / 8;
+                    out_align = gTarget.arch.alignments.ptr;
                     return true;
                 case ::HIR::CoreType::F16:
                     out_size = 2;
@@ -533,15 +533,15 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return true;
                 case ::HIR::CoreType::F32:
                     out_size = 4;
-                    out_align = g_target.arch.alignments.f32;
+                    out_align = gTarget.arch.alignments.f32;
                     return true;
                 case ::HIR::CoreType::F64:
                     out_size = 8;
-                    out_align = g_target.arch.alignments.f64;
+                    out_align = gTarget.arch.alignments.f64;
                     return true;
                 case ::HIR::CoreType::F128:
                     out_size = 16;
-                    out_align = g_target.arch.alignments.f64; //f128;
+                    out_align = gTarget.arch.alignments.f64; //f128;
                     return true;
                 case ::HIR::CoreType::Str:
                     DEBUG("sizeof on a `str` - unsized");
@@ -624,7 +624,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         TU_ARMA(Borrow, te) {
             // - Alignment is machine native
-            out_align = g_target.arch.pointerBits / 8;
+            out_align = gTarget.arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
             // TODO: Handle different types of Unsized (ones with different pointer sizes)
             switch (resolve.metadata_type(sp, te.inner)) {
@@ -632,29 +632,29 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return false;
                 case MetadataType::None:
                 case MetadataType::Zero:
-                    out_size = g_target.arch.pointerBits / 8;
+                    out_size = gTarget.arch.pointerBits / 8;
                     break;
                 case MetadataType::Slice:
                 case MetadataType::TraitObject:
-                    out_size = g_target.arch.pointerBits / 8 * 2;
+                    out_size = gTarget.arch.pointerBits / 8 * 2;
                     break;
             }
             return true;
         }
         TU_ARMA(Pointer, te) {
             // - Alignment is machine native
-            out_align = g_target.arch.pointerBits / 8;
+            out_align = gTarget.arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
             switch (resolve.metadata_type(sp, te.inner)) {
                 case MetadataType::Unknown:
                     return false;
                 case MetadataType::None:
                 case MetadataType::Zero:
-                    out_size = g_target.arch.pointerBits / 8;
+                    out_size = gTarget.arch.pointerBits / 8;
                     break;
                 case MetadataType::Slice:
                 case MetadataType::TraitObject:
-                    out_size = g_target.arch.pointerBits / 8 * 2;
+                    out_size = gTarget.arch.pointerBits / 8 * 2;
                     break;
             }
             return true;
@@ -667,8 +667,8 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         TU_ARMA(Function, te) {
             // Pointer size
-            out_size = g_target.arch.pointerBits / 8;
-            out_align = g_target.arch.pointerBits / 8;
+            out_size = gTarget.arch.pointerBits / 8;
+            out_align = gTarget.arch.pointerBits / 8;
             return true;
         }
         TU_ARMA(NodeType, te) {
@@ -975,7 +975,7 @@ namespace {
         return false;
     }
 
-    bool get_nonzero_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, TypeRepr::FieldPath& out_path) {
+    bool getNonzeroPath(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, TypeRepr::FieldPath& out_path) {
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
                 const TypeRepr* repr = TargetGetTypeRepr(sp, resolve, ty);
@@ -983,7 +983,7 @@ namespace {
                     return false;
                 }
                 for (size_t i = 0; i < repr->fields.size(); i++) {
-                    if (get_nonzero_path(sp, resolve, repr->fields[i].ty, out_path)) {
+                    if (getNonzeroPath(sp, resolve, repr->fields[i].ty, out_path)) {
                         out_path.sub_fields.push_back(i);
                         return true;
                     }
@@ -991,7 +991,7 @@ namespace {
             }
             break;
             TU_ARM(*ty, Array, te) {
-                if (te.size.is_Known() && te.size.as_Known() > 0 && get_nonzero_path(sp, resolve, te.inner, out_path)) {
+                if (te.size.is_Known() && te.size.as_Known() > 0 && getNonzeroPath(sp, resolve, te.inner, out_path)) {
                     out_path.sub_fields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
@@ -1010,7 +1010,7 @@ namespace {
                         return false;
                     }
                     for (size_t i = 0; i < r->fields.size(); i++) {
-                        if (get_nonzero_path(sp, resolve, r->fields[i].ty, out_path)) {
+                        if (getNonzeroPath(sp, resolve, r->fields[i].ty, out_path)) {
                             out_path.sub_fields.push_back(i);
                             return true;
                         }
@@ -1058,13 +1058,13 @@ namespace {
         return false;
     }
 
-    size_t get_size_or_zero(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    size_t getSizeOrZero(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         size_t size = 0;
         TargetGetSizeOf(sp, resolve, ty, size);
         return size;
     }
 
-    size_t get_offset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& out_path) {
+    size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr* r, const TypeRepr::FieldPath& out_path) {
         assert(out_path.index < r->fields.size());
         size_t ofs = r->fields[out_path.index].offset;
 
@@ -1093,7 +1093,7 @@ namespace {
     /// <param name="ty"></param>
     /// <param name="out_path">Path to the variant field</param>
     /// <returns>zero for no niche found, or the number of entries already used in the niche</returns>
-    unsigned get_variant_niche_path(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t min_offset, size_t max_offset, TypeRepr::FieldPath& out_path) {
+    unsigned getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t min_offset, size_t max_offset, TypeRepr::FieldPath& out_path) {
         TRACE_FUNCTION_F(ty << " min_offset=" << min_offset << " max_offset=" << max_offset);
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
@@ -1104,12 +1104,12 @@ namespace {
 
                 for (size_t i = 0; i < r->fields.size(); i++) {
                     const auto& f = r->fields[i];
-                    auto size = get_size_or_zero(sp, resolve, f.ty);
+                    auto size = getSizeOrZero(sp, resolve, f.ty);
                     DEBUG(i << ": " << f.offset << " + " << size);
                     if (f.offset >= max_offset) {
                         continue;
                     } else if (f.offset + size > min_offset) {
-                        if (auto rv = get_variant_niche_path(sp, resolve, f.ty, (f.offset < min_offset ? min_offset - f.offset : 0), max_offset - f.offset, out_path)) {
+                        if (auto rv = getVariantNichePath(sp, resolve, f.ty, (f.offset < min_offset ? min_offset - f.offset : 0), max_offset - f.offset, out_path)) {
                             out_path.sub_fields.push_back(i);
                             return rv;
                         }
@@ -1135,7 +1135,7 @@ namespace {
                         DEBUG("Max bounded");
                         assert(r->fields.size() >= 1);
                         assert(r->fields[0].offset == 0);
-                        auto size = get_size_or_zero(sp, resolve, r->fields[0].ty);
+                        auto size = getSizeOrZero(sp, resolve, r->fields[0].ty);
                         if (size > max_offset) {
                             return 0;
                         }
@@ -1146,12 +1146,12 @@ namespace {
 
                     for (size_t i = 0; i < r->fields.size(); i++) {
                         const auto& f = r->fields[i];
-                        auto size = get_size_or_zero(sp, resolve, f.ty);
+                        auto size = getSizeOrZero(sp, resolve, f.ty);
                         DEBUG(i << ": " << f.offset << " + " << size);
                         if (f.offset >= max_offset) {
                             continue;
                         } else if (f.offset + size > min_offset) {
-                            if (auto rv = get_variant_niche_path(sp, resolve, f.ty, (f.offset < min_offset ? min_offset - f.offset : 0), max_offset - f.offset, out_path)) {
+                            if (auto rv = getVariantNichePath(sp, resolve, f.ty, (f.offset < min_offset ? min_offset - f.offset : 0), max_offset - f.offset, out_path)) {
                                 out_path.sub_fields.push_back(i);
                                 return rv;
                             }
@@ -1169,7 +1169,7 @@ namespace {
                             if (r->fields.empty()) {
                                 return 0;
                             } else {
-                                auto rv = get_variant_niche_path(sp, resolve, r->fields[0].ty, min_offset, max_offset, out_path);
+                                auto rv = getVariantNichePath(sp, resolve, r->fields[0].ty, min_offset, max_offset, out_path);
                                 if (rv) {
                                     out_path.sub_fields.push_back(0);
                                 }
@@ -1178,7 +1178,7 @@ namespace {
                         }
                         TU_ARMA(Linear, ve) {
                             // Check that the offset of this tag field is >= min_offset
-                            auto ofs = get_offset(sp, resolve, r, ve.field);
+                            auto ofs = getOffset(sp, resolve, r, ve.field);
                             DEBUG("Linear - Tag offset: " << ofs);
                             if (min_offset <= ofs && ofs + ve.field.size <= max_offset) {
                                 out_path.size = ve.field.size;
@@ -1189,7 +1189,7 @@ namespace {
                             }
                         }
                         TU_ARMA(Values, ve) {
-                            auto ofs = get_offset(sp, resolve, r, ve.field);
+                            auto ofs = getOffset(sp, resolve, r, ve.field);
                             DEBUG("Values - Tag offset: " << ofs);
                             if (min_offset <= ofs && ofs + ve.field.size <= max_offset) {
                                 auto last_value = *std::max_element(ve.values.begin(), ve.values.end());
@@ -1279,7 +1279,7 @@ namespace {
                         }
                         DEBUG("max_size = " << max_size << ", max_align = " << max_align);
 
-                        auto tag_ty = enm.tagRepr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.get_repr_type(enm.tagRepr);
+                        auto tag_ty = enm.tagRepr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.getReprType(enm.tagRepr);
                         rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tag_ty)});
                         size_t tag_size, tag_align;
                         TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tag_size, tag_align);
@@ -1327,12 +1327,12 @@ namespace {
                         };
 
                         /// Is there an explicitly specified discriminant value provided?
-                        bool has_explcit_value = false;
+                        bool hasExplcitValue = false;
                         std::vector<Variant> variants;
                         variants.reserve(e.size());
                         for (const auto& var : e) {
                             if (var.discriminantExpr) {
-                                has_explcit_value = true;
+                                hasExplcitValue = true;
                             }
 
                             auto variant_type = monomorph(var.type);
@@ -1350,7 +1350,7 @@ namespace {
                         }
 
                         if (enm.tagRepr == ::HIR::Enum::Repr::Auto) {
-                            ASSERT_BUG(sp, !has_explcit_value, "Explicit tag without a repr");
+                            ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
                             // Non-zero optimisation
                             if (rv.variants.is_None() && variants.size() == 2) {
                                 // If only one variant has a size of 0, then look for a nonzero in the variant list
@@ -1370,7 +1370,7 @@ namespace {
                                     DEBUG("Variant #" << nz_var << " is populated, checking for NonZero");
                                     for (size_t i = 0; i < variants[nz_var].ents.size(); i++) {
                                         TypeRepr::FieldPath nz_path;
-                                        if (get_nonzero_path(sp, resolve, variants[nz_var].ents[i].ty, nz_path)) {
+                                        if (getNonzeroPath(sp, resolve, variants[nz_var].ents[i].ty, nz_path)) {
                                             nz_path.sub_fields.push_back(i);
                                             nz_path.index = nz_var;
                                             ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
@@ -1437,7 +1437,7 @@ namespace {
                                         // 1. Look for a tag at the end
                                         // - Prefer the end-of-struct version, as it avoids adding fields to the other variants
                                         TypeRepr::FieldPath nz_path;
-                                        if (auto offset = get_variant_niche_path(sp, resolve, fld.ty, (min_offset > fld.offset ? min_offset - fld.offset : 0), max_var_size, nz_path)) {
+                                        if (auto offset = getVariantNichePath(sp, resolve, fld.ty, (min_offset > fld.offset ? min_offset - fld.offset : 0), max_var_size, nz_path)) {
                                             size_t max_var = 0;
                                             switch (nz_path.size) {
                                                 case 1:
@@ -1458,7 +1458,7 @@ namespace {
                                                 // TODO: Get the niche offset, store so structure updating can add it...
                                                 nz_path.index = i;
                                                 ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
-                                                niche_offset = get_offset(sp, resolve, &*reprs[biggestVar], nz_path);
+                                                niche_offset = getOffset(sp, resolve, &*reprs[biggestVar], nz_path);
                                                 ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
 
                                                 nz_path.sub_fields.push_back(i);
@@ -1484,7 +1484,7 @@ namespace {
                                         // - Prepending the tag might change the next-largest variant too much?
                                         if (fld.offset == 0) {
                                             TypeRepr::FieldPath nz_path;
-                                            if (auto offset = get_variant_niche_path(sp, resolve, fld.ty, 0, max_var_size - min_offset, nz_path)) {
+                                            if (auto offset = getVariantNichePath(sp, resolve, fld.ty, 0, max_var_size - min_offset, nz_path)) {
                                                 size_t max_var = 0;
                                                 switch (nz_path.size) {
                                                     case 1:
@@ -1505,7 +1505,7 @@ namespace {
                                                     // TODO: Get the niche offset, store so structure updating can add it...
                                                     nz_path.index = i;
                                                     ::std::reverse(nz_path.sub_fields.begin(), nz_path.sub_fields.end());
-                                                    niche_offset = get_offset(sp, resolve, &*reprs[biggestVar], nz_path);
+                                                    niche_offset = getOffset(sp, resolve, &*reprs[biggestVar], nz_path);
                                                     if (niche_offset != 0) {
                                                         // - For now, only accept zero offsets
                                                         DEBUG("Ignore niche not at the start of the struture");
@@ -1562,8 +1562,8 @@ namespace {
                                     // - Add `non_niche_offset` to all variants
                                     assert(reprs.size() == variants.size());
                                     // Size/alignment of the union of the *final* variant layouts, which is what codegen emits.
-                                    size_t final_size = 0;
-                                    size_t final_align = 1;
+                                    size_t finalSize = 0;
+                                    size_t finalAlign = 1;
                                     for (size_t i = 0; i < reprs.size(); i++) {
                                         if (e[i].type != resolve.crate.types.unit()) {
                                             // If the tag is leading, then add to all other variants and update reprs
@@ -1593,7 +1593,7 @@ namespace {
                                                 auto tag_fld_idx = variants[i].ents.size();
                                                 size_t max_ofs = 0;
                                                 for (const auto& f : reprs[i]->fields) {
-                                                    max_ofs = std::max(max_ofs, f.offset + get_size_or_zero(sp, resolve, f.ty));
+                                                    max_ofs = std::max(max_ofs, f.offset + getSizeOrZero(sp, resolve, f.ty));
                                                 }
                                                 // - Increase alignment to the niche size
                                                 if (max_ofs % niche_path.size != 0) {
@@ -1620,15 +1620,15 @@ namespace {
                                                 assert(reprs[i]->size <= max_size);
                                                 assert(reprs[i]->align <= max_align);
                                             }
-                                            final_size = std::max(final_size, reprs[i]->size);
-                                            final_align = std::max(final_align, reprs[i]->align);
+                                            finalSize = std::max(finalSize, reprs[i]->size);
+                                            finalAlign = std::max(finalAlign, reprs[i]->align);
                                             set_type_repr(sp, variants[i].type, std::move(reprs[i]));
                                         } else {
                                             // Note: unit type (any empty type) doesn't need the tag added
                                             // NOTE: Unit type should already have a repr, but make sure
                                             if (const auto* r = TargetGetTypeRepr(sp, resolve, variants[i].type)) {
-                                                final_size = std::max(final_size, r->size);
-                                                final_align = std::max(final_align, r->align);
+                                                finalSize = std::max(finalSize, r->size);
+                                                finalAlign = std::max(finalAlign, r->align);
                                             }
                                         }
                                         rv.fields.push_back(TypeRepr::Field{0, mv$(variants[i].type)});
@@ -1638,20 +1638,20 @@ namespace {
                                     rv.align = max_align;
 
                                     // Under a capping ABI take size/align from the final variant layouts - `max_align` predates the tag field, so it over-states them
-                                    if (TargetCapsMemberAlignment() && final_size > 0) {
-                                        size_t sz = final_size;
-                                        while (sz % final_align != 0) {
+                                    if (TargetCapsMemberAlignment() && finalSize > 0) {
+                                        size_t sz = finalSize;
+                                        while (sz % finalAlign != 0) {
                                             sz++;
                                         }
-                                        if (sz != rv.size || final_align != rv.align) {
-                                            DEBUG("Capping ABI: " << ty << " " << rv.size << "/" << rv.align << " -> " << sz << "/" << final_align << " (union of the final variants)");
+                                        if (sz != rv.size || finalAlign != rv.align) {
+                                            DEBUG("Capping ABI: " << ty << " " << rv.size << "/" << rv.align << " -> " << sz << "/" << finalAlign << " (union of the final variants)");
                                             rv.size = sz;
-                                            rv.align = final_align;
+                                            rv.align = finalAlign;
                                         }
                                     }
 
                                     // Ensure that the tag offset is still valid
-                                    auto tag_offset = get_offset(sp, resolve, &rv, niche_path);
+                                    auto tag_offset = getOffset(sp, resolve, &rv, niche_path);
                                     if (non_niche_offset != 0) {
                                         ASSERT_BUG(sp, tag_offset < non_niche_offset, "Niche offset invalid: " << tag_offset << " >= " << non_niche_offset);
                                     } else {
@@ -1674,9 +1674,9 @@ namespace {
                             ::HIR::TypeRef tag_ty;
                             // If the tag size is specified, then force that
                             if (enm.tagRepr != HIR::Enum::Repr::Auto) {
-                                tag_ty = resolve.crate.types.primitive(enm.get_repr_type(enm.tagRepr));
+                                tag_ty = resolve.crate.types.primitive(enm.getReprType(enm.tagRepr));
                             } else {
-                                ASSERT_BUG(sp, !has_explcit_value, "Explicit tag without a repr");
+                                ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
                                 if (e.size() <= 1) {
                                     // Unreachable
                                     BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
@@ -1732,7 +1732,7 @@ namespace {
                             }
                             rv.align = max_align;
 
-                            if (has_explcit_value) {
+                            if (hasExplcitValue) {
                                 ::std::vector<U128> vals;
                                 for (const auto& v : e) {
                                     vals.push_back(v.discriminant_value);
@@ -1787,7 +1787,7 @@ namespace {
                             }
                             break;
                         default:
-                            rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(enm.get_repr_type(enm.tagRepr))});
+                            rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(enm.getReprType(enm.tagRepr))});
                             break;
                     }
                     if (rv.fields.size() > 0) {
@@ -1920,7 +1920,7 @@ namespace {
     static ::std::unordered_map<::HIR::TypeRef, ::std::unique_ptr<TypeRepr>> s_unencoded_cache;
     static ::std::unordered_map<::HIR::TypeRef, const TypeRepr*> s_cache_exact;
 
-    bool has_abi_identity(::HIR::TypeRef ty) {
+    bool hasAbiIdentity(::HIR::TypeRef ty) {
         return !monomorphise_type_needed(ty, /*ignore_lifetimes=*/true)
             && !ty->is_Infer()
             && !ty->is_ErasedType()
@@ -1928,7 +1928,7 @@ namespace {
     }
 
     void set_type_repr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
-        if (!has_abi_identity(ty)) {
+        if (!hasAbiIdentity(ty)) {
             const auto* repr_ptr = repr.get();
             auto ires = s_unencoded_cache.emplace(ty, mv$(repr));
             ASSERT_BUG(sp, ires.second, "set_type_repr called for type that already has a repr: " << ty);
@@ -1974,7 +1974,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
         return exact->second;
     }
 
-    if (!has_abi_identity(ty)) {
+    if (!hasAbiIdentity(ty)) {
         auto repr = make_type_repr(sp, resolve, ty);
         const auto* rv = repr.get();
         auto ires = s_unencoded_cache.emplace(ty, mv$(repr));
@@ -2020,7 +2020,7 @@ const ::HIR::TypeData* TargetGetInnerType(const Span& sp, const StaticTraitResol
     return *ty;
 }
 
-size_t TypeRepr::get_offset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr::FieldPath& path) const {
+size_t TypeRepr::getOffset(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr::FieldPath& path) const {
     const auto* r = this;
     assert(path.index < r->fields.size());
     size_t ofs = r->fields[path.index].offset;
@@ -2043,14 +2043,14 @@ size_t TypeRepr::get_offset(const Span& sp, const StaticTraitResolve& resolve, c
     return ofs;
 }
 
-std::pair<unsigned, bool> TypeRepr::get_enum_variant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const {
+std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const {
     unsigned var_idx = 0;
     bool sub_has_tag = false;
     TU_MATCH_HDRA( (this->variants), {)
     TU_ARMA(None, ve) {
         }
         TU_ARMA(Linear, ve) {
-            auto v = lit.slice(this->get_offset(sp, resolve, ve.field), ve.field.size).read_uint(ve.field.size);
+            auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).read_uint(ve.field.size);
             if (v < ve.offset) {
                 var_idx = ve.field.index;
                 sub_has_tag = false; // TODO: is this correct?
@@ -2062,14 +2062,14 @@ std::pair<unsigned, bool> TypeRepr::get_enum_variant(const Span& sp, const Stati
             }
         }
         TU_ARMA(Values, ve) {
-            auto v = lit.slice(this->get_offset(sp, resolve, ve.field), ve.field.size).read_uint(ve.field.size);
+            auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).read_uint(ve.field.size);
             auto it = std::find(ve.values.begin(), ve.values.end(), v);
             ASSERT_BUG(sp, it != ve.values.end(), "Invalid enum tag: " << v);
             var_idx = it - ve.values.begin();
             DEBUG("VariantMode::Values - #" << var_idx);
         }
         TU_ARMA(NonZero, ve) {
-            size_t ofs = this->get_offset(sp, resolve, ve.field);
+            size_t ofs = this->getOffset(sp, resolve, ve.field);
             bool is_nonzero = false;
             for (size_t i = 0; i < ve.field.size; i++) {
                 if (lit.slice(ofs + i, 1).read_uint(1) != 0) {

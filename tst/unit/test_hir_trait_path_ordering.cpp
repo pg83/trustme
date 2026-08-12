@@ -33,11 +33,11 @@ namespace {
 }
 
 int main() {
-    const auto fn_before_elision = make_trait_path("Fn", true);
-    const auto fn_after_elision = make_trait_path("Fn", false);
+    const auto fnBeforeElision = make_trait_path("Fn", true);
+    const auto fnAfterElision = make_trait_path("Fn", false);
     const auto unrelated = make_trait_path("Unrelated", false);
 
-    assert(fn_before_elision == fn_after_elision);
-    assert(fn_before_elision != unrelated);
-    assert(fn_after_elision != unrelated);
+    assert(fnBeforeElision == fnAfterElision);
+    assert(fnBeforeElision != unrelated);
+    assert(fnAfterElision != unrelated);
 }

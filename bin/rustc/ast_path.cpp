@@ -218,7 +218,7 @@ namespace AST {
 
     /// Return an iterator to the named item
     template <typename T>
-    typename ::std::vector<Named<T>>::const_iterator find_named(const ::std::vector<Named<T>>& vec, const ::std::string& name) {
+    typename ::std::vector<Named<T>>::const_iterator findNamed(const ::std::vector<Named<T>>& vec, const ::std::string& name) {
         return ::std::find_if(vec.begin(), vec.end(), [&name](const Named<T>& x) {
             return x.name == name;
         });

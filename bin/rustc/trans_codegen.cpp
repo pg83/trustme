@@ -14,7 +14,7 @@
 #include <iomanip>
 #include <fstream>
 
-void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* cratePtr, TransList list, const ::std::string& hir_file) {
+void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const TransOptions& opt, ::HIR::Crate* cratePtr, TransList list, const ::std::string& hirFile) {
     static Span sp;
 
     ::std::unique_ptr<CodeGenerator> codegen;
@@ -63,15 +63,15 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
         // - Enum variant (must be a tuple variant)
         const ::HIR::Module* mod_ptr = nullptr;
         if (path.mPath.components().size() > 1) {
-            const auto& nse = cratePtr->get_typeitem_by_path(sp, path.mPath, false, true);
+            const auto& nse = cratePtr->getTypeitemByPath(sp, path.mPath, false, true);
             if (const auto* e = nse.opt_Enum()) {
-                auto var_idx = e->find_variant(path.mPath.components().back());
+                auto var_idx = e->findVariant(path.mPath.components().back());
                 codegen->emitConstructorEnum(sp, path, *e, var_idx);
                 continue;
             }
             mod_ptr = &nse.as_Module();
         } else {
-            mod_ptr = &cratePtr->get_mod_by_path(sp, path.mPath, true);
+            mod_ptr = &cratePtr->getModByPath(sp, path.mPath, true);
         }
 
         // Not an enum, currently must be a struct
@@ -87,7 +87,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
         const auto& fcn = *ent.second->ptr;
         // Extern if there isn't any HIR
         bool is_extern = !static_cast<bool>(fcn.mCode);
-        if (fcn.mCode.mir && !ent.second->force_prototype) {
+        if (fcn.mCode.mir && !ent.second->forcePrototype) {
             codegen->emitFunctionProto(ent.first, fcn, ent.second->pp, is_extern);
         }
     }
@@ -96,7 +96,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
         //DEBUG("FUNCTION " << ent.first);
         assert(ent.second->ptr);
         const auto& fcn = *ent.second->ptr;
-        if (fcn.mCode.mir && !ent.second->force_prototype) {
+        if (fcn.mCode.mir && !ent.second->forcePrototype) {
         } else {
             // TODO: Why would an intrinsic be in the queue?
             // - If it's exported it does.
@@ -139,7 +139,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
 
     // 4. Emit function code
     for (const auto& ent : list.functions) {
-        if (ent.second->ptr && ent.second->ptr->mCode.mir && !ent.second->force_prototype) {
+        if (ent.second->ptr && ent.second->ptr->mCode.mir && !ent.second->forcePrototype) {
             const auto& path = ent.first;
             const auto& fcn = *ent.second->ptr;
             const auto& pp = ent.second->pp;
@@ -152,7 +152,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
                 return x == cratePtr->types.self();
             }));
 
-            bool is_monomorph = pp.has_types() || is_method;
+            bool is_monomorph = pp.hasTypes() || is_method;
             if (ent.second->monomorphised.code) {
                 // TODO: Flag that this should be a weak (or weak-er) symbol?
                 // - If it's from an external crate, it should be weak, but what about local ones?
@@ -173,7 +173,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
     // - This can save several GB of working set
     list = TransList();
     // Would drop the entire crate, but finalise tends to need it
-    codegen->finalise(opt, out_ty, hir_file);
+    codegen->finalise(opt, out_ty, hirFile);
 }
 
 
@@ -311,12 +311,12 @@ namespace {
                     TU_ARM(w, Deref, e)
                     os << ")";
                     break;
-                    TU_ARM(w, Field, field_index) {
+                    TU_ARM(w, Field, fieldIndex) {
                         // Add a space to prevent accidental float literals
                         if (prev_was_num) {
                             os << " ";
                         }
-                        os << "." << field_index;
+                        os << "." << fieldIndex;
                         was_num = true;
                     }
                     break;
@@ -439,16 +439,16 @@ namespace {
             }
         }
 
-        void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hir_file) override {
+        void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hirFile) override {
             if (out_ty == CodegenOutput::Executable) {
                 if (!crate.noMain) {
                     of << "fn main#(isize, *const *const i8): isize {\n";
-                    auto cStartPath = mResolve.crate.get_lang_item_path_opt("mrustc-start");
+                    auto cStartPath = mResolve.crate.getLangItemPathOpt("mrustc-start");
                     if (cStartPath == ::HIR::SimplePath()) {
-                        auto main_path = mResolve.crate.get_lang_item_path(Span(), "mrustc-main");
-                        const auto& start_path = mResolve.crate.get_lang_item_path_opt("start");
+                        auto main_path = mResolve.crate.getLangItemPath(Span(), "mrustc-main");
+                        const auto& start_path = mResolve.crate.getLangItemPathOpt("start");
                         if (crate.isNoCore && start_path == ::HIR::SimplePath()) {
-                            const auto& main_fcn = crate.get_function_by_path(Span(), main_path);
+                            const auto& main_fcn = crate.getFunctionByPath(Span(), main_path);
                             of << "\tlet direct_main_result: " << fmt(main_fcn.returnType) << ";\n";
                             of << "\t0: {\n";
                             of << "\t\tCALL direct_main_result = " << fmt(::HIR::GenericPath(main_path)) << "() goto 1 else 1\n";
@@ -456,7 +456,7 @@ namespace {
                             of << "\tlet m: fn();\n";
                             of << "\t0: {\n";
                             of << "\t\tASSIGN m = ADDROF " << fmt(::HIR::GenericPath(main_path)) << ";\n";
-                            of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(mResolve.crate.get_lang_item_path(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
+                            of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(mResolve.crate.getLangItemPath(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
                         }
                     } else {
                         of << "\t0: {\n";
@@ -470,7 +470,7 @@ namespace {
                 }
 
                 // Bind `panic_impl` lang item to the item tagged with `panic_implementation`.
-                const auto& panic_impl_path = crate.get_lang_item_path_opt("mrustc-panic_implementation");
+                const auto& panic_impl_path = crate.getLangItemPathOpt("mrustc-panic_implementation");
                 if (panic_impl_path != ::HIR::SimplePath()) {
                     of << "fn panic_impl#(usize): u32 = \"panic_impl\":\"Rust\" {\n";
                     of << "\t0: {\n";
@@ -480,7 +480,7 @@ namespace {
                     of << "\t2: { DIVERGE }\n";
                     of << "}\n";
                 } else if (!crate.isNoCore) {
-                    crate.get_lang_item_path(Span(), "mrustc-panic_implementation");
+                    crate.getLangItemPath(Span(), "mrustc-panic_implementation");
                 }
 
                 // TODO: OOM impl?
@@ -511,12 +511,12 @@ namespace {
                     const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
                     MIR_ASSERT(*mirRes, repr, "No repr for tuple " << ty);
 
-                    bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
+                    bool hasDropGlue = mResolve.type_needs_drop_glue(sp, ty);
                     auto dropGluePath = ::HIR::Path(ty, "#drop_glue");
 
                     of << "type " << fmt(ty) << " {\n";
                     of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
-                    if (has_drop_glue) {
+                    if (hasDropGlue) {
                         of << "\tDROP " << fmt(dropGluePath) << ";\n";
                     }
                     for (const auto& e : repr->fields) {
@@ -588,7 +588,7 @@ namespace {
             ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
 
             struct H {
-                static ::HIR::TypeRef get_metadata_type(const Span& sp, const ::StaticTraitResolve& resolve, const TypeRepr& r) {
+                static ::HIR::TypeRef getMetadataType(const Span& sp, const ::StaticTraitResolve& resolve, const TypeRepr& r) {
                     ASSERT_BUG(sp, r.fields.size() > 0, "");
                     auto& t = r.fields.back().ty;
                     if (t->is_Primitive() && t->as_Primitive() == ::HIR::CoreType::Str) {
@@ -599,15 +599,15 @@ namespace {
                         const auto& te = t->as_TraitObject();
                         //auto vtp = t.m_data.as_TraitObject().m_trait.m_path;
 
-                        const auto& trait = resolve.crate.get_trait_by_path(sp, te.mTrait.mPath.mPath);
-                        auto vtable_ty = trait.get_vtable_type(sp, resolve.crate, te);
+                        const auto& trait = resolve.crate.getTraitByPath(sp, te.mTrait.mPath.mPath);
+                        auto vtable_ty = trait.getVtableType(sp, resolve.crate, te);
                         return resolve.crate.types.pointer(::HIR::BorrowType::Shared, vtable_ty);
                     } else if (t->is_Path() && t->as_Path().binding.is_ExternType()) {
                         return resolve.crate.types.unit();
                     } else if (t->is_Path()) {
                         auto* repr = TargetGetTypeRepr(sp, resolve, t);
                         ASSERT_BUG(sp, repr, "No repr for " << t);
-                        return get_metadata_type(sp, resolve, *repr);
+                        return getMetadataType(sp, resolve, *repr);
                     } else {
                         BUG(sp, "Unexpected type in get_metadata_type - " << t);
                     }
@@ -615,16 +615,16 @@ namespace {
             };
 
             // Generate the drop glue (and determine if there is any)
-            bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
+            bool hasDropGlue = mResolve.type_needs_drop_glue(sp, ty);
 
             const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
             MIR_ASSERT(*mirRes, repr, "No repr for struct " << ty);
             of << "type " << TransMangle(p) << " {\n";
             of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
             if (repr->size == SIZE_MAX) {
-                of << "\tDSTMETA " << H::get_metadata_type(sp, mResolve, *repr) << ";\n";
+                of << "\tDSTMETA " << H::getMetadataType(sp, mResolve, *repr) << ";\n";
             }
-            if (has_drop_glue) {
+            if (hasDropGlue) {
                 of << "\tDROP " << fmt(dropGluePath) << ";\n";
             }
             for (const auto& e : repr->fields) {
@@ -715,14 +715,14 @@ namespace {
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
 
-            bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
+            bool hasDropGlue = mResolve.type_needs_drop_glue(sp, ty);
             auto dropGluePath = ::HIR::Path(ty, "#drop_glue");
 
             const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
             MIR_ASSERT(*mirRes, repr, "No repr for union " << ty);
             of << "type " << fmt(p) << " {\n";
             of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
-            if (has_drop_glue) {
+            if (hasDropGlue) {
                 of << "\tDROP " << fmt(dropGluePath) << ";\n";
             }
             for (const auto& e : repr->fields) {
@@ -742,14 +742,14 @@ namespace {
             ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
 
             // Generate the drop glue (and determine if there is any)
-            bool has_drop_glue = mResolve.type_needs_drop_glue(sp, ty);
+            bool hasDropGlue = mResolve.type_needs_drop_glue(sp, ty);
             auto dropGluePath = ::HIR::Path(ty, "#drop_glue");
 
             const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
             MIR_ASSERT(*mirRes, repr, "No repr for enum " << ty);
             of << "type " << fmt(p) << " {\n";
             of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
-            if (has_drop_glue) {
+            if (hasDropGlue) {
                 of << "\tDROP " << fmt(dropGluePath) << ";\n";
             }
             for (const auto& e : repr->fields) {
@@ -1286,7 +1286,7 @@ namespace {
                         TU_ARM(term, Drop, e) {
                             of << "DROP " << fmt(e.slot);
                             if (e.kind == ::MIR::eDropKind::SHALLOW) of << " SHALLOW";
-                            if (e.flag_idx != ~0u) of << " IF df" << e.flag_idx;
+                            if (e.flagIdx != ~0u) of << " IF df" << e.flagIdx;
                             of << " goto " << e.target << " unwind " << e.unwind.tag_str() << "\n";
                         }
                         break;
@@ -1341,13 +1341,13 @@ namespace {
 
     private:
         const ::HIR::TypeData* monomorphise_fcn_return(::HIR::TypeRef& tmp, const ::HIR::Function& item, const TransParams& params) {
-            bool has_erased = visit_ty_with(item.returnType, [&](const auto& x) {
+            bool hasErased = visit_ty_with(item.returnType, [&](const auto& x) {
                 return x->is_ErasedType();
             });
 
-            if (has_erased || monomorphise_type_needed(item.returnType)) {
+            if (hasErased || monomorphise_type_needed(item.returnType)) {
                 // If there's an erased type, make a copy with the erased type expanded
-                if (has_erased) {
+                if (hasErased) {
                     tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
                         if (const auto* te = x->opt_ErasedType()) {
                             if (const auto* e = te->inner.opt_Fcn()) {

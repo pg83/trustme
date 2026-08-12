@@ -58,14 +58,14 @@ public:
     TomlFileIter end();
 
     // Obtain the next value in the file
-    TomlKeyValue get_next_value();
+    TomlKeyValue getNextValue();
 
     const TomlLexer& lexer() const {
         return mLexer;
     }
 
 private:
-    std::vector<std::string> get_path(std::vector<std::string> tail) const;
+    std::vector<std::string> getPath(std::vector<std::string> tail) const;
     /// Consume a balanced `[...]` / `{...}` group (nested groups included),
     /// discarding its contents. The opening bracket/brace must already have
     /// been consumed. Used to skip nested arrays / inline tables that only
@@ -146,7 +146,7 @@ public:
     }
 
     void operator++() {
-        curValue = reader.get_next_value();
+        curValue = reader.getNextValue();
     }
 
     bool operator!=(const TomlFileIter& x) const {

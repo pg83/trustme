@@ -87,7 +87,7 @@ struct TraitResolveCommon {
 
     TraitResolveCommon(const ::HIR::Crate& crate);
 
-    bool has_self() const {
+    bool hasSelf() const {
         return implGenerics ? true : false;
     }
 
@@ -98,7 +98,7 @@ struct TraitResolveCommon {
     /// <summary>
     /// Obtain the type for a given constant parameter
     /// </summary>
-    const ::HIR::TypeData* get_const_param_type(const Span& sp, unsigned binding) const;
+    const ::HIR::TypeData* getConstParamType(const Span& sp, unsigned binding) const;
 
     void prep_indexes(const Span& sp);
 

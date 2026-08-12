@@ -19,7 +19,7 @@ public:
 
     /// Formats an integer in a decodable format (lower case until the final digit)
     // Used to encode values that might be have trailing digits
-    void fmt_base26_int(unsigned val) {
+    void fmtBase26Int(unsigned val) {
         // Lower-case:
         while (val >= 26) {
             os << char('a' + (val % 26));
@@ -33,7 +33,7 @@ public:
     // - These can be repeated quite often, so support back-references
     //   > Back-references are emitted as "`_` <base26>"
     // - Otherwise, emitted as a raw string (see below)
-    void fmt_name(const RcString& s) {
+    void fmtName(const RcString& s) {
         // Support back-references to names (if shorter than the literal name)
         auto it = std::find(nameCache.begin(), nameCache.end(), s);
         if (it != nameCache.end()) {
@@ -42,14 +42,14 @@ public:
             auto len = 1 + static_cast<unsigned>(std::ceil(std::log10(idx + 1) / std::log10(26)));
             if (len < s.size()) {
                 os << "_";
-                fmt_base26_int(idx);
+                fmtBase26Int(idx);
                 return;
             }
         } else {
             nameCache.push_back(s);
         }
 
-        this->fmt_name(s.c_str());
+        this->fmtName(s.c_str());
     }
 
     // Item names:
@@ -59,10 +59,10 @@ public:
     // - "<len:int> <raw_data>" (fully valid identifier)
     // - "<ofs:base26> <len:int> <raw_data1> <raw_data2>" (`#` or `-` present)
     // - "<len:base26> `_` <raw_data2>" (`#` or `-` at the start)
-    void fmt_name(const char* const s) {
-        bool has_non_ascii = false;
+    void fmtName(const char* const s) {
+        bool hasNonAscii = false;
         for (const auto* p = reinterpret_cast<const unsigned char*>(s); *p; ++p) {
-            has_non_ascii |= *p >= 0x80;
+            hasNonAscii |= *p >= 0x80;
         }
 
         // The C backend needs an ASCII identifier, not the externally-visible
@@ -70,7 +70,7 @@ public:
         // ordinary ASCII names beginning with `U` as well, so the mapping stays
         // injective (e.g. Unicode Ue588... and source identifier Ue588...).
         ::std::string encoded;
-        if (has_non_ascii) {
+        if (hasNonAscii) {
             static constexpr char HEX[] = "0123456789abcdef";
             encoded = "U";
             for (const auto* p = reinterpret_cast<const unsigned char*>(s); *p; ++p) {
@@ -84,7 +84,7 @@ public:
         const auto* name = encoded.empty() ? s : encoded.c_str();
 
         size_t size = strlen(name);
-        const char* hash_pos = nullptr;
+        const char* hashPos = nullptr;
         // Search the string for a '#' or '-' character (only one allowed)
         for (const auto* p = name; *p; p++) {
             if (isalnum(static_cast<unsigned char>(*p))) {
@@ -92,40 +92,40 @@ public:
             } else if (*p == '#' || *p == '-') { // HACK: Treat '-' and '#' as the same in encoding
                 // Multiple hash characters? abort/error
                 // HACK: Only treat the last one as special, previous ones are replaced by underscores
-                hash_pos = p;
+                hashPos = p;
             } else {
                 BUG(Span(), "Encounteded invalid character in symbol name while mangling: '" << *p << "' in '" << name << "'");
             }
         }
 
         // If there's a hash, then encode such that it's removed
-        if (hash_pos != nullptr) {
-            auto pre_hash_len = static_cast<int>(hash_pos - name);
+        if (hashPos != nullptr) {
+            auto pre_hash_len = static_cast<int>(hashPos - name);
             // If the hash is at the start, and is followed by either a digit (expected) or an underscore (unlikely) - then encode with a leading underscore
-            if (hash_pos == name && (isdigit(static_cast<unsigned char>(hash_pos[1])) || hash_pos[1] == '_')) {
+            if (hashPos == name && (isdigit(static_cast<unsigned char>(hashPos[1])) || hashPos[1] == '_')) {
                 // <len:base26> '_' <body2>
                 // An encoding that allows this pattern
-                fmt_base26_int(size - 1);
-                ASSERT_BUG(Span(), hash_pos[1] != '_', "Leading underscore not valid in '" << name << "'");
+                fmtBase26Int(size - 1);
+                ASSERT_BUG(Span(), hashPos[1] != '_', "Leading underscore not valid in '" << name << "'");
                 os << '_';
-                os << hash_pos + 1;
+                os << hashPos + 1;
             } else {
                 // <pos:base26> <len:int> <body1> <body2>
-                fmt_base26_int(pre_hash_len);
+                fmtBase26Int(pre_hash_len);
                 bool needs_leading_escape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
                 os << size - 1 + (needs_leading_escape ? 1 : 0);
                 // If the string starts with a digit or underscrore, then escape it with another underscore.
                 if (needs_leading_escape) {
                     os << '_';
                 }
-                for (const char* c = name; c != hash_pos; ++c) {
+                for (const char* c = name; c != hashPos; ++c) {
                     if (*c == '-' || *c == '#') {
                         os << '_';
                     } else {
                         os << *c;
                     }
                 }
-                os << hash_pos + 1;
+                os << hashPos + 1;
             }
         } else {
             bool needs_leading_escape = (isdigit(static_cast<unsigned char>(name[0])) || name[0] == '_');
@@ -138,17 +138,17 @@ public:
     }
 
     // SimplePath : <ncomp> 'c' [<RcString> ...]
-    void fmt_simple_path(const ::HIR::SimplePath& sp) {
+    void fmtSimplePath(const ::HIR::SimplePath& sp) {
         os << sp.components().size();
         os << "c"; // Needed to separate the component count from the crate name
-        this->fmt_name(sp.crate_name());
+        this->fmtName(sp.crate_name());
         for (const auto& c : sp.components()) {
-            this->fmt_name(c);
+            this->fmtName(c);
         }
     }
 
     // PathParams : <ntys> 'g' [<TypeRef> ...]
-    void fmt_path_params(const ::HIR::PathParams& pp) {
+    void fmtPathParams(const ::HIR::PathParams& pp) {
         // Type Parameter count
         os << pp.types.size();
         if (pp.values.size() > 0) {
@@ -157,7 +157,7 @@ public:
         }
         os << "g";
         for (const auto& ty : pp.types) {
-            fmt_type(ty);
+            fmtType(ty);
         }
         for (const auto& v : pp.values) {
             const auto& ev = *v.as_Evaluated();
@@ -177,12 +177,12 @@ public:
     }
 
     // GenericPath : <SimplePath> <PathParams>
-    void fmt_generic_path(const ::HIR::GenericPath& gp) {
-        this->fmt_simple_path(gp.mPath);
-        this->fmt_path_params(gp.mParams);
+    void fmtGenericPath(const ::HIR::GenericPath& gp) {
+        this->fmtSimplePath(gp.mPath);
+        this->fmtPathParams(gp.mParams);
     }
 
-    void fmt_path(const ::HIR::Path& p) {
+    void fmtPath(const ::HIR::Path& p) {
         // Path type
         // - Generic: starts with `G`
         // - Inherent: Starts with `I`
@@ -191,20 +191,20 @@ public:
         TU_MATCH_HDRA( (p.mData), {)
         TU_ARMA(Generic, e) {
                 os << "G";
-                this->fmt_generic_path(e);
+                this->fmtGenericPath(e);
             }
             TU_ARMA(UfcsInherent, e) {
                 os << "I";
-                this->fmt_type(e.type);
-                this->fmt_name(e.item);
-                this->fmt_path_params(e.params);
+                this->fmtType(e.type);
+                this->fmtName(e.item);
+                this->fmtPathParams(e.params);
             }
             TU_ARMA(UfcsKnown, e) {
                 os << "Q";
-                this->fmt_type(e.type);
-                this->fmt_generic_path(e.trait);
-                this->fmt_name(e.item);
-                this->fmt_path_params(e.params);
+                this->fmtType(e.type);
+                this->fmtGenericPath(e.trait);
+                this->fmtName(e.item);
+                this->fmtPathParams(e.params);
             }
             TU_ARMA(UfcsUnknown, e)
             BUG(Span(), "Non-encodable path " << p);
@@ -242,7 +242,7 @@ public:
     //   - char : 'C' 'x'
     //   - str  : 'C' 'y'
     // - Diverge: 'C' 'z'
-    void fmt_type(const ::HIR::TypeData* ty) {
+    void fmtType(const ::HIR::TypeData* ty) {
         TU_MATCH_HDRA( ((*ty)), { )
         case ::HIR::TypeData::TAG_Infer:
         case ::HIR::TypeData::TAG_Generic:
@@ -252,40 +252,40 @@ public:
             TU_ARMA(Tuple, e) {
                 os << "T" << e.size();
                 for (const auto& sty : e) {
-                    this->fmt_type(sty);
+                    this->fmtType(sty);
                 }
             }
             TU_ARMA(Slice, e) {
                 os << "S";
-                this->fmt_type(e.inner);
+                this->fmtType(e.inner);
             }
             TU_ARMA(Array, e) {
                 os << "A" << e.size.as_Known();
-                this->fmt_type(e.inner);
+                this->fmtType(e.inner);
             }
             TU_ARMA(Path, e) {
                 os << "G";
                 ASSERT_BUG(Span(), e.path.mData.is_Generic(), "Type path not Generic - " << ty);
-                this->fmt_generic_path(e.path.mData.as_Generic());
+                this->fmtGenericPath(e.path.mData.as_Generic());
             }
             TU_ARMA(TraitObject, e) {
                 // - TraitObject: 'D' <data:GenericPath> <naty> [<TypeRef> ...] <nmarker> [markers: <GenericPath> ...]
                 os << "D";
-                this->fmt_generic_path(e.mTrait.mPath);
+                this->fmtGenericPath(e.mTrait.mPath);
                 os << e.mTrait.typeBounds.size();
                 // HACK: Assume all TraitObject types have the same aty set (std::map is deterministic)
                 for (const auto& aty : e.mTrait.typeBounds) {
-                    this->fmt_type(aty.second.type);
+                    this->fmtType(aty.second.type);
                 }
                 os << e.markers.size();
                 for (const auto& p : e.markers) {
-                    this->fmt_generic_path(p);
+                    this->fmtGenericPath(p);
                 }
             }
             TU_ARMA(NamedFunction, e) {
                 // - Named function: 'f' <path>
                 os << "f";
-                this->fmt_path(e.path);
+                this->fmtPath(e.path);
             }
             TU_ARMA(Function, e) {
                 // - Function: 'F' <abi:RcString> <nargs> [args: <TypeRef> ...] <ret:TypeRef>
@@ -293,13 +293,13 @@ public:
                 os << (e.is_unsafe ? "u" : ""); // Optional allowed, next is a number
                 if (e.mAbi != ABI_RUST) {
                     os << "e";
-                    this->fmt_name(e.mAbi.c_str());
+                    this->fmtName(e.mAbi.c_str());
                 }
                 os << e.argTypes.size();
                 for (const auto& t : e.argTypes) {
-                    this->fmt_type(t);
+                    this->fmtType(t);
                 }
-                this->fmt_type(e.mRettype);
+                this->fmtType(e.mRettype);
             }
             TU_ARMA(Borrow, e) {
                 os << "B";
@@ -314,7 +314,7 @@ public:
                         os << "o";
                         break;
                 }
-                this->fmt_type(e.inner);
+                this->fmtType(e.inner);
             }
             TU_ARMA(Pointer, e) {
                 os << "P";
@@ -329,7 +329,7 @@ public:
                         os << "o";
                         break;
                 }
-                this->fmt_type(e.inner);
+                this->fmtType(e.inner);
             }
             TU_ARMA(Primitive, e) {
                 switch (e) {
@@ -400,21 +400,21 @@ public:
 };
 
 ::FmtLambda TransManglePath(const ::HIR::Path& p) {
-    return FMT_CB(os, os << "ZR"; Mangler(os).fmt_path(p));
+    return FMT_CB(os, os << "ZR"; Mangler(os).fmtPath(p));
 }
 
 ::FmtLambda TransMangleSimplePath(const ::HIR::SimplePath& p) {
-    return FMT_CB(os, os << "ZRG"; Mangler(os).fmt_simple_path(p); Mangler(os).fmt_path_params({}););
+    return FMT_CB(os, os << "ZRG"; Mangler(os).fmtSimplePath(p); Mangler(os).fmtPathParams({}););
 }
 
 ::FmtLambda TransMangleGenericPath(const ::HIR::GenericPath& p) {
-    return FMT_CB(os, os << "ZRG"; Mangler(os).fmt_generic_path(p));
+    return FMT_CB(os, os << "ZRG"; Mangler(os).fmtGenericPath(p));
 }
 
 ::FmtLambda TransMangleTypeRef(const ::HIR::TypeData* p) {
     return ::FmtLambda([p](::std::ostream& os) {
         os << "ZRT";
-        Mangler(os).fmt_type(p);
+        Mangler(os).fmtType(p);
     });
 }
 

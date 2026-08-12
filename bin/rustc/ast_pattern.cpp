@@ -45,7 +45,7 @@ namespace AST {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const Pattern::TuplePat& val) {
-        if (val.has_wildcard) {
+        if (val.hasWildcard) {
             os << val.start;
             os << ".., ";
             os << val.end;
@@ -193,7 +193,7 @@ namespace AST {
             }
 
             static TuplePat cloneTup(const TuplePat& p) {
-                return TuplePat{H::cloneList(p.start), p.has_wildcard, H::cloneList(p.end)};
+                return TuplePat{H::cloneList(p.start), p.hasWildcard, H::cloneList(p.end)};
             }
 
             static AST::Pattern::Value cloneVal(const AST::Pattern::Value& v) {

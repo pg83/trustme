@@ -16,11 +16,11 @@ namespace HIR {
 // TODO: This is very similar to "hir_typeck/common.h" MonomorphState, except it owns its data
 struct TransParams: public MonomorphiserPP {
     Span sp;
-    const ::HIR::GenericParams* gdef_impl;
+    const ::HIR::GenericParams* gdefImpl;
     ::HIR::PathParams pp_method;
     ::HIR::PathParams pp_impl;
     ::HIR::TypeRef self_type;
-    bool force_monomorphisation;
+    bool forceMonomorphisation;
 
     explicit TransParams(HIR::TypeInterner& types);
 
@@ -42,23 +42,23 @@ struct TransParams: public MonomorphiserPP {
     ::HIR::GenericPath monomorph(const ::StaticTraitResolve& resolve, const ::HIR::GenericPath& p) const;
     ::HIR::PathParams monomorph(const ::StaticTraitResolve& resolve, const ::HIR::PathParams& p) const;
 
-    bool has_types() const {
-        return force_monomorphisation || pp_method.has_params() || pp_impl.has_params();
+    bool hasTypes() const {
+        return forceMonomorphisation || pp_method.hasParams() || pp_impl.hasParams();
     }
 
-    const ::HIR::TypeData* get_self_type() const override {
+    const ::HIR::TypeData* getSelfType() const override {
         return self_type;
     }
 
-    const ::HIR::PathParams* get_impl_params() const override {
+    const ::HIR::PathParams* getImplParams() const override {
         return &pp_impl;
     }
 
-    const ::HIR::PathParams* get_method_params() const override {
+    const ::HIR::PathParams* getMethodParams() const override {
         return &pp_method;
     }
 
-    const ::HIR::PathParams* get_hrb_params() const override {
+    const ::HIR::PathParams* getHrbParams() const override {
         return nullptr;
     }
 };
@@ -76,7 +76,7 @@ struct TransListFunction {
     // If `pp.has_types` is true, the below is valid
     CachedFunction monomorphised;
     /// Forces the function to not be emited as code (just emit the signature)
-    bool force_prototype;
+    bool forcePrototype;
 
     TransListFunction(HIR::TypeInterner& types, const ::HIR::Path& path);
 };
@@ -102,8 +102,8 @@ class TransList {
     ::std::unordered_map<::std::string, ::HIR::Path> staticSymbols;
     struct TypeEmissionState {
         ::HIR::TypeRef canonical;
-        bool has_prototype;
-        bool has_definition;
+        bool hasPrototype;
+        bool hasDefinition;
     };
     ::std::unordered_map<::std::string, TypeEmissionState> typeSymbols;
 
@@ -144,9 +144,9 @@ public:
     TransListFunction* addFunction(HIR::TypeInterner& types, ::HIR::Path p);
     TransListStatic* addStatic(HIR::TypeInterner& types, ::HIR::Path p);
     TransListConst* add_const(HIR::TypeInterner& types, ::HIR::Path p);
-    TransListFunction* find_function(const ::HIR::Path& p);
-    const TransListFunction* find_function(const ::HIR::Path& p) const;
-    bool has_type(::HIR::TypeRef type, bool shallow) const;
+    TransListFunction* findFunction(const ::HIR::Path& p);
+    const TransListFunction* findFunction(const ::HIR::Path& p) const;
+    bool hasType(::HIR::TypeRef type, bool shallow) const;
     bool addType(::HIR::TypeRef type, bool shallow);
     void clearTypes();
 

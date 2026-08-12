@@ -39,7 +39,7 @@ extern void ConvertHIRResolveUFCSSortImpls(::HIR::Crate& crate);
 extern void ConvertHIRResolveUFCSOuter(::HIR::Crate& crate);
 extern void ConvertHIRResolveUFCS(::HIR::Crate& crate);
 extern void ConvertHIRMarkings(::HIR::Crate& crate);
-extern void ConvertHIRConstantEvaluate(::HIR::Crate& hir_crate);
+extern void ConvertHIRConstantEvaluate(::HIR::Crate& hirCrate);
 
 extern void ConvertHIRResolveUFCSExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& expr_ptr);
 extern void ConvertHIRConstantEvaluateExpr(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip, ::HIR::ExprPtr& exp);

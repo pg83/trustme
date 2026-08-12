@@ -49,7 +49,7 @@ namespace AST {
 
         const AST::AbsolutePath& vis_path() const;
 
-        bool is_visible(const ::AST::AbsolutePath& from_mod) const;
+        bool is_visible(const ::AST::AbsolutePath& fromMod) const;
         /// Returns true if this visibility is "more" than `x`
         bool contains(const Visibility& x) const;
 

@@ -62,7 +62,7 @@ namespace HIR {
             void write_u128(U128 v);
 
             void write_i128(S128 v) {
-                write_u128(v.get_inner());
+                write_u128(v.getInner());
             }
 
             void write_double(double v);
@@ -140,7 +140,7 @@ namespace HIR {
             Reader(Writer&&) = delete;
             ~Reader();
 
-            size_t get_pos() const {
+            size_t getPos() const {
                 return pos;
             }
 

@@ -57,7 +57,7 @@ public:
         return ptr;
     }
 
-    const SpanInnerSource& get_top_file_span() const;
+    const SpanInnerSource& getTopFileSpan() const;
 
     void bug(::std::function<void(::std::ostream&)> msg) const;
     void error(ErrorType tag, ::std::function<void(::std::ostream&)> msg) const;

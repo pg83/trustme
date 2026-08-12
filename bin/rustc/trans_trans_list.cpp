@@ -23,7 +23,7 @@ TransListFunction* TransList::addFunction(HIR::TypeInterner& types, ::HIR::Path 
     }
 }
 
-const TransListFunction* TransList::find_function(const ::HIR::Path& p) const {
+const TransListFunction* TransList::findFunction(const ::HIR::Path& p) const {
     auto exact = functions.find(p);
     if (exact != functions.end()) {
         return exact->second.get();
@@ -41,11 +41,11 @@ const TransListFunction* TransList::find_function(const ::HIR::Path& p) const {
     return exact->second.get();
 }
 
-TransListFunction* TransList::find_function(const ::HIR::Path& p) {
-    return const_cast<TransListFunction*>(static_cast<const TransList&>(*this).find_function(p));
+TransListFunction* TransList::findFunction(const ::HIR::Path& p) {
+    return const_cast<TransListFunction*>(static_cast<const TransList&>(*this).findFunction(p));
 }
 
-bool TransList::has_type(::HIR::TypeRef type, bool shallow) const {
+bool TransList::hasType(::HIR::TypeRef type, bool shallow) const {
     const auto symbol = FMT(TransMangle(type));
     const auto existing = typeSymbols.find(symbol);
     if (existing == typeSymbols.end()) {
@@ -53,7 +53,7 @@ bool TransList::has_type(::HIR::TypeRef type, bool shallow) const {
     }
     ASSERT_BUG(Span(), existing->second.canonical == type || existing->second.canonical->equalsIgnoringRegions(type),
         "Distinct types have the same mangled name: " << existing->second.canonical << " and " << type);
-    return existing->second.has_definition || (shallow && existing->second.has_prototype);
+    return existing->second.hasDefinition || (shallow && existing->second.hasPrototype);
 }
 
 bool TransList::addType(::HIR::TypeRef type, bool shallow) {
@@ -65,8 +65,8 @@ bool TransList::addType(::HIR::TypeRef type, bool shallow) {
         auto& state = existing->second;
         ASSERT_BUG(Span(), state.canonical == type || state.canonical->equalsIgnoringRegions(type),
             "Distinct types have the same mangled name: " << state.canonical << " and " << type);
-        auto& alreadyEmitted = shallow ? state.has_prototype : state.has_definition;
-        if (alreadyEmitted || (shallow && state.has_definition)) {
+        auto& alreadyEmitted = shallow ? state.hasPrototype : state.hasDefinition;
+        if (alreadyEmitted || (shallow && state.hasDefinition)) {
             return false;
         }
         alreadyEmitted = true;
@@ -167,14 +167,14 @@ TransListConst* TransList::add_const(HIR::TypeInterner& types, ::HIR::Path p) {
 
 TransParams::TransParams(HIR::TypeInterner& types)
     : MonomorphiserPP(types)
-    , gdef_impl(nullptr)
-    , force_monomorphisation(false) {
+    , gdefImpl(nullptr)
+    , forceMonomorphisation(false) {
 }
 TransParams::TransParams(HIR::TypeInterner& types, const Span& sp)
     : MonomorphiserPP(types)
     , sp(sp)
-    , gdef_impl(nullptr)
-    , force_monomorphisation(false) {
+    , gdefImpl(nullptr)
+    , forceMonomorphisation(false) {
 }
 TransParams::TransParams(TransParams&& x)
     : TransParams(x.type_interner()) {
@@ -182,11 +182,11 @@ TransParams::TransParams(TransParams&& x)
 }
 TransParams& TransParams::operator=(TransParams&& x) {
     sp = ::std::move(x.sp);
-    gdef_impl = x.gdef_impl;
+    gdefImpl = x.gdefImpl;
     pp_method = ::std::move(x.pp_method);
     pp_impl = ::std::move(x.pp_impl);
     self_type = x.self_type;
-    force_monomorphisation = x.force_monomorphisation;
+    forceMonomorphisation = x.forceMonomorphisation;
     return *this;
 }
 TransParams TransParams::new_impl(HIR::TypeInterner& types, Span sp, HIR::TypeRef ty, HIR::PathParams impl_params) {
@@ -206,7 +206,7 @@ TransListFunction::TransListFunction(HIR::TypeInterner& types, const ::HIR::Path
     : path(&path)
     , ptr(nullptr)
     , pp(types)
-    , force_prototype(false) {
+    , forcePrototype(false) {
 }
 TransListStatic::TransListStatic(HIR::TypeInterner& types): ptr(nullptr), pp(types) {}
 TransListConst::TransListConst(HIR::TypeInterner& types): ptr(nullptr), pp(types) {}

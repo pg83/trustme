@@ -99,7 +99,7 @@ namespace HIR {
             friend ::std::ostream& operator<<(::std::ostream& os, const PrintArgs& x);
         };
 
-        PrintArgs fmt_args() const {
+        PrintArgs fmtArgs() const {
             return PrintArgs(*this);
         }
 
@@ -111,7 +111,7 @@ namespace HIR {
             friend ::std::ostream& operator<<(::std::ostream& os, const PrintBounds& x);
         };
 
-        PrintBounds fmt_bounds() const {
+        PrintBounds fmtBounds() const {
             return PrintBounds(*this);
         }
 

@@ -37,7 +37,7 @@ Span::~Span() {
     }
 }
 
-const SpanInnerSource& Span::get_top_file_span() const {
+const SpanInnerSource& Span::getTopFileSpan() const {
     auto* top_span = this;
     while (top_span->get() && (*top_span)->parent_span != Span()) {
         top_span = &(*top_span)->parent_span;

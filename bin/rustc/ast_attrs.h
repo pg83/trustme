@@ -47,7 +47,7 @@ namespace AST {
     };
 
     struct AttributeName {
-        bool has_leading = false;
+        bool hasLeading = false;
         ::std::vector<RcString> elems;
 
         bool is_trivial() const {

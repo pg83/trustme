@@ -225,16 +225,16 @@ namespace HIR {
 
     typedef ::std::vector<StructField> t_struct_fields;
 
-    extern HIR::TypeRef fn_ptr_tuple_constructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const t_tuple_fields& types);
+    extern HIR::TypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const t_tuple_fields& types);
 
     /// Cache of the state of various language traits on an enum/struct
     struct TraitMarkings {
         /// Indicates that there is at least one Deref impl
-        bool has_a_deref = false;
+        bool hasADeref = false;
 
         /// Indicates that there is a Drop impl
         /// - If there is an impl, there must be an applicable impl to every instance.
-        bool has_drop_impl = false;
+        bool hasDropImpl = false;
 
         /// `true` if there is a Copy impl
         bool is_copy = false;
@@ -346,15 +346,15 @@ namespace HIR {
             return (mData.is_Data() ? mData.as_Data().size() : mData.as_Value().variants.size());
         }
 
-        size_t find_variant(const RcString&) const;
+        size_t findVariant(const RcString&) const;
 
         /// Returns true if this enum is a C-like enum (has values only)
         bool is_value() const;
         /// Returns the value for the given variant (onlu for value enums)
-        U128 get_value(size_t variant) const;
+        U128 getValue(size_t variant) const;
 
         /// Get a type for the given repr value
-        static ::HIR::CoreType get_repr_type(Repr r);
+        static ::HIR::CoreType getReprType(Repr r);
     };
 
     class Struct {
@@ -462,10 +462,10 @@ namespace HIR {
 
         Trait(GenericParams gps, LifetimeRef lifetime, ::std::vector<::HIR::TraitPath> parents);
 
-        ::HIR::TypeRef get_vtable_type(const Span& sp, const ::HIR::Crate& crate, const ::HIR::TypeData::Data_TraitObject& te) const;
-        unsigned get_vtable_value_index(const HIR::GenericPath& trait_path, const RcString& name) const;
-        unsigned get_vtable_parent_index(TypeInterner& types, const Span& sp, const HIR::PathParams& this_params, const HIR::GenericPath& trait_path) const;
-        ::std::pair<const ::HIR::AssociatedType*, const ::HIR::PathParams*> get_aty_def(const RcString& name) const;
+        ::HIR::TypeRef getVtableType(const Span& sp, const ::HIR::Crate& crate, const ::HIR::TypeData::Data_TraitObject& te) const;
+        unsigned getVtableValueIndex(const HIR::GenericPath& trait_path, const RcString& name) const;
+        unsigned getVtableParentIndex(TypeInterner& types, const Span& sp, const HIR::PathParams& this_params, const HIR::GenericPath& trait_path) const;
+        ::std::pair<const ::HIR::AssociatedType*, const ::HIR::PathParams*> getAtyDef(const RcString& name) const;
     };
 
     class ProcMacro {
@@ -668,9 +668,9 @@ namespace HIR {
             list_t non_named; // TODO: use a map of HIR::TypeRef::Data::Tag
             list_t generic;
 
-            const list_t* get_list_for_type(const ::HIR::TypeData* ty) const {
+            const list_t* getListForType(const ::HIR::TypeData* ty) const {
                 static list_t empty;
-                if (const auto* p = ty->get_sort_path()) {
+                if (const auto* p = ty->getSortPath()) {
                     auto it = named.find(*p);
                     if (it != named.end()) {
                         return &it->second;
@@ -683,8 +683,8 @@ namespace HIR {
                 }
             }
 
-            list_t& get_list_for_type_mut(const ::HIR::TypeData* ty) {
-                if (const auto* p = ty->get_sort_path()) {
+            list_t& getListForTypeMut(const ::HIR::TypeData* ty) {
+                if (const auto* p = ty->getSortPath()) {
                     return named[*p];
                 } else {
                     // TODO: Ivars match with core types
@@ -736,40 +736,40 @@ namespace HIR {
         /// See hir/crate_post_load.cpp
         void post_load_update(const RcString& loaded_name);
 
-        const ::HIR::SimplePath& get_lang_item_path(const Span& sp, const char* name) const;
-        const ::HIR::SimplePath& get_lang_item_path_opt(const char* name) const;
+        const ::HIR::SimplePath& getLangItemPath(const Span& sp, const char* name) const;
+        const ::HIR::SimplePath& getLangItemPathOpt(const char* name) const;
 
-        bool feature_enabled(const char* name) const {
+        bool featureEnabled(const char* name) const {
             return features.count(RcString::new_interned(name)) != 0;
         }
 
-        const ::HIR::MacroItem& get_macroitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;
+        const ::HIR::MacroItem& getMacroitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;
 
-        const ::HIR::TypeItem& get_typeitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;
-        const ::HIR::Trait& get_trait_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
-        ::std::optional<size_t> find_most_specific_trait(const Span& sp, const ::std::vector<::HIR::SimplePath>& candidates) const;
-        const ::HIR::Struct& get_struct_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
-        const ::HIR::Union& get_union_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
-        const ::HIR::Enum& get_enum_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;
-        const ::HIR::Module& get_mod_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_last_node = false, bool ignore_crate_name = false) const;
+        const ::HIR::TypeItem& getTypeitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;
+        const ::HIR::Trait& getTraitByPath(const Span& sp, const ::HIR::SimplePath& path) const;
+        ::std::optional<size_t> findMostSpecificTrait(const Span& sp, const ::std::vector<::HIR::SimplePath>& candidates) const;
+        const ::HIR::Struct& getStructByPath(const Span& sp, const ::HIR::SimplePath& path) const;
+        const ::HIR::Union& getUnionByPath(const Span& sp, const ::HIR::SimplePath& path) const;
+        const ::HIR::Enum& getEnumByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false, bool ignore_last_node = false) const;
+        const ::HIR::Module& getModByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_last_node = false, bool ignore_crate_name = false) const;
 
-        const ::HIR::ValueItem& get_valitem_by_path(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false) const;
-        const ::HIR::Function& get_function_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
+        const ::HIR::ValueItem& getValitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name = false) const;
+        const ::HIR::Function& getFunctionByPath(const Span& sp, const ::HIR::SimplePath& path) const;
 
         // NOTE: Special implementation to handle `m_inline_statics`
-        const ::HIR::Static& get_static_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
+        const ::HIR::Static& getStaticByPath(const Span& sp, const ::HIR::SimplePath& path) const;
 
-        const ::HIR::Constant& get_constant_by_path(const Span& sp, const ::HIR::SimplePath& path) const;
+        const ::HIR::Constant& getConstantByPath(const Span& sp, const ::HIR::SimplePath& path) const;
 
-        bool find_trait_impls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const;
-        bool find_auto_trait_impls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
-        bool find_type_impls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
+        bool findTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const;
+        bool findAutoTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
+        bool findTypeImpls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
 
-        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& ret_ty) const;
+        const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& ret_ty) const;
 
-        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const;
+        const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const;
 
-        const ::MIR::Function* get_or_gen_mir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const;
+        const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const;
     };
 
     /// Helper for obtaining the matching target for PathTuple/PathNamed

@@ -23,7 +23,7 @@ namespace {
     struct ConvertVector {
         uint64_t hi, lo;
         uint64_t doubleBits;
-        uint32_t float_bits;
+        uint32_t floatBits;
         int64_t asInt64;
         uint64_t asUint64;
     };
@@ -36,7 +36,7 @@ namespace {
     struct RoundingVector {
         uint64_t hi, lo;
         uint64_t trunc_hi, trunc_lo;
-        uint64_t floor_hi, floor_lo;
+        uint64_t floorHi, floorLo;
         uint64_t ceilHi, ceilLo;
         uint64_t round_hi, round_lo;
         uint64_t round_even_hi, round_even_lo;
@@ -82,8 +82,8 @@ namespace {
 STD_TEST_SUITE(Float128Vectors) {
     STD_TEST(testBinaryOps) {
         for (const auto& v : binaryOpVectors) {
-            const auto a = Float128::from_bits(v.aHi, v.aLo);
-            const auto b = Float128::from_bits(v.bHi, v.bLo);
+            const auto a = Float128::fromBits(v.aHi, v.aLo);
+            const auto b = Float128::fromBits(v.bHi, v.bLo);
             STD_INSIST(same_bits(a + b, v.addHi, v.addLo));
             STD_INSIST(same_bits(b + a, v.addHi, v.addLo));
             STD_INSIST(same_bits(a - b, v.sub_hi, v.sub_lo));
@@ -96,9 +96,9 @@ STD_TEST_SUITE(Float128Vectors) {
 
     STD_TEST(testConversions) {
         for (const auto& v : convertVectors) {
-            const auto value = Float128::from_bits(v.hi, v.lo);
+            const auto value = Float128::fromBits(v.hi, v.lo);
             STD_INSIST(bitsFromDouble(static_cast<double>(value)) == v.doubleBits);
-            STD_INSIST(bitsFromFloat(static_cast<float>(value)) == v.float_bits);
+            STD_INSIST(bitsFromFloat(static_cast<float>(value)) == v.floatBits);
             STD_INSIST(static_cast<int64_t>(value) == v.asInt64);
             STD_INSIST(static_cast<uint64_t>(value) == v.asUint64);
         }
@@ -112,9 +112,9 @@ STD_TEST_SUITE(Float128Vectors) {
 
     STD_TEST(testRounding) {
         for (const auto& v : rounding_vectors) {
-            const auto value = Float128::from_bits(v.hi, v.lo);
+            const auto value = Float128::fromBits(v.hi, v.lo);
             STD_INSIST(same_bits(value.trunc(), v.trunc_hi, v.trunc_lo));
-            STD_INSIST(same_bits(value.floor(), v.floor_hi, v.floor_lo));
+            STD_INSIST(same_bits(value.floor(), v.floorHi, v.floorLo));
             STD_INSIST(same_bits(value.ceil(), v.ceilHi, v.ceilLo));
             STD_INSIST(same_bits(value.round(), v.round_hi, v.round_lo));
             STD_INSIST(same_bits(value.round_even(), v.round_even_hi, v.round_even_lo));
@@ -122,8 +122,8 @@ STD_TEST_SUITE(Float128Vectors) {
     }
 
     STD_TEST(testDefaultFormat) {
-        for (const auto& v : format_vectors) {
-            STD_INSIST(render(Float128::from_bits(v.hi, v.lo)) == v.text);
+        for (const auto& v : formatVectors) {
+            STD_INSIST(render(Float128::fromBits(v.hi, v.lo)) == v.text);
         }
     }
 }
@@ -174,7 +174,7 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST((one / Float128()).is_infinite());
         STD_INSIST(same_bits(one / Float128(), inf.bitsHi(), inf.bitsLo()));
         // Overflow rounds to infinity
-        const auto max_normal = Float128::from_bits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
+        const auto max_normal = Float128::fromBits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
         STD_INSIST((max_normal + max_normal).is_infinite());
         STD_INSIST((max_normal * Float128(2.0)).is_infinite());
     }
@@ -203,7 +203,7 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(Float128(-2.0) < Float128(-1.0));
         STD_INSIST(Float128(-1.0) < Float128(0.5));
         // Subnormals order below normals
-        STD_INSIST(Float128::from_bits(0, 1) < Float128::from_bits(0x0001'0000'0000'0000ull, 0));
+        STD_INSIST(Float128::fromBits(0, 1) < Float128::fromBits(0x0001'0000'0000'0000ull, 0));
         STD_INSIST(!(nan == nan));
         STD_INSIST(nan != nan);
         STD_INSIST(!(nan < one));
@@ -227,7 +227,7 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(neg_inf >= neg_inf);
         STD_INSIST(Float128() < inf);
         STD_INSIST(neg_inf < Float128());
-        const auto max_normal = Float128::from_bits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
+        const auto max_normal = Float128::fromBits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
         STD_INSIST(max_normal < inf);
         STD_INSIST(neg_inf < -max_normal);
         STD_INSIST(!(nan < inf));
@@ -266,9 +266,9 @@ STD_TEST_SUITE(Float128Specials) {
 
     STD_TEST(testNarrowingEdges) {
         // Values beyond double range collapse to infinity / zero
-        const auto huge = Float128::from_bits(0x7ffe'0000'0000'0000ull, 0);
+        const auto huge = Float128::fromBits(0x7ffe'0000'0000'0000ull, 0);
         STD_INSIST(bitsFromDouble(static_cast<double>(huge)) == 0x7ff0'0000'0000'0000ull);
-        const auto tiny = Float128::from_bits(0x0001'0000'0000'0000ull, 0);
+        const auto tiny = Float128::fromBits(0x0001'0000'0000'0000ull, 0);
         STD_INSIST(bitsFromDouble(static_cast<double>(tiny)) == 0);
         STD_INSIST(bitsFromDouble(static_cast<double>(-tiny)) == 0x8000'0000'0000'0000ull);
         // A value halfway into double subnormal range

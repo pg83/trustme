@@ -10,8 +10,8 @@ TTStream::TTStream(Span parent, ParseState ps, const TokenTree& input_tt)
         DEBUG("parent " << s->parent_span);
     }
     DEBUG("input_tt = [" << input_tt << "]");
-    DEBUG("Set edition " << input_tt.get_edition());
-    edition = input_tt.get_edition();
+    DEBUG("Set edition " << input_tt.getEdition());
+    edition = input_tt.getEdition();
     stack.push_back(::std::make_pair(0, &input_tt));
 }
 
@@ -41,14 +41,14 @@ Token TTStream::realGetToken() {
                 return subtree.tok().clone();
             } else {
                 stack.push_back(::std::make_pair(0, &subtree));
-                DEBUG("Set edition " << edition << " -> " << subtree.get_edition());
-                edition = subtree.get_edition();
+                DEBUG("Set edition " << edition << " -> " << subtree.getEdition());
+                edition = subtree.getEdition();
             }
         } else {
             stack.pop_back();
             if (!stack.empty()) {
-                DEBUG("Restore edition " << edition << " -> " << stack.back().second->get_edition());
-                edition = stack.back().second->get_edition();
+                DEBUG("Restore edition " << edition << " -> " << stack.back().second->getEdition());
+                edition = stack.back().second->getEdition();
             }
         }
     }
@@ -93,8 +93,8 @@ Token TTStreamO::realGetToken() {
 
         if (idx == 0 && tree.is_token()) {
             idx++;
-            lastPos = tree.tok().get_pos();
-            edition = tree.get_edition();
+            lastPos = tree.tok().getPos();
+            edition = tree.getEdition();
             hygienePtr = &tree.hygiene();
             return mv$(tree.tok());
         }
@@ -103,8 +103,8 @@ Token TTStreamO::realGetToken() {
             TokenTree& subtree = tree[idx];
             idx++;
             if (subtree.size() == 0) {
-                lastPos = subtree.tok().get_pos();
-                edition = subtree.get_edition();
+                lastPos = subtree.tok().getPos();
+                edition = subtree.getEdition();
                 hygienePtr = &subtree.hygiene();
                 return mv$(subtree.tok());
             } else {

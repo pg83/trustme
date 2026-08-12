@@ -51,19 +51,19 @@ ParseError::BadChar::~BadChar() throw() {
 ParseError::Unexpected::Unexpected(const TokenStream& lex, const Token& tok) //:
 //    m_tok( mv$(tok) )
 {
-    Span pos = tok.get_pos().filename != "" ? lex.sub_span(tok.get_pos()) : lex.point_span();
+    Span pos = tok.getPos().filename != "" ? lex.sub_span(tok.getPos()) : lex.point_span();
     ERROR(pos, E0000, "Unexpected token " << tok);
 }
 
 ParseError::Unexpected::Unexpected(const TokenStream& lex, const Token& tok, Token exp) //:
 //    m_tok( mv$(tok) )
 {
-    Span pos = tok.get_pos().filename != "" ? lex.sub_span(tok.get_pos()) : lex.point_span();
+    Span pos = tok.getPos().filename != "" ? lex.sub_span(tok.getPos()) : lex.point_span();
     ERROR(pos, E0000, "Unexpected token " << tok << ", expected " << exp);
 }
 
 ParseError::Unexpected::Unexpected(const TokenStream& lex, const Token& tok, ::std::vector<eTokenType> exp) {
-    Span pos = tok.get_pos().filename != "" ? lex.sub_span(tok.get_pos()) : lex.point_span();
+    Span pos = tok.getPos().filename != "" ? lex.sub_span(tok.getPos()) : lex.point_span();
     ERROR(pos, E0000, "Unexpected token " << tok << ", expected one of " << FMT_CB(os, {
                           bool f = true;
                           for (auto v : exp) {

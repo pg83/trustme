@@ -43,16 +43,16 @@ class CMacroUseHandler: public ExpandDecorator {
                 filter.push_back(ident);
             });
         }
-        std::vector<bool> filters_used(filter.size());
+        std::vector<bool> filtersUsed(filter.size());
 
-        auto filter_valid = [&](RcString name) -> bool {
+        auto filterValid = [&](RcString name) -> bool {
             if (filter.empty()) {
                 return true;
             }
             auto it = std::find(filter.begin(), filter.end(), name);
             if (it != filter.end()) {
                 auto i = it - filter.begin();
-                filters_used[i] = true;
+                filtersUsed[i] = true;
                 return true;
             } else {
                 return false;
@@ -96,7 +96,7 @@ class CMacroUseHandler: public ExpandDecorator {
 
             DEBUG(ec.hir->exportedMacroNames.size() << " exported macros");
             for (const auto& name : ec.hir->exportedMacroNames) {
-                if (!filter_valid(name)) {
+                if (!filterValid(name)) {
                     DEBUG("Skip " << name);
                     continue;
                 }
@@ -114,7 +114,7 @@ class CMacroUseHandler: public ExpandDecorator {
                         continue;
                     }
                     ASSERT_BUG(sp, crate.externCrates.count(imp->path.crate_name()), "Crate `" << imp->path.crate_name() << "` not loaded");
-                    const ::HIR::Module& mod = crate.externCrates.at(imp->path.crate_name()).hir->get_mod_by_path(sp, imp->path, /*ignore_last_node*/ true, /*ignore_crate_name*/ true);
+                    const ::HIR::Module& mod = crate.externCrates.at(imp->path.crate_name()).hir->getModByPath(sp, imp->path, /*ignore_last_node*/ true, /*ignore_crate_name*/ true);
 
                     ASSERT_BUG(sp, mod.macroItems.count(imp->path.components().back()), "Failed to find final component of " << imp->path);
                     e = &*mod.macroItems.at(imp->path.components().back());
@@ -152,7 +152,7 @@ class CMacroUseHandler: public ExpandDecorator {
         } else if (const auto* submod_p = i.opt_Module()) {
             const auto& submod = *submod_p;
             for (const auto& mr : submod.macros()) {
-                if (!filter_valid(mr.name)) {
+                if (!filterValid(mr.name)) {
                     continue;
                 }
                 DEBUG("Imported " << mr.name);
@@ -164,7 +164,7 @@ class CMacroUseHandler: public ExpandDecorator {
                 }
             }
             for (const auto& mri : submod.macroImports) {
-                if (!filter_valid(mri.name)) {
+                if (!filterValid(mri.name)) {
                     continue;
                 }
                 DEBUG(mod.path() << ": Imported " << mri.name << " (propagate) = " << mri.path);
@@ -178,7 +178,7 @@ class CMacroUseHandler: public ExpandDecorator {
         }
 
         for (size_t i = 0; i < filter.size(); i++) {
-            if (!filters_used[i]) {
+            if (!filtersUsed[i]) {
                 ERROR(sp, E0000, "Couldn't find macro " << filter[i]);
             }
         }

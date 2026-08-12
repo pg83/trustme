@@ -62,7 +62,7 @@ public:
 
     void clearItemGenerics();
 
-    void set_both_generics_raw(const ::HIR::GenericParams* gps_impl, const ::HIR::GenericParams* gps_fcn);
+    void set_both_generics_raw(const ::HIR::GenericParams* gpsImpl, const ::HIR::GenericParams* gpsFcn);
 
     void clearBothGenerics();
 
@@ -77,20 +77,20 @@ public:
     /// \{
     typedef ::std::function<bool(ImplRef, bool is_fuzzed)> t_cb_find_impl;
 
-    bool find_impl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb) const {
-        return this->find_impl(sp, trait_path, &trait_params, type, found_cb);
+    bool findImpl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb) const {
+        return this->findImpl(sp, trait_path, &trait_params, type, foundCb);
     }
 
-    bool find_impl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb, bool dontHandoffToSpecialised = false) const;
+    bool findImpl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb, bool dontHandoffToSpecialised = false) const;
 
 private:
-    bool findImplBounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb) const;
-    bool findImplCheckCrate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl found_cb, const ::HIR::TraitImpl& impl) const;
+    bool findImplBounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb) const;
+    bool findImplCheckCrate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb, const ::HIR::TraitImpl& impl) const;
     bool findImplCheckCrateRaw(const Span& sp, const ::HIR::SimplePath& desTraitPath, const ::HIR::PathParams* desTraitParams, const ::HIR::TypeData* desType, const ::HIR::GenericParams& impl_params_def, const ::HIR::PathParams& impl_trait_params, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
     ::HIR::Compare checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeData* type) const;
 
 public:
-    const ::HIR::TypeData* fix_trait_default_return(const Span& sp, const HIR::ItemPath& p, const ::HIR::TypeData* tpl, ::HIR::TypeRef& tmp) const;
+    const ::HIR::TypeData* fixTraitDefaultReturn(const Span& sp, const HIR::ItemPath& p, const ::HIR::TypeData* tpl, ::HIR::TypeRef& tmp) const;
 
     void expandAssociatedTypes(const Span& sp, ::HIR::TypeRef& input) const;
     void expandAssociatedTypesPath(const Span& sp, ::HIR::Path& input) const;
@@ -120,7 +120,7 @@ public:
     /// \}
 
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
-    bool find_named_trait_in_trait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& params, const ::HIR::Trait& trait_ptr, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& pp, const ::HIR::TypeData* self_type, ::std::function<bool(const ::HIR::PathParams&, ::HIR::TraitPath::assocListT)> callback) const;
+    bool findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& params, const ::HIR::Trait& trait_ptr, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& pp, const ::HIR::TypeData* self_type, ::std::function<bool(const ::HIR::PathParams&, ::HIR::TraitPath::assocListT)> callback) const;
     ///
     bool trait_contains_type(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const char* name, ::HIR::GenericPath& out_path) const;
     bool iterate_aty_bounds(const Span& sp, const ::HIR::Path::Data::Data_UfcsKnown& pe, ::std::function<bool(const ::HIR::TraitPath&)> cb) const;
@@ -148,7 +148,7 @@ public:
     const ::HIR::TypeData* is_type_owned_box(const ::HIR::TypeData* ty) const;
     const ::HIR::TypeData* is_type_phantom_data(const ::HIR::TypeData* ty) const;
 
-    HIR::TypeRef get_field_type(const Span& sp, const ::HIR::TypeData* ty, const RcString& name) const;
+    HIR::TypeRef getFieldType(const Span& sp, const ::HIR::TypeData* ty, const RcString& name) const;
 
     TAGGED_UNION(
         ValuePtr,
@@ -180,5 +180,5 @@ public:
     );
 
     /// `signature_only` - Returns a pointer to an item with the correct signature, not the actual implementation (faster)
-    ValuePtr get_value(const Span& sp, const ::HIR::Path& p, MonomorphState& out_params, bool signature_only = false, const HIR::GenericParams** out_impl_params_def = nullptr) const;
+    ValuePtr getValue(const Span& sp, const ::HIR::Path& p, MonomorphState& out_params, bool signature_only = false, const HIR::GenericParams** out_impl_params_def = nullptr) const;
 };

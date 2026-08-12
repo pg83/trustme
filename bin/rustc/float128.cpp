@@ -16,7 +16,7 @@ namespace {
     constexpr int max_exponent = 16383;
 
     const u128 implicit_bit = u128(1) << significand_bits;
-    const u128 fraction_mask = implicit_bit - 1;
+    const u128 fractionMask = implicit_bit - 1;
 
     static int clz128(u128 v) {
         assert(v != 0);
@@ -78,7 +78,7 @@ namespace {
     }
 
     static Float128 pack_zero(bool negative) {
-        return Float128::from_bits(negative ? 0x8000'0000'0000'0000ull : 0, 0);
+        return Float128::fromBits(negative ? 0x8000'0000'0000'0000ull : 0, 0);
     }
 
     // significand in [0, 2^113); below 2^112 only with exponent == min_exponent
@@ -87,7 +87,7 @@ namespace {
         if (significand >= implicit_bit) {
             assert(min_exponent <= exponent && exponent <= max_exponent);
             biased = static_cast<uint64_t>(exponent + exponentBias);
-            significand &= fraction_mask;
+            significand &= fractionMask;
         } else {
             assert(exponent == min_exponent);
             biased = 0;
@@ -95,7 +95,7 @@ namespace {
         const uint64_t hi = (negative ? 0x8000'0000'0000'0000ull : 0)
             | (biased << 48)
             | static_cast<uint64_t>(significand >> 64);
-        return Float128::from_bits(hi, static_cast<uint64_t>(significand));
+        return Float128::fromBits(hi, static_cast<uint64_t>(significand));
     }
 
     static u128 shift_right_sticky(u128 v, unsigned n, bool& sticky) {
@@ -111,7 +111,7 @@ namespace {
     }
 
     static Float128 canonicalNan() {
-        return Float128::from_bits(0x7FFF'8000'0000'0000ull, 0);
+        return Float128::fromBits(0x7FFF'8000'0000'0000ull, 0);
     }
 
     // Round to nearest, ties to even. Value = significand * 2^(exponent - 113)
@@ -185,7 +185,7 @@ namespace {
     public:
         BigUint() = default;
 
-        static BigUint from_u128(u128 v) {
+        static BigUint fromU128(u128 v) {
             BigUint r;
             if (v != 0) {
                 r.limbs_.push_back(static_cast<uint64_t>(v));
@@ -326,11 +326,11 @@ namespace {
     };
 
     // 5^27 is the largest power of five below 2^63
-    constexpr uint64_t five_pow_27 = 7'450'580'596'923'828'125ull;
+    constexpr uint64_t fivePow27 = 7'450'580'596'923'828'125ull;
 
     static void multiply_pow5(BigUint& v, uint64_t power) {
         while (power >= 27) {
-            v.multiply_add_small(five_pow_27, 0);
+            v.multiply_add_small(fivePow27, 0);
             power -= 27;
         }
         uint64_t factor = 1;
@@ -344,7 +344,7 @@ namespace {
 
     static void dividePow5Sticky(BigUint& v, uint64_t power, bool& sticky) {
         while (power >= 27) {
-            sticky |= v.divideSmall(five_pow_27) != 0;
+            sticky |= v.divideSmall(fivePow27) != 0;
             power -= 27;
         }
         uint64_t factor = 1;
@@ -405,7 +405,7 @@ namespace {
         const int64_t scale10 = -lowest_exponent10 + 1;
         const int32_t exponent2 = value.exponent - significand_bits;
         bool sticky = false;
-        BigUint work = BigUint::from_u128(value.significand);
+        BigUint work = BigUint::fromU128(value.significand);
         if (scale10 > 0) {
             multiply_pow5(work, static_cast<uint64_t>(scale10));
         }
@@ -481,7 +481,7 @@ namespace {
         out += digits;
     }
 
-    static std::string format_scientific(const Unpacked& value, int precision) {
+    static std::string formatScientific(const Unpacked& value, int precision) {
         std::string out;
         if (value.negative) {
             out.push_back('-');
@@ -506,7 +506,7 @@ namespace {
         return out;
     }
 
-    static std::string format_fixed(const Unpacked& value, int precision) {
+    static std::string formatFixed(const Unpacked& value, int precision) {
         std::string out;
         if (value.negative) {
             out.push_back('-');
@@ -533,7 +533,7 @@ namespace {
         return out;
     }
 
-    static std::string format_default(const Unpacked& value, int precision) {
+    static std::string formatDefault(const Unpacked& value, int precision) {
         // printf %g: significant digits, trailing zeros trimmed
         const int significant = precision < 1 ? 1 : precision;
         std::string out;
@@ -613,7 +613,7 @@ Float128::Float128(double value) {
     *this = pack_finite(negative, exponent, u128(significand) << (significand_bits - 52));
 }
 
-Float128 Float128::from_bits(uint64_t hi, uint64_t lo) {
+Float128 Float128::fromBits(uint64_t hi, uint64_t lo) {
     Float128 r;
     r.hi = hi;
     r.lo = lo;
@@ -625,7 +625,7 @@ Float128 Float128::quiet_nan() {
 }
 
 Float128 Float128::infinity(bool negative) {
-    return from_bits((negative ? 0x8000'0000'0000'0000ull : 0) | 0x7FFF'0000'0000'0000ull, 0);
+    return fromBits((negative ? 0x8000'0000'0000'0000ull : 0) | 0x7FFF'0000'0000'0000ull, 0);
 }
 
 uint64_t Float128::bitsHi() const {
@@ -741,7 +741,7 @@ Float128::operator uint64_t() const {
 }
 
 Float128 Float128::operator-() const {
-    return from_bits(hi ^ 0x8000'0000'0000'0000ull, lo);
+    return fromBits(hi ^ 0x8000'0000'0000'0000ull, lo);
 }
 
 Float128 Float128::operator+(const Float128& other) const {
@@ -942,7 +942,7 @@ bool Float128::operator>=(const Float128& other) const {
 }
 
 Float128 Float128::abs() const {
-    return from_bits(hi & ~0x8000'0000'0000'0000ull, lo);
+    return fromBits(hi & ~0x8000'0000'0000'0000ull, lo);
 }
 
 Float128 Float128::trunc() const {
@@ -1112,7 +1112,7 @@ Float128 Float128::maximum_number(const Float128& a, const Float128& b) {
 Float128 Float128::parse_decimal(const char* text) {
     const char* cursor = text;
     BigUint digits;
-    int64_t fraction_digits = 0;
+    int64_t fractionDigits = 0;
     int64_t significant_digits = 0;
     assert(*cursor == '.' || ('0' <= *cursor && *cursor <= '9'));
     for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
@@ -1125,13 +1125,13 @@ Float128 Float128::parse_decimal(const char* text) {
         cursor++;
         for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
             digits.multiply_add_small(10, static_cast<uint64_t>(*cursor - '0'));
-            fraction_digits += 1;
+            fractionDigits += 1;
             if (!digits.is_zero()) {
                 significant_digits += 1;
             }
         }
     }
-    int64_t exponent10 = -fraction_digits;
+    int64_t exponent10 = -fractionDigits;
     if (*cursor == 'e' || *cursor == 'E') {
         cursor++;
         bool exponentNegative = false;
@@ -1201,11 +1201,11 @@ Float128 Float128::parse_decimal(const char* text) {
     const auto field = os.flags() & ::std::ios_base::floatfield;
     std::string text;
     if (field == ::std::ios_base::scientific) {
-        text = format_scientific(unpacked, precision < 0 ? 6 : precision);
+        text = formatScientific(unpacked, precision < 0 ? 6 : precision);
     } else if (field == ::std::ios_base::fixed) {
-        text = format_fixed(unpacked, precision < 0 ? 6 : precision);
+        text = formatFixed(unpacked, precision < 0 ? 6 : precision);
     } else {
-        text = format_default(unpacked, precision < 0 ? 6 : precision);
+        text = formatDefault(unpacked, precision < 0 ? 6 : precision);
     }
     return os << text;
 }

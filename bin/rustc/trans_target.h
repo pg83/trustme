@@ -128,7 +128,7 @@ struct TypeRepr {
     /// <param name="resolve">Resolve structure (shouldn't be needed)</param>
     /// <param name="path">Path to the field</param>
     /// <returns>Byte offset</returns>
-    size_t get_offset(const Span& sp, const StaticTraitResolve& resolve, const FieldPath& path) const;
+    size_t getOffset(const Span& sp, const StaticTraitResolve& resolve, const FieldPath& path) const;
 
     /// <summary>
     /// Determines which enum variant is stored in an encoded literal
@@ -137,7 +137,7 @@ struct TypeRepr {
     /// <param name="resolve">Resolve structure (shouldn't be needed)</param>
     /// <param name="lit">Literal covering the entire enum</param>
     /// <returns>Variant index and if the variant's data includes a tag field</returns>
-    std::pair<unsigned, bool> get_enum_variant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const;
+    std::pair<unsigned, bool> getEnumVariant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const;
 };
 
 std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x);

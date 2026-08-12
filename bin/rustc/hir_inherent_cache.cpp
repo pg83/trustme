@@ -4,7 +4,7 @@
 
 void HIR::InherentCache::Lowest::insert(const Span& sp, const HIR::TypeImpl& impl) {
     const auto& type = impl.mType;
-    if (const auto* path = type->get_sort_path()) {
+    if (const auto* path = type->getSortPath()) {
         //DEBUG(this->name << " named[" << *path << "] += impl" << impl.m_params.fmt_args() << " " << impl.m_type);
         this->named[*path].push_back(&impl);
     } else if (type->is_Path() || type->is_Generic()) {
@@ -25,7 +25,7 @@ void HIR::InherentCache::Lowest::iterate(const HIR::TypeData* type, InherentCach
 
     visit(this->generic);
 
-    if (const auto* path = type->get_sort_path()) {
+    if (const auto* path = type->getSortPath()) {
         auto it = this->named.find(*path);
         if (it != this->named.end()) {
             visit(it->second);
@@ -87,14 +87,14 @@ void HIR::InherentCache::Inner::insert(const Span& sp, const HIR::TypeData* curT
             ASSERT_BUG(sp, te.path.mData.is_Generic(), "Receiver path not a generic path - " << curTy);
             const auto& gp = te.path.mData.as_Generic();
             ASSERT_BUG(sp, gp.mParams.types.size() > 0, "Receiver path has no type params (needs at least one) - " << curTy);
-            DEBUG("m_path[" << gp.mPath << "] += " << gp.mParams.types.at(0) << " impl" << impl.mParams.fmt_args() << " " << impl.mType);
+            DEBUG("m_path[" << gp.mPath << "] += " << gp.mParams.types.at(0) << " impl" << impl.mParams.fmtArgs() << " " << impl.mType);
             mPath[gp.mPath].insert(sp, gp.mParams.types.at(0), impl);
         }
     }
 }
 
 void HIR::InherentCache::Inner::find(const Span& sp, const HIR::TypeData* curTyAct, t_cb_resolve_type ty_res, InherentCache::inner_callback_t& cb) const {
-    const auto& curTy = ty_res.get_type(sp, curTyAct);
+    const auto& curTy = ty_res.getType(sp, curTyAct);
     TRACE_FUNCTION_F("[Inner] " << curTy);
     byvalue.iterate(curTy, cb);
 

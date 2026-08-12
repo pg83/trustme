@@ -421,8 +421,8 @@ void ::HIR::ExprVisitorDef::visit_pattern(const Span& sp, ::HIR::Pattern& pat) {
         }
         TU_ARMA(PathNamed, e) {
             this->visit_path(HIR::Visitor::PathContext::TYPE, e.path);
-            for (auto& fld_pat : e.sub_patterns) {
-                this->visit_pattern(sp, fld_pat.second);
+            for (auto& fldPat : e.sub_patterns) {
+                this->visit_pattern(sp, fldPat.second);
             }
         }
         TU_ARMA(Value, e) {

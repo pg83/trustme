@@ -18,9 +18,9 @@ namespace typeck {
         ASSERT_BUG(sp, ip.parent, "prepare_from_path with too-short path - " << ip);
 
         struct H {
-            static const ::HIR::Module& get_mod_for_ip(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip) {
+            static const ::HIR::Module& getModForIp(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip) {
                 if (ip.parent) {
-                    const auto& mod = H::get_mod_for_ip(crate, *ip.parent);
+                    const auto& mod = H::getModForIp(crate, *ip.parent);
                     return mod.modItems.at(ip.name)->ent.as_Module();
                 } else {
                     assert(ip.crate_name);
@@ -32,7 +32,7 @@ namespace typeck {
                 // In-scope traits.
                 ms.traits.clear();
                 for (const auto& tp : mod.traits) {
-                    const auto& trait = ms.crate.get_trait_by_path(sp, tp);
+                    const auto& trait = ms.crate.getTraitByPath(sp, tp);
                     ms.traits.push_back(::std::make_pair(&tp, &trait));
                 }
             }
@@ -45,7 +45,7 @@ namespace typeck {
             // Trait definition
             //const auto& trait_mod = H::get_mod_for_ip(m_crate, *ip.parent->trait->parent);
             //const auto& trait = trait_mod.m_mod_items.at(ip.parent->trait->name).ent.as_Trait();
-            const auto& trait = crate.get_trait_by_path(sp, *ip.parent->trait);
+            const auto& trait = crate.getTraitByPath(sp, *ip.parent->trait);
             const auto& item = trait.values.at(ip.name);
             TU_MATCH_HDRA( (item), { )
             TU_ARMA(Function, e) {
@@ -63,7 +63,7 @@ namespace typeck {
             TODO(sp, "prepare_from_path - Type impl " << ip);
         } else {
             // Namespace path
-            const auto& mod = H::get_mod_for_ip(crate, *ip.parent);
+            const auto& mod = H::getModForIp(crate, *ip.parent);
             H::addTraitsFromMod(*this, mod);
             const auto& item = mod.valueItems.at(ip.name)->ent;
             implGenerics = nullptr;
@@ -114,7 +114,7 @@ namespace {
 
         void visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) override {
             HIR::GenericPath trait_gpath;
-            trait_gpath.mPath = p.get_simple_path();
+            trait_gpath.mPath = p.getSimplePath();
             for (size_t i = 0; i < item.mParams.types.size(); i++) {
                 trait_gpath.mParams.types.push_back(ms.crate.types.generic(item.mParams.types[i].mName, i));
             }
@@ -130,7 +130,7 @@ namespace {
             TRACE_FUNCTION_F("impl " << impl.mType);
             auto _ = this->ms.set_impl_generics(impl.mParams);
 
-            const auto& mod = this->ms.crate.get_mod_by_path(Span(), impl.srcModule);
+            const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.push_traits(impl.srcModule, mod);
             ::HIR::Visitor::visit_type_impl(impl);
             ms.pop_traits(mod);
@@ -143,9 +143,9 @@ namespace {
             auto _1 = this->ms.set_current_trait(trait_gpath);
             auto _ = this->ms.set_impl_generics(impl.mParams);
 
-            const auto& mod = this->ms.crate.get_mod_by_path(Span(), impl.srcModule);
+            const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.push_traits(impl.srcModule, mod);
-            ms.traits.push_back(::std::make_pair(&trait_path, &this->ms.crate.get_trait_by_path(Span(), trait_path)));
+            ms.traits.push_back(::std::make_pair(&trait_path, &this->ms.crate.getTraitByPath(Span(), trait_path)));
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
             ms.traits.pop_back();
             ms.pop_traits(mod);
@@ -155,7 +155,7 @@ namespace {
             TRACE_FUNCTION_F("impl " << trait_path << " for " << impl.mType << " { }");
             auto _ = this->ms.set_impl_generics(impl.mParams);
 
-            const auto& mod = this->ms.crate.get_mod_by_path(Span(), impl.srcModule);
+            const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.push_traits(impl.srcModule, mod);
             ::HIR::Visitor::visit_marker_impl(trait_path, impl);
             ms.pop_traits(mod);
@@ -214,7 +214,7 @@ namespace {
             auto _ = this->ms.set_item_generics(item.mParams);
 
             if (auto* e = item.mData.opt_Value()) {
-                auto enumType = ::HIR::Enum::get_repr_type(item.tagRepr);
+                auto enumType = ::HIR::Enum::getReprType(item.tagRepr);
 
                 for (auto& var : e->variants) {
                     DEBUG("Enum value " << p << " - " << var.name);
@@ -264,13 +264,13 @@ ModuleState::NullOnDrop<const ::HIR::GenericParams> ModuleState::set_item_generi
 }
 void ModuleState::push_traits(::HIR::ItemPath p, const ::HIR::Module& mod) {
     auto sp = Span();
-    modPaths.push_back(p.get_simple_path());
+    modPaths.push_back(p.getSimplePath());
     DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     // - Push a NULL entry to prevent parent module import lists being searched
     traits.push_back(::std::make_pair(nullptr, nullptr));
     for (const auto& trait_path : mod.traits) {
         DEBUG("Push " << trait_path);
-        traits.push_back(::std::make_pair(&trait_path, &this->crate.get_trait_by_path(sp, trait_path)));
+        traits.push_back(::std::make_pair(&trait_path, &this->crate.getTraitByPath(sp, trait_path)));
     }
 }
 void ModuleState::pop_traits(const ::HIR::Module& mod) {

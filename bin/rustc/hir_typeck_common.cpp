@@ -17,7 +17,7 @@ template <template <typename> class W>
 struct TyVisitor {
     const LList<const HIR::TypeData*>* curRecurseStack = nullptr;
 
-    virtual typename W<HIR::TypeData>::T& get_ty_data(const HIR::TypeData* ty) const = 0;
+    virtual typename W<HIR::TypeData>::T& getTyData(const HIR::TypeData* ty) const = 0;
 
     virtual bool visit_path_params(typename W<::HIR::PathParams>::T& tpl) {
         for (auto& ty : tpl.types) {
@@ -91,7 +91,7 @@ struct TyVisitor {
             }
         } h(curRecurseStack, ty);
 
-        TU_MATCH_HDRA( (this->get_ty_data(ty)), {)
+        TU_MATCH_HDRA( (this->getTyData(ty)), {)
         TU_ARMA(Infer, e) {
             }
             TU_ARMA(Diverge, e) {
@@ -180,7 +180,7 @@ struct TyVisitor {
 struct TyVisitorCbConst: TyVisitor<WConst> {
     t_cb_visit_ty callback;
 
-    const HIR::TypeData& get_ty_data(const HIR::TypeData* ty) const override {
+    const HIR::TypeData& getTyData(const HIR::TypeData* ty) const override {
         return *ty;
     }
 
@@ -323,7 +323,7 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
     {
     }
 
-    const HIR::TypeData& get_ty_data(const HIR::TypeData* ty) const override {
+    const HIR::TypeData& getTyData(const HIR::TypeData* ty) const override {
         return *ty;
     }
 
@@ -410,7 +410,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
             return types.intern(::HIR::TypeData::make_Path({this->monomorph_path(sp, e.path, allowInfer), mv$(binding), mv$(hrtbs)}));
         }
         TU_ARMA(Generic, e) {
-            return this->get_type(sp, e);
+            return this->getType(sp, e);
         }
         TU_ARMA(TraitObject, e) {
             ::HIR::TypeData::Data_TraitObject to;
@@ -515,14 +515,14 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
         // Have a flag/stack here for current defined HRL batches (trait paths and function pointers), if in one then do the hack
         // - Otherwise, pass to `get_lifetime`
         if (g.group() == HIR::GENERICHrtb) {
-            if (const auto* hrtb = has_hrb()) {
+            if (const auto* hrtb = hasHrb()) {
                 // TODO: Ensure that the param is in range (has some issues with nested?)
                 //ASSERT_BUG(sp, g.idx() < hrtb->m_lifetimes.size(), "Found HRTB out of range - " << g << " from for" << hrtb->fmt_args());
                 return lft;
             }
         }
 
-        return get_lifetime(sp, g);
+        return getLifetime(sp, g);
     } else {
         return lft;
     }
@@ -577,7 +577,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
 
 ::HIR::ConstGeneric Monomorphiser::monomorph_constgeneric(const Span& sp, const ::HIR::ConstGeneric& val, bool allowInfer) const {
     if (const auto* ge = val.opt_Generic()) {
-        return this->get_value(sp, *ge);
+        return this->getValue(sp, *ge);
     } else if (const auto* ge = val.opt_Unevaluated()) {
         auto rv = HIR::ConstGeneric(std::make_unique<HIR::ConstGenericUnevaluated>((*ge)->monomorph(sp, *this, true)));
         // TODO: Evaluate this constant (if possible), but that requires knowing the target type :/
@@ -616,7 +616,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
     if (auto* se = tpl.opt_Unevaluated()) {
         HIR::ArraySize sz;
         if (se->is_Generic()) {
-            sz = this->get_value(sp, se->as_Generic());
+            sz = this->getValue(sp, se->as_Generic());
             DEBUG(tpl << " -> " << sz);
         } else if (se->is_Unevaluated()) {
             sz = HIR::ConstGeneric(std::make_unique<HIR::ConstGenericUnevaluated>(se->as_Unevaluated()->monomorph(sp, *this, true)));
@@ -649,15 +649,15 @@ struct CloneTyWithMonomorph: Monomorphiser {
 
     explicit CloneTyWithMonomorph(HIR::TypeInterner& types): Monomorphiser(types) {}
 
-    ::HIR::TypeRef get_type(const Span& sp, const ::HIR::GenericRef& g) const override {
+    ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& g) const override {
         return types.generic(g.name, g.binding);
     }
 
-    ::HIR::ConstGeneric get_value(const Span& sp, const ::HIR::GenericRef& g) const override {
+    ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& g) const override {
         return g;
     }
 
-    ::HIR::LifetimeRef get_lifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
+    ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
         return HIR::LifetimeRef(g.binding);
     }
 
@@ -693,10 +693,10 @@ struct CloneTyWithMonomorph: Monomorphiser {
     return m.monomorph_type(sp, tpl, true);
 }
 
-::HIR::TypeRef MonomorphiserPP::get_type(const Span& sp, const ::HIR::GenericRef& ty) const /*override*/
+::HIR::TypeRef MonomorphiserPP::getType(const Span& sp, const ::HIR::GenericRef& ty) const /*override*/
 {
     if (ty.is_self()) {
-        if (const auto* s = this->get_self_type()) {
+        if (const auto* s = this->getSelfType()) {
             return s;
         } else {
             BUG(sp, "Unexpected Self");
@@ -704,7 +704,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
     } else {
         switch (ty.group()) {
             case 0:
-                if (const auto* p = this->get_impl_params()) {
+                if (const auto* p = this->getImplParams()) {
                     ASSERT_BUG(sp, ty.idx() < p->types.size(), "Type param " << ty << " out of range for (max " << p->types.size() << ")");
                     return p->types[ty.idx()];
                 } else {
@@ -712,7 +712,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
                 }
                 break;
             case 1:
-                if (const auto* p = this->get_method_params()) {
+                if (const auto* p = this->getMethodParams()) {
                     ASSERT_BUG(sp, ty.idx() < p->types.size(), "Type param " << ty << " out of range for (max " << p->types.size() << ")");
                     return p->types[ty.idx()];
                 } else {
@@ -725,11 +725,11 @@ struct CloneTyWithMonomorph: Monomorphiser {
     }
 }
 
-::HIR::ConstGeneric MonomorphiserPP::get_value(const Span& sp, const ::HIR::GenericRef& val) const /*override*/
+::HIR::ConstGeneric MonomorphiserPP::getValue(const Span& sp, const ::HIR::GenericRef& val) const /*override*/
 {
     switch (val.group()) {
         case 0:
-            if (const auto* p = this->get_impl_params()) {
+            if (const auto* p = this->getImplParams()) {
                 ASSERT_BUG(sp, val.idx() < p->values.size(), "Value param " << val << " out of range for (max " << p->values.size() << ")");
                 return p->values[val.idx()].clone();
             } else {
@@ -737,7 +737,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
             }
             break;
         case 1:
-            if (const auto* p = this->get_method_params()) {
+            if (const auto* p = this->getMethodParams()) {
                 ASSERT_BUG(sp, val.idx() < p->values.size(), "Value param " << val << " out of range for (max " << p->values.size() << ")");
                 return p->values[val.idx()].clone();
             } else {
@@ -749,11 +749,11 @@ struct CloneTyWithMonomorph: Monomorphiser {
     }
 }
 
-::HIR::LifetimeRef MonomorphiserPP::get_lifetime(const Span& sp, const ::HIR::GenericRef& lft_ref) const /*override*/
+::HIR::LifetimeRef MonomorphiserPP::getLifetime(const Span& sp, const ::HIR::GenericRef& lft_ref) const /*override*/
 {
     // HACK: If no params are present at all, just return unchanged
     // - Note: Equality on PathParams ignores lifetimes, hence the second check
-    if ((!this->get_impl_params() || (*this->get_impl_params() == HIR::PathParams() && this->get_impl_params()->mLifetimes.empty())) && (!this->get_method_params() || (*this->get_method_params() == HIR::PathParams() && this->get_method_params()->mLifetimes.empty())) && (!this->get_hrb_params() || (*this->get_hrb_params() == HIR::PathParams() && this->get_hrb_params()->mLifetimes.empty()))) {
+    if ((!this->getImplParams() || (*this->getImplParams() == HIR::PathParams() && this->getImplParams()->mLifetimes.empty())) && (!this->getMethodParams() || (*this->getMethodParams() == HIR::PathParams() && this->getMethodParams()->mLifetimes.empty())) && (!this->getHrbParams() || (*this->getHrbParams() == HIR::PathParams() && this->getHrbParams()->mLifetimes.empty()))) {
         DEBUG("Passthrough " << lft_ref);
         return HIR::LifetimeRef(lft_ref.binding);
     }
@@ -761,7 +761,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
     switch (lft_ref.group()) {
         // HACK: Pass through when no lifetimes were recorded at all (e.g. a trait-declared lifetime in a default method body)
         case 0:
-            if (const auto* p = this->get_impl_params()) {
+            if (const auto* p = this->getImplParams()) {
                 if (p->mLifetimes.empty()) {
                     DEBUG("No impl lifetimes recorded - passthrough " << lft_ref);
                     return HIR::LifetimeRef(lft_ref.binding);
@@ -773,7 +773,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
             }
             break;
         case 1:
-            if (const auto* p = this->get_method_params()) {
+            if (const auto* p = this->getMethodParams()) {
                 if (p->mLifetimes.empty()) {
                     DEBUG("No method lifetimes recorded - passthrough " << lft_ref);
                     return HIR::LifetimeRef(lft_ref.binding);
@@ -788,7 +788,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
             DEBUG("Placeholder " << lft_ref);
             return HIR::LifetimeRef(lft_ref.binding);
         case 3: // HRLs
-            if (const auto* p = this->get_hrb_params()) {
+            if (const auto* p = this->getHrbParams()) {
                 if (lft_ref.idx() >= p->mLifetimes.size()) {
                     DEBUG("HRL " << lft_ref << " out of range (max " << p->mLifetimes.size() << ") - passthrough");
                     return HIR::LifetimeRef(lft_ref.binding);

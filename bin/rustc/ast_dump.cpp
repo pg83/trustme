@@ -34,12 +34,12 @@ public:
     {
     }
 
-    void handle_module(const AST::Module& mod);
-    void handle_struct(const AST::Struct& s);
-    void handle_enum(const AST::Enum& s);
-    void handle_trait(const AST::Trait& s);
+    void handleModule(const AST::Module& mod);
+    void handleStruct(const AST::Struct& s);
+    void handleEnum(const AST::Enum& s);
+    void handleTrait(const AST::Trait& s);
 
-    void handle_function(const AST::Visibility& vis, const RcString& name, const AST::Function& f);
+    void handleFunction(const AST::Visibility& vis, const RcString& name, const AST::Function& f);
 
     virtual bool is_const() const override {
         return true;
@@ -64,7 +64,7 @@ public:
         if (n.localMod) {
             os << "\n";
             os << indent() << "// ANON: " << n.localMod->path() << "\n";
-            handle_module(*n.localMod);
+            handleModule(*n.localMod);
         }
         for (auto& child : n.nodes) {
             os << "\n";
@@ -78,7 +78,7 @@ public:
             } else {
                 AST::NodeVisitor::visit(child.node);
             }
-            if (child.has_semicolon) {
+            if (child.hasSemicolon) {
                 os << ";";
             }
         }
@@ -898,7 +898,7 @@ void RustPrinter::print_attrs(const AST::AttributeList& attrs) {
     }
 }
 
-void RustPrinter::handle_module(const AST::Module& mod) {
+void RustPrinter::handleModule(const AST::Module& mod) {
     bool need_nl = true;
 
     for (const auto& ip : mod.mItems) {
@@ -906,20 +906,20 @@ void RustPrinter::handle_module(const AST::Module& mod) {
         if (!i.data.is_Use()) {
             continue;
         }
-        const auto& i_data = i.data.as_Use();
+        const auto& iData = i.data.as_Use();
         //if(need_nl) {
         //    m_os << "\n";
         //    need_nl = false;
         //}
-        if (i_data.entries.empty()) {
+        if (iData.entries.empty()) {
             continue;
         }
         os << indent() << i.vis << "use ";
-        if (i_data.entries.size() > 1) {
+        if (iData.entries.size() > 1) {
             os << "{";
         }
-        for (const auto& ent : i_data.entries) {
-            if (&ent != &i_data.entries.front()) {
+        for (const auto& ent : iData.entries) {
+            if (&ent != &iData.entries.front()) {
                 os << ", ";
             }
             os << ent.path;
@@ -930,7 +930,7 @@ void RustPrinter::handle_module(const AST::Module& mod) {
             } else {
             }
         }
-        if (i_data.entries.size() > 1) {
+        if (iData.entries.size() > 1) {
             os << "}";
         }
         os << ";\n";
@@ -970,7 +970,7 @@ void RustPrinter::handle_module(const AST::Module& mod) {
         os << indent() << item.vis << "mod " << item.name << "\n";
         os << indent() << "{\n";
         inc_indent();
-        handle_module(e);
+        handleModule(e);
         decIndent();
         os << indent() << "}\n";
         os << "\n";
@@ -1006,7 +1006,7 @@ void RustPrinter::handle_module(const AST::Module& mod) {
         os << "\n";
         print_attrs(item.attrs);
         os << indent() << item.vis << "struct " << item.name;
-        handle_struct(e);
+        handleStruct(e);
     }
 
     for (const auto& ip : mod.mItems) {
@@ -1019,7 +1019,7 @@ void RustPrinter::handle_module(const AST::Module& mod) {
         os << "\n";
         print_attrs(item.attrs);
         os << indent() << item.vis << "enum " << item.name;
-        handle_enum(e);
+        handleEnum(e);
     }
 
     for (const auto& ip : mod.mItems) {
@@ -1032,7 +1032,7 @@ void RustPrinter::handle_module(const AST::Module& mod) {
         os << "\n";
         print_attrs(item.attrs);
         os << indent() << item.vis << "trait " << item.name;
-        handle_trait(e);
+        handleTrait(e);
     }
 
     for (const auto& ip : mod.mItems) {
@@ -1073,7 +1073,7 @@ void RustPrinter::handle_module(const AST::Module& mod) {
 
         os << "\n";
         print_attrs(item.attrs);
-        handle_function(item.vis, item.name, e);
+        handleFunction(item.vis, item.name, e);
     }
 
     for (const auto& ip : mod.mItems) {
@@ -1128,7 +1128,7 @@ void RustPrinter::handle_module(const AST::Module& mod) {
                     os << ";\n";
                 ),
                 (Type, os << indent() << "type " << it.name << " = " << e.type() << ";\n";),
-                (Function, handle_function(it.vis, it.name, e);)
+                (Function, handleFunction(it.vis, it.name, e);)
             )
         }
         decIndent();
@@ -1155,8 +1155,8 @@ void RustPrinter::print_params(const AST::GenericParams& params) {
                 TU_ARMA(Type, p) {
                     os << p.attrs();
                     os << p.name();
-                    if (!p.get_default().is_wildcard()) {
-                        os << " = " << p.get_default();
+                    if (!p.getDefault().is_wildcard()) {
+                        os << " = " << p.getDefault();
                     }
                 }
                 TU_ARMA(Value, p) {
@@ -1201,7 +1201,7 @@ void RustPrinter::print_pattern_tuple(const AST::Pattern::TuplePat& v, bool is_r
         print_pattern(sp, is_refutable);
         os << ", ";
     }
-    if (v.has_wildcard) {
+    if (v.hasWildcard) {
         os << ".., ";
         for (const auto& sp : v.end) {
             print_pattern(sp, is_refutable);
@@ -1330,7 +1330,7 @@ void RustPrinter::print_type(const TypeRef& t) {
     os << t;
 }
 
-void RustPrinter::handle_struct(const AST::Struct& s) {
+void RustPrinter::handleStruct(const AST::Struct& s) {
     print_params(s.params());
 
     TU_MATCH(
@@ -1349,7 +1349,7 @@ void RustPrinter::handle_struct(const AST::Struct& s) {
     os << "\n";
 }
 
-void RustPrinter::handle_enum(const AST::Enum& s) {
+void RustPrinter::handleEnum(const AST::Enum& s) {
     print_params(s.params());
     os << "\n";
     print_bounds(s.params());
@@ -1371,7 +1371,7 @@ void RustPrinter::handle_enum(const AST::Enum& s) {
     os << "\n";
 }
 
-void RustPrinter::handle_trait(const AST::Trait& s) {
+void RustPrinter::handleTrait(const AST::Trait& s) {
     print_params(s.params());
     {
         char c = ':';
@@ -1391,7 +1391,7 @@ void RustPrinter::handle_trait(const AST::Trait& s) {
     inc_indent();
 
     for (const auto& i : s.items()) {
-        TU_MATCH_DEF(AST::Item, (i.data), (e), (), (Type, os << indent() << "type " << i.name << ";\n";), (Function, handle_function(AST::Visibility::make_bare_private(), i.name, e);))
+        TU_MATCH_DEF(AST::Item, (i.data), (e), (), (Type, os << indent() << "type " << i.name << ";\n";), (Function, handleFunction(AST::Visibility::make_bare_private(), i.name, e);))
     }
 
     decIndent();
@@ -1399,7 +1399,7 @@ void RustPrinter::handle_trait(const AST::Trait& s) {
     os << "\n";
 }
 
-void RustPrinter::handle_function(const AST::Visibility& vis, const RcString& name, const AST::Function& f) {
+void RustPrinter::handleFunction(const AST::Visibility& vis, const RcString& name, const AST::Function& f) {
     os << indent();
     os << vis;
     if (f.is_const()) {
@@ -1461,7 +1461,7 @@ void RustPrinter::decIndent() {
 void DumpRust(const char* filename, const AST::Crate& crate) {
     ::std::ofstream os(filename);
     RustPrinter printer(os);
-    printer.handle_module(crate.root_module());
+    printer.handleModule(crate.root_module());
 }
 
 void DumpASTNode(::std::ostream& os, const AST::ExprNode& node) {

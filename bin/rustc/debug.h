@@ -6,8 +6,8 @@
 #include <type_traits>
 #include <utility>
 
-extern int g_debug_indent_level;
-extern bool g_debug_enabled;
+extern int gDebugIndentLevel;
+extern bool gDebugEnabled;
 
 #ifndef DEBUG_EXTRA_ENABLE
     #define DEBUG_EXTRA_ENABLE // Files can override this with their own flag if needed (e.g. `&& g_my_debug_on`)
@@ -18,18 +18,18 @@ extern bool g_debug_enabled;
     #define MAX_INDENT_LEVEL 450
     #define INDENT()                                         \
         do {                                                 \
-            g_debug_indent_level += 1;                       \
-            assert(g_debug_indent_level < MAX_INDENT_LEVEL); \
+            gDebugIndentLevel += 1;                       \
+            assert(gDebugIndentLevel < MAX_INDENT_LEVEL); \
         } while (0)
     #define UNINDENT()                 \
         do {                           \
-            g_debug_indent_level -= 1; \
+            gDebugIndentLevel -= 1; \
         } while (0)
     #define DEBUG_ENABLED (debugEnabled() DEBUG_EXTRA_ENABLE)
     #define DEBUG(ss)                                                                              \
         do {                                                                                       \
             if (DEBUG_ENABLED) {                                                                   \
-                debugOutput(g_debug_indent_level, __FUNCTION__) << ss << std::dec << ::std::endl; \
+                debugOutput(gDebugIndentLevel, __FUNCTION__) << ss << std::dec << ::std::endl; \
             }                                                                                      \
         } while (0)
     #define TRACE_FUNCTION TraceLog _tf_(DEBUG_ENABLED ? __func__ : nullptr)
@@ -67,7 +67,7 @@ extern bool g_debug_enabled;
 #endif
 
 inline bool debugEnabled() {
-    return g_debug_enabled;
+    return gDebugEnabled;
 }
 extern ::std::ostream& debugOutput(int indent, const char* function);
 
@@ -97,7 +97,7 @@ public:
         : mTag(tag)
     {
         if (mTag) {
-            auto& os = debugOutput(g_debug_indent_level, mTag);
+            auto& os = debugOutput(gDebugIndentLevel, mTag);
             os << ">> (";
             info_cb(os);
             os << ")" << ::std::endl;
@@ -122,7 +122,7 @@ public:
         , ret(::std::forward<Ret>(ret))
     {
         if (mTag) {
-            auto& os = debugOutput(g_debug_indent_level, mTag);
+            auto& os = debugOutput(gDebugIndentLevel, mTag);
             os << ">> (";
             info_cb(os);
             os << ")" << ::std::endl;
@@ -133,7 +133,7 @@ public:
     ~TraceLogRet() {
         if (mTag) {
             UNINDENT();
-            auto& os = debugOutput(g_debug_indent_level, mTag);
+            auto& os = debugOutput(gDebugIndentLevel, mTag);
             os << "<< (";
             ret(os);
             os << ")" << ::std::endl;

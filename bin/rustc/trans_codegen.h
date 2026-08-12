@@ -22,7 +22,7 @@ class CodeGenerator {
 public:
     virtual ~CodeGenerator();
 
-    virtual void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hir_file) {
+    virtual void finalise(const TransOptions& opt, CodegenOutput out_ty, const ::std::string& hirFile) {
     }
 
     // Called on all types directly mentioned (e.g. variables, arguments, and fields)

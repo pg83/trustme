@@ -71,7 +71,7 @@ struct EncodedLiteralSlice {
     U128 read_uint(size_t size = 0) const;
     S128 read_sint(size_t size = 0) const;
     FloatValue read_float(size_t size = 0) const;
-    const Reloc* get_reloc() const;
+    const Reloc* getReloc() const;
 
     bool operator==(const EncodedLiteralSlice& x) const;
 

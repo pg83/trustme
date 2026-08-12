@@ -5,10 +5,10 @@ void TraitResolveCommon::prep_indexes(const Span& sp) {
     TRACE_FUNCTION_F("");
 
     if (implGenerics) {
-        DEBUG("m_impl_generics = " << implGenerics->fmt_args() << implGenerics->fmt_bounds());
+        DEBUG("m_impl_generics = " << implGenerics->fmtArgs() << implGenerics->fmtBounds());
     }
     if (itemGenerics) {
-        DEBUG("m_item_generics = " << itemGenerics->fmt_args() << itemGenerics->fmt_bounds());
+        DEBUG("m_item_generics = " << itemGenerics->fmtArgs() << itemGenerics->fmtBounds());
     }
 
     typeEqualities.clear();
@@ -30,7 +30,7 @@ void TraitResolveCommon::prep_indexes(const Span& sp) {
     });
     DEBUG(traitBounds.size() << " trait bounds");
     for (const auto& tb : traitBounds) {
-        DEBUG(tb.first.first << " : " << (!tb.second.hrbs.is_empty() ? "for" : "") << tb.second.hrbs.fmt_args() << tb.first.second << " - " << tb.second.assoc);
+        DEBUG(tb.first.first << " : " << (!tb.second.hrbs.is_empty() ? "for" : "") << tb.second.hrbs.fmtArgs() << tb.first.second << " - " << tb.second.assoc);
     }
 }
 
@@ -45,52 +45,52 @@ void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const ::HIR::Gen
 }
 
 void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* outer_hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool addParents /*=true*/) {
-    TRACE_FUNCTION_F(FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmt_args() << " ";) << type << " : " << trait_path);
+    TRACE_FUNCTION_F(FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmtArgs() << " ";) << type << " : " << trait_path);
 
     const auto boundConstness = trait_path.constness;
-    auto get_or_add_trait_bound = [&](const HIR::GenericParams* hrbs, const HIR::GenericPath& generic_path) -> CachedBound& {
+    auto getOrAddTraitBound = [&](const HIR::GenericParams* hrbs, const HIR::GenericPath& genericPath) -> CachedBound& {
         auto it = ::std::find_if(traitBounds.begin(), traitBounds.end(), [&](const auto& entry) {
             const auto& boundType = entry.first.first;
             const auto& boundTrait = entry.first.second;
             return (boundType == type || boundType->equalsIgnoringRegions(type))
-                && boundTrait.equalsIgnoringRegions(generic_path);
+                && boundTrait.equalsIgnoringRegions(genericPath);
         });
         if (it != traitBounds.end()) {
-            DEBUG("[get_or_add_trait_bound] Existing " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmt_args() << " ";) << generic_path);
+            DEBUG("[get_or_add_trait_bound] Existing " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmtArgs() << " ";) << genericPath);
             if (boundConstness == HIR::BoundConstness::Always
                 || (boundConstness == HIR::BoundConstness::Maybe && it->second.constness == HIR::BoundConstness::Never)) {
                 it->second.constness = boundConstness;
             }
             return it->second;
         }
-        DEBUG("[get_or_add_trait_bound] Add " << FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmt_args() << " ";) << " ?: " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmt_args() << " ";) << generic_path);
-        auto& rv = traitBounds[std::make_pair(type, generic_path.clone())];
+        DEBUG("[get_or_add_trait_bound] Add " << FMT_CB(os, if (outer_hrtbs) os << "for" << outer_hrtbs->fmtArgs() << " ";) << " ?: " << FMT_CB(os, if (hrbs) os << "for" << hrbs->fmtArgs() << " ";) << genericPath);
+        auto& rv = traitBounds[std::make_pair(type, genericPath.clone())];
         if (outer_hrtbs && !outer_hrtbs->is_empty()) {
             rv.hrbs = outer_hrtbs->clone();
         }
         if (hrbs && !hrbs->is_empty()) {
             rv.hrbs = hrbs->clone();
         }
-        rv.trait_ptr = &crate.get_trait_by_path(sp, generic_path.mPath);
+        rv.trait_ptr = &crate.getTraitByPath(sp, genericPath.mPath);
         rv.constness = boundConstness;
         return rv;
     };
     auto push_type = [&](const RcString& name, const HIR::GenericParams* hrbs, const HIR::TraitPath::AtyEqual& atye) {
-        auto& b = get_or_add_trait_bound(hrbs, atye.source_trait);
+        auto& b = getOrAddTraitBound(hrbs, atye.source_trait);
         b.assoc.insert(std::make_pair(name, atye.clone()));
     };
 
     auto& trait_params = trait_path.mPath.mParams;
     auto monomorph = MonomorphStatePtr(crate.types, type, &trait_params, nullptr);
 
-    const auto& trait = crate.get_trait_by_path(sp, trait_path.mPath.mPath);
+    const auto& trait = crate.getTraitByPath(sp, trait_path.mPath.mPath);
 #if 1
     while (trait_params.types.size() < trait.mParams.types.size()) {
         trait_params.types.push_back(monomorph.monomorph_type(sp, trait.mParams.types[trait_params.types.size()].defaultValue));
     }
 #endif
 
-    get_or_add_trait_bound(trait_path.hrtbs.get(), trait_path.mPath);
+    getOrAddTraitBound(trait_path.hrtbs.get(), trait_path.mPath);
 
     for (const auto& tb : trait_path.typeBounds) {
         DEBUG("Equality (TB) - <" << type << " as " << tb.second.source_trait << ">::" << tb.first << " = " << tb.second);
@@ -125,7 +125,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
         if (aTy.second.generics.is_generic() || !aTy.second.generics.is_empty()) {
             continue;
         }
-        ASSERT_BUG(sp, !aTy.second.generics.is_generic(), "prep_indexes__add_trait_bound: Handle type generic ATYs - " << aTy.first << aTy.second.generics.fmt_args() << " in " << trait_path);
+        ASSERT_BUG(sp, !aTy.second.generics.is_generic(), "prep_indexes__add_trait_bound: Handle type generic ATYs - " << aTy.first << aTy.second.generics.fmtArgs() << " in " << trait_path);
         auto ty_a = crate.types.path(
             // TODO: Empty params works for now, as there's no type generics (yet)
             ::HIR::Path(type, trait_path.mPath.clone(), aTy.first, aTy.second.generics.make_empty_params(true)),
@@ -147,7 +147,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
 
                 // TODO: what if `trait_mono` has HRLs too?
                 if (outer_hrtbs && trait_mono.hrtbs) {
-                    TODO(sp, "Double-layerd HRLs - outer=" << outer_hrtbs->fmt_args() << " and inner=" << trait_mono.hrtbs->fmt_args());
+                    TODO(sp, "Double-layerd HRLs - outer=" << outer_hrtbs->fmtArgs() << " and inner=" << trait_mono.hrtbs->fmtArgs());
                 }
                 auto* inner_hrtbs = outer_hrtbs ? outer_hrtbs : aTyB.hrtbs.get();
                 prepIndexesAddEquality(sp, inner_hrtbs, mv$(ty_l), std::move(tb.second.type));
@@ -164,7 +164,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
 }
 
 /// Obtain the type for a given constant parameter
-const ::HIR::TypeData* TraitResolveCommon::get_const_param_type(const Span& sp, unsigned binding) const {
+const ::HIR::TypeData* TraitResolveCommon::getConstParamType(const Span& sp, unsigned binding) const {
     const HIR::GenericParams* p;
     switch (binding >> 8) {
         case 0: // impl level
@@ -179,10 +179,10 @@ const ::HIR::TypeData* TraitResolveCommon::get_const_param_type(const Span& sp, 
     auto slot = binding & 0xFF;
     if (!p) {
         if (implGenerics) {
-            DEBUG("Impl: " << implGenerics->fmt_args());
+            DEBUG("Impl: " << implGenerics->fmtArgs());
         }
         if (itemGenerics) {
-            DEBUG("Item: " << itemGenerics->fmt_args());
+            DEBUG("Item: " << itemGenerics->fmtArgs());
         }
     }
     ASSERT_BUG(sp, p, "No generic list for " << (binding >> 8) << ":" << slot);
@@ -192,7 +192,7 @@ const ::HIR::TypeData* TraitResolveCommon::get_const_param_type(const Span& sp, 
 
 ::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x) {
     if (!x.hrbs.is_empty()) {
-        s << "for" << x.hrbs.fmt_args() << " ";
+        s << "for" << x.hrbs.fmtArgs() << " ";
     }
     s << x.ty;
     return s;
@@ -214,24 +214,24 @@ TraitResolveCommon::TraitResolveCommon(const ::HIR::Crate& crate)
     : crate(crate)
     , implGenerics(nullptr)
     , itemGenerics(nullptr) {
-    mLangCopy = crate.get_lang_item_path_opt("copy");
-    mLangClone = crate.get_lang_item_path_opt("clone");
-    mLangDrop = crate.get_lang_item_path_opt("drop");
-    mLangSized = crate.get_lang_item_path_opt("sized");
-    mLangUnsize = crate.get_lang_item_path_opt("unsize");
-    mLangFn = crate.get_lang_item_path_opt("fn");
-    mLangFnMut = crate.get_lang_item_path_opt("fn_mut");
-    mLangFnOnce = crate.get_lang_item_path_opt("fn_once");
-    mLangBox = crate.get_lang_item_path_opt("owned_box");
-    mLangPhantomData = crate.get_lang_item_path_opt("phantom_data");
-    mLangGenerator = crate.get_lang_item_path_opt("coroutine");
-    mLangDiscriminantKind = crate.get_lang_item_path_opt("discriminant_kind");
-    mLangPointee = crate.get_lang_item_path_opt("pointee_trait");
-    mLangDynMetadata = crate.get_lang_item_path_opt("dyn_metadata");
-    mLangPointeeSized = crate.get_lang_item_path_opt("pointee_sized");
-    mLangMetaSized = crate.get_lang_item_path_opt("meta_sized");
-    mLangDestruct = crate.get_lang_item_path_opt("destruct");
-    mLangFuture = crate.get_lang_item_path_opt("future_trait");
+    mLangCopy = crate.getLangItemPathOpt("copy");
+    mLangClone = crate.getLangItemPathOpt("clone");
+    mLangDrop = crate.getLangItemPathOpt("drop");
+    mLangSized = crate.getLangItemPathOpt("sized");
+    mLangUnsize = crate.getLangItemPathOpt("unsize");
+    mLangFn = crate.getLangItemPathOpt("fn");
+    mLangFnMut = crate.getLangItemPathOpt("fn_mut");
+    mLangFnOnce = crate.getLangItemPathOpt("fn_once");
+    mLangBox = crate.getLangItemPathOpt("owned_box");
+    mLangPhantomData = crate.getLangItemPathOpt("phantom_data");
+    mLangGenerator = crate.getLangItemPathOpt("coroutine");
+    mLangDiscriminantKind = crate.getLangItemPathOpt("discriminant_kind");
+    mLangPointee = crate.getLangItemPathOpt("pointee_trait");
+    mLangDynMetadata = crate.getLangItemPathOpt("dyn_metadata");
+    mLangPointeeSized = crate.getLangItemPathOpt("pointee_sized");
+    mLangMetaSized = crate.getLangItemPathOpt("meta_sized");
+    mLangDestruct = crate.getLangItemPathOpt("destruct");
+    mLangFuture = crate.getLangItemPathOpt("future_trait");
 }
 const ::HIR::GenericParams& TraitResolveCommon::impl_generics() const {
     static ::HIR::GenericParams empty;

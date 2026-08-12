@@ -26,7 +26,7 @@ public:
     Float128();
     Float128(double value);  // implicit: exact widening
 
-    static Float128 from_bits(uint64_t hi, uint64_t lo);
+    static Float128 fromBits(uint64_t hi, uint64_t lo);
     // Parse `digits[.digits][(e|E)[+|-]digits]`, correctly rounded
     static Float128 parse_decimal(const char* text);
     static Float128 quiet_nan();

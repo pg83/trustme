@@ -97,8 +97,8 @@ namespace HIR {
         (),
         (TypePathBinding clone() const;
 
-         const GenericParams* get_generics() const;
-         const TraitMarkings* get_trait_markings() const;
+         const GenericParams* getGenerics() const;
+         const TraitMarkings* getTraitMarkings() const;
 
          bool operator==(const TypePathBinding & x) const;
          bool operator!=(const TypePathBinding & x) const { return !(*this == x); })
@@ -289,7 +289,7 @@ namespace HIR {
 
             uint32_t flags = 0;
 
-            bool has_type_infer() const { return flags & HAS_TYPE_INFER; }
+            bool hasTypeInfer() const { return flags & HAS_TYPE_INFER; }
             bool needs_monomorphisation(bool ignore_lifetimes = false) const {
                 const auto mask = HAS_TYPE_PARAM | HAS_UNEVALUATED_CONST
                     | (ignore_lifetimes ? 0u : HAS_LIFETIME_PARAM);
@@ -308,7 +308,7 @@ namespace HIR {
             bool match_test_generics(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
             ::HIR::Compare match_test_generics_fuzz(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
             Compare compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const;
-            const ::HIR::SimplePath* get_sort_path() const;
+            const ::HIR::SimplePath* getSortPath() const;
         )
     );
 

@@ -53,9 +53,9 @@ namespace MIR {
 
             Storage clone() const;
 
-            uintptr_t get_inner() const;
+            uintptr_t getInner() const;
 
-            static Storage from_inner(uintptr_t v);
+            static Storage fromInner(uintptr_t v);
 
             enum Tag {
                 TAG_Argument,
@@ -124,11 +124,11 @@ namespace MIR {
 
             static Wrapper newIndex(unsigned idx);
 
-            uint32_t get_inner() const {
+            uint32_t getInner() const {
                 return val;
             }
 
-            static Wrapper from_inner(uint32_t v) {
+            static Wrapper fromInner(uint32_t v) {
                 return Wrapper(v);
             }
 
@@ -702,7 +702,7 @@ namespace MIR {
         (Drop, struct {
             eDropKind kind;
             LValue slot;
-            unsigned int flag_idx;
+            unsigned int flagIdx;
             BasicBlockId target;
             UnwindAction unwind;
         }),

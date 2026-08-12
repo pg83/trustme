@@ -47,14 +47,14 @@ struct Context {
         };
 
         // Strong disable (depends on a trait impl)
-        bool force_disable = false;
+        bool forceDisable = false;
         //
-        bool force_no_to = false;
-        bool force_no_from = false;
+        bool forceNoTo = false;
+        bool forceNoFrom = false;
 
         // Possible types from trait impls (may introduce new types)
         // - This is union of all input bounds
-        bool has_bounded = false;
+        bool hasBounded = false;
         /// If the bounds include this ivar, mark differently (permits any incoming type, but types can be removed)
         /// - If an existing type isn't in the incoming set, it is removed
         /// - But any type in an incoming set is accepted (even if it doesn't already exist)
@@ -70,7 +70,7 @@ struct Context {
 
         void reset();
 
-        bool has_rules() const;
+        bool hasRules() const;
 
         void merge_from(const IVarPossible& source);
     };
@@ -132,7 +132,7 @@ struct Context {
     ::std::vector<IVarPossible> possible_ivar_vals;
     ::std::vector<Associated::CapturedIvarPossible>* possibleIvarSink = nullptr;
 
-    IVarPossible* get_possible_ivar_sink(unsigned index);
+    IVarPossible* getPossibleIvarSink(unsigned index);
 
     struct TaitEntry {
         HIR::PathParams params;
@@ -153,7 +153,7 @@ struct Context {
         return ivars.take_changed();
     }
 
-    bool has_rules() const {
+    bool hasRules() const {
         return !(link_coerce.empty() && link_assoc.empty() && to_visit.empty() && advRevisits.empty());
     }
 
@@ -194,7 +194,7 @@ struct Context {
 
     /// Get the `possible_ivar_vals` entry for the given ivar index
     /// Returns `nullptr` if the ivar is already known
-    IVarPossible* get_ivar_possibilities(const Span& sp, unsigned int ivar_index);
+    IVarPossible* getIvarPossibilities(const Span& sp, unsigned int ivar_index);
 
     enum class IvarUnknownType {
         /// Coercion to an unknown type (disables
@@ -235,19 +235,19 @@ struct Context {
     // ----
 
     // - Add a pattern binding (forcing the type to match)
-    void handle_pattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type, bool is_irrefutable = false);
-    void handle_pattern_direct_inner(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type);
+    void handlePattern(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type, bool is_irrefutable = false);
+    void handlePatternDirectInner(const Span& sp, ::HIR::Pattern& pat, const ::HIR::TypeData* type);
     void addBindingInner(const Span& sp, const ::HIR::PatternBinding& pb, ::HIR::TypeRef type);
 
     void addVar(const Span& sp, unsigned int index, const RcString& name, ::HIR::TypeRef type);
-    const ::HIR::TypeData* get_var(const Span& sp, unsigned int idx) const;
+    const ::HIR::TypeData* getVar(const Span& sp, unsigned int idx) const;
 
     // - Add a revisit entry
     void addRevisit(::HIR::ExprNode& node);
     void addRevisitAdv(::std::unique_ptr<Revisitor> ent);
 
-    const ::HIR::TypeData* get_type(const ::HIR::TypeData* ty) const {
-        return ivars.get_type(ty);
+    const ::HIR::TypeData* getType(const ::HIR::TypeData* ty) const {
+        return ivars.getType(ty);
     }
 
     /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)

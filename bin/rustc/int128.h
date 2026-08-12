@@ -19,11 +19,11 @@ public:
         return U128(UINT64_MAX, UINT64_MAX);
     }
 
-    uint64_t get_lo() const {
+    uint64_t getLo() const {
         return lo;
     }
 
-    uint64_t get_hi() const {
+    uint64_t getHi() const {
         return hi;
     }
 
@@ -54,7 +54,7 @@ public:
 
     void to_be_bytes(uint8_t* dst, size_t max_len);
 
-    void from_le_bytes(const uint8_t* src, size_t max_len) {
+    void fromLeBytes(const uint8_t* src, size_t max_len) {
         max_len = max_len > 16 ? 16 : max_len;
         *this = U128();
 #if __LITTLE_ENDIAN__
@@ -66,7 +66,7 @@ public:
 #endif
     }
 
-    void from_be_bytes(const uint8_t* src, size_t max_len);
+    void fromBeBytes(const uint8_t* src, size_t max_len);
 
     U128 operator~() const {
         return U128(~lo, ~hi);
@@ -254,7 +254,7 @@ public:
         return (*this < 0 ? -1.0f : 1.0f) * this->u_abs().to_float();
     }
 
-    U128 get_inner() const {
+    U128 getInner() const {
         return inner;
     }
 
@@ -262,9 +262,9 @@ private:
     void sign_extend(size_t n_bytes);
 
 public:
-    void from_le_bytes(const uint8_t* src, size_t max_len);
+    void fromLeBytes(const uint8_t* src, size_t max_len);
 
-    void from_be_bytes(const uint8_t* src, size_t max_len);
+    void fromBeBytes(const uint8_t* src, size_t max_len);
 
     S128 operator~() const {
         return S128(~inner);

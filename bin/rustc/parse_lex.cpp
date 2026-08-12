@@ -29,11 +29,11 @@ Lexer::Lexer(const ::std::string& filename, AST::Edition edition, ParseState ps)
             throw ::std::runtime_error("Unable to open file '" + filename + "'");
         }
         // Consume the BOM
-        if (this->getc_byte() == '\xef') {
-            if (this->getc_byte() != '\xbb') {
+        if (this->getcByte() == '\xef') {
+            if (this->getcByte() != '\xbb') {
                 throw ::std::runtime_error("Incomplete BOM - missing \\xBB in second position");
             }
-            if (this->getc_byte() != '\xbf') {
+            if (this->getcByte() != '\xbf') {
                 throw ::std::runtime_error("Incomplete BOM - missing \\xBF in third position");
             }
             lineOfs = 0;
@@ -255,7 +255,7 @@ signed int Lexer::getSymbol() {
     // 3. IF: a smaller character or, EOS is hit - Return current best
     unsigned ofs = 0;
     signed int best = 0;
-    bool hit_eof = false;
+    bool hitEof = false;
     for (unsigned i = 0; i < LEN(TOKENMAP); i++) {
         const char* const chars = TOKENMAP[i].chars;
         const size_t len = TOKENMAP[i].len;
@@ -270,7 +270,7 @@ signed int Lexer::getSymbol() {
             } catch (Lexer::EndOfFile) {
                 ch = 0;
                 // Prevent `ungetc` if EOF was hit
-                hit_eof = true;
+                hitEof = true;
             }
             ofs++;
         }
@@ -279,7 +279,7 @@ signed int Lexer::getSymbol() {
         }
     }
 
-    if (!hit_eof) {
+    if (!hitEof) {
         this->ungetc();
     }
     return best;
@@ -873,10 +873,10 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
     // - `0b` Binary
     // - Any other character: decimal
     if (ch == '0') {
-        ch = this->getc_num();
+        ch = this->getcNum();
         if (ch == 'x') {
             num_mode = NumMode::HEX;
-            while ((ch = this->getc_num()).isxdigit()) {
+            while ((ch = this->getcNum()).isxdigit()) {
                 val *= 16;
                 if (ch.v <= '9') {
                     val += U128(ch.v - '0');
@@ -888,7 +888,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
             }
         } else if (ch == 'b') {
             num_mode = NumMode::BIN;
-            while ((ch = this->getc_num()).isdigit()) {
+            while ((ch = this->getcNum()).isdigit()) {
                 val *= 2;
                 if (ch.v == '0') {
                     val += 0;
@@ -900,7 +900,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
             }
         } else if (ch == 'o') {
             num_mode = NumMode::OCT;
-            while ((ch = this->getc_num()).isdigit()) {
+            while ((ch = this->getcNum()).isdigit()) {
                 val *= 8;
                 if ('0' <= ch.v && ch.v <= '7') {
                     val += U128(ch.v - '0');
@@ -913,7 +913,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
             while (ch.isdigit()) {
                 val *= 10;
                 val += U128(ch.v - '0');
-                ch = this->getc_num();
+                ch = this->getcNum();
             }
         }
     } else {
@@ -921,7 +921,7 @@ U128 Lexer::parseInt(NumMode* num_mode_out) {
         while (ch.isdigit()) {
             val *= 10;
             val += U128(ch.v - '0');
-            ch = this->getc_num();
+            ch = this->getcNum();
         }
     }
 
@@ -940,7 +940,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
     //char buf[MAX_LEN+1];
     //int ofs = snprintf(buf, MAX_LEN+1, "%llu.", (unsigned long long)whole);
 
-    auto ch = this->getc_num();
+    auto ch = this->getcNum();
 #define PUTC(ch)                                                                                                                          \
     do {                                                                                                                                  \
         assert(ch.v < 127);                                                                                                               \
@@ -948,7 +948,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
     } while (0)
     while (ch.isdigit()) {
         PUTC(ch);
-        ch = this->getc_num();
+        ch = this->getcNum();
     }
     auto queue_tuple_indices = [&](Codepoint first) {
         DEBUG("Detected tuple index chain after float-shaped token - " << sbuf);
@@ -962,7 +962,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
         while (ch.isspace()) {
             ch = this->getc();
         }
-        bool has_trailing_dot = true;
+        bool hasTrailingDot = true;
         while (ch.isdigit()) {
             this->ungetc();
             indices.push_back(this->parseInt(nullptr));
@@ -971,7 +971,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
                 ch = this->getc();
             }
             if (ch != '.') {
-                has_trailing_dot = false;
+                hasTrailingDot = false;
                 this->ungetc();
                 break;
             }
@@ -980,11 +980,11 @@ FloatValue Lexer::parseFloat(U128 whole) {
                 ch = this->getc();
             }
         }
-        if (!ch.isdigit() && has_trailing_dot) {
+        if (!ch.isdigit() && hasTrailingDot) {
             this->ungetc();
         }
 
-        if (has_trailing_dot) {
+        if (hasTrailingDot) {
             nextTokens.push_back(TOK_DOT);
         }
         for (size_t i = indices.size(); i-- > 0;) {
@@ -1059,17 +1059,17 @@ FloatValue Lexer::parseFloat(U128 whole) {
     } else {
         if (ch == 'e' || ch == 'E') {
             PUTC(ch);
-            ch = this->getc_num();
+            ch = this->getcNum();
             if (ch == '-' || ch == '+') {
                 PUTC(ch);
-                ch = this->getc_num();
+                ch = this->getcNum();
             }
             if (!ch.isdigit()) {
                 throw ParseError::Generic(FMT("Non-numeric '" << ch << "' in float exponent"));
             }
             do {
                 PUTC(ch);
-                ch = this->getc_num();
+                ch = this->getcNum();
             } while (ch.isdigit());
         }
         this->ungetc();
@@ -1162,7 +1162,7 @@ uint32_t Lexer::parseEscape(char enclosing, bool* is_byte_escape) {
     }
 }
 
-char Lexer::getc_byte() {
+char Lexer::getcByte() {
     int rv = istream.get();
     if (rv == EOF) {
         throw Lexer::EndOfFile();
@@ -1190,7 +1190,7 @@ Codepoint Lexer::getc() {
         ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << " (cached)" << ::std::endl;
 #endif
     } else {
-        lastChar = this->getc_cp();
+        lastChar = this->getcCp();
         lineOfs += 1;
 #ifdef TRACE_CHARS
         ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << ::std::endl;
@@ -1199,7 +1199,7 @@ Codepoint Lexer::getc() {
     return lastChar;
 }
 
-Codepoint Lexer::getc_num() {
+Codepoint Lexer::getcNum() {
     Codepoint ch;
     do {
         ch = this->getc();
@@ -1207,8 +1207,8 @@ Codepoint Lexer::getc_num() {
     return ch;
 }
 
-Codepoint Lexer::getc_cp() {
-    uint8_t v1 = this->getc_byte();
+Codepoint Lexer::getcCp() {
+    uint8_t v1 = this->getcByte();
     if (v1 < 128) {
         return {v1};
     } else if ((v1 & 0xC0) == 0x80) {
@@ -1216,7 +1216,7 @@ Codepoint Lexer::getc_cp() {
         return {0xFFFE};
     } else if ((v1 & 0xE0) == 0xC0) {
         // Two bytes
-        uint8_t e1 = this->getc_byte();
+        uint8_t e1 = this->getcByte();
         if ((e1 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
@@ -1225,11 +1225,11 @@ Codepoint Lexer::getc_cp() {
         return {outval};
     } else if ((v1 & 0xF0) == 0xE0) {
         // Three bytes
-        uint8_t e1 = this->getc_byte();
+        uint8_t e1 = this->getcByte();
         if ((e1 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
-        uint8_t e2 = this->getc_byte();
+        uint8_t e2 = this->getcByte();
         if ((e2 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
@@ -1238,15 +1238,15 @@ Codepoint Lexer::getc_cp() {
         return {outval};
     } else if ((v1 & 0xF8) == 0xF0) {
         // Four bytes
-        uint8_t e1 = this->getc_byte();
+        uint8_t e1 = this->getcByte();
         if ((e1 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
-        uint8_t e2 = this->getc_byte();
+        uint8_t e2 = this->getcByte();
         if ((e2 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
-        uint8_t e3 = this->getc_byte();
+        uint8_t e3 = this->getcByte();
         if ((e3 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
@@ -1397,6 +1397,6 @@ void Lexer::push_hygine() {
     DEBUG(">> " << mHygiene);
 }
 void Lexer::pop_hygine() {
-    DEBUG("<< " << mHygiene << " -> " << mHygiene.get_parent());
-    mHygiene = mHygiene.get_parent();
+    DEBUG("<< " << mHygiene << " -> " << mHygiene.getParent());
+    mHygiene = mHygiene.getParent();
 }

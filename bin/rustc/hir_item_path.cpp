@@ -29,7 +29,7 @@ ItemPath::ItemPath(const ::HIR::TypeData* type, const ::HIR::SimplePath& path, c
 ItemPath::ItemPath(const ::HIR::SimplePath& path)
     : trait(&path) {
 }
-::HIR::SimplePath ItemPath::get_simple_path() const {
+::HIR::SimplePath ItemPath::getSimplePath() const {
     if (wrapped) {
         assert(wrapped->mData.is_Generic());
         return wrapped->mData.as_Generic().mPath;
@@ -37,14 +37,14 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
         return trait->clone();
     } else if (parent) {
         assert(name);
-        return parent->get_simple_path() + RcString::new_interned(name);
+        return parent->getSimplePath() + RcString::new_interned(name);
     } else {
         assert(!name);
         assert(crate_name);
         return ::HIR::SimplePath(RcString::new_interned(crate_name));
     }
 }
-::HIR::Path ItemPath::get_full_path() const {
+::HIR::Path ItemPath::getFullPath() const {
     if (wrapped) {
         return wrapped->clone();
     }
@@ -53,7 +53,7 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
 
     // If the parent has a name, or the parent is the crate root.
     if (parent->name || !parent->ty) {
-        return get_simple_path();
+        return getSimplePath();
     } else if (parent->trait) {
         assert(parent->ty);
         assert(parent->trait_params);
@@ -63,9 +63,9 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
         return ::HIR::Path(parent->ty, RcString::new_interned(name));
     }
 }
-const ItemPath& ItemPath::get_top_ip() const {
+const ItemPath& ItemPath::getTopIp() const {
     if (this->parent) {
-        return this->parent->get_top_ip();
+        return this->parent->getTopIp();
     }
     return *this;
 }

@@ -53,7 +53,7 @@ namespace MIR {
     } while (0)
 #define MIR_DEBUG(state, ...)                                     \
     do {                                                          \
-        DEBUG(FMT_CB(_ss, (state).fmt_pos(_ss);) << __VA_ARGS__); \
+        DEBUG(FMT_CB(_ss, (state).fmtPos(_ss);) << __VA_ARGS__); \
     } while (0)
 
     class TypeResolve {
@@ -99,13 +99,13 @@ namespace MIR {
 
         void set_cur_stmt_term(unsigned int bbIdx);
 
-        unsigned int get_cur_block() const {
+        unsigned int getCurBlock() const {
             return bbIdx;
         }
 
-        unsigned int get_cur_stmt_ofs() const;
+        unsigned int getCurStmtOfs() const;
 
-        void fmt_pos(::std::ostream& os, bool include_path = false) const;
+        void fmtPos(::std::ostream& os, bool include_path = false) const;
 
         void print_bug(::std::function<void(::std::ostream& os)> cb) const {
             print_msg("ERROR", cb);
@@ -117,23 +117,23 @@ namespace MIR {
 
         void print_msg(const char* tag, ::std::function<void(::std::ostream& os)> cb) const;
 
-        const ::MIR::BasicBlock& get_block(::MIR::BasicBlockId id) const;
+        const ::MIR::BasicBlock& getBlock(::MIR::BasicBlockId id) const;
 
-        const ::HIR::TypeData* get_static_type(::HIR::TypeRef& tmp, const ::HIR::Path& path) const;
-        const ::HIR::TypeData* get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapper_skip_count = 0) const;
+        const ::HIR::TypeData* getStaticType(::HIR::TypeRef& tmp, const ::HIR::Path& path) const;
+        const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue& val, unsigned wrapper_skip_count = 0) const;
 
-        const ::HIR::TypeData* get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue::CRef& val) const {
-            return get_lvalue_type(tmp, val.lv(), val.lv().wrappers.size() - val.wrapper_count());
+        const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue::CRef& val) const {
+            return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapper_count());
         }
 
-        const ::HIR::TypeData* get_lvalue_type(::HIR::TypeRef& tmp, const ::MIR::LValue::MRef& val) const {
-            return get_lvalue_type(tmp, val.lv(), val.lv().wrappers.size() - val.wrapper_count());
+        const ::HIR::TypeData* getLvalueType(::HIR::TypeRef& tmp, const ::MIR::LValue::MRef& val) const {
+            return getLvalueType(tmp, val.lv(), val.lv().wrappers.size() - val.wrapper_count());
         }
 
-        const ::HIR::TypeData* get_unwrapped_type(::HIR::TypeRef& tmp, const ::MIR::LValue::Wrapper& w, const ::HIR::TypeData* ty) const;
-        const ::HIR::TypeData* get_param_type(::HIR::TypeRef& tmp, const ::MIR::Param& val) const;
+        const ::HIR::TypeData* getUnwrappedType(::HIR::TypeRef& tmp, const ::MIR::LValue::Wrapper& w, const ::HIR::TypeData* ty) const;
+        const ::HIR::TypeData* getParamType(::HIR::TypeRef& tmp, const ::MIR::Param& val) const;
 
-        ::HIR::TypeRef get_const_type(const ::MIR::Constant& c) const;
+        ::HIR::TypeRef getConstType(const ::MIR::Constant& c) const;
 
         bool lvalue_is_copy(const ::MIR::LValue& val) const;
         const ::HIR::TypeData* is_type_owned_box(const ::HIR::TypeData* ty) const;

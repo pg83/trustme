@@ -11,13 +11,13 @@
 // - Cache messages for the current phase, clearing the cache (dropping) when various signatures match
 //  > Similar to the `log_get_last_function.py` script
 
-int g_debug_indent_level = 0;
-bool g_debug_enabled = true;
-::std::string g_cur_phase;
-::std::set<::std::string> g_debug_disable_map;
+int gDebugIndentLevel = 0;
+bool gDebugEnabled = true;
+::std::string gCurPhase;
+::std::set<::std::string> gDebugDisableMap;
 
 bool debugEnabledUpdate() {
-    if (g_debug_disable_map.count(g_cur_phase) != 0) {
+    if (gDebugDisableMap.count(gCurPhase) != 0) {
         return false;
     } else {
         return true;
@@ -25,22 +25,22 @@ bool debugEnabledUpdate() {
 }
 
 ::std::ostream& debugOutput(int indent, const char* function) {
-    return ::std::cout << g_cur_phase << "- " << RepeatLitStr{" ", indent} << function << ": ";
+    return ::std::cout << gCurPhase << "- " << RepeatLitStr{" ", indent} << function << ": ";
 }
 
 DebugTimedPhase::DebugTimedPhase(const char* name)
     : mName(name)
 {
     ::std::cout << mName << ": V V V" << ::std::endl;
-    g_cur_phase = mName;
-    g_debug_enabled = debugEnabledUpdate();
+    gCurPhase = mName;
+    gDebugEnabled = debugEnabledUpdate();
     start = clock();
 }
 
 DebugTimedPhase::~DebugTimedPhase() {
     auto end = clock();
-    g_cur_phase = "";
-    g_debug_enabled = debugEnabledUpdate();
+    gCurPhase = "";
+    gDebugEnabled = debugEnabledUpdate();
 
     // TODO: Show wall time too?
     ::std::cout << "(" << ::std::fixed << ::std::setprecision(2) << static_cast<double>(end - start) / static_cast<double>(CLOCKS_PER_SEC) << " s) ";
@@ -50,7 +50,7 @@ DebugTimedPhase::~DebugTimedPhase() {
 
 extern void debugInitPhases(const char* envVarName, std::initializer_list<const char*> il) {
     for (const char* e : il) {
-        g_debug_disable_map.insert(e);
+        gDebugDisableMap.insert(e);
     }
 
     // Mutate this map using an environment variable
@@ -58,7 +58,7 @@ extern void debugInitPhases(const char* envVarName, std::initializer_list<const 
     if (debug_string) {
         while (debug_string[0]) {
             if (strcmp(debug_string, "*") == 0) {
-                g_debug_disable_map.clear();
+                gDebugDisableMap.clear();
                 return;
             }
 
@@ -71,7 +71,7 @@ extern void debugInitPhases(const char* envVarName, std::initializer_list<const 
             } else {
                 s = debug_string;
             }
-            if (g_debug_disable_map.erase(s) == 0) {
+            if (gDebugDisableMap.erase(s) == 0) {
                 ::std::cerr << "WARN: Unknown compiler phase '" << s << "' in $" << envVarName << ::std::endl;
             }
             if (!end) {
@@ -165,7 +165,7 @@ NullSink::NullSink() {
 TraceLog::TraceLog(const char* tag)
     : mTag(tag) {
     if (mTag) {
-        auto& os = debugOutput(g_debug_indent_level, mTag);
+        auto& os = debugOutput(gDebugIndentLevel, mTag);
         os << ">>" << ::std::endl;
         INDENT();
     }
@@ -173,7 +173,7 @@ TraceLog::TraceLog(const char* tag)
 TraceLog::~TraceLog() {
     if (mTag) {
         UNINDENT();
-        auto& os = debugOutput(g_debug_indent_level, mTag);
+        auto& os = debugOutput(gDebugIndentLevel, mTag);
         os << "<< ()" << ::std::endl;
     }
 }

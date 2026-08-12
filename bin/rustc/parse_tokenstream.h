@@ -30,7 +30,7 @@ public:
     ::AST::Module* module = nullptr;
     ::AST::AttributeList* parent_attrs = nullptr;
 
-    ::AST::Module& get_current_mod();
+    ::AST::Module& getCurrentMod();
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ParseState& ps);
 };
@@ -68,7 +68,7 @@ public:
     void putback(Token tok);
     eTokenType lookahead(unsigned int count);
 
-    Ident::Hygiene get_hygiene() const;
+    Ident::Hygiene getHygiene() const;
 
     virtual void push_hygine() {
     }
@@ -80,7 +80,7 @@ public:
         return parseState;
     }
 
-    AST::Edition get_edition() const {
+    AST::Edition getEdition() const {
         return edition;
     }
 

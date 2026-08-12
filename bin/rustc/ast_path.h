@@ -339,7 +339,7 @@ namespace AST {
                 return Bindings{value.clone(), type.clone(), macro.clone()};
             }
 
-            bool has_binding() const {
+            bool hasBinding() const {
                 return !value.is_Unbound() || !type.is_Unbound() || !macro.is_Unbound();
             }
 

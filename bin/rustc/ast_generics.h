@@ -36,11 +36,11 @@ namespace AST {
             return mName;
         }
 
-        const TypeRef& get_default() const {
+        const TypeRef& getDefault() const {
             return defaultValue;
         }
 
-        TypeRef& get_default() {
+        TypeRef& getDefault() {
             return defaultValue;
         }
 
@@ -233,7 +233,7 @@ namespace AST {
             bounds.push_back(::std::move(bound));
         }
 
-        int find_name(const char* name) const;
+        int findName(const char* name) const;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const GenericParams& tp);
     };

@@ -7,9 +7,9 @@
 #include <fstream>
 #include <dirent.h>
 
-::std::vector<::std::string> AST::g_crate_load_dirs = {};
-::std::map<::std::string, ::std::string> AST::g_crate_overrides;
-::std::map<RcString, RcString> AST::g_implicit_crates;
+::std::vector<::std::string> AST::gCrateLoadDirs = {};
+::std::map<::std::string, ::std::string> AST::gCrateOverrides;
+::std::map<RcString, RcString> AST::gImplicitCrates;
 
 namespace {
     bool checkItemCfg(const ::AST::AttributeList& attrs) {
@@ -105,13 +105,13 @@ namespace AST {
 
         // Ensure that all crates passed on the command line are loaded.
         DEBUG("Load from --crate");
-        for (const auto& c : g_crate_overrides) {
+        for (const auto& c : gCrateOverrides) {
             auto n = RcString::new_interned(c.first);
             auto real_name = this->load_extern_crate(Span(), n);
-            g_implicit_crates.insert(std::make_pair(n, real_name));
+            gImplicitCrates.insert(std::make_pair(n, real_name));
         }
         if (this->extCratenameCore != "") {
-            g_implicit_crates.insert(std::make_pair(RcString::new_interned("core"), this->extCratenameCore));
+            gImplicitCrates.insert(std::make_pair(RcString::new_interned("core"), this->extCratenameCore));
         }
     }
 
@@ -121,9 +121,9 @@ namespace AST {
         TRACE_FUNCTION_F("Loading crate '" << name << "' (basename='" << basename << "')");
 
         ::std::string path;
-        auto it = g_crate_overrides.find(name.c_str());
+        auto it = gCrateOverrides.find(name.c_str());
         // If there's no filename, and this crate name is in the override list - use an the explicit path
-        if (basename == "" && it != g_crate_overrides.end()) {
+        if (basename == "" && it != gCrateOverrides.end()) {
             path = it->second;
             if (!::std::ifstream(path).good()) {
                 ERROR(sp, E0000, "Unable to open crate '" << name << "' at path " << path);
@@ -134,7 +134,7 @@ namespace AST {
         // - Checks the crate name of each to ensure a match
         else if (basename != "") {
             // Search a list of load paths for the crate
-            for (const auto& p : g_crate_load_dirs) {
+            for (const auto& p : gCrateLoadDirs) {
                 path = p + "/" + basename;
 
                 if (::std::ifstream(path).good()) {
@@ -158,7 +158,7 @@ namespace AST {
             auto directFilenameSo = FMT("lib" << name << RDYLIB_SUFFIX);
             auto name_prefix = FMT("lib" << name << "-");
             // Search a list of load paths for the crate
-            for (const auto& p : g_crate_load_dirs) {
+            for (const auto& p : gCrateLoadDirs) {
                 DEBUG("Searching in " << p);
                 path = p + "/" + directFilename;
                 if (::std::ifstream(path).good()) {

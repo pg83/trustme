@@ -38,15 +38,15 @@ namespace HIR {
             return trait_params;
         }
 
-        ::HIR::SimplePath get_simple_path() const;
+        ::HIR::SimplePath getSimplePath() const;
 
-        ::HIR::Path get_full_path() const;
+        ::HIR::Path getFullPath() const;
 
-        const char* get_name() const {
+        const char* getName() const {
             return name ? name : "";
         }
 
-        const ItemPath& get_top_ip() const;
+        const ItemPath& getTopIp() const;
 
         ItemPath operator+(const ::std::string& name) const {
             return ItemPath(*this, name.c_str());

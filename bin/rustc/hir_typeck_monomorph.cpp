@@ -79,21 +79,21 @@ void MonomorphState::set_impl_params(HIR::PathParams pp) {
     pp_impl_data = std::move(pp);
 }
 
-::HIR::TypeRef MonomorphHrlsOnly::get_type(const Span& sp, const ::HIR::GenericRef& ty) const {
+::HIR::TypeRef MonomorphHrlsOnly::getType(const Span& sp, const ::HIR::GenericRef& ty) const {
     if (ty.group() == 3) {
         ASSERT_BUG(sp, ty.idx() < pp_hrb->types.size(), ty << " out of bounds (" << pp_hrb->types.size() << ")");
         return pp_hrb->types.at(ty.idx());
     }
     return types.generic(ty.name, ty.binding);
 }
-::HIR::ConstGeneric MonomorphHrlsOnly::get_value(const Span& sp, const ::HIR::GenericRef& val) const {
+::HIR::ConstGeneric MonomorphHrlsOnly::getValue(const Span& sp, const ::HIR::GenericRef& val) const {
     if (val.group() == 3) {
         ASSERT_BUG(sp, val.idx() < pp_hrb->values.size(), val << " out of bounds (" << pp_hrb->values.size() << ")");
         return pp_hrb->values.at(val.idx()).clone();
     }
     return HIR::ConstGeneric(val);
 }
-::HIR::LifetimeRef MonomorphHrlsOnly::get_lifetime(const Span& sp, const ::HIR::GenericRef& lft_ref) const {
+::HIR::LifetimeRef MonomorphHrlsOnly::getLifetime(const Span& sp, const ::HIR::GenericRef& lft_ref) const {
     if (lft_ref.group() == 3) {
         // If the HRL batch does not cover this index, pass the lifetime through rather than abort: not reliably in range for nested binders, and erased before codegen.
         if (lft_ref.idx() >= pp_hrb->mLifetimes.size()) {

@@ -29,9 +29,9 @@ enum eParsePathGenericMode {
     PATH_GENERIC_TYPE
 };
 
-extern AST::Path ParsePath(TokenStream& lex, eParsePathGenericMode generic_mode); // Auto-determines
-extern AST::Path ParsePath(TokenStream& lex, bool is_abs, eParsePathGenericMode generic_mode);
-extern ::std::vector<AST::PathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode generic_mode);
+extern AST::Path ParsePath(TokenStream& lex, eParsePathGenericMode genericMode); // Auto-determines
+extern AST::Path ParsePath(TokenStream& lex, bool is_abs, eParsePathGenericMode genericMode);
+extern ::std::vector<AST::PathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
 extern AST::PathParams ParsePathGenericList(TokenStream& lex);
 
 extern AST::Visibility ParsePublicity(TokenStream& lex, bool allowRestricted = true);
