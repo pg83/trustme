@@ -1,6 +1,7 @@
+#pragma once
+
 /*
  */
-#pragma once
 #include "tagged_union.h"
 #include <climits>
 #include <ostream>

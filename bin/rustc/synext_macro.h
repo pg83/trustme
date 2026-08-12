@@ -1,11 +1,9 @@
 #pragma once
-#ifndef _SYNEXT_MACRO_HPP_
-    #define _SYNEXT_MACRO_HPP_
 
     //#include "../common.h"   // for mv$ and other things
-    #include <string>
-    #include <memory>
-    #include "span.h"
+#include <string>
+#include <memory>
+#include "span.h"
 
 class TypeRef;
 
@@ -44,6 +42,4 @@ struct MacroDef {
     }
 };
 
-    #define STATIC_MACRO(ident, _handler_class) static MacroDef s_register_##_handler_class(ident, ::std::unique_ptr<ExpandProcMacro>(new _handler_class()));
-
-#endif
+#define STATIC_MACRO(ident, _handler_class) static MacroDef s_register_##_handler_class(ident, ::std::unique_ptr<ExpandProcMacro>(new _handler_class()));

@@ -1,5 +1,4 @@
-#ifndef _AST__PATTERN_HPP_INCLUDED_
-#define _AST__PATTERN_HPP_INCLUDED_
+#pragma once
 
 #include <vector>
 #include <memory>
@@ -268,5 +267,3 @@ namespace AST {
     extern ::std::ostream& operator<<(::std::ostream& os, const Pattern::TuplePat& val);
 
 };
-
-#endif

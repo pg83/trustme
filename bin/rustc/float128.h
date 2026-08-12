@@ -1,3 +1,5 @@
+#pragma once
+
 // Software implementation of IEEE 754 binary128 (1.15.112).
 //
 // The compiler represents every float value as binary128 so that f32/f64
@@ -12,7 +14,6 @@
 //   all exponent bits, top mantissa bit; payloads are not propagated).
 // - Integer conversions truncate toward zero, saturate on overflow, and map
 //   NaN to zero (Rust `as` semantics).
-#pragma once
 
 #include <cstdint>
 #include <iosfwd>

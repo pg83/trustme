@@ -1,5 +1,4 @@
-#ifndef INCLUDED_TAGGED_UNION_H_
-#define INCLUDED_TAGGED_UNION_H_
+#pragma once
 
 //#include "cpp_unpack.h"
 #include <cassert>
@@ -577,5 +576,3 @@ namespace {
         new (&dst) T(src);
     }
 }
-
-#endif

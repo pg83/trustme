@@ -1,5 +1,4 @@
-#ifndef MACROS_HPP_INCLUDED
-#define MACROS_HPP_INCLUDED
+#pragma once
 
 #include "parse_lex.h"
 #include "parse_tokentree.h"
@@ -227,5 +226,3 @@ extern ::std::unique_ptr<TokenStream> Macro_InvokeRules(const RcString& name, co
 extern MacroRulesPtr Parse_MacroRules(TokenStream& lex);
 /// Parse a single-arm `macro` item ( `macro foo($name:ident) { $name }`)
 extern MacroRulesPtr Parse_MacroRulesSingleArm(TokenStream& lex);
-
-#endif // MACROS_HPP_INCLUDED

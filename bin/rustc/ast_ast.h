@@ -1,5 +1,4 @@
-#ifndef AST_HPP_INCLUDED
-#define AST_HPP_INCLUDED
+#pragma once
 
 #include "target_version.h"
 
@@ -942,5 +941,3 @@ namespace AST {
     );
 
 } // namespace AST
-
-#endif // AST_HPP_INCLUDED

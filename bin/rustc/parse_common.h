@@ -1,5 +1,5 @@
-#ifndef PARSE_COMMON_HPP_INCLUDED
-#define PARSE_COMMON_HPP_INCLUDED
+#pragma once
+
 #include <iostream>
 #include "parse_tokenstream.h"
 #include "ast_ast.h"
@@ -70,5 +70,3 @@ extern AST::ExprNodeP Parse_Stmt(TokenStream& lex);
 extern TokenTree Parse_TT(TokenStream& lex, bool unwrapped);
 
 extern bool Parse_IsTokValue(eTokenType tok_type);
-
-#endif // PARSE_COMMON_HPP_INCLUDED

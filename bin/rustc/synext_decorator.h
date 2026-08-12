@@ -1,13 +1,11 @@
 #pragma once
-#ifndef _SYNEXT_DECORATOR_HPP_
-    #define _SYNEXT_DECORATOR_HPP_
 
-    #include <string>
-    #include <memory>
-    #include "span.h"
-    #include "slice.h"
-    #include "ast_item.h"
-    #include "ast_expr.h"
+#include <string>
+#include <memory>
+#include "span.h"
+#include "slice.h"
+#include "ast_item.h"
+#include "ast_expr.h"
 
 class TypeRef;
 
@@ -122,6 +120,4 @@ struct DecoratorDef {
     }
 };
 
-    #define STATIC_DECORATOR(ident, _handler_class) static DecoratorDef s_register_##_handler_class(ident, ::std::unique_ptr<ExpandDecorator>(new _handler_class()));
-
-#endif
+#define STATIC_DECORATOR(ident, _handler_class) static DecoratorDef s_register_##_handler_class(ident, ::std::unique_ptr<ExpandDecorator>(new _handler_class()));

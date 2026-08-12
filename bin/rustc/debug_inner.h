@@ -1,6 +1,7 @@
+#pragma once
+
 /*
  */
-#pragma once
 #include <ctime>
 #include <initializer_list>
 

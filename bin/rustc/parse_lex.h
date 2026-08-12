@@ -1,5 +1,4 @@
-#ifndef LEX_HPP_INCLUDED
-#define LEX_HPP_INCLUDED
+#pragma once
 
 #include <string>
 #include <fstream>
@@ -108,5 +107,3 @@ private:
 
     class EndOfFile {};
 };
-
-#endif // LEX_HPP_INCLUDED

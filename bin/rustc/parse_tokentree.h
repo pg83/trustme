@@ -1,5 +1,4 @@
-#ifndef TOKENTREE_HPP_INCLUDED
-#define TOKENTREE_HPP_INCLUDED
+#pragma once
 
 #include "parse_token.h"
 #include "ident.h"
@@ -93,5 +92,3 @@ public:
 
     friend ::std::ostream& operator<<(::std::ostream& os, const TokenTree& tt);
 };
-
-#endif // TOKENTREE_HPP_INCLUDED

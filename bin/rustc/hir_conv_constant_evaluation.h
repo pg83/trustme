@@ -1,6 +1,7 @@
+#pragma once
+
 /*
  */
-#pragma once
 
 #include "hir_hir.h"
 #include "hir_typeck_static.h"

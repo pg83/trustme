@@ -1,7 +1,8 @@
+#pragma once
+
 // Helper for building anti-recursion stacks
 //
 //
-#pragma once
 #include <vector>
 
 template <typename T>

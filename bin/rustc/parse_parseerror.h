@@ -1,5 +1,4 @@
-#ifndef PARSEERROR_HPP_INCLUDED
-#define PARSEERROR_HPP_INCLUDED
+#pragma once
 
 #include <stdexcept>
 #include "parse_tokenstream.h"
@@ -35,5 +34,3 @@ namespace ParseError {
     } while (0)
 
 }
-
-#endif // PARSEERROR_HPP_INCLUDED

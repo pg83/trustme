@@ -1,7 +1,8 @@
+#pragma once
+
 /**
  * Vector-backed map that supports range lookups using different keys
  */
-#pragma once
 
 #include <algorithm>
 #include <cstddef>

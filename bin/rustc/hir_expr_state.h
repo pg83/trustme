@@ -1,4 +1,5 @@
 #pragma once
+
 #include "hir_hir.h"
 
 namespace HIR {

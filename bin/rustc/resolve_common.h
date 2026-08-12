@@ -1,4 +1,5 @@
 #pragma once
+
 #include <stdexcept>
 #include "tagged_union.h"
 

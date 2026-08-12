@@ -1,5 +1,4 @@
-#ifndef CORETYPES_HPP_INCLUDED
-#define CORETYPES_HPP_INCLUDED
+#pragma once
 
 enum eCoreType {
     CORETYPE_INVAL,
@@ -27,5 +26,3 @@ enum eCoreType {
 
 extern enum eCoreType coretype_fromstring(const char* name);
 extern const char* coretype_name(const eCoreType ct);
-
-#endif // CORETYPES_HPP_INCLUDED

@@ -1,5 +1,4 @@
-#ifndef COMMON_HPP_INCLUDED
-#define COMMON_HPP_INCLUDED
+#pragma once
 
 #include <iostream>
 #include <vector>
@@ -771,5 +770,3 @@ inline ::std::ostream& operator<<(::std::ostream& os, const ThinVector<T>& v) {
     }
     return os;
 }
-
-#endif

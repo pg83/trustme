@@ -1,5 +1,4 @@
-#ifndef _MAIN_BINDINGS_HPP_
-#define _MAIN_BINDINGS_HPP_
+#pragma once
 
 #include <string>
 #include <memory>
@@ -25,5 +24,3 @@ extern void Expand_Init();
 extern void Expand(::AST::Crate& crate);
 extern void Expand_TestHarness(::AST::Crate& crate);
 extern void Expand_ProcMacro(::AST::Crate& crate);
-
-#endif

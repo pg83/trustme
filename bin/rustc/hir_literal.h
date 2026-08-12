@@ -1,4 +1,5 @@
 #pragma once
+
 #include "tagged_union.h"
 #include "hir_generic_ref.h"
 

@@ -1,5 +1,3 @@
-#ifndef _HIR_PATH_HPP_
-#define _HIR_PATH_HPP_
 #pragma once
 
 #include "common.h"
@@ -486,5 +484,3 @@ namespace HIR {
     };
 
 } // namespace HIR
-
-#endif

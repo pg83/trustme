@@ -1,5 +1,3 @@
-#ifndef _HIR_TYPE_HPP_
-#define _HIR_TYPE_HPP_
 #pragma once
 
 #include "tagged_union.h"
@@ -378,5 +376,3 @@ namespace HIR {
     extern ::std::ostream& operator<<(::std::ostream& os, const ::HIR::TypeData* ty);
 
 } // namespace HIR
-
-#endif

@@ -1,3 +1,5 @@
+#pragma once
+
 /*
 * mrustc common tools
 * - by John Hodge (Mutabah)
@@ -5,7 +7,6 @@
 * tools/common/jobserver.h
 * - An interface to (or emulation of) make's jobserver
 */
-#pragma once
 #include <memory>
 
 class JobServer {

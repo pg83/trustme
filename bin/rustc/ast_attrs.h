@@ -1,5 +1,4 @@
-#ifndef _AST_ATTRS_HPP_
-#define _AST_ATTRS_HPP_
+#pragma once
 
 #include "tagged_union.h"
 #include "ast_expr_ptr.h"
@@ -145,5 +144,3 @@ namespace AST {
     TAGGED_UNION(AttributeData, None, (None, struct {}), (ValueUnexpanded, AST::ExprNodeP), (String, struct { ::std::string val; }), (List, struct { ::std::vector<Attribute> sub_items; }));
 
 } // namespace AST
-
-#endif

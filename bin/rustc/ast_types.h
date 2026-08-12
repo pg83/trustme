@@ -1,5 +1,4 @@
-#ifndef TYPES_HPP_INCLUDED
-#define TYPES_HPP_INCLUDED
+#pragma once
 
 #include <cstdint>
 #include <memory>
@@ -390,5 +389,3 @@ public:
 };
 
 #define TYPES_HPP_COMPLETE
-
-#endif // TYPES_HPP_INCLUDED

@@ -1,5 +1,4 @@
-#ifndef _COMPILE_ERROR_H_
-#define _COMPILE_ERROR_H_
+#pragma once
 
 #include <exception>
 #include <string>
@@ -45,5 +44,3 @@ namespace CompileError {
     };
 
 }
-
-#endif

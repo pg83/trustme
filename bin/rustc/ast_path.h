@@ -1,5 +1,4 @@
-#ifndef AST_PATH_HPP_INCLUDED
-#define AST_PATH_HPP_INCLUDED
+#pragma once
 
 #include "common.h"
 #include <cstdint>
@@ -615,5 +614,3 @@ namespace AST {
 } // namespace AST
 
 #define AST_PATH_HPP_COMPLETE
-
-#endif

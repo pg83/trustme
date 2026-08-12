@@ -1,3 +1,5 @@
+#pragma once
+
 /*
  * mrustc common tools
  * - by John Hodge (Mutabah)
@@ -5,7 +7,6 @@
  * tools/common/toml.h
  * - A very basic (and probably incomplete) streaming TOML parser
  */
-#pragma once
 
 #include <fstream>
 #include <vector>

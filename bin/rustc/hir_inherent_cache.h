@@ -1,4 +1,5 @@
 #pragma once
+
 #include "range_vec_map.h"
 #include "hir_type_ref.h"
 #include <map>

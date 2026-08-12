@@ -1,4 +1,5 @@
 #pragma once
+
 #include "hir_visitor.h"
 #include "hir_typeck_static.h"
 

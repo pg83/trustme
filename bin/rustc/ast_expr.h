@@ -1,5 +1,4 @@
-#ifndef AST_EXPR_INCLUDED
-#define AST_EXPR_INCLUDED
+#pragma once
 
 #include <ostream>
 #include <memory> // unique_ptr
@@ -1058,5 +1057,3 @@ namespace AST {
     };
 
 }
-
-#endif

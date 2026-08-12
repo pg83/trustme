@@ -1,5 +1,4 @@
-#ifndef _CPP_UNAPCK_H_
-#define _CPP_UNAPCK_H_
+#pragma once
 
 #define CC_EXP(...) __VA_ARGS__
 
@@ -27,5 +26,3 @@
 #define CC_GM(SUF, ...) CC_EXP(CC_GM_I(SUF, __VA_ARGS__, 16, 15, 14, 13, 12, 11, 10, 9, 8, 7, 6, 5, 4, 3, 2, 1))
 
 #define CC_ITERATE(fcn, args, ...) CC_EXP(CC_GM(CC_CALL_A, __VA_ARGS__)(fcn, args, __VA_ARGS__))
-
-#endif

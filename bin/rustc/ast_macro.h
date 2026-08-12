@@ -1,5 +1,4 @@
-#ifndef _AST_MACRO_HPP_
-#define _AST_MACRO_HPP_
+#pragma once
 
 #include "parse_tokentree.h"
 #include "span.h"
@@ -76,5 +75,3 @@ namespace AST {
     };
 
 }
-
-#endif

@@ -1,4 +1,5 @@
 #pragma once
+
 #include "tagged_union.h"
 #include <vector>
 #include <string>
