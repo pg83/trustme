@@ -24,10 +24,7 @@ public:
     ScopeHandle& operator=(ScopeHandle&& x) = delete;
     ~ScopeHandle();
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const ScopeHandle& x) {
-        os << x.idx;
-        return os;
-    }
+    friend ::std::ostream& operator<<(::std::ostream& os, const ScopeHandle& x);
 };
 
 // Rust 1.90 only permits a Box dereference to form a move path. A future
@@ -150,21 +147,7 @@ struct field_path_t {
         return ::ord(data, x.data);
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const field_path_t& x) {
-        for (auto idx : x.data) {
-            os << ".";
-            if (idx == FIELD_DEREF) {
-                os << "*";
-            } else if (idx > FIELD_INDEX_MAX) {
-                idx -= FIELD_INDEX_MAX;
-                idx = FIELD_INDEX_MAX - idx;
-                os << "-" << static_cast<unsigned int>(idx);
-            } else {
-                os << static_cast<unsigned int>(idx);
-            }
-        }
-        return os;
-    }
+    friend ::std::ostream& operator<<(::std::ostream& os, const field_path_t& x);
 };
 
 /// Binding from an expanded pattern
@@ -183,13 +166,7 @@ struct PatternBinding {
         return field == x.field && binding == x.binding && split_slice == x.split_slice;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x) {
-        os << *x.binding << x.field;
-        if (x.is_split_slice()) {
-            os << "[" << x.split_slice.first << "..-" << x.split_slice.second << "]";
-        }
-        return os;
-    }
+    friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x);
 };
 
 /// Helper class to construct MIR

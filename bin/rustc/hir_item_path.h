@@ -58,31 +58,7 @@ namespace HIR {
 
         bool operator==(const ::HIR::SimplePath& sp) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const ItemPath& x) {
-            if (x.wrapped) {
-                return os << *x.wrapped;
-            }
-            if (x.parent) {
-                os << *x.parent;
-            }
-            if (x.name) {
-                os << "::" << x.name;
-            } else if (x.ty) {
-                os << "<" << *x.ty;
-                if (x.trait) {
-                    os << " as " << *x.trait;
-                    if (x.trait_params) {
-                        os << *x.trait_params;
-                    }
-                }
-                os << ">";
-            } else if (x.trait) {
-                os << "<* as " << *x.trait << ">";
-            } else if (x.crate_name) {
-                os << "::\"" << x.crate_name << "\"";
-            }
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const ItemPath& x);
     };
 
 }

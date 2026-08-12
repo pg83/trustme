@@ -2138,3 +2138,37 @@ namespace HIR {
 
 TypeInterner::TypeInterner(stl::ObjPool& pool): m_pool(pool) {}
 }
+
+namespace HIR {
+
+bool is_integer(const CoreType& v) {
+    switch (v) {
+        case CoreType::Usize:
+        case CoreType::Isize:
+        case CoreType::U8:
+        case CoreType::I8:
+        case CoreType::U16:
+        case CoreType::I16:
+        case CoreType::U32:
+        case CoreType::I32:
+        case CoreType::U64:
+        case CoreType::I64:
+        case CoreType::U128:
+        case CoreType::I128:
+            return true;
+        default:
+            return false;
+    }
+}
+bool is_float(const CoreType& v) {
+    switch (v) {
+        case CoreType::F16:
+        case CoreType::F32:
+        case CoreType::F64:
+        case CoreType::F128:
+            return true;
+        default:
+            return false;
+    }
+}
+}

@@ -387,14 +387,7 @@ namespace AST {
 
         EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const EnumVariant& x) {
-            os << "EnumVariant(" << x.m_name;
-            TU_MATCH(EnumVariantData, (x.m_data), (e), (Unit, ), (Tuple, os << "(" << e.m_items << ")";), (Struct, os << " { " << e.m_fields << " }";))
-            if (x.m_discriminant_value) {
-                os << " = " << x.m_discriminant_value;
-            }
-            return os << ")";
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const EnumVariant& x);
     };
 
     class Enum {

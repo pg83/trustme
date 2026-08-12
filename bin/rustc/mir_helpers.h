@@ -148,10 +148,7 @@ namespace MIR {
         /// @return Clean string form of the type
         std::string intrinsic_type_name(const ::HIR::TypeData* ty) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const TypeResolve& x) {
-            x.fmt_pos(os);
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const TypeResolve& x);
     };
 
     // --------------------------------------------------------------------

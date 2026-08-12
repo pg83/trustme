@@ -85,23 +85,7 @@ struct TomlValue {
         List,
     };
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const Type& e) {
-        switch (e) {
-            case Type::Boolean:
-                os << "boolean";
-                break;
-            case Type::String:
-                os << "string";
-                break;
-            case Type::Integer:
-                os << "integer";
-                break;
-            case Type::List:
-                os << "list";
-                break;
-        }
-        return os;
-    }
+    friend ::std::ostream& operator<<(::std::ostream& os, const Type& e);
 
     struct TypeError: public ::std::exception {
         Type have;
@@ -144,48 +128,7 @@ struct TomlValue {
 
     const ::std::vector<TomlValue>& as_list() const;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const TomlValue& x) {
-        switch (x.m_type) {
-            case Type::Boolean:
-                os << (x.m_int_value != 0 ? "true" : "false");
-                break;
-            case Type::Integer:
-                os << x.m_int_value;
-                break;
-            case Type::List:
-                os << "[";
-                for (auto& e : x.m_sub_values) {
-                    os << e << ",";
-                }
-                os << "]";
-                break;
-            case Type::String:
-                os << "\"";
-                for (uint8_t c : x.m_str_value) {
-                    switch (c) {
-                        case '\n':
-                            os << "\\n";
-                            break;
-                        case '\r':
-                            os << "\\n";
-                            break;
-                        case '\t':
-                            os << "\\t";
-                            break;
-                        default:
-                            if (0x20 <= c && c <= 0x7F) {
-                                os << c;
-                            } else {
-                                static const char* H = "0123456789ABCDEF";
-                                os << "\\x" << H[c >> 4] << H[c & 0xF];
-                            }
-                    }
-                }
-                os << "\"";
-                break;
-        }
-        return os;
-    }
+    friend ::std::ostream& operator<<(::std::ostream& os, const TomlValue& x);
 };
 
 struct TomlKeyValue {

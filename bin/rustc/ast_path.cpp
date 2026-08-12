@@ -534,3 +534,18 @@ size_t Path::size() const {
     throw ::std::runtime_error("Path::nodes() fell off");
 }
 }
+
+namespace AST {
+
+::std::ostream& operator<<(::std::ostream& os, const AbsolutePath& x) {
+    if (x.crate != "") {
+        os << "::\"" << x.crate << "\"";
+    } else {
+        os << "crate";
+    }
+    for (const auto& n : x.nodes) {
+        os << "::" << n;
+    }
+    return os;
+}
+}

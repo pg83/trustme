@@ -3751,3 +3751,19 @@ const ::HIR::TypeData* StaticTraitResolve::monomorph_expand_opt(const Span& sp, 
     expand_associated_types(sp, rv);
     return rv;
 }
+
+std::ostream& operator<<(std::ostream& os, const MetadataType& x) {
+    switch (x) {
+        case MetadataType::Unknown:
+            return os << "Unknown";
+        case MetadataType::None:
+            return os << "None";
+        case MetadataType::Zero:
+            return os << "Zero";
+        case MetadataType::Slice:
+            return os << "Slice";
+        case MetadataType::TraitObject:
+            return os << "TraitObject";
+    }
+    return os << "?";
+}

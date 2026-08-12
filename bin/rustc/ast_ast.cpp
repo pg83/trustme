@@ -731,3 +731,15 @@ ImplDef::ImplDef(GenericParams params, Spanned<Path> trait_type, TypeRef impl_ty
     , m_type(mv$(impl_type)) {
 }
 }
+
+namespace AST {
+
+::std::ostream& operator<<(::std::ostream& os, const EnumVariant& x) {
+    os << "EnumVariant(" << x.m_name;
+    TU_MATCH(EnumVariantData, (x.m_data), (e), (Unit, ), (Tuple, os << "(" << e.m_items << ")";), (Struct, os << " { " << e.m_fields << " }";))
+    if (x.m_discriminant_value) {
+        os << " = " << x.m_discriminant_value;
+    }
+    return os << ")";
+}
+}

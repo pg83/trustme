@@ -1648,3 +1648,11 @@ bool VisitorMut::visit_lvalue(::MIR::LValue& lv, ValUsage u) {
     return false;
 }
 }}
+
+namespace MIR {
+
+::std::ostream& operator<<(::std::ostream& os, const TypeResolve& x) {
+    x.fmt_pos(os);
+    return os;
+}
+}

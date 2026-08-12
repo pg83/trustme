@@ -22,3 +22,11 @@ Ordering GenericRef::ord(const GenericRef& x) const {
     return rv;
 }
 }
+
+namespace HIR {
+
+::std::ostream& operator<<(::std::ostream& os, const GenericRef& x) {
+    x.fmt(os);
+    return os;
+}
+}

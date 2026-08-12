@@ -3941,3 +3941,11 @@ MacroRules::MacroRules(RcString source_crate, AST::Edition edition)
     , m_source_crate(std::move(source_crate))
     , m_edition(edition) {
 }
+
+::std::ostream& operator<<(::std::ostream& os, const SimplePatIfCheck& x) {
+    os << x.ty;
+    if (x.ty == MacroPatEnt::PAT_TOKEN) {
+        os << ":" << x.tok;
+    }
+    return os;
+}

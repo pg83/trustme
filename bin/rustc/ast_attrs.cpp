@@ -9,3 +9,11 @@ Attribute::Attribute(Span sp, AttributeName name, TokenTree data)
     , m_is_inert(false) {
 }
 }
+
+namespace AST {
+
+::std::ostream& operator<<(::std::ostream& os, const Attribute& x) {
+    x.fmt(os);
+    return os;
+}
+}

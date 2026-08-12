@@ -2101,3 +2101,15 @@ TargetArch::Alignments::Alignments(uint8_t u16, uint8_t u32, uint8_t u64, uint8_
     , f64(f64)
     , ptr(ptr) {
 }
+
+std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x) {
+    os << x.size << "@" << x.index;
+    for (auto idx : x.sub_fields) {
+        if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
+            os << "[0]";
+        } else {
+            os << "." << idx;
+        }
+    }
+    return os;
+}

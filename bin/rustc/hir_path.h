@@ -78,32 +78,9 @@ namespace HIR {
     class Trait;
     class GenericParams;
 
-    static inline ::std::ostream& operator<<(::std::ostream& os, const Compare& x) {
-        switch (x) {
-            case Compare::Equal:
-                os << "Equal";
-                break;
-            case Compare::Fuzzy:
-                os << "Fuzzy";
-                break;
-            case Compare::Unequal:
-                os << "Unequal";
-                break;
-        }
-        return os;
-    }
+    ::std::ostream& operator<<(::std::ostream& os, const Compare& x);
 
-    static inline Compare& operator&=(Compare& x, const Compare& y) {
-        if (x == Compare::Unequal) {
-        } else if (y == Compare::Unequal) {
-            x = Compare::Unequal;
-        } else if (y == Compare::Fuzzy) {
-            x = Compare::Fuzzy;
-        } else {
-            // keep as-is
-        }
-        return x;
-    }
+    Compare& operator&=(Compare& x, const Compare& y);
 
     /// Simple path - Absolute with no generic parameters
     // TODO: Maybe make this de-duplicated? Not sure about the overheads involved vs the gain - some paths are very common, others are only used once
@@ -255,10 +232,7 @@ namespace HIR {
                 return AtyEqual{source_trait.clone(), aty_params.clone(), type};
             }
 
-            friend ::std::ostream& operator<<(::std::ostream& os, const AtyEqual& x) {
-                os << x.type;
-                return os;
-            }
+            friend ::std::ostream& operator<<(::std::ostream& os, const AtyEqual& x);
         };
 
         /// Associated type trait bounds (`Type: Trait`)

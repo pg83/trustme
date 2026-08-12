@@ -11187,3 +11187,20 @@ bool Context::is_current_native_deref_receiver(const ::HIR::SimplePath& deref_tr
         && typeck::primitive_operator_has_builtin(typeck::PrimitiveOperator::Deref, borrow->inner)
         && m_current_trait_impl->matches_type(borrow->inner, m_ivars.callback_resolve_infer());
 }
+
+::std::ostream& operator<<(::std::ostream& os, const Context::Coercion& v) {
+    os << "R" << v.rule_idx << " " << v.left_ty << " := " << v.right_node_ptr << " " << &**v.right_node_ptr << " (" << (*v.right_node_ptr)->m_res_type << ")";
+    return os;
+}
+::std::ostream& operator<<(::std::ostream& os, const Context::Associated& v) {
+    os << "R" << v.rule_idx << " ";
+    if (v.name == "") {
+        os << "req ty " << v.impl_ty << " impl " << v.trait << v.params;
+    } else {
+        os << v.left_ty << " = " << "< `" << v.impl_ty << "` as `" << v.trait << v.params << "` >::" << v.name << v.aty_pp;
+    }
+    if (v.is_operator) {
+        os << " - op";
+    }
+    return os;
+}

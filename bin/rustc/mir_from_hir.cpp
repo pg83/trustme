@@ -9562,3 +9562,30 @@ const MirBuilder::var_alias_t* MirBuilder::get_variable_alias(const Span& sp, un
 MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
     : state(mv$(vs)) {
 }
+
+::std::ostream& operator<<(::std::ostream& os, const ScopeHandle& x) {
+    os << x.idx;
+    return os;
+}
+::std::ostream& operator<<(::std::ostream& os, const field_path_t& x) {
+    for (auto idx : x.data) {
+        os << ".";
+        if (idx == FIELD_DEREF) {
+            os << "*";
+        } else if (idx > FIELD_INDEX_MAX) {
+            idx -= FIELD_INDEX_MAX;
+            idx = FIELD_INDEX_MAX - idx;
+            os << "-" << static_cast<unsigned int>(idx);
+        } else {
+            os << static_cast<unsigned int>(idx);
+        }
+    }
+    return os;
+}
+::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x) {
+    os << *x.binding << x.field;
+    if (x.is_split_slice()) {
+        os << "[" << x.split_slice.first << "..-" << x.split_slice.second << "]";
+    }
+    return os;
+}

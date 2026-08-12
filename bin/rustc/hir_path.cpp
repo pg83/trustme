@@ -801,3 +801,36 @@ Path::Path(Data data)
 ConstGeneric_Unevaluated::ConstGeneric_Unevaluated() {
 }
 }
+
+namespace HIR {
+
+::std::ostream& operator<<(::std::ostream& os, const Compare& x) {
+    switch (x) {
+        case Compare::Equal:
+            os << "Equal";
+            break;
+        case Compare::Fuzzy:
+            os << "Fuzzy";
+            break;
+        case Compare::Unequal:
+            os << "Unequal";
+            break;
+    }
+    return os;
+}
+Compare& operator&=(Compare& x, const Compare& y) {
+    if (x == Compare::Unequal) {
+    } else if (y == Compare::Unequal) {
+        x = Compare::Unequal;
+    } else if (y == Compare::Fuzzy) {
+        x = Compare::Fuzzy;
+    } else {
+        // keep as-is
+    }
+    return x;
+}
+::std::ostream& operator<<(::std::ostream& os, const TraitPath::AtyEqual& x) {
+    os << x.type;
+    return os;
+}
+}

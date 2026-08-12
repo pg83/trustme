@@ -31,10 +31,7 @@ struct Context {
         ::HIR::TypeRef left_ty;
         ::HIR::ExprNodeP* right_node_ptr;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Coercion& v) {
-            os << "R" << v.rule_idx << " " << v.left_ty << " := " << v.right_node_ptr << " " << &**v.right_node_ptr << " (" << (*v.right_node_ptr)->m_res_type << ")";
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const Coercion& v);
     };
 
     struct IVarPossible {
@@ -107,18 +104,7 @@ struct Context {
         ::std::vector<StallDependency> stalled_on;
         ::std::vector<CapturedIvarPossible> stalled_possibilities;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v) {
-            os << "R" << v.rule_idx << " ";
-            if (v.name == "") {
-                os << "req ty " << v.impl_ty << " impl " << v.trait << v.params;
-            } else {
-                os << v.left_ty << " = " << "< `" << v.impl_ty << "` as `" << v.trait << v.params << "` >::" << v.name << v.aty_pp;
-            }
-            if (v.is_operator) {
-                os << " - op";
-            }
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v);
     };
 
     const ::HIR::Crate& m_crate;

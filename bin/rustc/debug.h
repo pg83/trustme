@@ -75,12 +75,7 @@ struct RepeatLitStr {
     const char* s;
     int n;
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const RepeatLitStr& r) {
-        for (int i = 0; i < r.n; i++) {
-            os << r.s;
-        }
-        return os;
-    }
+    friend ::std::ostream& operator<<(::std::ostream& os, const RepeatLitStr& r);
 };
 
 class NullSink {
@@ -160,10 +155,7 @@ struct FmtLambda {
 
     FmtLambda(::std::function<void(::std::ostream&)> cb);
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const FmtLambda& x) {
-        x.m_cb(os);
-        return os;
-    }
+    friend ::std::ostream& operator<<(::std::ostream& os, const FmtLambda& x);
 };
 
 #define FMT_CB(os, ...)         \

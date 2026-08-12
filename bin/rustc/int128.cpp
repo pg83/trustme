@@ -368,3 +368,52 @@ int S128::cmp128s(U128 a, U128 b) {
     }
     return 0;
 }
+
+std::ostream& operator<<(::std::ostream& os, const U128& x) {
+    if (x.hi == 0) {
+        os << x.lo;
+    }
+    //else if( (os.flags() & std::ios_base::hex) != 0 && true ) {
+    //    os << x.hi << "_" << x.lo;
+    //}
+    else {
+        char output[40 + 1];
+        auto v = x;
+        unsigned i = 0;
+        const char* chars = (os.flags() & std::ios_base::uppercase) ? "0123456789ABCDEF" : "0123456789abcdef";
+        switch (os.flags() & std::ios_base::basefield) {
+            case std::ios_base::hex:
+                while (v.hi > 0 || v.lo > 0) {
+                    output[i++] = chars[(v.lo & 0xF)];
+                    v >>= 4u;
+                }
+                break;
+            case std::ios_base::oct:
+                while (v.hi > 0 || v.lo > 0) {
+                    output[i++] = chars[(v.lo & 7)];
+                    v >>= 3u;
+                }
+                break;
+            case std::ios_base::dec:
+            default:
+                while (v.hi > 0 || v.lo > 0) {
+                    U128 v2(0), rem(0);
+                    U128::div128_o(v, U128(10), &v2, &rem);
+                    output[i++] = chars[(rem.lo % 10)];
+                    v = v2;
+                }
+                break;
+        }
+        for (auto v = os.width(); v > i; v--) {
+            os << ' ';
+        }
+        while (i--) {
+            os << output[i];
+        }
+    }
+    return os;
+}
+std::ostream& operator<<(::std::ostream& os, const S128& x) {
+    x.fmt(os);
+    return os;
+}

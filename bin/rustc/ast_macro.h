@@ -57,10 +57,7 @@ namespace AST {
             return m_input;
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const MacroInvocation& x) {
-            os << x.m_macro_path << "! " << x.m_ident << x.m_input;
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const MacroInvocation& x);
     };
 
 }

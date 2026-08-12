@@ -91,13 +91,7 @@ struct SimplePatIfCheck {
         return this->ty == x.ty && this->tok == x.tok;
     }
 
-    friend ::std::ostream& operator<<(::std::ostream& os, const SimplePatIfCheck& x) {
-        os << x.ty;
-        if (x.ty == MacroPatEnt::PAT_TOKEN) {
-            os << ":" << x.tok;
-        }
-        return os;
-    }
+    friend ::std::ostream& operator<<(::std::ostream& os, const SimplePatIfCheck& x);
 };
 
 /// Simple pattern entry for macro_rules! arm patterns

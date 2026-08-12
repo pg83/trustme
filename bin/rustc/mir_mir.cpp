@@ -1124,3 +1124,15 @@ EnumCachePtr& EnumCachePtr::operator=(EnumCachePtr&& x) {
     return *this;
 }
 }
+
+namespace MIR {
+
+::std::ostream& operator<<(::std::ostream& os, const LValue::CRef& x) {
+    x.fmt(os);
+    return os;
+}
+::std::ostream& operator<<(::std::ostream& os, const LValue::MRef& x) {
+    x.fmt(os);
+    return os;
+}
+}

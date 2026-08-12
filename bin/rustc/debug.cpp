@@ -180,3 +180,14 @@ TraceLog::~TraceLog() {
 FmtLambda::FmtLambda(::std::function<void(::std::ostream&)> cb)
     : m_cb(cb) {
 }
+
+::std::ostream& operator<<(::std::ostream& os, const RepeatLitStr& r) {
+    for (int i = 0; i < r.n; i++) {
+        os << r.s;
+    }
+    return os;
+}
+::std::ostream& operator<<(::std::ostream& os, const FmtLambda& x) {
+    x.m_cb(os);
+    return os;
+}

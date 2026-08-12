@@ -59,17 +59,7 @@ namespace AST {
             return !(*this == x);
         }
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const AbsolutePath& x) {
-            if (x.crate != "") {
-                os << "::\"" << x.crate << "\"";
-            } else {
-                os << "crate";
-            }
-            for (const auto& n : x.nodes) {
-                os << "::" << n;
-            }
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const AbsolutePath& x);
 
         // Returns true if this path is a prefix of the other path (or equal)
         bool is_parent_of(const AbsolutePath& other) const;

@@ -6,19 +6,7 @@
 #include "hir_typeck_common.h"
 #include "hir_typeck_resolve_common.h"
 
-static inline bool type_is_unbounded_infer(const ::HIR::TypeData* ty) {
-    if (const auto* te = ty->opt_Infer()) {
-        switch (te->ty_class) {
-            case ::HIR::InferClass::Integer:
-                return false;
-            case ::HIR::InferClass::Float:
-                return false;
-            case ::HIR::InferClass::None:
-                return true;
-        }
-    }
-    return false;
-}
+bool type_is_unbounded_infer(const ::HIR::TypeData* ty);
 
 class HMTypeInferrence {
 public:
@@ -28,10 +16,7 @@ public:
 
         FmtType(const HMTypeInferrence& ctxt, const ::HIR::TypeData* ty);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const FmtType& x) {
-            x.ctxt.print_type(os, x.ty);
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const FmtType& x);
     };
 
     struct FmtPP {
@@ -40,10 +25,7 @@ public:
 
         FmtPP(const HMTypeInferrence& ctxt, const ::HIR::PathParams& pps);
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const FmtPP& x) {
-            x.ctxt.print_pathparams(os, x.pps);
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const FmtPP& x);
     };
 
 public: // ?? - Needed once, anymore?

@@ -62,10 +62,7 @@ namespace HIR {
 
         void fmt(::std::ostream& os) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const GenericRef& x) {
-            x.fmt(os);
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const GenericRef& x);
     };
 
     struct LifetimeRef {

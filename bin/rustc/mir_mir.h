@@ -378,10 +378,7 @@ namespace MIR {
             /// Unwrap one level
             const CRef inner_ref() const;
 
-            friend ::std::ostream& operator<<(::std::ostream& os, const CRef& x) {
-                x.fmt(os);
-                return os;
-            }
+            friend ::std::ostream& operator<<(::std::ostream& os, const CRef& x);
 
             bool operator<(const CRef& b) const {
                 return this->ord(b) == OrdLess;
@@ -404,10 +401,7 @@ namespace MIR {
 
             void replace(LValue x);
 
-            friend ::std::ostream& operator<<(::std::ostream& os, const MRef& x) {
-                x.fmt(os);
-                return os;
-            }
+            friend ::std::ostream& operator<<(::std::ostream& os, const MRef& x);
         };
 
         Ordering ord(const LValue::CRef& x) const;

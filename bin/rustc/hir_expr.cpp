@@ -873,3 +873,24 @@ ExprNode_AsyncBlock::ExprNode_AsyncBlock(Span sp, ::HIR::ExprNodeP code, bool is
 }
 ExprVisitorDef::ExprVisitorDef(TypeInterner& types): m_types(types) {}
 }
+
+namespace HIR {
+
+::std::ostream& operator<<(::std::ostream& os, const ValueUsage& x) {
+    switch (x) {
+        case ValueUsage::Unknown:
+            os << "Unknown";
+            break;
+        case ValueUsage::Borrow:
+            os << "Borrow";
+            break;
+        case ValueUsage::Mutate:
+            os << "Mutate";
+            break;
+        case ValueUsage::Move:
+            os << "Move";
+            break;
+    }
+    return os;
+}
+}

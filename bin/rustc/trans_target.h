@@ -140,17 +140,7 @@ struct TypeRepr {
     std::pair<unsigned, bool> get_enum_variant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const;
 };
 
-static inline std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x) {
-    os << x.size << "@" << x.index;
-    for (auto idx : x.sub_fields) {
-        if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
-            os << "[0]";
-        } else {
-            os << "." << idx;
-        }
-    }
-    return os;
-}
+std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x);
 
 extern const TargetSpec& Target_GetCurSpec();
 extern void Target_SetCfg(const ::std::string& target_name);

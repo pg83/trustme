@@ -16,3 +16,11 @@ void MacroInvocation::clear() {
     m_input = TokenTree();
 }
 }
+
+namespace AST {
+
+::std::ostream& operator<<(::std::ostream& os, const MacroInvocation& x) {
+    os << x.m_macro_path << "! " << x.m_ident << x.m_input;
+    return os;
+}
+}

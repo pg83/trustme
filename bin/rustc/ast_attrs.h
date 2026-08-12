@@ -129,10 +129,7 @@ namespace AST {
 
         void parse_paren_ident_list(std::function<void(const Span& sp, RcString ident)> item_cb) const;
 
-        friend ::std::ostream& operator<<(::std::ostream& os, const Attribute& x) {
-            x.fmt(os);
-            return os;
-        }
+        friend ::std::ostream& operator<<(::std::ostream& os, const Attribute& x);
     };
 
     TAGGED_UNION(AttributeData, None, (None, struct {}), (ValueUnexpanded, AST::ExprNodeP), (String, struct { ::std::string val; }), (List, struct { ::std::vector<Attribute> sub_items; }));

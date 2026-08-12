@@ -22,21 +22,7 @@ namespace AsmCommon {
         InLateOut
     };
 
-    static inline std::ostream& operator<<(std::ostream& os, const Direction& d) {
-        switch (d) {
-            case Direction::In:
-                return os << "in";
-            case Direction::Out:
-                return os << "out";
-            case Direction::LateOut:
-                return os << "lateout";
-            case Direction::InOut:
-                return os << "inout";
-            case Direction::InLateOut:
-                return os << "inlateout";
-        }
-        return os;
-    }
+    std::ostream& operator<<(std::ostream& os, const Direction& d);
 
     enum class RegisterClass {
         x86_reg,
@@ -86,58 +72,15 @@ namespace AsmCommon {
                 throw "";
                     }));
 
-    static inline bool operator==(const RegisterSpec& a, const RegisterSpec& b) {
-        if (a.tag() != b.tag()) {
-            return false;
-        }
-        TU_MATCH_HDRA( (a,b), {)
-        TU_ARMA(Class, ae,be)
-            return ae == be;
-            TU_ARMA(Explicit, ae, be)
-            return ae == be;
-        }
-        return true;
-    }
+    bool operator==(const RegisterSpec& a, const RegisterSpec& b);
 
     static inline bool operator!=(const RegisterSpec& a, const RegisterSpec& b) {
         return !(a == b);
     }
 
-    static inline const char* to_string(const RegisterClass& c) {
-        switch (c) {
-            case RegisterClass::x86_reg:
-                return "reg";
-            case RegisterClass::x86_reg_abcd:
-                return "reg_abcd";
-            case RegisterClass::x86_reg_byte:
-                return "reg_byte";
-            case RegisterClass::x86_xmm:
-                return "xmm_reg";
-            case RegisterClass::x86_ymm:
-                return "ymm_reg";
-            case RegisterClass::x86_zmm:
-                return "zmm_reg";
-            case RegisterClass::x86_kreg:
-                return "kreg";
-            case RegisterClass::riscv_reg:
-                return "reg";
-            case RegisterClass::riscv_freg:
-                return "freg";
-        }
-        throw "";
-    }
+    const char* to_string(const RegisterClass& c);
 
-    static inline std::ostream& operator<<(std::ostream& os, const RegisterSpec& s) {
-        TU_MATCH_HDRA((s), {)
-        TU_ARMA(Class, c) {
-                os << to_string(c);
-            }
-            TU_ARMA(Explicit, e) {
-                os << "\"" << e << "\"";
-            }
-        }
-        return os;
-    }
+    std::ostream& operator<<(std::ostream& os, const RegisterSpec& s);
 
     struct LineFragment {
         std::string before;

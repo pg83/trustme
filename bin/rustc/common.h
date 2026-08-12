@@ -67,15 +67,7 @@ enum Ordering {
     OrdGreater,
 };
 
-static inline Ordering ord(bool l, bool r) {
-    if (l == r) {
-        return OrdEqual;
-    } else if (l) {
-        return OrdGreater;
-    } else {
-        return OrdLess;
-    }
-}
+Ordering ord(bool l, bool r);
 
 static inline Ordering ord(char l, char r) {
     return (l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess));
@@ -129,15 +121,7 @@ static inline Ordering ord(double l, double r) {
     return (l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess));
 }
 
-static inline Ordering ord(const ::std::string& l, const ::std::string& r) {
-    if (l == r) {
-        return OrdEqual;
-    } else if (l > r) {
-        return OrdGreater;
-    } else {
-        return OrdLess;
-    }
-}
+Ordering ord(const ::std::string& l, const ::std::string& r);
 
 template <typename T>
 Ordering ord(T* const& l, T* const& r) {
