@@ -9,7 +9,6 @@ Per-project settings that the shared [STYLE.md](STYLE.md) delegates here.
 
 ## Deviations
 
-- `style.py` still lives at the repository root, not yet at `./dev/style.py`.
 - The vocabulary rules in the shared style (`stl::` containers, no `std::`)
   describe what this library provides; internally it implements them on top
   of the C library and the language runtime.

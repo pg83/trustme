@@ -8,7 +8,7 @@ import sys
 from pathlib import Path
 
 
-ROOT = Path(__file__).resolve().parent
+ROOT = Path(__file__).resolve().parent.parent
 SOURCE_PATTERNS = ("*.cpp", "*.h", "*.mm")
 INITIALIZER_LIST = re.compile(r"^(?P<indent> +):(?=\s)")
 INCLUDE = re.compile(r'^#include\s+(?P<open>["<])(?P<path>[^">]+)[">]\s*(?P<tail>//.*)?$')
