@@ -49,7 +49,7 @@ public:
         return c_str() + size();
     }
 
-    bool is_interned() const {
+    bool isInterned() const {
         return ptr && ptr->ordering != 0;
     }
 

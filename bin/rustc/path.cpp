@@ -33,7 +33,7 @@ helpers::path::path(const char* s)
 }
 
 helpers::path helpers::path::to_absolute() const {
-    if (!this->is_valid()) {
+    if (!this->isValid()) {
         throw ::std::runtime_error("Calling to_absolute() on an invalid path");
     }
 
@@ -112,14 +112,14 @@ path::path(const ::std::string& s)
     : path(s.c_str()) {
 }
 path& path::operator/=(const path& p) {
-    if (!p.is_valid()) {
+    if (!p.isValid()) {
         throw ::std::runtime_error("Appending from an invalid path");
     }
 
     return *this /= p.mStr.c_str();
 }
 path& path::operator/=(const char* o) {
-    if (!this->is_valid()) {
+    if (!this->isValid()) {
         throw ::std::runtime_error("Appending to an invalid path");
     }
     if (o[0] == '/') {
@@ -130,7 +130,7 @@ path& path::operator/=(const char* o) {
     return *this;
 }
 path& path::operator/=(::std::string_view o) {
-    if (!this->is_valid()) {
+    if (!this->isValid()) {
         throw ::std::runtime_error("Appending to an invalid path");
     }
     if (o[0] == '/') {
@@ -153,7 +153,7 @@ path path::operator/(const char* o) const {
 }
 /// Add an arbitary string to the  component
 path path::operator+(const char* o) const {
-    if (!this->is_valid()) {
+    if (!this->isValid()) {
         throw ::std::runtime_error("Appending a string to an invalid path");
     }
     if (::std::strchr(o, SEP) != nullptr) {
@@ -164,7 +164,7 @@ path path::operator+(const char* o) const {
     return rv;
 }
 bool path::pop_component() {
-    if (!this->is_valid()) {
+    if (!this->isValid()) {
         throw ::std::runtime_error("Calling pop_component() on an invalid path");
     }
     auto pos = mStr.find_last_of(SEP);
@@ -176,7 +176,7 @@ bool path::pop_component() {
     }
 }
 path path::parent() const {
-    if (!this->is_valid()) {
+    if (!this->isValid()) {
         throw ::std::runtime_error("Calling parent() on an invalid path");
     }
     auto pos = mStr.find_last_of(SEP);
@@ -189,7 +189,7 @@ path path::parent() const {
     }
 }
 ::std::string path::basename() const {
-    if (!this->is_valid()) {
+    if (!this->isValid()) {
         throw ::std::runtime_error("Calling basename() on an invalid path");
     }
 

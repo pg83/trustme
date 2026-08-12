@@ -40,7 +40,7 @@ void memory_dump(const char* phase) {
         size_t chunkCount = 0;
         // - Open `/proc/self/maps`, parse `<start>-<end> <flags> <ofs> <maj>:<minor> <inode> <file_name>`
         {
-            uint64_t last_vaddr = 0;
+            uint64_t lastVaddr = 0;
             FILE* fp = ::std::fopen("/proc/self/maps", "r");
             while (!feof(fp)) {
                 RangeEnt e;
@@ -71,9 +71,9 @@ void memory_dump(const char* phase) {
                     continue;
                 }
 
-                if (last_vaddr / chunkSize != e.v_start / chunkSize) {
+                if (lastVaddr / chunkSize != e.v_start / chunkSize) {
                     //::std::cout << "e.name =" << e.name << "\n";
-                    if (last_vaddr % chunkSize != 0) {
+                    if (lastVaddr % chunkSize != 0) {
                         chunkCount += 1;
                     }
                     // Otherwise, the chunk would have already been flushed
@@ -92,12 +92,12 @@ void memory_dump(const char* phase) {
                     }
                     chunkCount += (e.v_end - (e.v_start + headSize)) / chunkSize;
                 }
-                last_vaddr = e.v_end;
+                lastVaddr = e.v_end;
                 // Add entry
                 range_ents.push_back(std::move(e));
             }
             // Account for last chunk's count
-            if (last_vaddr % chunkSize != 0) {
+            if (lastVaddr % chunkSize != 0) {
                 chunkCount += 1;
             }
             fclose(fp);
@@ -213,13 +213,13 @@ void memory_dump(const char* phase) {
             // Zero the buffer, just to make compression better on partial blocks
             memset(buf.data(), 0, buf.size());
         };
-        uint64_t last_vaddr = 0;
+        uint64_t lastVaddr = 0;
         for (const auto& r : range_ents) {
             if (r.flagsStr[0] == 'r') {
-                if (last_vaddr / chunkSize != r.v_start / chunkSize) {
+                if (lastVaddr / chunkSize != r.v_start / chunkSize) {
                     // Flush chunk, if the last end was not aligned
-                    if (last_vaddr % chunkSize != 0) {
-                        flushChunk(last_vaddr / chunkSize * chunkSize);
+                    if (lastVaddr % chunkSize != 0) {
+                        flushChunk(lastVaddr / chunkSize * chunkSize);
                     }
                 }
                 assert(chunkCountFlushed == r.firstChunk);
@@ -253,12 +253,12 @@ void memory_dump(const char* phase) {
                     memcpy(buf.data(), (const void*)tail_pos, tail_size);
                     // - No flush, next push will do that
                 }
-                last_vaddr = r.v_end;
+                lastVaddr = r.v_end;
                 //printf("> last_vaddr=%li\n", last_vaddr);
             }
         }
-        if (last_vaddr % chunkSize != 0) {
-            flushChunk(last_vaddr / chunkSize * chunkSize);
+        if (lastVaddr % chunkSize != 0) {
+            flushChunk(lastVaddr / chunkSize * chunkSize);
         }
         if (chunkCountFlushed != chunkCount) {
             //printf("BUG: flushed %i chunks, but expected %i\n", chunk_count_flushed, chunk_count);

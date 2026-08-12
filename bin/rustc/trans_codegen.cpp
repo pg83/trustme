@@ -86,9 +86,9 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
         assert(ent.second->ptr);
         const auto& fcn = *ent.second->ptr;
         // Extern if there isn't any HIR
-        bool is_extern = !static_cast<bool>(fcn.mCode);
+        bool isExtern = !static_cast<bool>(fcn.mCode);
         if (fcn.mCode.mir && !ent.second->forcePrototype) {
-            codegen->emitFunctionProto(ent.first, fcn, ent.second->pp, is_extern);
+            codegen->emitFunctionProto(ent.first, fcn, ent.second->pp, isExtern);
         }
     }
     // - External functions
@@ -115,9 +115,9 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
 
         DEBUG(
             "STATIC proto " << ent.first << ": "
-                            << "(m_value_generated=" << stat.valueGenerated << " && !m_no_emit_value=" << stat.noEmitValue << ") || is_generic=" << stat.mParams.is_generic()
+                            << "(m_value_generated=" << stat.valueGenerated << " && !m_no_emit_value=" << stat.noEmitValue << ") || is_generic=" << stat.mParams.isGeneric()
         );
-        if ((stat.valueGenerated && !stat.noEmitValue) || stat.mParams.is_generic()) {
+        if ((stat.valueGenerated && !stat.noEmitValue) || stat.mParams.isGeneric()) {
             codegen->emitStaticProto(ent.first, stat, ent.second->pp);
         } else {
             codegen->emitStaticExt(ent.first, stat, ent.second->pp);
@@ -128,7 +128,7 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
         assert(ent.second->ptr);
         const auto& stat = *ent.second->ptr;
 
-        if (stat.mParams.is_generic()) {
+        if (stat.mParams.isGeneric()) {
             codegen->emitStaticLocal(ent.first, stat, ent.second->pp, stat.monomorphCache.at(ent.first));
         } else if (stat.valueGenerated && !stat.noEmitValue) {
             codegen->emitStaticLocal(ent.first, stat, ent.second->pp, stat.valueRes);
@@ -146,20 +146,20 @@ void TransCodegen(const ::std::string& outfile, CodegenOutput out_ty, const Tran
             TRACE_FUNCTION_F(path);
             DEBUG("FUNCTION CODE " << path);
             // `is_extern` is set if there's no HIR (i.e. this function is from an external crate)
-            bool is_extern = !static_cast<bool>(fcn.mCode);
+            bool isExtern = !static_cast<bool>(fcn.mCode);
             // If this is a provided trait method, it needs to be monomorphised too.
-            bool is_method = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
+            bool isMethod = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
                 return x == cratePtr->types.self();
             }));
 
-            bool is_monomorph = pp.hasTypes() || is_method;
+            bool isMonomorph = pp.hasTypes() || isMethod;
             if (ent.second->monomorphised.code) {
                 // TODO: Flag that this should be a weak (or weak-er) symbol?
                 // - If it's from an external crate, it should be weak, but what about local ones?
-                codegen->emitFunctionCode(path, fcn, pp, is_extern, ent.second->monomorphised.code);
+                codegen->emitFunctionCode(path, fcn, pp, isExtern, ent.second->monomorphised.code);
             } else {
-                ASSERT_BUG(sp, !is_monomorph, "Function that required monomorphisation wasn't monomorphised");
-                codegen->emitFunctionCode(path, fcn, pp, is_extern, fcn.mCode.mir);
+                ASSERT_BUG(sp, !isMonomorph, "Function that required monomorphisation wasn't monomorphised");
+                codegen->emitFunctionCode(path, fcn, pp, isExtern, fcn.mCode.mir);
             }
         }
     }
@@ -445,17 +445,17 @@ namespace {
                     of << "fn main#(isize, *const *const i8): isize {\n";
                     auto cStartPath = mResolve.crate.getLangItemPathOpt("mrustc-start");
                     if (cStartPath == ::HIR::SimplePath()) {
-                        auto main_path = mResolve.crate.getLangItemPath(Span(), "mrustc-main");
+                        auto mainPath = mResolve.crate.getLangItemPath(Span(), "mrustc-main");
                         const auto& start_path = mResolve.crate.getLangItemPathOpt("start");
                         if (crate.isNoCore && start_path == ::HIR::SimplePath()) {
-                            const auto& main_fcn = crate.getFunctionByPath(Span(), main_path);
-                            of << "\tlet direct_main_result: " << fmt(main_fcn.returnType) << ";\n";
+                            const auto& mainFcn = crate.getFunctionByPath(Span(), mainPath);
+                            of << "\tlet direct_main_result: " << fmt(mainFcn.returnType) << ";\n";
                             of << "\t0: {\n";
-                            of << "\t\tCALL direct_main_result = " << fmt(::HIR::GenericPath(main_path)) << "() goto 1 else 1\n";
+                            of << "\t\tCALL direct_main_result = " << fmt(::HIR::GenericPath(mainPath)) << "() goto 1 else 1\n";
                         } else {
                             of << "\tlet m: fn();\n";
                             of << "\t0: {\n";
-                            of << "\t\tASSIGN m = ADDROF " << fmt(::HIR::GenericPath(main_path)) << ";\n";
+                            of << "\t\tASSIGN m = ADDROF " << fmt(::HIR::GenericPath(mainPath)) << ";\n";
                             of << "\t\tCALL RETURN = " << fmt(::HIR::GenericPath(mResolve.crate.getLangItemPath(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
                         }
                     } else {
@@ -779,13 +779,13 @@ namespace {
                         for (size_t i = 0; i < e.num_variants; i++) {
                             of << "\t\t";
 
-                            if (e.is_niche(i)) {
+                            if (e.isNiche(i)) {
                                 of << "*";
                             } else {
                                 emitValue(e.field, U128(e.offset + i));
                             }
                             // - Data field number (optional)
-                            if (!item.is_value()) {
+                            if (!item.isValue()) {
                                 of << " =" << i;
                             }
                             of << ",\n";
@@ -799,7 +799,7 @@ namespace {
                             // - Tag value
                             emitValue(e.field, e.values[idx]);
                             // - Data field number (optional)
-                            if (!item.is_value()) {
+                            if (!item.isValue()) {
                                 of << " =" << idx;
                             }
                             of << ",\n";
@@ -906,7 +906,7 @@ namespace {
             mirRes = nullptr;
         }
 
-        void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def, const ::MIR::FunctionPointer& code) override {
+        void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef, const ::MIR::FunctionPointer& code) override {
             TRACE_FUNCTION_F(p);
 
             ::MIR::TypeResolve::argsT arg_types;
@@ -1293,7 +1293,7 @@ namespace {
                         TU_ARM(term, Call, e) {
                             if (const auto* fP = e.fcn.opt_Intrinsic()) {
                                 if (fP->name == "offset_of") {
-                                    size_t val = mir_res.intrinsic_offset_of(fP->params.types.at(0), e.args);
+                                    size_t val = mir_res.intrinsicOffsetOf(fP->params.types.at(0), e.args);
                                     of << fmt(e.ret_val) << " = " << val << " usize;\n";
                                     of << "\t\tGOTO " << e.ret_block;
                                     break;

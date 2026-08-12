@@ -5,7 +5,7 @@ namespace AST {
 Visibility::Visibility()
     : mTy(Ty::Pub) {
 }
-Visibility Visibility::make_bare_private() {
+Visibility Visibility::makeBarePrivate() {
     Visibility rv;
     rv.mTy = Ty::Private;
     return rv;

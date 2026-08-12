@@ -25,7 +25,7 @@ namespace {
     };
 
     struct LintSetting {
-        bool is_set = false;
+        bool isSet = false;
         CfgLintLevel level = CfgLintLevel::Warn;
     };
 
@@ -83,22 +83,22 @@ namespace {
             }
         }
 
-        static bool is_ident_start(unsigned char c) {
+        static bool isIdentStart(unsigned char c) {
             return c == '_' || c >= 0x80 || ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z');
         }
 
-        static bool is_ident_continue(unsigned char c) {
-            return is_ident_start(c) || ('0' <= c && c <= '9');
+        static bool isIdentContinue(unsigned char c) {
+            return isIdentStart(c) || ('0' <= c && c <= '9');
         }
 
         ::std::string ident() {
             skip_ws();
             const auto start = pos;
-            if (pos >= input.size() || !is_ident_start(static_cast<unsigned char>(input[pos]))) {
+            if (pos >= input.size() || !isIdentStart(static_cast<unsigned char>(input[pos]))) {
                 fail("expected an identifier");
             }
             pos += 1;
-            while (pos < input.size() && is_ident_continue(static_cast<unsigned char>(input[pos]))) {
+            while (pos < input.size() && isIdentContinue(static_cast<unsigned char>(input[pos]))) {
                 pos += 1;
             }
             return input.substr(start, pos - start);
@@ -281,19 +281,19 @@ namespace {
         }
     };
 
-    bool is_sticky_lint_level(CfgLintLevel level) {
+    bool isStickyLintLevel(CfgLintLevel level) {
         return level == CfgLintLevel::ForceWarn || level == CfgLintLevel::Forbid;
     }
 
     void update_lint_setting(LintSetting& setting, CfgLintLevel level) {
-        if (setting.is_set && is_sticky_lint_level(setting.level)) {
+        if (setting.isSet && isStickyLintLevel(setting.level)) {
             return;
         }
-        setting.is_set = true;
+        setting.isSet = true;
         setting.level = level;
     }
 
-    unsigned lint_level_rank(CfgLintLevel level) {
+    unsigned lintLevelRank(CfgLintLevel level) {
         switch (level) {
             case CfgLintLevel::Allow: return 0;
             case CfgLintLevel::Warn:
@@ -305,11 +305,11 @@ namespace {
     }
 
     CfgLintLevel unexpected_cfg_level() {
-        auto level = gCheckCfg.unexpected_cfgs.is_set
+        auto level = gCheckCfg.unexpected_cfgs.isSet
             ? gCheckCfg.unexpected_cfgs.level
-            : (gCheckCfg.warnings.is_set ? gCheckCfg.warnings.level : CfgLintLevel::Warn);
-        if (level != CfgLintLevel::ForceWarn && gCheckCfg.cap.is_set
-            && lint_level_rank(level) > lint_level_rank(gCheckCfg.cap.level)) {
+            : (gCheckCfg.warnings.isSet ? gCheckCfg.warnings.level : CfgLintLevel::Warn);
+        if (level != CfgLintLevel::ForceWarn && gCheckCfg.cap.isSet
+            && lintLevelRank(level) > lintLevelRank(gCheckCfg.cap.level)) {
             level = gCheckCfg.cap.level;
         }
         return level;
@@ -472,7 +472,7 @@ void CfgSetLintLevel(::std::string name, CfgLintLevel level) {
 }
 
 void CfgSetLintCap(CfgLintLevel level) {
-    gCheckCfg.cap.is_set = true;
+    gCheckCfg.cap.isSet = true;
     gCheckCfg.cap.level = level;
 }
 

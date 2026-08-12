@@ -8,8 +8,8 @@
 namespace {
     template <typename T>
     void visit_impls(::HIR::Crate::ImplGroup<std::unique_ptr<T>>& g, ::std::function<void(T&)> cb) {
-        for (auto& impl_group : g.named) {
-            for (auto& impl : impl_group.second) {
+        for (auto& implGroup : g.named) {
+            for (auto& impl : implGroup.second) {
                 cb(*impl);
             }
         }
@@ -28,14 +28,14 @@ void ::HIR::Visitor::visit_crate(::HIR::Crate& crate) {
     visit_impls<::HIR::TypeImpl>(crate.typeImpls, [&](::HIR::TypeImpl& ty_impl) {
         this->visit_type_impl(ty_impl);
     });
-    for (auto& impl_group : crate.traitImpls) {
-        visit_impls<::HIR::TraitImpl>(impl_group.second, [&](::HIR::TraitImpl& ty_impl) {
-            this->visit_trait_impl(impl_group.first, ty_impl);
+    for (auto& implGroup : crate.traitImpls) {
+        visit_impls<::HIR::TraitImpl>(implGroup.second, [&](::HIR::TraitImpl& ty_impl) {
+            this->visit_trait_impl(implGroup.first, ty_impl);
         });
     }
-    for (auto& impl_group : crate.markerImpls) {
-        visit_impls<::HIR::MarkerImpl>(impl_group.second, [&](::HIR::MarkerImpl& ty_impl) {
-            this->visit_marker_impl(impl_group.first, ty_impl);
+    for (auto& implGroup : crate.markerImpls) {
+        visit_impls<::HIR::MarkerImpl>(implGroup.second, [&](::HIR::MarkerImpl& ty_impl) {
+            this->visit_marker_impl(implGroup.first, ty_impl);
         });
     }
 }
@@ -225,7 +225,7 @@ void ::HIR::Visitor::visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) {
         mResolve->set_impl_generics_raw(MetadataType::Unknown, item.mParams);
     }
     auto trait_sp = p.getSimplePath();
-    auto trait_pp = item.mParams.make_nop_params(type_interner(), 0);
+    auto trait_pp = item.mParams.makeNopParams(type_interner(), 0);
     const HIR::TypeRef tySelf = type_interner().self();
     ItemPath trait_ip(tySelf, trait_sp, trait_pp);
     TRACE_FUNCTION;
@@ -238,20 +238,20 @@ void ::HIR::Visitor::visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) {
         this->visit_trait_path(par);
     }
     for (auto& i : item.types) {
-        auto item_path = ::HIR::ItemPath(trait_ip, i.first.c_str());
+        auto itemPath = ::HIR::ItemPath(trait_ip, i.first.c_str());
         DEBUG("type " << i.first);
-        this->visit_associatedtype(item_path, i.second);
+        this->visit_associatedtype(itemPath, i.second);
     }
     for (auto& i : item.values) {
-        auto item_path = ::HIR::ItemPath(trait_ip, i.first.c_str());
+        auto itemPath = ::HIR::ItemPath(trait_ip, i.first.c_str());
         TU_MATCH(
             ::HIR::TraitValueItem,
             (i.second),
             (e),
             //(None, ),
-            (Constant, DEBUG("constant " << i.first); this->visit_constant(item_path, e);),
-            (Static, DEBUG("static " << i.first); this->visit_static(item_path, e);),
-            (Function, DEBUG("method " << i.first); this->visit_function(item_path, e);)
+            (Constant, DEBUG("constant " << i.first); this->visit_constant(itemPath, e);),
+            (Static, DEBUG("static " << i.first); this->visit_static(itemPath, e);),
+            (Function, DEBUG("method " << i.first); this->visit_function(itemPath, e);)
         )
     }
     if (mResolve) {

@@ -295,17 +295,17 @@ void S128::fromBeBytes(const uint8_t* src, size_t max_len) {
     sign_extend(max_len);
 }
 S128 S128::operator*(S128 x) const {
-    auto ret_neg = is_neg() != x.is_neg();
+    auto ret_neg = isNeg() != x.isNeg();
     auto rv_u = u_abs() * x.u_abs();
     return ret_neg ? -S128(rv_u) : S128(rv_u);
 }
 S128 S128::operator/(S128 x) const {
-    auto ret_neg = is_neg() != x.is_neg();
+    auto ret_neg = isNeg() != x.isNeg();
     auto rv_u = u_abs() / x.u_abs();
     return ret_neg ? -S128(rv_u) : S128(rv_u);
 }
 S128 S128::operator%(S128 x) const {
-    auto ret_neg = is_neg() != x.is_neg();
+    auto ret_neg = isNeg() != x.isNeg();
     auto rv_u = u_abs() % x.u_abs();
     return ret_neg ? -S128(rv_u) : S128(rv_u);
 }
@@ -314,7 +314,7 @@ U128 S128::u_abs() const {
     if (inner.hi == UINT64_MAX && inner.lo == 0) {
         return inner;
     }
-    if (is_neg()) {
+    if (isNeg()) {
         return (-*this).inner;
     } else {
         return (*this).inner;
@@ -348,7 +348,7 @@ S128 S128::operator>>(unsigned bits) const {
     return S128(U128(inner.lo >> bits | (inner.hi << (64 - bits)), static_cast<uint64_t>(static_cast<int64_t>(inner.hi) >> bits)));
 }
 void S128::fmt(::std::ostream& os) const {
-    if (is_i64()) {
+    if (isI64()) {
         os << static_cast<int64_t>(inner.lo);
     } else {
         if (*this < 0) {

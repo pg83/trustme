@@ -98,7 +98,7 @@ namespace AST {
 
         void fmt(std::ostream& os) const;
 
-        void mark_inert() const {
+        void markInert() const {
             isInert = true;
         }
 
@@ -127,7 +127,7 @@ namespace AST {
         /// Parses the data as a `("string")` and returns the string
         std::string parse_paren_string() const;
 
-        void parse_paren_ident_list(std::function<void(const Span& sp, RcString ident)> item_cb) const;
+        void parse_paren_ident_list(std::function<void(const Span& sp, RcString ident)> itemCb) const;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Attribute& x);
     };

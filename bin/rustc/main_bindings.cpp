@@ -52,10 +52,10 @@ void ExpandTestHarness(::AST::Crate& crate) {
     // ```
 
     // ---- main function ----
-    auto main_fn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
+    auto mainFn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
-        auto callNode = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("test_main_static")}), ::make_vec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("test#"), ::AST::PathNode("TESTS")})))));
-        main_fn.set_code(mv$(callNode));
+        auto callNode = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("test_main_static")}), ::makeVec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("test#"), ::AST::PathNode("TESTS")})))));
+        mainFn.set_code(mv$(callNode));
     }
 
     // ---- test list ----
@@ -64,7 +64,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     for (const auto& test : crate.tests) {
         ::AST::ExprNodeStructLiteral::t_values descVals;
         // `name: "foo",`
-        descVals.push_back({{}, "name", NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("StaticTestName")}), ::make_vec1(NEWNODE(String, test.name)))});
+        descVals.push_back({{}, "name", NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("StaticTestName")}), ::makeVec1(NEWNODE(String, test.name)))});
         // `ignore: false,`
         descVals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
         // `should_panic: ShouldPanic::No,`
@@ -78,7 +78,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
                     should_panic_val = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("Yes")}));
                     break;
                 case ::AST::TestDesc::ShouldPanic::YesWithMessage:
-                    should_panic_val = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), make_vec1(NEWNODE(String, test.expectedPanicMessage)));
+                    should_panic_val = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), makeVec1(NEWNODE(String, test.expectedPanicMessage)));
                     break;
             }
             descVals.push_back({{}, "should_panic", mv$(should_panic_val)});
@@ -107,10 +107,10 @@ void ExpandTestHarness(::AST::Crate& crate) {
         {
             // Convert `fn()` into `fn()->Result<(),String>`
             // Use `|| ::test::assert_test_result( fcn() )`
-            test_fcn_node = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("assert_test_result")}), ::make_vec1(NEWNODE(CallPath, AST::Path(test.path), {}))), false, false);
+            test_fcn_node = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, AST::Path(test.path), {}))), false, false);
         }
-        auto test_type_var_name = test.is_benchmark ? "StaticBenchFn" : "StaticTestFn";
-        descandfnVals.push_back({{}, RcString::new_interned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(test_type_var_name)}), ::make_vec1(std::move(test_fcn_node)))});
+        auto test_type_var_name = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
+        descandfnVals.push_back({{}, RcString::new_interned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(test_type_var_name)}), ::makeVec1(std::move(test_fcn_node)))});
 
         test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
         // NOTE: 1.39+ needs &TestDescAndFn here
@@ -121,22 +121,22 @@ void ExpandTestHarness(::AST::Crate& crate) {
     auto* tests_array = new ::AST::ExprNodeArray(mv$(test_nodes));
 
     size_t test_count = tests_array->values.size();
-    auto list_item_ty = TypeRef(Span(), ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}));
+    auto listItemTy = TypeRef(Span(), ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}));
     // NOTE: 1.39+ needs &TestDescAndFn here
     {
-        list_item_ty = TypeRef(TypeRef::TagReference(), Span(), AST::LifetimeRef::new_static(), false, mv$(list_item_ty));
+        listItemTy = TypeRef(TypeRef::TagReference(), Span(), AST::LifetimeRef::new_static(), false, mv$(listItemTy));
     }
-    auto tests_list = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), mv$(list_item_ty), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(test_count), CORETYPE_UINT))), ::AST::Expr(mv$(tests_array))};
+    auto tests_list = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(test_count), CORETYPE_UINT))), ::AST::Expr(mv$(tests_array))};
 
     // ---- module ----
     auto newmod = ::AST::Module{::AST::AbsolutePath("", {"test#"})};
-    auto vis_private = AST::Visibility::make_restricted(AST::Visibility::Ty::Private, newmod.path());
+    auto vis_private = AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, newmod.path());
     // - TODO: These need to be loaded too.
     //  > They don't actually need to exist here, just be loaded (and use absolute paths)
     //newmod.add_ext_crate(Span(), false, "std", "std", {});
     //newmod.add_ext_crate(Span(), false, "test", "test", {});
 
-    newmod.addItem(Span(), vis_private, "main", mv$(main_fn), {});
+    newmod.addItem(Span(), vis_private, "main", mv$(mainFn), {});
     newmod.addItem(Span(), vis_private, "TESTS", mv$(tests_list), {});
 
     crate.rootModule.addItem(Span(), vis_private, "test#", mv$(newmod), {});
@@ -167,7 +167,7 @@ struct ProgramParams {
         STAGE_BORROWCK,
         STAGE_MIR,
         STAGE_ALL,
-    } last_stage = STAGE_ALL;
+    } lastStage = STAGE_ALL;
 
     ::std::string infile;
     ::std::string outfile;
@@ -203,7 +203,7 @@ struct ProgramParams {
 
     TraitSolverConfig trait_solver;
 
-    ::std::vector<const char*> lib_search_dirs;
+    ::std::vector<const char*> libSearchDirs;
     ::std::vector<const char*> libraries;
     ::std::map<::std::string, ::std::string> crateOverrides; // --extern name=path
 
@@ -225,7 +225,7 @@ struct ProgramParams {
         ::std::string codegenType;
         ::std::string emitBuildCommand;
         ::std::string panic_type;
-        ::std::vector<::std::string> linker_args;
+        ::std::vector<::std::string> linkerArgs;
     } codegen;
 
     ProgramParams(int argc, char* argv[]);
@@ -256,7 +256,7 @@ void CompilePhaseV(const char* name, Fcn f) {
     f();
 }
 
-void init_debug_list() {
+void initDebugList() {
     debugInitPhases(
         "MRUSTC_DEBUG",
         {"Target Load",
@@ -322,7 +322,7 @@ void init_debug_list() {
 
 /// main!
 int main(int argc, char* argv[]) {
-    init_debug_list();
+    initDebugList();
     ProgramParams params(argc, argv);
     gTraitSolverConfig = params.trait_solver;
     const auto mir_opt_level = params.effectiveMirOptLevel();
@@ -391,7 +391,7 @@ int main(int argc, char* argv[]) {
         crate.crateNameSuffix = params.crate_name_suffix;
         //crate.m_crate_name = params.crate_name;
 
-        if (params.last_stage == ProgramParams::STAGE_PARSE) {
+        if (params.lastStage == ProgramParams::STAGE_PARSE) {
             return 0;
         }
         memory_dump("Parsed");
@@ -400,13 +400,13 @@ int main(int argc, char* argv[]) {
         CompilePhaseV("LoadCrates", [&]() {
             // Hacky!
             AST::gCrateOverrides = params.crateOverrides;
-            for (const auto& ld : params.lib_search_dirs) {
+            for (const auto& ld : params.libSearchDirs) {
                 AST::gCrateLoadDirs.push_back(ld);
             }
-            crate.load_externs();
+            crate.loadExterns();
             if (params.test_harness) {
                 auto test_crate_name = RcString::new_interned("test");
-                AST::gImplicitCrates.insert(std::make_pair(test_crate_name, crate.load_extern_crate(Span(), test_crate_name)));
+                AST::gImplicitCrates.insert(std::make_pair(test_crate_name, crate.loadExternCrate(Span(), test_crate_name)));
             }
         });
 
@@ -514,7 +514,7 @@ int main(int argc, char* argv[]) {
             });
         }
 
-        if (params.last_stage == ProgramParams::STAGE_EXPAND) {
+        if (params.lastStage == ProgramParams::STAGE_EXPAND) {
             return 0;
         }
         memory_dump("Expanded");
@@ -556,12 +556,12 @@ int main(int argc, char* argv[]) {
                 // The default (system) allocator is provided by liballoc.
                 allocatorCrateLoaded = true;
                 if (!allocatorCrateLoaded) {
-                    crate.load_extern_crate(Span(), "alloc_system");
+                    crate.loadExternCrate(Span(), "alloc_system");
                 }
 
                 if (panic_runtime_needed /*&& !panic_runtime_loaded*/) {
                     auto panic_crate = "panic_" + params.codegen.panic_type;
-                    crate.load_extern_crate(Span(), panic_crate.c_str());
+                    crate.loadExternCrate(Span(), panic_crate.c_str());
                 }
 
                 // - `mrustc-main` lang item default
@@ -632,7 +632,7 @@ int main(int argc, char* argv[]) {
             });
         }
 
-        if (params.last_stage == ProgramParams::STAGE_RESOLVE) {
+        if (params.lastStage == ProgramParams::STAGE_RESOLVE) {
             return 0;
         }
 
@@ -774,7 +774,7 @@ int main(int argc, char* argv[]) {
         //    HIR_Expand_LifetimeInfer_Validate(*hir_crate);
         //    });
 
-        if (params.last_stage == ProgramParams::STAGE_TYPECK) {
+        if (params.lastStage == ProgramParams::STAGE_TYPECK) {
             return 0;
         }
         memory_dump("Typecheck");
@@ -836,7 +836,7 @@ int main(int argc, char* argv[]) {
             }
         });
 
-        if (params.last_stage == ProgramParams::STAGE_MIR) {
+        if (params.lastStage == ProgramParams::STAGE_MIR) {
             return 0;
         }
         memory_dump("MIR Opt");
@@ -848,10 +848,10 @@ int main(int argc, char* argv[]) {
         TransOptions trans_opt;
         trans_opt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
         trans_opt.buildCommandFile = params.codegen.emitBuildCommand;
-        trans_opt.linker_args = params.codegen.linker_args;
+        trans_opt.linkerArgs = params.codegen.linkerArgs;
         trans_opt.opt_level = params.opt_level;
         trans_opt.panic_crate = "panic_" + params.codegen.panic_type;
-        for (const char* libdir : params.lib_search_dirs) {
+        for (const char* libdir : params.libSearchDirs) {
             // Store these paths for use in final linking.
             hirCrate->linkPaths.push_back(libdir);
         }
@@ -1006,7 +1006,7 @@ int main(int argc, char* argv[]) {
 
 ProgramParams::ProgramParams(int argc, char* argv[]) {
     if (const auto* a = getenv("MRUSTC_LIBDIR")) {
-        this->lib_search_dirs.push_back(a);
+        this->libSearchDirs.push_back(a);
     }
 
     // Parse the rustc-compatible command-line subset supported by this driver.
@@ -1046,9 +1046,9 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                             ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
                             exit(1);
                         }
-                        this->lib_search_dirs.push_back(argv[++i]);
+                        this->libSearchDirs.push_back(argv[++i]);
                     } else {
-                        this->lib_search_dirs.push_back(arg + 1);
+                        this->libSearchDirs.push_back(arg + 1);
                     }
                     continue;
                 case 'l':
@@ -1067,17 +1067,17 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 case 'D':
                 case 'F': {
                     const auto flag = *arg;
-                    const char* lint_name;
+                    const char* lintName;
                     if (arg[1] == '\0') {
                         if (i == argc - 1) {
                             ::std::cerr << "Option -" << flag << " requires an argument" << ::std::endl;
                             exit(1);
                         }
-                        lint_name = argv[++i];
+                        lintName = argv[++i];
                     } else {
-                        lint_name = arg + 1;
+                        lintName = arg + 1;
                     }
-                    if (lint_name[0] == '\0') {
+                    if (lintName[0] == '\0') {
                         ::std::cerr << "Option -" << flag << " requires an argument" << ::std::endl;
                         exit(1);
                     }
@@ -1085,7 +1085,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         : flag == 'W' ? CfgLintLevel::Warn
                         : flag == 'D' ? CfgLintLevel::Deny
                         : CfgLintLevel::Forbid;
-                    CfgSetLintLevel(lint_name, level);
+                    CfgSetLintLevel(lintName, level);
                     continue;
                 }
                 case 'C': {
@@ -1132,7 +1132,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->codegen.panic_type = optval;
                     } else if (optname == "link-arg") {
                         getOptval();
-                        this->codegen.linker_args.push_back(optval);
+                        this->codegen.linkerArgs.push_back(optval);
                     } else if (optname == "overflow-checks" || optname == "overflow_checks") {
                         getOptval();
                         if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
@@ -1284,15 +1284,15 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     } else if (optname == "stop-after") {
                         getOptval();
                         if (optval == "parse") {
-                            this->last_stage = STAGE_PARSE;
+                            this->lastStage = STAGE_PARSE;
                         } else if (optval == "expand") {
-                            this->last_stage = STAGE_EXPAND;
+                            this->lastStage = STAGE_EXPAND;
                         } else if (optval == "resolve") {
-                            this->last_stage = STAGE_RESOLVE;
+                            this->lastStage = STAGE_RESOLVE;
                         } else if (optval == "typeck") {
-                            this->last_stage = STAGE_TYPECK;
+                            this->lastStage = STAGE_TYPECK;
                         } else if (optval == "mir") {
-                            this->last_stage = STAGE_MIR;
+                            this->lastStage = STAGE_MIR;
                         } else {
                             ::std::cerr << "Unknown argument to -Z stop-after - '" << optval << "'" << ::std::endl;
                             exit(1);
@@ -1449,18 +1449,18 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                     exit(1);
                 }
                 CfgSetLintLevel(forceWarn, CfgLintLevel::ForceWarn);
-            } else if (const char* lint_cap = checkWithArg("cap-lints")) {
+            } else if (const char* lintCap = checkWithArg("cap-lints")) {
                 CfgLintLevel level;
-                if (strcmp(lint_cap, "allow") == 0) {
+                if (strcmp(lintCap, "allow") == 0) {
                     level = CfgLintLevel::Allow;
-                } else if (strcmp(lint_cap, "warn") == 0) {
+                } else if (strcmp(lintCap, "warn") == 0) {
                     level = CfgLintLevel::Warn;
-                } else if (strcmp(lint_cap, "deny") == 0) {
+                } else if (strcmp(lintCap, "deny") == 0) {
                     level = CfgLintLevel::Deny;
-                } else if (strcmp(lint_cap, "forbid") == 0) {
+                } else if (strcmp(lintCap, "forbid") == 0) {
                     level = CfgLintLevel::Forbid;
                 } else {
-                    ::std::cerr << "unknown lint level: `" << lint_cap << "`" << ::std::endl;
+                    ::std::cerr << "unknown lint level: `" << lintCap << "`" << ::std::endl;
                     exit(1);
                 }
                 CfgSetLintCap(level);

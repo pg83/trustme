@@ -28,7 +28,7 @@ struct Context {
     /// Inferrence variable equalities
     struct Coercion {
         unsigned rule_idx;
-        ::HIR::TypeRef left_ty;
+        ::HIR::TypeRef leftTy;
         ::HIR::ExprNodeP* right_node_ptr;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Coercion& v);
@@ -43,7 +43,7 @@ struct Context {
 
             ::HIR::TypeRef ty;
 
-            CoerceTy(::HIR::TypeRef ty, bool is_coerce);
+            CoerceTy(::HIR::TypeRef ty, bool isCoerce);
         };
 
         // Strong disable (depends on a trait impl)
@@ -88,18 +88,18 @@ struct Context {
 
         unsigned rule_idx;
         Span span;
-        ::HIR::TypeRef left_ty;
+        ::HIR::TypeRef leftTy;
 
         ::HIR::SimplePath trait;
         ::HIR::PathParams params;
-        ::HIR::TypeRef impl_ty;
+        ::HIR::TypeRef implTy;
         RcString name; // if "", no type is used (and left is ignored) - Just does trait selection
         ::HIR::PathParams atyPp;
 
         // HACK: operators are special - the result when both types are primitives is ALWAYS the lefthand side
-        bool is_operator;
+        bool isOperator;
         typeck::PrimitiveOperator operator_kind;
-        bool is_ambiguous = false;
+        bool isAmbiguous = false;
 
         ::std::vector<StallDependency> stalled_on;
         ::std::vector<CapturedIvarPossible> stalled_possibilities;
@@ -116,11 +116,11 @@ struct Context {
 
     unsigned next_rule_idx;
     // NOTE: unique_ptr used to reduce copy costs of the list
-    ::std::vector<::std::unique_ptr<Coercion>> link_coerce;
+    ::std::vector<::std::unique_ptr<Coercion>> linkCoerce;
     // Expected types are available while aggregate fields are enumerated,
     // before the corresponding coercion rules are solved.
     ::std::unordered_map<const ::HIR::ExprNode*, ::HIR::TypeRef> coercionHints;
-    ::std::vector<Associated> link_assoc;
+    ::std::vector<Associated> linkAssoc;
     /// Nodes that need revisiting (e.g. method calls when the receiver isn't known)
     ::std::vector<::HIR::ExprNode*> to_visit;
     /// Callback-based revisits (e.g. for slice patterns handling slices/arrays)
@@ -154,7 +154,7 @@ struct Context {
     }
 
     bool hasRules() const {
-        return !(link_coerce.empty() && link_assoc.empty() && to_visit.empty() && advRevisits.empty());
+        return !(linkCoerce.empty() && linkAssoc.empty() && to_visit.empty() && advRevisits.empty());
     }
 
     inline void addIvars(::HIR::TypeRef& ty) {
@@ -172,14 +172,14 @@ struct Context {
 
     const ::HIR::TypeData* coercionHint(const ::HIR::ExprNode& node) const;
     // - Equate a type to an associated type (if name == "", no equation is done, but trait is searched)
-    void equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* impl_ty, const char* name, const ::HIR::PathParams& atyPp, bool is_op = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
+    void equateTypesAssoc(const Span& sp, const ::HIR::TypeData* l, const ::HIR::SimplePath& trait, ::HIR::PathParams params, const ::HIR::TypeData* implTy, const char* name, const ::HIR::PathParams& atyPp, bool isOp = false, typeck::PrimitiveOperator operator_kind = typeck::PrimitiveOperator::None);
 
-    bool is_current_operator_impl(const ImplRef& impl) const;
+    bool isCurrentOperatorImpl(const ImplRef& impl) const;
 
     // A Deref implementation for a native pointer/reference receives `&Self`.
     // Dereferencing that receiver is the native step needed to recover `Self`,
     // not another dispatch through a potentially overlapping Deref impl.
-    bool is_current_native_deref_receiver(const ::HIR::SimplePath& derefTrait, const ::HIR::TypeData* operand) const;
+    bool isCurrentNativeDerefReceiver(const ::HIR::SimplePath& derefTrait, const ::HIR::TypeData* operand) const;
 
     // Equate const generics (values)
     void equateValues(const Span& sp, const ::HIR::ConstGeneric& rl, const ::HIR::ConstGeneric& rr);
@@ -188,13 +188,13 @@ struct Context {
     void require_sized(const Span& sp, const ::HIR::TypeData* ty);
 
     // - Add a trait bound (gets encoded as an associated type bound)
-    void addTraitBound(const Span& sp, const ::HIR::TypeData* impl_ty, const ::HIR::SimplePath& trait, ::HIR::PathParams params) {
-        equateTypesAssoc(sp, crate.types.infer(), trait, mv$(params), impl_ty, "", {}, false);
+    void addTraitBound(const Span& sp, const ::HIR::TypeData* implTy, const ::HIR::SimplePath& trait, ::HIR::PathParams params) {
+        equateTypesAssoc(sp, crate.types.infer(), trait, mv$(params), implTy, "", {}, false);
     }
 
     /// Get the `possible_ivar_vals` entry for the given ivar index
     /// Returns `nullptr` if the ivar is already known
-    IVarPossible* getIvarPossibilities(const Span& sp, unsigned int ivar_index);
+    IVarPossible* getIvarPossibilities(const Span& sp, unsigned int ivarIndex);
 
     enum class IvarUnknownType {
         /// Coercion to an unknown type (disables
@@ -224,11 +224,11 @@ struct Context {
     //void possible_equate_ivar_def(unsigned int ivar_index, const ::HIR::TypeData* t);
 
     /// Record that the IVar may be this type (and what the source is)
-    void possible_equate_ivar(const Span& sp, unsigned int ivar_index, const ::HIR::TypeData* t, PossibleTypeSource src_ty);
+    void possible_equate_ivar(const Span& sp, unsigned int ivarIndex, const ::HIR::TypeData* t, PossibleTypeSource src_ty);
     /// Add a possible type for an ivar (which is used if only one possibility meets available bounds)
-    void possible_equate_ivar_bounds(const Span& sp, unsigned int ivar_index, ::std::vector<::HIR::TypeRef> t);
+    void possible_equate_ivar_bounds(const Span& sp, unsigned int ivarIndex, ::std::vector<::HIR::TypeRef> t);
     /// Record that the IVar is equated to an unknown type
-    void possible_equate_ivar_unknown(const Span& sp, unsigned int ivar_index, IvarUnknownType src_ty);
+    void possible_equate_ivar_unknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType src_ty);
 
     // ----
     // Patterns and bindings

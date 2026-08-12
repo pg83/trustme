@@ -316,10 +316,10 @@ bool rewrite_path_tys_with(::HIR::TypeInterner& types, ::HIR::Path& path, t_cb_r
 }
 
 struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
-    bool ignore_lifetimes;
+    bool ignoreLifetimes;
 
-    TyVisitorMonomorphNeeded(bool ignore_lifetimes)
-        : ignore_lifetimes(ignore_lifetimes)
+    TyVisitorMonomorphNeeded(bool ignoreLifetimes)
+        : ignoreLifetimes(ignoreLifetimes)
     {
     }
 
@@ -327,14 +327,14 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
         return *ty;
     }
 
-    bool is_generic_lft(const ::HIR::LifetimeRef& lft) const {
-        return lft.is_param() && (lft.binding >> 8) != 3;
+    bool isGenericLft(const ::HIR::LifetimeRef& lft) const {
+        return lft.isParam() && (lft.binding >> 8) != 3;
     }
 
     bool visit_path_params(const ::HIR::PathParams& pp) override {
-        if (!this->ignore_lifetimes) {
+        if (!this->ignoreLifetimes) {
             for (const auto& lft : pp.mLifetimes) {
-                if (is_generic_lft(lft)) {
+                if (isGenericLft(lft)) {
                     return true;
                 }
             }
@@ -354,16 +354,16 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
         if (ty->is_Array() && ty->as_Array().size.is_Unevaluated() /*&& ty->as_Array().size.as_Unevaluated().*/) {
             return true;
         }
-        if (!this->ignore_lifetimes) {
-            if (ty->is_Borrow() && is_generic_lft(ty->as_Borrow().lifetime)) {
+        if (!this->ignoreLifetimes) {
+            if (ty->is_Borrow() && isGenericLft(ty->as_Borrow().lifetime)) {
                 return true;
             }
-            if (ty->is_TraitObject() && is_generic_lft(ty->as_TraitObject().lifetime)) {
+            if (ty->is_TraitObject() && isGenericLft(ty->as_TraitObject().lifetime)) {
                 return true;
             }
             if (ty->is_ErasedType()) {
                 for (const auto& l : ty->as_ErasedType().lifetimeBounds) {
-                    if (is_generic_lft(l)) {
+                    if (isGenericLft(l)) {
                         return true;
                     }
                 }
@@ -373,23 +373,23 @@ struct TyVisitorMonomorphNeeded: TyVisitor<WConst> {
     }
 };
 
-bool monomorphise_pathparams_needed(const ::HIR::PathParams& tpl, bool ignore_lifetimes /*=false*/) {
-    TyVisitorMonomorphNeeded v{ignore_lifetimes};
+bool monomorphise_pathparams_needed(const ::HIR::PathParams& tpl, bool ignoreLifetimes /*=false*/) {
+    TyVisitorMonomorphNeeded v{ignoreLifetimes};
     return v.visit_path_params(tpl);
 }
 
-bool monomorphise_traitpath_needed(const ::HIR::TraitPath& tpl, bool ignore_lifetimes /*=false*/) {
-    TyVisitorMonomorphNeeded v{ignore_lifetimes};
+bool monomorphise_traitpath_needed(const ::HIR::TraitPath& tpl, bool ignoreLifetimes /*=false*/) {
+    TyVisitorMonomorphNeeded v{ignoreLifetimes};
     return v.visit_trait_path(tpl);
 }
 
-bool monomorphise_path_needed(const ::HIR::Path& tpl, bool ignore_lifetimes /*=false*/) {
-    TyVisitorMonomorphNeeded v{ignore_lifetimes};
+bool monomorphise_path_needed(const ::HIR::Path& tpl, bool ignoreLifetimes /*=false*/) {
+    TyVisitorMonomorphNeeded v{ignoreLifetimes};
     return v.visit_path(tpl);
 }
 
-bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes /*=false*/) {
-    return tpl->needs_monomorphisation(ignore_lifetimes);
+bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=false*/) {
+    return tpl->needs_monomorphisation(ignoreLifetimes);
 }
 
 ::HIR::TypeRef Monomorphiser::monomorph_type(const Span& sp, const ::HIR::TypeData* tpl, bool allowInfer /*=true*/) const {
@@ -509,7 +509,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
 }
 
 ::HIR::LifetimeRef Monomorphiser::monomorph_lifetime(const Span& sp, const ::HIR::LifetimeRef& lft) const {
-    if (lft.is_param()) {
+    if (lft.isParam()) {
         HIR::GenericRef g{"", lft.binding};
 
         // Have a flag/stack here for current defined HRL batches (trait paths and function pointers), if in one then do the hack
@@ -548,9 +548,9 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
     throw "";
 }
 
-::HIR::TraitPath Monomorphiser::monomorph_traitpath(const Span& sp, const ::HIR::TraitPath& tpl, bool allowInfer, bool ignore_hrls) const {
+::HIR::TraitPath Monomorphiser::monomorph_traitpath(const Span& sp, const ::HIR::TraitPath& tpl, bool allowInfer, bool ignoreHrls) const {
     ::std::unique_ptr<PopOnDrop> _;
-    if (tpl.hrtbs && !ignore_hrls) {
+    if (tpl.hrtbs && !ignoreHrls) {
         _ = std::make_unique<PopOnDrop>(push_hrb(*tpl.hrtbs));
     }
 
@@ -608,7 +608,7 @@ bool monomorphise_type_needed(const ::HIR::TypeData* tpl, bool ignore_lifetimes 
     return rv;
 }
 
-::HIR::GenericPath Monomorphiser::monomorph_genericpath(const Span& sp, const ::HIR::GenericPath& tpl, bool allowInfer, bool ignore_hrls) const {
+::HIR::GenericPath Monomorphiser::monomorph_genericpath(const Span& sp, const ::HIR::GenericPath& tpl, bool allowInfer, bool ignoreHrls) const {
     return ::HIR::GenericPath(tpl.mPath, this->monomorph_path_params(sp, tpl.mParams, allowInfer));
 }
 
@@ -695,7 +695,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
 
 ::HIR::TypeRef MonomorphiserPP::getType(const Span& sp, const ::HIR::GenericRef& ty) const /*override*/
 {
-    if (ty.is_self()) {
+    if (ty.isSelf()) {
         if (const auto* s = this->getSelfType()) {
             return s;
         } else {
@@ -749,59 +749,59 @@ struct CloneTyWithMonomorph: Monomorphiser {
     }
 }
 
-::HIR::LifetimeRef MonomorphiserPP::getLifetime(const Span& sp, const ::HIR::GenericRef& lft_ref) const /*override*/
+::HIR::LifetimeRef MonomorphiserPP::getLifetime(const Span& sp, const ::HIR::GenericRef& lftRef) const /*override*/
 {
     // HACK: If no params are present at all, just return unchanged
     // - Note: Equality on PathParams ignores lifetimes, hence the second check
     if ((!this->getImplParams() || (*this->getImplParams() == HIR::PathParams() && this->getImplParams()->mLifetimes.empty())) && (!this->getMethodParams() || (*this->getMethodParams() == HIR::PathParams() && this->getMethodParams()->mLifetimes.empty())) && (!this->getHrbParams() || (*this->getHrbParams() == HIR::PathParams() && this->getHrbParams()->mLifetimes.empty()))) {
-        DEBUG("Passthrough " << lft_ref);
-        return HIR::LifetimeRef(lft_ref.binding);
+        DEBUG("Passthrough " << lftRef);
+        return HIR::LifetimeRef(lftRef.binding);
     }
 
-    switch (lft_ref.group()) {
+    switch (lftRef.group()) {
         // HACK: Pass through when no lifetimes were recorded at all (e.g. a trait-declared lifetime in a default method body)
         case 0:
             if (const auto* p = this->getImplParams()) {
                 if (p->mLifetimes.empty()) {
-                    DEBUG("No impl lifetimes recorded - passthrough " << lft_ref);
-                    return HIR::LifetimeRef(lft_ref.binding);
+                    DEBUG("No impl lifetimes recorded - passthrough " << lftRef);
+                    return HIR::LifetimeRef(lftRef.binding);
                 }
-                ASSERT_BUG(sp, lft_ref.idx() < p->mLifetimes.size(), "Lifetime param " << lft_ref << " out of range for (max " << p->mLifetimes.size() << ")");
-                return p->mLifetimes[lft_ref.idx()];
+                ASSERT_BUG(sp, lftRef.idx() < p->mLifetimes.size(), "Lifetime param " << lftRef << " out of range for (max " << p->mLifetimes.size() << ")");
+                return p->mLifetimes[lftRef.idx()];
             } else {
-                BUG(sp, "Impl lifetime parameters were not expected (got " << lft_ref << ")");
+                BUG(sp, "Impl lifetime parameters were not expected (got " << lftRef << ")");
             }
             break;
         case 1:
             if (const auto* p = this->getMethodParams()) {
                 if (p->mLifetimes.empty()) {
-                    DEBUG("No method lifetimes recorded - passthrough " << lft_ref);
-                    return HIR::LifetimeRef(lft_ref.binding);
+                    DEBUG("No method lifetimes recorded - passthrough " << lftRef);
+                    return HIR::LifetimeRef(lftRef.binding);
                 }
-                ASSERT_BUG(sp, lft_ref.idx() < p->mLifetimes.size(), "Lifetime param " << lft_ref << " out of range for (max " << p->mLifetimes.size() << ")");
-                return p->mLifetimes[lft_ref.idx()];
+                ASSERT_BUG(sp, lftRef.idx() < p->mLifetimes.size(), "Lifetime param " << lftRef << " out of range for (max " << p->mLifetimes.size() << ")");
+                return p->mLifetimes[lftRef.idx()];
             } else {
-                BUG(sp, "Method lifetime parameters were not expected (got " << lft_ref << ")");
+                BUG(sp, "Method lifetime parameters were not expected (got " << lftRef << ")");
             }
             break;
         case 2: // Placeholders, just pass through
-            DEBUG("Placeholder " << lft_ref);
-            return HIR::LifetimeRef(lft_ref.binding);
+            DEBUG("Placeholder " << lftRef);
+            return HIR::LifetimeRef(lftRef.binding);
         case 3: // HRLs
             if (const auto* p = this->getHrbParams()) {
-                if (lft_ref.idx() >= p->mLifetimes.size()) {
-                    DEBUG("HRL " << lft_ref << " out of range (max " << p->mLifetimes.size() << ") - passthrough");
-                    return HIR::LifetimeRef(lft_ref.binding);
+                if (lftRef.idx() >= p->mLifetimes.size()) {
+                    DEBUG("HRL " << lftRef << " out of range (max " << p->mLifetimes.size() << ") - passthrough");
+                    return HIR::LifetimeRef(lftRef.binding);
                 }
-                return p->mLifetimes[lft_ref.idx()];
+                return p->mLifetimes[lftRef.idx()];
             } else {
-                BUG(sp, "Higher-ranked lifetime parameters were not expected (got " << lft_ref << ")");
+                BUG(sp, "Higher-ranked lifetime parameters were not expected (got " << lftRef << ")");
                 //DEBUG("No HRBs " << lft_ref);
                 //return HIR::LifetimeRef(lft_ref.binding);
             }
             break;
         default:
-            BUG(sp, "Unexpected lifetime param " << lft_ref);
+            BUG(sp, "Unexpected lifetime param " << lftRef);
     }
 }
 
@@ -866,23 +866,23 @@ void checkTypeClassPrimitive(const Span& sp, const ::HIR::TypeData* type, ::HIR:
 namespace typeck {
 
 bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
-    const auto* left_primitive = left->opt_Primitive();
+    const auto* leftPrimitive = left->opt_Primitive();
     const auto* right_primitive = right->opt_Primitive();
 
     const auto same_numeric = [&]() {
-        return left == right && left_primitive && (::HIR::is_integer(*left_primitive) || ::HIR::is_float(*left_primitive));
+        return left == right && leftPrimitive && (::HIR::is_integer(*leftPrimitive) || ::HIR::isFloat(*leftPrimitive));
     };
     const auto same_bitwise = [&]() {
-        return left == right && left_primitive && (::HIR::is_integer(*left_primitive) || *left_primitive == ::HIR::CoreType::Bool);
+        return left == right && leftPrimitive && (::HIR::is_integer(*leftPrimitive) || *leftPrimitive == ::HIR::CoreType::Bool);
     };
     const auto shift = [&]() {
-        return left_primitive && right_primitive && ::HIR::is_integer(*left_primitive) && ::HIR::is_integer(*right_primitive);
+        return leftPrimitive && right_primitive && ::HIR::is_integer(*leftPrimitive) && ::HIR::is_integer(*right_primitive);
     };
     const auto comparison = [&]() {
         if (left != right) {
             return false;
         }
-        return left->is_Pointer() || (left_primitive && *left_primitive != ::HIR::CoreType::Str);
+        return left->is_Pointer() || (leftPrimitive && *leftPrimitive != ::HIR::CoreType::Str);
     };
 
     switch (op) {
@@ -930,7 +930,7 @@ bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData*
 // and may have a different type.
 bool primitive_operator_lhs_determines_rhs(PrimitiveOperator op, const ::HIR::TypeData* left) {
     const auto* primitive = left->opt_Primitive();
-    const auto numeric = primitive && (::HIR::is_integer(*primitive) || ::HIR::is_float(*primitive));
+    const auto numeric = primitive && (::HIR::is_integer(*primitive) || ::HIR::isFloat(*primitive));
     const auto bitwise = primitive && (::HIR::is_integer(*primitive) || *primitive == ::HIR::CoreType::Bool);
     const auto comparison = left->is_Pointer() || (primitive && *primitive != ::HIR::CoreType::Str);
 
@@ -992,7 +992,7 @@ bool primitive_operator_has_builtin(PrimitiveOperator op, const ::HIR::TypeData*
         case PrimitiveOperator::Not:
             return *primitive == ::HIR::CoreType::Bool || ::HIR::is_integer(*primitive);
         case PrimitiveOperator::Neg:
-            if (::HIR::is_float(*primitive)) {
+            if (::HIR::isFloat(*primitive)) {
                 return true;
             }
             switch (*primitive) {

@@ -160,7 +160,7 @@ namespace HIR {
         PathParams& operator=(PathParams&&) = default;
 
         Compare compareWithPlaceholders(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder) const;
-        Compare match_test_generics_fuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& match) const;
+        Compare matchTestGenericsFuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& match) const;
         bool equalsIgnoringRegions(const PathParams& x) const;
 
         /// Indicates that params exist (and thus the target requires monomorphisation)

@@ -14,8 +14,8 @@ Span::Span(Span parent, const Position& pos)
 {
 }
 
-Span::Span(Span parent, RcString source_crate, RcString macro_name)
-    : ptr(SpanInnerMacro::alloc(parent, source_crate, macro_name))
+Span::Span(Span parent, RcString source_crate, RcString macroName)
+    : ptr(SpanInnerMacro::alloc(parent, source_crate, macroName))
 {
 }
 

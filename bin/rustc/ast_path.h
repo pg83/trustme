@@ -62,7 +62,7 @@ namespace AST {
         friend ::std::ostream& operator<<(::std::ostream& os, const AbsolutePath& x);
 
         // Returns true if this path is a prefix of the other path (or equal)
-        bool is_parent_of(const AbsolutePath& other) const;
+        bool isParentOf(const AbsolutePath& other) const;
     };
 
     TAGGED_UNION_EX(
@@ -155,17 +155,17 @@ namespace AST {
          (ProcMacroDerive,
           struct {
               const ExternCrate* crate_;
-              RcString mac_name;
+              RcString macName;
           }),
          (ProcMacroAttribute,
           struct {
               const ExternCrate* crate_;
-              RcString mac_name;
+              RcString macName;
           }),
          (ProcMacro,
           struct {
               const ExternCrate* crate_;
-              RcString mac_name;
+              RcString macName;
           }),
          (MacroRules,
           struct {
@@ -267,7 +267,7 @@ namespace AST {
         }
 
         Ordering ord(const PathNode& x) const;
-        void print_pretty(::std::ostream& os, bool is_type_context) const;
+        void print_pretty(::std::ostream& os, bool isTypeContext) const;
 
         bool operator==(const PathNode& x) const {
             return ord(x) == OrdEqual;
@@ -432,7 +432,7 @@ namespace AST {
 
         const RcString& asTrivial() const;
 
-        bool is_valid() const {
+        bool isValid() const {
             return !cls.is_Invalid();
         }
 
@@ -446,7 +446,7 @@ namespace AST {
 
         size_t size() const;
 
-        bool is_parent_of(const Path& x) const;
+        bool isParentOf(const Path& x) const;
 
         void bindVariable(unsigned int slot);
 
@@ -471,7 +471,7 @@ namespace AST {
             return ord(x) != OrdLess;
         }
 
-        void print_pretty(::std::ostream& os, bool is_type_context, bool is_debug = false) const;
+        void print_pretty(::std::ostream& os, bool isTypeContext, bool isDebug = false) const;
         friend ::std::ostream& operator<<(::std::ostream& os, const Path& path);
 
     private:

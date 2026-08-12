@@ -61,9 +61,9 @@ Ordering HIR::GenericBound::ord(const HIR::GenericBound& b) const {
     return OrdEqual;
 }
 
-HIR::PathParams HIR::GenericParams::make_nop_params(TypeInterner& types, unsigned level, bool lifetimes_only /*=false*/) const {
-    assert(!lifetimes_only || this->types.empty());
-    assert(!lifetimes_only || this->values.empty());
+HIR::PathParams HIR::GenericParams::makeNopParams(TypeInterner& types, unsigned level, bool lifetimesOnly /*=false*/) const {
+    assert(!lifetimesOnly || this->types.empty());
+    assert(!lifetimesOnly || this->values.empty());
 
     HIR::PathParams rv;
     rv.mLifetimes = ThinVector<HIR::LifetimeRef>(this->mLifetimes.size());
@@ -156,7 +156,7 @@ bool GenericParams::is_empty() const {
     }
     return true;
 }
-bool GenericParams::is_generic() const {
+bool GenericParams::isGeneric() const {
     if (!types.empty()) {
         return true;
     }
@@ -166,8 +166,8 @@ bool GenericParams::is_generic() const {
     }
     return false;
 }
-PathParams GenericParams::make_empty_params(bool lifetimes_only) const {
-    assert(lifetimes_only);
+PathParams GenericParams::makeEmptyParams(bool lifetimesOnly) const {
+    assert(lifetimesOnly);
     PathParams rv;
     rv.mLifetimes = ThinVector<LifetimeRef>(mLifetimes.size());
     return rv;

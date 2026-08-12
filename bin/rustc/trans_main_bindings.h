@@ -28,11 +28,11 @@ struct TransOptions {
     OptimizationLevel opt_level = OptimizationLevel::None;
     DebugInfoLevel debugInfo = DebugInfoLevel::None;
     ::std::string buildCommandFile;
-    ::std::vector<::std::string> linker_args;
+    ::std::vector<::std::string> linkerArgs;
 
     ::std::string panic_crate;
 
-    ::std::vector<::std::string> library_search_dirs;
+    ::std::vector<::std::string> librarySearchDirs;
     ::std::vector<::std::string> libraries;
 };
 

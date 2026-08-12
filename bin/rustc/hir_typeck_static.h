@@ -75,7 +75,7 @@ public:
 
     /// \brief Lookups
     /// \{
-    typedef ::std::function<bool(ImplRef, bool is_fuzzed)> t_cb_find_impl;
+    typedef ::std::function<bool(ImplRef, bool isFuzzed)> t_cb_find_impl;
 
     bool findImpl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb) const {
         return this->findImpl(sp, trait_path, &trait_params, type, foundCb);
@@ -86,7 +86,7 @@ public:
 private:
     bool findImplBounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb) const;
     bool findImplCheckCrate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb, const ::HIR::TraitImpl& impl) const;
-    bool findImplCheckCrateRaw(const Span& sp, const ::HIR::SimplePath& desTraitPath, const ::HIR::PathParams* desTraitParams, const ::HIR::TypeData* desType, const ::HIR::GenericParams& impl_params_def, const ::HIR::PathParams& impl_trait_params, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
+    bool findImplCheckCrateRaw(const Span& sp, const ::HIR::SimplePath& desTraitPath, const ::HIR::PathParams* desTraitParams, const ::HIR::TypeData* desType, const ::HIR::GenericParams& implParamsDef, const ::HIR::PathParams& implTraitParams, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
     ::HIR::Compare checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* params_ptr, const ::HIR::TypeData* type) const;
 
 public:
@@ -123,7 +123,7 @@ public:
     bool findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& params, const ::HIR::Trait& trait_ptr, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& pp, const ::HIR::TypeData* self_type, ::std::function<bool(const ::HIR::PathParams&, ::HIR::TraitPath::assocListT)> callback) const;
     ///
     bool trait_contains_type(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const char* name, ::HIR::GenericPath& out_path) const;
-    bool iterate_aty_bounds(const Span& sp, const ::HIR::Path::Data::Data_UfcsKnown& pe, ::std::function<bool(const ::HIR::TraitPath&)> cb) const;
+    bool iterateAtyBounds(const Span& sp, const ::HIR::Path::Data::Data_UfcsKnown& pe, ::std::function<bool(const ::HIR::TraitPath&)> cb) const;
 
     // --------------
     // Common bounds
@@ -145,8 +145,8 @@ public:
     /// Returns `true` if the passed type either implements Drop, or contains a type that implements Drop
     bool type_needs_drop_glue(const Span& sp, const ::HIR::TypeData* ty) const;
 
-    const ::HIR::TypeData* is_type_owned_box(const ::HIR::TypeData* ty) const;
-    const ::HIR::TypeData* is_type_phantom_data(const ::HIR::TypeData* ty) const;
+    const ::HIR::TypeData* isTypeOwnedBox(const ::HIR::TypeData* ty) const;
+    const ::HIR::TypeData* isTypePhantomData(const ::HIR::TypeData* ty) const;
 
     HIR::TypeRef getFieldType(const Span& sp, const ::HIR::TypeData* ty, const RcString& name) const;
 

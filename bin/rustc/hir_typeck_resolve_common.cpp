@@ -14,7 +14,7 @@ void TraitResolveCommon::prep_indexes(const Span& sp) {
     typeEqualities.clear();
     traitBounds.clear();
 
-    this->iterate_bounds([&](const HIR::GenericBound& b) -> bool {
+    this->iterateBounds([&](const HIR::GenericBound& b) -> bool {
         TU_MATCH_HDRA( (b), { )
         default:
             break;
@@ -34,14 +34,14 @@ void TraitResolveCommon::prep_indexes(const Span& sp) {
     }
 }
 
-void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef long_ty, ::HIR::TypeRef short_ty) {
-    DEBUG("ADD " << long_ty << " => " << short_ty);
+void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef longTy, ::HIR::TypeRef short_ty) {
+    DEBUG("ADD " << longTy << " => " << short_ty);
     if (!hrtbs) {
         static const HIR::GenericParams emptyHrtbs;
         hrtbs = &emptyHrtbs;
     }
     // TODO: Sort the two types by "complexity" (most of the time long >= short)
-    this->typeEqualities.insert(::std::make_pair(mv$(long_ty), CachedEquality{hrtbs->clone(), mv$(short_ty)}));
+    this->typeEqualities.insert(::std::make_pair(mv$(longTy), CachedEquality{hrtbs->clone(), mv$(short_ty)}));
 }
 
 void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* outer_hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool addParents /*=true*/) {
@@ -122,13 +122,13 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
             continue;
         }
 
-        if (aTy.second.generics.is_generic() || !aTy.second.generics.is_empty()) {
+        if (aTy.second.generics.isGeneric() || !aTy.second.generics.is_empty()) {
             continue;
         }
-        ASSERT_BUG(sp, !aTy.second.generics.is_generic(), "prep_indexes__add_trait_bound: Handle type generic ATYs - " << aTy.first << aTy.second.generics.fmtArgs() << " in " << trait_path);
+        ASSERT_BUG(sp, !aTy.second.generics.isGeneric(), "prep_indexes__add_trait_bound: Handle type generic ATYs - " << aTy.first << aTy.second.generics.fmtArgs() << " in " << trait_path);
         auto ty_a = crate.types.path(
             // TODO: Empty params works for now, as there's no type generics (yet)
-            ::HIR::Path(type, trait_path.mPath.clone(), aTy.first, aTy.second.generics.make_empty_params(true)),
+            ::HIR::Path(type, trait_path.mPath.clone(), aTy.first, aTy.second.generics.makeEmptyParams(true)),
             ::HIR::TypePathBinding::make_Opaque({})
         );
         monomorph.pp_method = &ty_a->as_Path().path.mData.as_UfcsKnown().params;
@@ -149,8 +149,8 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
                 if (outer_hrtbs && trait_mono.hrtbs) {
                     TODO(sp, "Double-layerd HRLs - outer=" << outer_hrtbs->fmtArgs() << " and inner=" << trait_mono.hrtbs->fmtArgs());
                 }
-                auto* inner_hrtbs = outer_hrtbs ? outer_hrtbs : aTyB.hrtbs.get();
-                prepIndexesAddEquality(sp, inner_hrtbs, mv$(ty_l), std::move(tb.second.type));
+                auto* innerHrtbs = outer_hrtbs ? outer_hrtbs : aTyB.hrtbs.get();
+                prepIndexesAddEquality(sp, innerHrtbs, mv$(ty_l), std::move(tb.second.type));
             }
         }
 
@@ -242,7 +242,7 @@ const ::HIR::GenericParams& TraitResolveCommon::item_generics() const {
     return itemGenerics ? *itemGenerics : empty;
 }
 /// Iterate over in-scope bounds (function then type)
-bool TraitResolveCommon::iterate_bounds(::std::function<bool(const ::HIR::GenericBound&)> cb) const {
+bool TraitResolveCommon::iterateBounds(::std::function<bool(const ::HIR::GenericBound&)> cb) const {
     const ::HIR::GenericParams* v[2] = {itemGenerics, implGenerics};
     for (auto p : v) {
         if (!p) {

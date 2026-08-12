@@ -45,7 +45,7 @@ namespace AST {
             isExpanded = true;
         }
 
-        const RcString& input_ident() const {
+        const RcString& inputIdent() const {
             return ident;
         }
 

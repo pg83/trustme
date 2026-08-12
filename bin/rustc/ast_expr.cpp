@@ -1175,7 +1175,7 @@ void NodeVisitor::visit(ExprNodeP& cnode) {
     }
 }
 void NodeVisitorDef::visit(ExprNodeP& cnode) {
-    if (cnode.is_valid()) {
+    if (cnode.isValid()) {
         TRACE_FUNCTION_F(cnode.type_name());
         cnode->visit(*this);
     }

@@ -2,10 +2,10 @@
 
 #include "parse_token.h"
 
-extern bool is_token_path(eTokenType tt);
-extern bool is_token_pat(eTokenType tt);
-extern bool is_token_type(eTokenType tt);
-extern bool is_token_expr(eTokenType tt);
-extern bool is_token_stmt(eTokenType tt);
-extern bool is_token_item(eTokenType tt);
-extern bool is_token_vis(eTokenType tt);
+extern bool isTokenPath(eTokenType tt);
+extern bool isTokenPat(eTokenType tt);
+extern bool isTokenType(eTokenType tt);
+extern bool isTokenExpr(eTokenType tt);
+extern bool isTokenStmt(eTokenType tt);
+extern bool isTokenItem(eTokenType tt);
+extern bool isTokenVis(eTokenType tt);

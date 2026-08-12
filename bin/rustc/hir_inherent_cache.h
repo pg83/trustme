@@ -13,17 +13,17 @@ namespace HIR {
     /// </summary>
     class InherentCache {
     private:
-        typedef ::std::function<void(const HIR::TypeData* self_ty, const HIR::TypeImpl& impl)> inner_callback_t;
+        typedef ::std::function<void(const HIR::TypeData* self_ty, const HIR::TypeImpl& impl)> innerCallbackT;
 
         struct Lowest {
             // Same as HIR::Crate::ImplGroup
-            typedef ::std::vector<const HIR::TypeImpl*> list_t;
-            ::std::map<::HIR::SimplePath, list_t> named;
-            list_t non_named; // TODO: use a map of HIR::TypeRef::Data::Tag
-            list_t generic;
+            typedef ::std::vector<const HIR::TypeImpl*> listT;
+            ::std::map<::HIR::SimplePath, listT> named;
+            listT non_named; // TODO: use a map of HIR::TypeRef::Data::Tag
+            listT generic;
 
             void insert(const Span& sp, const HIR::TypeImpl& impl);
-            void iterate(const HIR::TypeData* ty, inner_callback_t& cb) const;
+            void iterate(const HIR::TypeData* ty, innerCallbackT& cb) const;
         };
 
         /// <summary>
@@ -42,7 +42,7 @@ namespace HIR {
             std::map<HIR::SimplePath, Inner> mPath;
 
             void insert(const Span& sp, const HIR::TypeData* receiver, const HIR::TypeImpl& impl);
-            void find(const Span& sp, const HIR::TypeData* curTy, t_cb_resolve_type ty_res, inner_callback_t& cb) const;
+            void find(const Span& sp, const HIR::TypeData* curTy, t_cb_resolve_type ty_res, innerCallbackT& cb) const;
         };
 
         std::map<RcString, Inner> items;
@@ -53,7 +53,7 @@ namespace HIR {
         /// `impl`: TypeImpl containing this method
         typedef ::std::function<void(const HIR::TypeData* self_ty, const HIR::TypeImpl& impl)> callbackT;
 
-        void insert_all(const Span& sp, const HIR::TypeImpl& impl, const HIR::SimplePath& langBox);
+        void insertAll(const Span& sp, const HIR::TypeImpl& impl, const HIR::SimplePath& langBox);
         /// Locates methods matching the specifided type
         void find(const Span& sp, const RcString& name, const HIR::TypeData* ty, t_cb_resolve_type ty_res, callbackT cb) const;
     };

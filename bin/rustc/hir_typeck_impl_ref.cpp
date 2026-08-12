@@ -59,7 +59,7 @@ bool ImplRef::type_is_specialisable(const char* name) const {
                 // If not present (which might happen during UFCS resolution), assume that it's not specialisable
                 return false;
             }
-            return it->second.is_specialisable;
+            return it->second.isSpecialisable;
         }
         TU_ARMA(BoundedPtr, e) {
             return false;
@@ -79,7 +79,7 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
 
 ::HIR::TypeRef ImplRef::Monomorph::getType(const Span& sp, const ::HIR::GenericRef& ge) const /*override*/
 {
-    if (ge.is_self()) {
+    if (ge.isSelf()) {
         // Store (or cache) a monomorphisation of Self, and error if this recurses
         if (this->ti.self_cache == ::HIR::TypeRef()) {
             this->ti.self_cache = types.diverge();

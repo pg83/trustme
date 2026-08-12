@@ -95,7 +95,7 @@ public:
     Token(enum eTokenType type, ::std::string str, Ident::Hygiene h);
     Token(enum eTokenType type, Ident i);
     Token(U128 val, enum eCoreType datatype);
-    static Token make_float(FloatValue val, enum eCoreType datatype);
+    static Token makeFloat(FloatValue val, enum eCoreType datatype);
     Token(const InterpolatedFragment&);
 
     struct TagTakeIP {};

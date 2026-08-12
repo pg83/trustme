@@ -15,8 +15,8 @@ namespace {
     constexpr int min_exponent = -16382;  // of normal values
     constexpr int max_exponent = 16383;
 
-    const u128 implicit_bit = u128(1) << significand_bits;
-    const u128 fractionMask = implicit_bit - 1;
+    const u128 implicitBit = u128(1) << significand_bits;
+    const u128 fractionMask = implicitBit - 1;
 
     static int clz128(u128 v) {
         assert(v != 0);
@@ -71,7 +71,7 @@ namespace {
             }
         } else {
             r.kind = Kind::Finite;
-            r.significand = fraction | implicit_bit;
+            r.significand = fraction | implicitBit;
             r.exponent = static_cast<int32_t>(biased) - exponentBias;
         }
         return r;
@@ -84,7 +84,7 @@ namespace {
     // significand in [0, 2^113); below 2^112 only with exponent == min_exponent
     static Float128 pack_finite(bool negative, int32_t exponent, u128 significand) {
         uint64_t biased;
-        if (significand >= implicit_bit) {
+        if (significand >= implicitBit) {
             assert(min_exponent <= exponent && exponent <= max_exponent);
             biased = static_cast<uint64_t>(exponent + exponentBias);
             significand &= fractionMask;
@@ -196,7 +196,7 @@ namespace {
             return r;
         }
 
-        bool is_zero() const {
+        bool isZero() const {
             return limbs_.empty();
         }
 
@@ -228,7 +228,7 @@ namespace {
         }
 
         void shift_left(size_t bits) {
-            if (is_zero() || bits == 0) {
+            if (isZero() || bits == 0) {
                 return;
             }
             const size_t whole = bits / 64;
@@ -261,7 +261,7 @@ namespace {
             const size_t whole = bits / 64;
             const unsigned rest = bits % 64;
             if (whole >= limbs_.size()) {
-                sticky |= !is_zero();
+                sticky |= !isZero();
                 limbs_.clear();
                 return;
             }
@@ -308,14 +308,14 @@ namespace {
 
         // Decimal digits, most significant first ("0" for zero)
         std::string to_decimal() const {
-            if (is_zero()) {
+            if (isZero()) {
                 return "0";
             }
             std::string reversed;
             BigUint copy = *this;
-            while (!copy.is_zero()) {
+            while (!copy.isZero()) {
                 uint64_t chunk = copy.divideSmall(10'000'000'000'000'000'000ull);
-                const bool more = !copy.is_zero();
+                const bool more = !copy.isZero();
                 for (int i = 0; i < 19 && (more || chunk != 0); i++) {
                     reversed.push_back(static_cast<char>('0' + chunk % 10));
                     chunk /= 10;
@@ -381,8 +381,8 @@ namespace {
         const uint64_t bias = static_cast<uint64_t>(1 - target_min_exponent);
         if (exponent > target_max_exponent && result >= target_implicit) {
             // Overflow to infinity
-            const uint64_t infinite_biased = static_cast<uint64_t>(target_max_exponent) + bias + 1;
-            return infinite_biased << target_mantissa_bits;
+            const uint64_t infiniteBiased = static_cast<uint64_t>(target_max_exponent) + bias + 1;
+            return infiniteBiased << target_mantissa_bits;
         }
         if (result == 0) {
             return 0;
@@ -397,12 +397,12 @@ namespace {
     // floor(|value| / 10^lowest_exponent10) rounded to nearest (ties to
     // even), as decimal digits without leading zeros ("" means zero). This is
     // the shared exact core of every decimal output format.
-    static std::string digitsAt(const Unpacked& value, int64_t lowest_exponent10) {
+    static std::string digitsAt(const Unpacked& value, int64_t lowestExponent10) {
         assert(value.kind == Kind::Finite);
         // One extra decimal digit plus a sticky bit make the final rounding
         // exact: the extra digit separates above-half from below-half, and
         // sticky distinguishes a true tie
-        const int64_t scale10 = -lowest_exponent10 + 1;
+        const int64_t scale10 = -lowestExponent10 + 1;
         const int32_t exponent2 = value.exponent - significand_bits;
         bool sticky = false;
         BigUint work = BigUint::fromU128(value.significand);
@@ -636,11 +636,11 @@ uint64_t Float128::bitsLo() const {
     return lo;
 }
 
-bool Float128::is_nan() const {
+bool Float128::isNan() const {
     return unpack(hi, lo).kind == Kind::NotANumber;
 }
 
-bool Float128::is_infinite() const {
+bool Float128::isInfinite() const {
     return unpack(hi, lo).kind == Kind::Infinity;
 }
 
@@ -711,7 +711,7 @@ Float128::operator int64_t() const {
         return 0;
     }
     if (value.exponent >= 63) {
-        if (value.negative && value.exponent == 63 && value.significand == implicit_bit) {
+        if (value.negative && value.exponent == 63 && value.significand == implicitBit) {
             return INT64_MIN;
         }
         return value.negative ? INT64_MIN : INT64_MAX;
@@ -923,10 +923,10 @@ bool Float128::operator<(const Float128& other) const {
     if (a.exponent == b.exponent && a.significand == b.significand) {
         return false;
     }
-    const bool magnitude_less = a.exponent != b.exponent
+    const bool magnitudeLess = a.exponent != b.exponent
         ? a.exponent < b.exponent
         : a.significand < b.significand;
-    return a.negative ? !magnitude_less : magnitude_less;
+    return a.negative ? !magnitudeLess : magnitudeLess;
 }
 
 bool Float128::operator<=(const Float128& other) const {
@@ -1012,7 +1012,7 @@ Float128 Float128::round_even() const {
     }
     if (value.exponent == -1) {
         // Magnitude in [0.5, 1): only exactly one half ties, to zero
-        if (value.significand == implicit_bit) {
+        if (value.significand == implicitBit) {
             return pack_zero(value.negative);
         }
         return value.negative ? Float128(-1.0) : Float128(1.0);
@@ -1082,10 +1082,10 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
 }
 
 Float128 Float128::minimum_number(const Float128& a, const Float128& b) {
-    if (a.is_nan()) {
+    if (a.isNan()) {
         return b;
     }
-    if (b.is_nan()) {
+    if (b.isNan()) {
         return a;
     }
     if (a == b) {
@@ -1096,10 +1096,10 @@ Float128 Float128::minimum_number(const Float128& a, const Float128& b) {
 }
 
 Float128 Float128::maximum_number(const Float128& a, const Float128& b) {
-    if (a.is_nan()) {
+    if (a.isNan()) {
         return b;
     }
-    if (b.is_nan()) {
+    if (b.isNan()) {
         return a;
     }
     if (a == b) {
@@ -1117,7 +1117,7 @@ Float128 Float128::parse_decimal(const char* text) {
     assert(*cursor == '.' || ('0' <= *cursor && *cursor <= '9'));
     for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
         digits.multiply_add_small(10, static_cast<uint64_t>(*cursor - '0'));
-        if (!digits.is_zero()) {
+        if (!digits.isZero()) {
             significant_digits += 1;
         }
     }
@@ -1126,7 +1126,7 @@ Float128 Float128::parse_decimal(const char* text) {
         for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
             digits.multiply_add_small(10, static_cast<uint64_t>(*cursor - '0'));
             fractionDigits += 1;
-            if (!digits.is_zero()) {
+            if (!digits.isZero()) {
                 significant_digits += 1;
             }
         }
@@ -1150,7 +1150,7 @@ Float128 Float128::parse_decimal(const char* text) {
         exponent10 += exponentNegative ? -explicitExponent : explicitExponent;
     }
     assert(*cursor == '\0');
-    if (digits.is_zero()) {
+    if (digits.isZero()) {
         return pack_zero(false);
     }
     // Magnitude guards: beyond these the value is certainly out of range

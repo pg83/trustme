@@ -38,7 +38,7 @@ extern bool gDebugEnabled;
             __os << ss;                                                               \
         })
     #define TRACE_FUNCTION_FR(ss, ss2)                                                        \
-        auto _tf_ = make_trace_log_ret(DEBUG_ENABLED ? __func__ : nullptr,                    \
+        auto _tf_ = makeTraceLogRet(DEBUG_ENABLED ? __func__ : nullptr,                    \
             [&](::std::ostream& __os) { __os << ss; },                                        \
             [&](::std::ostream& __os) { __os << ss2; })
 #else
@@ -93,13 +93,13 @@ class TraceLog {
 
 public:
     template<typename Info>
-    TraceLog(const char* tag, Info&& info_cb)
+    TraceLog(const char* tag, Info&& infoCb)
         : mTag(tag)
     {
         if (mTag) {
             auto& os = debugOutput(gDebugIndentLevel, mTag);
             os << ">> (";
-            info_cb(os);
+            infoCb(os);
             os << ")" << ::std::endl;
             INDENT();
         }
@@ -117,14 +117,14 @@ class TraceLogRet {
 
 public:
     template<typename Info>
-    TraceLogRet(const char* tag, Info&& info_cb, Ret&& ret)
+    TraceLogRet(const char* tag, Info&& infoCb, Ret&& ret)
         : mTag(tag)
         , ret(::std::forward<Ret>(ret))
     {
         if (mTag) {
             auto& os = debugOutput(gDebugIndentLevel, mTag);
             os << ">> (";
-            info_cb(os);
+            infoCb(os);
             os << ")" << ::std::endl;
             INDENT();
         }
@@ -142,10 +142,10 @@ public:
 };
 
 template<typename Info, typename Ret>
-auto make_trace_log_ret(const char* tag, Info&& info_cb, Ret&& ret) {
+auto makeTraceLogRet(const char* tag, Info&& infoCb, Ret&& ret) {
     return TraceLogRet<::std::decay_t<Ret>>(
         tag,
-        ::std::forward<Info>(info_cb),
+        ::std::forward<Info>(infoCb),
         ::std::forward<Ret>(ret)
     );
 }

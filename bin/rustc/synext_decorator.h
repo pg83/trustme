@@ -35,7 +35,7 @@ enum class AttrStage {
 };
 
 class ExpandDecorator {
-    void unexpected(const Span& sp, const AST::Attribute& mi, const char* loc_str) const;
+    void unexpected(const Span& sp, const AST::Attribute& mi, const char* locStr) const;
 
 public:
     virtual ~ExpandDecorator() = default;

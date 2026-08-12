@@ -29,7 +29,7 @@ namespace HIR {
 
         unsigned implicitDerefCount = 0;
 
-        bool is_valid() const {
+        bool isValid() const {
             return mName != "";
         }
 
@@ -131,7 +131,7 @@ namespace HIR {
                  ::HIR::Path path;
                  PathBinding binding;
                  ::std::vector<Pattern> leading;
-                 bool is_split;
+                 bool isSplit;
                  ::std::vector<Pattern> trailing;
                  // Cache making MIR gen easier for split patterns
                  unsigned int total_size;
@@ -143,10 +143,10 @@ namespace HIR {
                  PathBinding binding;
 
                  ::std::vector<::std::pair<RcString, Pattern>> sub_patterns;
-                 bool is_exhaustive;
+                 bool isExhaustive;
 
-                 bool is_wildcard() const {
-                     return sub_patterns.empty() && !is_exhaustive;
+                 bool isWildcard() const {
+                     return sub_patterns.empty() && !isExhaustive;
                  }
              }),
             // Split/or patterns
@@ -157,7 +157,7 @@ namespace HIR {
              struct {
                  std::unique_ptr<Value> start;
                  std::unique_ptr<Value> end;
-                 bool is_inclusive;
+                 bool isInclusive;
              }),
             (Slice, struct { ::std::vector<Pattern> sub_patterns; }),
             (SplitSlice, struct {

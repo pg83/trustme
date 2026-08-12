@@ -35,7 +35,7 @@ namespace AST {
         PatternBinding(const PatternBinding& x) = default;
         PatternBinding& operator=(PatternBinding&& x) = default;
 
-        bool is_valid() const {
+        bool isValid() const {
             return mName.name != "";
         }
     };
@@ -101,7 +101,7 @@ namespace AST {
              struct {
                  Path path;
                  ::std::vector<StructPatternEntry> sub_patterns;
-                 bool is_exhaustive;
+                 bool isExhaustive;
              }),
             (Slice, struct { ::std::vector<Pattern> sub_pats; }),
             (SplitSlice,
@@ -166,7 +166,7 @@ namespace AST {
 
         struct TagStruct {};
 
-        Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> sub_patterns, bool is_exhaustive);
+        Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> sub_patterns, bool isExhaustive);
 
         const Span& span() const {
             return mSpan;

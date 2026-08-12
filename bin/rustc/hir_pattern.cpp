@@ -95,7 +95,7 @@ namespace HIR {
                 for (const auto& s : e.leading) {
                     os << s << ", ";
                 }
-                if (e.is_split) {
+                if (e.isSplit) {
                     os << "..";
                     for (const auto& s : e.trailing) {
                         os << ", " << s;
@@ -119,7 +119,7 @@ namespace HIR {
                 if (e.start) {
                     os << *e.start;
                 }
-                os << " .." << (e.is_inclusive ? "=" : "") << " ";
+                os << " .." << (e.isInclusive ? "=" : "") << " ";
                 if (e.end) {
                     os << *e.end;
                 }
@@ -137,7 +137,7 @@ namespace HIR {
                 for (const auto& s : e.leading) {
                     os << s << ", ";
                 }
-                if (e.extraBind.is_valid()) {
+                if (e.extraBind.isValid()) {
                     os << e.extraBind;
                 }
                 os << "..";
@@ -181,7 +181,7 @@ namespace {
             (Value, ),
             (Range, ),
             (Slice, for (const auto& subpattern : e.sub_patterns) { visit_pattern_declaration_slots(subpattern, slots); }),
-            (SplitSlice, for (const auto& subpattern : e.leading) { visit_pattern_declaration_slots(subpattern, slots); } if (e.extraBind.is_valid()) { slots.push_back(e.extraBind.slot); } for (const auto& subpattern : e.trailing) { visit_pattern_declaration_slots(subpattern, slots); }),
+            (SplitSlice, for (const auto& subpattern : e.leading) { visit_pattern_declaration_slots(subpattern, slots); } if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); } for (const auto& subpattern : e.trailing) { visit_pattern_declaration_slots(subpattern, slots); }),
             (Or, assert(!e.empty()); visit_pattern_declaration_slots(e.front(), slots);)
         )
     }
@@ -206,7 +206,7 @@ namespace {
                 (Slice, for (const auto& subpattern : e.sub_patterns) { visit_immediate(subpattern); }),
                 (SplitSlice,
                  for (const auto& subpattern : e.leading) { visit_immediate(subpattern); }
-                 if (e.extraBind.is_valid()) { slots.push_back(e.extraBind.slot); }
+                 if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); }
                  for (auto it = e.trailing.rbegin(); it != e.trailing.rend(); ++it) { visit_immediate(*it); }),
                 (Or, assert(!e.empty()); deferredOrPatterns.push_back(&current);)
             )
@@ -295,17 +295,17 @@ namespace {
                 return ::HIR::Pattern::Data::make_PathValue({e.path.clone(), e.binding.clone()});
             }
             TU_ARMA(PathTuple, e) {
-                return ::HIR::Pattern::Data::make_PathTuple({e.path.clone(), e.binding.clone(), clonePatVec(e.leading), e.is_split, clonePatVec(e.trailing), e.total_size});
+                return ::HIR::Pattern::Data::make_PathTuple({e.path.clone(), e.binding.clone(), clonePatVec(e.leading), e.isSplit, clonePatVec(e.trailing), e.total_size});
             }
             TU_ARMA(PathNamed, e) {
-                return ::HIR::Pattern::Data::make_PathNamed({e.path.clone(), e.binding.clone(), clonePatFields(e.sub_patterns), e.is_exhaustive});
+                return ::HIR::Pattern::Data::make_PathNamed({e.path.clone(), e.binding.clone(), clonePatFields(e.sub_patterns), e.isExhaustive});
             }
 
             TU_ARMA(Value, e) {
                 return ::HIR::Pattern::Data::make_Value({clonePatval(e.val)});
             }
             TU_ARMA(Range, e) {
-                return ::HIR::Pattern::Data::make_Range({box$(clonePatval(*e.start)), box$(clonePatval(*e.end)), e.is_inclusive});
+                return ::HIR::Pattern::Data::make_Range({box$(clonePatval(*e.start)), box$(clonePatval(*e.end)), e.isInclusive});
             }
 
             TU_ARMA(Slice, e) {
@@ -352,7 +352,7 @@ Pattern::Pattern(std::vector<PatternBinding> pbs, Data d)
 }
 Pattern::Pattern(PatternBinding pb, Data d)
     : mData(mv$(d)) {
-    if (pb.is_valid()) {
+    if (pb.isValid()) {
         mBindings.push_back(std::move(pb));
     }
 }

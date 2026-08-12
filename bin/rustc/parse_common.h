@@ -30,7 +30,7 @@ enum eParsePathGenericMode {
 };
 
 extern AST::Path ParsePath(TokenStream& lex, eParsePathGenericMode genericMode); // Auto-determines
-extern AST::Path ParsePath(TokenStream& lex, bool is_abs, eParsePathGenericMode genericMode);
+extern AST::Path ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMode);
 extern ::std::vector<AST::PathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
 extern AST::PathParams ParsePathGenericList(TokenStream& lex);
 

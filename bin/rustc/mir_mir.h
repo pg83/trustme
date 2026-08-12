@@ -218,7 +218,7 @@ namespace MIR {
 
         static LValue newDowncast(LValue lv, unsigned idx);
 
-        static LValue newIndex(LValue lv, unsigned local_idx);
+        static LValue newIndex(LValue lv, unsigned localIdx);
 
         bool is_Return() const {
             return wrappers.empty() && root.is_Return();
@@ -250,7 +250,7 @@ namespace MIR {
 
         Ordering ord(const LValue& x) const;
 
-        LValue monomorphise(const MonomorphState& ms, unsigned local_offset = 0);
+        LValue monomorphise(const MonomorphState& ms, unsigned localOffset = 0);
 
         //LValue monomorphise(const TransParams& ms, unsigned local_offset=0);
         LValue clone() const {
@@ -271,13 +271,13 @@ namespace MIR {
         LValue cloneUnwrapped(unsigned count = 1) const;
 
         // Returns true if this LValue is a subset of the other (e.g. `_1.0` is a subset of `_1.0*`)
-        bool is_subset_of(const LValue& other) const {
+        bool isSubsetOf(const LValue& other) const {
             return root == other.root && other.wrappers.size() >= wrappers.size() && std::equal(wrappers.begin(), wrappers.end(), other.wrappers.begin());
         }
 
         // Returns true if one lvalue is a subset of the other
         // - Equivalent to `a.is_subset_of(b) || b.is_subset_of(a)` (but more efficient)
-        bool is_either_subset(const LValue& other) const;
+        bool isEitherSubset(const LValue& other) const;
 
         /// Helper class that represents a LValue unwrapped to a certain degree
         class RefCommon {
@@ -376,7 +376,7 @@ namespace MIR {
             CRef(const LValue& lv, size_t wc);
 
             /// Unwrap one level
-            const CRef inner_ref() const;
+            const CRef innerRef() const;
 
             friend ::std::ostream& operator<<(::std::ostream& os, const CRef& x);
 
@@ -397,7 +397,7 @@ namespace MIR {
                 return CRef(*mLv, wrapperCount);
             }
 
-            MRef inner_ref();
+            MRef innerRef();
 
             void replace(LValue x);
 
@@ -574,7 +574,7 @@ namespace MIR {
             (Borrow,
              struct {
                  ::HIR::BorrowType type;
-                 bool is_raw;
+                 bool isRaw;
                  LValue val;
              }),
             (Constant, Constant),
@@ -690,7 +690,7 @@ namespace MIR {
              LValue val;
              ::std::vector<BasicBlockId> targets;
              unsigned int valid_flag = ~0u;
-             BasicBlockId invalid_target = ~0u;
+             BasicBlockId invalidTarget = ~0u;
          }),
         (SwitchValue,
          struct {
@@ -793,7 +793,7 @@ namespace MIR {
     struct BasicBlock {
         ::std::vector<Statement> statements;
         Terminator terminator;
-        bool is_cleanup = false;
+        bool isCleanup = false;
     };
 
     struct EnumCache; // Defined in trans/enumerate.cpp
@@ -844,15 +844,15 @@ namespace MIR {
         Cloner(const Span& sp, HIR::TypeInterner& types);
         virtual ~Cloner();
 
-        virtual ::MIR::BasicBlockId map_bb_idx(::MIR::BasicBlockId idx) const {
+        virtual ::MIR::BasicBlockId mapBbIdx(::MIR::BasicBlockId idx) const {
             return idx;
         }
 
-        virtual unsigned map_local(unsigned f) const {
+        virtual unsigned mapLocal(unsigned f) const {
             return f;
         }
 
-        virtual unsigned map_drop_flag(unsigned f) const {
+        virtual unsigned mapDropFlag(unsigned f) const {
             return f;
         }
 

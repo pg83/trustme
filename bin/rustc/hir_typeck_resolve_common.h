@@ -103,11 +103,11 @@ struct TraitResolveCommon {
     void prep_indexes(const Span& sp);
 
 protected:
-    void prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef long_ty, ::HIR::TypeRef short_ty);
+    void prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef longTy, ::HIR::TypeRef short_ty);
     void prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool addParents = true);
 
     /// Iterate over in-scope bounds (function then type)
-    bool iterate_bounds(::std::function<bool(const ::HIR::GenericBound&)> cb) const;
+    bool iterateBounds(::std::function<bool(const ::HIR::GenericBound&)> cb) const;
 };
 
 extern ::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x);

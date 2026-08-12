@@ -215,7 +215,7 @@ namespace HIR {
             /// Guard value
             ::HIR::ExprNodeP val;
             /// Indicates that this guard is an `if` (changes scoping rules, and tweaks how typecheck happens)
-            bool is_if;
+            bool isIf;
         };
 
         struct Arm {
@@ -381,7 +381,7 @@ namespace HIR {
         ::HIR::ExprNodeP index;
 
         struct {
-            ::HIR::TypeRef index_ty;
+            ::HIR::TypeRef indexTy;
         } cache;
 
         ExprNodeIndex(Span sp, ::HIR::ExprNodeP val, ::HIR::ExprNodeP index);

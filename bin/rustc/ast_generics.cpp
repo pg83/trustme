@@ -15,7 +15,7 @@ TypeParam::TypeParam(Span sp, ::AST::AttributeList attrs, RcString name)
     , defaultValue(mSpan) {
 }
 void TypeParam::setDefault(TypeRef type) {
-    assert(defaultValue.is_wildcard());
+    assert(defaultValue.isWildcard());
     defaultValue = ::std::move(type);
 }
 LifetimeParam::LifetimeParam(Span sp, ::AST::AttributeList attrs, Ident name)

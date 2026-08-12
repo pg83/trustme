@@ -93,14 +93,14 @@ void MonomorphState::set_impl_params(HIR::PathParams pp) {
     }
     return HIR::ConstGeneric(val);
 }
-::HIR::LifetimeRef MonomorphHrlsOnly::getLifetime(const Span& sp, const ::HIR::GenericRef& lft_ref) const {
-    if (lft_ref.group() == 3) {
+::HIR::LifetimeRef MonomorphHrlsOnly::getLifetime(const Span& sp, const ::HIR::GenericRef& lftRef) const {
+    if (lftRef.group() == 3) {
         // If the HRL batch does not cover this index, pass the lifetime through rather than abort: not reliably in range for nested binders, and erased before codegen.
-        if (lft_ref.idx() >= pp_hrb->mLifetimes.size()) {
-            DEBUG("HRL " << lft_ref << " out of bounds (" << pp_hrb->mLifetimes.size() << ") - passthrough");
-            return ::HIR::LifetimeRef(lft_ref.binding);
+        if (lftRef.idx() >= pp_hrb->mLifetimes.size()) {
+            DEBUG("HRL " << lftRef << " out of bounds (" << pp_hrb->mLifetimes.size() << ") - passthrough");
+            return ::HIR::LifetimeRef(lftRef.binding);
         }
-        return pp_hrb->mLifetimes.at(lft_ref.idx());
+        return pp_hrb->mLifetimes.at(lftRef.idx());
     }
-    return ::HIR::LifetimeRef(lft_ref.binding);
+    return ::HIR::LifetimeRef(lftRef.binding);
 }

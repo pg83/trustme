@@ -177,23 +177,23 @@ public:
 ::std::unique_ptr<JobServer> JobServer::create(size_t server_jobs) {
     const auto* makeflags = getenv("MAKEFLAGS");
 
-    const char* jobserver_auth = nullptr;
+    const char* jobserverAuth = nullptr;
     if (makeflags) {
         const char* const needle = "--jobserver-auth=";
         auto pos = ::std::strstr(makeflags, needle);
         while (pos != nullptr) {
             auto e = pos + ::std::strlen(needle);
             if (pos == makeflags || pos[-1] == ' ') {
-                jobserver_auth = e;
+                jobserverAuth = e;
             }
             pos = ::std::strstr(e, needle);
         }
     }
 
-    if (jobserver_auth) {
-        const auto* p = std::strchr(jobserver_auth, ' ');
-        auto len = p ? p - jobserver_auth : strlen(jobserver_auth);
-        std::string authStr(jobserver_auth, len);
+    if (jobserverAuth) {
+        const auto* p = std::strchr(jobserverAuth, ' ');
+        auto len = p ? p - jobserverAuth : strlen(jobserverAuth);
+        std::string authStr(jobserverAuth, len);
 
         // Found a valid jobserver string!
         // - Named pipe: `fifo:PATH`

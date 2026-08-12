@@ -45,12 +45,12 @@ TAGGED_UNION_EX(
         // Partially valid (Map of field states)
         (Partial,
          struct {
-             ::std::vector<VarState> inner_states;
+             ::std::vector<VarState> innerStates;
              unsigned int outer_flag; // If ~0u, the outer discriminant is always valid.
          }),
         (MovedOut,
          struct {
-             ::std::unique_ptr<VarState> inner_state;
+             ::std::unique_ptr<VarState> innerState;
              unsigned int outer_flag; // If ~0u, the outer is always valid. If set, then the outer may have been moved (but inner state still maybe valid)
          }),
         // Optionally valid (integer indicates the drop flag index)
@@ -80,7 +80,7 @@ struct SplitEnd {
 };
 
 struct ScopeDropSlot {
-    bool is_argument;
+    bool isArgument;
     unsigned int index;
 };
 
@@ -89,7 +89,7 @@ TAGGED_UNION(
     Owning,
     (Owning,
      struct {
-         bool is_temporary;
+         bool isTemporary;
          ::std::vector<unsigned int> slots; // Locals whose state is owned by this scope
          ::std::vector<ScopeDropSlot> dropSlots; // Locals and arguments in scheduled drop order
      }),
@@ -158,7 +158,7 @@ struct PatternBinding {
 
     PatternBinding(fieldPathT field, const ::HIR::PatternBinding& binding);
 
-    bool is_split_slice() const {
+    bool isSplitSlice() const {
         return split_slice.first != SIZE_MAX;
     }
 
@@ -248,7 +248,7 @@ public:
     }
 
     /// Check if the passed type is Box<T> and returns a pointer to the T type if so, otherwise nullptr
-    const ::HIR::TypeData* is_type_owned_box(const ::HIR::TypeData* ty) const;
+    const ::HIR::TypeData* isTypeOwnedBox(const ::HIR::TypeData* ty) const;
 
     class SavedAliases {
         friend class MirBuilder;
@@ -270,8 +270,8 @@ public:
     ::MIR::LValue getVariable(const Span& sp, unsigned idx) const;
 
     ::MIR::LValue new_temporary(const ::HIR::TypeData* ty);
-    ::MIR::LValue lvalue_or_temp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val);
-    size_t local_count() const {
+    ::MIR::LValue lvalueOrTemp(const Span& sp, const ::HIR::TypeData* ty, ::MIR::RValue val);
+    size_t localCount() const {
         return output.locals.size();
     }
 
@@ -320,7 +320,7 @@ public:
     }
 
     // Mark a value as initialised (used for Call, because it has to be done after the panic block is populated)
-    void mark_value_assigned(const Span& sp, const ::MIR::LValue& val);
+    void markValueAssigned(const Span& sp, const ::MIR::LValue& val);
 
     // Moves control of temporaries up to the specified scope (or to above it)
     void raise_temporaries(const Span& sp, const ::MIR::LValue& val, const ScopeHandle& scope, bool to_above = false);
@@ -349,7 +349,7 @@ public:
     };
 
     /// @brief Insert saved code, applying the supplied mapper
-    void insert_cloned(const Span& sp, const SavedCode& c, CloneMapper& mapper);
+    void insertCloned(const Span& sp, const SavedCode& c, CloneMapper& mapper);
 
 private:
     struct CodeSaveStackEnt {
@@ -393,7 +393,7 @@ public:
     /// Drop all defined values in the scope (emits the drops if `cleanup` is set)
     void terminate_scope(const Span& sp, ScopeHandle, bool cleanup = true);
     /// Terminates a scope early (e.g. via return/break/...)
-    void terminate_scope_early(const Span& sp, const ScopeHandle&, bool loop_exit = false);
+    void terminate_scope_early(const Span& sp, const ScopeHandle&, bool loopExit = false);
     /// Marks the end of a split arm (end match arm, if body, ...)
     void endSplitArm(const Span& sp, const ScopeHandle&, bool reachable, bool early = false);
     /// Terminates the current split early (TODO: What does this mean?)
@@ -442,14 +442,14 @@ private:
 
     void dropValueFromState(const Span& sp, VarState& vs, ::MIR::LValue lv);
     void dropScopeValues(ScopeDef& sd);
-    ::MIR::UnwindAction make_unwind_action(const Span& sp, const ::MIR::LValue* consumedValue = nullptr);
+    ::MIR::UnwindAction makeUnwindAction(const Span& sp, const ::MIR::LValue* consumedValue = nullptr);
     void push_drop_terminator(const Span& sp, ::MIR::eDropKind kind, ::MIR::LValue val, unsigned int dropFlag);
     /// Finalise a scope before it's fully destroyed. Doesn't emit destructors (already done by `drop_scope_values`)
     void completeScope(ScopeDef& sd);
 
 public:
     void with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const ::MIR::LValue::Wrapper* stop_wrapper = nullptr) const;
-    bool lvalue_is_copy(const Span& sp, const ::MIR::LValue& lv) const;
+    bool lvalueIsCopy(const Span& sp, const ::MIR::LValue& lv) const;
 
     // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer
     ::MIR::LValue getPtrToDst(const Span& sp, const ::MIR::LValue& lv) const;
@@ -516,7 +516,7 @@ public:
     virtual SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() = 0;
 };
 
-extern void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue match_val, const std::vector<unsigned>& let_else_initializer_temps);
+extern void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
 extern void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, const ::HIR::Pattern& pat, ::MIR::LValue val, const ::HIR::ExprNode* else_node);
 
 extern void MIRLowerHIRGetTypeValueForPath(

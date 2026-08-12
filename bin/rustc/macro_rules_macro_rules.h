@@ -107,7 +107,7 @@ TAGGED_UNION(
     // Pop from the loop stack
     (LoopEnd, struct {/*unsigned index;*/}),
     // Jump to a new point of execution
-    (Jump, struct { size_t jump_target; }),
+    (Jump, struct { size_t jumpTarget; }),
     // Expect a specific token, erroring/failing the arm if nt met
     (ExpectTok, Token),
     // Expect a pattern match
@@ -119,7 +119,7 @@ TAGGED_UNION(
     // Compare the head of the input stream and poke the pattern stream
     (If, struct {
         bool is_equal;
-        size_t jump_target;
+        size_t jumpTarget;
         ::std::vector<SimplePatIfCheck> ents;
     })
 );

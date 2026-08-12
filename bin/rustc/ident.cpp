@@ -5,7 +5,7 @@
 
 unsigned int Ident::Hygiene::gNextScope = 0;
 
-bool Ident::Hygiene::is_visible(const Hygiene& src) const {
+bool Ident::Hygiene::isVisible(const Hygiene& src) const {
     if (inner->contexts.size() > src->contexts.size()) {
         return false;
     }
@@ -83,7 +83,7 @@ Ident::Hygiene& Ident::Hygiene::operator=(Hygiene&& x) {
     //assert(m_inner);
     return *this;
 }
-Ident::Hygiene Ident::Hygiene::new_scope_chained(const Hygiene& parent, unsigned int macro_definition) {
+Ident::Hygiene Ident::Hygiene::new_scope_chained(const Hygiene& parent, unsigned int macroDefinition) {
     Hygiene rv;
     rv->search_module = parent->search_module;
     rv->contexts.reserve(parent->contexts.size() + 1);
@@ -91,16 +91,16 @@ Ident::Hygiene Ident::Hygiene::new_scope_chained(const Hygiene& parent, unsigned
     rv->contexts.insert(rv->contexts.begin(), parent->contexts.begin(), parent->contexts.end());
     rv->macro_definitions.insert(rv->macro_definitions.begin(), parent->macro_definitions.begin(), parent->macro_definitions.end());
     rv->contexts.push_back(++gNextScope);
-    rv->macro_definitions.push_back(macro_definition);
+    rv->macro_definitions.push_back(macroDefinition);
     return rv;
 }
-Ident::Hygiene Ident::Hygiene::with_tail_scope(const Hygiene& scope, bool inherit_mod_path) const {
+Ident::Hygiene Ident::Hygiene::with_tail_scope(const Hygiene& scope, bool inheritModPath) const {
     assert(!scope->contexts.empty());
     assert(scope->contexts.size() == scope->macro_definitions.size());
     Hygiene rv(*this);
     rv->contexts.push_back(scope->contexts.back());
     rv->macro_definitions.push_back(scope->macro_definitions.back());
-    if (inherit_mod_path && scope->search_module) {
+    if (inheritModPath && scope->search_module) {
         rv->search_module = scope->search_module;
     }
     return rv;
@@ -112,7 +112,7 @@ Ident::Hygiene Ident::Hygiene::getParent() const {
     rv->macro_definitions.insert(rv->macro_definitions.begin(), inner->macro_definitions.begin(), inner->macro_definitions.end() - 1);
     return rv;
 }
-bool Ident::Hygiene::leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definitionContext) {
+bool Ident::Hygiene::leaveMacroDefinition(unsigned int definition, const Hygiene& token_context, const Hygiene& definitionContext) {
     assert(inner->contexts.size() == inner->macro_definitions.size());
     if (inner->macro_definitions.empty() || inner->macro_definitions.back() != definition) {
         return false;

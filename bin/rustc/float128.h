@@ -35,8 +35,8 @@ public:
     uint64_t bitsHi() const;
     uint64_t bitsLo() const;
 
-    bool is_nan() const;
-    bool is_infinite() const;
+    bool isNan() const;
+    bool isInfinite() const;
 
     // Correctly rounded narrowing
     explicit operator float() const;

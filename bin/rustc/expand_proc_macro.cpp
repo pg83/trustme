@@ -107,7 +107,7 @@ STATIC_DECORATOR("proc_macro", DecoratorProcMacro)
 
 void ExpandProcMacroHarness(::AST::Crate& crate) {
     auto pm_crate_name = RcString::new_interned("proc_macro");
-    AST::gImplicitCrates.insert(std::make_pair(pm_crate_name, crate.load_extern_crate(Span(), pm_crate_name)));
+    AST::gImplicitCrates.insert(std::make_pair(pm_crate_name, crate.loadExternCrate(Span(), pm_crate_name)));
 
     // Create the following module:
     // ```
@@ -123,10 +123,10 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
     // ```
 
     // ---- main function ----
-    auto main_fn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
+    auto mainFn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
-        auto callNode = NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("main")}), ::make_vec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("proc_macro#"), ::AST::PathNode("MACROS")})))));
-        main_fn.set_code(mv$(callNode));
+        auto callNode = NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("main")}), ::makeVec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("proc_macro#"), ::AST::PathNode("MACROS")})))));
+        mainFn.set_code(mv$(callNode));
     }
 
     // ---- test list ----
@@ -145,7 +145,7 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
         // `name: "foo",`
         descVals.push_back({{}, "name", NEWNODE(String, desc.name.c_str())});
         // `handler`: ::foo
-        descVals.push_back({{}, "handler", NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroType"), ::AST::PathNode(type_name)}), ::make_vec1(NEWNODE(NamedValue, AST::Path(desc.path))))});
+        descVals.push_back({{}, "handler", NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroType"), ::AST::PathNode(type_name)}), ::makeVec1(NEWNODE(NamedValue, AST::Path(desc.path))))});
 
         test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroDesc")}), nullptr, mv$(descVals)));
     }
@@ -158,10 +158,10 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
     auto newmod = ::AST::Module{::AST::AbsolutePath("", {"proc_macro#"})};
     // - TODO: These need to be loaded too.
     //  > They don't actually need to exist here, just be loaded (and use absolute paths)
-    auto vis_private = AST::Visibility::make_restricted(AST::Visibility::Ty::Private, newmod.path());
+    auto vis_private = AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, newmod.path());
     newmod.addExtCrate(Span(), vis_private, crate.extCratenameProcmacro, "proc_macro", {});
 
-    newmod.addItem(Span(), vis_private, "main", mv$(main_fn), {});
+    newmod.addItem(Span(), vis_private, "main", mv$(mainFn), {});
     newmod.addItem(Span(), vis_private, "MACROS", mv$(tests_list), {});
 
     crate.rootModule.addItem(Span(), vis_private, "proc_macro#", mv$(newmod), {});
@@ -204,7 +204,7 @@ struct ProcMacroInv: public TokenStream {
     ::std::ofstream dumpFileRes;
 
     /// Spans that have had an index assigned
-    ::std::unordered_map<const SpanInner*, size_t> known_spans;
+    ::std::unordered_map<const SpanInner*, size_t> knownSpans;
     /// Span indexes that have been sent
     ::std::unordered_set<size_t> sent_spans;
     size_t next_span_index = 2;
@@ -375,7 +375,7 @@ public:
     }
 
     void send_span_def(size_t index, const Span& sp) {
-        this->known_spans[sp.get()] = index;
+        this->knownSpans[sp.get()] = index;
         this->sent_spans.insert(index);
 
         this->send_u8(static_cast<uint8_t>(TokenClass::SpanDef));
@@ -429,11 +429,11 @@ private:
     U128 recv_v128u_u128();
 };
 
-ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path) {
-    TRACE_FUNCTION_F(mac_path);
+ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath) {
+    TRACE_FUNCTION_F(macPath);
     // 1. Locate macro in HIR list
-    const auto& crate_name = mac_path.front();
-    ASSERT_BUG(sp, crate.externCrates.count(crate_name), "Crate not loaded for macro: [" << mac_path << "]");
+    const auto& crate_name = macPath.front();
+    ASSERT_BUG(sp, crate.externCrates.count(crate_name), "Crate not loaded for macro: [" << macPath << "]");
     const auto& ext_crate = crate.externCrates.at(crate_name);
     // TODO: Ensure that this macro is in the listed crate.
     const ::HIR::ProcMacro* pmp = nullptr;
@@ -443,8 +443,8 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const
         }
         const auto& pm = mi.second->ent.as_ProcMacro();
         bool good = true;
-        for (size_t i = 0; i < ::std::min(mac_path.size() - 1, pm.path.components().size()); i++) {
-            if (mac_path[1 + i] != pm.path.components()[i]) {
+        for (size_t i = 0; i < ::std::min(macPath.size() - 1, pm.path.components().size()); i++) {
+            if (macPath[1 + i] != pm.path.components()[i]) {
                 good = false;
                 break;
             }
@@ -455,7 +455,7 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const ::AST::Crate& crate, const
         }
     }
     if (!pmp) {
-        ERROR(sp, E0000, "Unable to find referenced proc macro " << mac_path);
+        ERROR(sp, E0000, "Unable to find referenced proc macro " << macPath);
     }
 
     // 2. Get executable and macro name
@@ -889,7 +889,7 @@ namespace {
         }
 
         void visit_tokentree(const ::TokenTree& tt) {
-            if (tt.is_token()) {
+            if (tt.isToken()) {
                 visit_token(tt.tok());
             } else {
                 for (size_t i = 0; i < tt.size(); i++) {
@@ -950,7 +950,7 @@ namespace {
                         this->visit_pattern(spe.pat);
                         pmi.send_symbol(",");
                     }
-                    if (!e.is_exhaustive) {
+                    if (!e.isExhaustive) {
                         pmi.send_symbol("...");
                     }
                     pmi.send_symbol("}");
@@ -1000,7 +1000,7 @@ namespace {
 
                  parse_string(ss.str());),
                 (
-                    Tuple, pmi.send_symbol("("); for (const auto& st : te.inner_types) {
+                    Tuple, pmi.send_symbol("("); for (const auto& st : te.innerTypes) {
                         this->visit_type(st);
                         pmi.send_symbol(",");
                     } pmi.send_symbol(")");
@@ -1071,7 +1071,7 @@ namespace {
             }
         }
 
-        void visit_path_node(const AST::PathNode& e, bool is_expr) {
+        void visit_path_node(const AST::PathNode& e, bool isExpr) {
             pmi.send_ident(e.name().c_str());
             if (!e.args().is_empty()) {
                 if (e.args().isParen) {
@@ -1083,7 +1083,7 @@ namespace {
                     return;
                 }
 
-                if (is_expr) {
+                if (isExpr) {
                     pmi.send_symbol("::");
                 }
                 pmi.send_symbol("<");
@@ -1128,7 +1128,7 @@ namespace {
             }
         }
 
-        void visit_path(const AST::Path& path, bool is_expr = false) {
+        void visit_path(const AST::Path& path, bool isExpr = false) {
             const ::std::vector<AST::PathNode>* nodes = nullptr;
             TU_MATCH_HDRA( (path.cls), {)
             TU_ARMA(Invalid, pe) {
@@ -1192,16 +1192,16 @@ namespace {
                     pmi.send_symbol("::");
                 }
                 first = false;
-                visit_path_node(e, is_expr);
+                visit_path_node(e, isExpr);
             }
         }
 
         void visit_params(const AST::GenericParams& params) {
             if (!params.mParams.empty()) {
-                bool is_first = true;
+                bool isFirst = true;
                 pmi.send_symbol("<");
                 for (const auto& param : params.mParams) {
-                    if (!is_first) {
+                    if (!isFirst) {
                         pmi.send_symbol(",");
                     }
                     TU_MATCH_HDRA( (param), {)
@@ -1255,7 +1255,7 @@ namespace {
                                     }
                                     TU_ARMA(IsTrait, be) {
                                         assert(be.outer_hrbs.empty()); // Shouldn't be possible in this position
-                                        if (!be.inner_hrbs.empty()) {
+                                        if (!be.innerHrbs.empty()) {
                                             TODO(sp, "be.inner_hrbs");
                                         }
                                         visit_bound_constness(be.constness);
@@ -1267,7 +1267,7 @@ namespace {
                                     }
                             }
                             }
-                            if (!p.getDefault().is_wildcard()) {
+                            if (!p.getDefault().isWildcard()) {
                                 pmi.send_symbol("=");
                                 this->visit_type(p.getDefault());
                             }
@@ -1281,7 +1281,7 @@ namespace {
                             assert(param.boundsStart == param.boundsEnd);
                         }
                     }
-                    is_first = false;
+                    isFirst = false;
                 }
                 pmi.send_symbol(">");
             }
@@ -1338,7 +1338,7 @@ namespace {
                             visit_hrbs(be.outer_hrbs);
                             visit_type(be.type);
                             pmi.send_symbol(":");
-                            visit_hrbs(be.inner_hrbs);
+                            visit_hrbs(be.innerHrbs);
                             visit_bound_constness(be.constness);
                             visit_path(be.trait);
                         }
@@ -1418,10 +1418,10 @@ namespace {
                 DEBUG("Skip " << a << " (derive input)");
                 return;
             }
-            auto is_local = (a.name().is_trivial() && pmi.attrIsUsed(a.name().asTrivial()));
-            if (this->emitAllAttrs || is_local) {
-                if (is_local) {
-                    a.mark_inert();
+            auto isLocal = (a.name().is_trivial() && pmi.attrIsUsed(a.name().asTrivial()));
+            if (this->emitAllAttrs || isLocal) {
+                if (isLocal) {
+                    a.markInert();
                 }
                 DEBUG("Send " << a);
                 pmi.send_symbol("#");
@@ -1586,7 +1586,7 @@ namespace {
             if (fcn.is_const()) {
                 pmi.send_rword("const");
             }
-            if (fcn.is_async()) {
+            if (fcn.isAsync()) {
                 pmi.send_rword("async");
             }
             if (fcn.abi() != ABI_RUST) {
@@ -1614,7 +1614,7 @@ namespace {
             //}
             this->visit_bounds(fcn.params());
             // A trait method declaration has no body - send `;` rather than dereferencing an absent node.
-            if (fcn.code().is_valid()) {
+            if (fcn.code().isValid()) {
                 this->visit_nodes(fcn.code());
             } else {
                 pmi.send_symbol(";");
@@ -1675,7 +1675,7 @@ namespace {
             }
             visit_params(impl.params());
 
-            if (impl.trait().ent.is_valid()) {
+            if (impl.trait().ent.isValid()) {
                 visit_path(impl.trait().ent);
                 pmi.send_rword("for");
             }
@@ -1711,7 +1711,7 @@ namespace {
 
             pmi.send_symbol("{");
             // Trait items inherit the trait's visibility; mrustc records them as `pub`, which the plugin's parser rejects. Send them unqualified.
-            const auto item_vis = ::AST::Visibility::make_bare_private();
+            const auto itemVis = ::AST::Visibility::makeBarePrivate();
             for (const auto& i : trait.items()) {
                 this->visit_attrs(i.attrs);
                 TU_MATCH_HDRA((i.data), {)
@@ -1719,21 +1719,21 @@ namespace {
                     TODO(i.span, "visit_trait item - " << i.data.tag_str());
                     break;
                     TU_ARMA(Function, e) {
-                        this->visit_function(i.name, item_vis, e);
+                        this->visit_function(i.name, itemVis, e);
                     }
                     TU_ARMA(Static, e) {
-                        this->visit_static(i.name, item_vis, e);
+                        this->visit_static(i.name, itemVis, e);
                     }
                     // An associated type. Bounds live in `m_self_bounds` encoded as `Self: ...`, not the shape needed here, so only the un-bounded form is emitted.
                     TU_ARMA(Type, e) {
                         if (!e.selfBounds.bounds.empty()) {
                             TODO(i.span, "visit_trait - associated type with bounds - " << i.name);
                         }
-                        this->visit_vis(item_vis);
+                        this->visit_vis(itemVis);
                         pmi.send_rword("type");
                         pmi.send_ident(i.name.c_str());
                         this->visit_params(e.mParams);
-                        if (e.mType.is_valid()) {
+                        if (e.mType.isValid()) {
                             pmi.send_symbol("=");
                             this->visit_type(e.mType);
                         }
@@ -1799,9 +1799,9 @@ namespace {
     };
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree* attrInput, std::function<void(Visitor& v)> cb) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, const TokenTree* attrInput, std::function<void(Visitor& v)> cb) {
     // 1. Create ProcMacroInv instance
-    auto pmi = ProcMacroInvokeInt(sp, crate, mac_path);
+    auto pmi = ProcMacroInvokeInt(sp, crate, macPath);
     if (!pmi.checkGood()) {
         return ::std::unique_ptr<TokenStream>();
     }
@@ -1828,45 +1828,45 @@ namespace {
 }
 
 // --- Derive inputs
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Struct& i) {
-    return ProcMacroInvoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Struct& i) {
+    return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         DEBUG("derive on struct");
         v.skip_derive_attrs = true;
         v.visit_top_attrs(attrs);
-        v.visit_struct(item_name, vis, i);
+        v.visit_struct(itemName, vis, i);
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Enum& i) {
-    return ProcMacroInvoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Enum& i) {
+    return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         DEBUG("derive on enum");
         v.skip_derive_attrs = true;
         v.visit_top_attrs(attrs);
-        v.visit_enum(item_name, vis, i);
+        v.visit_enum(itemName, vis, i);
     });
 }
 
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Union& i) {
-    return ProcMacroInvoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Union& i) {
+    return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         DEBUG("derive on union");
         v.skip_derive_attrs = true;
         v.visit_top_attrs(attrs);
-        v.visit_union(item_name, vis, i);
+        v.visit_union(itemName, vis, i);
     });
 }
 
 // --- attribute
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree& tt, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& item_name, const ::AST::Item& i) {
-    return ProcMacroInvoke(sp, crate, mac_path, &tt, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Item& i) {
+    return ProcMacroInvoke(sp, crate, macPath, &tt, [&](Visitor& v) {
         v.emitAllAttrs = true;
         v.visit_top_attrs(attrs);
-        v.visit_item(item_name, vis, i);
+        v.visit_item(itemName, vis, i);
     });
 }
 
 // -- function-like input
-::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& mac_path, const TokenTree& tt) {
-    return ProcMacroInvoke(sp, crate, mac_path, nullptr, [&](Visitor& v) {
+::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, const TokenTree& tt) {
+    return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         v.visit_tokentree(tt);
     });
 }
@@ -2216,7 +2216,7 @@ Token ProcMacroInv::realGetToken_() {
             }
             double val;
             this->recv_bytes_raw(&val, sizeof(val));
-            return Token::make_float(val, ty);
+            return Token::makeFloat(val, ty);
         }
             //case TokenClass::Fragment:
             //    TODO(this->m_parent_span, "Handle ints/floats/fragments from child process");

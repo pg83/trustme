@@ -157,7 +157,7 @@ namespace AST {
               Span span;
               HigherRankedBounds outer_hrbs;
               TypeRef type;
-              HigherRankedBounds inner_hrbs;
+              HigherRankedBounds innerHrbs;
               AST::Path trait;
               BoundConstness constness = BoundConstness::Never;
           }),
@@ -187,7 +187,7 @@ namespace AST {
          Span span;
 
          GenericBound clone() const {
-             TU_MATCH(GenericBound, ((*this)), (ent), (None, return make_None({});), (Lifetime, return make_Lifetime({ent.test, ent.bound});), (TypeLifetime, return make_TypeLifetime({ent.type.clone(), ent.bound});), (IsTrait, return make_IsTrait({ent.span, ent.outer_hrbs, ent.type.clone(), ent.inner_hrbs, ent.trait, ent.constness});), (MaybeTrait, return make_MaybeTrait({ent.type.clone(), ent.trait});), (NotTrait, return make_NotTrait({ent.type.clone(), ent.trait});), (Equality, return make_Equality({ent.type.clone(), ent.replacement.clone()});))
+             TU_MATCH(GenericBound, ((*this)), (ent), (None, return make_None({});), (Lifetime, return make_Lifetime({ent.test, ent.bound});), (TypeLifetime, return make_TypeLifetime({ent.type.clone(), ent.bound});), (IsTrait, return make_IsTrait({ent.span, ent.outer_hrbs, ent.type.clone(), ent.innerHrbs, ent.trait, ent.constness});), (MaybeTrait, return make_MaybeTrait({ent.type.clone(), ent.trait});), (NotTrait, return make_NotTrait({ent.type.clone(), ent.trait});), (Equality, return make_Equality({ent.type.clone(), ent.replacement.clone()});))
              return GenericBound();
          })
     );

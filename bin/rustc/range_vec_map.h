@@ -12,11 +12,11 @@
 template <typename K, typename V, typename Cmp = std::less<K>>
 class RangeVecMap {
 public:
-    typedef std::pair<K, V> item_t;
+    typedef std::pair<K, V> itemT;
 
 private:
-    typedef std::vector<::std::unique_ptr<item_t>> inner_t;
-    inner_t mData;
+    typedef std::vector<::std::unique_ptr<itemT>> innerT;
+    innerT mData;
     Cmp cmp;
 
 public:
@@ -25,19 +25,19 @@ public:
 
     class iterator {
         friend class RangeVecMap<K, V, Cmp>;
-        typename inner_t::iterator inner;
+        typename innerT::iterator inner;
 
-        iterator(typename inner_t::iterator i)
+        iterator(typename innerT::iterator i)
             : inner(i)
         {
         }
 
     public:
-        item_t& operator*() {
+        itemT& operator*() {
             return **inner;
         }
 
-        item_t* operator->() {
+        itemT* operator->() {
             return &**inner;
         }
 
@@ -65,19 +65,19 @@ public:
 
     class const_iterator {
         friend class RangeVecMap<K, V, Cmp>;
-        typename inner_t::const_iterator inner;
+        typename innerT::const_iterator inner;
 
-        const_iterator(typename inner_t::const_iterator i)
+        const_iterator(typename innerT::const_iterator i)
             : inner(i)
         {
         }
 
     public:
-        const item_t& operator*() {
+        const itemT& operator*() {
             return **inner;
         }
 
-        const item_t* operator->() {
+        const itemT* operator->() {
             return &**inner;
         }
 
@@ -125,14 +125,14 @@ public:
 
     template <typename K2>
     iterator lower_bound(const K2& k) {
-        return iterator(std::lower_bound(mData.begin(), mData.end(), k, [&](const ::std::unique_ptr<item_t>& kv, const K2& k) {
+        return iterator(std::lower_bound(mData.begin(), mData.end(), k, [&](const ::std::unique_ptr<itemT>& kv, const K2& k) {
             return cmp(kv->first, k);
         }));
     }
 
     template <typename K2>
     iterator upper_bound(const K2& k) {
-        return iterator(std::upper_bound(mData.begin(), mData.end(), k, [&](const K2& k, const ::std::unique_ptr<item_t>& kv) {
+        return iterator(std::upper_bound(mData.begin(), mData.end(), k, [&](const K2& k, const ::std::unique_ptr<itemT>& kv) {
             return cmp(k, kv->first);
         }));
     }
@@ -145,7 +145,7 @@ public:
     /// Lower bound: First item in the map not less than the provided key (equal, or first after)
     template <typename K2>
     const_iterator lower_bound(const K2& k) const {
-        return const_iterator(std::lower_bound(mData.begin(), mData.end(), k, [&](const ::std::unique_ptr<item_t>& kv, const K2& k) {
+        return const_iterator(std::lower_bound(mData.begin(), mData.end(), k, [&](const ::std::unique_ptr<itemT>& kv, const K2& k) {
             return cmp(kv->first, k);
         }));
     }
@@ -153,7 +153,7 @@ public:
     /// Upper bound: First item in the map after the provided key
     template <typename K2>
     const_iterator upper_bound(const K2& k) const {
-        return const_iterator(std::upper_bound(mData.begin(), mData.end(), k, [&](const K2& k, const ::std::unique_ptr<item_t>& kv) {
+        return const_iterator(std::upper_bound(mData.begin(), mData.end(), k, [&](const K2& k, const ::std::unique_ptr<itemT>& kv) {
             return cmp(k, kv->first);
         }));
     }
@@ -182,11 +182,11 @@ public:
         return v.first;
     }
 
-    std::pair<iterator, bool> insert(item_t kv) {
+    std::pair<iterator, bool> insert(itemT kv) {
         auto its = this->equal_range(kv.first);
         if (its.first == its.second) {
             size_t i = its.first.inner - mData.begin();
-            mData.insert(its.first.inner, std::make_unique<item_t>(std::move(kv)));
+            mData.insert(its.first.inner, std::make_unique<itemT>(std::move(kv)));
             return std::make_pair(iterator(mData.begin() + i), true);
         } else {
             assert(its.first + 1 == its.second);
@@ -198,7 +198,7 @@ public:
         auto its = equal_range(k);
         if (its.first == its.second) {
             size_t i = its.first.inner - mData.begin();
-            mData.insert(its.first.inner, std::make_unique<item_t>(std::make_pair(std::move(k), V())));
+            mData.insert(its.first.inner, std::make_unique<itemT>(std::make_pair(std::move(k), V())));
             return mData[i]->second;
         } else {
             assert(its.first.inner + 1 == its.second.inner);

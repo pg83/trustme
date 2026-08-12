@@ -60,7 +60,7 @@ public:
             os << "'" << n.label << ": ";
         }
         os << "{";
-        inc_indent();
+        incIndent();
         if (n.localMod) {
             os << "\n";
             os << indent() << "// ANON: " << n.localMod->path() << "\n";
@@ -113,7 +113,7 @@ public:
     }
 
     void dumpTokentree(const TokenTree& tt) {
-        if (tt.is_token()) {
+        if (tt.isToken()) {
             dumpToken(tt.tok());
         } else {
             for (size_t i = 0; i < tt.size(); i++) {
@@ -288,10 +288,10 @@ public:
         exprRoot = false;
         os << n.mPath;
         os << "(";
-        bool is_first = true;
+        bool isFirst = true;
         for (auto& arg : n.mArgs) {
-            if (is_first) {
-                is_first = false;
+            if (isFirst) {
+                isFirst = false;
             } else {
                 os << ", ";
             }
@@ -305,10 +305,10 @@ public:
         WRAPIF(n.val, AST::ExprNodeDeref, AST::ExprNodeUniOp, AST::ExprNodeCast, AST::ExprNodeBinOp, AST::ExprNodeAssign, AST::ExprNodeMatch, AST::ExprNodeIf, AST::ExprNodeMatch);
         os << "." << n.method;
         os << "(";
-        bool is_first = true;
+        bool isFirst = true;
         for (auto& arg : n.mArgs) {
-            if (is_first) {
-                is_first = false;
+            if (isFirst) {
+                isFirst = false;
             } else {
                 os << ", ";
             }
@@ -322,10 +322,10 @@ public:
         os << "(";
         AST::NodeVisitor::visit(n.val);
         os << ")(";
-        bool is_first = true;
+        bool isFirst = true;
         for (auto& arg : n.mArgs) {
-            if (is_first) {
-                is_first = false;
+            if (isFirst) {
+                isFirst = false;
             } else {
                 os << ", ";
             }
@@ -423,17 +423,17 @@ public:
             os << indent() << "{\n";
         } else {
             os << " {\n";
-            inc_indent();
+            incIndent();
         }
 
         for (auto& arm : n.arms) {
             os << indent();
-            bool is_first = true;
+            bool isFirst = true;
             for (const auto& pat : arm.patterns) {
-                if (!is_first) {
+                if (!isFirst) {
                     os << "|";
                 }
-                is_first = false;
+                isFirst = false;
                 print_pattern(pat, true);
             }
             if (!arm.guard.empty()) {
@@ -442,7 +442,7 @@ public:
             }
             os << " => ";
             // Increase indent, but don't print. Causes nested blocks to be indented above the match
-            inc_indent();
+            incIndent();
             AST::NodeVisitor::visit(arm.mCode);
             decIndent();
             os << ",\n";
@@ -470,12 +470,12 @@ public:
             os << "if ";
             visit_iflet_conditions(arm.conditions);
 
-            bool is_block = (cast<const AST::ExprNodeBlock>(&*arm.body) != nullptr);
-            if (!is_block) {
+            bool isBlock = (cast<const AST::ExprNodeBlock>(&*arm.body) != nullptr);
+            if (!isBlock) {
                 os << "{ ";
             }
             AST::NodeVisitor::visit(arm.body);
-            if (!is_block) {
+            if (!isBlock) {
                 os << " }";
             }
             if (expr_root) {
@@ -487,12 +487,12 @@ public:
                 os << indent();
             }
             os << "else";
-            bool is_block = (cast<const AST::ExprNodeBlock>(&*n.elseNode) != nullptr);
-            if (!is_block) {
+            bool isBlock = (cast<const AST::ExprNodeBlock>(&*n.elseNode) != nullptr);
+            if (!isBlock) {
                 os << "{ ";
             }
             AST::NodeVisitor::visit(n.elseNode);
-            if (!is_block) {
+            if (!isBlock) {
                 os << " }";
             }
         }
@@ -504,12 +504,12 @@ public:
             os << "move ";
         }
         os << "|";
-        bool is_first = true;
+        bool isFirst = true;
         for (const auto& arg : n.mArgs) {
-            if (!is_first) {
+            if (!isFirst) {
                 os << ", ";
             }
-            is_first = false;
+            isFirst = false;
             print_pattern(arg.first, false);
             os << ": ";
             print_type(arg.second);
@@ -635,7 +635,7 @@ public:
     virtual void visit(AST::ExprNodeStructLiteral& n) override {
         exprRoot = false;
         os << n.mPath << " {\n";
-        inc_indent();
+        incIndent();
         for (auto& i : n.values) {
             print_attrs(i.attrs);
             os << indent() << "r#" << i.name << ": ";
@@ -654,7 +654,7 @@ public:
     virtual void visit(AST::ExprNodeStructLiteralPattern& n) override {
         exprRoot = false;
         os << n.mPath << " {\n";
-        inc_indent();
+        incIndent();
         for (auto& i : n.values) {
             print_attrs(i.attrs);
             os << indent() << "r#" << i.name << ": ";
@@ -734,10 +734,10 @@ public:
 
     virtual void visit(AST::ExprNodeBinOp& n) override {
         exprRoot = false;
-        auto* left_binop = cast<AST::ExprNodeBinOp>(n.left.get());
+        auto* leftBinop = cast<AST::ExprNodeBinOp>(n.left.get());
         if (!n.left) {
             os << "/*null*/";
-        } else if (left_binop && left_binop->mType == n.mType) {
+        } else if (leftBinop && leftBinop->mType == n.mType) {
             AST::NodeVisitor::visit(n.left);
         } else {
             WRAPIF(n.left, AST::ExprNodeCast, AST::ExprNodeBinOp);
@@ -883,11 +883,11 @@ private:
     void print_attrs(const AST::AttributeList& attrs);
     void print_params(const AST::GenericParams& params);
     void print_bounds(const AST::GenericParams& params);
-    void print_pattern_tuple(const AST::Pattern::TuplePat& v, bool is_refutable);
-    void print_pattern(const AST::Pattern& p, bool is_refutable);
+    void print_pattern_tuple(const AST::Pattern::TuplePat& v, bool isRefutable);
+    void print_pattern(const AST::Pattern& p, bool isRefutable);
     void print_type(const TypeRef& t);
 
-    void inc_indent();
+    void incIndent();
     RepeatLitStr indent();
     void decIndent();
 };
@@ -969,7 +969,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
         os << "\n";
         os << indent() << item.vis << "mod " << item.name << "\n";
         os << indent() << "{\n";
-        inc_indent();
+        incIndent();
         handleModule(e);
         decIndent();
         os << indent() << "}\n";
@@ -1096,7 +1096,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
 
         print_bounds(i.def().params());
         os << indent() << "{\n";
-        inc_indent();
+        incIndent();
         for (const auto& it : i.items()) {
             TU_MATCH_DEF(
                 AST::Item,
@@ -1139,10 +1139,10 @@ void RustPrinter::handleModule(const AST::Module& mod) {
 
 void RustPrinter::print_params(const AST::GenericParams& params) {
     if (!params.mParams.empty()) {
-        bool is_first = true;
+        bool isFirst = true;
         os << "<";
         for (const auto& p : params.mParams) {
-            if (!is_first) {
+            if (!isFirst) {
                 os << ", ";
             }
             TU_MATCH_HDRA( (p), {)
@@ -1155,7 +1155,7 @@ void RustPrinter::print_params(const AST::GenericParams& params) {
                 TU_ARMA(Type, p) {
                     os << p.attrs();
                     os << p.name();
-                    if (!p.getDefault().is_wildcard()) {
+                    if (!p.getDefault().isWildcard()) {
                         os << " = " << p.getDefault();
                     }
                 }
@@ -1164,7 +1164,7 @@ void RustPrinter::print_params(const AST::GenericParams& params) {
                     os << "const " << p.name() << ": " << p.type();
                 }
             }
-            is_first = false;
+            isFirst = false;
         }
         os << ">";
     }
@@ -1172,23 +1172,23 @@ void RustPrinter::print_params(const AST::GenericParams& params) {
 
 void RustPrinter::print_bounds(const AST::GenericParams& params) {
     if (!params.bounds.empty()) {
-        inc_indent();
-        bool is_first = true;
+        incIndent();
+        bool isFirst = true;
 
         for (const auto& b : params.bounds) {
             if (b.is_None()) {
                 os << "/*-*/";
                 continue;
             }
-            if (!is_first) {
+            if (!isFirst) {
                 os << ",\n";
             } else {
                 os << indent() << "where\n";
             }
-            is_first = false;
+            isFirst = false;
 
             os << indent();
-            TU_MATCH(AST::GenericBound, (b), (ent), (None, os << "/*-*/";), (Lifetime, os << ent.test << ": " << ent.bound;), (TypeLifetime, os << ent.type << ": " << ent.bound;), (IsTrait, os << ent.outer_hrbs << ent.type << ": "; if (ent.constness == AST::BoundConstness::Always) os << "const "; else if (ent.constness == AST::BoundConstness::Maybe) os << "[const] "; os << ent.inner_hrbs << ent.trait;), (MaybeTrait, os << ent.type << ": ?" << ent.trait;), (NotTrait, os << ent.type << ": !" << ent.trait;), (Equality, os << ent.type << ": =" << ent.replacement;))
+            TU_MATCH(AST::GenericBound, (b), (ent), (None, os << "/*-*/";), (Lifetime, os << ent.test << ": " << ent.bound;), (TypeLifetime, os << ent.type << ": " << ent.bound;), (IsTrait, os << ent.outer_hrbs << ent.type << ": "; if (ent.constness == AST::BoundConstness::Always) os << "const "; else if (ent.constness == AST::BoundConstness::Maybe) os << "[const] "; os << ent.innerHrbs << ent.trait;), (MaybeTrait, os << ent.type << ": ?" << ent.trait;), (NotTrait, os << ent.type << ": !" << ent.trait;), (Equality, os << ent.type << ": =" << ent.replacement;))
         }
         os << "\n";
 
@@ -1196,21 +1196,21 @@ void RustPrinter::print_bounds(const AST::GenericParams& params) {
     }
 }
 
-void RustPrinter::print_pattern_tuple(const AST::Pattern::TuplePat& v, bool is_refutable) {
+void RustPrinter::print_pattern_tuple(const AST::Pattern::TuplePat& v, bool isRefutable) {
     for (const auto& sp : v.start) {
-        print_pattern(sp, is_refutable);
+        print_pattern(sp, isRefutable);
         os << ", ";
     }
     if (v.hasWildcard) {
         os << ".., ";
         for (const auto& sp : v.end) {
-            print_pattern(sp, is_refutable);
+            print_pattern(sp, isRefutable);
             os << ", ";
         }
     }
 }
 
-void RustPrinter::print_pattern(const AST::Pattern& p, bool is_refutable) {
+void RustPrinter::print_pattern(const AST::Pattern& p, bool isRefutable) {
     for (const auto& pb : p.bindings()) {
         if (pb.isMutable) {
             os << "mut ";
@@ -1227,7 +1227,7 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool is_refutable) {
         }
         os << pb.mName << "/*" << pb.slot << "*/";
         // If binding is irrefutable, and would be binding against a wildcard, just emit the name
-        if (!is_refutable && p.bindings().size() == 1 && p.data().is_Any()) {
+        if (!isRefutable && p.bindings().size() == 1 && p.data().is_Any()) {
             return;
         }
         os << " @ ";
@@ -1243,7 +1243,7 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool is_refutable) {
          {
              const auto& v = p.data().as_Box();
              os << "box ";
-             print_pattern(*v.sub, is_refutable);
+             print_pattern(*v.sub, isRefutable);
          }),
         (Ref,
          {
@@ -1255,40 +1255,40 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool is_refutable) {
              }
              // Just in case the inner binds as mut
              os << "(";
-             print_pattern(*v.sub, is_refutable);
+             print_pattern(*v.sub, isRefutable);
              os << ")";
          }),
         (Value, os << v.start; if (!v.end.is_Invalid()) { os << " ..= " << v.end; }),
         (ValueLeftInc, os << v.start << " .. " << v.end;),
-        (StructTuple, os << v.path << "("; this->print_pattern_tuple(v.tup_pat, is_refutable); os << ")";),
+        (StructTuple, os << v.path << "("; this->print_pattern_tuple(v.tup_pat, isRefutable); os << ")";),
         (Struct,
          {
              const auto& v = p.data().as_Struct();
              os << v.path << "{";
              for (const auto& sp : v.sub_patterns) {
                  os << sp.name << ": ";
-                 print_pattern(sp.pat, is_refutable);
+                 print_pattern(sp.pat, isRefutable);
                  os << ",";
              }
-             if (!v.is_exhaustive) {
+             if (!v.isExhaustive) {
                  os << "..";
              }
              os << "}";
          }),
-        (Tuple, os << "("; this->print_pattern_tuple(v, is_refutable); os << ")";),
+        (Tuple, os << "("; this->print_pattern_tuple(v, isRefutable); os << ")";),
         (
             Slice, os << "["; for (const auto& sp : v.sub_pats) {
-                print_pattern(sp, is_refutable);
+                print_pattern(sp, isRefutable);
                 os << ", ";
             } os << "]";
         ),
         (
             SplitSlice, os << "["; bool needs_comma = false; for (const auto& sp : v.leading) {
-                print_pattern(sp, is_refutable);
+                print_pattern(sp, isRefutable);
                 os << ", ";
             }
 
-                                                               if (v.extraBind.is_valid()) {
+                                                               if (v.extraBind.isValid()) {
                                                                    const auto& b = v.extraBind;
                                                                    if (b.isMutable) {
                                                                        os << "mut ";
@@ -1313,7 +1313,7 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool is_refutable) {
                     os << ", ";
                 }
                 for (const auto& sp : v.trailing) {
-                    print_pattern(sp, is_refutable);
+                    print_pattern(sp, isRefutable);
                     os << ", ";
                 }
             } os
@@ -1321,7 +1321,7 @@ void RustPrinter::print_pattern(const AST::Pattern& p, bool is_refutable) {
         ),
         (Or, os << "("; for (const auto& e : v) {
             os << (&e == &v.front() ? "" : " | ");
-            print_pattern(e, is_refutable);
+            print_pattern(e, isRefutable);
         } os << ")";)
     )
 }
@@ -1342,7 +1342,7 @@ void RustPrinter::handleStruct(const AST::Struct& s) {
         (Struct, os << "\n"; print_bounds(s.params());
 
          os << indent() << "{\n";
-         inc_indent();
+         incIndent();
          for (const auto& i : e.ents) { os << indent() << i.vis << i.mName << ": " << i.mType.print_pretty() << ",\n"; } decIndent();
          os << indent() << "}\n";)
     )
@@ -1355,11 +1355,11 @@ void RustPrinter::handleEnum(const AST::Enum& s) {
     print_bounds(s.params());
 
     os << indent() << "{\n";
-    inc_indent();
+    incIndent();
     unsigned int idx = 0;
     for (const auto& i : s.variants()) {
         os << indent() << "/*" << idx << "*/" << i.mName;
-        TU_MATCH(AST::EnumVariantData, (i.mData), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.mItems) os << t.mType.print_pretty() << ", "; os << ")";), (Struct, os << "{\n"; inc_indent(); for (const auto& i : e.fields) { os << indent() << i.mName << ": " << i.mType.print_pretty() << ",\n"; } decIndent(); os << indent() << "}";))
+        TU_MATCH(AST::EnumVariantData, (i.mData), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.mItems) os << t.mType.print_pretty() << ", "; os << ")";), (Struct, os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.mName << ": " << i.mType.print_pretty() << ",\n"; } decIndent(); os << indent() << "}";))
         if (i.discriminantValue) {
             os << " = " << i.discriminantValue;
         }
@@ -1388,10 +1388,10 @@ void RustPrinter::handleTrait(const AST::Trait& s) {
     print_bounds(s.params());
 
     os << indent() << "{\n";
-    inc_indent();
+    incIndent();
 
     for (const auto& i : s.items()) {
-        TU_MATCH_DEF(AST::Item, (i.data), (e), (), (Type, os << indent() << "type " << i.name << ";\n";), (Function, handleFunction(AST::Visibility::make_bare_private(), i.name, e);))
+        TU_MATCH_DEF(AST::Item, (i.data), (e), (), (Type, os << indent() << "type " << i.name << ";\n";), (Function, handleFunction(AST::Visibility::makeBarePrivate(), i.name, e);))
     }
 
     decIndent();
@@ -1408,7 +1408,7 @@ void RustPrinter::handleFunction(const AST::Visibility& vis, const RcString& nam
     if (f.is_unsafe()) {
         os << "unsafe ";
     }
-    if (f.is_async()) {
+    if (f.isAsync()) {
         os << "async ";
     }
     if (f.abi() != ABI_RUST) {
@@ -1417,22 +1417,22 @@ void RustPrinter::handleFunction(const AST::Visibility& vis, const RcString& nam
     os << "fn " << name;
     print_params(f.params());
     os << "(";
-    bool is_first = true;
+    bool isFirst = true;
     for (const auto& a : f.args()) {
-        if (!is_first) {
+        if (!isFirst) {
             os << ", ";
         }
         print_attrs(a.attrs);
         print_pattern(a.pat, false);
         os << ": " << a.ty.print_pretty();
-        is_first = false;
+        isFirst = false;
     }
     os << ")";
-    if (!f.rettype().is_unit()) {
+    if (!f.rettype().isUnit()) {
         os << " -> " << f.rettype().print_pretty();
     }
 
-    if (f.code().is_valid()) {
+    if (f.code().isValid()) {
         os << "\n";
         print_bounds(f.params());
 
@@ -1446,7 +1446,7 @@ void RustPrinter::handleFunction(const AST::Visibility& vis, const RcString& nam
     }
 }
 
-void RustPrinter::inc_indent() {
+void RustPrinter::incIndent() {
     indentLevel++;
 }
 

@@ -33,7 +33,7 @@ namespace {
                 //DEBUG("BB" << i);
 
                 os << indent() << "bb" << i << ": {\n";
-                inc_indent();
+                incIndent();
                 for (const auto& stmt : block.statements) {
                     os << indent();
 
@@ -362,7 +362,7 @@ namespace {
             return RepeatLitStr{"   ", static_cast<int>(indentLevel)};
         }
 
-        void inc_indent() {
+        void incIndent() {
             indentLevel++;
         }
 
@@ -397,7 +397,7 @@ namespace {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
-            inc_indent();
+            incIndent();
             ::HIR::Visitor::visit_type_impl(impl);
             decIndent();
             os << indent() << "}\n";
@@ -413,7 +413,7 @@ namespace {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
-            inc_indent();
+            incIndent();
             ::HIR::Visitor::visit_trait_impl(trait_path, impl);
             decIndent();
             os << indent() << "}\n";
@@ -424,7 +424,7 @@ namespace {
         void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
             shortItemName = true;
 
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.is_positive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
@@ -442,7 +442,7 @@ namespace {
                 os << indent() << " " << item.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
-            inc_indent();
+            incIndent();
             ::HIR::Visitor::visit_trait(p, item);
             decIndent();
             os << indent() << "}\n";
@@ -481,7 +481,7 @@ namespace {
 
             if (item.mCode) {
                 os << indent() << "{\n";
-                inc_indent();
+                incIndent();
                 dumpMir(os, indentLevel, item.mCode.getMirOrError(Span()));
                 decIndent();
                 os << indent() << "}\n";
@@ -500,9 +500,9 @@ namespace {
             }
             os << ": " << item.mType;
             if (item.mValue) {
-                inc_indent();
+                incIndent();
                 os << " = {\n";
-                inc_indent();
+                incIndent();
                 dumpMir(os, indentLevel, item.mValue.getMirOrError(Span()));
                 decIndent();
                 os << indent() << "} /* = " << item.valueRes << "*/;\n";
@@ -522,9 +522,9 @@ namespace {
             }
             os << ": " << item.mType;
             if (item.mValue) {
-                inc_indent();
+                incIndent();
                 os << " = {\n";
-                inc_indent();
+                incIndent();
                 dumpMir(os, indentLevel, item.mValue.getMirOrError(Span()));
                 decIndent();
                 os << indent() << "} /* = " << item.valueRes << "*/;\n";
@@ -539,7 +539,7 @@ namespace {
             return RepeatLitStr{"   ", static_cast<int>(indentLevel)};
         }
 
-        void inc_indent() {
+        void incIndent() {
             indentLevel++;
         }
 

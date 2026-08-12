@@ -28,11 +28,11 @@ namespace AST {
         Visibility();
 
     public:
-        static Visibility make_bare_private();
+        static Visibility makeBarePrivate();
 
-        static Visibility make_global();
-        static Visibility make_restricted(Ty ty, AST::AbsolutePath p);
-        static Visibility make_restricted(AST::AbsolutePath p, AST::Path in_path);
+        static Visibility makeGlobal();
+        static Visibility makeRestricted(Ty ty, AST::AbsolutePath p);
+        static Visibility makeRestricted(AST::AbsolutePath p, AST::Path in_path);
 
         void fmt(::std::ostream& os) const;
         friend std::ostream& operator<<(::std::ostream& os, const Visibility& x);
@@ -41,7 +41,7 @@ namespace AST {
             return mTy;
         }
 
-        bool is_global() const {
+        bool isGlobal() const {
             return mTy == Ty::Pub;
         }
 
@@ -49,12 +49,12 @@ namespace AST {
 
         const AST::AbsolutePath& vis_path() const;
 
-        bool is_visible(const ::AST::AbsolutePath& fromMod) const;
+        bool isVisible(const ::AST::AbsolutePath& fromMod) const;
         /// Returns true if this visibility is "more" than `x`
         bool contains(const Visibility& x) const;
 
         /// Updates this visibility such that `contains(x)` returns true
-        void inplace_union(const Visibility& x);
+        void inplaceUnion(const Visibility& x);
     };
 
     enum class CachedCfg {

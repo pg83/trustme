@@ -25,7 +25,7 @@ public:
 
     Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs);
     Span(Span parent, const Position& position);
-    Span(Span parent, RcString source_crate, RcString macro_name);
+    Span(Span parent, RcString source_crate, RcString macroName);
     ~Span();
 
     Span(const Span& x);
@@ -143,7 +143,7 @@ struct Spanned {
 };
 
 template <typename T>
-Spanned<T> make_spanned(Span sp, T val) {
+Spanned<T> makeSpanned(Span sp, T val) {
     return Spanned<T>{::std::move(sp), ::std::move(val)};
 }
 

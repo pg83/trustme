@@ -57,7 +57,7 @@ namespace HIR {
 
     bool is_integer(const CoreType& v);
 
-    bool is_float(const CoreType& v);
+    bool isFloat(const CoreType& v);
 
     enum class BorrowType {
         Shared,
@@ -109,7 +109,7 @@ namespace HIR {
         TypePathBinding binding;
         ::std::unique_ptr<::HIR::GenericParams> hrtbs; // HRTBs for vtable paths ONLY
 
-        bool is_closure() const {
+        bool isClosure() const {
             return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0;
         }
 
@@ -134,7 +134,7 @@ namespace HIR {
         HIR::TypeRef type;
 
         TypeDataErasedTypeAliasInner(const HIR::ItemPath& p, const HIR::GenericParams& params);
-        bool is_public_to(const HIR::SimplePath& p) const;
+        bool isPublicTo(const HIR::SimplePath& p) const;
     };
 
     TAGGED_UNION(
@@ -231,7 +231,7 @@ namespace HIR {
              InferClass ty_class;
 
              /// Returns true if the ivar is a literal
-             bool is_lit() const {
+             bool isLit() const {
                  switch (this->ty_class) {
                      case InferClass::None:
                          return false;
@@ -290,9 +290,9 @@ namespace HIR {
             uint32_t flags = 0;
 
             bool hasTypeInfer() const { return flags & HAS_TYPE_INFER; }
-            bool needs_monomorphisation(bool ignore_lifetimes = false) const {
+            bool needs_monomorphisation(bool ignoreLifetimes = false) const {
                 const auto mask = HAS_TYPE_PARAM | HAS_UNEVALUATED_CONST
-                    | (ignore_lifetimes ? 0u : HAS_LIFETIME_PARAM);
+                    | (ignoreLifetimes ? 0u : HAS_LIFETIME_PARAM);
                 return flags & mask;
             }
             bool may_have_associated_type() const {
@@ -305,8 +305,8 @@ namespace HIR {
             // Deliberately semantic relations. Plain TypeRef equality is pointer identity.
             bool equalsIgnoringRegions(::HIR::TypeRef x) const;
             Ordering ord_ignoring_regions(::HIR::TypeRef x) const;
-            bool match_test_generics(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
-            ::HIR::Compare match_test_generics_fuzz(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
+            bool matchTestGenerics(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
+            ::HIR::Compare matchTestGenericsFuzz(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder, MatchGenerics& callback) const;
             Compare compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolve_placeholder) const;
             const ::HIR::SimplePath* getSortPath() const;
         )

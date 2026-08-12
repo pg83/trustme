@@ -27,7 +27,7 @@ public:
         return hi;
     }
 
-    bool is_u64() const {
+    bool isU64() const {
         return hi == 0;
     }
 
@@ -240,7 +240,7 @@ public:
         return S128(U128(0, INT64_MIN));
     }
 
-    bool is_i64() const {
+    bool isI64() const {
         return inner.hi == ((inner.lo >> 63) ? UINT64_MAX : 0);
     }
 
@@ -300,7 +300,7 @@ public:
 
     S128 operator%(S128 x) const;
 
-    bool is_neg() const {
+    bool isNeg() const {
         return (inner >> 127).truncate_u64() != 0;
     }
 

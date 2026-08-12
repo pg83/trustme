@@ -110,7 +110,7 @@ namespace {
             blocks.reserve(150'000 * 3 / BLOCK_SIZE / 2);
         }
 
-        std::pair<const RcString*, bool> lookup_or_add(const StringView& sv) {
+        std::pair<const RcString*, bool> lookupOrAdd(const StringView& sv) {
             // Special case: empty collection
             if (blocks.empty()) {
                 blocks.push_back(Block());
@@ -128,7 +128,7 @@ namespace {
             }
             // Special case: The first block sorts after this string, so we need to add the new string to the start of it (or to a new block before)
             else if (maybe_after == blocks.begin()) {
-                return insert_into_block(maybe_after, maybe_after->ents.begin(), RcString(sv));
+                return insertIntoBlock(maybe_after, maybe_after->ents.begin(), RcString(sv));
             }
             // Since the string sorts before the beginning of `maybe_after`, it should be in (or be added to) the previous block
             else {
@@ -141,7 +141,7 @@ namespace {
                     return std::make_pair(&*maybe_pos, false);
                 } else {
                     // Not equal, so it has to be above - so insert
-                    return insert_into_block(maybe_block, maybe_pos, RcString(sv));
+                    return insertIntoBlock(maybe_block, maybe_pos, RcString(sv));
                 }
             }
         }
@@ -183,7 +183,7 @@ namespace {
         }
 
     private:
-        std::pair<const RcString*, bool> insert_into_block(std::vector<Block>::iterator block, std::vector<RcString>::iterator slot, RcString rv) {
+        std::pair<const RcString*, bool> insertIntoBlock(std::vector<Block>::iterator block, std::vector<RcString>::iterator slot, RcString rv) {
 #define VALIDATE 0
 #if VALIDATE
             size_t start_len = 0;
@@ -250,7 +250,7 @@ RcString RcString::new_interned(const char* s, size_t len) {
     if (!RcStringInternedStrings) {
         RcStringInternedStrings = new TieredSet;
     }
-    auto ret = RcStringInternedStrings->lookup_or_add(StringView{s, len});
+    auto ret = RcStringInternedStrings->lookupOrAdd(StringView{s, len});
     // Set interned and invalidate the cache if an insert happened
     if (ret.second) {
         ret.first->ptr->ordering = 1;
@@ -261,7 +261,7 @@ RcString RcString::new_interned(const char* s, size_t len) {
 }
 
 Ordering RcString::ord_interned(const RcString& s) const {
-    assert(s.is_interned() && this->is_interned());
+    assert(s.isInterned() && this->isInterned());
     if (!RcStringInternedOrderingValid) {
         // Populate cache
         unsigned i = 1;
@@ -340,7 +340,7 @@ Ordering RcString::ord(const RcString& s) const {
         return ptr ? OrdGreater : OrdLess;
     }
     // If both are interned, then use stored sorting
-    if (is_interned() && s.is_interned()) {
+    if (isInterned() && s.isInterned()) {
         return ord_interned(s);
     }
     return ord(s.c_str(), s.size());
@@ -350,7 +350,7 @@ bool RcString::operator==(const RcString& s) const {
         return false;
     }
     // If both are interned, then just compare pointers
-    if (is_interned() && s.is_interned()) {
+    if (isInterned() && s.isInterned()) {
         return ptr == s.ptr;
     }
     return this->ord(s) == OrdEqual;

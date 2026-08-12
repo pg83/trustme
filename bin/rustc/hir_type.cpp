@@ -143,7 +143,7 @@ HIR::ArraySize HIR::ArraySize::clone() const {
     this->generics.bounds.clear();
 }
 
-bool ::HIR::TypeDataErasedTypeAliasInner::is_public_to(const HIR::SimplePath& p) const {
+bool ::HIR::TypeDataErasedTypeAliasInner::isPublicTo(const HIR::SimplePath& p) const {
     return p.starts_with(this->path, /*skip_last=*/true);
 }
 
@@ -188,7 +188,7 @@ bool ::HIR::TypeDataErasedTypeAliasInner::is_public_to(const HIR::SimplePath& p)
         {
                 ft.hrls.mLifetimes = f.mParams.mLifetimes;
                 method_pp_trimmed = ms.pp_method->clone();
-                method_pp_trimmed.mLifetimes = std::move(ft.hrls.make_nop_params(types, 3, /*lifetimes_only*/ true).mLifetimes);
+                method_pp_trimmed.mLifetimes = std::move(ft.hrls.makeNopParams(types, 3, /*lifetimes_only*/ true).mLifetimes);
                 ms.pp_method = &method_pp_trimmed;
         }
         for( const auto& arg : f.mArgs )
@@ -691,7 +691,7 @@ namespace {
     }
 
     void addLifetimeFlags(uint32_t& flags, LifetimeRef lifetime) {
-        if (lifetime.is_param() && lifetime.asParam().group() != GENERICHrtb) {
+        if (lifetime.isParam() && lifetime.asParam().group() != GENERICHrtb) {
             flags |= TypeData::HAS_LIFETIME_PARAM;
         }
     }
@@ -1258,14 +1258,14 @@ Ordering HIR::TypeData::ord_ignoring_regions(::HIR::TypeRef x) const {
 }
 
 namespace {
-    ::HIR::Compare match_generics_pp(const Span& sp, const ::HIR::PathParams& t, const ::HIR::PathParams& x, ::HIR::t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) {
-        return t.match_test_generics_fuzz(sp, x, resolve_placeholder, callback);
+    ::HIR::Compare matchGenericsPp(const Span& sp, const ::HIR::PathParams& t, const ::HIR::PathParams& x, ::HIR::t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) {
+        return t.matchTestGenericsFuzz(sp, x, resolve_placeholder, callback);
     }
 
-    ::HIR::Compare match_values(const Span& sp, const ::HIR::ConstGeneric& t, const ::HIR::ConstGeneric& x, ::HIR::MatchGenerics& callback) {
+    ::HIR::Compare matchValues(const Span& sp, const ::HIR::ConstGeneric& t, const ::HIR::ConstGeneric& x, ::HIR::MatchGenerics& callback) {
         // LHS generic: call callback
         if (const auto* e = t.opt_Generic()) {
-            return callback.match_val(*e, x);
+            return callback.matchVal(*e, x);
         }
 
         // Either are infer, check for exact match or return fuzzy
@@ -1301,11 +1301,11 @@ namespace {
     }
 }
 
-bool ::HIR::TypeData::match_test_generics(const Span& sp, ::HIR::TypeRef x_in, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) const {
-    return this->match_test_generics_fuzz(sp, x_in, resolve_placeholder, callback) == ::HIR::Compare::Equal;
+bool ::HIR::TypeData::matchTestGenerics(const Span& sp, ::HIR::TypeRef x_in, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) const {
+    return this->matchTestGenericsFuzz(sp, x_in, resolve_placeholder, callback) == ::HIR::Compare::Equal;
 }
 
-::HIR::Compare HIR::TypeData::match_test_generics_fuzz(const Span& sp, ::HIR::TypeRef x_in, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) const {
+::HIR::Compare HIR::TypeData::matchTestGenericsFuzz(const Span& sp, ::HIR::TypeRef x_in, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& callback) const {
     const TypeRef self = this;
     return callback.cmpType(sp, self, x_in, resolve_placeholder);
 }
@@ -1325,7 +1325,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 if (tpe.mPath != xpe.mPath) {
                     rv = Compare::Unequal;
                 } else {
-                    rv = match_generics_pp(sp, tpe.mParams, xpe.mParams, resolve_placeholder, *this);
+                    rv = matchGenericsPp(sp, tpe.mParams, xpe.mParams, resolve_placeholder, *this);
                 }
             }
             TU_ARMA(UfcsKnown, tpe, xpe) {
@@ -1333,25 +1333,25 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 if (tpe.trait.mPath != xpe.trait.mPath) {
                     rv = Compare::Unequal;
                 }
-                rv &= match_generics_pp(sp, tpe.trait.mParams, xpe.trait.mParams, resolve_placeholder, *this);
+                rv &= matchGenericsPp(sp, tpe.trait.mParams, xpe.trait.mParams, resolve_placeholder, *this);
                 if (tpe.item != xpe.item) {
                     rv = Compare::Unequal;
                 }
-                rv &= match_generics_pp(sp, tpe.params, xpe.params, resolve_placeholder, *this);
+                rv &= matchGenericsPp(sp, tpe.params, xpe.params, resolve_placeholder, *this);
             }
             TU_ARMA(UfcsUnknown, tpe, xpe) {
                 rv = this->cmpType(sp, tpe.type, xpe.type, resolve_placeholder);
                 if (tpe.item != xpe.item) {
                     rv = Compare::Unequal;
                 }
-                rv &= match_generics_pp(sp, tpe.params, xpe.params, resolve_placeholder, *this);
+                rv &= matchGenericsPp(sp, tpe.params, xpe.params, resolve_placeholder, *this);
             }
             TU_ARMA(UfcsInherent, tpe, xpe) {
                 rv = this->cmpType(sp, tpe.type, xpe.type, resolve_placeholder);
                 if (tpe.item != xpe.item) {
                     rv = Compare::Unequal;
                 }
-                rv &= match_generics_pp(sp, tpe.params, xpe.params, resolve_placeholder, *this);
+                rv &= matchGenericsPp(sp, tpe.params, xpe.params, resolve_placeholder, *this);
             }
         }
     }
@@ -1361,7 +1361,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
 
 ::HIR::Compare HIR::MatchGenerics::cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, t_cb_resolve_type resolve_placeholder) {
     if (const auto* e = ty_l->opt_Generic()) {
-        return this->match_ty(*e, ty_r, resolve_placeholder);
+        return this->matchTy(*e, ty_r, resolve_placeholder);
     }
     const auto& v = (ty_l->is_Infer() ? resolve_placeholder.getType(sp, ty_l) : ty_l);
     const auto& x = (ty_r->is_Infer() || ty_r->is_Generic() ? resolve_placeholder.getType(sp, ty_r) : ty_r);
@@ -1554,31 +1554,31 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             }
             static const HIR::GenericParams emptyParams;
             auto _ = push_hrb(te.mTrait.hrtbs ? *te.mTrait.hrtbs : emptyParams);
-            auto cmp = match_generics_pp(sp, te.mTrait.mPath.mParams, xe.mTrait.mPath.mParams, resolve_placeholder, *this);
+            auto cmp = matchGenericsPp(sp, te.mTrait.mPath.mParams, xe.mTrait.mPath.mParams, resolve_placeholder, *this);
             for (unsigned int i = 0; i < te.markers.size(); i++) {
                 if (te.markers[i].mPath != xe.markers[i].mPath) {
                     return Compare::Unequal;
                 }
-                cmp &= match_generics_pp(sp, te.markers[i].mParams, xe.markers[i].mParams, resolve_placeholder, *this);
+                cmp &= matchGenericsPp(sp, te.markers[i].mParams, xe.markers[i].mParams, resolve_placeholder, *this);
             }
 
-            auto it_l = te.mTrait.typeBounds.begin();
-            auto it_r = xe.mTrait.typeBounds.begin();
-            while (it_l != te.mTrait.typeBounds.end() && it_r != xe.mTrait.typeBounds.end()) {
-                if (it_l->first != it_r->first) {
+            auto itL = te.mTrait.typeBounds.begin();
+            auto itR = xe.mTrait.typeBounds.begin();
+            while (itL != te.mTrait.typeBounds.end() && itR != xe.mTrait.typeBounds.end()) {
+                if (itL->first != itR->first) {
                     return Compare::Unequal;
                 }
-                cmp &= it_l->second.type->match_test_generics_fuzz(sp, it_r->second.type, resolve_placeholder, *this);
-                ++it_l;
-                ++it_r;
+                cmp &= itL->second.type->matchTestGenericsFuzz(sp, itR->second.type, resolve_placeholder, *this);
+                ++itL;
+                ++itR;
             }
 
-            if (it_l != te.mTrait.typeBounds.end() || it_r != xe.mTrait.typeBounds.end()) {
+            if (itL != te.mTrait.typeBounds.end() || itR != xe.mTrait.typeBounds.end()) {
                 return Compare::Unequal;
             }
 
-            if (te.lifetime.is_param()) {
-                /*cmp &= */ this->match_lft(HIR::GenericRef("", te.lifetime.binding), xe.lifetime);
+            if (te.lifetime.isParam()) {
+                /*cmp &= */ this->matchLft(HIR::GenericRef("", te.lifetime.binding), xe.lifetime);
             }
 
             return cmp;
@@ -1588,10 +1588,10 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 return Compare::Unequal;
             }
             TU_MATCH_HDRA((te.inner, xe.inner), {)
-            TU_ARMA(Known, l, r) return l->match_test_generics_fuzz(sp, r, resolve_placeholder, *this);
+            TU_ARMA(Known, l, r) return l->matchTestGenericsFuzz(sp, r, resolve_placeholder, *this);
             TU_ARMA(Alias, l, r) {
                 return l.inner == r.inner
-                    ? l.params.match_test_generics_fuzz(sp, r.params, resolve_placeholder, *this)
+                    ? l.params.matchTestGenericsFuzz(sp, r.params, resolve_placeholder, *this)
                     : Compare::Unequal;
             }
             TU_ARMA(Fcn, l, r) {
@@ -1607,9 +1607,9 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
             if (const auto* tse = te.size.opt_Unevaluated()) {
                 HIR::ConstGeneric v;
                 if (xe.size.opt_Known()) {
-                    rv &= match_values(sp, *tse, EncodedLiteralPtr(EncodedLiteral::make_usize(xe.size.as_Known())), *this);
+                    rv &= matchValues(sp, *tse, EncodedLiteralPtr(EncodedLiteral::makeUsize(xe.size.as_Known())), *this);
                 } else {
-                    rv &= match_values(sp, *tse, xe.size.as_Unevaluated(), *this);
+                    rv &= matchValues(sp, *tse, xe.size.as_Unevaluated(), *this);
                 }
             } else if (const auto* xse = xe.size.opt_Unevaluated()) {
                 // `te.size` must be known here, all we need to handle is `Infer`?
@@ -1654,8 +1654,8 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::push_hrb(const std::unique_ptr
                 return Compare::Unequal;
             }
             auto rv = Compare::Equal;
-            if (te.lifetime.is_param()) {
-                /*rv &=*/this->match_lft(te.lifetime.asParam(), xe.lifetime);
+            if (te.lifetime.isParam()) {
+                /*rv &=*/this->matchLft(te.lifetime.asParam(), xe.lifetime);
             } else {
                 //if( te.lifetime != xe.lifetime )
                 //    return Compare::Unequal;
@@ -1709,9 +1709,9 @@ bool HIR::TypePathBinding::operator==(const HIR::TypePathBinding& x) const {
 }
 
 const ::HIR::TraitMarkings* HIR::TypePathBinding::getTraitMarkings() const {
-    const ::HIR::TraitMarkings* markings_ptr = nullptr;
-    TU_MATCHA((*this), (tpb), (Unbound, ), (Opaque, ), (ExternType, markings_ptr = &tpb->markings;), (Struct, markings_ptr = &tpb->markings;), (Union, markings_ptr = &tpb->markings;), (Enum, markings_ptr = &tpb->markings;))
-    return markings_ptr;
+    const ::HIR::TraitMarkings* markingsPtr = nullptr;
+    TU_MATCHA((*this), (tpb), (Unbound, ), (Opaque, ), (ExternType, markingsPtr = &tpb->markings;), (Struct, markingsPtr = &tpb->markings;), (Union, markingsPtr = &tpb->markings;), (Enum, markingsPtr = &tpb->markings;))
+    return markingsPtr;
 }
 
 const ::HIR::GenericParams* HIR::TypePathBinding::getGenerics() const {
@@ -2160,7 +2160,7 @@ bool is_integer(const CoreType& v) {
             return false;
     }
 }
-bool is_float(const CoreType& v) {
+bool isFloat(const CoreType& v) {
     switch (v) {
         case CoreType::F16:
         case CoreType::F32:

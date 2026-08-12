@@ -102,7 +102,7 @@ class CMacroUseHandler: public ExpandDecorator {
                 }
                 ASSERT_BUG(sp, ec.hir->rootModule.macroItems.count(name) == 1, "Macro `" << name << "` missing from crate " << ec.mName);
                 const auto* e = &*ec.hir->rootModule.macroItems.at(name);
-                if (!e->publicity.is_global()) {
+                if (!e->publicity.isGlobal()) {
                     DEBUG("Not public: " << name);
                     continue;
                 }
@@ -135,8 +135,8 @@ class CMacroUseHandler: public ExpandDecorator {
                 TU_ARMA(Import, imp) {
                         throw "Unexpected";
                     }
-                    TU_ARMA(MacroRules, mac_ptr) {
-                        mr = &*mac_ptr;
+                    TU_ARMA(MacroRules, macPtr) {
+                        mr = &*macPtr;
                     }
                     TU_ARMA(ProcMacro, p) {
                         mr = &p;
@@ -194,11 +194,11 @@ class CMacroExportHandler: public ExpandDecorator {
         // TODO: Flags on the attribute
         // - `local_inner_macros`: Forces macro lookups within the expansion to search within the source crate
         //   > Strictly speaking, not the same as `macro`-style macros?
-        bool local_inner_macros = false;
+        bool localInnerMacros = false;
         if (mi.data().size() > 0) {
             mi.parse_paren_ident_list([&](const Span& sp, RcString ident) {
                 if (ident == "local_inner_macros") {
-                    local_inner_macros = true;
+                    localInnerMacros = true;
                 } else {
                     ERROR(sp, E0000, "Unknown option for #[macro_export] - " << ident);
                 }
@@ -218,13 +218,13 @@ class CMacroExportHandler: public ExpandDecorator {
             const auto& name = p.nodes.front().name();
             mod.macroImports.push_back(AST::Module::MacroImport{true, u->entries.front().name, AST::AbsolutePath(p.crate, {name}), {}});
 
-            crate.rootModule.addItem(sp, AST::Visibility::make_global(), name, i.clone(), {});
+            crate.rootModule.addItem(sp, AST::Visibility::makeGlobal(), name, i.clone(), {});
         } else if (i.is_MacroInv()) {
             const auto& mac = i.as_MacroInv();
             if (!(mac.path().is_trivial() && mac.path().asTrivial() == "macro_rules")) {
                 ERROR(sp, E0000, "#[macro_export] is only valid on macro_rules!");
             }
-            const auto& name = mac.input_ident();
+            const auto& name = mac.inputIdent();
 
             // Tag the macro in the module for crate export
             // AND move it to the root module
@@ -239,7 +239,7 @@ class CMacroExportHandler: public ExpandDecorator {
             mod.macroImports.push_back(AST::Module::MacroImport{false, name, AST::AbsolutePath("", {name}), &*e.data});
             DEBUG(mod.path() << ": macro_use Import " << mod.macroImports.back().name << " = " << mod.macroImports.back().path);
 
-            if (local_inner_macros) {
+            if (localInnerMacros) {
                 Ident::ModPath mp;
                 mp.crate = "";
                 // Empty node list, will search the crate root
@@ -302,7 +302,7 @@ class CBuiltinMacroHandler: public ExpandDecorator {
             if (!(e.path().is_trivial() && e.path().asTrivial() == "macro_rules")) {
                 ERROR(sp, E0000, "Use of #[rustc_builtin_macro] on macro other than macro_rules! - " << i.tag_str());
             }
-            name = e.input_ident();
+            name = e.inputIdent();
         } else if (i.is_Macro()) {
             name = path.nodes.back();
         } else {

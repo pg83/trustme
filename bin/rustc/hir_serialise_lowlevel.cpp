@@ -128,7 +128,7 @@ namespace HIR {
             zstream.avail_in = len;
             zstream.next_in = reinterpret_cast<unsigned char*>(const_cast<void*>(buf));
 
-            size_t last_avail_in = zstream.avail_in;
+            size_t lastAvailIn = zstream.avail_in;
 
             // While there's data to compress
             while (zstream.avail_in > 0) {
@@ -140,8 +140,8 @@ namespace HIR {
                     throw ::std::runtime_error("zlib deflate stream error");
                 }
 
-                size_t used_this_time = last_avail_in - zstream.avail_in;
-                last_avail_in = zstream.avail_in;
+                size_t used_this_time = lastAvailIn - zstream.avail_in;
+                lastAvailIn = zstream.avail_in;
                 byteInCount += used_this_time;
 
                 // If the entire input wasn't consumed, then it was likely due to a lack of output space

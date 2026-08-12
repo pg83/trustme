@@ -60,14 +60,14 @@ TargetSpec gTarget;
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size, size_t& out_align);
 
 namespace {
-    TargetSpec load_spec_from_file(const ::std::string& filename) {
+    TargetSpec loadSpecFromFile(const ::std::string& filename) {
         TargetSpec rv;
 
         TomlFile toml_file(filename);
-        for (auto key_val : toml_file) {
+        for (auto keyVal : toml_file) {
             // Assertion: The way toml works, there has to be at least two entries in every path.
-            assert(key_val.path.size() > 1);
-            DEBUG(key_val.path << " = " << key_val.value);
+            assert(keyVal.path.size() > 1);
+            DEBUG(keyVal.path << " = " << keyVal.value);
 
             auto checkPathLength = [&](const TomlKeyValue& kv, unsigned len) {
                 if (kv.path.size() != len) {
@@ -86,143 +86,143 @@ namespace {
             };
 
             try {
-                if (key_val.path[0] == "target") {
-                    checkPathLengthMin(key_val, 2);
-                    if (key_val.path[1] == "family") {
-                        checkPathLength(key_val, 2);
-                        rv.family = key_val.value.asString();
-                    } else if (key_val.path[1] == "os-name") {
-                        checkPathLength(key_val, 2);
-                        rv.osName = key_val.value.asString();
-                    } else if (key_val.path[1] == "env-name") {
-                        checkPathLength(key_val, 2);
-                        rv.envName = key_val.value.asString();
-                    } else if (key_val.path[1] == "arch") {
-                        checkPathLength(key_val, 2);
-                        if (key_val.value.asString() == ARCH_ARM32.mName) {
+                if (keyVal.path[0] == "target") {
+                    checkPathLengthMin(keyVal, 2);
+                    if (keyVal.path[1] == "family") {
+                        checkPathLength(keyVal, 2);
+                        rv.family = keyVal.value.asString();
+                    } else if (keyVal.path[1] == "os-name") {
+                        checkPathLength(keyVal, 2);
+                        rv.osName = keyVal.value.asString();
+                    } else if (keyVal.path[1] == "env-name") {
+                        checkPathLength(keyVal, 2);
+                        rv.envName = keyVal.value.asString();
+                    } else if (keyVal.path[1] == "arch") {
+                        checkPathLength(keyVal, 2);
+                        if (keyVal.value.asString() == ARCH_ARM32.mName) {
                             rv.arch = ARCH_ARM32;
-                        } else if (key_val.value.asString() == ARCH_ARM64.mName) {
+                        } else if (keyVal.value.asString() == ARCH_ARM64.mName) {
                             rv.arch = ARCH_ARM64;
-                        } else if (key_val.value.asString() == ARCH_X86.mName) {
+                        } else if (keyVal.value.asString() == ARCH_X86.mName) {
                             rv.arch = ARCH_X86;
-                        } else if (key_val.value.asString() == ARCH_X86_64.mName) {
+                        } else if (keyVal.value.asString() == ARCH_X86_64.mName) {
                             rv.arch = ARCH_X86_64;
-                        } else if (key_val.value.asString() == ARCH_M68K.mName) {
+                        } else if (keyVal.value.asString() == ARCH_M68K.mName) {
                             rv.arch = ARCH_M68K;
-                        } else if (key_val.value.asString() == ARCH_POWERPC.mName) {
+                        } else if (keyVal.value.asString() == ARCH_POWERPC.mName) {
                             rv.arch = ARCH_POWERPC;
-                        } else if (key_val.value.asString() == ARCH_POWERPC64.mName) {
+                        } else if (keyVal.value.asString() == ARCH_POWERPC64.mName) {
                             rv.arch = ARCH_POWERPC64;
-                        } else if (key_val.value.asString() == ARCH_POWERPC64LE.mName) {
+                        } else if (keyVal.value.asString() == ARCH_POWERPC64LE.mName) {
                             rv.arch = ARCH_POWERPC64LE;
-                        } else if (key_val.value.asString() == ARCH_RISCV64.mName) {
+                        } else if (keyVal.value.asString() == ARCH_RISCV64.mName) {
                             rv.arch = ARCH_RISCV64;
                         } else {
                             // Error.
-                            ::std::cerr << "ERROR: Unknown architecture name '" << key_val.value.asString() << "' in " << filename << ::std::endl;
+                            ::std::cerr << "ERROR: Unknown architecture name '" << keyVal.value.asString() << "' in " << filename << ::std::endl;
                             exit(1);
                         }
                     } else {
                         // Warning
-                        ::std::cerr << "Warning: Unknown configuration item " << key_val.path[0] << "." << key_val.path[1] << " in " << filename << ::std::endl;
+                        ::std::cerr << "Warning: Unknown configuration item " << keyVal.path[0] << "." << keyVal.path[1] << " in " << filename << ::std::endl;
                     }
-                } else if (key_val.path[0] == "backend") {
-                    checkPathLengthMin(key_val, 2);
-                    if (key_val.path[1] == "c") {
-                        checkPathLengthMin(key_val, 3);
+                } else if (keyVal.path[0] == "backend") {
+                    checkPathLengthMin(keyVal, 2);
+                    if (keyVal.path[1] == "c") {
+                        checkPathLengthMin(keyVal, 3);
 
-                        if (key_val.path[2] == "variant") {
-                            checkPathLength(key_val, 3);
-                            if (key_val.value.asString() != "gnu") {
-                                ::std::cerr << "ERROR: Unknown C variant name '" << key_val.value.asString() << "' in " << filename << ::std::endl;
+                        if (keyVal.path[2] == "variant") {
+                            checkPathLength(keyVal, 3);
+                            if (keyVal.value.asString() != "gnu") {
+                                ::std::cerr << "ERROR: Unknown C variant name '" << keyVal.value.asString() << "' in " << filename << ::std::endl;
                                 exit(1);
                             }
-                        } else if (key_val.path[2] == "target") {
-                            checkPathLength(key_val, 3);
-                            rv.backendC.cCompiler = key_val.value.asString();
-                        } else if (key_val.path[2] == "emulate-i128") {
-                            checkPathLength(key_val, 3);
-                            rv.backendC.emulatedI128 = key_val.value.asBool();
-                        } else if (key_val.path[2] == "compiler-opts") {
-                            checkPathLength(key_val, 3);
-                            for (const auto& v : key_val.value.asList()) {
+                        } else if (keyVal.path[2] == "target") {
+                            checkPathLength(keyVal, 3);
+                            rv.backendC.cCompiler = keyVal.value.asString();
+                        } else if (keyVal.path[2] == "emulate-i128") {
+                            checkPathLength(keyVal, 3);
+                            rv.backendC.emulatedI128 = keyVal.value.asBool();
+                        } else if (keyVal.path[2] == "compiler-opts") {
+                            checkPathLength(keyVal, 3);
+                            for (const auto& v : keyVal.value.asList()) {
                                 rv.backendC.compilerOpts.push_back(v.asString());
                             }
-                        } else if (key_val.path[2] == "linker-opts-pre") {
-                            checkPathLength(key_val, 3);
-                            for (const auto& v : key_val.value.asList()) {
+                        } else if (keyVal.path[2] == "linker-opts-pre") {
+                            checkPathLength(keyVal, 3);
+                            for (const auto& v : keyVal.value.asList()) {
                                 rv.backendC.linkerOptsPre.push_back(v.asString());
                             }
-                        } else if (key_val.path[2] == "linker-opts" || key_val.path[2] == "linker-opts-post") {
-                            checkPathLength(key_val, 3);
-                            for (const auto& v : key_val.value.asList()) {
+                        } else if (keyVal.path[2] == "linker-opts" || keyVal.path[2] == "linker-opts-post") {
+                            checkPathLength(keyVal, 3);
+                            for (const auto& v : keyVal.value.asList()) {
                                 rv.backendC.linkerOptsPost.push_back(v.asString());
                             }
                         } else {
-                            ::std::cerr << "WARNING: Unknown field backend.c." << key_val.path[2] << " in " << filename << ::std::endl;
+                            ::std::cerr << "WARNING: Unknown field backend.c." << keyVal.path[2] << " in " << filename << ::std::endl;
                         }
                     }
                     // Does MMIR need configuration?
                     else {
-                        ::std::cerr << "WARNING: Unknown configuration item backend." << key_val.path[1] << " in " << filename << ::std::endl;
+                        ::std::cerr << "WARNING: Unknown configuration item backend." << keyVal.path[1] << " in " << filename << ::std::endl;
                     }
-                } else if (key_val.path[0] == "arch") {
-                    checkPathLengthMin(key_val, 2);
-                    if (key_val.path[1] == "name") {
-                        checkPathLength(key_val, 2);
+                } else if (keyVal.path[0] == "arch") {
+                    checkPathLengthMin(keyVal, 2);
+                    if (keyVal.path[1] == "name") {
+                        checkPathLength(keyVal, 2);
                         if (rv.arch.mName != "") {
                             ::std::cerr << "ERROR: Architecture already specified to be '" << rv.arch.mName << "'" << ::std::endl;
                             exit(1);
                         }
-                        rv.arch.mName = key_val.value.asString();
-                    } else if (key_val.path[1] == "pointer-bits") {
-                        checkPathLength(key_val, 2);
-                        rv.arch.pointerBits = key_val.value.asInt();
-                    } else if (key_val.path[1] == "is-big-endian") {
-                        checkPathLength(key_val, 2);
-                        rv.arch.bigEndian = key_val.value.asBool();
-                    } else if (key_val.path[1] == "has-atomic-u8") {
-                        checkPathLength(key_val, 2);
-                        rv.arch.atomics.u8 = key_val.value.asBool();
-                    } else if (key_val.path[1] == "has-atomic-u16") {
-                        checkPathLength(key_val, 2);
-                        rv.arch.atomics.u16 = key_val.value.asBool();
-                    } else if (key_val.path[1] == "has-atomic-u32") {
-                        checkPathLength(key_val, 2);
-                        rv.arch.atomics.u32 = key_val.value.asBool();
-                    } else if (key_val.path[1] == "has-atomic-u64") {
-                        checkPathLength(key_val, 2);
-                        rv.arch.atomics.u64 = key_val.value.asBool();
-                    } else if (key_val.path[1] == "has-atomic-ptr") {
-                        checkPathLength(key_val, 2);
-                        rv.arch.atomics.ptr = key_val.value.asBool();
-                    } else if (key_val.path[1] == "alignments") {
-                        checkPathLength(key_val, 3);
-                        if (key_val.path[2] == "u16") {
-                            rv.arch.alignments.u16 = key_val.value.asInt();
-                        } else if (key_val.path[2] == "u32") {
-                            rv.arch.alignments.u32 = key_val.value.asInt();
-                        } else if (key_val.path[2] == "u64") {
-                            rv.arch.alignments.u64 = key_val.value.asInt();
-                        } else if (key_val.path[2] == "u128") {
-                            rv.arch.alignments.u128 = key_val.value.asInt();
-                        } else if (key_val.path[2] == "f32") {
-                            rv.arch.alignments.f32 = key_val.value.asInt();
-                        } else if (key_val.path[2] == "f64") {
-                            rv.arch.alignments.f64 = key_val.value.asInt();
-                        } else if (key_val.path[2] == "ptr") {
-                            rv.arch.alignments.ptr = key_val.value.asInt();
+                        rv.arch.mName = keyVal.value.asString();
+                    } else if (keyVal.path[1] == "pointer-bits") {
+                        checkPathLength(keyVal, 2);
+                        rv.arch.pointerBits = keyVal.value.asInt();
+                    } else if (keyVal.path[1] == "is-big-endian") {
+                        checkPathLength(keyVal, 2);
+                        rv.arch.bigEndian = keyVal.value.asBool();
+                    } else if (keyVal.path[1] == "has-atomic-u8") {
+                        checkPathLength(keyVal, 2);
+                        rv.arch.atomics.u8 = keyVal.value.asBool();
+                    } else if (keyVal.path[1] == "has-atomic-u16") {
+                        checkPathLength(keyVal, 2);
+                        rv.arch.atomics.u16 = keyVal.value.asBool();
+                    } else if (keyVal.path[1] == "has-atomic-u32") {
+                        checkPathLength(keyVal, 2);
+                        rv.arch.atomics.u32 = keyVal.value.asBool();
+                    } else if (keyVal.path[1] == "has-atomic-u64") {
+                        checkPathLength(keyVal, 2);
+                        rv.arch.atomics.u64 = keyVal.value.asBool();
+                    } else if (keyVal.path[1] == "has-atomic-ptr") {
+                        checkPathLength(keyVal, 2);
+                        rv.arch.atomics.ptr = keyVal.value.asBool();
+                    } else if (keyVal.path[1] == "alignments") {
+                        checkPathLength(keyVal, 3);
+                        if (keyVal.path[2] == "u16") {
+                            rv.arch.alignments.u16 = keyVal.value.asInt();
+                        } else if (keyVal.path[2] == "u32") {
+                            rv.arch.alignments.u32 = keyVal.value.asInt();
+                        } else if (keyVal.path[2] == "u64") {
+                            rv.arch.alignments.u64 = keyVal.value.asInt();
+                        } else if (keyVal.path[2] == "u128") {
+                            rv.arch.alignments.u128 = keyVal.value.asInt();
+                        } else if (keyVal.path[2] == "f32") {
+                            rv.arch.alignments.f32 = keyVal.value.asInt();
+                        } else if (keyVal.path[2] == "f64") {
+                            rv.arch.alignments.f64 = keyVal.value.asInt();
+                        } else if (keyVal.path[2] == "ptr") {
+                            rv.arch.alignments.ptr = keyVal.value.asInt();
                         } else {
-                            ::std::cerr << "WARNING: Unknown field arch.alignments." << key_val.path[1] << " in " << filename << ::std::endl;
+                            ::std::cerr << "WARNING: Unknown field arch.alignments." << keyVal.path[1] << " in " << filename << ::std::endl;
                         }
                     } else {
-                        ::std::cerr << "WARNING: Unknown field arch." << key_val.path[1] << " in " << filename << ::std::endl;
+                        ::std::cerr << "WARNING: Unknown field arch." << keyVal.path[1] << " in " << filename << ::std::endl;
                     }
                 } else {
-                    ::std::cerr << "WARNING: Unknown configuration item " << key_val.path[0] << " in " << filename << ::std::endl;
+                    ::std::cerr << "WARNING: Unknown configuration item " << keyVal.path[0] << " in " << filename << ::std::endl;
                 }
             } catch (const TomlValue::TypeError& e) {
-                ::std::cerr << "ERROR: Invalid type for " << key_val.path << " - " << e << ::std::endl;
+                ::std::cerr << "ERROR: Invalid type for " << keyVal.path << " - " << e << ::std::endl;
                 exit(1);
             }
         }
@@ -297,12 +297,12 @@ namespace {
            << "\n";
     }
 
-    TargetSpec init_from_spec_name(const ::std::string& target_name) {
+    TargetSpec initFromSpecName(const ::std::string& target_name) {
 // Options for all the fully-GNU environments
 #define BACKEND_C_OPTS_GNU {"-ffunction-sections", "-pthread"}, {"-Wl,--start-group"}, {"-Wl,--end-group", "-Wl,--gc-sections", "-l", "atomic"}
         // If there's a '/' in the filename, open it as a path, otherwise assume it's a triple.
         if (target_name.find('/') != ::std::string::npos) {
-            return load_spec_from_file(target_name);
+            return loadSpecFromFile(target_name);
         } else if (target_name == "i586-linux-gnu" || target_name == "i586-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {true, "i586-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_X86};
         } else if (target_name == "x86_64-linux-gnu" || target_name == "x86_64-unknown-linux-gnu") {
@@ -386,7 +386,7 @@ void TargetExportCurSpec(const ::std::string& filename) {
 }
 
 void TargetSetCfg(const ::std::string& target_name) {
-    gTarget = init_from_spec_name(target_name);
+    gTarget = initFromSpecName(target_name);
 
     if (gTarget.family == "unix") {
         CfgSetFlag("unix");
@@ -680,8 +680,8 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
 }
 
 bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_size) {
-    size_t ignore_align;
-    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, out_size, ignore_align);
+    size_t ignoreAlign;
+    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, out_size, ignoreAlign);
     if (rv && out_size == SIZE_MAX) {
         BUG(sp, "Getting size of Unsized type - " << ty);
     }
@@ -689,9 +689,9 @@ bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const ::
 }
 
 bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, size_t& out_align) {
-    size_t ignore_size;
-    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, ignore_size, out_align);
-    if (rv && ignore_size == SIZE_MAX) {
+    size_t ignoreSize;
+    bool rv = TargetGetSizeAndAlignOf(sp, resolve, ty, ignoreSize, out_align);
+    if (rv && ignoreSize == SIZE_MAX) {
         BUG(sp, "Getting alignment of Unsized type - " << ty);
     }
     return rv;
@@ -714,7 +714,7 @@ namespace {
         return os;
     }
 
-    bool make_field_ent(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, ::HIR::TypeRef ty, Ent& out) {
+    bool makeFieldEnt(const Span& sp, const StaticTraitResolve& resolve, unsigned idx, ::HIR::TypeRef ty, Ent& out) {
         size_t size, align;
         if (!TargetGetSizeAndAlignOf(sp, resolve, ty, size, align)) {
             DEBUG("Can't get size/align of " << ty);
@@ -741,7 +741,7 @@ namespace {
                 unsigned int idx = 0;
                 for (const auto& e : se) {
                     Ent ent;
-                    if (!make_field_ent(sp, resolve, idx, monomorph(e.ent), ent)) {
+                    if (!makeFieldEnt(sp, resolve, idx, monomorph(e.ent), ent)) {
                         return false;
                     }
                     DEBUG("#" << idx << ": " << ent);
@@ -753,7 +753,7 @@ namespace {
                 unsigned int idx = 0;
                 for (const auto& e : se) {
                     Ent ent;
-                    if (!make_field_ent(sp, resolve, idx, monomorph(e.ty), ent)) {
+                    if (!makeFieldEnt(sp, resolve, idx, monomorph(e.ty), ent)) {
                         return false;
                     }
                     DEBUG("#" << idx << " " << e.name << ": " << ent);
@@ -820,8 +820,8 @@ namespace {
 
         TypeRepr rv;
         size_t curOfs = 0;
-        size_t max_align = 1;
-        bool is_first_field = true;
+        size_t maxAlign = 1;
+        bool isFirstField = true;
         for (auto& e : ents) {
             auto align = e.align;
 
@@ -831,10 +831,10 @@ namespace {
             // The cap is on natural alignment only: an explicitly aligned member keeps it, as in gcc.
             if (TargetCapsMemberAlignment()) {
                 if (e.size > 0) {
-                    if (!is_first_field && !e.user_align && align >= 4 && align <= 8) {
+                    if (!isFirstField && !e.user_align && align >= 4 && align <= 8) {
                         align = 4;
                     }
-                    is_first_field = false;
+                    isFirstField = false;
                 }
             }
             if (e.user_align) {
@@ -848,7 +848,7 @@ namespace {
                     curOfs++;
                 }
             }
-            max_align = ::std::max(max_align, align);
+            maxAlign = ::std::max(maxAlign, align);
 
             // Forced padding is indicated by setting the field index to -1
             if (e.field != ~0u) {
@@ -867,14 +867,14 @@ namespace {
             }
         }
         if (forced_alignment > 0) {
-            max_align = std::max(max_align, static_cast<size_t>(forced_alignment));
+            maxAlign = std::max(maxAlign, static_cast<size_t>(forced_alignment));
             // `repr(align(N))` - this is the root of a user-alignment chain.
             rv.user_align = true;
         }
         // If not packing (and the size isn't infinite/unsized) then round the size up to the alignment
         if (curOfs != SIZE_MAX) {
             // Size must be a multiple of alignment
-            while (curOfs % max_align != 0) {
+            while (curOfs % maxAlign != 0) {
                 curOfs++;
             }
         }
@@ -882,7 +882,7 @@ namespace {
             ASSERT_BUG(sp, f.ty != HIR::TypeRef(), "Uninitialised field found - " << (&f - &fields[0]));
         }
         // Aligment is 1 for packed structs, and `max_align` otherwise
-        rv.align = max_align;
+        rv.align = maxAlign;
         rv.size = curOfs;
         rv.fields = ::std::move(fields);
         DEBUG(ty << ": size = " << rv.size << ", align = " << rv.align);
@@ -890,7 +890,7 @@ namespace {
     }
 
     // Returns NULL when the repr can't be determined
-    ::std::unique_ptr<TypeRepr> make_type_repr_struct(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    ::std::unique_ptr<TypeRepr> makeTypeReprStruct(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         TRACE_FUNCTION_F(ty);
         ::std::vector<Ent> ents;
         StructSorting sorting;
@@ -930,7 +930,7 @@ namespace {
             unsigned int idx = 0;
             for (const auto& t : *te) {
                 Ent ent;
-                if (!make_field_ent(sp, resolve, idx, t, ent)) {
+                if (!makeFieldEnt(sp, resolve, idx, t, ent)) {
                     return nullptr;
                 }
                 idx++;
@@ -1016,7 +1016,7 @@ namespace {
                         }
                     }
                     // 1.39 marks these with #[rustc_nonnull_optimization_guaranteed] instead
-                    if (str->structMarkings.is_nonzero) {
+                    if (str->structMarkings.isNonzero) {
                         DEBUG(ty << " tagged NonZero");
                         out_path.sub_fields.push_back(0);
                         out_path.size = r->size;
@@ -1192,13 +1192,13 @@ namespace {
                             auto ofs = getOffset(sp, resolve, r, ve.field);
                             DEBUG("Values - Tag offset: " << ofs);
                             if (min_offset <= ofs && ofs + ve.field.size <= max_offset) {
-                                auto last_value = *std::max_element(ve.values.begin(), ve.values.end());
-                                if (last_value < UINT_MAX) {
+                                auto lastValue = *std::max_element(ve.values.begin(), ve.values.end());
+                                if (lastValue < UINT_MAX) {
                                     out_path.size = ve.field.size;
                                     out_path.sub_fields.clear();
                                     out_path.sub_fields.insert(out_path.sub_fields.begin(), ve.field.sub_fields.rbegin(), ve.field.sub_fields.rend());
                                     out_path.sub_fields.push_back(ve.field.index);
-                                    return last_value.truncate_u64() + 1;
+                                    return lastValue.truncate_u64() + 1;
                                 }
                             }
                             return 0;
@@ -1236,7 +1236,7 @@ namespace {
         return 0;
     }
 
-    ::std::unique_ptr<TypeRepr> make_type_repr_enum(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    ::std::unique_ptr<TypeRepr> makeTypeReprEnum(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         TRACE_FUNCTION_F(ty);
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
@@ -1260,7 +1260,7 @@ namespace {
                     // - A data enum with `repr(C)` puts the tag before the data
                     if (enm.isCRepr) {
                         size_t max_size = 0;
-                        size_t max_align = 0;
+                        size_t maxAlign = 0;
                         for (const auto& var : e) {
                             auto t = monomorph(var.type);
                             size_t size, align;
@@ -1272,12 +1272,12 @@ namespace {
                                 BUG(sp, "Unsized type in enum - " << t);
                             }
                             max_size = ::std::max(max_size, size);
-                            max_align = ::std::max(max_align, align);
+                            maxAlign = ::std::max(maxAlign, align);
                             rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
 
                             ASSERT_BUG(sp, !var.discriminantExpr, "TODO: Handle explicit discriminants with repr(C) data");
                         }
-                        DEBUG("max_size = " << max_size << ", max_align = " << max_align);
+                        DEBUG("max_size = " << max_size << ", max_align = " << maxAlign);
 
                         auto tag_ty = enm.tagRepr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.getReprType(enm.tagRepr);
                         rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tag_ty)});
@@ -1285,7 +1285,7 @@ namespace {
                         TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tag_size, tag_align);
                         size_t dataOfs = tag_size;
 
-                        while (dataOfs % max_align != 0) {
+                        while (dataOfs % maxAlign != 0) {
                             dataOfs++;
                         }
 
@@ -1293,7 +1293,7 @@ namespace {
                             rv.fields[i].offset = dataOfs;
                         }
                         rv.size = dataOfs + max_size;
-                        rv.align = std::max(tag_align, max_align);
+                        rv.align = std::max(tag_align, maxAlign);
                         while (rv.size % rv.align != 0) {
                             rv.size++;
                         }
@@ -1302,14 +1302,14 @@ namespace {
                         // If there are not multiple variants, then only include the one body
                         if (e.size() == 1) {
                             auto t = monomorph(e[0].type);
-                            const auto* inner_repr = TargetGetTypeRepr(sp, resolve, t);
-                            if (!inner_repr) {
+                            const auto* innerRepr = TargetGetTypeRepr(sp, resolve, t);
+                            if (!innerRepr) {
                                 DEBUG("Generic type in enum - " << t);
                                 return nullptr;
                             }
                             rv.fields.push_back(TypeRepr::Field{0, mv$(t)});
-                            rv.size = inner_repr->size;
-                            rv.align = inner_repr->align;
+                            rv.size = innerRepr->size;
+                            rv.align = innerRepr->align;
                         } else {
                             rv.size = 0;
                             rv.align = 0;
@@ -1406,11 +1406,11 @@ namespace {
                                 size_t biggestVar = variants.size();
                                 size_t max_var_size = 0;
                                 size_t min_offset = 0;
-                                size_t max_align = 1;
+                                size_t maxAlign = 1;
                                 std::vector<std::unique_ptr<TypeRepr>> reprs;
                                 for (size_t i = 0; i < variants.size(); i++) {
                                     reprs.push_back(makeTypeReprStructInner(sp, e[i].type, variants[i].ents, StructSorting::All, variants[i].forced_alignment, 0));
-                                    max_align = std::max(max_align, reprs.back()->align);
+                                    maxAlign = std::max(maxAlign, reprs.back()->align);
                                     size_t var_size = reprs.back()->size;
                                     // If larger than current max, update current max and reset
                                     if (var_size > max_var_size) {
@@ -1534,7 +1534,7 @@ namespace {
 
                                 // Fix overall size
                                 size_t max_size = max_var_size;
-                                while (max_size % max_align != 0) {
+                                while (max_size % maxAlign != 0) {
                                     max_size++;
                                 }
 
@@ -1588,7 +1588,7 @@ namespace {
                                                 reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
                                                 assert(reprs[i]->size <= max_size);
-                                                assert(reprs[i]->align <= max_align);
+                                                assert(reprs[i]->align <= maxAlign);
                                             } else {
                                                 auto tag_fld_idx = variants[i].ents.size();
                                                 size_t max_ofs = 0;
@@ -1618,7 +1618,7 @@ namespace {
                                                 reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
                                                 // Make sure that the newly calculated repr doesn't change the size/alignment
                                                 assert(reprs[i]->size <= max_size);
-                                                assert(reprs[i]->align <= max_align);
+                                                assert(reprs[i]->align <= maxAlign);
                                             }
                                             finalSize = std::max(finalSize, reprs[i]->size);
                                             finalAlign = std::max(finalAlign, reprs[i]->align);
@@ -1635,7 +1635,7 @@ namespace {
                                     }
 
                                     rv.size = max_size;
-                                    rv.align = max_align;
+                                    rv.align = maxAlign;
 
                                     // Under a capping ABI take size/align from the final variant layouts - `max_align` predates the tag field, so it over-states them
                                     if (TargetCapsMemberAlignment() && finalSize > 0) {
@@ -1695,7 +1695,7 @@ namespace {
                             size_t tag_align;
                             TargetGetSizeAndAlignOf(sp, resolve, tag_ty, tag_size, tag_align);
                             size_t max_size = tag_size;
-                            size_t max_align = tag_align;
+                            size_t maxAlign = tag_align;
                             // Sort all varaint fields (fully)
                             // Add the tag to the start of all variants
                             // Generate a struct repr (with sorting off)
@@ -1716,7 +1716,7 @@ namespace {
                                     // - Create repr and assign
                                     auto repr = makeTypeReprStructInner(sp, var_ty, ents, StructSorting::None, variants[var_i].forced_alignment, 0);
                                     max_size = std::max(max_size, repr->size);
-                                    max_align = std::max(max_align, repr->align);
+                                    maxAlign = std::max(maxAlign, repr->align);
                                     set_type_repr(sp, var_ty, std::move(repr));
                                 }
 
@@ -1727,10 +1727,10 @@ namespace {
 
                             // Size must be a multiple of alignment
                             rv.size = max_size;
-                            while (rv.size % max_align != 0) {
+                            while (rv.size % maxAlign != 0) {
                                 rv.size++;
                             }
-                            rv.align = max_align;
+                            rv.align = maxAlign;
 
                             if (hasExplcitValue) {
                                 ::std::vector<U128> vals;
@@ -1830,7 +1830,7 @@ namespace {
         return box$(rv);
     }
 
-    ::std::unique_ptr<TypeRepr> make_type_repr_union(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    ::std::unique_ptr<TypeRepr> makeTypeReprUnion(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
@@ -1872,17 +1872,17 @@ namespace {
             case ::HIR::TypeData::TAGDEAD:
                 abort();
             case ::HIR::TypeData::TAG_Tuple:
-                return make_type_repr_struct(sp, resolve, ty);
+                return makeTypeReprStruct(sp, resolve, ty);
             case ::HIR::TypeData::TAG_Path:
                 switch (ty->as_Path().binding.tag()) {
                     case ::HIR::TypePathBinding::TAGDEAD:
                         abort();
                     case ::HIR::TypePathBinding::TAG_Struct:
-                        return make_type_repr_struct(sp, resolve, ty);
+                        return makeTypeReprStruct(sp, resolve, ty);
                     case ::HIR::TypePathBinding::TAG_Union:
-                        return make_type_repr_union(sp, resolve, ty);
+                        return makeTypeReprUnion(sp, resolve, ty);
                     case ::HIR::TypePathBinding::TAG_Enum:
-                        return make_type_repr_enum(sp, resolve, ty);
+                        return makeTypeReprEnum(sp, resolve, ty);
                     case ::HIR::TypePathBinding::TAG_ExternType:
                         // TODO: Do extern types need anything?
                         return nullptr;
@@ -1901,7 +1901,7 @@ namespace {
         }
     }
 
-    ::std::unique_ptr<TypeRepr> make_type_repr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
+    ::std::unique_ptr<TypeRepr> makeTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty) {
         ::std::unique_ptr<TypeRepr> rv;
         TRACE_FUNCTION_FR(ty, ty << " " << FMT_CB(ss, if (rv) { ss << "size=" << rv->size << ", align=" << rv->align; } else { ss << "NONE"; }));
         rv = make_type_repr_(sp, resolve, ty);
@@ -1975,7 +1975,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     }
 
     if (!hasAbiIdentity(ty)) {
-        auto repr = make_type_repr(sp, resolve, ty);
+        auto repr = makeTypeRepr(sp, resolve, ty);
         const auto* rv = repr.get();
         auto ires = s_unencoded_cache.emplace(ty, mv$(repr));
         ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
@@ -1994,7 +1994,7 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
         return repr;
     }
 
-    auto repr = make_type_repr(sp, resolve, ty);
+    auto repr = makeTypeRepr(sp, resolve, ty);
     const auto* rv = repr.get();
     auto ires = s_cache.emplace(mv$(symbol), CachedTypeRepr{ty, mv$(repr)});
     ASSERT_BUG(sp, ires.second, "Type representation was created recursively for " << ty);
@@ -2012,9 +2012,9 @@ const ::HIR::TypeData* TargetGetInnerType(const Span& sp, const StaticTraitResol
             ASSERT_BUG(sp, array && array->size.is_Known() && array->size.as_Known() > 0, "Array field path on non-array " << *ty);
             ty = &array->inner;
         } else {
-            const auto* inner_repr = TargetGetTypeRepr(sp, resolve, *ty);
-            ASSERT_BUG(sp, inner_repr, "No inner repr for " << *ty);
-            ty = &inner_repr->fields.at(field).ty;
+            const auto* innerRepr = TargetGetTypeRepr(sp, resolve, *ty);
+            ASSERT_BUG(sp, innerRepr, "No inner repr for " << *ty);
+            ty = &innerRepr->fields.at(field).ty;
         }
     }
     return *ty;
@@ -2070,15 +2070,15 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
         }
         TU_ARMA(NonZero, ve) {
             size_t ofs = this->getOffset(sp, resolve, ve.field);
-            bool is_nonzero = false;
+            bool isNonzero = false;
             for (size_t i = 0; i < ve.field.size; i++) {
                 if (lit.slice(ofs + i, 1).read_uint(1) != 0) {
-                    is_nonzero = true;
+                    isNonzero = true;
                     break;
                 }
             }
 
-            var_idx = (is_nonzero ? 1 - ve.zero_variant : ve.zero_variant);
+            var_idx = (isNonzero ? 1 - ve.zero_variant : ve.zero_variant);
             DEBUG("VariantMode::NonZero - #" << var_idx);
         }
     }

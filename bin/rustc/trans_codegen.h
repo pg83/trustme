@@ -55,10 +55,10 @@ public:
     virtual void emitFunctionExt(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) {
     }
 
-    virtual void emitFunctionProto(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def) {
+    virtual void emitFunctionProto(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef) {
     }
 
-    virtual void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool is_extern_def, const ::MIR::FunctionPointer& code) = 0;
+    virtual void emitFunctionCode(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params, bool isExternDef, const ::MIR::FunctionPointer& code) = 0;
 
     virtual void emitGlobalAsm(const ::HIR::GlobalAssembly&) = 0;
 };

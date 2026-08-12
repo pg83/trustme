@@ -34,7 +34,7 @@ public:
 
     TokenTree clone() const;
 
-    bool is_token() const {
+    bool isToken() const {
         return mTok.type() != TOK_NULL;
     }
 

@@ -71,7 +71,7 @@ private:
     Token getTokenInt();
 
     signed int getSymbol();
-    Token getTokenIntRawString(bool is_byte);
+    Token getTokenIntRawString(bool isByte);
     Token getTokenIntIdentifier(Codepoint ch, Codepoint ch2 = '\0', bool parse_reserved_word = true);
     enum class NumMode {
         BIN,
@@ -81,7 +81,7 @@ private:
     };
     U128 parseInt(NumMode* num_mode);
     FloatValue parseFloat(U128 whole);
-    uint32_t parseEscape(char enclosing, bool* is_byte_escape = nullptr);
+    uint32_t parseEscape(char enclosing, bool* isByteEscape = nullptr);
 
     void push_hygine() override;
 

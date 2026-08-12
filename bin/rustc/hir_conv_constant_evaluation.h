@@ -84,13 +84,13 @@ namespace HIR {
         }
 
     private:
-        void push_stack_entry(::FmtLambda print_path, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* item_params_def, const ::HIR::GenericParams* impl_params_def);
+        void push_stack_entry(::FmtLambda print_path, const ::MIR::Function& fcn, MonomorphState ms, ::HIR::TypeRef exp, ::HIR::Function::argsT argDefs, ::std::vector<::MIR::eval::AllocationPtr> args, const ::HIR::GenericParams* itemParamsDef, const ::HIR::GenericParams* implParamsDef);
 
         ::MIR::eval::AllocationPtr run_until_stack_empty();
-        void run_statement(::MIR::eval::CallStackEntry& local_state, const ::MIR::Statement& stmt);
+        void run_statement(::MIR::eval::CallStackEntry& localState, const ::MIR::Statement& stmt);
         // Returns UINT_MAX on return
-        unsigned run_terminator(::MIR::eval::CallStackEntry& local_state, const ::MIR::Terminator& stmt);
-        bool callFunction(::MIR::eval::CallStackEntry& local_state, const MIR::LValue& rv_slot, ::std::shared_ptr<::HIR::Path> path, ::std::vector<::MIR::eval::AllocationPtr> callArgs);
+        unsigned run_terminator(::MIR::eval::CallStackEntry& localState, const ::MIR::Terminator& stmt);
+        bool callFunction(::MIR::eval::CallStackEntry& localState, const MIR::LValue& rv_slot, ::std::shared_ptr<::HIR::Path> path, ::std::vector<::MIR::eval::AllocationPtr> callArgs);
 
         EncodedLiteral allocationToEncoded(const ::HIR::TypeData* ty, const ::MIR::eval::Allocation& a);
     };

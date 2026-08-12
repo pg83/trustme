@@ -30,7 +30,7 @@ namespace HIR {
             return GenericRef(RcString::new_interned("Self"), GENERICSelf);
         }
 
-        bool is_self() const {
+        bool isSelf() const {
             return binding == 0xFFFF;
         }
 
@@ -81,14 +81,14 @@ namespace HIR {
 
         static LifetimeRef new_static();
 
-        bool is_param() const {
+        bool isParam() const {
             return binding < 0xFF00;
         }
 
         GenericRef asParam() const;
 
-        bool is_hrl() const {
-            return is_param() && asParam().group() == 3;
+        bool isHrl() const {
+            return isParam() && asParam().group() == 3;
         }
 
         Ordering ord(const LifetimeRef& x) const {

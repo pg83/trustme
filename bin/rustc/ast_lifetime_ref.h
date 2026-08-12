@@ -33,11 +33,11 @@ namespace AST {
 
         void set_binding(uint16_t b);
 
-        bool is_unbound() const {
+        bool isUnbound() const {
             return mBinding == BINDING_UNBOUND;
         }
 
-        bool is_infer() const {
+        bool isInfer() const {
             return mBinding == BINDING_INFER;
         }
 

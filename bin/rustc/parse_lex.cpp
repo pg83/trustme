@@ -420,7 +420,7 @@ Token Lexer::getTokenInt() {
                                 return Token(val, CORETYPE_ANY);
                             } else {
                                 FloatValue fval = val.to_double();
-                                return Token::make_float(fval, CORETYPE_ANY);
+                                return Token::makeFloat(fval, CORETYPE_ANY);
                             }
                         } else {
                             // Digit, continue
@@ -464,7 +464,7 @@ Token Lexer::getTokenInt() {
                     } else {
                         this->ungetc();
                     }
-                    return Token::make_float(fval, num_type);
+                    return Token::makeFloat(fval, num_type);
 
                 } else if (issym(ch)) {
                     // Unsigned
@@ -522,16 +522,16 @@ Token Lexer::getTokenInt() {
             }
             // Byte/Raw strings
             else if (ch == 'b' || ch == 'r') {
-                bool is_byte = false;
+                bool isByte = false;
                 if (ch == 'b') {
-                    is_byte = true;
+                    isByte = true;
                     ch = this->getc();
                 }
 
                 if (ch == 'r') {
-                    return this->getTokenIntRawString(is_byte);
+                    return this->getTokenIntRawString(isByte);
                 } else {
-                    assert(is_byte);
+                    assert(isByte);
 
                     // Byte string
                     if (ch == '"') {
@@ -568,7 +568,7 @@ Token Lexer::getTokenInt() {
                             return Token(U128(ch.v), CORETYPE_U8);
                         }
                     } else {
-                        assert(is_byte);
+                        assert(isByte);
                         this->ungetc();
                         return this->getTokenIntIdentifier('b');
                     }
@@ -598,17 +598,17 @@ Token Lexer::getTokenInt() {
                     // Line comment
                     ::std::string str;
                     auto ch = this->getc();
-                    bool is_doc = false;
-                    bool is_pdoc = false;
+                    bool isDoc = false;
+                    bool isPdoc = false;
                     if (ch == '/') {
                         ch = this->getc();
                         if (ch == '/') {
                             str += "/";
                         } else {
-                            is_doc = true;
+                            isDoc = true;
                         }
                     } else if (ch == '!') {
-                        is_pdoc = true;
+                        isPdoc = true;
                         ch = this->getc();
                     }
                     while (ch != '\n' && ch != '\r') {
@@ -616,14 +616,14 @@ Token Lexer::getTokenInt() {
                         ch = this->getc();
                     }
                     this->ungetc();
-                    if (is_doc || is_pdoc) {
+                    if (isDoc || isPdoc) {
                         //# [ doc = "commment data" ]
                         nextTokens.push_back(TOK_SQUARE_CLOSE);
                         nextTokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
                         nextTokens.push_back(TOK_EQUAL);
                         nextTokens.push_back(Token(TOK_IDENT, RcString::new_interned("doc")));
                         nextTokens.push_back(TOK_SQUARE_OPEN);
-                        if (is_pdoc) {
+                        if (isPdoc) {
                             nextTokens.push_back(TOK_EXCLAM);
                         }
                         return TOK_HASH;
@@ -632,8 +632,8 @@ Token Lexer::getTokenInt() {
                 }
                 case BLOCKCOMMENT: {
                     ::std::string str;
-                    bool is_doc = false;
-                    bool is_pdoc = false;
+                    bool isDoc = false;
+                    bool isPdoc = false;
                     ch = this->getc();
                     if (ch == '*') {
                         ch = this->getc();
@@ -645,10 +645,10 @@ Token Lexer::getTokenInt() {
                             return Token(TOK_COMMENT, str, realGetHygiene());
                         } else {
                             // `/**` - A doc comment
-                            is_doc = true;
+                            isDoc = true;
                         }
                     } else if (ch == '!') {
-                        is_pdoc = true;
+                        isPdoc = true;
                         ch = this->getc();
                     }
                     unsigned int level = 0;
@@ -680,14 +680,14 @@ Token Lexer::getTokenInt() {
                         }
                         ch = this->getc();
                     }
-                    if (is_doc || is_pdoc) {
+                    if (isDoc || isPdoc) {
                         //# [ doc = "commment data" ]
                         nextTokens.push_back(TOK_SQUARE_CLOSE);
                         nextTokens.push_back(Token(TOK_STRING, mv$(str), realGetHygiene()));
                         nextTokens.push_back(TOK_EQUAL);
                         nextTokens.push_back(Token(TOK_IDENT, RcString::new_interned("doc")));
                         nextTokens.push_back(TOK_SQUARE_OPEN);
-                        if (is_pdoc) {
+                        if (isPdoc) {
                             nextTokens.push_back(TOK_EXCLAM);
                         }
                         return TOK_HASH;
@@ -750,7 +750,7 @@ Token Lexer::getTokenInt() {
     throw "Fell off the end of getTokenInt";
 }
 
-Token Lexer::getTokenIntRawString(bool is_byte) {
+Token Lexer::getTokenIntRawString(bool isByte) {
     // Raw string (possibly byte)
     Codepoint ch = this->getc();
     unsigned int hashes = 0;
@@ -762,7 +762,7 @@ Token Lexer::getTokenIntRawString(bool is_byte) {
         // 'b' or 'br' identifier
         if (hashes == 0) {
             this->ungetc(); // Unget the not '"'
-            if (is_byte) {
+            if (isByte) {
                 return this->getTokenIntIdentifier('b', 'r');
             } else {
                 return this->getTokenIntIdentifier('r');
@@ -815,7 +815,7 @@ Token Lexer::getTokenIntRawString(bool is_byte) {
             }
         }
     }
-    return Token(is_byte ? TOK_BYTESTRING : TOK_STRING, mv$(val), realGetHygiene());
+    return Token(isByte ? TOK_BYTESTRING : TOK_STRING, mv$(val), realGetHygiene());
 }
 
 Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool parse_reserved_word) {
@@ -834,10 +834,10 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
             str = "";
             while ((ch = this->getc()) != '"') {
                 if (ch == '\\') {
-                    bool is_byte_escape;
-                    auto v = this->parseEscape('"', &is_byte_escape);
+                    bool isByteEscape;
+                    auto v = this->parseEscape('"', &isByteEscape);
                     if (v != ~0u) {
-                        if (is_byte_escape) {
+                        if (isByteEscape) {
                             str += static_cast<char>(v);
                         } else {
                             str += Codepoint(v);
@@ -995,7 +995,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
         }
     };
     auto queue_float = [&]() {
-        nextTokens.push_back(Token::make_float(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
+        nextTokens.push_back(Token::makeFloat(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
         return std::numeric_limits<double>::quiet_NaN();
     };
     // If the current char is a `.`
@@ -1019,7 +1019,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
             }
             //buf[ofs] = 0;
             //m_next_tokens.push_back(Token::make_float(::std::strtod(buf, NULL), CORETYPE_ANY));
-            nextTokens.push_back(Token::make_float(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
+            nextTokens.push_back(Token::makeFloat(parse_float_value(sbuf.c_str()), CORETYPE_ANY));
 
             return std::numeric_limits<double>::quiet_NaN();
         } else {
@@ -1082,15 +1082,15 @@ FloatValue Lexer::parseFloat(U128 whole) {
     }
 }
 
-uint32_t Lexer::parseEscape(char enclosing, bool* is_byte_escape) {
-    if (is_byte_escape) {
-        *is_byte_escape = false;
+uint32_t Lexer::parseEscape(char enclosing, bool* isByteEscape) {
+    if (isByteEscape) {
+        *isByteEscape = false;
     }
     auto ch = this->getc();
     switch (ch.v) {
         case 'x': {
-            if (is_byte_escape) {
-                *is_byte_escape = true;
+            if (isByteEscape) {
+                *isByteEscape = true;
             }
             ch = this->getc();
             if (!ch.isxdigit()) {
@@ -1150,7 +1150,7 @@ uint32_t Lexer::parseEscape(char enclosing, bool* is_byte_escape) {
                 ch = this->getc();
             }
             if (ch == '\\') {
-                return parseEscape(enclosing, is_byte_escape);
+                return parseEscape(enclosing, isByteEscape);
             } else if (ch == enclosing) {
                 this->ungetc();
                 return ~0;

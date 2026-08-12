@@ -207,55 +207,55 @@ namespace {
             } else {
                 // Type inferrence using the +=
                 // - "" as type name to indicate that it's just using the trait magic?
-                const char* lang_item = nullptr;
+                const char* langItem = nullptr;
                 auto operator_kind = typeck::PrimitiveOperator::None;
                 switch (node.op) {
                     case ::HIR::ExprNodeAssign::Op::None:
                         throw "";
                     case ::HIR::ExprNodeAssign::Op::Add:
-                        lang_item = "add_assign";
+                        langItem = "add_assign";
                         operator_kind = typeck::PrimitiveOperator::AddAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Sub:
-                        lang_item = "sub_assign";
+                        langItem = "sub_assign";
                         operator_kind = typeck::PrimitiveOperator::SubAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Mul:
-                        lang_item = "mul_assign";
+                        langItem = "mul_assign";
                         operator_kind = typeck::PrimitiveOperator::MulAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Div:
-                        lang_item = "div_assign";
+                        langItem = "div_assign";
                         operator_kind = typeck::PrimitiveOperator::DivAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Mod:
-                        lang_item = "rem_assign";
+                        langItem = "rem_assign";
                         operator_kind = typeck::PrimitiveOperator::RemAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::And:
-                        lang_item = "bitand_assign";
+                        langItem = "bitand_assign";
                         operator_kind = typeck::PrimitiveOperator::BitAndAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Or:
-                        lang_item = "bitor_assign";
+                        langItem = "bitor_assign";
                         operator_kind = typeck::PrimitiveOperator::BitOrAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Xor:
-                        lang_item = "bitxor_assign";
+                        langItem = "bitxor_assign";
                         operator_kind = typeck::PrimitiveOperator::BitXorAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Shr:
-                        lang_item = "shr_assign";
+                        langItem = "shr_assign";
                         operator_kind = typeck::PrimitiveOperator::ShrAssign;
                         break;
                     case ::HIR::ExprNodeAssign::Op::Shl:
-                        lang_item = "shl_assign";
+                        langItem = "shl_assign";
                         operator_kind = typeck::PrimitiveOperator::ShlAssign;
                         break;
                 }
-                assert(lang_item);
+                assert(langItem);
                 if (!typeck::primitive_operator_has_builtin(operator_kind, node.slot->resType, node.mValue->resType)) {
-                    const auto& trait_path = this->getLangItemPath(node.span(), lang_item);
+                    const auto& trait_path = this->getLangItemPath(node.span(), langItem);
                     checkTraitBound(node.span(), trait_path, {node.mValue->resType}, node.slot->resType);
                 }
             }
@@ -276,35 +276,35 @@ namespace {
                 case ::HIR::ExprNodeBinOp::Op::CmpGtE: {
                     checkTypesEqual(node.span(), mResolve.crate.types.primitive(::HIR::CoreType::Bool), node.resType);
 
-                    const char* item_name = nullptr;
+                    const char* itemName = nullptr;
                     switch (node.op) {
                         case ::HIR::ExprNodeBinOp::Op::CmpEqu:
-                            item_name = "eq";
+                            itemName = "eq";
                             break;
                         case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
-                            item_name = "eq";
+                            itemName = "eq";
                             break;
                         case ::HIR::ExprNodeBinOp::Op::CmpLt:
-                            item_name = "partial_ord";
+                            itemName = "partial_ord";
                             break;
                         case ::HIR::ExprNodeBinOp::Op::CmpLtE:
-                            item_name = "partial_ord";
+                            itemName = "partial_ord";
                             break;
                         case ::HIR::ExprNodeBinOp::Op::CmpGt:
-                            item_name = "partial_ord";
+                            itemName = "partial_ord";
                             break;
                         case ::HIR::ExprNodeBinOp::Op::CmpGtE:
-                            item_name = "partial_ord";
+                            itemName = "partial_ord";
                             break;
                         default:
                             break;
                     }
-                    assert(item_name);
+                    assert(itemName);
                     auto operator_kind = node.op == ::HIR::ExprNodeBinOp::Op::CmpEqu || node.op == ::HIR::ExprNodeBinOp::Op::CmpNEqu
                         ? typeck::PrimitiveOperator::Equal
                         : typeck::PrimitiveOperator::Order;
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.left->resType, node.right->resType)) {
-                        const auto& op_trait = this->getLangItemPath(node.span(), item_name);
+                        const auto& op_trait = this->getLangItemPath(node.span(), itemName);
                         checkTraitBound(node.span(), op_trait, {node.right->resType}, node.left->resType);
                     }
                     break;
@@ -315,7 +315,7 @@ namespace {
                     // No validation needed, result forced in typeck
                     break;
                 default: {
-                    const char* item_name = nullptr;
+                    const char* itemName = nullptr;
                     auto operator_kind = typeck::PrimitiveOperator::None;
                     switch (node.op) {
                         case ::HIR::ExprNodeBinOp::Op::CmpEqu:
@@ -336,51 +336,51 @@ namespace {
                             throw "";
 
                         case ::HIR::ExprNodeBinOp::Op::Add:
-                            item_name = "add";
+                            itemName = "add";
                             operator_kind = typeck::PrimitiveOperator::Add;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Sub:
-                            item_name = "sub";
+                            itemName = "sub";
                             operator_kind = typeck::PrimitiveOperator::Sub;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Mul:
-                            item_name = "mul";
+                            itemName = "mul";
                             operator_kind = typeck::PrimitiveOperator::Mul;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Div:
-                            item_name = "div";
+                            itemName = "div";
                             operator_kind = typeck::PrimitiveOperator::Div;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Mod:
-                            item_name = "rem";
+                            itemName = "rem";
                             operator_kind = typeck::PrimitiveOperator::Rem;
                             break;
 
                         case ::HIR::ExprNodeBinOp::Op::And:
-                            item_name = "bitand";
+                            itemName = "bitand";
                             operator_kind = typeck::PrimitiveOperator::BitAnd;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Or:
-                            item_name = "bitor";
+                            itemName = "bitor";
                             operator_kind = typeck::PrimitiveOperator::BitOr;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Xor:
-                            item_name = "bitxor";
+                            itemName = "bitxor";
                             operator_kind = typeck::PrimitiveOperator::BitXor;
                             break;
 
                         case ::HIR::ExprNodeBinOp::Op::Shr:
-                            item_name = "shr";
+                            itemName = "shr";
                             operator_kind = typeck::PrimitiveOperator::Shr;
                             break;
                         case ::HIR::ExprNodeBinOp::Op::Shl:
-                            item_name = "shl";
+                            itemName = "shl";
                             operator_kind = typeck::PrimitiveOperator::Shl;
                             break;
                     }
-                    assert(item_name);
+                    assert(itemName);
                     if (!typeck::primitive_operator_has_builtin(operator_kind, node.left->resType, node.right->resType)) {
-                        const auto& op_trait = this->getLangItemPath(node.span(), item_name);
+                        const auto& op_trait = this->getLangItemPath(node.span(), itemName);
                         checkAssociatedType(node.span(), node.resType, op_trait, {node.right->resType}, node.left->resType, "Output");
                     }
                     break;
@@ -798,7 +798,7 @@ namespace {
                 }
                 TU_ARMA(UfcsInherent, e) {
                     // - Locate function (and impl block)
-                    const ::HIR::TypeImpl* impl_ptr = nullptr;
+                    const ::HIR::TypeImpl* implPtr = nullptr;
                     mResolve.crate.findTypeImpls(e.type, HIR::ResolvePlaceholdersNop(), [&](const auto& impl) {
                         DEBUG("- impl" << impl.mParams.fmtArgs() << " " << impl.mType);
                         auto it = impl.methods.find(e.item);
@@ -806,18 +806,18 @@ namespace {
                             return false;
                         }
                         fcn_ptr = &it->second.data;
-                        impl_ptr = &impl;
+                        implPtr = &impl;
                         return true;
                     });
                     if (!fcn_ptr) {
                         ERROR(sp, E0000, "Failed to locate function " << path);
                     }
-                    assert(impl_ptr);
+                    assert(implPtr);
 
                     cache.fcnParams = &fcn_ptr->mParams;
 
                     // NOTE: Trusts the existing cache.
-                    ASSERT_BUG(sp, e.impl_params.types.size() == impl_ptr->mParams.types.size(), "Path impl_params cache is missized - " << e.impl_params.types.size() << " != " << impl_ptr->mParams.types.size());
+                    ASSERT_BUG(sp, e.impl_params.types.size() == implPtr->mParams.types.size(), "Path impl_params cache is missized - " << e.impl_params.types.size() << " != " << implPtr->mParams.types.size());
                     auto& impl_params = e.impl_params;
 
                     // Create monomorphise callback
@@ -942,7 +942,7 @@ namespace {
                     mResolve.expandAssociatedTypes(node.span(), tmp_ft);
                     e = &tmp_ft->as_Function();
                 }
-                auto hrls = e->hrls.make_empty_params(true);
+                auto hrls = e->hrls.makeEmptyParams(true);
                 auto m = MonomorphHrlsOnly(mResolve.crate.types, hrls);
                 if (e->is_variadic ? node.mArgs.size() < e->argTypes.size() : node.mArgs.size() != e->argTypes.size()) {
                     ERROR(node.span(), E0000, "Incorrect number of arguments to call via " << val_ty);
@@ -1024,11 +1024,11 @@ namespace {
             const auto& sp = node.span();
             const auto& str_ty = node.mValue->resType;
 
-            bool is_index = ('0' <= node.field.c_str()[0] && node.field.c_str()[0] <= '9');
+            bool isIndex = ('0' <= node.field.c_str()[0] && node.field.c_str()[0] <= '9');
             if (str_ty->is_Tuple()) {
-                ASSERT_BUG(sp, is_index, "Non-index _Field on tuple");
+                ASSERT_BUG(sp, isIndex, "Non-index _Field on tuple");
             } else if (str_ty->is_NodeType()) {
-                ASSERT_BUG(sp, is_index, "Non-index _Field on magic type");
+                ASSERT_BUG(sp, isIndex, "Non-index _Field on magic type");
             } else {
                 ASSERT_BUG(sp, str_ty->is_Path(), "Value type of _Field isn't Path - " << str_ty);
                 const auto& ty_e = str_ty->as_Path();
@@ -1062,9 +1062,9 @@ namespace {
         void visit(::HIR::ExprNodeArrayList& node) override {
             TRACE_FUNCTION_F(&node << " [...,]");
             // Cleanly equate into array (with coercions)
-            const auto& inner_ty = node.resType->as_Array().inner;
+            const auto& innerTy = node.resType->as_Array().inner;
             for (auto& val : node.vals) {
-                checkTypesEqual(val->span(), inner_ty, val->resType);
+                checkTypesEqual(val->span(), innerTy, val->resType);
             }
 
             for (auto& val : node.vals) {
@@ -1076,8 +1076,8 @@ namespace {
             TRACE_FUNCTION_F(&node << " [...; " << node.mSize << "]");
 
             //check_types_equal(node.m_size->span(), ::HIR::TypeRef(::HIR::Primitive::Usize), node.m_size->m_res_type);
-            const auto& inner_ty = node.resType->as_Array().inner;
-            checkTypesEqual(node.val->span(), inner_ty, node.val->resType);
+            const auto& innerTy = node.resType->as_Array().inner;
+            checkTypesEqual(node.val->span(), innerTy, node.val->resType);
 
             node.val->visit(*this);
             //if(node.m_size.is_Unevaluated() && node.m_size.as_Unevaluated().is_Unevaluated())
@@ -1690,7 +1690,7 @@ namespace {
 
     public:
         void visit_lifetime(const Span& sp, HIR::LifetimeRef& lft) {
-            if (!lft.is_param()) {
+            if (!lft.isParam()) {
                 switch (lft.binding) {
                     case HIR::LifetimeRef::STATIC: // 'static
                         break;
@@ -1822,12 +1822,12 @@ namespace {
         }
 
     private:
-        bool locate_trait_item_in_bounds(const Span& sp, ::HIR::Visitor::PathContext pc, const ::HIR::TypeData* tr, const ::HIR::GenericParams& params, ::HIR::Path::Data& pd) {
+        bool locateTraitItemInBounds(const Span& sp, ::HIR::Visitor::PathContext pc, const ::HIR::TypeData* tr, const ::HIR::GenericParams& params, ::HIR::Path::Data& pd) {
             //const auto& name = pd.as_UfcsUnknown().item;
             for (const auto& b : params.bounds) {
                 TU_IFLET(::HIR::GenericBound, b, TraitBound, e, DEBUG("- " << e.type << " : " << e.trait.mPath); if (e.type == tr) {
                     DEBUG(" - Match");
-                    if (locate_in_trait_and_set(sp, pc, e.trait.mPath, this->crate.getTraitByPath(sp, e.trait.mPath.mPath), pd)) {
+                    if (locateInTraitAndSet(sp, pc, e.trait.mPath, this->crate.getTraitByPath(sp, e.trait.mPath.mPath), pd)) {
                         return true;
                     }
                 });
@@ -1840,7 +1840,7 @@ namespace {
             return ::HIR::Path::Data::make_UfcsKnown({mv$(e.type), mv$(trait_path), mv$(e.item), mv$(e.params)});
         }
 
-        static bool locate_item_in_trait(::HIR::Visitor::PathContext pc, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
+        static bool locateItemInTrait(::HIR::Visitor::PathContext pc, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
             const auto& e = pd.as_UfcsUnknown();
 
             switch (pc) {
@@ -1860,15 +1860,15 @@ namespace {
             return false;
         }
 
-        bool locate_in_trait_and_set(const Span& sp, ::HIR::Visitor::PathContext pc, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
-            if (locate_item_in_trait(pc, trait, pd)) {
-                pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), make_generic_path(trait_path.mPath, trait), trait);
+        bool locateInTraitAndSet(const Span& sp, ::HIR::Visitor::PathContext pc, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
+            if (locateItemInTrait(pc, trait, pd)) {
+                pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(trait_path.mPath, trait), trait);
                 return true;
             }
             // Search all supertraits
             for (const auto& pt : trait.allParentTraits) {
-                if (locate_item_in_trait(pc, *pt.traitPtr, pd)) {
-                    pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), make_generic_path(trait_path.mPath, trait), trait);
+                if (locateItemInTrait(pc, *pt.traitPtr, pd)) {
+                    pd = getUfcsKnown(mv$(pd.as_UfcsUnknown()), makeGenericPath(trait_path.mPath, trait), trait);
                     return true;
                 }
             }
@@ -1885,14 +1885,14 @@ namespace {
                     DEBUG("- TODO: Bound " << bound);
                     return false;
                 }
-                pd = getUfcsKnown(mv$(e), make_generic_path(trait_path.mPath, trait), trait);
+                pd = getUfcsKnown(mv$(e), makeGenericPath(trait_path.mPath, trait), trait);
                 return true;
             });
         }
 
-        bool locate_in_trait_impl_and_set(::HIR::Visitor::PathContext pc, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
+        bool locateInTraitImplAndSet(::HIR::Visitor::PathContext pc, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait, ::HIR::Path::Data& pd) {
             auto& e = pd.as_UfcsUnknown();
-            if (this->locate_item_in_trait(pc, trait, pd)) {
+            if (this->locateItemInTrait(pc, trait, pd)) {
                 return this->set_from_impl(trait_path, trait, pd);
             } else {
                 DEBUG("- Item " << e.item << " not in trait " << trait_path.mPath);
@@ -1900,7 +1900,7 @@ namespace {
 
             // Search supertraits (recursively)
             for (const auto& pt : trait.allParentTraits) {
-                if (this->locate_item_in_trait(pc, *pt.traitPtr, pd)) {
+                if (this->locateItemInTrait(pc, *pt.traitPtr, pd)) {
                     // TODO: Monomorphise params?
                     return set_from_impl(pt.mPath, *pt.traitPtr, pd);
                 } else {
@@ -1909,7 +1909,7 @@ namespace {
             return false;
         }
 
-        ::HIR::GenericPath make_generic_path(::HIR::SimplePath sp, const ::HIR::Trait& trait) {
+        ::HIR::GenericPath makeGenericPath(::HIR::SimplePath sp, const ::HIR::Trait& trait) {
             auto trait_path_g = ::HIR::GenericPath(mv$(sp));
             for (unsigned int i = 0; i < trait.mParams.types.size(); i++) {
                 trait_path_g.mParams.types.push_back(crate.types.generic(trait.mParams.types[i].mName, i));
@@ -1935,10 +1935,10 @@ namespace {
             this->visit_path_params(e.params);
 
             // Search for matching impls in current generic blocks
-            if (mResolve.itemGenerics != nullptr && locate_trait_item_in_bounds(sp, pc, e.type, *mResolve.itemGenerics, p.mData)) {
+            if (mResolve.itemGenerics != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.itemGenerics, p.mData)) {
                 return;
             }
-            if (mResolve.implGenerics != nullptr && locate_trait_item_in_bounds(sp, pc, e.type, *mResolve.implGenerics, p.mData)) {
+            if (mResolve.implGenerics != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.implGenerics, p.mData)) {
                 return;
             }
 
@@ -1947,7 +1947,7 @@ namespace {
                 // - TODO: This could be encoded by a `Self: Trait` bound in the generics, but that may have knock-on issues?
                 if (te->name == "Self" && currentTrait) {
                     auto trait_path = this->getCurrentTraitGp();
-                    if (this->locate_in_trait_and_set(sp, pc, trait_path, *currentTrait, p.mData)) {
+                    if (this->locateInTraitAndSet(sp, pc, trait_path, *currentTrait, p.mData)) {
                         // Success!
                         return;
                     }
@@ -2009,7 +2009,7 @@ namespace {
                     // TODO: Search supertraits
                     // TODO: Should impls be searched first, or item names?
                     // - Item names add complexity, but impls are slower
-                    if (this->locate_in_trait_impl_and_set(pc, mv$(trait_path), trait, p.mData)) {
+                    if (this->locateInTraitImplAndSet(pc, mv$(trait_path), trait, p.mData)) {
                         return;
                     }
                 }
@@ -2217,10 +2217,10 @@ namespace {
                     if (v_it == trait.values.end() || !v_it->second.is_Function()) {
                         ERROR(sp, E0000, "Trait " << trait_path << " doesn't have a method named " << e.first);
                     }
-                    auto& impl_fcn = e.second.data;
+                    auto& implFcn = e.second.data;
                     const auto& trait_fcn = v_it->second.as_Function();
 
-                    auto fcn_params = trait_fcn.mParams.make_nop_params(crate.types, 1);
+                    auto fcn_params = trait_fcn.mParams.makeNopParams(crate.types, 1);
                     MonomorphStatePtr ms{crate.types, impl.mType, &impl.traitArgs, &fcn_params};
                     HIR::TypeRef tmp;
                     auto maybe_monomorph = [&](const HIR::TypeData* ty) -> const HIR::TypeData* {
@@ -2245,27 +2245,27 @@ namespace {
 
                     std::vector<std::string> failures;
                     // -- Generics
-                    if (impl_fcn.mParams.types.size() != trait_fcn.mParams.types.size()) {
-                        failures.push_back(FMT("Mismatched type param count (expected " << trait_fcn.mParams.types.size() << ", got " << impl_fcn.mParams.types.size() << ")"));
+                    if (implFcn.mParams.types.size() != trait_fcn.mParams.types.size()) {
+                        failures.push_back(FMT("Mismatched type param count (expected " << trait_fcn.mParams.types.size() << ", got " << implFcn.mParams.types.size() << ")"));
                     }
                     // Different logic for lifetimes, only want to check un-elided lifetimes
                     // - Well, elided lifetimes can overlap non-elided ones (as long as they're identical)
-                    if (impl_fcn.mParams.values.size() != trait_fcn.mParams.values.size()) {
-                        failures.push_back(FMT("Mismatched const param count (expected " << trait_fcn.mParams.values.size() << ", got " << impl_fcn.mParams.values.size() << ")"));
+                    if (implFcn.mParams.values.size() != trait_fcn.mParams.values.size()) {
+                        failures.push_back(FMT("Mismatched const param count (expected " << trait_fcn.mParams.values.size() << ", got " << implFcn.mParams.values.size() << ")"));
                     }
                     // -- Arguments
-                    if (impl_fcn.mArgs.size() != trait_fcn.mArgs.size()) {
-                        failures.push_back(FMT("Mismatched argument count (expected " << trait_fcn.mArgs.size() << ", got " << impl_fcn.mArgs.size() << ")"));
+                    if (implFcn.mArgs.size() != trait_fcn.mArgs.size()) {
+                        failures.push_back(FMT("Mismatched argument count (expected " << trait_fcn.mArgs.size() << ", got " << implFcn.mArgs.size() << ")"));
                     }
-                    if (impl_fcn.receiver != trait_fcn.receiver) {
+                    if (implFcn.receiver != trait_fcn.receiver) {
                         failures.push_back(FMT("Receiver type")); //"(expected " << trait_fcn.m_receiver << ", got " << impl_fcn.m_receiver));
                     }
-                    for (size_t i = 0; i < std::min(impl_fcn.mArgs.size(), trait_fcn.mArgs.size()); i++) {
-                        if (!(i == 0 && (trait_fcn.receiver == HIR::Function::Receiver::Free || impl_fcn.receiver == HIR::Function::Receiver::Free))) {
+                    for (size_t i = 0; i < std::min(implFcn.mArgs.size(), trait_fcn.mArgs.size()); i++) {
+                        if (!(i == 0 && (trait_fcn.receiver == HIR::Function::Receiver::Free || implFcn.receiver == HIR::Function::Receiver::Free))) {
                             // Check the type.
                             // - Also, fix lifetime elision?
                             const auto& expTy = maybe_monomorph(trait_fcn.mArgs[i].second);
-                            /*const*/ auto& hasTy = impl_fcn.mArgs[i].second;
+                            /*const*/ auto& hasTy = implFcn.mArgs[i].second;
 
                             if (expTy != hasTy && !expTy->equalsIgnoringRegions(hasTy)) {
                                 failures.push_back(FMT("Argument " << 1 + i << " mismatch - expected " << expTy << ", got " << hasTy));
@@ -2293,29 +2293,29 @@ namespace {
                             return ::HIR::MatchGenerics::cmpType(sp, ty_l, ty_r, resolve_cb);
                         }
 
-                        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, HIR::t_cb_resolve_type resolve_cb) override {
+                        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, HIR::t_cb_resolve_type resolve_cb) override {
                             return (!ty->is_Generic() || ty->as_Generic() != g) ? ::HIR::Compare::Unequal : ::HIR::Compare::Equal;
                         }
 
-                        ::HIR::Compare match_val(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
+                        ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
                             return (!sz.is_Generic() || sz.as_Generic() != g) ? ::HIR::Compare::Unequal : ::HIR::Compare::Equal;
                         }
-                    } match_cb;
+                    } matchCb;
 
                     const auto& expRetTy1 = maybe_monomorph(trait_fcn.returnType);
-                    if (!expRetTy1->match_test_generics(sp, impl_fcn.returnType, HIR::ResolvePlaceholdersNop(), match_cb)) {
+                    if (!expRetTy1->matchTestGenerics(sp, implFcn.returnType, HIR::ResolvePlaceholdersNop(), matchCb)) {
                         failures.push_back(
                             FMT("Mismatched return type:\n"
                                 << "  Expected " << expRetTy1 << "\n"
-                                << "  Found    " << impl_fcn.returnType)
+                                << "  Found    " << implFcn.returnType)
                         );
                     }
                     HIR::TypeRef expRetTyReal;
-                    const auto& expRetTy = match_cb.mapping.empty() ? expRetTy1 : (expRetTyReal = cloneTyWith(crate.types, sp, expRetTy1, [&](const ::HIR::TypeData* ref, ::HIR::TypeRef& out) -> bool {
+                    const auto& expRetTy = matchCb.mapping.empty() ? expRetTy1 : (expRetTyReal = cloneTyWith(crate.types, sp, expRetTy1, [&](const ::HIR::TypeData* ref, ::HIR::TypeRef& out) -> bool {
                         if (const auto* ty_p = ref->opt_Path()) {
                             if (const auto* path_p = ty_p->path.mData.opt_UfcsKnown()) {
-                                auto it = match_cb.mapping.find(path_p->item);
-                                if (it != match_cb.mapping.end()) {
+                                auto it = matchCb.mapping.find(path_p->item);
+                                if (it != matchCb.mapping.end()) {
                                     out = it->second;
                                     return true;
                                 }
@@ -2351,13 +2351,13 @@ namespace {
                                       << FMT_CB(
                                              os,
                                              {
-                                                 os << "    fn " << e.first << impl_fcn.mParams.fmtArgs() << "(";
-                                                 for (const auto& a : impl_fcn.mArgs) {
+                                                 os << "    fn " << e.first << implFcn.mParams.fmtArgs() << "(";
+                                                 for (const auto& a : implFcn.mArgs) {
                                                      os << a.first << ": " << a.second << ", ";
                                                  }
                                                  os << ")\n";
-                                                 os << "    -> " << impl_fcn.returnType << "\n";
-                                                 os << "    " << impl_fcn.mParams.fmtBounds();
+                                                 os << "    -> " << implFcn.returnType << "\n";
+                                                 os << "    " << implFcn.mParams.fmtBounds();
                                              }
                                          )
                                       << "\n"
@@ -2370,10 +2370,10 @@ namespace {
                     // Counter-ref: rustc-1.54.0
                     // Update AFTER the checks
                     DEBUG("Replace generic block's lifetimes with " << trait_fcn.mParams.fmtArgs());
-                    impl_fcn.mParams.mLifetimes = trait_fcn.mParams.mLifetimes;
+                    implFcn.mParams.mLifetimes = trait_fcn.mParams.mLifetimes;
                     // Replace the lifetime bounds too (undoes some potential confusion from elision)
                     {
-                        auto& bl = impl_fcn.mParams.bounds;
+                        auto& bl = implFcn.mParams.bounds;
                         bl.erase(
                             std::remove_if(
                                 bl.begin(),
@@ -2390,30 +2390,30 @@ namespace {
                         default:
                             break;
                             TU_ARMA(TypeLifetime, be) {
-                                impl_fcn.mParams.bounds.push_back(::HIR::GenericBound::make_TypeLifetime({ms.monomorph_type(sp, be.type), ms.monomorph_lifetime(sp, be.valid_for)}));
+                                implFcn.mParams.bounds.push_back(::HIR::GenericBound::make_TypeLifetime({ms.monomorph_type(sp, be.type), ms.monomorph_lifetime(sp, be.valid_for)}));
                             }
                             TU_ARMA(Lifetime, be) {
-                                impl_fcn.mParams.bounds.push_back(::HIR::GenericBound::make_Lifetime({ms.monomorph_lifetime(sp, be.test), ms.monomorph_lifetime(sp, be.valid_for)}));
+                                implFcn.mParams.bounds.push_back(::HIR::GenericBound::make_Lifetime({ms.monomorph_lifetime(sp, be.test), ms.monomorph_lifetime(sp, be.valid_for)}));
                             }
                         }
                     }
 
                     // HACK: Clone the expected type, so the lifetimes match.
                     DEBUG("Updating < " << impl.mType << " as " << trait_path << impl.traitArgs << " >::" << e.first);
-                    impl_fcn.returnType = expRetTy;
-                    for (size_t i = 0; i < std::min(impl_fcn.mArgs.size(), trait_fcn.mArgs.size()); i++) {
+                    implFcn.returnType = expRetTy;
+                    for (size_t i = 0; i < std::min(implFcn.mArgs.size(), trait_fcn.mArgs.size()); i++) {
                         DEBUG("ARG" << i << "> " << trait_fcn.mArgs[i].second);
-                        impl_fcn.mArgs[i].second = mResolve.monomorph_expand(sp, trait_fcn.mArgs[i].second, ms);
+                        implFcn.mArgs[i].second = mResolve.monomorph_expand(sp, trait_fcn.mArgs[i].second, ms);
                     }
                     DEBUG("Updated < " << impl.mType << " as " << trait_path << impl.traitArgs << " >::" << e.first);
 
                     DEBUG(FMT_CB(os, {
-                        os << "fn " << e.first << impl_fcn.mParams.fmtArgs() << "(";
-                        for (const auto& a : impl_fcn.mArgs) {
+                        os << "fn " << e.first << implFcn.mParams.fmtArgs() << "(";
+                        for (const auto& a : implFcn.mArgs) {
                             os << a.first << ": " << a.second << ", ";
                         }
                         os << ")";
-                        os << impl_fcn.mParams.fmtBounds();
+                        os << implFcn.mParams.fmtBounds();
                     }));
                 }
                 for (const auto& e : impl.constants) {
@@ -2421,7 +2421,7 @@ namespace {
                     if (!vi.is_Constant()) {
                         ERROR(sp, E0000, "Trait " << trait_path << " doesn't have a constant named " << e.first);
                     }
-                    const auto& impl_const = e.second.data;
+                    const auto& implConst = e.second.data;
                     const auto& trait_const = vi.as_Constant();
 
                     // Check type
@@ -2431,7 +2431,7 @@ namespace {
                     if (!vi.is_Static()) {
                         ERROR(sp, E0000, "Trait " << trait_path << " doesn't have a static named " << e.first);
                     }
-                    const auto& impl_static = e.second.data;
+                    const auto& implStatic = e.second.data;
                     const auto& trait_static = vi.as_Static();
 
                     // Check type
@@ -2499,7 +2499,7 @@ namespace {
             if (item.receiver != HIR::Function::Receiver::Free) {
                 if (const auto* b = item.mArgs[0].second->opt_Borrow()) {
                     // If this was an elided lifetime.
-                    if (b->lifetime.is_param() && (b->lifetime.binding >> 8) == 1 && (b->lifetime.binding & 0xFF) > firstElidedLifetimeIdx) {
+                    if (b->lifetime.isParam() && (b->lifetime.binding >> 8) == 1 && (b->lifetime.binding & 0xFF) > firstElidedLifetimeIdx) {
                         elidedOutputLifetime = b->lifetime;
                     }
                 }

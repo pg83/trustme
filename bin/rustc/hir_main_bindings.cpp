@@ -314,30 +314,30 @@ public:
         size_t method_count = in.read_count();
         for (size_t i = 0; i < method_count; i++) {
             auto name = in.read_istring();
-            auto is_spec = in.read_bool();
-            DEBUG((is_spec ? "default " : "") << "fn " << name);
-            rv.methods.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Function>{is_spec, deserialiseFunction()}));
+            auto isSpec = in.read_bool();
+            DEBUG((isSpec ? "default " : "") << "fn " << name);
+            rv.methods.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Function>{isSpec, deserialiseFunction()}));
         }
         size_t constCount = in.read_count();
         for (size_t i = 0; i < constCount; i++) {
             auto name = in.read_istring();
-            auto is_spec = in.read_bool();
-            DEBUG((is_spec ? "default " : "") << "const " << name);
-            rv.constants.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Constant>{is_spec, deserialiseConstant()}));
+            auto isSpec = in.read_bool();
+            DEBUG((isSpec ? "default " : "") << "const " << name);
+            rv.constants.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Constant>{isSpec, deserialiseConstant()}));
         }
         size_t static_count = in.read_count();
         for (size_t i = 0; i < static_count; i++) {
             auto name = in.read_istring();
-            auto is_spec = in.read_bool();
-            DEBUG((is_spec ? "default " : "") << "static " << name);
-            rv.statics.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Static>{is_spec, deserialiseStatic()}));
+            auto isSpec = in.read_bool();
+            DEBUG((isSpec ? "default " : "") << "static " << name);
+            rv.statics.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Static>{isSpec, deserialiseStatic()}));
         }
         size_t type_count = in.read_count();
         for (size_t i = 0; i < type_count; i++) {
             auto name = in.read_istring();
-            auto is_spec = in.read_bool();
-            DEBUG((is_spec ? "default " : "") << "type " << name);
-            rv.types.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::TypeRef>{is_spec, deserialiseType()}));
+            auto isSpec = in.read_bool();
+            DEBUG((isSpec ? "default " : "") << "type " << name);
+            rv.types.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::TypeRef>{isSpec, deserialiseType()}));
         }
 
         // m_src_module doesn't matter after typeck
@@ -347,9 +347,9 @@ public:
     ::HIR::MarkerImpl deserialiseMarkerimpl() {
         auto generics = deserialiseGenericparams();
         auto params = deserialisePathparams();
-        auto is_neg = in.read_bool();
+        auto isNeg = in.read_bool();
         auto ty = deserialiseType();
-        return ::HIR::MarkerImpl{mv$(generics), mv$(params), is_neg, mv$(ty)};
+        return ::HIR::MarkerImpl{mv$(generics), mv$(params), isNeg, mv$(ty)};
     }
 
     Ident::Hygiene deserialiseHygine() {
@@ -663,8 +663,8 @@ public:
         switch (auto tag = in.read_tag()) {
             case 0: {
                 auto spath = deserialiseSimplepath();
-                auto is_variant = in.read_bool();
-                return ::HIR::TypeItem::make_Import({mv$(spath), is_variant, static_cast<unsigned int>(in.read_count())});
+                auto isVariant = in.read_bool();
+                return ::HIR::TypeItem::make_Import({mv$(spath), isVariant, static_cast<unsigned int>(in.read_count())});
             }
             case 1:
                 return ::HIR::TypeItem(deserialiseModule());
@@ -691,8 +691,8 @@ public:
         switch (auto tag = in.read_tag()) {
             case 0: {
                 auto spath = deserialiseSimplepath();
-                auto is_variant = in.read_bool();
-                return ::HIR::ValueItem::make_Import({mv$(spath), is_variant, static_cast<unsigned int>(in.read_count())});
+                auto isVariant = in.read_bool();
+                return ::HIR::ValueItem::make_Import({mv$(spath), isVariant, static_cast<unsigned int>(in.read_count())});
             }
             case 1:
                 return ::HIR::ValueItem(deserialiseConstant());
@@ -805,7 +805,7 @@ public:
 #undef BIT
         auto ty = deserialiseType();
         auto rv = ::HIR::Static(mv$(linkage), is_mut, mv$(ty), {});
-        if (params.is_generic()) {
+        if (params.isGeneric()) {
             rv.mValue = deserialiseExprptr();
         }
         rv.mParams = ::std::move(params);
@@ -839,7 +839,7 @@ public:
         uint8_t bitflag1 = in.read_u8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         BIT(0, m.canUnsize)
-        BIT(1, m.is_nonzero)
+        BIT(1, m.isNonzero)
         BIT(2, m.boundedMax)
         BIT(3, m.is_fundamental)
 #undef BIT
@@ -1358,8 +1358,8 @@ EncodedLiteral HirDeserialiser::deserialiseEncodedliteral() {
 
     auto statements = deserialiseVec<::MIR::Statement>();
     auto terminator = deserialiseMirTerminator();
-    const auto is_cleanup = in.read_bool();
-    return ::MIR::BasicBlock{mv$(statements), mv$(terminator), is_cleanup};
+    const auto isCleanup = in.read_bool();
+    return ::MIR::BasicBlock{mv$(statements), mv$(terminator), isCleanup};
 }
 
 AsmCommon::Options HirDeserialiser::deserialiseAsmOptions() {
@@ -1661,7 +1661,7 @@ namespace {
         void visit_module(::HIR::ItemPath p, ::HIR::Module& mod) override {
             if (p.getName()[0]) {
                 os << indent() << "mod " << p.getName() << " {\n";
-                inc_indent();
+                incIndent();
             }
 
             // TODO: Include trait list
@@ -1685,7 +1685,7 @@ namespace {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
-            inc_indent();
+            incIndent();
             ::HIR::Visitor::visit_type_impl(impl);
             decIndent();
             os << indent() << "}\n";
@@ -1697,7 +1697,7 @@ namespace {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
-            inc_indent();
+            incIndent();
             for (auto& ent : impl.types) {
                 os << indent() << "type " << ent.first << " = " << ent.second.data << "\n";
             }
@@ -1707,7 +1707,7 @@ namespace {
         }
 
         void visit_marker_impl(const ::HIR::SimplePath& trait_path, ::HIR::MarkerImpl& impl) override {
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.is_positive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
+            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << trait_path << impl.traitArgs << " for " << impl.mType << "\n";
             if (!impl.mParams.bounds.empty()) {
                 os << indent() << " " << impl.mParams.fmtBounds() << "\n";
             }
@@ -1727,13 +1727,13 @@ namespace {
             os << indent() << "trait " << p.getName() << item.mParams.fmtArgs() << " : " << item.lifetime << "\n";
             if (!item.parentTraits.empty()) {
                 os << indent() << "  " << ": ";
-                bool is_first = true;
+                bool isFirst = true;
                 for (auto& bound : item.parentTraits) {
-                    if (!is_first) {
+                    if (!isFirst) {
                         os << indent() << "  " << "+ ";
                     }
                     os << bound << "\n";
-                    is_first = false;
+                    isFirst = false;
                 }
             }
             if (!item.mParams.bounds.empty()) {
@@ -1747,19 +1747,19 @@ namespace {
                 os << indent() << "*/\n";
             }
             os << indent() << "{\n";
-            inc_indent();
+            incIndent();
 
             for (auto& i : item.types) {
                 os << indent() << "type " << i.first;
                 if (!i.second.traitBounds.empty()) {
                     os << ": ";
-                    bool is_first = true;
+                    bool isFirst = true;
                     for (auto& bound : i.second.traitBounds) {
-                        if (!is_first) {
+                        if (!isFirst) {
                             os << " + ";
                         }
                         os << bound;
-                        is_first = false;
+                        isFirst = false;
                     }
                 }
                 //this->visit_type(i.second.m_default);
@@ -1803,7 +1803,7 @@ namespace {
                         os << indent() << " " << item.mParams.fmtBounds() << "\n";
                     }
                     os << indent() << "{\n";
-                    inc_indent();
+                    incIndent();
                     for (const auto& fld : flds) {
                         os << indent() << fld.vis << " " << fld.name << ": " << fld.ty;
                         if (fld.default_value) {
@@ -1823,7 +1823,7 @@ namespace {
                 os << indent() << " " << item.mParams.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
-            inc_indent();
+            incIndent();
             if (const auto* e = item.mData.opt_Value()) {
                 for (const auto& var : e->variants) {
                     os << indent() << var.name;
@@ -1870,7 +1870,7 @@ namespace {
                     item.mCode->visit(*this);
                 } else {
                     os << "{\n";
-                    inc_indent();
+                    incIndent();
                     os << indent();
 
                     item.mCode->visit(*this);
@@ -1941,7 +1941,7 @@ namespace {
 
         void visit(::HIR::ExprNodeBlock& node) override {
             os << "{\n";
-            inc_indent();
+            incIndent();
             for (auto& sn : node.nodes) {
                 os << indent();
                 this->visit_node_ptr(sn);
@@ -2043,7 +2043,7 @@ namespace {
                     }
                 }
                 os << " => ";
-                inc_indent();
+                incIndent();
                 this->visit_node_ptr(arm.mCode);
                 decIndent();
                 os << ",\n";
@@ -2337,7 +2337,7 @@ namespace {
 
         void visit(::HIR::ExprNodeStructLiteral& node) override {
             os << node.mType << " {\n";
-            inc_indent();
+            incIndent();
             for (/*const*/ auto& val : node.values) {
                 os << indent() << val.first << ": ";
                 this->visit_node_ptr(val.second);
@@ -2449,7 +2449,7 @@ namespace {
             return RepeatLitStr{"    ", static_cast<int>(indentLevel)};
         }
 
-        void inc_indent() {
+        void incIndent() {
             indentLevel++;
         }
 
@@ -2602,7 +2602,7 @@ public:
     }
 
     void serialise(const ::HIR::Publicity& pub) {
-        out.write_bool(pub.is_global());
+        out.write_bool(pub.isGlobal());
     }
 
     template <typename T>
@@ -2942,13 +2942,13 @@ public:
         serialise_vec(crate.exportedMacroNames);
 
         {
-            decltype(crate.mLangItems) lang_items_filtered;
+            decltype(crate.mLangItems) langItemsFiltered;
             for (const auto& ent : crate.mLangItems) {
                 if (ent.second.crate_name() == "" || ent.second.crate_name() == crate.crateName) {
-                    lang_items_filtered.insert(ent);
+                    langItemsFiltered.insert(ent);
                 }
             }
-            serialise_strmap(lang_items_filtered);
+            serialise_strmap(langItemsFiltered);
         }
 
         out.write_count(crate.extCrates.size());
@@ -2984,22 +2984,22 @@ public:
         out.write_count(impl.methods.size());
         for (const auto& v : impl.methods) {
             out.write_string(v.first);
-            out.write_bool(v.second.publicity.is_global());
-            out.write_bool(v.second.is_specialisable);
+            out.write_bool(v.second.publicity.isGlobal());
+            out.write_bool(v.second.isSpecialisable);
             serialise(v.second.data);
         }
         out.write_count(impl.constants.size());
         for (const auto& v : impl.constants) {
             out.write_string(v.first);
-            out.write_bool(v.second.publicity.is_global());
-            out.write_bool(v.second.is_specialisable);
+            out.write_bool(v.second.publicity.isGlobal());
+            out.write_bool(v.second.isSpecialisable);
             serialise(v.second.data);
         }
         out.write_count(impl.types.size());
         for (const auto& v : impl.types) {
             out.write_string(v.first);
-            out.write_bool(v.second.publicity.is_global());
-            out.write_bool(v.second.is_specialisable);
+            out.write_bool(v.second.publicity.isGlobal());
+            out.write_bool(v.second.isSpecialisable);
             serialise(v.second.data);
         }
         // m_src_module doesn't matter after typeck
@@ -3020,28 +3020,28 @@ public:
         for (const auto& v : impl.methods) {
             DEBUG("fn " << v.first);
             out.write_string(v.first);
-            out.write_bool(v.second.is_specialisable);
+            out.write_bool(v.second.isSpecialisable);
             serialise(v.second.data);
         }
         out.write_count(impl.constants.size());
         for (const auto& v : impl.constants) {
             DEBUG("const " << v.first);
             out.write_string(v.first);
-            out.write_bool(v.second.is_specialisable);
+            out.write_bool(v.second.isSpecialisable);
             serialise(v.second.data);
         }
         out.write_count(impl.statics.size());
         for (const auto& v : impl.statics) {
             DEBUG("static " << v.first);
             out.write_string(v.first);
-            out.write_bool(v.second.is_specialisable);
+            out.write_bool(v.second.isSpecialisable);
             serialise(v.second.data);
         }
         out.write_count(impl.types.size());
         for (const auto& v : impl.types) {
             DEBUG("type " << v.first);
             out.write_string(v.first);
-            out.write_bool(v.second.is_specialisable);
+            out.write_bool(v.second.isSpecialisable);
             serialise(v.second.data);
         }
         // m_src_module doesn't matter after typeck
@@ -3054,7 +3054,7 @@ public:
     void serialise_markerimpl(const ::HIR::MarkerImpl& impl) {
         serialise_generics(impl.mParams);
         serialise_pathparams(impl.traitArgs);
-        out.write_bool(impl.is_positive);
+        out.write_bool(impl.isPositive);
         serialise_type(impl.mType);
     }
 
@@ -3135,7 +3135,7 @@ public:
             TU_ARMA(LoopEnd, _e) {
             }
             TU_ARMA(Jump, e) {
-                out.write_count(e.jump_target);
+                out.write_count(e.jumpTarget);
             }
             TU_ARMA(ExpectTok, e) {
                 serialise(e);
@@ -3146,7 +3146,7 @@ public:
             }
             TU_ARMA(If, e) {
                 out.write_bool(e.is_equal);
-                out.write_count(e.jump_target);
+                out.write_count(e.jumpTarget);
                 serialise_vec(e.ents);
             }
             }
@@ -3292,7 +3292,7 @@ public:
     void serialise(const ::MIR::BasicBlock& block) {
         serialise_vec(block.statements);
         serialise(block.terminator);
-        out.write_bool(block.is_cleanup);
+        out.write_bool(block.isCleanup);
     }
 
     void serialise(const ::AsmCommon::LineFragment& l) {
@@ -3425,7 +3425,7 @@ public:
             (Unreachable, ),
             (Goto, out.write_count(e);),
             (If, serialise(e.cond); out.write_count(e.bbTrue); out.write_count(e.bbFalse);),
-            (Switch, serialise(e.val); serialise_vec(e.targets); out.write_count(e.valid_flag); out.write_count(e.invalid_target);),
+            (Switch, serialise(e.val); serialise_vec(e.targets); out.write_count(e.valid_flag); out.write_count(e.invalidTarget);),
             (SwitchValue, serialise(e.val); out.write_count(e.defTarget); serialise_vec(e.targets); serialise(e.values);),
             (Drop, out.write_tag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.write_count(e.flagIdx); out.write_count(e.target); serialise_unwind(e.unwind);),
             (Call, out.write_count(e.ret_block); serialise_unwind(e.unwind); serialise(e.ret_val); serialise(e.fcn); serialise_vec(e.args);)
@@ -3479,7 +3479,7 @@ public:
     void serialise(const ::MIR::RValue& val) {
         TRACE_FUNCTION_F("RValue = " << val);
         out.write_tag(val.tag());
-        TU_MATCHA((val), (e), (Use, serialise(e);), (Constant, serialise(e);), (SizedArray, serialise(e.val); serialise_arraysize(e.count);), (Borrow, out.write_tag(static_cast<int>(e.type)); out.write_bool(e.is_raw); serialise(e.val);), (Cast, serialise(e.val); serialise(e.type);), (BinOp, serialise(e.val_l); out.write_tag(static_cast<int>(e.op)); serialise(e.val_r);), (UniOp, serialise(e.val); out.write_tag(static_cast<int>(e.op));), (DstMeta, serialise(e.val);), (DstPtr, serialise(e.val);), (MakeDst, serialise(e.ptr_val); auto b = !TU_TEST2(e.meta_val, Constant, , ItemAddr, .get() == nullptr); out.write_bool(b); if (b) serialise(e.meta_val);), (Tuple, serialise_vec(e.vals);), (Array, serialise_vec(e.vals);), (UnionVariant, serialise_genericpath(e.path); out.write_count(e.index); serialise(e.val);), (EnumVariant, serialise_genericpath(e.path); out.write_count(e.index); serialise_vec(e.vals);), (Struct, serialise_genericpath(e.path); serialise_vec(e.vals);))
+        TU_MATCHA((val), (e), (Use, serialise(e);), (Constant, serialise(e);), (SizedArray, serialise(e.val); serialise_arraysize(e.count);), (Borrow, out.write_tag(static_cast<int>(e.type)); out.write_bool(e.isRaw); serialise(e.val);), (Cast, serialise(e.val); serialise(e.type);), (BinOp, serialise(e.val_l); out.write_tag(static_cast<int>(e.op)); serialise(e.val_r);), (UniOp, serialise(e.val); out.write_tag(static_cast<int>(e.op));), (DstMeta, serialise(e.val);), (DstPtr, serialise(e.val);), (MakeDst, serialise(e.ptr_val); auto b = !TU_TEST2(e.meta_val, Constant, , ItemAddr, .get() == nullptr); out.write_bool(b); if (b) serialise(e.meta_val);), (Tuple, serialise_vec(e.vals);), (Array, serialise_vec(e.vals);), (UnionVariant, serialise_genericpath(e.path); out.write_count(e.index); serialise(e.val);), (EnumVariant, serialise_genericpath(e.path); out.write_count(e.index); serialise_vec(e.vals);), (Struct, serialise_genericpath(e.path); serialise_vec(e.vals);))
     }
 
     void serialise(const ::MIR::Constant& v) {
@@ -3488,7 +3488,7 @@ public:
     }
 
     void serialise(const ::HIR::TypeItem& item) {
-        TU_MATCHA((item), (e), (Import, out.write_tag(0); serialise_simplepath(e.path); out.write_bool(e.is_variant); out.write_count(e.idx);), (Module, out.write_tag(1); serialise_module(e);), (TypeAlias, out.write_tag(2); serialise(e);), (Enum, out.write_tag(3); serialise(e);), (Struct, out.write_tag(4); serialise(e);), (Trait, out.write_tag(5); serialise(e);), (Union, out.write_tag(6); serialise(e);), (ExternType, out.write_tag(7); serialise(e);), (TraitAlias, out.write_tag(8); serialise(e);))
+        TU_MATCHA((item), (e), (Import, out.write_tag(0); serialise_simplepath(e.path); out.write_bool(e.isVariant); out.write_count(e.idx);), (Module, out.write_tag(1); serialise_module(e);), (TypeAlias, out.write_tag(2); serialise(e);), (Enum, out.write_tag(3); serialise(e);), (Struct, out.write_tag(4); serialise(e);), (Trait, out.write_tag(5); serialise(e);), (Union, out.write_tag(6); serialise(e);), (ExternType, out.write_tag(7); serialise(e);), (TraitAlias, out.write_tag(8); serialise(e);))
     }
 
     void serialise(const ::HIR::MacroItem& item) {
@@ -3508,7 +3508,7 @@ public:
     }
 
     void serialise(const ::HIR::ValueItem& item) {
-        TU_MATCHA((item), (e), (Import, out.write_tag(0); serialise_simplepath(e.path); out.write_bool(e.is_variant); out.write_count(e.idx);), (Constant, out.write_tag(1); serialise(e);), (Static, out.write_tag(2); serialise(e);), (StructConstant, out.write_tag(3); serialise_simplepath(e.ty);), (Function, out.write_tag(4); serialise(e);), (StructConstructor, out.write_tag(5); serialise_simplepath(e.ty);))
+        TU_MATCHA((item), (e), (Import, out.write_tag(0); serialise_simplepath(e.path); out.write_bool(e.isVariant); out.write_count(e.idx);), (Constant, out.write_tag(1); serialise(e);), (Static, out.write_tag(2); serialise(e);), (StructConstant, out.write_tag(3); serialise_simplepath(e.ty);), (Function, out.write_tag(4); serialise(e);), (StructConstructor, out.write_tag(5); serialise_simplepath(e.ty);))
     }
 
     void serialise(const ::HIR::Linkage& linkage) {
@@ -3577,7 +3577,7 @@ public:
         out.write_u8(bitflag1);
         serialise(item.mType);
 
-        if (item.mParams.is_generic()) {
+        if (item.mParams.isGeneric()) {
             serialise(item.mValue);
         }
         // NOTE: Value not stored (What if the static is generic? It can't be.)
@@ -3646,7 +3646,7 @@ public:
     if (fld)        \
         bitflag1 |= 1 << (i);
         BIT(0, m.canUnsize)
-        BIT(1, m.is_nonzero)
+        BIT(1, m.isNonzero)
         BIT(2, m.boundedMax)
         BIT(3, m.is_fundamental)
 #undef BIT

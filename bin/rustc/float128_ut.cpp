@@ -136,47 +136,47 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(same_bits(Float128(0.5), 0x3ffe'0000'0000'0000ull, 0));
         // Subnormal double widens to a normal binary128
         STD_INSIST(same_bits(Float128(doubleFromBits(1)), 0x3bcd'0000'0000'0000ull, 0));
-        STD_INSIST(Float128(doubleFromBits(0x7FF8'0000'0000'0000ull)).is_nan());
-        STD_INSIST(Float128(doubleFromBits(0x7FF0'0000'0000'0000ull)).is_infinite());
+        STD_INSIST(Float128(doubleFromBits(0x7FF8'0000'0000'0000ull)).isNan());
+        STD_INSIST(Float128(doubleFromBits(0x7FF0'0000'0000'0000ull)).isInfinite());
         STD_INSIST(same_bits(Float128::quiet_nan(), 0x7fff'8000'0000'0000ull, 0));
-        STD_INSIST(Float128::quiet_nan().is_nan());
-        STD_INSIST(Float128::infinity(false).is_infinite());
-        STD_INSIST(!Float128::infinity(false).is_nan());
-        STD_INSIST(!Float128(1.5).is_nan());
-        STD_INSIST(!Float128(1.5).is_infinite());
+        STD_INSIST(Float128::quiet_nan().isNan());
+        STD_INSIST(Float128::infinity(false).isInfinite());
+        STD_INSIST(!Float128::infinity(false).isNan());
+        STD_INSIST(!Float128(1.5).isNan());
+        STD_INSIST(!Float128(1.5).isInfinite());
     }
 
     STD_TEST(testNanPropagation) {
         const auto nan = Float128::quiet_nan();
         const auto one = Float128(1.0);
-        STD_INSIST((nan + one).is_nan());
-        STD_INSIST((one - nan).is_nan());
-        STD_INSIST((nan * nan).is_nan());
-        STD_INSIST((one / nan).is_nan());
+        STD_INSIST((nan + one).isNan());
+        STD_INSIST((one - nan).isNan());
+        STD_INSIST((nan * nan).isNan());
+        STD_INSIST((one / nan).isNan());
         const auto inf = Float128::infinity(false);
-        STD_INSIST((inf - inf).is_nan());
-        STD_INSIST((inf + (-inf)).is_nan());
-        STD_INSIST((Float128() * inf).is_nan());
-        STD_INSIST((inf / inf).is_nan());
-        STD_INSIST((Float128() / Float128()).is_nan());
-        STD_INSIST(Float128::remainder(one, Float128()).is_nan());
-        STD_INSIST(Float128::remainder(inf, one).is_nan());
+        STD_INSIST((inf - inf).isNan());
+        STD_INSIST((inf + (-inf)).isNan());
+        STD_INSIST((Float128() * inf).isNan());
+        STD_INSIST((inf / inf).isNan());
+        STD_INSIST((Float128() / Float128()).isNan());
+        STD_INSIST(Float128::remainder(one, Float128()).isNan());
+        STD_INSIST(Float128::remainder(inf, one).isNan());
         STD_INSIST(same_bits(Float128::remainder(one, inf), one.bitsHi(), one.bitsLo()));
     }
 
     STD_TEST(testInfinityArithmetic) {
         const auto inf = Float128::infinity(false);
         const auto one = Float128(1.0);
-        STD_INSIST((inf + inf).is_infinite());
-        STD_INSIST((inf + one).is_infinite());
+        STD_INSIST((inf + inf).isInfinite());
+        STD_INSIST((inf + one).isInfinite());
         STD_INSIST(same_bits(one / inf, 0, 0));
         STD_INSIST(same_bits(-one / inf, 0x8000'0000'0000'0000ull, 0));
-        STD_INSIST((one / Float128()).is_infinite());
+        STD_INSIST((one / Float128()).isInfinite());
         STD_INSIST(same_bits(one / Float128(), inf.bitsHi(), inf.bitsLo()));
         // Overflow rounds to infinity
         const auto max_normal = Float128::fromBits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
-        STD_INSIST((max_normal + max_normal).is_infinite());
-        STD_INSIST((max_normal * Float128(2.0)).is_infinite());
+        STD_INSIST((max_normal + max_normal).isInfinite());
+        STD_INSIST((max_normal * Float128(2.0)).isInfinite());
     }
 
     STD_TEST(testZeroSigns) {
@@ -243,7 +243,7 @@ STD_TEST_SUITE(Float128Specials) {
         // A single NaN operand loses
         STD_INSIST(same_bits(Float128::minimum_number(nan, two), two.bitsHi(), two.bitsLo()));
         STD_INSIST(same_bits(Float128::maximum_number(one, nan), one.bitsHi(), one.bitsLo()));
-        STD_INSIST(Float128::minimum_number(nan, nan).is_nan());
+        STD_INSIST(Float128::minimum_number(nan, nan).isNan());
         // Signed zeros are distinguished
         STD_INSIST(same_bits(Float128::minimum_number(Float128(), -Float128()), 0x8000'0000'0000'0000ull, 0));
         STD_INSIST(same_bits(Float128::maximum_number(Float128(), -Float128()), 0, 0));
@@ -274,7 +274,7 @@ STD_TEST_SUITE(Float128Specials) {
         // A value halfway into double subnormal range
         const auto sub = Float128(doubleFromBits(0x0000'0000'0000'0001ull));
         STD_INSIST(bitsFromDouble(static_cast<double>(sub)) == 1);
-        STD_INSIST(Float128(doubleFromBits(0x7ff8'0000'0000'0000ull)).is_nan());
+        STD_INSIST(Float128(doubleFromBits(0x7ff8'0000'0000'0000ull)).isNan());
         STD_INSIST(bitsFromDouble(static_cast<double>(Float128::quiet_nan())) == 0x7ff8'0000'0000'0000ull);
         STD_INSIST(bitsFromFloat(static_cast<float>(Float128::infinity(true))) == 0xff80'0000u);
     }
@@ -284,7 +284,7 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(same_bits(Float128::parse_decimal("00012.5000"), Float128(12.5).bitsHi(), Float128(12.5).bitsLo()));
         STD_INSIST(same_bits(Float128::parse_decimal("1E3"), Float128(1000.0).bitsHi(), Float128(1000.0).bitsLo()));
         STD_INSIST(same_bits(Float128::parse_decimal("1e+3"), Float128(1000.0).bitsHi(), Float128(1000.0).bitsLo()));
-        STD_INSIST(Float128::parse_decimal("1e999999999").is_infinite());
+        STD_INSIST(Float128::parse_decimal("1e999999999").isInfinite());
         STD_INSIST(same_bits(Float128::parse_decimal("1e-999999999"), 0, 0));
     }
 

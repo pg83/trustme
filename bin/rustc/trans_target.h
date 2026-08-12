@@ -81,10 +81,10 @@ struct TypeRepr {
              bool uses_niche() const {
                  return !field.sub_fields.empty();
              }
-             bool is_niche(unsigned var_idx) const {
+             bool isNiche(unsigned var_idx) const {
                  return uses_niche() && var_idx == field.index;
              }
-             bool is_tag(unsigned var_idx) const {
+             bool isTag(unsigned var_idx) const {
                  return !uses_niche() && var_idx == field.index;
              }
          }),
@@ -95,7 +95,7 @@ struct TypeRepr {
              // NOTE: `field.sub_path` should always be empty?
              FieldPath field;
              ::std::vector<U128> values;
-             bool is_tag(unsigned var_idx) const {
+             bool isTag(unsigned var_idx) const {
                  return var_idx == field.index;
              }
          }),

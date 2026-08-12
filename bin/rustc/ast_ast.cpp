@@ -132,11 +132,11 @@ namespace AST {
         return rv;
     }
 
-    void Attribute::parse_paren_ident_list(std::function<void(const Span& sp, RcString ident)> item_cb) const {
+    void Attribute::parse_paren_ident_list(std::function<void(const Span& sp, RcString ident)> itemCb) const {
         TTStream lex(this->mSpan, ParseState(), this->data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
         while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
-            item_cb(lex.point_span(), lex.getTokenCheck(TOK_IDENT).ident().name);
+            itemCb(lex.point_span(), lex.getTokenCheck(TOK_IDENT).ident().name);
             if (lex.lookahead(0) != TOK_COMMA) {
                 break;
             }
@@ -146,18 +146,18 @@ namespace AST {
     }
 
     // ---
-    Visibility Visibility::make_global() {
+    Visibility Visibility::makeGlobal() {
         return Visibility();
     }
 
-    Visibility Visibility::make_restricted(Ty ty, AST::AbsolutePath p) {
+    Visibility Visibility::makeRestricted(Ty ty, AST::AbsolutePath p) {
         Visibility rv;
         rv.mTy = ty;
         rv.visPath = std::make_shared<AST::AbsolutePath>(std::move(p));
         return rv;
     }
 
-    Visibility Visibility::make_restricted(AST::AbsolutePath p, AST::Path in_path) {
+    Visibility Visibility::makeRestricted(AST::AbsolutePath p, AST::Path in_path) {
         Visibility rv;
         rv.mTy = Ty::PubIn;
         rv.visPath = std::make_shared<AST::AbsolutePath>(std::move(p));
@@ -201,7 +201,7 @@ namespace AST {
         return os;
     }
 
-    bool Visibility::is_visible(const ::AST::AbsolutePath& fromMod) const {
+    bool Visibility::isVisible(const ::AST::AbsolutePath& fromMod) const {
         if (visPath) {
             if (visPath->crate != fromMod.crate) {
                 return false;
@@ -222,13 +222,13 @@ namespace AST {
 
     bool Visibility::contains(const ::AST::Visibility& x) const {
         if (visPath) {
-            return x.is_visible(*visPath);
+            return x.isVisible(*visPath);
         } else {
             return true;
         }
     }
 
-    void Visibility::inplace_union(const Visibility& x) {
+    void Visibility::inplaceUnion(const Visibility& x) {
         if (this->contains(x)) {
         } else if (x.contains(*this)) {
             visPath = x.visPath;
@@ -252,7 +252,7 @@ namespace AST {
     }
 
     Static Static::clone() const {
-        return Static(cls, mType.clone(), mValue.is_valid() ? AST::Expr(mValue.node().clone()) : AST::Expr());
+        return Static(cls, mType.clone(), mValue.isValid() ? AST::Expr(mValue.node().clone()) : AST::Expr());
     }
 
     Function::Function(Span sp, ::std::string abi, Flags flags, GenericParams params, TypeRef ret_type, Arglist args, bool is_variadic)
@@ -273,22 +273,22 @@ namespace AST {
         }
 
         auto rv = Function(mSpan, mAbi, flags, mParams.clone(), mRettype.clone(), mv$(new_args), isVariadic);
-        if (mCode.is_valid()) {
+        if (mCode.isValid()) {
             rv.mCode = AST::Expr(mCode.node().clone());
         }
         return rv;
     }
 
     void Trait::addType(Span sp, RcString name, AttributeList attrs, TypeRef type) {
-        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Type({TypeAlias(GenericParams(), mv$(type))})));
+        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::makeGlobal(), mv$(name), Item::make_Type({TypeAlias(GenericParams(), mv$(type))})));
     }
 
     void Trait::addFunction(Span sp, RcString name, AttributeList attrs, Function fcn) {
-        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Function({mv$(fcn)})));
+        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::makeGlobal(), mv$(name), Item::make_Function({mv$(fcn)})));
     }
 
     void Trait::addStatic(Span sp, RcString name, AttributeList attrs, Static v) {
-        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::make_global(), mv$(name), Item::make_Static({mv$(v)})));
+        mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::makeGlobal(), mv$(name), Item::make_Static({mv$(v)})));
     }
 
     void Trait::set_is_marker() {
@@ -345,20 +345,20 @@ namespace AST {
         return os << "impl " << (impl.isConst ? "const " : "") << "<" << impl.mParams << "> " << impl.mTrait.ent << " for " << impl.mType << "";
     }
 
-    void Impl::addFunction(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Function fcn) {
-        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Function(mv$(fcn)))});
+    void Impl::addFunction(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, Function fcn) {
+        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(Item::make_Function(mv$(fcn)))});
     }
 
-    void Impl::addType(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, GenericParams params, TypeRef type) {
-        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Type(TypeAlias(mv$(params), mv$(type))))});
+    void Impl::addType(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, GenericParams params, TypeRef type) {
+        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(Item::make_Type(TypeAlias(mv$(params), mv$(type))))});
     }
 
-    void Impl::addStatic(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Static v) {
-        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), is_specialisable, mv$(name), box$(Item::make_Static(mv$(v)))});
+    void Impl::addStatic(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, Static v) {
+        mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(Item::make_Static(mv$(v)))});
     }
 
     void Impl::addMacroInvocation(MacroInvocation item) {
-        mItems.push_back(ImplItem{item.span(), {}, AST::Visibility::make_global(), false, "", box$(Item::make_MacroInv(mv$(item)))});
+        mItems.push_back(ImplItem{item.span(), {}, AST::Visibility::makeGlobal(), false, "", box$(Item::make_MacroInv(mv$(item)))});
     }
 
     bool Impl::hasNamedItem(const RcString& name) const {
@@ -442,22 +442,22 @@ namespace AST {
         addItem(Named<Item>(mv$(sp), mv$(attrs), mv$(vis), mv$(name), mv$(it)));
     }
 
-    void Module::addExtCrate(Span sp, AST::Visibility vis, RcString extName, RcString imp_name, AttributeList attrs) {
-        this->addItem(mv$(sp), mv$(vis), imp_name, Item::make_Crate({mv$(extName)}), mv$(attrs));
+    void Module::addExtCrate(Span sp, AST::Visibility vis, RcString extName, RcString impName, AttributeList attrs) {
+        this->addItem(mv$(sp), mv$(vis), impName, Item::make_Crate({mv$(extName)}), mv$(attrs));
     }
 
     void Module::addMacroInvocation(MacroInvocation item) {
-        this->addItem(item.span(), AST::Visibility::make_global(), "", Item(mv$(item)), ::AST::AttributeList{});
+        this->addItem(item.span(), AST::Visibility::makeGlobal(), "", Item(mv$(item)), ::AST::AttributeList{});
     }
 
-    void Module::addMacro(bool is_exported, RcString name, MacroRulesPtr macro) {
+    void Module::addMacro(bool isExported, RcString name, MacroRulesPtr macro) {
         assert(macro);
         assert(macro->rules.size() > 0);
         mMacros.push_back(
             Named<MacroRulesPtr>(
                 Span(),
                 {},
-                /*is_pub=*/is_exported ? AST::Visibility::make_global() : AST::Visibility::make_restricted(AST::Visibility::Ty::Private, myPath),
+                /*is_pub=*/isExported ? AST::Visibility::makeGlobal() : AST::Visibility::makeRestricted(AST::Visibility::Ty::Private, myPath),
                 mv$(name),
                 mv$(macro)
             )
@@ -567,7 +567,7 @@ namespace AST {
                 } else if (ent.constness == BoundConstness::Maybe) {
                     os << "[const] ";
                 }
-                os << ent.inner_hrbs << ent.trait;
+                os << ent.innerHrbs << ent.trait;
             }
             TU_ARMA(MaybeTrait, ent) {
                 os << ent.type << ": ?" << ent.trait;
@@ -659,7 +659,7 @@ Function::Arg::Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs)
 Function::Flags::Flags()
     : is_const(false)
     , is_unsafe(false)
-    , is_async(false) {
+    , isAsync(false) {
 }
 Function::Flags Function::Flags::set_unsafe() const {
     auto rv = *this;
@@ -673,7 +673,7 @@ Function::Flags Function::Flags::set_const() const {
 }
 Function::Flags Function::Flags::set_async() const {
     auto rv = *this;
-    rv.is_async = true;
+    rv.isAsync = true;
     return rv;
 }
 // Helper for derive, defines an ABI_RUST function with no generics

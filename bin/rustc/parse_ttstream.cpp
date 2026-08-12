@@ -25,7 +25,7 @@ Token TTStream::realGetToken() {
         assert(stack.back().second);
         const TokenTree& tree = *stack.back().second;
 
-        if (idx == 0 && tree.is_token()) {
+        if (idx == 0 && tree.isToken()) {
             idx++;
             hygienePtr = &tree.hygiene();
             DEBUG(tree.tok());
@@ -91,7 +91,7 @@ Token TTStreamO::realGetToken() {
         unsigned int& idx = stack.back().first;
         TokenTree& tree = (stack.back().second ? *stack.back().second : inputTt);
 
-        if (idx == 0 && tree.is_token()) {
+        if (idx == 0 && tree.isToken()) {
             idx++;
             lastPos = tree.tok().getPos();
             edition = tree.getEdition();

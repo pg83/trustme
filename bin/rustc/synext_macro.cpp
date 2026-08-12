@@ -537,7 +537,7 @@ public:
                 TODO(sp, "sym/const");
             }
         }
-        auto named_item = AST::Named<AST::Item>(sp, {}, AST::Visibility::make_bare_private(), "", AST::Item(std::move(global_asm)));
+        auto named_item = AST::Named<AST::Item>(sp, {}, AST::Visibility::makeBarePrivate(), "", AST::Item(std::move(global_asm)));
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(Token::TagTakeIP(), InterpolatedFragment(std::move(named_item))))));
     }
 };
@@ -820,9 +820,9 @@ class CExpanderColumn: public ExpandProcMacro {
 class CExpanderUnstableColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         const auto offset = getTopSpan(sp)->start_ofs;
-        constexpr unsigned macro_width = sizeof("__rust_unstable_column!()") - 1 + 1;
-        ASSERT_BUG(sp, offset >= macro_width, "__rust_unstable_column! invocation span is too short");
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - macro_width), CORETYPE_U32))));
+        constexpr unsigned macroWidth = sizeof("__rust_unstable_column!()") - 1 + 1;
+        ASSERT_BUG(sp, offset >= macroWidth, "__rust_unstable_column! invocation span is too short");
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - macroWidth), CORETYPE_U32))));
     }
 };
 
@@ -947,7 +947,7 @@ namespace {
     /// A single formatting fragment
     struct FmtFrag {
         /// Literal text preceding the fragment
-        ::std::string leading_text;
+        ::std::string leadingText;
 
         /// Argument index used
         unsigned int argIndex;
@@ -1407,9 +1407,9 @@ namespace {
 
                 auto exprTt = TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, ParseExpr0(lex).release())));
 
-                auto ins_rv = named_args_index.insert(::std::make_pair(mv$(name), static_cast<unsigned>(named_args.size())));
-                if (ins_rv.second == false) {
-                    ERROR(sp, E0000, "Duplicate definition of named argument `" << ins_rv.first->first << "`");
+                auto insRv = named_args_index.insert(::std::make_pair(mv$(name), static_cast<unsigned>(named_args.size())));
+                if (insRv.second == false) {
+                    ERROR(sp, E0000, "Duplicate definition of named argument `" << insRv.first->first << "`");
                 }
                 named_args.push_back(mv$(exprTt));
             }
@@ -1430,15 +1430,15 @@ namespace {
             tail += "\n";
         }
 
-        bool is_simple = true;
+        bool isSimple = true;
         for (unsigned int i = 0; i < fragments.size(); i++) {
             if (fragments[i].argIndex != i) {
                 DEBUG(i << "Ordering mismach");
-                is_simple = false;
+                isSimple = false;
             }
             if (fragments[i].args != FmtArgs{}) {
                 DEBUG(i << " Args changed - " << fragments[i].args << " != " << FmtArgs{});
-                is_simple = false;
+                isSimple = false;
             }
         }
 
@@ -1488,7 +1488,7 @@ namespace {
 
             toks.push_back(TokenTree(TOK_SQUARE_OPEN));
             for (const auto& frag : fragments) {
-                toks.push_back(Token(TOK_STRING, frag.leading_text, h));
+                toks.push_back(Token(TOK_STRING, frag.leadingText, h));
                 toks.push_back(TokenTree(TOK_COMMA));
             }
             toks.push_back(Token(TOK_STRING, tail, h));
@@ -1523,7 +1523,7 @@ namespace {
             }
         };
 
-        if (is_simple) {
+        if (isSimple) {
             // ::fmt::Arguments::new_v1
             push_path(toks, crate, {"fmt", "Arguments", "new_v1"});
             // (
@@ -1741,7 +1741,7 @@ STATIC_MACRO("format_args_nl", CFormatArgsNlExpander);
 
 namespace {
 
-    ::std::string include_get_string(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
+    ::std::string includeGetString(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
         auto n = ParseExprVal(lex);
         ASSERT_BUG(sp, n, "No expression returned");
         if (lex.lookahead(0) == TOK_COMMA) {
@@ -1788,7 +1788,7 @@ class CIncludeExpander: public ExpandProcMacro {
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
-        auto path = include_get_string(sp, lex, crate, mod);
+        auto path = includeGetString(sp, lex, crate, mod);
         GET_CHECK_TOK(tok, lex, TOK_EOF);
 
         //::std::string file_path = get_path_relative_to(mod.m_file_info.path, mv$(path));
@@ -1811,7 +1811,7 @@ class CIncludeBytesExpander: public ExpandProcMacro {
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
-        auto path = include_get_string(sp, lex, crate, mod);
+        auto path = includeGetString(sp, lex, crate, mod);
         GET_CHECK_TOK(tok, lex, TOK_EOF);
 
         ::std::string filePath = getPathRelativeTo(mod.fileInfo.path, mv$(path));
@@ -1835,7 +1835,7 @@ class CIncludeStrExpander: public ExpandProcMacro {
         Token tok;
         auto lex = TTStream(sp, ParseState(), tt);
 
-        auto path = include_get_string(sp, lex, crate, mod);
+        auto path = includeGetString(sp, lex, crate, mod);
         GET_CHECK_TOK(tok, lex, TOK_EOF);
 
         ::std::string filePath = getPathRelativeTo(mod.fileInfo.path, mv$(path));
@@ -1959,13 +1959,13 @@ class CExpanderBuildDiagnosticArray: public ExpandProcMacro {
         //auto crate_name = mv$(tok.str());
         GET_CHECK_TOK(tok, lex, TOK_COMMA);
         GET_CHECK_TOK(tok, lex, TOK_IDENT);
-        auto item_name = tok.ident();
+        auto itemName = tok.ident();
         GET_CHECK_TOK(tok, lex, TOK_EOF);
 
         ::std::vector<TokenTree> toks;
         toks.push_back(TOK_RWORD_PUB);
         toks.push_back(TOK_RWORD_STATIC);
-        toks.push_back(Token(TOK_IDENT, item_name));
+        toks.push_back(Token(TOK_IDENT, itemName));
         // : [(&'static str, &'static str); 0]
         toks.push_back(TOK_COLON);
         toks.push_back(TOK_SQUARE_OPEN);

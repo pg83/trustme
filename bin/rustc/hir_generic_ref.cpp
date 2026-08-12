@@ -45,7 +45,7 @@ LifetimeRef LifetimeRef::new_static() {
     return rv;
 }
 GenericRef LifetimeRef::asParam() const {
-    assert(is_param());
+    assert(isParam());
     return GenericRef(RcString(), binding);
 }
 ::std::ostream& operator<<(::std::ostream& os, const LifetimeRef& x) {

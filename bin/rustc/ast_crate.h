@@ -24,7 +24,7 @@ namespace AST {
         ::AST::AbsolutePath path;
         ::std::string name;
         bool ignore = false;
-        bool is_benchmark = false;
+        bool isBenchmark = false;
 
         enum class ShouldPanic {
             No,
@@ -117,11 +117,11 @@ namespace AST {
         void set_crate_name(std::string name);
 
         /// Load referenced crates
-        void load_externs();
+        void loadExterns();
 
         /// Load the named crate and returns the crate's unique name
         /// If the parameter `file` is non-empty, only that particular filename will be loaded (from any of the search paths)
-        RcString load_extern_crate(Span sp, const RcString& name, const ::std::string& file = "");
+        RcString loadExternCrate(Span sp, const RcString& name, const ::std::string& file = "");
     };
 
     /// Representation of an imported crate

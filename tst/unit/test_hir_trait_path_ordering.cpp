@@ -17,7 +17,7 @@ Ordering HIR::ConstGeneric::ord(const HIR::ConstGeneric&) const {
 }
 
 namespace {
-    HIR::TraitPath make_trait_path(const char* name, bool applyElision) {
+    HIR::TraitPath makeTraitPath(const char* name, bool applyElision) {
         std::unique_ptr<HIR::GenericParams> hrtbs;
         if (applyElision) {
             hrtbs = std::make_unique<HIR::GenericParams>();
@@ -33,9 +33,9 @@ namespace {
 }
 
 int main() {
-    const auto fnBeforeElision = make_trait_path("Fn", true);
-    const auto fnAfterElision = make_trait_path("Fn", false);
-    const auto unrelated = make_trait_path("Unrelated", false);
+    const auto fnBeforeElision = makeTraitPath("Fn", true);
+    const auto fnAfterElision = makeTraitPath("Fn", false);
+    const auto unrelated = makeTraitPath("Unrelated", false);
 
     assert(fnBeforeElision == fnAfterElision);
     assert(fnBeforeElision != unrelated);

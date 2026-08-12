@@ -157,7 +157,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         const auto& pp = ent.second->pp;
         const auto& s = *ent.second->ptr;
 
-        if (!s.mParams.is_generic()) {
+        if (!s.mParams.isGeneric()) {
             continue;
         }
 
@@ -184,10 +184,10 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
     for (auto& fcnEnt : list.functions) {
         const auto& fcn = *fcnEnt.second->ptr;
         // Trait methods (which are the only case where `Self` can exist in the argument list at this stage) always need to be monomorphised.
-        bool is_method = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
+        bool isMethod = (fcn.mArgs.size() > 0 && visit_ty_with(fcn.mArgs[0].second, [&](const auto& x) {
             return x == crate.types.self();
         }));
-        bool monomorph_needed = fcnEnt.second->pp.hasTypes() || is_method;
+        bool monomorph_needed = fcnEnt.second->pp.hasTypes() || isMethod;
 
         if (monomorph_needed) {
             const auto& path = fcnEnt.first;

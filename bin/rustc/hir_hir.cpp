@@ -148,15 +148,15 @@ namespace HIR {
             throw "";
         }
 
-        bool constExprNodesEqual(const ::HIR::ConstGenericUnevaluated& left_value, const ::HIR::ExprNode& left, const ::HIR::ConstGenericUnevaluated& right_value, const ::HIR::ExprNode& right) {
+        bool constExprNodesEqual(const ::HIR::ConstGenericUnevaluated& leftValue, const ::HIR::ExprNode& left, const ::HIR::ConstGenericUnevaluated& right_value, const ::HIR::ExprNode& right) {
             if (const auto* l = cast<const ::HIR::ExprNodeConstParam>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeConstParam>(&right);
                 if (!r) {
                     return false;
                 }
-                const auto* l_param = getUnevaluatedParam(left_value, l->mBinding);
+                const auto* lParam = getUnevaluatedParam(leftValue, l->mBinding);
                 const auto* r_param = getUnevaluatedParam(right_value, r->mBinding);
-                return l_param && r_param ? *l_param == *r_param : l->mBinding == r->mBinding;
+                return lParam && r_param ? *lParam == *r_param : l->mBinding == r->mBinding;
             }
             if (const auto* l = cast<const ::HIR::ExprNodeLiteral>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeLiteral>(&right);
@@ -164,19 +164,19 @@ namespace HIR {
             }
             if (const auto* l = cast<const ::HIR::ExprNodeBinOp>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeBinOp>(&right);
-                return r && l->op == r->op && constExprNodesEqual(left_value, *l->left, right_value, *r->left) && constExprNodesEqual(left_value, *l->right, right_value, *r->right);
+                return r && l->op == r->op && constExprNodesEqual(leftValue, *l->left, right_value, *r->left) && constExprNodesEqual(leftValue, *l->right, right_value, *r->right);
             }
             if (const auto* l = cast<const ::HIR::ExprNodeUniOp>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeUniOp>(&right);
-                return r && l->op == r->op && constExprNodesEqual(left_value, *l->mValue, right_value, *r->mValue);
+                return r && l->op == r->op && constExprNodesEqual(leftValue, *l->mValue, right_value, *r->mValue);
             }
             if (const auto* l = cast<const ::HIR::ExprNodeCast>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeCast>(&right);
-                return r && l->dstType == r->dstType && constExprNodesEqual(left_value, *l->mValue, right_value, *r->mValue);
+                return r && l->dstType == r->dstType && constExprNodesEqual(leftValue, *l->mValue, right_value, *r->mValue);
             }
             if (const auto* l = cast<const ::HIR::ExprNodeConstBlock>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeConstBlock>(&right);
-                return r && constExprNodesEqual(left_value, *l->inner, right_value, *r->inner);
+                return r && constExprNodesEqual(leftValue, *l->inner, right_value, *r->inner);
             }
             if (const auto* l = cast<const ::HIR::ExprNodeCallPath>(&left)) {
                 const auto* r = cast<const ::HIR::ExprNodeCallPath>(&right);
@@ -184,7 +184,7 @@ namespace HIR {
                     return false;
                 }
                 for (unsigned int i = 0; i < l->mArgs.size(); i++) {
-                    if (!constExprNodesEqual(left_value, *l->mArgs[i], right_value, *r->mArgs[i])) {
+                    if (!constExprNodesEqual(leftValue, *l->mArgs[i], right_value, *r->mArgs[i])) {
                         return false;
                     }
                 }
@@ -196,11 +196,11 @@ namespace HIR {
                     return false;
                 }
                 for (unsigned int i = 0; i < l->nodes.size(); i++) {
-                    if (!constExprNodesEqual(left_value, *l->nodes[i], right_value, *r->nodes[i])) {
+                    if (!constExprNodesEqual(leftValue, *l->nodes[i], right_value, *r->nodes[i])) {
                         return false;
                     }
                 }
-                return !l->valueNode || constExprNodesEqual(left_value, *l->valueNode, right_value, *r->valueNode);
+                return !l->valueNode || constExprNodesEqual(leftValue, *l->valueNode, right_value, *r->valueNode);
             }
             return false;
         }
@@ -277,9 +277,9 @@ namespace HIR {
                     }
                     return 0;
                 }
-            } inner_os(os);
+            } innerOs(os);
 
-            HIRDumpExpr(inner_os, *expr);
+            HIRDumpExpr(innerOs, *expr);
         }
     }
 
@@ -316,7 +316,7 @@ HIR::ConstGeneric HIR::ConstGeneric::clone() const {
 
 ::std::shared_ptr<::HIR::SimplePath> HIR::Publicity::none_path = ::std::make_shared<HIR::SimplePath>(::HIR::SimplePath{"#", {}});
 
-bool HIR::Publicity::is_visible(const ::HIR::SimplePath& p) const {
+bool HIR::Publicity::isVisible(const ::HIR::SimplePath& p) const {
     DEBUG(*this << " " << p);
     // No path = global public
     if (!vis_path) {
@@ -330,7 +330,7 @@ bool HIR::Publicity::is_visible(const ::HIR::SimplePath& p) const {
     return p.starts_with(*vis_path);
 }
 
-::HIR::TypeRef HIR::Function::make_ptr_ty(const Span& sp, const Monomorphiser& ms) const {
+::HIR::TypeRef HIR::Function::makePtrTy(const Span& sp, const Monomorphiser& ms) const {
     ::HIR::TypeDataFunctionPointer ft;
     ft.is_unsafe = this->unsafe;
     ft.is_variadic = this->variadic;
@@ -379,7 +379,7 @@ size_t HIR::Enum::findVariant(const RcString& name) const {
     }
 }
 
-bool HIR::Enum::is_value() const {
+bool HIR::Enum::isValue() const {
     return this->mData.is_Value();
 }
 
@@ -458,18 +458,18 @@ const ::HIR::SimplePath& ::HIR::Crate::getLangItemPathOpt(const char* name) cons
 }
 
 namespace {
-    const ::HIR::Module& getContainingModule(const ::HIR::Crate& crate, const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) {
+    const ::HIR::Module& getContainingModule(const ::HIR::Crate& crate, const Span& sp, const ::HIR::SimplePath& path, bool ignoreCrateName, bool ignoreLastNode) {
         ASSERT_BUG(sp, path.components().size() > 0u, "Invalid path (no nodes) - " << path);
-        ASSERT_BUG(sp, path.components().size() > (ignore_last_node ? 1u : 0u), "Invalid path (only one node with `ignore_last_node` - " << path);
+        ASSERT_BUG(sp, path.components().size() > (ignoreLastNode ? 1u : 0u), "Invalid path (only one node with `ignore_last_node` - " << path);
 
         const ::HIR::Module* mod;
-        if (!ignore_crate_name && path.crate_name() != crate.crateName) {
+        if (!ignoreCrateName && path.crate_name() != crate.crateName) {
             ASSERT_BUG(sp, crate.extCrates.count(path.crate_name()) > 0, "Crate '" << path.crate_name() << "' not loaded for " << path);
             mod = &crate.extCrates.at(path.crate_name()).mData->rootModule;
         } else {
             mod = &crate.rootModule;
         }
-        for (unsigned int i = 0; i < path.components().size() - (ignore_last_node ? 2 : 1); i++) {
+        for (unsigned int i = 0; i < path.components().size() - (ignoreLastNode ? 2 : 1); i++) {
             const auto& pc = path.components()[i];
             auto it = mod->modItems.find(pc);
             if (it == mod->modItems.end()) {
@@ -485,10 +485,10 @@ namespace {
     }
 }
 
-const ::HIR::MacroItem& ::HIR::Crate::getMacroitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) const {
-    const auto& mod = getContainingModule(*this, sp, path, ignore_crate_name, ignore_last_node);
+const ::HIR::MacroItem& ::HIR::Crate::getMacroitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignoreCrateName, bool ignoreLastNode) const {
+    const auto& mod = getContainingModule(*this, sp, path, ignoreCrateName, ignoreLastNode);
 
-    auto it = mod.macroItems.find(ignore_last_node ? path.components()[path.components().size() - 2] : path.components().back());
+    auto it = mod.macroItems.find(ignoreLastNode ? path.components()[path.components().size() - 2] : path.components().back());
     if (it == mod.macroItems.end()) {
         BUG(sp, "Could not find macro name in " << path);
     }
@@ -496,10 +496,10 @@ const ::HIR::MacroItem& ::HIR::Crate::getMacroitemByPath(const Span& sp, const :
     return it->second->ent;
 }
 
-const ::HIR::TypeItem& ::HIR::Crate::getTypeitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) const {
-    const auto& mod = getContainingModule(*this, sp, path, ignore_crate_name, ignore_last_node);
+const ::HIR::TypeItem& ::HIR::Crate::getTypeitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignoreCrateName, bool ignoreLastNode) const {
+    const auto& mod = getContainingModule(*this, sp, path, ignoreCrateName, ignoreLastNode);
 
-    auto it = mod.modItems.find(ignore_last_node ? path.components()[path.components().size() - 2] : path.components().back());
+    auto it = mod.modItems.find(ignoreLastNode ? path.components()[path.components().size() - 2] : path.components().back());
     if (it == mod.modItems.end()) {
         BUG(sp, "Could not find type " << path);
     }
@@ -507,24 +507,24 @@ const ::HIR::TypeItem& ::HIR::Crate::getTypeitemByPath(const Span& sp, const ::H
     return it->second->ent;
 }
 
-const ::HIR::Module& ::HIR::Crate::getModByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_last_node /*=false*/, bool ignore_crate_name /*=false*/) const {
-    if (ignore_last_node) {
+const ::HIR::Module& ::HIR::Crate::getModByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignoreLastNode /*=false*/, bool ignoreCrateName /*=false*/) const {
+    if (ignoreLastNode) {
         ASSERT_BUG(sp, path.components().size() > 0, "get_mod_by_path received invalid path with ignore_last_node=true - " << path);
     }
     // Special handling for empty paths with `ignore_last_node`
-    if (path.components().size() == (ignore_last_node ? 1 : 0)) {
-        if (!ignore_crate_name && path.crate_name() != crateName) {
+    if (path.components().size() == (ignoreLastNode ? 1 : 0)) {
+        if (!ignoreCrateName && path.crate_name() != crateName) {
             ASSERT_BUG(sp, extCrates.count(path.crate_name()) > 0, "Crate '" << path.crate_name() << "' not loaded");
             return extCrates.at(path.crate_name()).mData->rootModule;
         } else {
             return this->rootModule;
         }
     } else {
-        const auto& ti = this->getTypeitemByPath(sp, path, ignore_crate_name, ignore_last_node);
+        const auto& ti = this->getTypeitemByPath(sp, path, ignoreCrateName, ignoreLastNode);
         if (auto* e = ti.opt_Module()) {
             return *e;
         } else {
-            if (ignore_last_node) {
+            if (ignoreLastNode) {
                 BUG(sp, "Parent path of " << path << " didn't point to a module");
             } else {
                 BUG(sp, "Module path " << path << " didn't point to a module");
@@ -549,7 +549,7 @@ const ::HIR::Trait& ::HIR::Crate::getTraitByPath(const Span& sp, const ::HIR::Si
     for (size_t candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
         const auto& candidate = candidates[candidateIndex];
         const auto& trait = this->getTraitByPath(sp, candidate);
-        bool is_subtrait_of_all = true;
+        bool isSubtraitOfAll = true;
 
         for (const auto& other : candidates) {
             if (candidate == other) {
@@ -563,12 +563,12 @@ const ::HIR::Trait& ::HIR::Crate::getTraitByPath(const Span& sp, const ::HIR::Si
                 }
             );
             if (!hasSupertrait) {
-                is_subtrait_of_all = false;
+                isSubtraitOfAll = false;
                 break;
             }
         }
 
-        if (!is_subtrait_of_all) {
+        if (!isSubtraitOfAll) {
             continue;
         }
         if (selected && candidates[*selected] != candidate) {
@@ -597,15 +597,15 @@ const ::HIR::Union& ::HIR::Crate::getUnionByPath(const Span& sp, const ::HIR::Si
     }
 }
 
-const ::HIR::Enum& ::HIR::Crate::getEnumByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name, bool ignore_last_node) const {
-    const auto& ti = this->getTypeitemByPath(sp, path, ignore_crate_name, ignore_last_node);
+const ::HIR::Enum& ::HIR::Crate::getEnumByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignoreCrateName, bool ignoreLastNode) const {
+    const auto& ti = this->getTypeitemByPath(sp, path, ignoreCrateName, ignoreLastNode);
     TU_IFLET(::HIR::TypeItem, ti, Enum, e, return e;)
     else {
         BUG(sp, "Enum path " << path << " didn't point to an enum (" << ti.tag_str() << ")");
     }
 }
 
-const ::HIR::ValueItem& ::HIR::Crate::getValitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignore_crate_name) const {
+const ::HIR::ValueItem& ::HIR::Crate::getValitemByPath(const Span& sp, const ::HIR::SimplePath& path, bool ignoreCrateName) const {
     if (path.crate_name() == "#intrinsics") {
         ASSERT_BUG(sp, path.components().size() == 1, "");
         if (path.components().back() == "offset_of") {
@@ -626,7 +626,7 @@ const ::HIR::ValueItem& ::HIR::Crate::getValitemByPath(const Span& sp, const ::H
             return i->second->ent;
         }
     }
-    const auto& mod = getContainingModule(*this, sp, path, ignore_crate_name, /*ignore_last_node=*/false);
+    const auto& mod = getContainingModule(*this, sp, path, ignoreCrateName, /*ignore_last_node=*/false);
 
     auto it = mod.valueItems.find(path.components().back());
     if (it == mod.valueItems.end()) {
@@ -677,7 +677,7 @@ void HIR::Crate::post_load_update(const RcString& name) {
 
 
 namespace {
-    bool is_unbounded_infer(const ::HIR::TypeData* type) {
+    bool isUnboundedInfer(const ::HIR::TypeData* type) {
         if (const auto* e = type->opt_Infer()) {
             return e->ty_class == ::HIR::InferClass::None;
         } else {
@@ -686,24 +686,24 @@ namespace {
     }
 
     class ImplMatcher: public ::HIR::MatchGenerics {
-        std::vector<std::optional<HIR::TypeRef>> impl_types;
+        std::vector<std::optional<HIR::TypeRef>> implTypes;
 
     public:
         ImplMatcher(const ::HIR::GenericParams& impl_generics)
-            : impl_types(impl_generics.types.size())
+            : implTypes(impl_generics.types.size())
         {
         }
 
-        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type resolve_cb) override {
-            assert(g.binding < impl_types.size());
-            if (impl_types[g.binding]) {
-                return (*impl_types[g.binding])->compareWithPlaceholders(Span(), ty, resolve_cb);
+        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type resolve_cb) override {
+            assert(g.binding < implTypes.size());
+            if (implTypes[g.binding]) {
+                return (*implTypes[g.binding])->compareWithPlaceholders(Span(), ty, resolve_cb);
             }
-            impl_types[g.binding] = ty;
+            implTypes[g.binding] = ty;
             return ::HIR::Compare::Equal;
         }
 
-        ::HIR::Compare match_val(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
+        ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
             // TODO
             //assert( g.binding < impl_params.m_values.size() );
             //impl_params.m_values[g.binding] = sz.clone();
@@ -711,45 +711,45 @@ namespace {
         }
     };
 
-    bool matches_type_root(const ::HIR::GenericParams& params, const ::HIR::TypeData* impl_ty, const ::HIR::TypeData* match_type, ::HIR::t_cb_resolve_type ty_res) {
+    bool matchesTypeRoot(const ::HIR::GenericParams& params, const ::HIR::TypeData* implTy, const ::HIR::TypeData* matchType, ::HIR::t_cb_resolve_type ty_res) {
         // A nominal path deserialises without its pointer-valued binding
         // metadata. Its SimplePath is nevertheless complete and is exactly
         // what the impl index and matcher use. Only an unresolved UFCS path is
         // still too early to select an inherent impl.
-        const auto* match_path = match_type->opt_Path();
-        if (is_unbounded_infer(match_type)
-            || (match_path && match_path->binding.is_Unbound()
-                && !match_path->path.mData.is_Generic())) {
+        const auto* matchPath = matchType->opt_Path();
+        if (isUnboundedInfer(matchType)
+            || (matchPath && matchPath->binding.is_Unbound()
+                && !matchPath->path.mData.is_Generic())) {
             return false;
         }
 #if 1
         ImplMatcher m{params};
-        auto cmp = impl_ty->match_test_generics_fuzz(Span(), match_type, ty_res, m);
+        auto cmp = implTy->matchTestGenericsFuzz(Span(), matchType, ty_res, m);
         return cmp != HIR::Compare::Unequal;
 #else
-        return matches_type_int(impl_ty, match_type, ty_res, true);
+        return matchesTypeInt(implTy, matchType, ty_res, true);
 #endif
     }
 }
 
-bool ::HIR::TraitImpl::matches_type(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
+bool ::HIR::TraitImpl::matchesType(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
     // NOTE: Don't return any impls when the type is an unbouned ivar. Wouldn't be able to pick anything anyway
     // TODO: For `Unbound`, it could be valid, if the target is a generic.
     // - Pure infer could also be useful (for knowing if there's any other potential impls)
 
     // HACK: Assume an unbounded matches
-    if (is_unbounded_infer(type)) {
+    if (isUnboundedInfer(type)) {
         return true;
     }
-    return matches_type_root(mParams, mType, type, ty_res);
+    return matchesTypeRoot(mParams, mType, type, ty_res);
 }
 
-bool ::HIR::TypeImpl::matches_type(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
-    return matches_type_root(mParams, mType, type, ty_res);
+bool ::HIR::TypeImpl::matchesType(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
+    return matchesTypeRoot(mParams, mType, type, ty_res);
 }
 
-bool ::HIR::MarkerImpl::matches_type(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
-    return matches_type_root(mParams, mType, type, ty_res);
+bool ::HIR::MarkerImpl::matchesType(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
+    return matchesTypeRoot(mParams, mType, type, ty_res);
 }
 
 namespace {
@@ -767,12 +767,12 @@ namespace {
         if (left == right) {
             return ::OrdEqual;
         }
-        const bool left_open = left.is_Unevaluated();
+        const bool leftOpen = left.is_Unevaluated();
         const bool right_open = right.is_Unevaluated();
-        if (left_open != right_open) {
-            return left_open ? ::OrdLess : ::OrdGreater;
+        if (leftOpen != right_open) {
+            return leftOpen ? ::OrdLess : ::OrdGreater;
         }
-        if (left_open) {
+        if (leftOpen) {
             // Two independently named const parameters are equally general.
             // Relations between them are accounted for by the surrounding
             // impl matcher; neither is more specific on syntax alone.
@@ -1032,22 +1032,22 @@ bool ::HIR::TraitImpl::more_specific_than(HIR::TypeInterner& types, const ::HIR:
         return false;
     }
 
-    auto it_t = boundsT.begin();
-    auto it_o = boundsO.begin();
+    auto itT = boundsT.begin();
+    auto itO = boundsO.begin();
     bool is_equal = true;
-    while (it_t != boundsT.end() && it_o != boundsO.end()) {
-        auto cmp = ::ord(*it_t, *it_o);
+    while (itT != boundsT.end() && itO != boundsO.end()) {
+        auto cmp = ::ord(*itT, *itO);
         // Equal bounds? advance both
         if (cmp == OrdEqual) {
-            ++it_t;
-            ++it_o;
+            ++itT;
+            ++itO;
             continue;
         }
 
         // If the two bounds are similar
-        if (it_t->tag() == it_o->tag() && it_t->is_TraitBound()) {
-            const auto& bT = it_t->as_TraitBound();
-            const auto& bO = it_o->as_TraitBound();
+        if (itT->tag() == itO->tag() && itT->is_TraitBound()) {
+            const auto& bT = itT->as_TraitBound();
+            const auto& bO = itO->as_TraitBound();
             // Check if the type is equal
             if (bT.type == bO.type && bT.trait.mPath.mPath == bO.trait.mPath.mPath) {
                 const auto& params_t = bT.trait.mPath.mParams;
@@ -1066,21 +1066,21 @@ bool ::HIR::TraitImpl::more_specific_than(HIR::TypeInterner& types, const ::HIR:
                         return true;
                     }
                 }
-                TODO(sp, *it_t << " ?= " << *it_o);
+                TODO(sp, *itT << " ?= " << *itO);
             }
         }
 
         if (cmp == OrdLess) {
             is_equal = false;
-            ++it_t;
+            ++itT;
         } else {
             //++ it_o;
-            DEBUG(*it_t << " ?= " << *it_o << " : " << cmp);
+            DEBUG(*itT << " ?= " << *itO << " : " << cmp);
             return false;
         }
     }
-    if (it_t != boundsT.end()) {
-        DEBUG("Remaining local bounds - " << *it_t);
+    if (itT != boundsT.end()) {
+        DEBUG("Remaining local bounds - " << *itT);
         return true;
     } else {
         DEBUG("Out of local bounds, equal or less specific");
@@ -1091,86 +1091,86 @@ bool ::HIR::TraitImpl::more_specific_than(HIR::TypeInterner& types, const ::HIR:
 namespace {
 
     struct ImplTyMatcher: public ::HIR::MatchGenerics, public Monomorphiser {
-        ::std::vector<::std::optional<::HIR::TypeRef>> impl_tys;
-        ::std::vector<::std::optional<::HIR::ConstGeneric>> impl_vals;
-        ::std::vector<::std::optional<::HIR::LifetimeRef>> impl_lfts;
+        ::std::vector<::std::optional<::HIR::TypeRef>> implTys;
+        ::std::vector<::std::optional<::HIR::ConstGeneric>> implVals;
+        ::std::vector<::std::optional<::HIR::LifetimeRef>> implLfts;
 
         explicit ImplTyMatcher(HIR::TypeInterner& types)
             : Monomorphiser(types)
         {
         }
 
-        ::HIR::Compare match_ty(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type _resolve_cb) override {
-            assert(g.binding < impl_tys.size());
-            if (impl_tys.at(g.binding)) {
-                DEBUG("Compare " << ty << " and " << *impl_tys.at(g.binding));
-                return (ty == *impl_tys.at(g.binding) ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal);
+        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type _resolve_cb) override {
+            assert(g.binding < implTys.size());
+            if (implTys.at(g.binding)) {
+                DEBUG("Compare " << ty << " and " << *implTys.at(g.binding));
+                return (ty == *implTys.at(g.binding) ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal);
             } else {
-                impl_tys.at(g.binding) = ty;
+                implTys.at(g.binding) = ty;
                 return ::HIR::Compare::Equal;
             }
         }
 
-        ::HIR::Compare match_val(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
-            assert(g.binding < impl_vals.size());
-            if (impl_vals.at(g.binding)) {
-                DEBUG("Compare " << sz << " and " << *impl_vals.at(g.binding));
-                return (sz == *impl_vals.at(g.binding) ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal);
+        ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
+            assert(g.binding < implVals.size());
+            if (implVals.at(g.binding)) {
+                DEBUG("Compare " << sz << " and " << *implVals.at(g.binding));
+                return (sz == *implVals.at(g.binding) ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal);
             } else {
-                impl_vals.at(g.binding) = sz.clone();
+                implVals.at(g.binding) = sz.clone();
                 return ::HIR::Compare::Equal;
             }
         }
 
-        ::HIR::Compare match_lft(const ::HIR::GenericRef& g, const ::HIR::LifetimeRef& lft) override {
-            assert(g.binding < impl_lfts.size());
-            if (impl_lfts.at(g.binding)) {
-                DEBUG("Compare " << lft << " and " << *impl_lfts.at(g.binding));
-                return (lft == *impl_lfts.at(g.binding) ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal);
+        ::HIR::Compare matchLft(const ::HIR::GenericRef& g, const ::HIR::LifetimeRef& lft) override {
+            assert(g.binding < implLfts.size());
+            if (implLfts.at(g.binding)) {
+                DEBUG("Compare " << lft << " and " << *implLfts.at(g.binding));
+                return (lft == *implLfts.at(g.binding) ? ::HIR::Compare::Equal : ::HIR::Compare::Unequal);
             } else {
-                impl_lfts.at(g.binding) = lft;
+                implLfts.at(g.binding) = lft;
                 return HIR::Compare::Equal;
             }
         }
 
         ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& g) const override {
             ASSERT_BUG(sp, g.group() == 0, "");
-            ASSERT_BUG(sp, g.idx() < impl_tys.size(), "");
-            if (!impl_tys[g.idx()]) {
+            ASSERT_BUG(sp, g.idx() < implTys.size(), "");
+            if (!implTys[g.idx()]) {
                 DEBUG("get_type - not populated, " << g);
-                return types.generic(RcString(FMT("placeholder_" << &impl_tys << "_" << g.idx())), HIR::GenericRef(RcString(), HIR::GENERICPlaceholder, g.idx()).binding);
+                return types.generic(RcString(FMT("placeholder_" << &implTys << "_" << g.idx())), HIR::GenericRef(RcString(), HIR::GENERICPlaceholder, g.idx()).binding);
             }
-            return *impl_tys[g.idx()];
+            return *implTys[g.idx()];
         }
 
         ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& g) const override {
             ASSERT_BUG(sp, g.group() == 0, "");
-            ASSERT_BUG(sp, g.idx() < impl_vals.size(), "");
-            ASSERT_BUG(sp, impl_vals[g.idx()], "");
-            return impl_vals[g.idx()]->clone();
+            ASSERT_BUG(sp, g.idx() < implVals.size(), "");
+            ASSERT_BUG(sp, implVals[g.idx()], "");
+            return implVals[g.idx()]->clone();
         }
 
         ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& g) const override {
             ASSERT_BUG(sp, g.group() == 0, "");
-            ASSERT_BUG(sp, g.idx() < impl_lfts.size(), "");
-            if (!impl_lfts[g.idx()]) {
+            ASSERT_BUG(sp, g.idx() < implLfts.size(), "");
+            if (!implLfts[g.idx()]) {
                 DEBUG("WARNING: Assuming an empty lifetime");
                 return HIR::LifetimeRef();
             }
-            return *impl_lfts[g.idx()];
+            return *implLfts[g.idx()];
         }
 
         void reinit(const HIR::GenericParams& params) {
-            this->impl_tys.clear();
-            this->impl_vals.clear();
-            this->impl_lfts.clear();
-            this->impl_tys.resize(params.types.size());
-            this->impl_vals.resize(params.values.size());
-            this->impl_lfts.resize(params.mLifetimes.size());
+            this->implTys.clear();
+            this->implVals.clear();
+            this->implLfts.clear();
+            this->implTys.resize(params.types.size());
+            this->implVals.resize(params.values.size());
+            this->implLfts.resize(params.mLifetimes.size());
         }
 
         void fmt(::std::ostream& os) const {
-            for (const auto& p : this->impl_tys) {
+            for (const auto& p : this->implTys) {
                 if (p) {
                     os << *p;
                 } else {
@@ -1178,7 +1178,7 @@ namespace {
                 }
                 os << ",";
             }
-            for (const auto& p : this->impl_vals) {
+            for (const auto& p : this->implVals) {
                 if (p) {
                     os << *p;
                 } else {
@@ -1186,7 +1186,7 @@ namespace {
                 }
                 os << ",";
             }
-            for (const auto& p : this->impl_lfts) {
+            for (const auto& p : this->implLfts) {
                 if (p) {
                     os << *p;
                 } else {
@@ -1363,31 +1363,31 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
     // > Create values for impl params from the type, then check if the trait params are compatible
     // > Requires two lists, and telling which one to use by the end
     auto cbIdent = ResolvePlaceholdersNop();
-    bool is_reversed = false;
+    bool isReversed = false;
     ImplTyMatcher matcher(crate.types);
     matcher.reinit(this->mParams);
-    if (!this->mType->match_test_generics(sp, other.mType, cbIdent, matcher)) {
+    if (!this->mType->matchTestGenerics(sp, other.mType, cbIdent, matcher)) {
         DEBUG("- Type mismatch, try other ordering");
-        is_reversed = true;
+        isReversed = true;
         matcher.reinit(other.mParams);
-        if (!other.mType->match_test_generics(sp, this->mType, cbIdent, matcher)) {
+        if (!other.mType->matchTestGenerics(sp, this->mType, cbIdent, matcher)) {
             DEBUG("- Type mismatch in both orderings");
             return false;
         }
-        if (other.traitArgs.match_test_generics_fuzz(sp, this->traitArgs, cbIdent, matcher) != ::HIR::Compare::Equal) {
+        if (other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) != ::HIR::Compare::Equal) {
             DEBUG("- Params mismatch");
             return false;
         }
         // Matched with second ordering
-    } else if (this->traitArgs.match_test_generics_fuzz(sp, other.traitArgs, cbIdent, matcher) != ::HIR::Compare::Equal) {
+    } else if (this->traitArgs.matchTestGenericsFuzz(sp, other.traitArgs, cbIdent, matcher) != ::HIR::Compare::Equal) {
         DEBUG("- Param mismatch, try other ordering");
-        is_reversed = true;
+        isReversed = true;
         matcher.reinit(other.mParams);
-        if (!other.mType->match_test_generics(sp, this->mType, cbIdent, matcher)) {
+        if (!other.mType->matchTestGenerics(sp, this->mType, cbIdent, matcher)) {
             DEBUG("- Type mismatch in alt ordering");
             return false;
         }
-        if (other.traitArgs.match_test_generics_fuzz(sp, this->traitArgs, cbIdent, matcher) != ::HIR::Compare::Equal) {
+        if (other.traitArgs.matchTestGenericsFuzz(sp, this->traitArgs, cbIdent, matcher) != ::HIR::Compare::Equal) {
             DEBUG("- Params mismatch in alt ordering");
             return false;
         }
@@ -1397,11 +1397,11 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
     }
 
     struct H2 {
-        static const ::HIR::TypeData* monomorph(const Span& sp, const ::HIR::TypeData* in_ty, const Monomorphiser& ms, ::HIR::TypeRef& tmp) {
-            if (!monomorphise_type_needed(in_ty)) {
-                return in_ty;
+        static const ::HIR::TypeData* monomorph(const Span& sp, const ::HIR::TypeData* inTy, const Monomorphiser& ms, ::HIR::TypeRef& tmp) {
+            if (!monomorphise_type_needed(inTy)) {
+                return inTy;
             } else {
-                tmp = ms.monomorph_type(sp, in_ty);
+                tmp = ms.monomorph_type(sp, inTy);
                 // TODO: EAT?
                 return tmp;
             }
@@ -1458,13 +1458,13 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
                             ImplTyMatcher matcher(crate.types);
                             matcher.reinit(ti.mParams);
                             // 1. Triple-check the type matches (and get generics)
-                            if (!ti.mType->match_test_generics(sp, ty, cbIdent, matcher)) {
+                            if (!ti.mType->matchTestGenerics(sp, ty, cbIdent, matcher)) {
                                 return false;
                             }
                             // 2. Check trait params
                             assert(trait.mPath.mParams.types.size() == ti.traitArgs.types.size());
                             for (size_t i = 0; i < trait.mPath.mParams.types.size(); i++) {
-                                if (!ti.traitArgs.types[i]->match_test_generics(sp, trait.mPath.mParams.types[i], cbIdent, matcher)) {
+                                if (!ti.traitArgs.types[i]->matchTestGenerics(sp, trait.mPath.mParams.types[i], cbIdent, matcher)) {
                                     return false;
                                 }
                             }
@@ -1478,7 +1478,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
                                     DEBUG("Associated type '" << atyb.first << "' not in trait impl, assuming good");
                                 } else {
                                     const auto& aty = ti.types.at(atyb.first);
-                                    if (!aty.data->match_test_generics(sp, atyb.second.type, cbIdent, matcher)) {
+                                    if (!aty.data->matchTestGenerics(sp, atyb.second.type, cbIdent, matcher)) {
                                         return false;
                                     }
                                 }
@@ -1500,7 +1500,7 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
     };
 
     // The two impls could overlap, pending on trait bounds
-    if (is_reversed) {
+    if (isReversed) {
         DEBUG("(reversed) impl params " << FMT_CB(os, matcher.fmt(os);));
         // Check bounds on `other` using these params
         // TODO: Take a callback that does the checks. Or somehow return a "maybe overlaps" result?
@@ -1514,9 +1514,9 @@ bool ::HIR::TraitImpl::overlaps_with(const Crate& crate, const ::HIR::TraitImpl&
 
 namespace {
     template <typename ImplType>
-    bool findImplsList(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::list_t& impl_list, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
-        for (const auto& impl : impl_list) {
-            if (impl->matches_type(type, ty_res)) {
+    bool findImplsList(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::listT& implList, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
+        for (const auto& impl : implList) {
+            if (impl->matchesType(type, ty_res)) {
                 if (callback(*impl)) {
                     return true;
                 }
@@ -1526,9 +1526,9 @@ namespace {
     }
 
     template <typename ImplType>
-    bool findImplsList(const typename ::HIR::Crate::ImplGroup<const ImplType*>::list_t& impl_list, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
-        for (const auto& impl : impl_list) {
-            if (impl->matches_type(type, ty_res)) {
+    bool findImplsList(const typename ::HIR::Crate::ImplGroup<const ImplType*>::listT& implList, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
+        for (const auto& impl : implList) {
+            if (impl->matchesType(type, ty_res)) {
                 if (callback(*impl)) {
                     return true;
                 }
@@ -1543,13 +1543,13 @@ namespace {
         auto it = crate.traitImpls.find(trait);
         if (it != crate.traitImpls.end()) {
             // 1. Find named impls (associated with named types)
-            if (const auto* impl_list = it->second.getListForType(type)) {
-                if (findImplsList(*impl_list, type, ty_res, callback)) {
+            if (const auto* implList = it->second.getListForType(type)) {
+                if (findImplsList(*implList, type, ty_res, callback)) {
                     return true;
                 }
             }
             // - If the type is an ivar, search all types
-            if (type->is_Infer() && !type->as_Infer().is_lit()) {
+            if (type->is_Infer() && !type->as_Infer().isLit()) {
                 DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, ty_res, callback)) {
@@ -1574,13 +1574,13 @@ bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::T
         auto it = this->allTraitImpls.find(trait);
         if (it != this->allTraitImpls.end()) {
             // 1. Find named impls (associated with named types)
-            if (const auto* impl_list = it->second.getListForType(type)) {
-                if (findImplsList(*impl_list, type, ty_res, callback)) {
+            if (const auto* implList = it->second.getListForType(type)) {
+                if (findImplsList(*implList, type, ty_res, callback)) {
                     return true;
                 }
             }
             // - If the type is an ivar, search all types
-            if (type->is_Infer() && !type->as_Infer().is_lit()) {
+            if (type->is_Infer() && !type->as_Infer().isLit()) {
                 DEBUG("Search all lists");
                 for (const auto& list : it->second.named) {
                     if (findImplsList(list.second, type, ty_res, callback)) {
@@ -1615,8 +1615,8 @@ namespace {
         auto it = crate.markerImpls.find(trait);
         if (it != crate.markerImpls.end()) {
             // 1. Find named impls (associated with named types)
-            if (const auto* impl_list = it->second.getListForType(type)) {
-                if (findImplsList(*impl_list, type, ty_res, callback)) {
+            if (const auto* implList = it->second.getListForType(type)) {
+                if (findImplsList(*implList, type, ty_res, callback)) {
                     return true;
                 }
             }
@@ -1636,8 +1636,8 @@ bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HI
         auto it = this->allMarkerImpls.find(trait);
         if (it != this->allMarkerImpls.end()) {
             // 1. Find named impls (associated with named types)
-            if (const auto* impl_list = it->second.getListForType(type)) {
-                if (findImplsList(*impl_list, type, ty_res, callback)) {
+            if (const auto* implList = it->second.getListForType(type)) {
+                if (findImplsList(*implList, type, ty_res, callback)) {
                     return true;
                 }
             }
@@ -1665,8 +1665,8 @@ bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HI
 namespace {
     bool findTypeImplsInt(const ::HIR::Crate& crate, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) {
         // 1. Find named impls (associated with named types)
-        if (const auto* impl_list = crate.typeImpls.getListForType(type)) {
-            if (findImplsList(*impl_list, type, ty_res, callback)) {
+        if (const auto* implList = crate.typeImpls.getListForType(type)) {
+            if (findImplsList(*implList, type, ty_res, callback)) {
                 return true;
             }
         }
@@ -1683,8 +1683,8 @@ namespace {
 bool ::HIR::Crate::findTypeImpls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const {
     if (allTraitImpls.size() > 0) {
         // 1. Find named impls (associated with named types)
-        if (const auto* impl_list = this->allTypeImpls.getListForType(type)) {
-            if (findImplsList(*impl_list, type, ty_res, callback)) {
+        if (const auto* implList = this->allTypeImpls.getListForType(type)) {
+            if (findImplsList(*implList, type, ty_res, callback)) {
                 return true;
             }
         }
@@ -1831,7 +1831,7 @@ const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const 
     const auto& vtable_ref = crate.getStructByPath(sp, vtable_ty_spath);
     HIR::PathParams pp_hrls;
     if (te.mTrait.hrtbs) {
-        pp_hrls = te.mTrait.hrtbs->make_empty_params(true);
+        pp_hrls = te.mTrait.hrtbs->makeEmptyParams(true);
     }
     // Copy the param set from the trait in the trait object
     ::HIR::PathParams vtable_params = MonomorphHrlsOnly(crate.types, pp_hrls).monomorph_path_params(sp, te.mTrait.mPath.mParams, false);
@@ -1888,7 +1888,7 @@ unsigned HIR::Trait::getVtableParentIndex(HIR::TypeInterner& types, const Span& 
 }
 
 /// Helper for getting the struct associated with a pattern path
-const ::HIR::Struct& HIR::pattern_get_struct(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding, bool is_tuple) {
+const ::HIR::Struct& HIR::pattern_get_struct(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding, bool isTuple) {
     const ::HIR::Struct* str_p = nullptr;
     TU_MATCH_HDRA( (binding), { )
     TU_ARMA(Unbound, be)
@@ -1901,14 +1901,14 @@ const ::HIR::Struct& HIR::pattern_get_struct(const Span& sp, const ::HIR::Path& 
         }
         TU_ARMA(Enum, be) {
             const auto& enm = *be.ptr;
-            if (is_tuple) {
+            if (isTuple) {
                 ASSERT_BUG(sp, enm.mData.is_Data(), "PathTuple pattern with non-data enum - " << path);
             } else {
                 ASSERT_BUG(sp, enm.mData.is_Data(), "PathNamed pattern with non-data enum - " << path);
             }
             const auto& enmD = enm.mData.as_Data();
             ASSERT_BUG(sp, be.var_idx < enmD.size(), "Variant index " << be.var_idx << " out of range - " << path);
-            if (is_tuple) {
+            if (isTuple) {
                 ASSERT_BUG(sp, !enmD[be.var_idx].is_struct, "PathTuple pattern with brace enum variant - " << path);
             } else {
                 ASSERT_BUG(sp, enmD[be.var_idx].is_struct, "PathNamed pattern with non-brace enum variant - " << path);
@@ -1918,7 +1918,7 @@ const ::HIR::Struct& HIR::pattern_get_struct(const Span& sp, const ::HIR::Path& 
     }
     const auto& str = *str_p;
 
-    if(is_tuple) {
+    if(isTuple) {
         ASSERT_BUG(sp, str.mData.is_Tuple(), "PathTuple pattern with non-tuple struct - " << str.mData.tag_str());
     }
     else {
@@ -1952,7 +1952,7 @@ namespace HIR {
 }
 
 // ---
-EncodedLiteral EncodedLiteral::make_usize(uint64_t v) {
+EncodedLiteral EncodedLiteral::makeUsize(uint64_t v) {
     EncodedLiteral rv;
     rv.bytes.resize(TargetGetPointerBits() / 8);
     rv.write_usize(0, v);

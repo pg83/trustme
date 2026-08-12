@@ -35,10 +35,10 @@ namespace AST {
         ExprNodeP& operator=(const ExprNodeP& x) = delete;
 
         operator bool() const {
-            return is_valid();
+            return isValid();
         }
 
-        bool is_valid() const {
+        bool isValid() const {
             return ptr != nullptr;
         }
 
@@ -82,10 +82,10 @@ namespace AST {
         Expr();
 
         operator bool() const {
-            return is_valid();
+            return isValid();
         }
 
-        bool is_valid() const {
+        bool isValid() const {
             return mNode.get() != nullptr;
         }
 

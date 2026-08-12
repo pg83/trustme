@@ -11,8 +11,8 @@
 #define FMT(ss) (static_cast<::std::ostringstream&&>(::std::ostringstream() << ss).str())
 // Project-wide shorthand retained for the pervasive move idiom.
 #define mv$(...) ::std::move(__VA_ARGS__)
-#define box$(...) ::make_unique_ptr(::std::move(__VA_ARGS__))
-#define rc_new$(...) ::make_shared_ptr(::std::move(__VA_ARGS__))
+#define box$(...) ::makeUniquePtr(::std::move(__VA_ARGS__))
+#define rc_new$(...) ::makeSharedPtr(::std::move(__VA_ARGS__))
 
 #include "debug.h"
 #include "compile_error.h"
@@ -26,24 +26,24 @@ Y* cast(X* x) noexcept {
 }
 
 template <typename T>
-::std::unique_ptr<T> make_unique_ptr(T&& v) {
+::std::unique_ptr<T> makeUniquePtr(T&& v) {
     return ::std::unique_ptr<T>(new T(mv$(v)));
 }
 
 template <typename T>
-::std::shared_ptr<T> make_shared_ptr(T&& v) {
+::std::shared_ptr<T> makeSharedPtr(T&& v) {
     return ::std::shared_ptr<T>(new T(mv$(v)));
 }
 
 template <typename T>
-::std::vector<T> make_vec1(T&& v) {
+::std::vector<T> makeVec1(T&& v) {
     ::std::vector<T> rv;
     rv.push_back(mv$(v));
     return rv;
 }
 
 template <typename T>
-::std::vector<T> make_vec2(T v1, T v2) {
+::std::vector<T> makeVec2(T v1, T v2) {
     ::std::vector<T> rv;
     rv.reserve(2);
     rv.push_back(mv$(v1));
@@ -52,7 +52,7 @@ template <typename T>
 }
 
 template <typename T>
-::std::vector<T> make_vec3(T v1, T v2, T v3) {
+::std::vector<T> makeVec3(T v1, T v2, T v3) {
     ::std::vector<T> rv;
     rv.reserve(3);
     rv.push_back(mv$(v1));
@@ -262,12 +262,12 @@ namespace std {
     template <typename T>
     inline ::std::ostream& operator<<(::std::ostream& os, const ::std::vector<T*>& v) {
         if (v.size() > 0) {
-            bool is_first = true;
+            bool isFirst = true;
             for (const auto& i : v) {
-                if (!is_first) {
+                if (!isFirst) {
                     os << ", ";
                 }
-                is_first = false;
+                isFirst = false;
                 os << *i;
             }
         }
@@ -277,12 +277,12 @@ namespace std {
     template <typename T>
     inline ::std::ostream& operator<<(::std::ostream& os, const ::std::vector<T>& v) {
         if (v.size() > 0) {
-            bool is_first = true;
+            bool isFirst = true;
             for (const auto& i : v) {
-                if (!is_first) {
+                if (!isFirst) {
                     os << ", ";
                 }
-                is_first = false;
+                isFirst = false;
                 os << i;
             }
         }
@@ -292,12 +292,12 @@ namespace std {
     template <typename T>
     inline ::std::ostream& operator<<(::std::ostream& os, const ::std::set<T>& v) {
         if (v.size() > 0) {
-            bool is_first = true;
+            bool isFirst = true;
             for (const auto& i : v) {
-                if (!is_first) {
+                if (!isFirst) {
                     os << ", ";
                 }
-                is_first = false;
+                isFirst = false;
                 os << i;
             }
         }
@@ -313,12 +313,12 @@ namespace std {
     template <typename T, typename U, class Cmp>
     inline ::std::ostream& operator<<(::std::ostream& os, const ::std::map<T, U, Cmp>& v) {
         if (v.size() > 0) {
-            bool is_first = true;
+            bool isFirst = true;
             for (const auto& i : v) {
-                if (!is_first) {
+                if (!isFirst) {
                     os << ", ";
                 }
-                is_first = false;
+                isFirst = false;
                 os << i.first << ": " << i.second;
             }
         }
@@ -328,12 +328,12 @@ namespace std {
     template <typename T, typename U, class Cmp>
     inline ::std::ostream& operator<<(::std::ostream& os, const ::std::multimap<T, U, Cmp>& v) {
         if (v.size() > 0) {
-            bool is_first = true;
+            bool isFirst = true;
             for (const auto& i : v) {
-                if (!is_first) {
+                if (!isFirst) {
                     os << ", ";
                 }
-                is_first = false;
+                isFirst = false;
                 os << i.first << ": " << i.second;
             }
         }
@@ -739,12 +739,12 @@ private:
 template <typename T>
 inline ::std::ostream& operator<<(::std::ostream& os, const ThinVector<T>& v) {
     if (v.size() > 0) {
-        bool is_first = true;
+        bool isFirst = true;
         for (const auto& i : v) {
-            if (!is_first) {
+            if (!isFirst) {
                 os << ", ";
             }
-            is_first = false;
+            isFirst = false;
             os << i;
         }
     }

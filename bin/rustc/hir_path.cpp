@@ -296,12 +296,12 @@ bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
         return false;
     }
 
-    auto lhs_type = typeBounds.begin();
+    auto lhsType = typeBounds.begin();
     auto rhs_type = x.typeBounds.begin();
-    for (; lhs_type != typeBounds.end(); ++lhs_type, ++rhs_type) {
-        const auto& lhs = lhs_type->second;
+    for (; lhsType != typeBounds.end(); ++lhsType, ++rhs_type) {
+        const auto& lhs = lhsType->second;
         const auto& rhs = rhs_type->second;
-        if (lhs_type->first != rhs_type->first
+        if (lhsType->first != rhs_type->first
             || !lhs.source_trait.equalsIgnoringRegions(rhs.source_trait)
             || !lhs.atyParams.equalsIgnoringRegions(rhs.atyParams)
             || (lhs.type != rhs.type && !lhs.type->equalsIgnoringRegions(rhs.type))) {
@@ -309,12 +309,12 @@ bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
         }
     }
 
-    auto lhs_bound = traitBounds.begin();
+    auto lhsBound = traitBounds.begin();
     auto rhs_bound = x.traitBounds.begin();
-    for (; lhs_bound != traitBounds.end(); ++lhs_bound, ++rhs_bound) {
-        const auto& lhs = lhs_bound->second;
+    for (; lhsBound != traitBounds.end(); ++lhsBound, ++rhs_bound) {
+        const auto& lhs = lhsBound->second;
         const auto& rhs = rhs_bound->second;
-        if (lhs_bound->first != rhs_bound->first
+        if (lhsBound->first != rhs_bound->first
             || !lhs.source_trait.equalsIgnoringRegions(rhs.source_trait)
             || !lhs.atyParams.equalsIgnoringRegions(rhs.atyParams)
             || lhs.traits.size() != rhs.traits.size()) {
@@ -448,7 +448,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     return rv;
 }
 
-::HIR::Compare HIR::PathParams::match_test_generics_fuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& match) const {
+::HIR::Compare HIR::PathParams::matchTestGenericsFuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolve_placeholder, ::HIR::MatchGenerics& match) const {
     using ::HIR::Compare;
     auto rv = Compare::Equal;
     TRACE_FUNCTION_F("(PathParams) " << *this << " with " << x);
@@ -457,7 +457,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
         return Compare::Unequal;
     }
     for (unsigned int i = 0; i < x.types.size(); i++) {
-        rv &= this->types[i]->match_test_generics_fuzz(sp, x.types[i], resolve_placeholder, match);
+        rv &= this->types[i]->matchTestGenericsFuzz(sp, x.types[i], resolve_placeholder, match);
         if (rv == Compare::Unequal) {
             return Compare::Unequal;
         }
@@ -470,7 +470,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
         const auto& val_t = resolve_placeholder.getVal(sp, this->values[i]);
         const auto& val_x = resolve_placeholder.getVal(sp, x.values[i]);
         if (const auto* ge = val_t.opt_Generic()) {
-            rv &= match.match_val(*ge, val_x);
+            rv &= match.matchVal(*ge, val_x);
             if (rv == Compare::Unequal) {
                 return Compare::Unequal;
             }
@@ -510,9 +510,9 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
                 }
             };
 
-            U128 lit_t, lit_x;
-            if (H2::getLiteral(val_t, lit_t) && H2::getLiteral(val_x, lit_x)) {
-                if (lit_t != lit_x) {
+            U128 litT, litX;
+            if (H2::getLiteral(val_t, litT) && H2::getLiteral(val_x, litX)) {
+                if (litT != litX) {
                     return Compare::Unequal;
                 }
                 // Equal literals: continue (leaves `rv` as-is)
@@ -530,8 +530,8 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
         //return Compare::Unequal;
     }
     for (unsigned int i = 0; i < std::min(this->mLifetimes.size(), x.mLifetimes.size()); i++) {
-        if (this->mLifetimes[i].is_param()) {
-            /*rv &=*/match.match_lft(this->mLifetimes[i].asParam(), x.mLifetimes[i]);
+        if (this->mLifetimes[i].isParam()) {
+            /*rv &=*/match.matchLft(this->mLifetimes[i].asParam(), x.mLifetimes[i]);
             //if(rv == Compare::Unequal)
             //    return Compare::Unequal;
         } else {
@@ -597,18 +597,18 @@ namespace {
     }
 #endif
 
-    auto it_l = typeBounds.begin();
-    auto it_r = x.typeBounds.begin();
-    while (it_l != typeBounds.end() && it_r != x.typeBounds.end()) {
-        if (it_l->first != it_r->first) {
+    auto itL = typeBounds.begin();
+    auto itR = x.typeBounds.begin();
+    while (itL != typeBounds.end() && itR != x.typeBounds.end()) {
+        if (itL->first != itR->first) {
             return Compare::Unequal;
         }
-        CMP(rv, it_l->second.type->compareWithPlaceholders(sp, it_r->second.type, resolve_placeholder));
-        ++it_l;
-        ++it_r;
+        CMP(rv, itL->second.type->compareWithPlaceholders(sp, itR->second.type, resolve_placeholder));
+        ++itL;
+        ++itR;
     }
 
-    if (it_l != typeBounds.end() || it_r != x.typeBounds.end()) {
+    if (itL != typeBounds.end() || itR != x.typeBounds.end()) {
         return Compare::Unequal;
     }
 

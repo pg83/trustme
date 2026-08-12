@@ -37,7 +37,7 @@ struct EncodedLiteral {
     std::vector<uint8_t> bytes;
     std::vector<Reloc> relocations;
 
-    static EncodedLiteral make_usize(uint64_t v);
+    static EncodedLiteral makeUsize(uint64_t v);
     EncodedLiteral clone() const;
 
     void write_uint(size_t ofs, size_t size, uint64_t v);

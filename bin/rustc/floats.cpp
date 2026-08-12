@@ -5,11 +5,11 @@ FloatValue parse_float_value(const char* text) {
 }
 
 bool floatValueIsNan(FloatValue value) {
-    return value.is_nan();
+    return value.isNan();
 }
 
 bool floatValueIsInfinite(FloatValue value) {
-    return value.is_infinite();
+    return value.isInfinite();
 }
 
 FloatValue floatValueAbs(FloatValue value) {

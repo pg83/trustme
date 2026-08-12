@@ -51,8 +51,8 @@ struct TomlToken {
     {
     }
 
-    static TomlToken lex_from(::std::ifstream& is, unsigned& line);
-    static TomlToken lex_from_inner(::std::ifstream& is, unsigned& line);
+    static TomlToken lexFrom(::std::ifstream& is, unsigned& line);
+    static TomlToken lexFromInner(::std::ifstream& is, unsigned& line);
 
     const ::std::string& asString() const {
         assert(mType == Type::Ident || mType == Type::String);
@@ -179,7 +179,7 @@ TomlKeyValue TomlFile::getNextValue() {
             throw ::std::runtime_error(::format(mLexer, ": Unexpected EOF in composite"));
         }
     }
-    std::vector<std::string> key_name;
+    std::vector<std::string> keyName;
     for (;;) {
         switch (t.mType) {
             case TomlToken::Type::String:
@@ -188,7 +188,7 @@ TomlKeyValue TomlFile::getNextValue() {
             default:
                 throw ::std::runtime_error(::format(mLexer, ": Unexpected token for key - ", t));
         }
-        key_name.push_back(t.asString());
+        keyName.push_back(t.asString());
         t = mLexer.get_token();
         if (t.mType == TomlToken::Type::Assign) {
             break;
@@ -209,12 +209,12 @@ TomlKeyValue TomlFile::getNextValue() {
     switch (t.mType) {
         // String: Return the string value
         case TomlToken::Type::String:
-            rv.path = this->getPath(std::move(key_name));
+            rv.path = this->getPath(std::move(keyName));
             rv.value = TomlValue{t.mData};
             break;
         // Array: Parse the entire list and return as Type::List
         case TomlToken::Type::SquareOpen: {
-            rv.path = this->getPath(std::move(key_name));
+            rv.path = this->getPath(std::move(keyName));
             rv.value.mType = TomlValue::Type::List;
             bool skipped_nested = false;
             while ((t = mLexer.get_token()).mType != TomlToken::Type::SquareClose) {
@@ -277,20 +277,20 @@ TomlKeyValue TomlFile::getNextValue() {
             break;
         }
         case TomlToken::Type::BraceOpen:
-            currentComposite.push_back(std::move(key_name));
+            currentComposite.push_back(std::move(keyName));
             DEBUG("Enter composite block " << currentBlock << ", " << currentComposite);
             // Recurse to restart parse
             return getNextValue();
         case TomlToken::Type::Integer:
-            rv.path = this->getPath(std::move(key_name));
+            rv.path = this->getPath(std::move(keyName));
             rv.value = TomlValue{t.intval};
             break;
         case TomlToken::Type::Ident:
             if (t.mData == "true") {
-                rv.path = this->getPath(std::move(key_name));
+                rv.path = this->getPath(std::move(keyName));
                 rv.value = TomlValue{true};
             } else if (t.mData == "false") {
-                rv.path = this->getPath(std::move(key_name));
+                rv.path = this->getPath(std::move(keyName));
 
                 rv.value = TomlValue{false};
             } else {
@@ -364,7 +364,7 @@ TomlLexer::TomlLexer(const ::std::string& filename)
 }
 
 TomlToken TomlLexer::get_token() {
-    auto rv = TomlToken::lex_from(input, line);
+    auto rv = TomlToken::lexFrom(input, line);
     if (rv.mType == TomlToken::Type::Newline) {
         line++;
     }
@@ -376,8 +376,8 @@ TomlToken TomlLexer::get_token() {
     return os;
 }
 
-TomlToken TomlToken::lex_from(::std::ifstream& is, unsigned& line) {
-    auto rv = TomlToken::lex_from_inner(is, line);
+TomlToken TomlToken::lexFrom(::std::ifstream& is, unsigned& line) {
+    auto rv = TomlToken::lexFromInner(is, line);
     //DEBUG("lex_from: " << rv);
     return rv;
 }
@@ -448,7 +448,7 @@ namespace {
     }
 }
 
-TomlToken TomlToken::lex_from_inner(::std::ifstream& is, unsigned& line) {
+TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
     int c;
     do {
         c = is.get();
@@ -604,11 +604,11 @@ TomlToken TomlToken::lex_from_inner(::std::ifstream& is, unsigned& line) {
                 is.putback(c);
 
                 int64_t val = 0;
-                bool is_all_digit = true;
-                bool is_neg = false;
+                bool isAllDigit = true;
+                bool isNeg = false;
                 size_t i = 0;
                 if (str[0] == '-') {
-                    is_neg = true;
+                    isNeg = true;
                     i++;
                 }
 
@@ -618,7 +618,7 @@ TomlToken TomlToken::lex_from_inner(::std::ifstream& is, unsigned& line) {
                         for (; i < str.size(); i++) {
                             c = str[i];
                             if (!isxdigit(c)) {
-                                is_all_digit = false;
+                                isAllDigit = false;
                                 break;
                             }
                             val *= 16;
@@ -629,7 +629,7 @@ TomlToken TomlToken::lex_from_inner(::std::ifstream& is, unsigned& line) {
                         for (; i < str.size(); i++) {
                             c = str[i];
                             if (!('0' <= c && c <= '7')) {
-                                is_all_digit = false;
+                                isAllDigit = false;
                                 break;
                             }
                             val *= 8;
@@ -640,7 +640,7 @@ TomlToken TomlToken::lex_from_inner(::std::ifstream& is, unsigned& line) {
                         for (; i < str.size(); i++) {
                             c = str[i];
                             if (!('0' <= c && c <= '1')) {
-                                is_all_digit = false;
+                                isAllDigit = false;
                                 break;
                             }
                             val *= 2;
@@ -653,15 +653,15 @@ TomlToken TomlToken::lex_from_inner(::std::ifstream& is, unsigned& line) {
                     for (; i < str.size(); i++) {
                         c = str[i];
                         if (!isdigit(c)) {
-                            is_all_digit = false;
+                            isAllDigit = false;
                             break;
                         }
                         val *= 10;
                         val += c - '0';
                     }
                 }
-                if (is_all_digit) {
-                    return TomlToken{Type::Integer, (is_neg ? -val : val)};
+                if (isAllDigit) {
+                    return TomlToken{Type::Integer, (isNeg ? -val : val)};
                 }
                 return TomlToken{Type::Ident, str};
             } else {

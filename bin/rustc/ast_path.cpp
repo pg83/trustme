@@ -48,7 +48,7 @@ namespace AST {
     }
 
     ::std::ostream& operator<<(::std::ostream& os, const PathBindingMacro& x) {
-        TU_MATCHA((x), (i), (Unbound, os << "_";), (ProcMacroDerive, os << "ProcMacroDerive(? " << i.mac_name << ")";), (ProcMacroAttribute, os << "ProcMacroAttribute(? " << i.mac_name << ")";), (ProcMacro, os << "ProcMacro(? " << i.mac_name << ")";), (MacroRules, os << "MacroRules(? ?)";))
+        TU_MATCHA((x), (i), (Unbound, os << "_";), (ProcMacroDerive, os << "ProcMacroDerive(? " << i.macName << ")";), (ProcMacroAttribute, os << "ProcMacroAttribute(? " << i.macName << ")";), (ProcMacro, os << "ProcMacro(? " << i.macName << ")";), (MacroRules, os << "MacroRules(? ?)";))
         return os;
     }
 
@@ -201,10 +201,10 @@ namespace AST {
         return OrdEqual;
     }
 
-    void PathNode::print_pretty(::std::ostream& os, bool is_type_context) const {
+    void PathNode::print_pretty(::std::ostream& os, bool isTypeContext) const {
         os << mName;
         if (!mParams.is_empty()) {
-            if (!is_type_context) {
+            if (!isTypeContext) {
                 os << "::";
             }
             os << mParams;
@@ -243,7 +243,7 @@ namespace AST {
         TU_MATCH(Class, (x.cls), (ent), (Invalid, cls = Class::make_Invalid({});), (Local, cls = Class::make_Local({ent.name});), (Relative, cls = Class::make_Relative({ent.hygiene, ent.nodes});), (Self, cls = Class::make_Self({ent.nodes});), (Super, cls = Class::make_Super({ent.count, ent.nodes});), (Absolute, cls = Class::make_Absolute({ent.crate, ent.nodes});), (UFCS, if (ent.trait) cls = Class::make_UFCS({box$(ent.type->clone()), ::std::unique_ptr<Path>(new Path(*ent.trait)), ent.nodes}); else cls = Class::make_UFCS({box$(ent.type->clone()), nullptr, ent.nodes});))
     }
 
-    bool Path::is_parent_of(const Path& x) const {
+    bool Path::isParentOf(const Path& x) const {
         if (!this->cls.is_Absolute() || !x.cls.is_Absolute()) {
             return false;
         }
@@ -293,7 +293,7 @@ namespace AST {
         return OrdEqual;
     }
 
-    void Path::print_pretty(::std::ostream& os, bool is_type_context, bool is_debug) const {
+    void Path::print_pretty(::std::ostream& os, bool isTypeContext, bool isDebug) const {
     TU_MATCH_HDRA( (cls), {)
     TU_ARMA(Invalid, ent) {
                 os << "/*inv*/";
@@ -303,7 +303,7 @@ namespace AST {
             TU_ARMA(Local, ent) {
                 // Only print comment if there's no binding
                 if (mBindings.value.is_Unbound() && mBindings.type.is_Unbound()) {
-                    if (is_debug) {
+                    if (isDebug) {
                         os << "/*var*/";
                     }
                 } else {
@@ -312,28 +312,28 @@ namespace AST {
                 os << ent.name;
             }
             TU_ARMA(Relative, ent) {
-                if (is_debug) {
+                if (isDebug) {
                     os << ent.hygiene;
                 }
                 for (const auto& n : ent.nodes) {
                     if (&n != &ent.nodes[0]) {
                         os << "::";
                     }
-                    n.print_pretty(os, is_type_context);
+                    n.print_pretty(os, isTypeContext);
                 }
             }
             TU_ARMA(Self, ent) {
                 os << "self";
                 for (const auto& n : ent.nodes) {
                     os << "::";
-                    n.print_pretty(os, is_type_context);
+                    n.print_pretty(os, isTypeContext);
                 }
             }
             TU_ARMA(Super, ent) {
                 os << "super";
                 for (const auto& n : ent.nodes) {
                     os << "::";
-                    n.print_pretty(os, is_type_context);
+                    n.print_pretty(os, isTypeContext);
                 }
             }
             TU_ARMA(Absolute, ent) {
@@ -347,7 +347,7 @@ namespace AST {
                 }
                 for (const auto& n : ent.nodes) {
                     os << "::";
-                    n.print_pretty(os, is_type_context);
+                    n.print_pretty(os, isTypeContext);
                 }
             }
             TU_ARMA(UFCS, ent) {
@@ -365,11 +365,11 @@ namespace AST {
                 }
                 for (const auto& n : ent.nodes) {
                     os << "::";
-                    n.print_pretty(os, is_type_context);
+                    n.print_pretty(os, isTypeContext);
                 }
             }
     }
-    if( is_debug ) {
+    if( isDebug ) {
             os << "/*";
             bool printed = false;
             if (!mBindings.value.is_Unbound()) {
@@ -434,7 +434,7 @@ bool AbsolutePath::operator==(const AbsolutePath& x) const {
     return true;
 }
 // Returns true if this path is a prefix of the other path (or equal)
-bool AbsolutePath::is_parent_of(const AbsolutePath& other) const {
+bool AbsolutePath::isParentOf(const AbsolutePath& other) const {
     if (this->crate != other.crate) {
         return false;
     }

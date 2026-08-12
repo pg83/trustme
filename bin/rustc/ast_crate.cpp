@@ -21,12 +21,12 @@ namespace {
         return true;
     }
 
-    void iterate_module(::AST::Module& mod, ::std::function<void(::AST::Module& mod)> fcn) {
+    void iterateModule(::AST::Module& mod, ::std::function<void(::AST::Module& mod)> fcn) {
         fcn(mod);
         for (auto& sm : mod.mItems) {
             if (auto* e = sm->data.opt_Module()) {
                 if (checkItemCfg(sm->attrs)) {
-                    iterate_module(*e, fcn);
+                    iterateModule(*e, fcn);
                 }
             }
         }
@@ -48,7 +48,7 @@ namespace AST {
     {
     }
 
-    void Crate::load_externs() {
+    void Crate::loadExterns() {
         auto cb = [this](Module& mod) {
             for (/*const*/ auto& it : mod.mItems) {
                 if (auto* c = it->data.opt_Crate()) {
@@ -56,13 +56,13 @@ namespace AST {
                         if (c->name == "") {
                             // Leave for now
                         } else {
-                            c->name = load_extern_crate(it->span, c->name);
+                            c->name = loadExternCrate(it->span, c->name);
                         }
                     }
                 }
             }
         };
-        iterate_module(rootModule, cb);
+        iterateModule(rootModule, cb);
 
         // Check for no_std or no_core, and load libstd/libcore
         // - Duplicates some of the logic in "Expand", but also helps keep crate loading separate to most of expand
@@ -92,12 +92,12 @@ namespace AST {
         if (no_core) {
             // Don't load anything
         } else if (no_std) {
-            auto n = this->load_extern_crate(Span(), "core");
+            auto n = this->loadExternCrate(Span(), "core");
             //if( n != "core" ) {
             //    WARNING(Span(), W0000, "libcore wasn't loaded as `core`, instead `" << n << "`");
             //}
         } else {
-            auto n = this->load_extern_crate(Span(), "std");
+            auto n = this->loadExternCrate(Span(), "std");
             //if( n != "std" ) {
             //    WARNING(Span(), W0000, "libstd wasn't loaded as `std`, instead `" << n << "`");
             //}
@@ -107,7 +107,7 @@ namespace AST {
         DEBUG("Load from --crate");
         for (const auto& c : gCrateOverrides) {
             auto n = RcString::new_interned(c.first);
-            auto real_name = this->load_extern_crate(Span(), n);
+            auto real_name = this->loadExternCrate(Span(), n);
             gImplicitCrates.insert(std::make_pair(n, real_name));
         }
         if (this->extCratenameCore != "") {
@@ -117,7 +117,7 @@ namespace AST {
 
     // TODO: Handle disambiguating crates with the same name (e.g. libc in std and crates.io libc)
     // - Crates recorded in rlibs should specify a hash/tag that's passed in to this function.
-    RcString Crate::load_extern_crate(Span sp, const RcString& name, const ::std::string& basename /*=""*/) {
+    RcString Crate::loadExternCrate(Span sp, const RcString& name, const ::std::string& basename /*=""*/) {
         TRACE_FUNCTION_F("Loading crate '" << name << "' (basename='" << basename << "')");
 
         ::std::string path;
@@ -231,10 +231,10 @@ namespace AST {
         // Load referenced crates
         for (const auto& ext : crateExtList) {
             if (externCrates.count(ext.first) == 0) {
-                const auto load_name = this->load_extern_crate(sp, ext.first, ext.second.basename);
-                if (load_name != ext.first) {
+                const auto loadName = this->loadExternCrate(sp, ext.first, ext.second.basename);
+                if (loadName != ext.first) {
                     // ERROR - The crate loaded wasn't the one that was used when compiling this crate.
-                    ERROR(sp, E0000, "The crate file `" << ext.second.basename << "` didn't load the expected crate - have " << load_name << " != exp " << ext.first);
+                    ERROR(sp, E0000, "The crate file `" << ext.second.basename << "` didn't load the expected crate - have " << loadName << " != exp " << ext.first);
                 }
             }
         }

@@ -105,7 +105,7 @@ namespace MIR {
 
         unsigned int getCurStmtOfs() const;
 
-        void fmtPos(::std::ostream& os, bool include_path = false) const;
+        void fmtPos(::std::ostream& os, bool includePath = false) const;
 
         void print_bug(::std::function<void(::std::ostream& os)> cb) const {
             print_msg("ERROR", cb);
@@ -135,18 +135,18 @@ namespace MIR {
 
         ::HIR::TypeRef getConstType(const ::MIR::Constant& c) const;
 
-        bool lvalue_is_copy(const ::MIR::LValue& val) const;
-        const ::HIR::TypeData* is_type_owned_box(const ::HIR::TypeData* ty) const;
+        bool lvalueIsCopy(const ::MIR::LValue& val) const;
+        const ::HIR::TypeData* isTypeOwnedBox(const ::HIR::TypeData* ty) const;
 
         /// @brief Handler for the `offset_of` intrinsic
         /// @param ty Type
         /// @param params Field names (must be Const::String)
         /// @return Offset in bytes
-        size_t intrinsic_offset_of(const ::HIR::TypeData* ty, const ::std::vector<MIR::Param>& params) const;
+        size_t intrinsicOffsetOf(const ::HIR::TypeData* ty, const ::std::vector<MIR::Param>& params) const;
         /// @brief Handler for the `type_name` intrinsic, strips out mrustc's helper comments
         /// @param ty Type
         /// @return Clean string form of the type
-        std::string intrinsic_type_name(const ::HIR::TypeData* ty) const;
+        std::string intrinsicTypeName(const ::HIR::TypeData* ty) const;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const TypeResolve& x);
     };
@@ -165,7 +165,7 @@ namespace MIR {
         }
 
         // true if this value is used at any point
-        bool is_used() const;
+        bool isUsed() const;
 
         bool overlaps(const ValueLifetime& x) const;
 
@@ -432,7 +432,7 @@ namespace MIR {
                             rv |= visit_block_id(target);
                         }
                         if (e.valid_flag != ~0u) {
-                            rv |= visit_block_id(e.invalid_target);
+                            rv |= visit_block_id(e.invalidTarget);
                         }
                     }
                     TU_ARMA(SwitchValue, e) {

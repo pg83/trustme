@@ -56,13 +56,13 @@ struct Ident {
             return Hygiene(++gNextScope);
         }
 
-        static Hygiene new_scope_chained(const Hygiene& parent, unsigned int macro_definition = 0);
+        static Hygiene new_scope_chained(const Hygiene& parent, unsigned int macroDefinition = 0);
 
-        Hygiene with_tail_scope(const Hygiene& scope, bool inherit_mod_path = false) const;
+        Hygiene with_tail_scope(const Hygiene& scope, bool inheritModPath = false) const;
 
         Hygiene getParent() const;
 
-        bool leave_macro_definition(unsigned int definition, const Hygiene& token_context, const Hygiene& definitionContext);
+        bool leaveMacroDefinition(unsigned int definition, const Hygiene& token_context, const Hygiene& definitionContext);
 
         bool hasModPath() const {
             return inner->search_module != 0;
@@ -75,7 +75,7 @@ struct Ident {
         }
 
         // Returns true if an ident with hygine `source` can see an ident with this hygine
-        bool is_visible(const Hygiene& source) const;
+        bool isVisible(const Hygiene& source) const;
 
         Ordering ord(const Hygiene& x) const;
 
@@ -108,7 +108,7 @@ struct Ident {
     Ident& operator=(Ident&& x) = default;
     Ident& operator=(const Ident& x) = default;
 
-    RcString into_string() {
+    RcString intoString() {
         return ::std::move(name);
     }
 

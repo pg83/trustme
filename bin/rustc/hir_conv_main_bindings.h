@@ -24,7 +24,7 @@ namespace HIR {
 };
 
 extern void ConvertHIRLifetimeElision(::HIR::Crate& crate);
-extern ::HIR::PathParams ConvertHIRCompleteAliasParams(::HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool is_expr);
+extern ::HIR::PathParams ConvertHIRCompleteAliasParams(::HIR::TypeInterner& types, const Span& sp, const ::HIR::GenericParams& params_def, const ::HIR::GenericPath& path, bool isExpr);
 extern void ConvertHIRExpandAliases(::HIR::Crate& crate);
 extern void ConvertHIRExpandAliasesSelf(::HIR::Crate& crate);
 extern void ConvertHIRExpandAliasesSelfExpr(

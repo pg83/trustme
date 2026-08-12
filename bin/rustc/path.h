@@ -28,7 +28,7 @@ namespace helpers {
 
         path(const char* s);
 
-        bool is_valid() const {
+        bool isValid() const {
             return mStr != "";
         }
 

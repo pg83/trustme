@@ -84,12 +84,12 @@ namespace HIR {
 
         bool is_empty() const;
 
-        bool is_generic() const;
+        bool isGeneric() const;
 
         /// Create a PathParams instance that doesn't monomorphise at all
-        PathParams make_nop_params(TypeInterner& types, unsigned level, bool lifetimes_only = false) const;
+        PathParams makeNopParams(TypeInterner& types, unsigned level, bool lifetimesOnly = false) const;
 
-        PathParams make_empty_params(bool lifetimes_only = false) const;
+        PathParams makeEmptyParams(bool lifetimesOnly = false) const;
 
         struct PrintArgs {
             const GenericParams& gp;

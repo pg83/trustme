@@ -98,7 +98,7 @@ struct TypeErasedType {
     ::std::vector<AST::LifetimeRef> lifetimes;
     ::std::unique_ptr<AST::PathParams> use;
     /// Was this `impl` from 2024 or later edition? This changes the behaviour if `use` is not present
-    bool is_edition_2024_or_later;
+    bool isEdition2024OrLater;
 };
 
 TAGGED_UNION_OUT_OF_LINE(
@@ -111,7 +111,7 @@ TAGGED_UNION_OUT_OF_LINE(
     (Macro, struct { ::std::unique_ptr<::AST::MacroInvocation> inv; }),
     (Primitive, struct { enum eCoreType coreType; }),
     (Function, struct { TypeFunction info; }),
-    (Tuple, struct { ::std::vector<TypeRef> inner_types; }),
+    (Tuple, struct { ::std::vector<TypeRef> innerTypes; }),
     (Borrow,
      struct {
          AST::LifetimeRef lifetime;
@@ -196,7 +196,7 @@ public:
 
     struct TagTuple {};
 
-    TypeRef(TagTuple, Span sp, ::std::vector<TypeRef> inner_types);
+    TypeRef(TagTuple, Span sp, ::std::vector<TypeRef> innerTypes);
 
     struct TagFunction {};
 
@@ -204,19 +204,19 @@ public:
 
     struct TagReference {};
 
-    TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool is_mut, TypeRef inner_type);
+    TypeRef(TagReference, Span sp, AST::LifetimeRef lft, bool is_mut, TypeRef innerType);
 
     struct TagPointer {};
 
-    TypeRef(TagPointer, Span sp, bool is_mut, TypeRef inner_type);
+    TypeRef(TagPointer, Span sp, bool is_mut, TypeRef innerType);
 
     struct TagSizedArray {};
 
-    TypeRef(TagSizedArray, Span sp, TypeRef inner_type, ::std::shared_ptr<AST::ExprNode> size);
+    TypeRef(TagSizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<AST::ExprNode> size);
 
     struct TagUnsizedArray {};
 
-    TypeRef(TagUnsizedArray, Span sp, TypeRef inner_type);
+    TypeRef(TagUnsizedArray, Span sp, TypeRef innerType);
 
     struct TagArg {};
 
@@ -235,27 +235,27 @@ public:
         return mSpan;
     }
 
-    bool is_valid() const {
+    bool isValid() const {
         return !mData.is_None();
     }
 
-    bool is_unbounded() const {
+    bool isUnbounded() const {
         return mData.is_Any();
     }
 
-    bool is_wildcard() const {
+    bool isWildcard() const {
         return mData.is_Any();
     }
 
-    bool is_unit() const {
+    bool isUnit() const {
         return mData.is_Unit();
     }
 
-    bool is_primitive() const {
+    bool isPrimitive() const {
         return mData.is_Primitive();
     }
 
-    bool is_path() const {
+    bool isPath() const {
         return mData.is_Path();
     }
 
@@ -267,7 +267,7 @@ public:
         return *mData.as_Path();
     }
 
-    bool is_type_param() const {
+    bool isTypeParam() const {
         return mData.is_Generic();
     }
 
@@ -283,17 +283,17 @@ public:
         return mData.is_Pointer();
     }
 
-    bool is_tuple() const {
+    bool isTuple() const {
         return mData.is_Tuple();
     }
 
     TypeRef clone() const;
 
-    const TypeRef& inner_type() const {
+    const TypeRef& innerType() const {
         TU_MATCH_DEF(TypeData, (mData), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return *e.inner;), (Pointer, return *e.inner;), (Array, return *e.inner;))
     }
 
-    TypeRef& inner_type() {
+    TypeRef& innerType() {
         TU_MATCH_DEF(TypeData, (mData), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return *e.inner;), (Pointer, return *e.inner;), (Array, return *e.inner;))
     }
 
@@ -311,7 +311,7 @@ public:
         return ord(x) == OrdLess;
     };
 
-    void print(::std::ostream& os, bool is_debug = false) const;
+    void print(::std::ostream& os, bool isDebug = false) const;
 
     PrettyPrintType print_pretty() const {
         return PrettyPrintType(*this);

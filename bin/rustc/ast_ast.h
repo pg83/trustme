@@ -136,8 +136,8 @@ namespace AST {
 
     public:
         struct Markings {
-            std::string link_name;
-            std::string link_section;
+            std::string linkName;
+            std::string linkSection;
             Linkage linkage = Linkage::Default;
         } markings;
 
@@ -181,11 +181,11 @@ namespace AST {
         struct Flags {
             bool is_const;
             bool is_unsafe;
-            bool is_async;
+            bool isAsync;
 
             Flags();
 
-            static Flags make_unsafe() {
+            static Flags makeUnsafe() {
                 return Flags().set_unsafe();
             }
 
@@ -214,14 +214,14 @@ namespace AST {
                 Never,
                 Normal,
                 Always
-            } inline_type = Inline::Auto;
+            } inlineType = Inline::Auto;
 
-            bool is_cold = false;
-            bool is_naked = false;
+            bool isCold = false;
+            bool isNaked = false;
             std::vector<unsigned> rustc_legacy_const_generics;
 
-            std::string link_name;
-            std::string link_section;
+            std::string linkName;
+            std::string linkSection;
             Linkage linkage = Linkage::Default;
         } markings;
 
@@ -259,8 +259,8 @@ namespace AST {
             return flags.is_unsafe;
         }
 
-        bool is_async() const {
-            return flags.is_async;
+        bool isAsync() const {
+            return flags.isAsync;
         }
 
         const GenericParams& params() const {
@@ -411,7 +411,7 @@ namespace AST {
                 U128,
                 I128
             } repr = Repr::Rust;
-            bool is_repr_c = false;
+            bool isReprC = false;
             uint64_t alignValue = 0;
         } markings;
 
@@ -573,7 +573,7 @@ namespace AST {
             Span sp;
             AttributeList attrs;
             AST::Visibility vis; // Ignored for trait impls
-            bool is_specialisable;
+            bool isSpecialisable;
             RcString name;
 
             ::std::unique_ptr<Item> data;
@@ -593,9 +593,9 @@ namespace AST {
         ~Impl();
         Impl& operator=(Impl&&);
 
-        void addFunction(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Function fcn);
-        void addType(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, GenericParams params, TypeRef type);
-        void addStatic(Span sp, AttributeList attrs, AST::Visibility vis, bool is_specialisable, RcString name, Static v);
+        void addFunction(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, Function fcn);
+        void addType(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, GenericParams params, TypeRef type);
+        void addStatic(Span sp, AttributeList attrs, AST::Visibility vis, bool isSpecialisable, RcString name, Static v);
         void addMacroInvocation(MacroInvocation inv);
 
         const ImplDef& def() const {
@@ -643,7 +643,7 @@ namespace AST {
 
     public:
         struct Link {
-            std::string lib_name;
+            std::string libName;
         };
 
         std::vector<Link> libraries;
@@ -700,9 +700,9 @@ namespace AST {
             //bool    force_no_load = false;
             // Is this module disabled (i.e. it's tagged with a failing `#[cfg]`)?
             // Disables down-stream file loading (as that might fail)
-            bool is_disabled = false;
+            bool isDisabled = false;
             // Is this a `mod foo { ... }` or `mod foo;` (changes how `#[path]` is processed inside)
-            bool in_mod_block = false;
+            bool inModBlock = false;
             // Path to this module
             ::std::string path = "!";
             // Directory controlled by this module
@@ -715,7 +715,7 @@ namespace AST {
         char indexPopulated = 0;   // 0 = no, 1 = partial, 2 = complete
 
         struct IndexEnt {
-            bool is_import; // Set if this item has a path that isn't `mod->path() + name`
+            bool isImport; // Set if this item has a path that isn't `mod->path() + name`
             ::AST::Visibility vis;
             ::AST::Path path;
         };
@@ -732,20 +732,20 @@ namespace AST {
         // List of macros imported from other modules (via #[macro_use], includes proc macros)
         // - First value is an absolute path to the macro (including crate name)
         struct MacroImport {
-            bool is_pub;
+            bool isPub;
             RcString name; // Can be different, if `use foo as bar` is used
             AST::AbsolutePath path;
             MacroRef ref;
 
             MacroImport clone() const {
-                return MacroImport{is_pub, name, path, ref.clone()};
+                return MacroImport{isPub, name, path, ref.clone()};
             }
         };
 
         ::std::vector<MacroImport> macroImports;
 
         struct Import {
-            bool is_pub;
+            bool isPub;
             RcString name;
             ::AST::Path path; // If `name` is "", then this is a module/enum to glob
         };
@@ -759,7 +759,7 @@ namespace AST {
         Module(Module&&);
         Module& operator=(Module&&);
 
-        bool is_anon() const {
+        bool isAnon() const {
             return myPath.nodes.size() > 0 && myPath.nodes.back().c_str()[0] == '#';
         }
 
@@ -768,10 +768,10 @@ namespace AST {
 
         void addItem(Named<Item> item);
         void addItem(Span sp, Visibility vis, RcString name, Item it, AttributeList attrs);
-        void addExtCrate(Span sp, Visibility vis, RcString extName, RcString imp_name, AttributeList attrs);
+        void addExtCrate(Span sp, Visibility vis, RcString extName, RcString impName, AttributeList attrs);
         void addMacroInvocation(MacroInvocation item);
 
-        void addMacro(bool is_exported, RcString name, MacroRulesPtr macro);
+        void addMacro(bool isExported, RcString name, MacroRulesPtr macro);
 
         const ::AST::AbsolutePath& path() const {
             return myPath;

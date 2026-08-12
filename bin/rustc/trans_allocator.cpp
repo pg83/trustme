@@ -16,8 +16,8 @@ const size_t NUM_ALLOCATOR_METHODS = sizeof(ALLOCATOR_METHODS) / sizeof(ALLOCATO
 const char GLOBAL_ALLOCATOR_LANG_ITEM[] = "mrustc-global_allocator";
 
 HIR::SimplePath TransAllocatorTraitPath(const HIR::Crate& crate) {
-    const auto& layout_path = TransAllocatorLayoutPath(crate);
-    return HIR::SimplePath(layout_path.crate_name(), {"alloc", "global", "GlobalAlloc"});
+    const auto& layoutPath = TransAllocatorLayoutPath(crate);
+    return HIR::SimplePath(layoutPath.crate_name(), {"alloc", "global", "GlobalAlloc"});
 }
 
 const HIR::SimplePath& TransAllocatorLayoutPath(const HIR::Crate& crate) {
@@ -25,13 +25,13 @@ const HIR::SimplePath& TransAllocatorLayoutPath(const HIR::Crate& crate) {
 }
 
 HIR::Path TransAllocatorLayoutCtorPath(const HIR::Crate& crate) {
-    const auto& layout_path = TransAllocatorLayoutPath(crate);
-    const auto& layout_struct = crate.getStructByPath(Span(), layout_path);
-    const auto layout_type = crate.types.path(
-        HIR::GenericPath(layout_path),
-        HIR::TypePathBinding(&layout_struct)
+    const auto& layoutPath = TransAllocatorLayoutPath(crate);
+    const auto& layoutStruct = crate.getStructByPath(Span(), layoutPath);
+    const auto layoutType = crate.types.path(
+        HIR::GenericPath(layoutPath),
+        HIR::TypePathBinding(&layoutStruct)
     );
-    return HIR::Path(layout_type, RcString::new_interned("from_size_align_unchecked"));
+    return HIR::Path(layoutType, RcString::new_interned("from_size_align_unchecked"));
 }
 
 HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData* allocator_type, const AllocatorMethod& method) {
@@ -42,6 +42,6 @@ HIR::Path TransAllocatorMethodPath(const HIR::Crate& crate, const HIR::TypeData*
         allocator_type,
         HIR::GenericPath(trait_path),
         RcString::new_interned(method.name),
-        function.mParams.make_empty_params(true)
+        function.mParams.makeEmptyParams(true)
     );
 }
