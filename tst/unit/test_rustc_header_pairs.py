@@ -26,9 +26,18 @@ class RustcHeaderPairsTest(unittest.TestCase):
 
     def test_every_source_has_a_header(self):
         for source in sorted(RUSTC.glob("*.cpp")):
+            if source.name.endswith("_ut.cpp"):
+                # Unit tests pair with the header of the module they test
+                continue
             with self.subTest(source=source.name):
                 header = source.with_suffix(".h")
                 self.assertTrue(header.is_file(), f"missing {header.name}")
+
+    def test_every_unit_test_has_a_module(self):
+        for source in sorted(RUSTC.glob("*_ut.cpp")):
+            with self.subTest(source=source.name):
+                module = source.with_name(source.name.removesuffix("_ut.cpp") + ".h")
+                self.assertTrue(module.is_file(), f"missing {module.name}")
 
     def test_sources_have_no_mrustc_banners(self):
         sources = sorted(

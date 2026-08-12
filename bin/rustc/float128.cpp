@@ -898,6 +898,16 @@ bool Float128::operator<(const Float128& other) const {
     if (a.kind == Kind::NotANumber || b.kind == Kind::NotANumber) {
         return false;
     }
+    if (a.kind == Kind::Infinity || b.kind == Kind::Infinity) {
+        if (a.kind == Kind::Infinity && b.kind == Kind::Infinity) {
+            return a.negative && !b.negative;
+        }
+        if (a.kind == Kind::Infinity) {
+            // -inf is below everything else; +inf is below nothing
+            return a.negative;
+        }
+        return !b.negative;
+    }
     if (a.kind == Kind::Zero && b.kind == Kind::Zero) {
         return false;
     }

@@ -210,6 +210,28 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(!(nan <= one));
         STD_INSIST(!(one < nan));
         STD_INSIST(!(one >= nan));
+        // Infinities order beyond every finite value
+        const auto inf = Float128::infinity(false);
+        const auto neg_inf = Float128::infinity(true);
+        STD_INSIST(one < inf);
+        STD_INSIST(one <= inf);
+        STD_INSIST(!(inf < one));
+        STD_INSIST(inf > one);
+        STD_INSIST(neg_inf < one);
+        STD_INSIST(neg_inf < Float128(-1.0));
+        STD_INSIST(neg_inf < inf);
+        STD_INSIST(!(inf < inf));
+        STD_INSIST(inf <= inf);
+        STD_INSIST(inf == inf);
+        STD_INSIST(!(neg_inf > neg_inf));
+        STD_INSIST(neg_inf >= neg_inf);
+        STD_INSIST(Float128() < inf);
+        STD_INSIST(neg_inf < Float128());
+        const auto max_normal = Float128::from_bits(0x7ffe'ffff'ffff'ffffull, 0xffff'ffff'ffff'ffffull);
+        STD_INSIST(max_normal < inf);
+        STD_INSIST(neg_inf < -max_normal);
+        STD_INSIST(!(nan < inf));
+        STD_INSIST(!(inf < nan));
     }
 
     STD_TEST(testMinimumMaximum) {
