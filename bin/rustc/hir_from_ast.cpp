@@ -2256,7 +2256,6 @@ void LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         }
     }
 
-    //
     for (const auto& i : astMod.mItems) {
         if (!i->data.is_Impl()) {
             continue;

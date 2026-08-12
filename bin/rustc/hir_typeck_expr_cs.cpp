@@ -102,7 +102,6 @@ namespace {
 
     // -----------------------------------------------------------------------
     // Revisit Class
-    //
     // Handles visiting nodes during inferrence passes
     // -----------------------------------------------------------------------
     // TODO: Convert these to `Revisitor` instances
@@ -951,7 +950,6 @@ namespace {
                     // - Should use available information to strike them down
                     // > Try and equate the return type and the arguments, if any fail then move on to the next possibility?
                     // > ONLY if those arguments/return are generic
-                    //
                     // Possible causes of multiple entries
                     // - Multiple distinct traits with the same method
                     //   > If `self` is concretely known, this is an error (and shouldn't happen in well-formed code).
@@ -960,8 +958,6 @@ namespace {
                     // - Multiple trait bounds (same trait, different type params)
                     //   > Guess at the type params, then discard if there's a conflict?
                     //   > De-duplicate same traits?
-                    //
-                    //
                     // So: To be able to prune the list, we need to check the type parameters for the trait/type/impl
 
                     // Remove anything except for the highest autoref level
@@ -1301,7 +1297,6 @@ namespace {
 
     // -----------------------------------------------------------------------
     // Post-inferrence visitor
-    //
     // Saves the inferred types into the HIR expression tree, and ensures that
     // all types were inferred.
     // -----------------------------------------------------------------------
@@ -2628,8 +2623,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
     // - BUT: New bindings will still be added as usualin this pass.
     // - Any use of `&` (or `ref`?) in the pattern disables match ergonomics for the entire pattern.
     //   - Does `box` also do this disable?
-    //
-    //
     // - Add a counter to each pattern indicting how many implicit borrows/derefs are applied.
     // - When this function is called, check if the pattern is eligable for pattern auto-ref/deref
     // - Detect if the pattern uses & or ref. If it does, then invoke the existing code
@@ -2687,7 +2680,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
             // TODO: Recurse into inner patterns, creating new revisitors?
             // - OR, could just recurse on it.
-            //
             // Recusring incurs costs on every iteration, but is less expensive the first time around
             // New revisitors are cheaper when inferrence takes multiple iterations, but takes longer first time.
             bool revisitInner(Context& context, HIRPattern& pattern, const HIRTypeData* type, HIRPatternBinding::Type bindingMode) const {
@@ -3482,7 +3474,6 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
         }
     };
 
-    //
     TU_MATCH_HDRA( (pat.mData), {)
     TU_ARMA(Any, e) {
             // Just leave it, the pattern says nothing
@@ -4799,7 +4790,6 @@ namespace {
     }
 
     /// Checks if two types can be a valid coercion
-    //
     // General rules:
     // - CoerceUnsized generics/associated types can only involve generics/associated types
     // - CoerceUnsized structs only go between themselves (and either recurse or unsize a parameter)
@@ -9110,7 +9100,6 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
 
 // -----------------------------------------------------------------------
 // IVar generation visitor
-//
 // Iterates the HIR expression tree and adds ivars to all types
 // -----------------------------------------------------------------------
 class ExprVisitorAddIvars: public HIRExprVisitorDef {
@@ -9165,7 +9154,6 @@ public:
 
 // -----------------------------------------------------------------------
 // Enumeration visitor
-//
 // Iterates the HIR expression tree and extracts type "equations"
 // -----------------------------------------------------------------------
 class ExprVisitorEnum: public HIRExprVisitor {

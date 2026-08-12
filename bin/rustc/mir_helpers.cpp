@@ -537,7 +537,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(MIRTypeResolve& state, const MI
 
 // ----------
 // TODO: Improved algorithm
-//
 // 1. Locate loops (such that a block can be checked for if it's part of a loop, relative to another block)
 //  - This can also be used to determine if one bb is before another
 // 2. Locate assignment operations (and inline assembly outputs) of locals
@@ -874,7 +873,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                         }
                     }
                     TU_ARMA(Asm, se) {
-                        //
                         for (const auto& e : se.outputs) {
                             if (e.second == mLv) {
                                 // Assigned, just apply

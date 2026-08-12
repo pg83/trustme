@@ -6351,7 +6351,6 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
 // --------------------------------------------------------------------
 // Replaces reborrows where the source is never used again (except maybe
 // being dropped)
-//
 // _1 = & _0*;
 // ...
 // drop(_0);
@@ -7091,7 +7090,6 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
 
 // --------------------------------------------------------------------
 // Propagate source values when a composite (tuple) is read
-//
 // TODO: Is this needed now that SplitAggregates exists?
 // --------------------------------------------------------------------
 bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
@@ -8384,7 +8382,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
 // Split aggregated values that are never used by outer value into inner values
 // --------------------------------------------------------------------
 // NOTE: This is a generalised version of the old de-tuple pass (and fills part of MIR_Optimise_PropagateKnownValues)
-//
 // NOTE: This has a special case rule that disallowes borrows of the first field: Sometimes a borrow of the first
 //       field is used as a proxy for the entire struct.
 bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
@@ -9532,11 +9529,9 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
 
 // --------------------------------------------------------------------
 // Find re-borrows of values that aren't otherwise used.
-//
 // - Look for `<local> = &[mut] *<local/arg>`
 // - Check if the source is only ever used here (and in a drop)
 // - If that's the case, replace usage with a move and delete the drop
-//
 // TODO: Could allow multiple uses if it's a shared borrow
 // --------------------------------------------------------------------
 bool MIROptimiseUselessReborrows(MIRTypeResolve& state, MIRFunction& fcn) {

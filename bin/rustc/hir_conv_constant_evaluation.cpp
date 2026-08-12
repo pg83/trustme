@@ -1544,7 +1544,6 @@ public:
                     }
                 }
                 TU_ARMA(Deref, e) {
-                    //
                     if (const auto* te = typ->opt_Pointer()) {
                         typ = te->inner;
                     } else if (const auto* te = typ->opt_Borrow()) {

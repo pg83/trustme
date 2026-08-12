@@ -4679,7 +4679,6 @@ TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             auto path = ParsePath(lex, PATH_GENERIC_TYPE);
             return TypeRef(TypeRef::TagPath(), lex.endSpan(ps), mv$(path));
         }
-        //
         case TOK_RWORD_FOR: {
             auto hrls = ParseHRB(lex);
             switch (LOOK_AHEAD(lex)) {

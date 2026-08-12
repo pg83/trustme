@@ -1926,7 +1926,6 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
     // TODO: Expand default type parameters?
     // - Helps with cases like PartialOrd<Self>, but hinders when the default is a hint (in expressions)
 
-    //
     if(const auto* e = path.cls.opt_UFCS())
     {
         if (!e->nodes.empty() && (!e->trait || !e->trait->isValid()) && e->type->mData.is_Generic() && e->type->mData.as_Generic().index == GENERICSelf) {
@@ -3421,7 +3420,6 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
 }
 
 // Wildcard (aka glob) import resolution
-//
 // Strategy:
 // - HIR just imports the items
 // - Enums import all variants

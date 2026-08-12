@@ -1,8 +1,5 @@
 #pragma once
 
-//
-//
-//
 #include "common.h"
 #include "hir_type.h"
 #include "int128.h"

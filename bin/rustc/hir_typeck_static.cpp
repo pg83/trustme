@@ -1236,7 +1236,6 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
 
             // TODO: This is extrememly inefficient (looks up the trait impl 1+N times)
             if (bTpMono.typeBounds.size() > 0) {
-                //
                 for (const auto& assocBound : bTpMono.typeBounds) {
                     // TODO: Can bounds have generic params (GATs)
                     const auto& atyName = assocBound.first;
@@ -1947,7 +1946,6 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
             //            // - Why opaque? It's not bounded, don't even bother
             //            TODO(sp, "Handle unconstrained associate type " << e2.item << " from " << e2.type);
             //        }
-            //
             //        input = it->second.type.clone();
             //        return true;
             //    }
@@ -2182,7 +2180,6 @@ bool StaticTraitResolve::replaceEqualities(HIRTypeRef& input) const {
 }
 
 // -------------------------------------------------------------------------------------------------------------------
-//
 // -------------------------------------------------------------------------------------------------------------------
 
 bool StaticTraitResolve::iterateAtyBounds(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, ::std::function<bool(const HIRTraitPath&)> cb) const {
@@ -2229,7 +2226,6 @@ bool StaticTraitResolve::iterateAtyBounds(const Span& sp, const HIRPath::Data::D
 }
 
 // -------------------------------------------------------------------------------------------------------------------
-//
 // -------------------------------------------------------------------------------------------------------------------
 bool StaticTraitResolve::findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& desParams, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* targetType, ::std::function<bool(const HIRPathParams&, HIRTraitPath::assocListT)> callback) const {
     TRACE_FUNCTION_F(des << desParams << " from " << traitPath << pp);

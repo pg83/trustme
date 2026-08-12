@@ -112,7 +112,6 @@ public:
     void setIvarTo(unsigned int slot, HIRTypeRef type);
     void ivarUnify(unsigned int leftSlot, unsigned int rightSlot);
 
-    //
     unsigned int newIvarVal();
     void setIvarValTo(unsigned int slot, HIRConstGeneric val);
     void ivarValUnify(unsigned int leftSlot, unsigned int rightSlot);

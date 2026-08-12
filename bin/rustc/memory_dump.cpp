@@ -18,7 +18,6 @@ void memoryDump(const char* phase) {
 #if defined(__linux__) && defined(__x86_64__)
         // On linux, dump out a custom format that covers the entire address space
         // Could save as an ELF core dump, but lazy
-        //
         // For the format, see down near `struct DumpFileHdr`
     #define DEBUG_MEM_DUMP 1
 

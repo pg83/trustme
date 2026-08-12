@@ -199,7 +199,6 @@ namespace {
 
             // Else, drop yield saves (Note: final state has no saves, so acts as the "completed" state)
             for (size_t i = 0; i < generatorState.states.size(); i++) {
-                //
                 arms.push_back(outBuilder.newBbUnlinked());
                 outBuilder.setCurBlock(arms.back());
                 for (const auto& v : generatorState.states[i].saved) {

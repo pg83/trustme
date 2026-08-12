@@ -3,7 +3,6 @@
 // Encoding protocol ideas:
 // > Semi-typed data format (encode length in the format)
 // Purpose: Allows internal consistency checking and recovery (recovery not needed here)
-//
 // 0x00-0xBF are literal integer values.
 // 0xC0-0xFB <data>: Short encoded length prefixed data (lengths 0 to 59 bytes)
 // 0xFC <len+> <data>: Length prefixed literal data

@@ -1,11 +1,11 @@
-#include "hir_generic_params.h"
 #include "hir_path.h"
+#include "hir_generic_params.h"
 
+#include <memory>
+#include <vector>
 #include <cassert>
 #include <cstdlib>
-#include <memory>
 #include <utility>
-#include <vector>
 
 // This unit links hir_path.cpp without the rest of the compiler. Its path
 // parameters are empty, so neither encoded constants nor their ordering can be

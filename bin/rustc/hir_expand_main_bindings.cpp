@@ -3746,7 +3746,6 @@ namespace {
             } else if (const auto* te = ty->opt_Path()) {
                 if (/*const auto* pe =*/te->path.mData.opt_Generic()) {
                     // TODO: Look up variance of the lifetime params
-                    //
                     // TODO: Get the variance info of each parameter (instead of assuming "variant")
                     const auto& p = te->path.mData.as_Generic();
                     if (!p.mParams.mLifetimes.empty()) {

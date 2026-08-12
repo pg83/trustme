@@ -1411,7 +1411,6 @@ TU_ARMA(Alias, ee) {
         }
 
         // -------------------------------------------------------------------------------------------------------------------
-        //
         // -------------------------------------------------------------------------------------------------------------------
         bool TraitResolution::iterateBoundsTraits(const Span& sp, const HIRTypeData* type, const HIRSimplePath& trait, tCbBound cb) const {
             return iterateBoundsTraits(sp, type, [&](HIRCompare cmp, const HIRTypeData* t, const HIRGenericPath& tr, const CachedBound& b) {
@@ -4499,7 +4498,6 @@ TU_ARMA(Alias, ee) {
         }
 
         // -------------------------------------------------------------------------------------------------------------------
-        //
         // -------------------------------------------------------------------------------------------------------------------
 
         void TraitResolution::compactIvars(HMTypeInferrence& ivars) {
@@ -5202,7 +5200,6 @@ TU_ARMA(Alias, ee) {
             const auto& peInner = *peInnerP;
             // TODO: Search for equality bounds on this associated type (pe_inner) that match the entire type (pe)
             // - Does simplification of complex associated types
-            //
             HIRGenericPath traitPath;
             if (!this->traitContainsType(sp, peInner.trait, this->crate.getTraitByPath(sp, peInner.trait.mPath), peInner.item.c_str(), traitPath)) {
                 BUG(sp, "Cannot find associated type " << peInner.item << " anywhere in trait " << peInner.trait);
@@ -5495,7 +5492,6 @@ TU_ARMA(Alias, ee) {
         }
 
         // -------------------------------------------------------------------------------------------------------------------
-        //
         // -------------------------------------------------------------------------------------------------------------------
         bool TraitResolution::findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& desParams, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* targetType, tCbFindTrait callback) const {
             TRACE_FUNCTION_F(des << desParams << " in " << traitPath << pp);
@@ -6487,7 +6483,6 @@ TU_ARMA(Alias, ee) {
                             DEBUG("Multiple placeholders (" << numFuzzy << "), but all equal " << fuzzyPh);
                             placeholders = ::std::move(fuzzyPh);
                         } else {
-                            //
                             DEBUG("TODO: Multiple fuzzy matches (" << numFuzzy << "), which placeholder set to use?");
                         }
                         match = HIRCompare::Fuzzy;
@@ -6655,7 +6650,6 @@ TU_ARMA(Alias, ee) {
                 (pb),
                 (
                     Unbound,
-                    //
                 ),
                 (
                     Opaque,
@@ -6894,9 +6888,7 @@ TU_ARMA(Alias, ee) {
         // - Returns Compare::Equal if the unsize is possible and fully known
         // - Returns Compare::Fuzzy if the unsize is possible, but still unknown.
         // - Returns Compare::Unequal if the unsize is impossibe (for any reason)
-        //
         // Closure is called `get_new_type` is true, and the unsize is possible
-        //
         // usecases:
         // - Checking for an impl as part of impl selection (return True/False/Maybe with required match for Maybe)
         // - Checking for an impl as part of typeck (return True/False/Maybe with unsize possibility OR required equality)
@@ -7228,7 +7220,6 @@ TU_ARMA(Alias, ee) {
         }
 
         // -------------------------------------------------------------------------------------------------------------------
-        //
         // -------------------------------------------------------------------------------------------------------------------
         TraitResolution::AutoderefResult TraitResolution::autoderefStep(const Span& sp, const HIRTypeData* tyIn, HIRTypeRef& target, ::std::optional<HIRTypeRef>* implType) const {
             if (implType) {

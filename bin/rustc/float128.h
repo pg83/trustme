@@ -1,13 +1,11 @@
 #pragma once
 
 // Software implementation of IEEE 754 binary128 (1.15.112).
-//
 // The compiler represents every float value as binary128 so that f32/f64
 // arithmetic sees no double rounding and f128 semantics are exact. This type
 // implements that format in integer arithmetic: it has no dependency on
 // `_Float128`, 128-bit libgcc/compiler-rt builtins, or glibc float128 APIs,
 // so results are identical on every host toolchain.
-//
 // Semantics:
 // - Arithmetic and conversions round to nearest, ties to even.
 // - Operations that produce a NaN return the canonical quiet NaN (sign 0,

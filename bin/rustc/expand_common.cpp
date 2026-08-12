@@ -2412,9 +2412,7 @@ void ExpandModIndexAnon(ASTCrate& crate, ASTModule& mod) {
     }
 }
 
-//
 // Expand all `cfg` attributes... mostly to find #[macro_export]
-//
 void Expand_Mod_Early(ASTCrate& crate, ASTModule& mod, std::vector<std::unique_ptr<ASTNamed<ASTItem>>>& newRootItems) {
     TRACE_FUNCTION_F(mod.path());
     for (auto& i : mod.mItems) {

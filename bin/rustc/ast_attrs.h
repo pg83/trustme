@@ -7,7 +7,6 @@
 class ASTCrate;
 class ASTModule;
 
-//
 class ASTAttribute;
 ::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
 

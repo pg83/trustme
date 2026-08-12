@@ -49,7 +49,6 @@ struct Context {
 
         // Strong disable (depends on a trait impl)
         bool forceDisable = false;
-        //
         bool forceNoTo = false;
         bool forceNoFrom = false;
 

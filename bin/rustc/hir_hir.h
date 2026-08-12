@@ -579,7 +579,6 @@ public:
     HIRSimplePath srcModule;
     bool isConst = false;
 
-    //
     //const TraitImpl*    m_parent_spec_impl;
 
     bool matchesType(const HIRTypeData* tr, tCbResolveType tyRes) const;
