@@ -1,7 +1,8 @@
 #include "parse_tokenstream.h"
+
 #include "common.h"
-#include "parse_parseerror.h"
 #include "ast_crate.h" // Edition lookup
+#include "parse_parseerror.h"
 
 const bool DEBUG_PRINT_TOKENS = false;
 //const bool DEBUG_PRINT_TOKENS = true;
@@ -142,10 +143,12 @@ Span TokenStream::pointSpan() const {
 
 ParseState::ParseState() {
 }
+
 ::AST::Module& ParseState::getCurrentMod() {
     assert(this->module);
     return *this->module;
 }
+
 /// <summary>Consumes a token if it is of the specified type</summary>
 bool TokenStream::getTokenIf(eTokenType exp) { // I'd like std::optional, but not available
     if (lookahead(0) == exp) {
@@ -155,6 +158,7 @@ bool TokenStream::getTokenIf(eTokenType exp) { // I'd like std::optional, but no
         return false;
     }
 }
+
 /// <summary>Consumes a token if it is of the specified type</summary>
 bool TokenStream::getTokenIf(eTokenType exp, Token& dst) { // I'd like std::optional, but not available
     if (lookahead(0) == exp) {
@@ -164,10 +168,13 @@ bool TokenStream::getTokenIf(eTokenType exp, Token& dst) { // I'd like std::opti
         return false;
     }
 }
+
 SavedParseState::SavedParseState(TokenStream& lex, ParseState state)
     : lex(lex)
-    , state(state) {
+    , state(state)
+{
 }
+
 SavedParseState::~SavedParseState() {
     DEBUG("Restoring " << state);
     lex.parseState() = state;

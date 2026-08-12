@@ -1,18 +1,20 @@
 #include "hir_hir.h"
-#include <algorithm>
-#include "hir_typeck_common.h"
-#include "hir_typeck_expr_visit.h" // for invoking typecheck
-#include "hir_item_path.h"
-#include "hir_expr_state.h"
-#include "hir_expand_main_bindings.h"
-#include "mir_main_bindings.h"
+
+#include "floats.h"
 #include "mir_mir.h"
 #include "hir_expr.h"
-#include "macro_rules_macro_rules.h" // Used to update the crate name
-#include "hir_conv_main_bindings.h"
 #include "trans_target.h"
-#include "floats.h"
+#include "hir_item_path.h"
+#include "hir_expr_state.h"
+#include "hir_typeck_common.h"
+#include "mir_main_bindings.h"
+#include "hir_typeck_expr_visit.h" // for invoking typecheck
+#include "hir_conv_main_bindings.h"
+#include "macro_rules_macro_rules.h" // Used to update the crate name
+#include "hir_expand_main_bindings.h"
+
 #include <optional>
+#include <algorithm>
 
 namespace HIR {
     ::std::ostream& operator<<(::std::ostream& os, const Publicity& x) {
@@ -541,10 +543,7 @@ const ::HIR::Trait& ::HIR::Crate::getTraitByPath(const Span& sp, const ::HIR::Si
     }
 }
 
-::std::optional<size_t> HIR::Crate::findMostSpecificTrait(
-    const Span& sp,
-    const ::std::vector<::HIR::SimplePath>& candidates
-) const {
+::std::optional<size_t> HIR::Crate::findMostSpecificTrait(const Span& sp, const ::std::vector<::HIR::SimplePath>& candidates) const {
     ::std::optional<size_t> selected;
     for (size_t candidateIndex = 0; candidateIndex < candidates.size(); candidateIndex++) {
         const auto& candidate = candidates[candidateIndex];
@@ -555,13 +554,9 @@ const ::HIR::Trait& ::HIR::Crate::getTraitByPath(const Span& sp, const ::HIR::Si
             if (candidate == other) {
                 continue;
             }
-            const bool hasSupertrait = ::std::any_of(
-                trait.allParentTraits.begin(),
-                trait.allParentTraits.end(),
-                [&](const auto& parent) {
-                    return parent.mPath.mPath == other;
-                }
-            );
+            const bool hasSupertrait = ::std::any_of(trait.allParentTraits.begin(), trait.allParentTraits.end(), [&](const auto& parent) {
+                return parent.mPath.mPath == other;
+            });
             if (!hasSupertrait) {
                 isSubtraitOfAll = false;
                 break;
@@ -667,14 +662,12 @@ const ::HIR::Static& ::HIR::Crate::getStaticByPath(const Span& sp, const ::HIR::
     BUG(sp, "`static` path " << path << " can't be found");
 }
 
-
 void HIR::Crate::postLoadUpdate(const RcString& name) {
     // TODO: Do a pass across m_hir that
     // 1. Updates all absolute paths with the crate name
     // 2. Sets binding pointers where required
     // 3. Updates macros with the crate name
 }
-
 
 namespace {
     bool isUnboundedInfer(const ::HIR::TypeData* type) {
@@ -717,9 +710,7 @@ namespace {
         // what the impl index and matcher use. Only an unresolved UFCS path is
         // still too early to select an inherent impl.
         const auto* matchPath = matchType->opt_Path();
-        if (isUnboundedInfer(matchType)
-            || (matchPath && matchPath->binding.is_Unbound()
-                && !matchPath->path.mData.is_Generic())) {
+        if (isUnboundedInfer(matchType) || (matchPath && matchPath->binding.is_Unbound() && !matchPath->path.mData.is_Generic())) {
             return false;
         }
 #if 1
@@ -759,11 +750,7 @@ namespace {
     ::Ordering typelistOrdSpecific(const Span& sp, const ThinVector<::HIR::TypeRef>& left, const ThinVector<::HIR::TypeRef>& right);
     ::Ordering typelistOrdSpecific(const Span& sp, const ::std::vector<::HIR::TypeRef>& left, const ::std::vector<::HIR::TypeRef>& right);
 
-    ::Ordering arraySizeOrdSpecific(
-        const Span& sp,
-        const ::HIR::ArraySize& left,
-        const ::HIR::ArraySize& right
-    ) {
+    ::Ordering arraySizeOrdSpecific(const Span& sp, const ::HIR::ArraySize& left, const ::HIR::ArraySize& right) {
         if (left == right) {
             return ::OrdEqual;
         }
@@ -889,10 +876,7 @@ namespace {
             }
             TU_ARMA(Array, le) {
                 if (const auto* re = right->opt_Array()) {
-                    return combineSpecificity(
-                        typeOrdSpecific(sp, le.inner, re->inner),
-                        arraySizeOrdSpecific(sp, le.size, re->size)
-                    );
+                    return combineSpecificity(typeOrdSpecific(sp, le.inner, re->inner), arraySizeOrdSpecific(sp, le.size, re->size));
                 } else {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
@@ -1730,13 +1714,7 @@ const ::MIR::Function* HIR::Crate::getOrGenMir(const ::HIR::ItemPath& ip, const 
                 // Lazy processing can be requested from Resolve UFCS Outer,
                 // before the whole-crate Self-expansion pass has run.  Give
                 // this body and its signature the same owner substitution.
-                ConvertHIRExpandAliasesSelfExpr(
-                    *this,
-                    ep.state->currentTraitImpl->mType,
-                    const_cast<::HIR::Function::argsT&>(args),
-                    retTy,
-                    epMut
-                    );
+                ConvertHIRExpandAliasesSelfExpr(*this, ep.state->currentTraitImpl->mType, const_cast<::HIR::Function::argsT&>(args), retTy, epMut);
             }
 
             // TODO: Ensure that all referenced items have constants evaluated
@@ -2168,102 +2146,122 @@ Ordering EncodedLiteralSlice::ord(const EncodedLiteralSlice& x) const {
 
 namespace HIR {
 
-Publicity::Publicity(::std::shared_ptr<::HIR::SimplePath> p)
-    : visPath(p) {
-}
-Publicity Publicity::newPriv(::HIR::SimplePath p) {
-    size_t nComp = p.components().size();
-    while (nComp > 0 && p.components()[nComp - 1].c_str()[0] == '#') {
-        nComp--;
+    Publicity::Publicity(::std::shared_ptr<::HIR::SimplePath> p)
+        : visPath(p)
+    {
     }
-    auto s = std::span<const RcString>(p.components().data(), nComp);
-    return Publicity(::std::make_shared<HIR::SimplePath>(p.crateName(), s));
-}
-Static::Static(Linkage linkage, bool isMut, TypeRef type, ExprPtr value)
-    : linkage(std::move(linkage))
-    , isMut(isMut)
-    , mType(std::move(type))
-    , mValue(std::move(value)) {
-}
-Constant::Constant() {
-}
-Constant::Constant(GenericParams params, TypeRef type, ExprPtr value)
-    : mParams(::std::move(params))
-    , mType(::std::move(type))
-    , mValue(::std::move(value)) {
-}
-Function::Function() {
-}
-Function::Function(Receiver receiver, GenericParams params, argsT args, TypeRef retTy, ExprPtr code)
-    : receiver(receiver)
-    , mParams(std::move(params))
-    , mArgs(std::move(args))
-    , variadic(false)
-    , returnType(std::move(retTy))
-    , mCode(std::move(code)) {
-}
-Struct::FieldDefault::FieldDefault(size_t index, HIR::ExprPtr v)
-    : index(index)
-    , expr(std::move(v)) {
-}
-Struct::Struct(GenericParams params, Repr repr, Data data)
-    : mParams(mv$(params))
-    , repr(mv$(repr))
-    , mData(mv$(data)) {
-}
-Struct::Struct(GenericParams params, Repr repr, Data data, unsigned align, TraitMarkings tm, StructMarkings sm)
-    : mParams(mv$(params))
-    , repr(mv$(repr))
-    , mData(mv$(data))
-    , forcedAlignment(align)
-    , markings(mv$(tm))
-    , structMarkings(mv$(sm)) {
-}
-AssociatedType::AssociatedType(
-    ::HIR::GenericParams generics,
-    bool isSized,
-    LifetimeRef lifetimeBound,
-    ::std::vector<::HIR::TraitPath> traitBounds,
-    ::HIR::TypeRef defaultType
-)
-    : generics(::std::move(generics))
-    , isSized(isSized)
-    , lifetimeBound(lifetimeBound)
-    , traitBounds(::std::move(traitBounds))
-    , hasDefault(defaultType && !defaultType->is_Infer())
-    , defaultValue(defaultType) {
-    assert(defaultType);
-}
-Trait::Trait(GenericParams gps, LifetimeRef lifetime, ::std::vector<::HIR::TraitPath> parents)
-    : mParams(mv$(gps))
-    , lifetime(mv$(lifetime))
-    , parentTraits(mv$(parents))
-    , mIsMarker(false)
-    , isConst(false)
-    , isCoinductive(false)
-    , isFundamental(false)
-    , vtableParentTraitsStart(0) {
-}
-Module::Module() {
-}
-Crate::Crate(stl::ObjPool* pool, TypeInterner& types)
-    : pool(pool)
-    , types(types)
-    , intrinsicOffsetof(Function{Function::Receiver::Free, GenericParams{}, {}, types.primitive(CoreType::Usize), {}}) {
-}
-const ::HIR::Constant& Crate::getConstantByPath(const Span& sp, const ::HIR::SimplePath& path) const {
-    const auto& ti = this->getValitemByPath(sp, path);
-    TU_IFLET(::HIR::ValueItem, ti, Constant, e, return e;)
-    else {
-        BUG(sp, "`const` path " << path << " didn't point to an enum");
+
+    Publicity Publicity::newPriv(::HIR::SimplePath p) {
+        size_t nComp = p.components().size();
+        while (nComp > 0 && p.components()[nComp - 1].c_str()[0] == '#') {
+            nComp--;
+        }
+        auto s = std::span<const RcString>(p.components().data(), nComp);
+        return Publicity(::std::make_shared<HIR::SimplePath>(p.crateName(), s));
     }
-}
-const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const {
-    auto ty = fcn.returnType;
-    return getOrGenMir(ip, fcn.mCode, fcn.mArgs, ty);
-}
-const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const {
-    static ::HIR::Function::argsT sArgs;
-    return getOrGenMir(ip, ep, sArgs, expTy);
-}
+
+    Static::Static(Linkage linkage, bool isMut, TypeRef type, ExprPtr value)
+        : linkage(std::move(linkage))
+        , isMut(isMut)
+        , mType(std::move(type))
+        , mValue(std::move(value))
+    {
+    }
+
+    Constant::Constant() {
+    }
+
+    Constant::Constant(GenericParams params, TypeRef type, ExprPtr value)
+        : mParams(::std::move(params))
+        , mType(::std::move(type))
+        , mValue(::std::move(value))
+    {
+    }
+
+    Function::Function() {
+    }
+
+    Function::Function(Receiver receiver, GenericParams params, argsT args, TypeRef retTy, ExprPtr code)
+        : receiver(receiver)
+        , mParams(std::move(params))
+        , mArgs(std::move(args))
+        , variadic(false)
+        , returnType(std::move(retTy))
+        , mCode(std::move(code))
+    {
+    }
+
+    Struct::FieldDefault::FieldDefault(size_t index, HIR::ExprPtr v)
+        : index(index)
+        , expr(std::move(v))
+    {
+    }
+
+    Struct::Struct(GenericParams params, Repr repr, Data data)
+        : mParams(mv$(params))
+        , repr(mv$(repr))
+        , mData(mv$(data))
+    {
+    }
+
+    Struct::Struct(GenericParams params, Repr repr, Data data, unsigned align, TraitMarkings tm, StructMarkings sm)
+        : mParams(mv$(params))
+        , repr(mv$(repr))
+        , mData(mv$(data))
+        , forcedAlignment(align)
+        , markings(mv$(tm))
+        , structMarkings(mv$(sm))
+    {
+    }
+
+    AssociatedType::AssociatedType(::HIR::GenericParams generics, bool isSized, LifetimeRef lifetimeBound, ::std::vector<::HIR::TraitPath> traitBounds, ::HIR::TypeRef defaultType)
+        : generics(::std::move(generics))
+        , isSized(isSized)
+        , lifetimeBound(lifetimeBound)
+        , traitBounds(::std::move(traitBounds))
+        , hasDefault(defaultType && !defaultType->is_Infer())
+        , defaultValue(defaultType)
+    {
+        assert(defaultType);
+    }
+
+    Trait::Trait(GenericParams gps, LifetimeRef lifetime, ::std::vector<::HIR::TraitPath> parents)
+        : mParams(mv$(gps))
+        , lifetime(mv$(lifetime))
+        , parentTraits(mv$(parents))
+        , mIsMarker(false)
+        , isConst(false)
+        , isCoinductive(false)
+        , isFundamental(false)
+        , vtableParentTraitsStart(0)
+    {
+    }
+
+    Module::Module() {
+    }
+
+    Crate::Crate(stl::ObjPool* pool, TypeInterner& types)
+        : pool(pool)
+        , types(types)
+        , intrinsicOffsetof(Function{Function::Receiver::Free, GenericParams{}, {}, types.primitive(CoreType::Usize), {}})
+    {
+    }
+
+    const ::HIR::Constant& Crate::getConstantByPath(const Span& sp, const ::HIR::SimplePath& path) const {
+        const auto& ti = this->getValitemByPath(sp, path);
+        TU_IFLET(::HIR::ValueItem, ti, Constant, e, return e;)
+        else {
+            BUG(sp, "`const` path " << path << " didn't point to an enum");
+        }
+    }
+
+    const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::Function& fcn) const {
+        auto ty = fcn.returnType;
+        return getOrGenMir(ip, fcn.mCode, fcn.mArgs, ty);
+    }
+
+    const ::MIR::Function* Crate::getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, ::HIR::TypeRef& expTy) const {
+        static ::HIR::Function::argsT sArgs;
+        return getOrGenMir(ip, ep, sArgs, expTy);
+    }
 }

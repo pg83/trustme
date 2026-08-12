@@ -1,14 +1,17 @@
 #include "hir_main_bindings.h"
+
 #include "hir_hir.h"
 #include "mir_mir.h"
-#include "macro_rules_macro_rules.h"
-#include "hir_serialise_lowlevel.h"
-#include <std/mem/obj_pool.h>
-#include <typeinfo>
-#include "hir_visitor.h"
 #include "hir_expr.h"
+#include "hir_visitor.h"
 #include "hir_expr_state.h"
 #include "hir_typeck_monomorph.h" // monomorphise_path_needed
+#include "hir_serialise_lowlevel.h"
+#include "macro_rules_macro_rules.h"
+
+#include <std/mem/obj_pool.h>
+
+#include <typeinfo>
 
 // TODO: Have an environment variable that controls if debug is enabled here.
 #define DEBUG_EXTRA_ENABLE &&desDebugEnabled()
@@ -1045,9 +1048,9 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     auto _ = in.openObject("HIR::TypeData");
 
     switch (auto tag = in.readTag()) {
-#define _(x, ...)                                                      \
-    case ::HIR::TypeData::TAG_##x:                                     \
-        DEBUG("- " #x);                                                \
+#define _(x, ...)                                                         \
+    case ::HIR::TypeData::TAG_##x:                                        \
+        DEBUG("- " #x);                                                   \
         rv = typeInterner.intern(::HIR::TypeData::make_##x(__VA_ARGS__)); \
         break;
         _(Infer, {~0u, HIR::InferClass::None})
@@ -1170,8 +1173,7 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
             return ::HIR::GenericBound::make_Lifetime({deserialiseLifetimeref(), deserialiseLifetimeref()});
         case 1:
             return ::HIR::GenericBound::make_TypeLifetime({deserialiseType(), deserialiseLifetimeref()});
-        case 2:
-        {
+        case 2: {
             auto hrtbs = in.readBool() ? box$(deserialiseGenericparams()) : nullptr;
             auto type = deserialiseType();
             auto trait = deserialiseTraitpath();
@@ -1365,7 +1367,7 @@ EncodedLiteral HirDeserialiser::deserialiseEncodedliteral() {
 AsmOptions HirDeserialiser::deserialiseAsmOptions() {
     AsmOptions o;
     const uint16_t bitflag1 = in.readU16();
-#define BIT(i, fld)             \
+#define BIT(i, fld)            \
     if (bitflag1 & (1 << (i))) \
     fld = true
     BIT(0, o.pure);
@@ -1641,7 +1643,6 @@ RcString HIRDeserialiseJustName(const ::std::string& filename) {
 #define DEBUG_EXTRA_ENABLE
 #undef DEF_D
 
-
 #define NODE_IS(valptr, tysuf) (cast<const ::HIR::ExprNode##tysuf>(&*valptr) != nullptr)
 
 namespace {
@@ -1913,7 +1914,7 @@ namespace {
             os << ";\n";
         }
 
-// - Misc
+        // - Misc
 
         bool nodeIsLeaf(const ::HIR::ExprNode& node) {
             if (NODE_IS(&node, PathValue)) {
@@ -2478,7 +2479,6 @@ void HIRDumpExpr(::std::ostream& sink, const ::HIR::ExprPtr& expr) {
 }
 
 #undef NODE_IS
-
 
 //namespace {
 class HirSerialiser {
@@ -3714,12 +3714,7 @@ public:
         serialise(item.lifetime);
         // Kept as one byte for compatibility with metadata written before
         // the fundamental bit was represented in HIR.
-        out.writeU8(
-            (item.mIsMarker ? 1u : 0u)
-            | (item.isFundamental ? 2u : 0u)
-            | (item.isCoinductive ? 4u : 0u)
-            | (item.isConst ? 8u : 0u)
-        );
+        out.writeU8((item.mIsMarker ? 1u : 0u) | (item.isFundamental ? 2u : 0u) | (item.isCoinductive ? 4u : 0u) | (item.isConst ? 8u : 0u));
         serialiseStrmap(item.types);
         serialiseStrmap(item.values);
         serialiseStrmap(item.valueIndexes);

@@ -1,15 +1,15 @@
 #pragma once
 
-#include <ostream>
-#include <memory> // unique_ptr
-#include <vector>
-
-#include "parse_tokentree.h"
+#include "hir_asm.h"
+#include "ast_attrs.h"
 #include "ast_types.h"
 #include "ast_pattern.h"
-#include "ast_attrs.h"
 #include "ast_expr_ptr.h"
-#include "hir_asm.h"
+#include "parse_tokentree.h"
+
+#include <memory> // unique_ptr
+#include <vector>
+#include <ostream>
 
 namespace AST {
 

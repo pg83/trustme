@@ -1,22 +1,23 @@
 #include "synext_macro.h"
+#include "synext_macro.h"
 
 #include "common.h"
-#include "synext_macro.h"
 #include "synext.h" // for Expand_BareExpr
-#include "parse_tokentree.h"
-#include "parse_ttstream.h"
-#include "parse_common.h"
-#include "parse_parseerror.h"
-#include "ast_expr.h" // for ExprNode_*
-#include "parse_interpolated_fragment.h"
-#include "ast_crate.h"
 #include "hir_asm.h"
+#include "hir_hir.h"
+#include "ast_expr.h" // for ExprNode_*
+#include "ast_crate.h"
+#include "parse_lex.h" // For Codepoint
+#include "expand_cfg.h"
+#include "parse_common.h"
 #include "trans_target.h"
+#include "parse_ttstream.h"
+#include "parse_tokentree.h"
+#include "parse_parseerror.h"
+#include "parse_interpolated_fragment.h"
+
 #include <cctype>
 #include <string_view>
-#include "expand_cfg.h"
-#include "parse_lex.h" // For Codepoint
-#include "hir_hir.h"
 
 namespace {
     ::std::string getString(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
@@ -561,7 +562,6 @@ STATIC_MACRO("asm", CAsmExpander);
 STATIC_MACRO("global_asm", CGlobalAsmExpander);
 STATIC_MACRO("naked_asm", CNakedAsmExpander);
 
-
 class CExpanderAssert: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         Token tok;
@@ -645,7 +645,6 @@ void ExpandInitAssert() {
     RegisterSynextMacro("assert", ::std::unique_ptr<ExpandProcMacro>(new CExpanderAssert));
 }
 
-
 class CExpanderCompileError: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         ERROR(sp, E0000, "compile_error! " << tt);
@@ -653,7 +652,6 @@ class CExpanderCompileError: public ExpandProcMacro {
 };
 
 STATIC_MACRO("compile_error", CExpanderCompileError);
-
 
 class CConcatExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
@@ -725,7 +723,6 @@ class CConcatIdentsExpander: public ExpandProcMacro {
 STATIC_MACRO("concat", CConcatExpander);
 STATIC_MACRO("concat_idents", CConcatIdentsExpander);
 
-
 namespace {
     // Read a string out of the input stream
     ::std::string getString(const Span& sp, const AST::Crate& crate, AST::Module& mod, const TokenTree& tt) {
@@ -790,7 +787,6 @@ class CExpanderOptionEnv: public ExpandProcMacro {
 STATIC_MACRO("env", CExpanderEnv);
 STATIC_MACRO("option_env", CExpanderOptionEnv);
 
-
 namespace {
     const SpanInnerSource* getTopSpan(const Span& sp) {
         return &sp.getTopFileSpan();
@@ -843,7 +839,6 @@ STATIC_MACRO("line", CExpanderLine);
 STATIC_MACRO("column", CExpanderColumn);
 STATIC_MACRO("__rust_unstable_column", CExpanderUnstableColumn);
 STATIC_MACRO("module_path", CExpanderModulePath);
-
 
 namespace {
 
@@ -1738,7 +1733,6 @@ STATIC_MACRO("format_args_nl", CFormatArgsNlExpander);
 
 #undef CMP
 
-
 namespace {
 
     ::std::string includeGetString(const Span& sp, TokenStream& lex, const ::AST::Crate& crate, AST::Module& mod) {
@@ -1860,7 +1854,6 @@ STATIC_MACRO("include", CIncludeExpander);
 STATIC_MACRO("include_bytes", CIncludeBytesExpander);
 STATIC_MACRO("include_str", CIncludeStrExpander);
 
-
 class CExpanderPanic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         Token tok;
@@ -1936,7 +1929,6 @@ void ExpandInitPanic() {
     RegisterSynextMacro("unreachable", ::std::unique_ptr<ExpandProcMacro>(new CExpanderUnreachable));
 }
 
-
 class CExpanderRegisterDiagnostic: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         return box$(TTStreamO(sp, ParseState(), TokenTree()));
@@ -1995,7 +1987,6 @@ STATIC_MACRO("__register_diagnostic", CExpanderRegisterDiagnostic)
 STATIC_MACRO("__diagnostic_used", CExpanderDiagnosticUsed)
 STATIC_MACRO("__build_diagnostic_array", CExpanderBuildDiagnosticArray)
 
-
 class CExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         Token tok;
@@ -2019,6 +2010,7 @@ STATIC_MACRO("stringify", CExpander);
 MacroDef::MacroDef(::std::string name, ::std::unique_ptr<ExpandProcMacro> def)
     : prev(nullptr)
     , name(::std::move(name))
-    , def(::std::move(def)) {
+    , def(::std::move(def))
+{
     RegisterSynextMacroStatic(this);
 }

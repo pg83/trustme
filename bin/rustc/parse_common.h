@@ -1,8 +1,9 @@
 #pragma once
 
-#include <iostream>
-#include "parse_tokenstream.h"
 #include "ast_ast.h"
+#include "parse_tokenstream.h"
+
+#include <iostream>
 
 #define GET_TOK(tok, lex) ((tok = lex.getToken()).type())
 #define PUTBACK(tok, lex) lex.putback(::std::move(tok))
@@ -11,14 +12,14 @@
     do {                                                            \
         if ((tok = lex.getToken()).type() != exp) {                 \
             DEBUG("GET_CHECK_TOK " << __FILE__ << ":" << __LINE__); \
-            throw ParseErrorUnexpected(lex, tok, Token(exp));     \
+            throw ParseErrorUnexpected(lex, tok, Token(exp));       \
         }                                                           \
     } while (0)
 #define CHECK_TOK(tok, exp)                                     \
     do {                                                        \
         if (tok.type() != exp) {                                \
             DEBUG("CHECK_TOK " << __FILE__ << ":" << __LINE__); \
-            throw ParseErrorUnexpected(lex, tok, Token(exp)); \
+            throw ParseErrorUnexpected(lex, tok, Token(exp));   \
         }                                                       \
     } while (0)
 

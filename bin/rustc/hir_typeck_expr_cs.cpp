@@ -1,17 +1,19 @@
 #include "hir_typeck_expr_cs.h"
-#include "hir_typeck_main_bindings.h"
-#include "hir_expr.h"
-#include "hir_hir.h"
-#include "hir_visitor.h"
-#include <algorithm> // std::find_if
 
+#include "hir_hir.h"
+#include "hir_expr.h"
+#include "hir_visitor.h"
 #include "hir_typeck_static.h"
+#include "trait_solver_mode.h"
 #include "hir_typeck_helpers.h"
 #include "hir_typeck_expr_visit.h"
-#include <optional>
 #include "hir_conv_main_bindings.h"
-#include "trait_solver_mode.h"
+#include "hir_typeck_main_bindings.h"
+
 #include <std/mem/obj_pool.h>
+
+#include <optional>
+#include <algorithm> // std::find_if
 
 namespace {
     inline HIR::ExprNodeP mkExprnodep(HIR::ExprNode* en, ::HIR::TypeRef ty) {
@@ -31,7 +33,10 @@ namespace {
         struct HasPlaceholder {};
 
         struct V: public HIR::Visitor {
-            explicit V(HIR::TypeInterner& types): HIR::Visitor(nullptr, types) {}
+            explicit V(HIR::TypeInterner& types)
+                : HIR::Visitor(nullptr, types)
+            {
+            }
 
             void visitConstgeneric(const HIR::ConstGeneric& v) {
                 if (v.is_Generic() && v.as_Generic().isPlaceholder()) {
@@ -68,7 +73,10 @@ namespace {
     }
 
     struct MonomorphEraseHrls: public Monomorphiser {
-        explicit MonomorphEraseHrls(HIR::TypeInterner& types): Monomorphiser(types) {}
+        explicit MonomorphEraseHrls(HIR::TypeInterner& types)
+            : Monomorphiser(types)
+        {
+        }
 
         ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& g) const override {
             return types.generic(g.name, g.binding);
@@ -383,10 +391,9 @@ namespace {
                                     node.mValue = NEWNODE(ty, sp, Cast, mv$(node.mValue), ty);
                                     this->completed = true;
                                 } else {
-                                    bool found = !this->context.mResolve.mLangUnsize.components().empty()
-                                                 && this->context.mResolve.findTraitImpls(sp, this->context.mResolve.mLangUnsize, ::HIR::PathParams(e.inner), sE.inner, [](auto, auto) {
-                                                        return true;
-                                                    });
+                                    bool found = !this->context.mResolve.mLangUnsize.components().empty() && this->context.mResolve.findTraitImpls(sp, this->context.mResolve.mLangUnsize, ::HIR::PathParams(e.inner), sE.inner, [](auto, auto) {
+                                        return true;
+                                    });
                                     if (found) {
                                         auto ty = context.crate.types.borrow(e.type, e.inner);
                                         node.mValue = NEWNODE(ty, sp, Unsize, mv$(node.mValue), ty);
@@ -707,9 +714,7 @@ namespace {
             // Iterator obligations select their input types.  Normalise what
             // is currently known, but don't diagnose the still-dependent
             // projection as a non-callable concrete type.
-            node.mValue->resType = this->context.mResolve.expandAssociatedTypes(
-                node.span(), node.mValue->resType
-            );
+            node.mValue->resType = this->context.mResolve.expandAssociatedTypes(node.span(), node.mValue->resType);
             const auto& tyO = this->context.getType(node.mValue->resType);
             TRACE_FUNCTION_F("CallValue: ty=" << tyO);
 
@@ -724,8 +729,7 @@ namespace {
                 // - Don't even bother
                 return;
             }
-            if (this->context.mResolve.hasAssociatedType(tyO)
-                && this->context.mResolve.typeContainsIvars(tyO)) {
+            if (this->context.mResolve.hasAssociatedType(tyO) && this->context.mResolve.typeContainsIvars(tyO)) {
                 return;
             }
 
@@ -1137,27 +1141,11 @@ namespace {
                         auto span = nodePtr->span();
                         auto sourceTy = curTy;
                         ::std::optional<::HIR::TypeRef> implType;
-                        auto result = this->context.mResolve.autoderefStep(
-                            span, sourceTy, tmpTy, &implType
-                        );
-                        ASSERT_BUG(
-                            span,
-                            result == TraitResolution::AutoderefResult::Match,
-                            "Selected autoderef step no longer has a unique response for " << sourceTy
-                        );
+                        auto result = this->context.mResolve.autoderefStep(span, sourceTy, tmpTy, &implType);
+                        ASSERT_BUG(span, result == TraitResolution::AutoderefResult::Match, "Selected autoderef step no longer has a unique response for " << sourceTy);
                         if (implType) {
                             this->context.equateTypes(span, sourceTy, *implType);
-                            this->context.equateTypesAssoc(
-                                span,
-                                tmpTy,
-                                this->context.crate.getLangItemPath(span, "deref"),
-                                {},
-                                sourceTy,
-                                "Target",
-                                {},
-                                true,
-                                TypeckPrimitiveOperator::Deref
-                            );
+                            this->context.equateTypesAssoc(span, tmpTy, this->context.crate.getLangItemPath(span, "deref"), {}, sourceTy, "Target", {}, true, TypeckPrimitiveOperator::Deref);
                         }
                         curTy = tmpTy;
                         auto ty = tmpTy;
@@ -1504,15 +1492,13 @@ namespace {
 
                     // 3. Locate the most permissive implemented Fn* trait (Fn first, then FnMut, then assume just FnOnce)
                     // NOTE: Borrowing is added by the expansion to CallPath
-                    if (!this->context.mResolve.mLangFn.components().empty()
-                        && this->context.mResolve.findTraitImpls(node.span(), this->context.mResolve.mLangFn, traitPp, ty, [&](auto impl, auto cmp) {
+                    if (!this->context.mResolve.mLangFn.components().empty() && this->context.mResolve.findTraitImpls(node.span(), this->context.mResolve.mLangFn, traitPp, ty, [&](auto impl, auto cmp) {
                         //ASSERT_BUG(node.span(), cmp == ::HIR::Compare::Equal, "");
                         return true;
                     })) {
                         DEBUG("-- Using Fn");
                         node.traitUsed = ::HIR::ExprNodeCallValue::TraitUsed::Fn;
-                    } else if (!this->context.mResolve.mLangFnMut.components().empty()
-                        && this->context.mResolve.findTraitImpls(node.span(), this->context.mResolve.mLangFnMut, traitPp, ty, [&](auto impl, auto cmp) {
+                    } else if (!this->context.mResolve.mLangFnMut.components().empty() && this->context.mResolve.findTraitImpls(node.span(), this->context.mResolve.mLangFnMut, traitPp, ty, [&](auto impl, auto cmp) {
                         //ASSERT_BUG(node.span(), cmp == ::HIR::Compare::Equal, "Fuzzy FnMut" << trait_pp << " impl?! " << ty);
                         return true;
                     })) {
@@ -2008,11 +1994,9 @@ void Context::equateTypesInner(const Span& sp, const ::HIR::TypeData* li, const 
 
     auto bindInferToAlias = [&](const ::HIR::TypeData* infer, const ::HIR::TypeData* alias) {
         const auto* inferData = infer->opt_Infer();
-        if (!inferData
-            || inferData->isLit()
-            || visitTyWith(alias, [&](const ::HIR::TypeData* inner) {
-                return inner == infer;
-            })) {
+        if (!inferData || inferData->isLit() || visitTyWith(alias, [&](const ::HIR::TypeData* inner) {
+            return inner == infer;
+        })) {
             return false;
         }
         const auto ivarIdx = inferData->index;
@@ -5308,35 +5292,27 @@ namespace {
                 for (const auto& arg : nodeP->mArgs) {
                     closureArgs.push_back(arg.second);
                 }
-                ::HIR::PathParams desiredParams{
-                    context.crate.types.tuple(mv$(closureArgs))
-                };
+                ::HIR::PathParams desiredParams{context.crate.types.tuple(mv$(closureArgs))};
 
                 ::HIR::PathParams expectedParams;
                 ::HIR::TypeRef expectedOutput;
-                const bool foundExpectation = context.mResolve.findTraitImpls(
-                    sp,
-                    context.mResolve.mLangFnOnce,
-                    desiredParams,
-                    dst,
-                    [&](ImplRef impl, ::HIR::Compare) {
-                        auto params = impl.getTraitParams(context.crate.types);
-                        if (params.types.size() != 1 || !params.types.front()->is_Tuple()) {
-                            return false;
-                        }
-                        const auto& args = params.types.front()->as_Tuple();
-                        if (args.size() != nodeP->mArgs.size()) {
-                            return false;
-                        }
-                        auto output = impl.getType(context.crate.types, "Output", {});
-                        if (output == ::HIR::TypeRef()) {
-                            return false;
-                        }
-                        expectedParams = mv$(params);
-                        expectedOutput = mv$(output);
-                        return true;
+                const bool foundExpectation = context.mResolve.findTraitImpls(sp, context.mResolve.mLangFnOnce, desiredParams, dst, [&](ImplRef impl, ::HIR::Compare) {
+                    auto params = impl.getTraitParams(context.crate.types);
+                    if (params.types.size() != 1 || !params.types.front()->is_Tuple()) {
+                        return false;
                     }
-                );
+                    const auto& args = params.types.front()->as_Tuple();
+                    if (args.size() != nodeP->mArgs.size()) {
+                        return false;
+                    }
+                    auto output = impl.getType(context.crate.types, "Output", {});
+                    if (output == ::HIR::TypeRef()) {
+                        return false;
+                    }
+                    expectedParams = mv$(params);
+                    expectedOutput = mv$(output);
+                    return true;
+                });
                 if (foundExpectation && contextMut) {
                     const auto& expectedArgs = expectedParams.types.front()->as_Tuple();
                     for (size_t i = 0; i < expectedArgs.size(); i++) {
@@ -5487,13 +5463,9 @@ namespace {
         // outer coercion fixes an otherwise unbound result ivar to the
         // expected type.  This lets a selected `!` target use the ordinary
         // `! -> T` coercion afterwards.
-        const bool hasPendingDerefTarget = ::std::any_of(
-            context.linkAssoc.begin(), context.linkAssoc.end(),
-            [&](const Context::Associated& rule) {
-                return rule.operatorKind == TypeckPrimitiveOperator::Deref
-                    && context.ivars.typesEqual(rule.leftTy, tySrc);
-            }
-        );
+        const bool hasPendingDerefTarget = ::std::any_of(context.linkAssoc.begin(), context.linkAssoc.end(), [&](const Context::Associated& rule) {
+            return rule.operatorKind == TypeckPrimitiveOperator::Deref && context.ivars.typesEqual(rule.leftTy, tySrc);
+        });
         if (hasPendingDerefTarget) {
             DEBUG("Deref target is pending - keep coercion");
             return false;
@@ -5599,7 +5571,6 @@ namespace {
                 }
                 throw "unreachable";
             }
-
         };
 
         // A trait implementation only suppresses the language primitive
@@ -5615,8 +5586,7 @@ namespace {
             // the candidate, not this expression.  They have no Context
             // slot, so do not feed them to expansion/comparison below.
             // Conservatively retain such a candidate as a semantic overload.
-            if (context.ivars.typeContainsIvars(implTy, /*only_unbound=*/true)
-                || context.ivars.pathparamsContainIvars(implParams, /*only_unbound=*/true)) {
+            if (context.ivars.typeContainsIvars(implTy, /*only_unbound=*/true) || context.ivars.pathparamsContainIvars(implParams, /*only_unbound=*/true)) {
                 return false;
             }
             implTy = context.mResolve.expandAssociatedTypes(sp, mv$(implTy));
@@ -5624,12 +5594,7 @@ namespace {
                 ty = context.mResolve.expandAssociatedTypes(sp, mv$(ty));
             }
 
-            const bool hasBuiltinInputs = implParams.types.size() == 0
-                ? primitiveOperatorHasBuiltin(v.operatorKind, implTy)
-                : implParams.types.size() == 1
-                    && primitiveOperatorHasBuiltin(
-                        v.operatorKind, implTy, implParams.types.front()
-                    );
+            const bool hasBuiltinInputs = implParams.types.size() == 0 ? primitiveOperatorHasBuiltin(v.operatorKind, implTy) : implParams.types.size() == 1 && primitiveOperatorHasBuiltin(v.operatorKind, implTy, implParams.types.front());
             if (!hasBuiltinInputs) {
                 return false;
             }
@@ -5656,9 +5621,7 @@ namespace {
                     return false;
                 }
             }
-            return output->compareWithPlaceholders(
-                sp, builtinOutput, context.ivars.callbackResolveInfer()
-            ) == ::HIR::Compare::Equal;
+            return output->compareWithPlaceholders(sp, builtinOutput, context.ivars.callbackResolveInfer()) == ::HIR::Compare::Equal;
         };
 
         // The operator obligation is created with a fresh RHS variable, but
@@ -5668,8 +5631,7 @@ namespace {
         // a builtin hint would incorrectly force the variable to `i8`.
         const auto concreteCoercionSource = [&](const ::HIR::TypeData* type) {
             const auto* infer = context.getType(type)->opt_Infer();
-            if (!infer || infer->index == ~0u
-                || infer->index >= context.possibleIvarVals.size()) {
+            if (!infer || infer->index == ~0u || infer->index >= context.possibleIvarVals.size()) {
                 return static_cast<const ::HIR::TypeData*>(nullptr);
             }
             const auto& possible = context.possibleIvarVals[infer->index];
@@ -5717,15 +5679,7 @@ namespace {
         // language primitive whose known lhs determines the rhs type gives
         // that expression its missing context.  Keep unknown and semantic
         // overloads untouched: those must select an implementation first.
-        const bool canContextualisePrimitiveRhs =
-            v.isOperator
-            && !hasSemanticOperatorImpl
-            && (!sawCurrentOperatorImpl || currentOperatorImplHasBuiltinSignature)
-            && v.params.types.size() == 1
-            && !context.ivars.typeContainsIvars(v.implTy, /*only_unbound=*/true)
-            && primitiveOperatorLhsDeterminesRhs(v.operatorKind, context.getType(v.implTy))
-            && v.params.types.front()->is_Infer()
-            && v.params.types.front()->as_Infer().index == ~0u;
+        const bool canContextualisePrimitiveRhs = v.isOperator && !hasSemanticOperatorImpl && (!sawCurrentOperatorImpl || currentOperatorImplHasBuiltinSignature) && v.params.types.size() == 1 && !context.ivars.typeContainsIvars(v.implTy, /*only_unbound=*/true) && primitiveOperatorLhsDeterminesRhs(v.operatorKind, context.getType(v.implTy)) && v.params.types.front()->is_Infer() && v.params.types.front()->as_Infer().index == ~0u;
         if (canContextualisePrimitiveRhs) {
             context.addIvars(v.params.types.front());
         }
@@ -5734,11 +5688,7 @@ namespace {
         // placeholder from an impl candidate. Such a placeholder has no slot
         // in this Context, so primitive equations must wait for it to be
         // contextualised rather than asking HMTypeInferrence to resolve it.
-        const bool primitiveTypesAreContextual =
-            !context.ivars.typeContainsIvars(v.implTy, /*only_unbound=*/true)
-            && !context.ivars.pathparamsContainIvars(v.params, /*only_unbound=*/true)
-            && (v.name == ""
-                || !context.ivars.typeContainsIvars(v.leftTy, /*only_unbound=*/true));
+        const bool primitiveTypesAreContextual = !context.ivars.typeContainsIvars(v.implTy, /*only_unbound=*/true) && !context.ivars.pathparamsContainIvars(v.params, /*only_unbound=*/true) && (v.name == "" || !context.ivars.typeContainsIvars(v.leftTy, /*only_unbound=*/true));
 
         // MAGIC! Have special handling for operator overloads
         // A semantic overload is allowed to determine its result type
@@ -5762,10 +5712,7 @@ namespace {
                 const auto& leftTy = context.getType(left);
                 const auto& rightTy = context.getType(right);
                 const bool primitiveOrLiteralPair = H::typeIsNum(leftTy) && H::typeIsNum(rightTy);
-                const bool languagePrimitiveCandidate =
-                    primitiveOperatorHasLanguageCandidate(
-                        v.operatorKind, leftTy, rightTy
-                    );
+                const bool languagePrimitiveCandidate = primitiveOperatorHasLanguageCandidate(v.operatorKind, leftTy, rightTy);
                 if (primitiveOrLiteralPair || languagePrimitiveCandidate) {
                     DEBUG("- Magic inferrence link for primitive binops");
                     if (v.name == "") {
@@ -5773,10 +5720,7 @@ namespace {
                     } else {
                         context.equateTypes(sp, res, left);
                     }
-                    const bool isShift = v.operatorKind == TypeckPrimitiveOperator::Shl
-                        || v.operatorKind == TypeckPrimitiveOperator::Shr
-                        || v.operatorKind == TypeckPrimitiveOperator::ShlAssign
-                        || v.operatorKind == TypeckPrimitiveOperator::ShrAssign;
+                    const bool isShift = v.operatorKind == TypeckPrimitiveOperator::Shl || v.operatorKind == TypeckPrimitiveOperator::Shr || v.operatorKind == TypeckPrimitiveOperator::ShlAssign || v.operatorKind == TypeckPrimitiveOperator::ShrAssign;
                     if (isShift) {
                         // Shifts can have mismatched types on each side.
                     } else {
@@ -5786,10 +5730,7 @@ namespace {
                     // Assignment and comparison trait constraints have no
                     // associated output (`name == ""`), so `res` is an
                     // absent placeholder rather than a Context ivar.
-                    if (v.name != ""
-                        && context.getType(left)->is_Infer()
-                        && context.getType(right)->is_Infer()
-                        && context.getType(res)->is_Infer()) {
+                    if (v.name != "" && context.getType(left)->is_Infer() && context.getType(right)->is_Infer() && context.getType(res)->is_Infer()) {
                         context.possibleEquateTypeUnknown(sp, right, Context::IvarUnknownType::To);
                         DEBUG("> All are infer, skip");
                         return AssociatedCheckResult::Stalled;
@@ -5833,9 +5774,7 @@ namespace {
         // semantics; otherwise a generic smart pointer cannot establish the
         // Target used by its own `deref` body.
         const auto currentOperatorUsesLanguagePrimitive = [&]() {
-            if (!v.isOperator
-                || v.operatorKind == TypeckPrimitiveOperator::None
-                || (sawCurrentOperatorImpl && !currentOperatorImplHasBuiltinSignature)) {
+            if (!v.isOperator || v.operatorKind == TypeckPrimitiveOperator::None || (sawCurrentOperatorImpl && !currentOperatorImplHasBuiltinSignature)) {
                 return false;
             }
 
@@ -5844,9 +5783,7 @@ namespace {
                 return primitiveOperatorHasBuiltin(v.operatorKind, implTy);
             }
             if (v.params.types.size() == 1) {
-                return primitiveOperatorHasLanguageCandidate(
-                    v.operatorKind, implTy, context.getType(v.params.types.front())
-                );
+                return primitiveOperatorHasLanguageCandidate(v.operatorKind, implTy, context.getType(v.params.types.front()));
             }
             return false;
         };
@@ -5867,11 +5804,7 @@ namespace {
             auto candidateCallback = [&](ImplRef impl, HIR::Compare cmp) {
                 DEBUG("[check_associated] Found cmp=" << cmp << " " << impl);
                 if (impl.isAmbiguousIdentity()) {
-                    ASSERT_BUG(
-                        sp,
-                        cmp == ::HIR::Compare::Fuzzy,
-                        "Definite solver response marked as ambiguous identity"
-                    );
+                    ASSERT_BUG(sp, cmp == ::HIR::Compare::Fuzzy, "Definite solver response marked as ambiguous identity");
                     sawAmbiguousIdentity = true;
                     return false;
                 }
@@ -5964,8 +5897,7 @@ namespace {
                                     // child impl's predicates into obligations.  Keep the
                                     // ambiguity until inference can prove one candidate.
                                     DEBUG("[check_associated] - More specific, but applicability is still fuzzy");
-                                }
-                                else if (bestImpl.moreSpecificThan(context.crate.types, impl)) {
+                                } else if (bestImpl.moreSpecificThan(context.crate.types, impl)) {
                                     DEBUG("[check_associated] - Less specific, but applicability is still fuzzy");
                                 } else {
                                     DEBUG("[check_associated] > Overlapping impls have equal or incomparable specificity");
@@ -6014,20 +5946,7 @@ namespace {
                     return false;
                 }
             };
-            const bool found = gTraitSolverConfig.globally
-                ? context.mResolve.findTraitImplsNext(
-                    sp,
-                    v.trait,
-                    v.params,
-                    v.implTy,
-                    candidateCallback,
-                    v.name.c_str(),
-                    v.name == "" ? nullptr : v.leftTy,
-                    v.name == "" ? nullptr : &v.atyPp
-                )
-                : context.mResolve.findTraitImpls(
-                    sp, v.trait, v.params, v.implTy, candidateCallback
-                );
+            const bool found = gTraitSolverConfig.globally ? context.mResolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.mResolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
             if (found) {
                 // Fully-known impl
                 DEBUG("Fully-known impl located");
@@ -6074,11 +5993,7 @@ namespace {
 
                     context.equateTypes(sp, dstTy, srcTy);
                     return AssociatedCheckResult::Complete;
-                } else if (v.operatorKind != TypeckPrimitiveOperator::None
-                           && (v.params.types.size() == 0
-                               ? primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy))
-                               : v.params.types.size() == 1
-                                   && primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy), context.getType(v.params.types.at(0))))) {
+                } else if (v.operatorKind != TypeckPrimitiveOperator::None && (v.params.types.size() == 0 ? primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy)) : v.params.types.size() == 1 && primitiveOperatorHasBuiltin(v.operatorKind, context.getType(v.implTy), context.getType(v.params.types.at(0))))) {
                     // No trait implementation matched this expression.  The
                     // language-defined primitive candidate therefore wins.
                     return AssociatedCheckResult::Complete;
@@ -6093,8 +6008,7 @@ namespace {
                 auto& possibleImplTy = possibleImpls.at(0).implTy;
                 auto& possibleParams = possibleImpls.at(0).params;
                 auto& bestImpl = possibleImpls.at(0).implRef;
-                DEBUG("Only one impl " << v.trait << context.ivars.fmt(possibleParams) << " for " << context.ivars.fmtType(possibleImplTy)
-                    << FMT_CB(os, if (outputType) os << " - out=" << *outputType;));
+                DEBUG("Only one impl " << v.trait << context.ivars.fmt(possibleParams) << " for " << context.ivars.fmtType(possibleImplTy) << FMT_CB(os, if (outputType) os << " - out=" << *outputType;));
                 // - If there are any magic params in the impl, don't use it yet.
                 //  > Ideally, there should be a match_test_generics to resolve the magic impls.
                 DEBUG("> best_impl=" << bestImpl);
@@ -6338,10 +6252,7 @@ namespace {
         const auto typeCanStall = [](const ::HIR::TypeRef type) {
             return (type->flags & (::HIR::TypeData::HAS_UNEVALUATED_CONST | ::HIR::TypeData::HAS_DEFERRED_CONST)) == 0;
         };
-        if (!typeCanStall(rule.implTy)
-            || (rule.name != "" && !typeCanStall(rule.leftTy))
-            || pathParamsHaveUntrackedConst(rule.params)
-            || pathParamsHaveUntrackedConst(rule.atyPp)) {
+        if (!typeCanStall(rule.implTy) || (rule.name != "" && !typeCanStall(rule.leftTy)) || pathParamsHaveUntrackedConst(rule.params) || pathParamsHaveUntrackedConst(rule.atyPp)) {
             return false;
         }
         for (const auto type : rule.params.types) {
@@ -6539,8 +6450,8 @@ namespace {
             }
         }
 
-        template<typename T>
-        void addRefs(const ::std::vector<unsigned int>& dependencies, ::std::vector<T> IvarBoundRefs::*member, T value) {
+        template <typename T>
+        void addRefs(const ::std::vector<unsigned int>& dependencies, ::std::vector<T> IvarBoundRefs::* member, T value) {
             for (const auto index : dependencies) {
                 if (index < refs.size()) {
                     (refs[index].*member).push_back(value);
@@ -6622,7 +6533,6 @@ namespace {
                 outTy = cloneTyWith(context.crate.types, sp, rty, *this);
                 return true;
             }
-
         };
 
         Cb cb{usedTy, sp, context, ivarIdx, newTy};
@@ -7661,9 +7571,17 @@ namespace {
                 }
             }
 
-            ASSERT_BUG(sp, ::std::all_of(possibleTys.begin(), possibleTys.end(), [](const PossibleType& ty) {
+            ASSERT_BUG(
+                sp,
+                ::std::all_of(
+                    possibleTys.begin(),
+                    possibleTys.end(),
+                    [](const PossibleType& ty) {
                 return ty.hasType();
-            }), "Coercion barrier escaped into concrete type selection");
+            }
+                ),
+                "Coercion barrier escaped into concrete type selection"
+            );
 
             // Filter out ivars
             // - TODO: Should this also remove &_ types? (maybe not, as they give information about borrow classes)
@@ -8430,8 +8348,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const ::HIR::Type
                     }
                     context.linkAssoc.pop_back();
                 } else {
-                    if ((result == AssociatedCheckResult::Stalled || result == AssociatedCheckResult::Ambiguous)
-                        && setAssociatedStall(context, rule)) {
+                    if ((result == AssociatedCheckResult::Stalled || result == AssociatedCheckResult::Ambiguous) && setAssociatedStall(context, rule)) {
                         rule.stalledPossibilities = mv$(capturedPossibilities);
                     } else {
                         rule.stalledOn.clear();
@@ -8593,7 +8510,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const ::HIR::Type
         }
 #endif
 
-
         // Finally. If nothing changed, apply ivar defaults
         if (!context.ivars.peekChanged()) {
             DEBUG("- Applying defaults");
@@ -8660,23 +8576,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const ::HIR::Type
                 continue;
             }
             if (rule.name == "") {
-                ERROR(
-                    rule.span,
-                    E0000,
-                    "type annotations needed: cannot infer a type satisfying `"
-                        << context.ivars.fmtType(rule.implTy) << ": "
-                        << rule.trait << context.ivars.fmt(rule.params) << "`"
-                );
+                ERROR(rule.span, E0000, "type annotations needed: cannot infer a type satisfying `" << context.ivars.fmtType(rule.implTy) << ": " << rule.trait << context.ivars.fmt(rule.params) << "`");
             } else {
-                ERROR(
-                    rule.span,
-                    E0000,
-                    "type annotations needed: cannot infer `"
-                        << context.ivars.fmtType(rule.leftTy) << " = <"
-                        << context.ivars.fmtType(rule.implTy) << " as "
-                        << rule.trait << context.ivars.fmt(rule.params) << ">::"
-                        << rule.name << "`"
-                );
+                ERROR(rule.span, E0000, "type annotations needed: cannot infer `" << context.ivars.fmtType(rule.leftTy) << " = <" << context.ivars.fmtType(rule.implTy) << " as " << rule.trait << context.ivars.fmt(rule.params) << ">::" << rule.name << "`");
             }
         }
         context.dump();
@@ -8780,8 +8682,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const ::HIR::Type
     }
 }
 
-
-
 namespace {
     inline ::HIR::SimplePath getRuleParentPath(const ::HIR::SimplePath& sp) {
         return sp.parent();
@@ -8792,301 +8692,301 @@ namespace {
     }
 }
 
-    bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warnUnusedResult));
-    bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache, const ::HIR::Function*& fcnPtr);
+bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warnUnusedResult));
+bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache, const ::HIR::Function*& fcnPtr);
 
-    class OwnedImplMatcher: public ::HIR::MatchGenerics {
-        ::HIR::PathParams& implParams;
+class OwnedImplMatcher: public ::HIR::MatchGenerics {
+    ::HIR::PathParams& implParams;
 
-    public:
-        OwnedImplMatcher(::HIR::PathParams& implParams)
-            : implParams(implParams)
+public:
+    OwnedImplMatcher(::HIR::PathParams& implParams)
+        : implParams(implParams)
+    {
+    }
+
+    ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::tCbResolveType _resolve_cb) override {
+        assert(g.binding < implParams.types.size());
+        auto& slot = implParams.types[g.binding];
+        if (!(slot->is_Infer() && slot->as_Infer().index == ~0u)) {
+            return slot->compareWithPlaceholders(Span(), ty, _resolve_cb);
+        }
+        slot = ty;
+        return ::HIR::Compare::Equal;
+    }
+
+    ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
+        assert(g.binding < implParams.values.size());
+        ASSERT_BUG(Span(), implParams.values[g.binding] == ::HIR::ConstGeneric(), "TODO: Multiple values? " << implParams.values[g.binding] << " and " << sz);
+        implParams.values[g.binding] = sz.clone();
+        return ::HIR::Compare::Equal;
+    }
+};
+
+void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr& ms, const ::HIR::GenericParams& paramDefs, ::HIR::PathParams& params) {
+#if 1
+    for (size_t i = 0; i < paramDefs.types.size(); i++) {
+        const auto& ty = params.types[i];
+        const auto& typ = paramDefs.types[i];
+        if (const auto* te = ty->opt_Infer()) {
+            if (!typ.defaultValue->is_Infer()) {
+                if (auto* ent = context.getIvarPossibilities(sp, te->index)) {
+                    auto defTy = ms.monomorphType(sp, typ.defaultValue);
+                    DEBUG("Added default for " << ty << ": " << defTy);
+                    ent->typesDefault.insert(std::move(defTy));
+                }
+            }
+        }
+    }
+#endif
+}
+
+template <typename T>
+void fix_param_count_(const Span& sp, Context& context, const ::HIR::TypeData* selfTy, bool useDefaults, const T& path, const ::HIR::GenericParams& paramDefs, ::HIR::PathParams& params) {
+    if (params.mLifetimes.size() == paramDefs.mLifetimes.size()) {
+    } else if (params.mLifetimes.size() > paramDefs.mLifetimes.size()) {
+        ERROR(sp, E0000, "Too many lifetime parameters passed to " << path);
+    } else {
+        params.mLifetimes.resize(paramDefs.mLifetimes.size());
+    }
+
+    if (params.types.size() == paramDefs.types.size()) {
+        // Nothing to do, all good
+    } else if (params.types.size() > paramDefs.types.size()) {
+        ERROR(sp, E0000, "Too many type parameters passed to " << path);
+    } else {
+        while (params.types.size() < paramDefs.types.size()) {
+            const auto& typ = paramDefs.types[params.types.size()];
+            if (useDefaults) {
+                if (typ.defaultValue->is_Infer()) {
+                    ERROR(sp, E0000, "Omitted type parameter with no default in " << path);
+                } else if (monomorphiseTypeNeeded(typ.defaultValue)) {
+                    auto cb = MonomorphStatePtr(context.crate.types, selfTy, nullptr, nullptr);
+                    params.types.push_back(cb.monomorphType(sp, typ.defaultValue));
+                } else {
+                    params.types.push_back(typ.defaultValue);
+                }
+            } else {
+                params.types.push_back(context.ivars.newIvarTr());
+                // TODO: It's possible that the default could be added using `context.possible_equate_type_def` to give inferrence a fallback
+            }
+        }
+    }
+
+    if (params.values.size() == paramDefs.values.size()) {
+        // Nothing to do, all good
+    } else if (params.values.size() > paramDefs.values.size()) {
+        ERROR(sp, E0000, "Too many const parameters passed to " << path);
+    } else {
+        while (params.values.size() < paramDefs.values.size()) {
+            //const auto& def = param_defs.m_values[params.m_values.size()];
+            params.values.push_back({});
+            context.ivars.addIvars(params.values.back());
+        }
+    }
+}
+
+void fixParamCount(const Span& sp, Context& context, const ::HIR::TypeData* selfTy, bool useDefaults, const ::HIR::Path& path, const ::HIR::GenericParams& paramDefs, ::HIR::PathParams& params) {
+    fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
+}
+
+void fixParamCount(const Span& sp, Context& context, const ::HIR::TypeData* selfTy, bool useDefaults, const ::HIR::GenericPath& path, const ::HIR::GenericParams& paramDefs, ::HIR::PathParams& params) {
+    fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
+}
+
+void applyBoundsAsRulesTrait(Context& context, const Span& sp, const ::HIR::TypeData* realType, const ::HIR::TraitPath& traitPath, const MonomorphHrlsOnly& msHrl) {
+    // If there's no type bounds, emit a trait bound
+    // - Otherwise, the assocated type bounds will serve the same purpose
+    if (traitPath.typeBounds.size() == 0) {
+        context.addTraitBound(sp, realType, traitPath.mPath.mPath, msHrl.monomorphPathParams(sp, traitPath.mPath.mParams, true));
+    }
+
+    // Associated type equalities
+    for (const auto& assoc : traitPath.typeBounds) {
+        context.equateTypesAssoc(sp, msHrl.monomorphType(sp, assoc.second.type, true), assoc.second.sourceTrait.mPath, msHrl.monomorphPathParams(sp, assoc.second.sourceTrait.mParams, true), realType, assoc.first.c_str(), msHrl.monomorphPathParams(sp, assoc.second.atyParams, true), false);
+    }
+    // Associated type trait bounds:
+    for (const auto& assoc : traitPath.traitBounds) {
+        auto atyTy = context.crate.types.path(::HIR::Path(realType, assoc.second.sourceTrait.clone(), assoc.first, assoc.second.atyParams.clone()), {});
+        for (const auto& tr : assoc.second.traits) {
+            applyBoundsAsRulesTrait(context, sp, atyTy, tr, msHrl);
+        }
+    }
+}
+
+void applyBoundsAsRules(Context& context, const Span& sp, const ::HIR::GenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel) {
+    TRACE_FUNCTION;
+    for (const auto& bound : paramsDef.bounds) {
+            TU_MATCH_HDRA( (bound), {)
+            TU_ARMA(Lifetime, be) {
+            }
+            TU_ARMA(TypeLifetime, be) {
+            }
+            TU_ARMA(TraitBound, be) {
+                static const HIR::GenericParams emptyHrtb;
+                const auto& outerHrtb = be.hrtbs ? *be.hrtbs : emptyHrtb;
+                DEBUG("Bound for" << outerHrtb.fmtArgs() << " " << be.type << ":  " << be.trait);
+                ASSERT_BUG(sp, int(!outerHrtb.isEmpty()) + int(!(be.trait.hrtbs ? *be.trait.hrtbs : emptyHrtb).isEmpty()) < 2, "Unexpected nested HRTBs: for" << outerHrtb.fmtArgs() << " " << be.type << ":  " << be.trait);
+
+                auto _ = ms.pushHrb(outerHrtb);
+                auto realType = ms.monomorphType(sp, be.type);
+                auto realTrait = ms.monomorphTraitpath(sp, be.trait, false);
+                DEBUG("= (" << realType << ": " << realTrait << ")");
+                // Replace any HRLs with unbound/empty lifetimes
+                auto ppHrl = (realTrait.hrtbs && !realTrait.hrtbs->isEmpty()) ? realTrait.hrtbs->makeEmptyParams(true) : outerHrtb.makeEmptyParams(true);
+                DEBUG("outer_hrb = " << outerHrtb.fmtArgs() << ", pp_hrl = " << ppHrl);
+                auto msHrl = MonomorphHrlsOnly(context.crate.types, ppHrl);
+                applyBoundsAsRulesTrait(context, sp, realType, realTrait, msHrl);
+            }
+            TU_ARMA(TypeEquality, be) {
+                auto realTypeLeft = context.mResolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
+                auto realTypeRight = context.mResolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.otherType));
+                context.equateTypes(sp, realTypeLeft, realTypeRight);
+            }
+            }
+    }
+
+    for (size_t i = 0; i < paramsDef.types.size(); i++) {
+        if (paramsDef.types[i].isSized) {
+            ::HIR::TypeRef ty = context.crate.types.generic("", (isImplLevel ? 0 : 256) + i);
+            context.requireSized(sp, ms.getType(Span(), ty->as_Generic()));
+        }
+    }
+}
+
+/// (HELPER) Populate the cache for nodes that use visit_call
+/// TODO: If the function has multiple mismatched options, tell the caller to try again later?
+bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) {
+    TRACE_FUNCTION_FR(path, path);
+    assert(cache.argTypes.size() == 0);
+
+    const ::HIR::Function* fcnPtr = nullptr;
+
+    MonomorphHrlsOnly(context.crate.types, HIR::PathParams()).monomorphPath(sp, path);
+
+    struct Monomorph: public Monomorphiser {
+        Context& context;
+        const HIR::TypeData* selfTy;
+        const HIR::PathParams* implParams;
+        const HIR::PathParams& fcnParams;
+        const HIR::PathParams hrlParams;
+
+        Monomorph(Context& context, const HIR::TypeData* selfTy, const HIR::PathParams* implParams, const HIR::PathParams& fcnParams, HIR::PathParams hrlParams)
+            : Monomorphiser(context.crate.types)
+            , context(context)
+            , selfTy(selfTy)
+            , implParams(implParams)
+            , fcnParams(fcnParams)
+            , hrlParams(std::move(hrlParams))
         {
         }
 
-        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::tCbResolveType _resolve_cb) override {
-            assert(g.binding < implParams.types.size());
-            auto& slot = implParams.types[g.binding];
-            if (!(slot->is_Infer() && slot->as_Infer().index == ~0u)) {
-                return slot->compareWithPlaceholders(Span(), ty, _resolve_cb);
+        ::HIR::TypeRef getType(const Span& sp, const HIR::GenericRef& e) const override {
+            if (e.name == "Self" || e.isSelf()) {
+                if (selfTy) {
+                    return selfTy;
+                } else {
+                    TODO(sp, "Handle 'Self' when monomorphising");
+                }
+            } else if (e.binding < 256) {
+                if (implParams) {
+                    auto idx = e.idx();
+                    ASSERT_BUG(sp, idx < implParams->types.size(), "Generic param (impl) out of input range - " << e << " >= " << implParams->types.size());
+                    return context.getType(implParams->types[idx]);
+                } else {
+                    BUG(sp, "Impl-level parameter on free function (" << e << ")");
+                }
+            } else if (e.binding < 512) {
+                auto idx = e.idx();
+                ASSERT_BUG(sp, idx < fcnParams.types.size(), "Generic param out of input range - " << e << " >= " << fcnParams.types.size());
+                return context.getType(fcnParams.types[idx]);
+            } else {
+                BUG(sp, "Generic binding out of total range (" << e << ")");
             }
-            slot = ty;
-            return ::HIR::Compare::Equal;
         }
 
-        ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) override {
-            assert(g.binding < implParams.values.size());
-            ASSERT_BUG(Span(), implParams.values[g.binding] == ::HIR::ConstGeneric(), "TODO: Multiple values? " << implParams.values[g.binding] << " and " << sz);
-            implParams.values[g.binding] = sz.clone();
-            return ::HIR::Compare::Equal;
+        ::HIR::ConstGeneric getValue(const Span& sp, const HIR::GenericRef& e) const override {
+            if (e.binding < 256) {
+                ASSERT_BUG(sp, implParams, "Impl-level value parameter on free function (" << e << ")");
+                auto idx = e.idx();
+                ASSERT_BUG(sp, idx < implParams->values.size(), "Generic value (impl) out of input range - " << e << " >= " << implParams->values.size());
+                return context.ivars.getValue(implParams->values[idx]).clone();
+            } else if (e.binding < 512) {
+                auto idx = e.idx();
+                ASSERT_BUG(sp, idx < fcnParams.values.size(), "Generic value out of input range - " << e << " >= " << fcnParams.values.size());
+                return context.ivars.getValue(fcnParams.values[idx]).clone();
+            } else {
+                BUG(sp, "Generic value bounding out of total range (" << e << ")");
+            }
+        }
+
+        ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& e) const override {
+            if (e.group() == 0) {
+                ASSERT_BUG(sp, implParams, "Impl-level lifetime parameter on free function (" << e << ")");
+                auto idx = e.idx();
+                ASSERT_BUG(sp, idx < implParams->mLifetimes.size(), "Generic lifetime (impl) out of input range - " << e << " >= " << implParams->mLifetimes.size());
+                // If this resolves to a HRL (group 3) then return an empty lifetime
+                auto rv = implParams->mLifetimes[idx];
+                if (rv.isHrl()) {
+                    return HIR::LifetimeRef();
+                }
+                return rv;
+            } else if (e.group() == 1) {
+                auto idx = e.idx();
+                ASSERT_BUG(sp, idx < fcnParams.mLifetimes.size(), "Generic lifetime out of input range - " << e << " >= " << fcnParams.mLifetimes.size());
+                return fcnParams.mLifetimes[idx];
+            } else if (e.group() == 3) {
+                auto idx = e.idx();
+                ASSERT_BUG(sp, idx < fcnParams.mLifetimes.size(), "Generic lifetime out of input range - " << e << " >= " << hrlParams.mLifetimes.size());
+                return hrlParams.mLifetimes[idx];
+            } else {
+                BUG(sp, "Generic lifetime bounding out of total range (" << e << ")");
+            }
         }
     };
 
-    void populateDefaults(const Span& sp, Context& context, const MonomorphStatePtr& ms, const ::HIR::GenericParams& paramDefs, ::HIR::PathParams& params) {
-#if 1
-        for (size_t i = 0; i < paramDefs.types.size(); i++) {
-            const auto& ty = params.types[i];
-            const auto& typ = paramDefs.types[i];
-            if (const auto* te = ty->opt_Infer()) {
-                if (!typ.defaultValue->is_Infer()) {
-                    if (auto* ent = context.getIvarPossibilities(sp, te->index)) {
-                        auto defTy = ms.monomorphType(sp, typ.defaultValue);
-                        DEBUG("Added default for " << ty << ": " << defTy);
-                        ent->typesDefault.insert(std::move(defTy));
-                    }
-                }
-            }
-        }
-#endif
-    }
-
-    template <typename T>
-    void fix_param_count_(const Span& sp, Context& context, const ::HIR::TypeData* selfTy, bool useDefaults, const T& path, const ::HIR::GenericParams& paramDefs, ::HIR::PathParams& params) {
-        if (params.mLifetimes.size() == paramDefs.mLifetimes.size()) {
-        } else if (params.mLifetimes.size() > paramDefs.mLifetimes.size()) {
-            ERROR(sp, E0000, "Too many lifetime parameters passed to " << path);
-        } else {
-            params.mLifetimes.resize(paramDefs.mLifetimes.size());
-        }
-
-        if (params.types.size() == paramDefs.types.size()) {
-            // Nothing to do, all good
-        } else if (params.types.size() > paramDefs.types.size()) {
-            ERROR(sp, E0000, "Too many type parameters passed to " << path);
-        } else {
-            while (params.types.size() < paramDefs.types.size()) {
-                const auto& typ = paramDefs.types[params.types.size()];
-                if (useDefaults) {
-                    if (typ.defaultValue->is_Infer()) {
-                        ERROR(sp, E0000, "Omitted type parameter with no default in " << path);
-                    } else if (monomorphiseTypeNeeded(typ.defaultValue)) {
-                        auto cb = MonomorphStatePtr(context.crate.types, selfTy, nullptr, nullptr);
-                        params.types.push_back(cb.monomorphType(sp, typ.defaultValue));
-                    } else {
-                        params.types.push_back(typ.defaultValue);
-                    }
-                } else {
-                    params.types.push_back(context.ivars.newIvarTr());
-                    // TODO: It's possible that the default could be added using `context.possible_equate_type_def` to give inferrence a fallback
-                }
-            }
-        }
-
-        if (params.values.size() == paramDefs.values.size()) {
-            // Nothing to do, all good
-        } else if (params.values.size() > paramDefs.values.size()) {
-            ERROR(sp, E0000, "Too many const parameters passed to " << path);
-        } else {
-            while (params.values.size() < paramDefs.values.size()) {
-                //const auto& def = param_defs.m_values[params.m_values.size()];
-                params.values.push_back({});
-                context.ivars.addIvars(params.values.back());
-            }
-        }
-    }
-
-    void fixParamCount(const Span& sp, Context& context, const ::HIR::TypeData* selfTy, bool useDefaults, const ::HIR::Path& path, const ::HIR::GenericParams& paramDefs, ::HIR::PathParams& params) {
-        fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
-    }
-
-    void fixParamCount(const Span& sp, Context& context, const ::HIR::TypeData* selfTy, bool useDefaults, const ::HIR::GenericPath& path, const ::HIR::GenericParams& paramDefs, ::HIR::PathParams& params) {
-        fix_param_count_(sp, context, selfTy, useDefaults, path, paramDefs, params);
-    }
-
-    void applyBoundsAsRulesTrait(Context& context, const Span& sp, const ::HIR::TypeData* realType, const ::HIR::TraitPath& traitPath, const MonomorphHrlsOnly& msHrl) {
-        // If there's no type bounds, emit a trait bound
-        // - Otherwise, the assocated type bounds will serve the same purpose
-        if (traitPath.typeBounds.size() == 0) {
-            context.addTraitBound(sp, realType, traitPath.mPath.mPath, msHrl.monomorphPathParams(sp, traitPath.mPath.mParams, true));
-        }
-
-        // Associated type equalities
-        for (const auto& assoc : traitPath.typeBounds) {
-            context.equateTypesAssoc(sp, msHrl.monomorphType(sp, assoc.second.type, true), assoc.second.sourceTrait.mPath, msHrl.monomorphPathParams(sp, assoc.second.sourceTrait.mParams, true), realType, assoc.first.c_str(), msHrl.monomorphPathParams(sp, assoc.second.atyParams, true), false);
-        }
-        // Associated type trait bounds:
-        for (const auto& assoc : traitPath.traitBounds) {
-            auto atyTy = context.crate.types.path(::HIR::Path(realType, assoc.second.sourceTrait.clone(), assoc.first, assoc.second.atyParams.clone()), {});
-            for (const auto& tr : assoc.second.traits) {
-                applyBoundsAsRulesTrait(context, sp, atyTy, tr, msHrl);
-            }
-        }
-    }
-
-    void applyBoundsAsRules(Context& context, const Span& sp, const ::HIR::GenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel) {
-        TRACE_FUNCTION;
-        for (const auto& bound : paramsDef.bounds) {
-            TU_MATCH_HDRA( (bound), {)
-            TU_ARMA(Lifetime, be) {
-                }
-                TU_ARMA(TypeLifetime, be) {
-                }
-                TU_ARMA(TraitBound, be) {
-                    static const HIR::GenericParams emptyHrtb;
-                    const auto& outerHrtb = be.hrtbs ? *be.hrtbs : emptyHrtb;
-                    DEBUG("Bound for" << outerHrtb.fmtArgs() << " " << be.type << ":  " << be.trait);
-                    ASSERT_BUG(sp, int(!outerHrtb.isEmpty()) + int(!(be.trait.hrtbs ? *be.trait.hrtbs : emptyHrtb).isEmpty()) < 2, "Unexpected nested HRTBs: for" << outerHrtb.fmtArgs() << " " << be.type << ":  " << be.trait);
-
-                    auto _ = ms.pushHrb(outerHrtb);
-                    auto realType = ms.monomorphType(sp, be.type);
-                    auto realTrait = ms.monomorphTraitpath(sp, be.trait, false);
-                    DEBUG("= (" << realType << ": " << realTrait << ")");
-                    // Replace any HRLs with unbound/empty lifetimes
-                    auto ppHrl = (realTrait.hrtbs && !realTrait.hrtbs->isEmpty()) ? realTrait.hrtbs->makeEmptyParams(true) : outerHrtb.makeEmptyParams(true);
-                    DEBUG("outer_hrb = " << outerHrtb.fmtArgs() << ", pp_hrl = " << ppHrl);
-                    auto msHrl = MonomorphHrlsOnly(context.crate.types, ppHrl);
-                    applyBoundsAsRulesTrait(context, sp, realType, realTrait, msHrl);
-                }
-                TU_ARMA(TypeEquality, be) {
-                    auto realTypeLeft = context.mResolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.type));
-                    auto realTypeRight = context.mResolve.expandAssociatedTypes(sp, ms.monomorphType(sp, be.otherType));
-                    context.equateTypes(sp, realTypeLeft, realTypeRight);
-                }
-            }
-        }
-
-        for (size_t i = 0; i < paramsDef.types.size(); i++) {
-            if (paramsDef.types[i].isSized) {
-                ::HIR::TypeRef ty = context.crate.types.generic("", (isImplLevel ? 0 : 256) + i);
-                context.requireSized(sp, ms.getType(Span(), ty->as_Generic()));
-            }
-        }
-    }
-
-    /// (HELPER) Populate the cache for nodes that use visit_call
-    /// TODO: If the function has multiple mismatched options, tell the caller to try again later?
-    bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) {
-        TRACE_FUNCTION_FR(path, path);
-        assert(cache.argTypes.size() == 0);
-
-        const ::HIR::Function* fcnPtr = nullptr;
-
-        MonomorphHrlsOnly(context.crate.types, HIR::PathParams()).monomorphPath(sp, path);
-
-        struct Monomorph: public Monomorphiser {
-            Context& context;
-            const HIR::TypeData* selfTy;
-            const HIR::PathParams* implParams;
-            const HIR::PathParams& fcnParams;
-            const HIR::PathParams hrlParams;
-
-            Monomorph(Context& context, const HIR::TypeData* selfTy, const HIR::PathParams* implParams, const HIR::PathParams& fcnParams, HIR::PathParams hrlParams)
-                : Monomorphiser(context.crate.types)
-                , context(context)
-                , selfTy(selfTy)
-                , implParams(implParams)
-                , fcnParams(fcnParams)
-                , hrlParams(std::move(hrlParams))
-            {
-            }
-
-            ::HIR::TypeRef getType(const Span& sp, const HIR::GenericRef& e) const override {
-                if (e.name == "Self" || e.isSelf()) {
-                    if (selfTy) {
-                        return selfTy;
-                    } else {
-                        TODO(sp, "Handle 'Self' when monomorphising");
-                    }
-                } else if (e.binding < 256) {
-                    if (implParams) {
-                        auto idx = e.idx();
-                        ASSERT_BUG(sp, idx < implParams->types.size(), "Generic param (impl) out of input range - " << e << " >= " << implParams->types.size());
-                        return context.getType(implParams->types[idx]);
-                    } else {
-                        BUG(sp, "Impl-level parameter on free function (" << e << ")");
-                    }
-                } else if (e.binding < 512) {
-                    auto idx = e.idx();
-                    ASSERT_BUG(sp, idx < fcnParams.types.size(), "Generic param out of input range - " << e << " >= " << fcnParams.types.size());
-                    return context.getType(fcnParams.types[idx]);
-                } else {
-                    BUG(sp, "Generic binding out of total range (" << e << ")");
-                }
-            }
-
-            ::HIR::ConstGeneric getValue(const Span& sp, const HIR::GenericRef& e) const override {
-                if (e.binding < 256) {
-                    ASSERT_BUG(sp, implParams, "Impl-level value parameter on free function (" << e << ")");
-                    auto idx = e.idx();
-                    ASSERT_BUG(sp, idx < implParams->values.size(), "Generic value (impl) out of input range - " << e << " >= " << implParams->values.size());
-                    return context.ivars.getValue(implParams->values[idx]).clone();
-                } else if (e.binding < 512) {
-                    auto idx = e.idx();
-                    ASSERT_BUG(sp, idx < fcnParams.values.size(), "Generic value out of input range - " << e << " >= " << fcnParams.values.size());
-                    return context.ivars.getValue(fcnParams.values[idx]).clone();
-                } else {
-                    BUG(sp, "Generic value bounding out of total range (" << e << ")");
-                }
-            }
-
-            ::HIR::LifetimeRef getLifetime(const Span& sp, const ::HIR::GenericRef& e) const override {
-                if (e.group() == 0) {
-                    ASSERT_BUG(sp, implParams, "Impl-level lifetime parameter on free function (" << e << ")");
-                    auto idx = e.idx();
-                    ASSERT_BUG(sp, idx < implParams->mLifetimes.size(), "Generic lifetime (impl) out of input range - " << e << " >= " << implParams->mLifetimes.size());
-                    // If this resolves to a HRL (group 3) then return an empty lifetime
-                    auto rv = implParams->mLifetimes[idx];
-                    if (rv.isHrl()) {
-                        return HIR::LifetimeRef();
-                    }
-                    return rv;
-                } else if (e.group() == 1) {
-                    auto idx = e.idx();
-                    ASSERT_BUG(sp, idx < fcnParams.mLifetimes.size(), "Generic lifetime out of input range - " << e << " >= " << fcnParams.mLifetimes.size());
-                    return fcnParams.mLifetimes[idx];
-                } else if (e.group() == 3) {
-                    auto idx = e.idx();
-                    ASSERT_BUG(sp, idx < fcnParams.mLifetimes.size(), "Generic lifetime out of input range - " << e << " >= " << hrlParams.mLifetimes.size());
-                    return hrlParams.mLifetimes[idx];
-                } else {
-                    BUG(sp, "Generic lifetime bounding out of total range (" << e << ")");
-                }
-            }
-        };
-
-        cache.topParams = nullptr;
+    cache.topParams = nullptr;
         TU_MATCH_HDRA( (path.mData), {)
         TU_ARMA(Generic, e) {
-                const auto& fcn = context.crate.getFunctionByPath(sp, e.mPath);
-                fixParamCount(sp, context, ::HIR::TypeRef(), false, path, fcn.mParams, e.mParams);
-                fcnPtr = &fcn;
-                cache.fcnParams = &fcn.mParams;
+            const auto& fcn = context.crate.getFunctionByPath(sp, e.mPath);
+            fixParamCount(sp, context, ::HIR::TypeRef(), false, path, fcn.mParams, e.mParams);
+            fcnPtr = &fcn;
+            cache.fcnParams = &fcn.mParams;
 
-                //const auto& params_def = fcn.m_params;
-                const auto& pathParams = e.mParams;
-                cache.monomorph.reset(new Monomorph(context, nullptr, nullptr, pathParams, {}));
+            //const auto& params_def = fcn.m_params;
+            const auto& pathParams = e.mParams;
+            cache.monomorph.reset(new Monomorph(context, nullptr, nullptr, pathParams, {}));
+        }
+        TU_ARMA(UfcsKnown, e) {
+            const auto& trait = context.crate.getTraitByPath(sp, e.trait.mPath);
+            fixParamCount(sp, context, e.type, true, path, trait.mParams, e.trait.mParams);
+            if (trait.values.count(e.item) == 0) {
+                BUG(sp, "Method '" << e.item << "' of trait " << e.trait.mPath << " doesn't exist");
             }
-            TU_ARMA(UfcsKnown, e) {
-                const auto& trait = context.crate.getTraitByPath(sp, e.trait.mPath);
-                fixParamCount(sp, context, e.type, true, path, trait.mParams, e.trait.mParams);
-                if (trait.values.count(e.item) == 0) {
-                    BUG(sp, "Method '" << e.item << "' of trait " << e.trait.mPath << " doesn't exist");
-                }
-                const auto& fcn = trait.values.at(e.item).as_Function();
-                fixParamCount(sp, context, e.type, false, path, fcn.mParams, e.params);
-                cache.fcnParams = &fcn.mParams;
-                cache.topParams = &trait.mParams;
+            const auto& fcn = trait.values.at(e.item).as_Function();
+            fixParamCount(sp, context, e.type, false, path, fcn.mParams, e.params);
+            cache.fcnParams = &fcn.mParams;
+            cache.topParams = &trait.mParams;
 
-                // Add a bound requiring the Self type impl the trait
-                //auto pp_hrl = e.trait.m_hrls ? e.trait.m_hrls->make_empty_params(true) : HIR::PathParams();
-                //auto ms_hrl = MonomorphHrlsOnly(pp_hrl);
-                //context.add_trait_bound(sp, e.type,  e.trait.m_path, ms_hrl.monomorph_path_params(sp, e.trait.m_params, true));
-                context.addTraitBound(sp, e.type, e.trait.mPath, e.trait.mParams.clone());
+            // Add a bound requiring the Self type impl the trait
+            //auto pp_hrl = e.trait.m_hrls ? e.trait.m_hrls->make_empty_params(true) : HIR::PathParams();
+            //auto ms_hrl = MonomorphHrlsOnly(pp_hrl);
+            //context.add_trait_bound(sp, e.type,  e.trait.m_path, ms_hrl.monomorph_path_params(sp, e.trait.m_params, true));
+            context.addTraitBound(sp, e.type, e.trait.mPath, e.trait.mParams.clone());
 
-                fcnPtr = &fcn;
+            fcnPtr = &fcn;
 
-                cache.monomorph.reset(new Monomorph(context, e.type, &e.trait.mParams, e.params, {}));
+            cache.monomorph.reset(new Monomorph(context, e.type, &e.trait.mParams, e.params, {}));
+        }
+        TU_ARMA(UfcsUnknown, e) {
+            // TODO: Eventually, the HIR `Resolve UFCS` pass will be removed, leaving this code responsible for locating the item.
+            TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");
+        }
+        TU_ARMA(UfcsInherent, e) {
+            // NOTE: This case is kinda long, so it's refactored out into a helper
+            if (!visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr)) {
+                return false;
             }
-            TU_ARMA(UfcsUnknown, e) {
-                // TODO: Eventually, the HIR `Resolve UFCS` pass will be removed, leaving this code responsible for locating the item.
-                TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");
-            }
-            TU_ARMA(UfcsInherent, e) {
-                // NOTE: This case is kinda long, so it's refactored out into a helper
-                if (!visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr)) {
-                    return false;
-                }
-            }
+        }
         }
 
         assert( fcnPtr );
@@ -9097,1022 +8997,1014 @@ namespace {
 
         // --- Monomorphise the argument/return types (into current context)
         for(const auto& arg : fcn.mArgs) {
-            TRACE_FUNCTION_FR("ARG " << path << " - " << arg.first << ": " << arg.second, "Arg " << arg.first << " : " << cache.argTypes.back());
-            cache.argTypes.push_back(monomorph.monomorphType(sp, arg.second, false));
+        TRACE_FUNCTION_FR("ARG " << path << " - " << arg.first << ": " << arg.second, "Arg " << arg.first << " : " << cache.argTypes.back());
+        cache.argTypes.push_back(monomorph.monomorphType(sp, arg.second, false));
         }
         {
-            TRACE_FUNCTION_FR("RET " << path << " - " << fcn.returnType, "Ret " << cache.argTypes.back());
-            cache.argTypes.push_back(monomorph.monomorphType(sp, fcn.returnType, false));
+        TRACE_FUNCTION_FR("RET " << path << " - " << fcn.returnType, "Ret " << cache.argTypes.back());
+        cache.argTypes.push_back(monomorph.monomorphType(sp, fcn.returnType, false));
         }
 
         // --- Apply bounds by adding them to the associated type ruleset
         if( cache.topParams ) {
-            applyBoundsAsRules(context, sp, *cache.topParams, monomorph, /*is_impl_level=*/true);
+        applyBoundsAsRules(context, sp, *cache.topParams, monomorph, /*is_impl_level=*/true);
         }
         applyBoundsAsRules(context, sp, *cache.fcnParams, monomorph, /*is_impl_level=*/false);
 
         return true;
+}
+
+bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache, const ::HIR::Function*& fcnPtr) {
+    auto& e = path.mData.as_UfcsInherent();
+
+    const ::HIR::TypeImpl* implPtr = nullptr;
+    // Detect multiple applicable methods and get the caller to try again later if there are multiple
+    unsigned int count = 0;
+    context.crate.findTypeImpls(e.type, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
+        DEBUG("- impl" << impl.mParams.fmtArgs() << " " << impl.mType);
+        auto it = impl.methods.find(e.item);
+        if (it == impl.methods.end()) {
+            return false;
+        }
+        fcnPtr = &it->second.data;
+        implPtr = &impl;
+        count++;
+        return false;
+    });
+    if (!fcnPtr) {
+        ERROR(sp, E0000, "Failed to locate function " << path);
     }
+    if (count > 1) {
+        // Return a status to the caller so it can try again when there may be more information
+        return false;
+    }
+    assert(implPtr);
+    DEBUG("Found impl" << implPtr->mParams.fmtArgs() << " " << implPtr->mType);
+    fixParamCount(sp, context, e.type, false, path, fcnPtr->mParams, e.params);
+    cache.fcnParams = &fcnPtr->mParams;
 
-    bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache, const ::HIR::Function*& fcnPtr) {
-        auto& e = path.mData.as_UfcsInherent();
-
-        const ::HIR::TypeImpl* implPtr = nullptr;
-        // Detect multiple applicable methods and get the caller to try again later if there are multiple
-        unsigned int count = 0;
-        context.crate.findTypeImpls(e.type, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
-            DEBUG("- impl" << impl.mParams.fmtArgs() << " " << impl.mType);
-            auto it = impl.methods.find(e.item);
-            if (it == impl.methods.end()) {
-                return false;
-            }
-            fcnPtr = &it->second.data;
-            implPtr = &impl;
-            count++;
-            return false;
-        });
-        if (!fcnPtr) {
-            ERROR(sp, E0000, "Failed to locate function " << path);
+    // If the impl block has parameters, figure out what types they map to
+    // - The function params are already mapped (from fix_param_count)
+    auto& implParams = e.implParams;
+    implParams.mLifetimes.resize(implPtr->mParams.mLifetimes.size());
+    if (implPtr->mParams.isGeneric()) {
+        while (implParams.types.size() < implPtr->mParams.types.size()) {
+            implParams.types.push_back(context.crate.types.infer());
         }
-        if (count > 1) {
-            // Return a status to the caller so it can try again when there may be more information
-            return false;
-        }
-        assert(implPtr);
-        DEBUG("Found impl" << implPtr->mParams.fmtArgs() << " " << implPtr->mType);
-        fixParamCount(sp, context, e.type, false, path, fcnPtr->mParams, e.params);
-        cache.fcnParams = &fcnPtr->mParams;
+        implParams.values.resize(implPtr->mParams.values.size());
+        OwnedImplMatcher matcher(implParams);
 
-        // If the impl block has parameters, figure out what types they map to
-        // - The function params are already mapped (from fix_param_count)
-        auto& implParams = e.implParams;
-        implParams.mLifetimes.resize(implPtr->mParams.mLifetimes.size());
-        if (implPtr->mParams.isGeneric()) {
-            while (implParams.types.size() < implPtr->mParams.types.size()) {
-                implParams.types.push_back(context.crate.types.infer());
-            }
-            implParams.values.resize(implPtr->mParams.values.size());
-            OwnedImplMatcher matcher(implParams);
-
-            auto cmp = implPtr->mType->matchTestGenericsFuzz(sp, e.type, context.ivars.callbackResolveInfer(), matcher);
-            if (cmp == ::HIR::Compare::Fuzzy) {
-                // If the match was fuzzy, it could be due to a compound being matched against an ivar
-                DEBUG("- Fuzzy match, adding ivars and equating");
-                for (auto& ty : implParams.types) {
-                    if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
-                        // Allocate a new ivar for the param
-                        ty = context.ivars.newIvarTr();
-                    }
-                }
-
-                context.ivars.addIvarsParams(implParams);
-
-                // Monomorphise the impl type with the new ivars, and equate to e.type
-                // TODO: Use a copy of `MonomorphStatePtr` that calls `context.get_type`
-                auto implMonomorphCb = MonomorphStatePtr(context.crate.types, e.type, &implParams, nullptr);
-                auto implTyMono = implMonomorphCb.monomorphType(sp, implPtr->mType, false);
-                DEBUG("- impl_ty_mono = " << implTyMono);
-
-                context.equateTypes(sp, implTyMono, e.type);
-            } else if (cmp == ::HIR::Compare::Unequal) {
-                BUG(sp, "Failed to match inherent impl?!");
-            } else {
-                context.ivars.addIvarsParams(implParams);
-            }
-
-            // Fill unknown parametrs with ivars
+        auto cmp = implPtr->mType->matchTestGenericsFuzz(sp, e.type, context.ivars.callbackResolveInfer(), matcher);
+        if (cmp == ::HIR::Compare::Fuzzy) {
+            // If the match was fuzzy, it could be due to a compound being matched against an ivar
+            DEBUG("- Fuzzy match, adding ivars and equating");
             for (auto& ty : implParams.types) {
                 if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
                     // Allocate a new ivar for the param
                     ty = context.ivars.newIvarTr();
                 }
             }
+
+            context.ivars.addIvarsParams(implParams);
+
+            // Monomorphise the impl type with the new ivars, and equate to e.type
+            // TODO: Use a copy of `MonomorphStatePtr` that calls `context.get_type`
+            auto implMonomorphCb = MonomorphStatePtr(context.crate.types, e.type, &implParams, nullptr);
+            auto implTyMono = implMonomorphCb.monomorphType(sp, implPtr->mType, false);
+            DEBUG("- impl_ty_mono = " << implTyMono);
+
+            context.equateTypes(sp, implTyMono, e.type);
+        } else if (cmp == ::HIR::Compare::Unequal) {
+            BUG(sp, "Failed to match inherent impl?!");
+        } else {
+            context.ivars.addIvarsParams(implParams);
         }
 
-        // Create monomorphise callback
-        const auto& fcnParams = e.params;
-        // TODO: Use a copy of `MonomorphStatePtr` that calls `context.get_type`
-        cache.monomorph.reset(new MonomorphStatePtr(context.crate.types, e.type, &implParams, &fcnParams));
-
-        // Add trait bounds for all impl and function bounds
-        applyBoundsAsRules(context, sp, implPtr->mParams, *cache.monomorph, /*is_impl_level=*/true);
-
-        // Equate `Self` and `impl_ptr->m_type` (after monomorph)
-        {
-            ::HIR::TypeRef tmp;
-            const auto& implTyM = cache.monomorph->maybeMonomorphType(sp, tmp, implPtr->mType);
-
-            context.equateTypes(sp, e.type, implTyM);
+        // Fill unknown parametrs with ivars
+        for (auto& ty : implParams.types) {
+            if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
+                // Allocate a new ivar for the param
+                ty = context.ivars.newIvarTr();
+            }
         }
-
-        return true;
     }
 
-    // -----------------------------------------------------------------------
-    // IVar generation visitor
-    //
-    // Iterates the HIR expression tree and adds ivars to all types
-    // -----------------------------------------------------------------------
-    class ExprVisitorAddIvars: public HIR::ExprVisitorDef {
-        Context& context;
+    // Create monomorphise callback
+    const auto& fcnParams = e.params;
+    // TODO: Use a copy of `MonomorphStatePtr` that calls `context.get_type`
+    cache.monomorph.reset(new MonomorphStatePtr(context.crate.types, e.type, &implParams, &fcnParams));
 
-    public:
-        ExprVisitorAddIvars(Context& context)
-            : HIR::ExprVisitorDef(context.crate.types)
-            , context(context)
-        {
-        }
+    // Add trait bounds for all impl and function bounds
+    applyBoundsAsRules(context, sp, implPtr->mParams, *cache.monomorph, /*is_impl_level=*/true);
 
-        void innerVisitType(::HIR::TypeRef& ty) {
-            rewriteTyWith(context.crate.types, ty, [this](HIR::TypeRef&, HIR::TypeData& data) -> bool {
-                if (auto* te = data.opt_Path()) {
-                    if (te->path.mData.is_Generic()) {
-                        auto& params = te->path.mData.as_Generic().mParams;
-                        const HIR::GenericParams* paramDefs = nullptr;
+    // Equate `Self` and `impl_ptr->m_type` (after monomorph)
+    {
+        ::HIR::TypeRef tmp;
+        const auto& implTyM = cache.monomorph->maybeMonomorphType(sp, tmp, implPtr->mType);
+
+        context.equateTypes(sp, e.type, implTyM);
+    }
+
+    return true;
+}
+
+// -----------------------------------------------------------------------
+// IVar generation visitor
+//
+// Iterates the HIR expression tree and adds ivars to all types
+// -----------------------------------------------------------------------
+class ExprVisitorAddIvars: public HIR::ExprVisitorDef {
+    Context& context;
+
+public:
+    ExprVisitorAddIvars(Context& context)
+        : HIR::ExprVisitorDef(context.crate.types)
+        , context(context)
+    {
+    }
+
+    void innerVisitType(::HIR::TypeRef& ty) {
+        rewriteTyWith(context.crate.types, ty, [this](HIR::TypeRef&, HIR::TypeData& data) -> bool {
+            if (auto* te = data.opt_Path()) {
+                if (te->path.mData.is_Generic()) {
+                    auto& params = te->path.mData.as_Generic().mParams;
+                    const HIR::GenericParams* paramDefs = nullptr;
                         TU_MATCH_HDRA( (te->binding), { )
                         TU_ARMA(Struct, pbe)    paramDefs = &pbe->mParams;
-                            TU_ARMA(Enum, pbe) paramDefs = &pbe->mParams;
-                            TU_ARMA(Union, pbe) paramDefs = &pbe->mParams;
-                            TU_ARMA(ExternType, pbe) {
-                            }
-                            TU_ARMA(Opaque, pbe) {
-                            }
-                            TU_ARMA(Unbound, pbe) {
-                            }
+                        TU_ARMA(Enum, pbe) paramDefs = &pbe->mParams;
+                        TU_ARMA(Union, pbe) paramDefs = &pbe->mParams;
+                        TU_ARMA(ExternType, pbe) {
+                        }
+                        TU_ARMA(Opaque, pbe) {
+                        }
+                        TU_ARMA(Unbound, pbe) {
+                        }
                         }
                         if(paramDefs)
                         {
-                            populateDefaults(Span(), context, MonomorphStatePtr(context.crate.types, nullptr, &params, nullptr), *paramDefs, params);
+                        populateDefaults(Span(), context, MonomorphStatePtr(context.crate.types, nullptr, &params, nullptr), *paramDefs, params);
                         }
-                    }
                 }
-                return false;
-            });
-        }
-
-        void visitPathParams(::HIR::PathParams& pp) override {
-            this->context.ivars.addIvarsParams(pp);
-            for (auto& ty : pp.types) {
-                innerVisitType(ty);
             }
-        }
+            return false;
+        });
+    }
 
-        void visitType(::HIR::TypeRef& ty) override {
-            this->context.addIvars(ty);
+    void visitPathParams(::HIR::PathParams& pp) override {
+        this->context.ivars.addIvarsParams(pp);
+        for (auto& ty : pp.types) {
             innerVisitType(ty);
         }
-    };
+    }
 
-    // -----------------------------------------------------------------------
-    // Enumeration visitor
-    //
-    // Iterates the HIR expression tree and extracts type "equations"
-    // -----------------------------------------------------------------------
-    class ExprVisitorEnum: public ::HIR::ExprVisitor {
-        Context& context;
+    void visitType(::HIR::TypeRef& ty) override {
+        this->context.addIvars(ty);
+        innerVisitType(ty);
+    }
+};
+
+// -----------------------------------------------------------------------
+// Enumeration visitor
+//
+// Iterates the HIR expression tree and extracts type "equations"
+// -----------------------------------------------------------------------
+class ExprVisitorEnum: public ::HIR::ExprVisitor {
+    Context& context;
+    const ::HIR::TypeData* retType;
+
+    struct RetTarget {
         const ::HIR::TypeData* retType;
+        const ::HIR::TypeData* resumeType;
+        const ::HIR::TypeData* yieldType;
 
-        struct RetTarget {
-            const ::HIR::TypeData* retType;
-            const ::HIR::TypeData* resumeType;
-            const ::HIR::TypeData* yieldType;
-
-            RetTarget(const ::HIR::TypeData* retType)
-                : retType(retType)
-                , resumeType(nullptr)
-                , yieldType(nullptr)
-            {
-            }
-
-            RetTarget(const ::HIR::TypeData* retType, const ::HIR::TypeData* resumeType, const ::HIR::TypeData* yieldType)
-                : retType(retType)
-                , resumeType(resumeType)
-                , yieldType(yieldType)
-            {
-            }
-        };
-
-        ::std::vector<RetTarget> closureRetTypes;
-
-        ::std::vector<bool> innerCoerceEnabledStack;
-
-        ::std::vector<::HIR::ExprNodeLoop*> loopBlocks; // Used for `break` type markings
-
-        // TEMP: List of in-scope traits for buildup
-        ::HIR::tTraitList traits;
-
-    public:
-        ExprVisitorEnum(Context& context, ::HIR::tTraitList baseTraits, const ::HIR::TypeData* retType)
-            : context(context)
-            , retType(retType)
-            , traits(mv$(baseTraits))
+        RetTarget(const ::HIR::TypeData* retType)
+            : retType(retType)
+            , resumeType(nullptr)
+            , yieldType(nullptr)
         {
         }
 
-        void visit(::HIR::ExprNodeBlock& node) override {
-            TRACE_FUNCTION_FR(&node << " { ... }", &node << " " << this->context.getType(node.resType));
+        RetTarget(const ::HIR::TypeData* retType, const ::HIR::TypeData* resumeType, const ::HIR::TypeData* yieldType)
+            : retType(retType)
+            , resumeType(resumeType)
+            , yieldType(yieldType)
+        {
+        }
+    };
 
-            const auto isDiverge = [&](const ::HIR::TypeData* rty) -> bool {
-                const auto& ty = this->context.getType(rty);
-                // TODO: Search the entire type for `!`? (What about pointers to it? or Option/Result?)
-                // - A correct search will search for unconditional (ignoring enums with a non-! variant) non-rawptr instances of ! in the type
-                return ty->is_Diverge();
-            };
+    ::std::vector<RetTarget> closureRetTypes;
 
-            bool diverges = false;
-            this->pushTraits(node.traits);
-            if (node.nodes.size() > 0) {
-                this->pushInnerCoerce(false);
-                for (unsigned int i = 0; i < node.nodes.size(); i++) {
-                    auto& snp = node.nodes[i];
-                    this->context.addIvars(snp->resType);
-                    snp->visit(*this);
+    ::std::vector<bool> innerCoerceEnabledStack;
 
-                    // If this statement yields !, then mark the block as diverging
-                    if (isDiverge(snp->resType)) {
-                        diverges = true;
-                    } else {
-                        struct RevisitDefaultUnit: public Context::Revisitor {
-                            HIR::ExprNode* node;
+    ::std::vector<::HIR::ExprNodeLoop*> loopBlocks; // Used for `break` type markings
 
-                            RevisitDefaultUnit(HIR::ExprNode* node)
-                                : node(node)
-                            {
-                            }
+    // TEMP: List of in-scope traits for buildup
+    ::HIR::tTraitList traits;
 
-                            const Span& span(void) const {
-                                return node->span();
-                            }
+public:
+    ExprVisitorEnum(Context& context, ::HIR::tTraitList baseTraits, const ::HIR::TypeData* retType)
+        : context(context)
+        , retType(retType)
+        , traits(mv$(baseTraits))
+    {
+    }
 
-                            void fmt(std::ostream& os) const {
-                                os << "RevisitDefaultUnit(" << node << ": " << node->resType << ")";
-                            }
+    void visit(::HIR::ExprNodeBlock& node) override {
+        TRACE_FUNCTION_FR(&node << " { ... }", &node << " " << this->context.getType(node.resType));
 
-                            bool revisit(Context& context, bool isFallback) {
-                                DEBUG("is_fallback=" << isFallback);
-                                const auto& ty = context.getType(node->resType);
-                                if (const auto* i = ty->opt_Infer()) {
-                                    if (i->tyClass != HIR::InferClass::None) {
-                                        // Bounded ivar, remove this rule.
-                                        return true;
-                                    }
-                                    if (isFallback) {
-                                        context.equateTypes(node->span(), ty, context.crate.types.unit());
-                                        return true;
-                                    }
-                                    //context.possible_equate_ivar_bounds(node->span(), i->index, make_vec2(ty.clone(),
-                                    return false;
-                                } else {
+        const auto isDiverge = [&](const ::HIR::TypeData* rty) -> bool {
+            const auto& ty = this->context.getType(rty);
+            // TODO: Search the entire type for `!`? (What about pointers to it? or Option/Result?)
+            // - A correct search will search for unconditional (ignoring enums with a non-! variant) non-rawptr instances of ! in the type
+            return ty->is_Diverge();
+        };
+
+        bool diverges = false;
+        this->pushTraits(node.traits);
+        if (node.nodes.size() > 0) {
+            this->pushInnerCoerce(false);
+            for (unsigned int i = 0; i < node.nodes.size(); i++) {
+                auto& snp = node.nodes[i];
+                this->context.addIvars(snp->resType);
+                snp->visit(*this);
+
+                // If this statement yields !, then mark the block as diverging
+                if (isDiverge(snp->resType)) {
+                    diverges = true;
+                } else {
+                    struct RevisitDefaultUnit: public Context::Revisitor {
+                        HIR::ExprNode* node;
+
+                        RevisitDefaultUnit(HIR::ExprNode* node)
+                            : node(node)
+                        {
+                        }
+
+                        const Span& span(void) const {
+                            return node->span();
+                        }
+
+                        void fmt(std::ostream& os) const {
+                            os << "RevisitDefaultUnit(" << node << ": " << node->resType << ")";
+                        }
+
+                        bool revisit(Context& context, bool isFallback) {
+                            DEBUG("is_fallback=" << isFallback);
+                            const auto& ty = context.getType(node->resType);
+                            if (const auto* i = ty->opt_Infer()) {
+                                if (i->tyClass != HIR::InferClass::None) {
+                                    // Bounded ivar, remove this rule.
                                     return true;
                                 }
+                                if (isFallback) {
+                                    context.equateTypes(node->span(), ty, context.crate.types.unit());
+                                    return true;
+                                }
+                                //context.possible_equate_ivar_bounds(node->span(), i->index, make_vec2(ty.clone(),
+                                return false;
+                            } else {
+                                return true;
                             }
-                        };
-
-                        this->context.addRevisitAdv(std::make_unique<RevisitDefaultUnit>(&*snp));
-                    }
-                }
-                this->popInnerCoerce();
-            }
-
-            if (node.valueNode) {
-                auto& snp = node.valueNode;
-                DEBUG("Block yields final value");
-                this->context.addIvars(snp->resType);
-                this->context.equateTypes(snp->span(), node.resType, snp->resType);
-                this->context.requireSized(snp->span(), snp->resType);
-                snp->visit(*this);
-            } else if (node.nodes.size() > 0) {
-                // NOTE: If the final statement in the block diverges, mark this as diverging
-                const auto& snp = node.nodes.back();
-                bool defer = false;
-                if (!diverges) {
-                    if (const auto* e = this->context.getType(snp->resType)->opt_Infer()) {
-                        switch (e->tyClass) {
-                            case ::HIR::InferClass::Integer:
-                            case ::HIR::InferClass::Float:
-                                diverges = false;
-                                break;
-                            default:
-                                defer = true;
-                                break;
                         }
-                    } else if (isDiverge(snp->resType)) {
-                        diverges = true;
-                    } else {
-                        diverges = false;
-                    }
+                    };
+
+                    this->context.addRevisitAdv(std::make_unique<RevisitDefaultUnit>(&*snp));
                 }
-
-                // If a statement in this block diverges
-                if (defer) {
-                    DEBUG("Block final node returns _, derfer diverge check");
-                    this->context.addRevisit(node);
-                } else if (diverges) {
-                    DEBUG("Block diverges, yield !");
-                    this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
-                } else {
-                    DEBUG("Block doesn't diverge but doesn't yield a value, yield ()");
-                    this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
-                }
-            } else {
-                // Result should be `()`
-                DEBUG("Block is empty, yield ()");
-                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
-            }
-            this->popTraits(node.traits);
-        }
-
-        void visit(::HIR::ExprNodeConstBlock& node) override {
-            TRACE_FUNCTION_F(&node << " const { ... }");
-            this->context.addIvars(node.inner->resType);
-
-            //this->push_inner_coerce( true );
-            node.inner->visit(*this);
-            //this->pop_inner_coerce();
-            this->context.equateTypes(node.span(), node.resType, node.inner->resType);
-        }
-
-        void visit(::HIR::ExprNodeAsm& node) override {
-            TRACE_FUNCTION_F(&node << " llvm_asm! ...");
-
-            this->pushInnerCoerce(false);
-            for (auto& v : node.outputs) {
-                this->context.addIvars(v.value->resType);
-                v.value->visit(*this);
-            }
-            for (auto& v : node.inputs) {
-                this->context.addIvars(v.value->resType);
-                v.value->visit(*this);
             }
             this->popInnerCoerce();
-            // TODO: Revisit to check that the input are integers, and the outputs are integer lvalues
+        }
+
+        if (node.valueNode) {
+            auto& snp = node.valueNode;
+            DEBUG("Block yields final value");
+            this->context.addIvars(snp->resType);
+            this->context.equateTypes(snp->span(), node.resType, snp->resType);
+            this->context.requireSized(snp->span(), snp->resType);
+            snp->visit(*this);
+        } else if (node.nodes.size() > 0) {
+            // NOTE: If the final statement in the block diverges, mark this as diverging
+            const auto& snp = node.nodes.back();
+            bool defer = false;
+            if (!diverges) {
+                if (const auto* e = this->context.getType(snp->resType)->opt_Infer()) {
+                    switch (e->tyClass) {
+                        case ::HIR::InferClass::Integer:
+                        case ::HIR::InferClass::Float:
+                            diverges = false;
+                            break;
+                        default:
+                            defer = true;
+                            break;
+                    }
+                } else if (isDiverge(snp->resType)) {
+                    diverges = true;
+                } else {
+                    diverges = false;
+                }
+            }
+
+            // If a statement in this block diverges
+            if (defer) {
+                DEBUG("Block final node returns _, derfer diverge check");
+                this->context.addRevisit(node);
+            } else if (diverges) {
+                DEBUG("Block diverges, yield !");
+                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+            } else {
+                DEBUG("Block doesn't diverge but doesn't yield a value, yield ()");
+                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
+            }
+        } else {
+            // Result should be `()`
+            DEBUG("Block is empty, yield ()");
             this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
         }
+        this->popTraits(node.traits);
+    }
 
-        void visit(::HIR::ExprNodeAsm2& node) override {
-            TRACE_FUNCTION_F(&node << " asm! ...");
+    void visit(::HIR::ExprNodeConstBlock& node) override {
+        TRACE_FUNCTION_F(&node << " const { ... }");
+        this->context.addIvars(node.inner->resType);
 
-            this->pushInnerCoerce(false);
-            for (auto& v : node.mParams) {
+        //this->push_inner_coerce( true );
+        node.inner->visit(*this);
+        //this->pop_inner_coerce();
+        this->context.equateTypes(node.span(), node.resType, node.inner->resType);
+    }
+
+    void visit(::HIR::ExprNodeAsm& node) override {
+        TRACE_FUNCTION_F(&node << " llvm_asm! ...");
+
+        this->pushInnerCoerce(false);
+        for (auto& v : node.outputs) {
+            this->context.addIvars(v.value->resType);
+            v.value->visit(*this);
+        }
+        for (auto& v : node.inputs) {
+            this->context.addIvars(v.value->resType);
+            v.value->visit(*this);
+        }
+        this->popInnerCoerce();
+        // TODO: Revisit to check that the input are integers, and the outputs are integer lvalues
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
+    }
+
+    void visit(::HIR::ExprNodeAsm2& node) override {
+        TRACE_FUNCTION_F(&node << " asm! ...");
+
+        this->pushInnerCoerce(false);
+        for (auto& v : node.mParams) {
                 TU_MATCH_HDRA( (v), { )
                 TU_ARMA(Const, e) {
-                        this->context.addIvars(e->resType);
-                        visitNodePtr(e);
+                    this->context.addIvars(e->resType);
+                    visitNodePtr(e);
+                }
+                TU_ARMA(Sym, e) {
+                }
+                TU_ARMA(RegSingle, e) {
+                    this->context.addIvars(e.val->resType);
+                    visitNodePtr(e.val);
+                }
+                TU_ARMA(Reg, e) {
+                    if (e.valIn) {
+                        this->context.addIvars(e.valIn->resType);
+                        visitNodePtr(e.valIn);
                     }
-                    TU_ARMA(Sym, e) {
-                    }
-                    TU_ARMA(RegSingle, e) {
-                        this->context.addIvars(e.val->resType);
-                        visitNodePtr(e.val);
-                    }
-                    TU_ARMA(Reg, e) {
-                        if (e.valIn) {
-                            this->context.addIvars(e.valIn->resType);
-                            visitNodePtr(e.valIn);
-                        }
-                        if (e.valOut) {
-                            this->context.addIvars(e.valOut->resType);
-                            visitNodePtr(e.valOut);
-                        }
+                    if (e.valOut) {
+                        this->context.addIvars(e.valOut->resType);
+                        visitNodePtr(e.valOut);
                     }
                 }
-            }
-            this->popInnerCoerce();
-            // TODO: Revisit to check that the input are integers, and the outputs are integer lvalues
-            if (node.options.noreturn) {
-                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+                }
+        }
+        this->popInnerCoerce();
+        // TODO: Revisit to check that the input are integers, and the outputs are integer lvalues
+        if (node.options.noreturn) {
+            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+        } else {
+            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
+        }
+    }
+
+    void visit(::HIR::ExprNodeReturn& node) override {
+        TRACE_FUNCTION_F(&node << " return ...");
+        this->context.addIvars(node.mValue->resType);
+
+        const auto* retTy = (this->closureRetTypes.size() > 0 ? this->closureRetTypes.back().retType : this->retType);
+        this->context.equateTypesCoerce(node.span(), retTy, node.mValue);
+
+        this->pushInnerCoerce(true);
+        node.mValue->visit(*this);
+        this->popInnerCoerce();
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+    }
+
+    void visit(::HIR::ExprNodeYield& node) override {
+        TRACE_FUNCTION_F(&node << " yield ...");
+        this->context.addIvars(node.mValue->resType);
+
+        if (this->closureRetTypes.empty() || this->closureRetTypes.back().yieldType == nullptr) {
+            ERROR(node.span(), E0000, "`yield` outside a generator closure");
+        }
+        const auto* retTy = this->closureRetTypes.back().yieldType;
+        const auto* resumeTy = this->closureRetTypes.back().resumeType;
+        this->context.equateTypesCoerce(node.span(), retTy, node.mValue);
+
+        this->pushInnerCoerce(true);
+        node.mValue->visit(*this);
+        this->popInnerCoerce();
+        this->context.equateTypes(node.span(), node.resType, resumeTy);
+    }
+
+    void visit(::HIR::ExprNodeAWait& node) override {
+        TRACE_FUNCTION_F(&node << "(...).await");
+        this->context.addIvars(node.mValue->resType);
+        node.mValue->visit(*this);
+        // Require that `return = <[node.value] as `future_trait`>::Output`
+        this->context.equateTypesAssoc(node.span(), node.resType, context.mResolve.mLangFuture, {}, node.mValue->resType, "Output", {});
+    }
+
+    void visit(::HIR::ExprNodeLoop& node) override {
+        auto _ = this->pushInnerCoerceScoped(false);
+        TRACE_FUNCTION_F(&node << " loop ('" << node.label << ") { ... }");
+        // Push this node to a stack so `break` statements can update the yeilded value
+        this->loopBlocks.push_back(&node);
+        node.diverges = true; // Set to `false` if a break is hit
+
+        this->context.addIvars(node.mCode->resType);
+        this->context.equateTypes(node.span(), node.mCode->resType, this->context.crate.types.unit());
+        node.mCode->visit(*this);
+
+        this->loopBlocks.pop_back();
+
+        if (node.diverges) {
+            // NOTE: This doesn't set the ivar to !, but marks it as a ! ivar (similar to the int/float markers)
+            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+            DEBUG("Loop diverged");
+        }
+    }
+
+    void visit(::HIR::ExprNodeLoopControl& node) override {
+        TRACE_FUNCTION_F(&node << " " << (node.isContinue ? "continue" : "break") << " '" << node.label);
+        // Break types
+        if (!node.isContinue) {
+            ::HIR::ExprNodeLoop* loopNodePtr;
+            if (node.label != "") {
+                auto it = ::std::find_if(this->loopBlocks.rbegin(), this->loopBlocks.rend(), [&](const auto& np) {
+                    return np->label == node.label;
+                });
+                if (it == this->loopBlocks.rend()) {
+                    ERROR(node.span(), E0000, "Could not find loop '" << node.label << " for break");
+                }
+                loopNodePtr = &**it;
             } else {
-                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
-            }
-        }
-
-        void visit(::HIR::ExprNodeReturn& node) override {
-            TRACE_FUNCTION_F(&node << " return ...");
-            this->context.addIvars(node.mValue->resType);
-
-            const auto* retTy = (this->closureRetTypes.size() > 0 ? this->closureRetTypes.back().retType : this->retType);
-            this->context.equateTypesCoerce(node.span(), retTy, node.mValue);
-
-            this->pushInnerCoerce(true);
-            node.mValue->visit(*this);
-            this->popInnerCoerce();
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
-        }
-
-        void visit(::HIR::ExprNodeYield& node) override {
-            TRACE_FUNCTION_F(&node << " yield ...");
-            this->context.addIvars(node.mValue->resType);
-
-            if (this->closureRetTypes.empty() || this->closureRetTypes.back().yieldType == nullptr) {
-                ERROR(node.span(), E0000, "`yield` outside a generator closure");
-            }
-            const auto* retTy = this->closureRetTypes.back().yieldType;
-            const auto* resumeTy = this->closureRetTypes.back().resumeType;
-            this->context.equateTypesCoerce(node.span(), retTy, node.mValue);
-
-            this->pushInnerCoerce(true);
-            node.mValue->visit(*this);
-            this->popInnerCoerce();
-            this->context.equateTypes(node.span(), node.resType, resumeTy);
-        }
-
-        void visit(::HIR::ExprNodeAWait& node) override {
-            TRACE_FUNCTION_F(&node << "(...).await");
-            this->context.addIvars(node.mValue->resType);
-            node.mValue->visit(*this);
-            // Require that `return = <[node.value] as `future_trait`>::Output`
-            this->context.equateTypesAssoc(node.span(), node.resType, context.mResolve.mLangFuture, {}, node.mValue->resType, "Output", {});
-        }
-
-        void visit(::HIR::ExprNodeLoop& node) override {
-            auto _ = this->pushInnerCoerceScoped(false);
-            TRACE_FUNCTION_F(&node << " loop ('" << node.label << ") { ... }");
-            // Push this node to a stack so `break` statements can update the yeilded value
-            this->loopBlocks.push_back(&node);
-            node.diverges = true; // Set to `false` if a break is hit
-
-            this->context.addIvars(node.mCode->resType);
-            this->context.equateTypes(node.span(), node.mCode->resType, this->context.crate.types.unit());
-            node.mCode->visit(*this);
-
-            this->loopBlocks.pop_back();
-
-            if (node.diverges) {
-                // NOTE: This doesn't set the ivar to !, but marks it as a ! ivar (similar to the int/float markers)
-                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
-                DEBUG("Loop diverged");
-            }
-        }
-
-        void visit(::HIR::ExprNodeLoopControl& node) override {
-            TRACE_FUNCTION_F(&node << " " << (node.isContinue ? "continue" : "break") << " '" << node.label);
-            // Break types
-            if (!node.isContinue) {
-                ::HIR::ExprNodeLoop* loopNodePtr;
-                if (node.label != "") {
-                    auto it = ::std::find_if(this->loopBlocks.rbegin(), this->loopBlocks.rend(), [&](const auto& np) {
-                        return np->label == node.label;
-                    });
-                    if (it == this->loopBlocks.rend()) {
-                        ERROR(node.span(), E0000, "Could not find loop '" << node.label << " for break");
-                    }
-                    loopNodePtr = &**it;
-                } else {
-                    loopNodePtr = nullptr;
-                    for (auto it = this->loopBlocks.rbegin(); it != this->loopBlocks.rend(); ++it) {
-                        if (!(*it)->requireLabel) {
-                            loopNodePtr = *it;
-                            break;
-                        }
-                    }
-                    if (!loopNodePtr) {
-                        ERROR(node.span(), E0000, "Break statement with no active loop");
+                loopNodePtr = nullptr;
+                for (auto it = this->loopBlocks.rbegin(); it != this->loopBlocks.rend(); ++it) {
+                    if (!(*it)->requireLabel) {
+                        loopNodePtr = *it;
+                        break;
                     }
                 }
-                node.targetNode = loopNodePtr;
-
-                DEBUG("Break out of loop " << loopNodePtr);
-                auto& loopNode = *loopNodePtr;
-                loopNode.diverges = false;
-
-                if (node.mValue) {
-                    this->context.addIvars(node.mValue->resType);
-                    this->pushInnerCoerce(true);
-                    node.mValue->visit(*this);
-                    this->popInnerCoerce();
-                    this->context.equateTypesCoerce(node.span(), loopNode.resType, node.mValue);
-                    this->context.requireSized(node.span(), node.mValue->resType);
-                } else {
-                    this->context.equateTypes(node.span(), loopNode.resType, this->context.crate.types.unit());
+                if (!loopNodePtr) {
+                    ERROR(node.span(), E0000, "Break statement with no active loop");
                 }
             }
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
-        }
+            node.targetNode = loopNodePtr;
 
-        void visit(::HIR::ExprNodeLet& node) override {
-            TRACE_FUNCTION_F(&node << " let " << node.pattern << ": " << node.mType);
-
-            this->context.addIvars(node.mType);
-            this->context.handlePattern(node.span(), node.pattern, node.mType, true);
+            DEBUG("Break out of loop " << loopNodePtr);
+            auto& loopNode = *loopNodePtr;
+            loopNode.diverges = false;
 
             if (node.mValue) {
                 this->context.addIvars(node.mValue->resType);
-                // If the type was omitted or was just `_`, equate
-                if (node.mType->is_Infer()) {
-                    this->context.equateTypes(node.span(), node.mType, node.mValue->resType);
-                    this->pushInnerCoerce(true);
-                }
-                // otherwise coercions apply
-                else {
-                    this->context.equateTypesCoerce(node.span(), node.mType, node.mValue);
-                    this->pushInnerCoerce(true);
-                }
-
+                this->pushInnerCoerce(true);
                 node.mValue->visit(*this);
-                // No need for `Sized` bound, as it could end up being a `ref` binding
                 this->popInnerCoerce();
-            }
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
-        }
-
-        void visit(::HIR::ExprNodeMatch& node) override {
-            TRACE_FUNCTION_F(&node << " match ...");
-
-            auto valType = this->context.ivars.newIvarTr();
-
-            {
-                auto _ = this->pushInnerCoerceScoped(true);
-                this->context.addIvars(node.mValue->resType);
-
-                node.mValue->visit(*this);
-                // TODO: If a coercion point (and ivar for the value) is placed here, it will allow `match &string { "..." ... }`
-                // - But, this can break some parts of inferrence
-                this->context.equateTypes(node.span(), valType, node.mValue->resType);
-                //this->context.equate_types_coerce( node.span(), val_type, node.m_value );
-            }
-
-            for (auto& arm : node.arms) {
-                TRACE_FUNCTION_F("ARM " << arm.patterns);
-                for (auto& pat : arm.patterns) {
-                    this->context.handlePattern(node.span(), pat, valType);
-                }
-
-                for (auto& c : arm.guards) {
-                    auto _ = this->pushInnerCoerceScoped(false);
-                    this->context.addIvars(c.val->resType);
-                    c.val->visit(*this);
-
-                    // Shortcut `if` to avoid the pattern matching complexity
-                    if (c.isIf) {
-                        this->context.equateTypes(c.val->span(), this->context.crate.types.primitive(::HIR::CoreType::Bool), c.val->resType);
-                    } else {
-                        this->context.handlePattern(node.span(), c.pat, c.val->resType);
-                    }
-                }
-
-                this->context.addIvars(arm.mCode->resType);
-                this->context.equateTypesCoerce(node.span(), node.resType, arm.mCode);
-                arm.mCode->visit(*this);
-            }
-
-            if (node.arms.empty()) {
-                DEBUG("Empty match");
-                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
-            }
-        }
-
-        void visit(::HIR::ExprNodeAssign& node) override {
-            auto _ = this->pushInnerCoerceScoped(false);
-
-            TRACE_FUNCTION_F(&node << "... = ...");
-            this->context.addIvars(node.slot->resType);
-            this->context.addIvars(node.mValue->resType);
-
-            // Plain assignment can't be overloaded, requires equal types
-            if (node.op == ::HIR::ExprNodeAssign::Op::None) {
-                this->context.equateTypesCoerce(node.span(), node.slot->resType, node.mValue);
+                this->context.equateTypesCoerce(node.span(), loopNode.resType, node.mValue);
+                this->context.requireSized(node.span(), node.mValue->resType);
             } else {
-                // Type inferrence using the +=
-                // - "" as type name to indicate that it's just using the trait magic?
-                const char* langItem = nullptr;
-                auto operatorKind = TypeckPrimitiveOperator::None;
-                switch (node.op) {
-                    case ::HIR::ExprNodeAssign::Op::None:
-                        throw "";
-                    case ::HIR::ExprNodeAssign::Op::Add:
-                        langItem = "add_assign";
-                        operatorKind = TypeckPrimitiveOperator::AddAssign;
-                        break;
-                    case ::HIR::ExprNodeAssign::Op::Sub:
-                        langItem = "sub_assign";
-                        operatorKind = TypeckPrimitiveOperator::SubAssign;
-                        break;
-                    case ::HIR::ExprNodeAssign::Op::Mul:
-                        langItem = "mul_assign";
-                        operatorKind = TypeckPrimitiveOperator::MulAssign;
-                        break;
-                    case ::HIR::ExprNodeAssign::Op::Div:
-                        langItem = "div_assign";
-                        operatorKind = TypeckPrimitiveOperator::DivAssign;
-                        break;
-                    case ::HIR::ExprNodeAssign::Op::Mod:
-                        langItem = "rem_assign";
-                        operatorKind = TypeckPrimitiveOperator::RemAssign;
-                        break;
-                    case ::HIR::ExprNodeAssign::Op::And:
-                        langItem = "bitand_assign";
-                        operatorKind = TypeckPrimitiveOperator::BitAndAssign;
-                        break;
-                    case ::HIR::ExprNodeAssign::Op::Or:
-                        langItem = "bitor_assign";
-                        operatorKind = TypeckPrimitiveOperator::BitOrAssign;
-                        break;
-                    case ::HIR::ExprNodeAssign::Op::Xor:
-                        langItem = "bitxor_assign";
-                        operatorKind = TypeckPrimitiveOperator::BitXorAssign;
-                        break;
-                    case ::HIR::ExprNodeAssign::Op::Shr:
-                        langItem = "shr_assign";
-                        operatorKind = TypeckPrimitiveOperator::ShrAssign;
-                        break;
-                    case ::HIR::ExprNodeAssign::Op::Shl:
-                        langItem = "shl_assign";
-                        operatorKind = TypeckPrimitiveOperator::ShlAssign;
-                        break;
-                }
-                assert(langItem);
-                const auto& traitPath = this->context.crate.getLangItemPathOpt(langItem);
-
-                auto ty = this->context.ivars.newIvarTr();
-                this->context.equateTypesCoerce(node.span(), ty, node.mValue);
-                if (!traitPath.components().empty()) {
-                    this->context.equateTypesAssoc(node.span(), this->context.crate.types.infer(), traitPath, HIR::PathParams(mv$(ty)), node.slot->resType, "", {}, true, operatorKind);
-                } else if (operatorKind != TypeckPrimitiveOperator::ShlAssign && operatorKind != TypeckPrimitiveOperator::ShrAssign) {
-                    this->context.equateTypes(node.span(), node.slot->resType, ty);
-                }
+                this->context.equateTypes(node.span(), loopNode.resType, this->context.crate.types.unit());
             }
-
-            node.slot->visit(*this);
-
-            auto _2 = this->pushInnerCoerceScoped(node.op == ::HIR::ExprNodeAssign::Op::None);
-            node.mValue->visit(*this);
-            this->context.requireSized(node.span(), node.mValue->resType);
-
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
         }
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+    }
 
-        void visit(::HIR::ExprNodeBinOp& node) override {
-            auto _ = this->pushInnerCoerceScoped(false);
+    void visit(::HIR::ExprNodeLet& node) override {
+        TRACE_FUNCTION_F(&node << " let " << node.pattern << ": " << node.mType);
 
-            TRACE_FUNCTION_F(&node << "... " << ::HIR::ExprNodeBinOp::opname(node.op) << " ...");
+        this->context.addIvars(node.mType);
+        this->context.handlePattern(node.span(), node.pattern, node.mType, true);
 
-            this->context.addIvars(node.left->resType);
-            this->context.addIvars(node.right->resType);
-
-            const auto& leftTy = node.left->resType;
-            ::HIR::TypeRef rightTyInner = this->context.ivars.newIvarTr();
-            const auto& rightTy = rightTyInner; //node.m_right->m_res_type;
-            this->context.equateTypesCoerce(node.span(), rightTyInner, node.right);
-
-            switch (node.op) {
-                case ::HIR::ExprNodeBinOp::Op::CmpEqu:
-                case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
-                case ::HIR::ExprNodeBinOp::Op::CmpLt:
-                case ::HIR::ExprNodeBinOp::Op::CmpLtE:
-                case ::HIR::ExprNodeBinOp::Op::CmpGt:
-                case ::HIR::ExprNodeBinOp::Op::CmpGtE: {
-                    this->context.equateTypes(node.span(), node.resType, this->context.crate.types.primitive(::HIR::CoreType::Bool));
-
-                    const char* itemName = nullptr;
-                    switch (node.op) {
-                        case ::HIR::ExprNodeBinOp::Op::CmpEqu:
-                            itemName = "eq";
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
-                            itemName = "eq";
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::CmpLt:
-                            itemName = "partial_ord";
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::CmpLtE:
-                            itemName = "partial_ord";
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::CmpGt:
-                            itemName = "partial_ord";
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::CmpGtE:
-                            itemName = "partial_ord";
-                            break;
-                        default:
-                            break;
-                    }
-                    assert(itemName);
-                    const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
-
-                    auto operatorKind = node.op == ::HIR::ExprNodeBinOp::Op::CmpEqu || node.op == ::HIR::ExprNodeBinOp::Op::CmpNEqu
-                        ? TypeckPrimitiveOperator::Equal
-                        : TypeckPrimitiveOperator::Order;
-                    if (!opTrait.components().empty()) {
-                        this->context.equateTypesAssoc(node.span(), this->context.crate.types.infer(), opTrait, HIR::PathParams(rightTy), leftTy, "", {}, true, operatorKind);
-                    } else {
-                        this->context.equateTypes(node.span(), leftTy, rightTy);
-                    }
-                    break;
-                }
-
-                case ::HIR::ExprNodeBinOp::Op::BoolAnd:
-                case ::HIR::ExprNodeBinOp::Op::BoolOr:
-                    this->context.equateTypes(node.span(), node.resType, this->context.crate.types.primitive(::HIR::CoreType::Bool));
-                    this->context.equateTypes(node.span(), leftTy, this->context.crate.types.primitive(::HIR::CoreType::Bool));
-                    this->context.equateTypes(node.span(), rightTy, this->context.crate.types.primitive(::HIR::CoreType::Bool));
-                    break;
-                default: {
-                    const char* itemName = nullptr;
-                    auto operatorKind = TypeckPrimitiveOperator::None;
-                    switch (node.op) {
-                        case ::HIR::ExprNodeBinOp::Op::CmpEqu:
-                            throw "";
-                        case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
-                            throw "";
-                        case ::HIR::ExprNodeBinOp::Op::CmpLt:
-                            throw "";
-                        case ::HIR::ExprNodeBinOp::Op::CmpLtE:
-                            throw "";
-                        case ::HIR::ExprNodeBinOp::Op::CmpGt:
-                            throw "";
-                        case ::HIR::ExprNodeBinOp::Op::CmpGtE:
-                            throw "";
-                        case ::HIR::ExprNodeBinOp::Op::BoolAnd:
-                            throw "";
-                        case ::HIR::ExprNodeBinOp::Op::BoolOr:
-                            throw "";
-
-                        case ::HIR::ExprNodeBinOp::Op::Add:
-                            itemName = "add";
-                            operatorKind = TypeckPrimitiveOperator::Add;
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::Sub:
-                            itemName = "sub";
-                            operatorKind = TypeckPrimitiveOperator::Sub;
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::Mul:
-                            itemName = "mul";
-                            operatorKind = TypeckPrimitiveOperator::Mul;
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::Div:
-                            itemName = "div";
-                            operatorKind = TypeckPrimitiveOperator::Div;
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::Mod:
-                            itemName = "rem";
-                            operatorKind = TypeckPrimitiveOperator::Rem;
-                            break;
-
-                        case ::HIR::ExprNodeBinOp::Op::And:
-                            itemName = "bitand";
-                            operatorKind = TypeckPrimitiveOperator::BitAnd;
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::Or:
-                            itemName = "bitor";
-                            operatorKind = TypeckPrimitiveOperator::BitOr;
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::Xor:
-                            itemName = "bitxor";
-                            operatorKind = TypeckPrimitiveOperator::BitXor;
-                            break;
-
-                        case ::HIR::ExprNodeBinOp::Op::Shr:
-                            itemName = "shr";
-                            operatorKind = TypeckPrimitiveOperator::Shr;
-                            break;
-                        case ::HIR::ExprNodeBinOp::Op::Shl:
-                            itemName = "shl";
-                            operatorKind = TypeckPrimitiveOperator::Shl;
-                            break;
-                    }
-                    assert(itemName);
-                    const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
-
-                    // NOTE: `true` marks the association as coming from a binary operation, which changes integer handling
-                    if (!opTrait.components().empty()) {
-                        this->context.equateTypesAssoc(node.span(), node.resType, opTrait, HIR::PathParams(rightTy), leftTy, "Output", {}, true, operatorKind);
-                    } else {
-                        this->context.equateTypes(node.span(), node.resType, leftTy);
-                        if (operatorKind != TypeckPrimitiveOperator::Shl && operatorKind != TypeckPrimitiveOperator::Shr) {
-                            this->context.equateTypes(node.span(), leftTy, rightTy);
-                        }
-                    }
-                    break;
-                }
-            }
-            node.left->visit(*this);
-            auto _2 = this->pushInnerCoerceScoped(true);
-            node.right->visit(*this);
-        }
-
-        void visit(::HIR::ExprNodeUniOp& node) override {
-            auto _ = this->pushInnerCoerceScoped(false);
-
-            TRACE_FUNCTION_F(&node << " " << ::HIR::ExprNodeUniOp::opname(node.op) << "...");
+        if (node.mValue) {
             this->context.addIvars(node.mValue->resType);
-            const char* itemName = nullptr;
+            // If the type was omitted or was just `_`, equate
+            if (node.mType->is_Infer()) {
+                this->context.equateTypes(node.span(), node.mType, node.mValue->resType);
+                this->pushInnerCoerce(true);
+            }
+            // otherwise coercions apply
+            else {
+                this->context.equateTypesCoerce(node.span(), node.mType, node.mValue);
+                this->pushInnerCoerce(true);
+            }
+
+            node.mValue->visit(*this);
+            // No need for `Sized` bound, as it could end up being a `ref` binding
+            this->popInnerCoerce();
+        }
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
+    }
+
+    void visit(::HIR::ExprNodeMatch& node) override {
+        TRACE_FUNCTION_F(&node << " match ...");
+
+        auto valType = this->context.ivars.newIvarTr();
+
+        {
+            auto _ = this->pushInnerCoerceScoped(true);
+            this->context.addIvars(node.mValue->resType);
+
+            node.mValue->visit(*this);
+            // TODO: If a coercion point (and ivar for the value) is placed here, it will allow `match &string { "..." ... }`
+            // - But, this can break some parts of inferrence
+            this->context.equateTypes(node.span(), valType, node.mValue->resType);
+            //this->context.equate_types_coerce( node.span(), val_type, node.m_value );
+        }
+
+        for (auto& arm : node.arms) {
+            TRACE_FUNCTION_F("ARM " << arm.patterns);
+            for (auto& pat : arm.patterns) {
+                this->context.handlePattern(node.span(), pat, valType);
+            }
+
+            for (auto& c : arm.guards) {
+                auto _ = this->pushInnerCoerceScoped(false);
+                this->context.addIvars(c.val->resType);
+                c.val->visit(*this);
+
+                // Shortcut `if` to avoid the pattern matching complexity
+                if (c.isIf) {
+                    this->context.equateTypes(c.val->span(), this->context.crate.types.primitive(::HIR::CoreType::Bool), c.val->resType);
+                } else {
+                    this->context.handlePattern(node.span(), c.pat, c.val->resType);
+                }
+            }
+
+            this->context.addIvars(arm.mCode->resType);
+            this->context.equateTypesCoerce(node.span(), node.resType, arm.mCode);
+            arm.mCode->visit(*this);
+        }
+
+        if (node.arms.empty()) {
+            DEBUG("Empty match");
+            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+        }
+    }
+
+    void visit(::HIR::ExprNodeAssign& node) override {
+        auto _ = this->pushInnerCoerceScoped(false);
+
+        TRACE_FUNCTION_F(&node << "... = ...");
+        this->context.addIvars(node.slot->resType);
+        this->context.addIvars(node.mValue->resType);
+
+        // Plain assignment can't be overloaded, requires equal types
+        if (node.op == ::HIR::ExprNodeAssign::Op::None) {
+            this->context.equateTypesCoerce(node.span(), node.slot->resType, node.mValue);
+        } else {
+            // Type inferrence using the +=
+            // - "" as type name to indicate that it's just using the trait magic?
+            const char* langItem = nullptr;
             auto operatorKind = TypeckPrimitiveOperator::None;
             switch (node.op) {
-                case ::HIR::ExprNodeUniOp::Op::Invert:
-                    itemName = "not";
-                    operatorKind = TypeckPrimitiveOperator::Not;
+                case ::HIR::ExprNodeAssign::Op::None:
+                    throw "";
+                case ::HIR::ExprNodeAssign::Op::Add:
+                    langItem = "add_assign";
+                    operatorKind = TypeckPrimitiveOperator::AddAssign;
                     break;
-                case ::HIR::ExprNodeUniOp::Op::Negate:
-                    itemName = "neg";
-                    operatorKind = TypeckPrimitiveOperator::Neg;
+                case ::HIR::ExprNodeAssign::Op::Sub:
+                    langItem = "sub_assign";
+                    operatorKind = TypeckPrimitiveOperator::SubAssign;
+                    break;
+                case ::HIR::ExprNodeAssign::Op::Mul:
+                    langItem = "mul_assign";
+                    operatorKind = TypeckPrimitiveOperator::MulAssign;
+                    break;
+                case ::HIR::ExprNodeAssign::Op::Div:
+                    langItem = "div_assign";
+                    operatorKind = TypeckPrimitiveOperator::DivAssign;
+                    break;
+                case ::HIR::ExprNodeAssign::Op::Mod:
+                    langItem = "rem_assign";
+                    operatorKind = TypeckPrimitiveOperator::RemAssign;
+                    break;
+                case ::HIR::ExprNodeAssign::Op::And:
+                    langItem = "bitand_assign";
+                    operatorKind = TypeckPrimitiveOperator::BitAndAssign;
+                    break;
+                case ::HIR::ExprNodeAssign::Op::Or:
+                    langItem = "bitor_assign";
+                    operatorKind = TypeckPrimitiveOperator::BitOrAssign;
+                    break;
+                case ::HIR::ExprNodeAssign::Op::Xor:
+                    langItem = "bitxor_assign";
+                    operatorKind = TypeckPrimitiveOperator::BitXorAssign;
+                    break;
+                case ::HIR::ExprNodeAssign::Op::Shr:
+                    langItem = "shr_assign";
+                    operatorKind = TypeckPrimitiveOperator::ShrAssign;
+                    break;
+                case ::HIR::ExprNodeAssign::Op::Shl:
+                    langItem = "shl_assign";
+                    operatorKind = TypeckPrimitiveOperator::ShlAssign;
                     break;
             }
-            assert(itemName);
-            const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
-            if (!opTrait.components().empty()) {
-                this->context.equateTypesAssoc(node.span(), node.resType, opTrait, ::HIR::PathParams{}, node.mValue->resType, "Output", {}, true, operatorKind);
-            } else {
-                this->context.equateTypes(node.span(), node.resType, node.mValue->resType);
-            }
-            node.mValue->visit(*this);
-        }
+            assert(langItem);
+            const auto& traitPath = this->context.crate.getLangItemPathOpt(langItem);
 
-        void visit(::HIR::ExprNodeBorrow& node) override {
-            TRACE_FUNCTION_F(&node << " &_ ...");
-            this->context.addIvars(node.mValue->resType);
-
-            // TODO: Can Ref/RefMut trigger coercions?
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.borrow(node.mType, node.mValue->resType));
-
-            node.mValue->visit(*this);
-        }
-
-        void visit(::HIR::ExprNodeRawBorrow& node) override {
-            TRACE_FUNCTION_F(&node << " &raw _ ...");
-            this->context.addIvars(node.mValue->resType);
-
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.pointer(node.mType, node.mValue->resType));
-
-            node.mValue->visit(*this);
-        }
-
-        void visit(::HIR::ExprNodeCast& node) override {
-            auto _ = this->pushInnerCoerceScoped(false);
-            this->context.addIvars(node.dstType);
-
-            TRACE_FUNCTION_F(&node << " ... as " << node.dstType);
-
-            node.mValue->visit(*this);
-
-            this->context.equateTypes(node.span(), node.resType, node.dstType);
-            // TODO: Only revisit if the cast type requires inferring.
-            this->context.addRevisit(node);
-        }
-
-        void visit(::HIR::ExprNodeUnsize& node) override {
-            // _Unsize is emitted for type annotations, and adds a coercion point to its inner
-            this->context.addIvars(node.dstType);
-            node.mValue->visit(*this);
-
-            this->context.equateTypesCoerce(node.mValue->span(), node.dstType, node.mValue);
-            this->context.equateTypes(node.span(), node.resType, node.dstType);
-        }
-
-        void visit(::HIR::ExprNodeIndex& node) override {
-            auto _ = this->pushInnerCoerceScoped(false);
-
-            TRACE_FUNCTION_F(&node << " ... [ ... ]");
-            this->context.addIvars(node.mValue->resType);
-            node.cache.indexTy = this->context.ivars.newIvarTr();
-            this->context.addIvars(node.index->resType);
-
-            node.mValue->visit(*this);
-            node.index->visit(*this);
-            this->context.equateTypesCoerce(node.index->span(), node.cache.indexTy, node.index);
-
-            this->context.addRevisit(node);
-        }
-
-        void visit(::HIR::ExprNodeDeref& node) override {
-            auto _ = this->pushInnerCoerceScoped(false);
-
-            TRACE_FUNCTION_F(&node << " *...");
-            this->context.addIvars(node.mValue->resType);
-
-            node.mValue->visit(*this);
-
-            // Resolve native dereference versus an overloaded Deref before
-            // the enclosing expression's coercion is considered.  A trait
-            // target is an output constraint, not an expected result type.
-            const auto& ty = this->context.getType(node.mValue->resType);
-            const auto& opTrait = this->context.crate.getLangItemPathOpt("deref");
-            const ::HIR::TypeData* inner = nullptr;
-            bool isOwnedBox = false;
-            if (const auto* e = ty->opt_Borrow()) {
-                inner = e->inner;
-            } else if (const auto* e = ty->opt_Pointer()) {
-                inner = e->inner;
-            } else if (const auto* e = this->context.mResolve.typeIsOwnedBox(node.span(), ty)) {
-                inner = e;
-                isOwnedBox = true;
-            }
-            if (!inner) {
-                this->context.addRevisit(node);
-                return;
-            }
-
-            const bool hasVisibleImpl = !isOwnedBox
-                && !opTrait.components().empty()
-                && !this->context.isCurrentNativeDerefReceiver(opTrait, ty)
-                && this->context.mResolve.findTraitImpls(node.span(), opTrait, {}, ty, [&](ImplRef impl, HIR::Compare) {
-                    return !this->context.isCurrentOperatorImpl(impl);
-                });
-            if (hasVisibleImpl) {
-                node.traitUsed = ::HIR::ExprNodeDeref::TraitUsed::Trait;
-                this->context.equateTypesAssoc(
-                    node.span(), node.resType, opTrait, {}, node.mValue->resType,
-                    "Target", {}, true, TypeckPrimitiveOperator::Deref
-                );
-            } else {
-                node.traitUsed = ::HIR::ExprNodeDeref::TraitUsed::Builtin;
-                this->context.equateTypes(node.span(), node.resType, inner);
+            auto ty = this->context.ivars.newIvarTr();
+            this->context.equateTypesCoerce(node.span(), ty, node.mValue);
+            if (!traitPath.components().empty()) {
+                this->context.equateTypesAssoc(node.span(), this->context.crate.types.infer(), traitPath, HIR::PathParams(mv$(ty)), node.slot->resType, "", {}, true, operatorKind);
+            } else if (operatorKind != TypeckPrimitiveOperator::ShlAssign && operatorKind != TypeckPrimitiveOperator::ShrAssign) {
+                this->context.equateTypes(node.span(), node.slot->resType, ty);
             }
         }
 
-        void visit(::HIR::ExprNodeEmplace& node) override {
-            auto _ = this->pushInnerCoerceScoped(false);
-            TRACE_FUNCTION_F(&node << " ... <- ... ");
-            this->context.addIvars(node.place->resType);
-            this->context.addIvars(node.mValue->resType);
+        node.slot->visit(*this);
 
-            node.place->visit(*this);
-            auto _2 = this->pushInnerCoerceScoped(true);
-            node.mValue->visit(*this);
+        auto _2 = this->pushInnerCoerceScoped(node.op == ::HIR::ExprNodeAssign::Op::None);
+        node.mValue->visit(*this);
+        this->context.requireSized(node.span(), node.mValue->resType);
 
-            this->context.addRevisit(node);
-        }
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
+    }
 
-        void addIvarsGenericPath(const Span& sp, ::HIR::GenericPath& gp) {
-            for (auto& ty : gp.mParams.types) {
-                this->context.addIvars(ty);
-            }
-        }
+    void visit(::HIR::ExprNodeBinOp& node) override {
+        auto _ = this->pushInnerCoerceScoped(false);
 
-        void addIvarsPath(const Span& sp, ::HIR::Path& path) {
-            TU_MATCH(::HIR::Path::Data, (path.mData), (e), (Generic, this->addIvarsGenericPath(sp, e);), (UfcsKnown, this->context.addIvars(e.type); this->addIvarsGenericPath(sp, e.trait); for (auto& ty : e.params.types) this->context.addIvars(ty);), (UfcsUnknown, TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");), (UfcsInherent, this->context.addIvars(e.type); for (auto& ty : e.params.types) this->context.addIvars(ty);))
-        }
+        TRACE_FUNCTION_F(&node << "... " << ::HIR::ExprNodeBinOp::opname(node.op) << " ...");
 
-        ::HIR::TypeRef getStructenumTy(const Span& sp, bool isStruct, ::HIR::GenericPath& gp) {
-            if (isStruct) {
-                const auto& e = this->context.crate.getTypeitemByPath(sp, gp.mPath);
-                if (e.is_Struct()) {
-                    const auto& str = e.as_Struct();
-                    fixParamCount(sp, this->context, ::HIR::TypeRef(), false, gp, str.mParams, gp.mParams);
+        this->context.addIvars(node.left->resType);
+        this->context.addIvars(node.right->resType);
 
-                    return this->context.crate.types.path(gp.clone(), ::HIR::TypePathBinding::make_Struct(&str));
-                } else if (e.is_Union()) {
-                    const auto& u = e.as_Union();
-                    fixParamCount(sp, this->context, ::HIR::TypeRef(), false, gp, u.mParams, gp.mParams);
+        const auto& leftTy = node.left->resType;
+        ::HIR::TypeRef rightTyInner = this->context.ivars.newIvarTr();
+        const auto& rightTy = rightTyInner; //node.m_right->m_res_type;
+        this->context.equateTypesCoerce(node.span(), rightTyInner, node.right);
 
-                    return this->context.crate.types.path(gp.clone(), ::HIR::TypePathBinding::make_Union(&u));
-                } else {
-                    BUG(sp, "Path " << gp << " doesn't refer to a struct/union");
+        switch (node.op) {
+            case ::HIR::ExprNodeBinOp::Op::CmpEqu:
+            case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
+            case ::HIR::ExprNodeBinOp::Op::CmpLt:
+            case ::HIR::ExprNodeBinOp::Op::CmpLtE:
+            case ::HIR::ExprNodeBinOp::Op::CmpGt:
+            case ::HIR::ExprNodeBinOp::Op::CmpGtE: {
+                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.primitive(::HIR::CoreType::Bool));
+
+                const char* itemName = nullptr;
+                switch (node.op) {
+                    case ::HIR::ExprNodeBinOp::Op::CmpEqu:
+                        itemName = "eq";
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
+                        itemName = "eq";
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::CmpLt:
+                        itemName = "partial_ord";
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::CmpLtE:
+                        itemName = "partial_ord";
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::CmpGt:
+                        itemName = "partial_ord";
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::CmpGtE:
+                        itemName = "partial_ord";
+                        break;
+                    default:
+                        break;
                 }
-            } else {
-                auto sPath = getRuleParentPath(gp.mPath);
+                assert(itemName);
+                const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
 
-                const auto& enm = this->context.crate.getEnumByPath(sp, sPath);
-                fixParamCount(sp, this->context, ::HIR::TypeRef(), false, gp, enm.mParams, gp.mParams);
+                auto operatorKind = node.op == ::HIR::ExprNodeBinOp::Op::CmpEqu || node.op == ::HIR::ExprNodeBinOp::Op::CmpNEqu ? TypeckPrimitiveOperator::Equal : TypeckPrimitiveOperator::Order;
+                if (!opTrait.components().empty()) {
+                    this->context.equateTypesAssoc(node.span(), this->context.crate.types.infer(), opTrait, HIR::PathParams(rightTy), leftTy, "", {}, true, operatorKind);
+                } else {
+                    this->context.equateTypes(node.span(), leftTy, rightTy);
+                }
+                break;
+            }
 
-                return this->context.crate.types.path(::HIR::GenericPath(mv$(sPath), gp.mParams.clone()), ::HIR::TypePathBinding::make_Enum(&enm));
+            case ::HIR::ExprNodeBinOp::Op::BoolAnd:
+            case ::HIR::ExprNodeBinOp::Op::BoolOr:
+                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.primitive(::HIR::CoreType::Bool));
+                this->context.equateTypes(node.span(), leftTy, this->context.crate.types.primitive(::HIR::CoreType::Bool));
+                this->context.equateTypes(node.span(), rightTy, this->context.crate.types.primitive(::HIR::CoreType::Bool));
+                break;
+            default: {
+                const char* itemName = nullptr;
+                auto operatorKind = TypeckPrimitiveOperator::None;
+                switch (node.op) {
+                    case ::HIR::ExprNodeBinOp::Op::CmpEqu:
+                        throw "";
+                    case ::HIR::ExprNodeBinOp::Op::CmpNEqu:
+                        throw "";
+                    case ::HIR::ExprNodeBinOp::Op::CmpLt:
+                        throw "";
+                    case ::HIR::ExprNodeBinOp::Op::CmpLtE:
+                        throw "";
+                    case ::HIR::ExprNodeBinOp::Op::CmpGt:
+                        throw "";
+                    case ::HIR::ExprNodeBinOp::Op::CmpGtE:
+                        throw "";
+                    case ::HIR::ExprNodeBinOp::Op::BoolAnd:
+                        throw "";
+                    case ::HIR::ExprNodeBinOp::Op::BoolOr:
+                        throw "";
+
+                    case ::HIR::ExprNodeBinOp::Op::Add:
+                        itemName = "add";
+                        operatorKind = TypeckPrimitiveOperator::Add;
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::Sub:
+                        itemName = "sub";
+                        operatorKind = TypeckPrimitiveOperator::Sub;
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::Mul:
+                        itemName = "mul";
+                        operatorKind = TypeckPrimitiveOperator::Mul;
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::Div:
+                        itemName = "div";
+                        operatorKind = TypeckPrimitiveOperator::Div;
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::Mod:
+                        itemName = "rem";
+                        operatorKind = TypeckPrimitiveOperator::Rem;
+                        break;
+
+                    case ::HIR::ExprNodeBinOp::Op::And:
+                        itemName = "bitand";
+                        operatorKind = TypeckPrimitiveOperator::BitAnd;
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::Or:
+                        itemName = "bitor";
+                        operatorKind = TypeckPrimitiveOperator::BitOr;
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::Xor:
+                        itemName = "bitxor";
+                        operatorKind = TypeckPrimitiveOperator::BitXor;
+                        break;
+
+                    case ::HIR::ExprNodeBinOp::Op::Shr:
+                        itemName = "shr";
+                        operatorKind = TypeckPrimitiveOperator::Shr;
+                        break;
+                    case ::HIR::ExprNodeBinOp::Op::Shl:
+                        itemName = "shl";
+                        operatorKind = TypeckPrimitiveOperator::Shl;
+                        break;
+                }
+                assert(itemName);
+                const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
+
+                // NOTE: `true` marks the association as coming from a binary operation, which changes integer handling
+                if (!opTrait.components().empty()) {
+                    this->context.equateTypesAssoc(node.span(), node.resType, opTrait, HIR::PathParams(rightTy), leftTy, "Output", {}, true, operatorKind);
+                } else {
+                    this->context.equateTypes(node.span(), node.resType, leftTy);
+                    if (operatorKind != TypeckPrimitiveOperator::Shl && operatorKind != TypeckPrimitiveOperator::Shr) {
+                        this->context.equateTypes(node.span(), leftTy, rightTy);
+                    }
+                }
+                break;
             }
         }
+        node.left->visit(*this);
+        auto _2 = this->pushInnerCoerceScoped(true);
+        node.right->visit(*this);
+    }
 
-        void visit(::HIR::ExprNodeTupleVariant& node) override {
-            const auto& sp = node.span();
-            TRACE_FUNCTION_F(&node << " " << node.mPath << "(...) [" << (node.isStruct ? "struct" : "enum") << "]");
-            for (auto& val : node.mArgs) {
-                this->context.addIvars(val->resType);
+    void visit(::HIR::ExprNodeUniOp& node) override {
+        auto _ = this->pushInnerCoerceScoped(false);
+
+        TRACE_FUNCTION_F(&node << " " << ::HIR::ExprNodeUniOp::opname(node.op) << "...");
+        this->context.addIvars(node.mValue->resType);
+        const char* itemName = nullptr;
+        auto operatorKind = TypeckPrimitiveOperator::None;
+        switch (node.op) {
+            case ::HIR::ExprNodeUniOp::Op::Invert:
+                itemName = "not";
+                operatorKind = TypeckPrimitiveOperator::Not;
+                break;
+            case ::HIR::ExprNodeUniOp::Op::Negate:
+                itemName = "neg";
+                operatorKind = TypeckPrimitiveOperator::Neg;
+                break;
+        }
+        assert(itemName);
+        const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
+        if (!opTrait.components().empty()) {
+            this->context.equateTypesAssoc(node.span(), node.resType, opTrait, ::HIR::PathParams{}, node.mValue->resType, "Output", {}, true, operatorKind);
+        } else {
+            this->context.equateTypes(node.span(), node.resType, node.mValue->resType);
+        }
+        node.mValue->visit(*this);
+    }
+
+    void visit(::HIR::ExprNodeBorrow& node) override {
+        TRACE_FUNCTION_F(&node << " &_ ...");
+        this->context.addIvars(node.mValue->resType);
+
+        // TODO: Can Ref/RefMut trigger coercions?
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.borrow(node.mType, node.mValue->resType));
+
+        node.mValue->visit(*this);
+    }
+
+    void visit(::HIR::ExprNodeRawBorrow& node) override {
+        TRACE_FUNCTION_F(&node << " &raw _ ...");
+        this->context.addIvars(node.mValue->resType);
+
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.pointer(node.mType, node.mValue->resType));
+
+        node.mValue->visit(*this);
+    }
+
+    void visit(::HIR::ExprNodeCast& node) override {
+        auto _ = this->pushInnerCoerceScoped(false);
+        this->context.addIvars(node.dstType);
+
+        TRACE_FUNCTION_F(&node << " ... as " << node.dstType);
+
+        node.mValue->visit(*this);
+
+        this->context.equateTypes(node.span(), node.resType, node.dstType);
+        // TODO: Only revisit if the cast type requires inferring.
+        this->context.addRevisit(node);
+    }
+
+    void visit(::HIR::ExprNodeUnsize& node) override {
+        // _Unsize is emitted for type annotations, and adds a coercion point to its inner
+        this->context.addIvars(node.dstType);
+        node.mValue->visit(*this);
+
+        this->context.equateTypesCoerce(node.mValue->span(), node.dstType, node.mValue);
+        this->context.equateTypes(node.span(), node.resType, node.dstType);
+    }
+
+    void visit(::HIR::ExprNodeIndex& node) override {
+        auto _ = this->pushInnerCoerceScoped(false);
+
+        TRACE_FUNCTION_F(&node << " ... [ ... ]");
+        this->context.addIvars(node.mValue->resType);
+        node.cache.indexTy = this->context.ivars.newIvarTr();
+        this->context.addIvars(node.index->resType);
+
+        node.mValue->visit(*this);
+        node.index->visit(*this);
+        this->context.equateTypesCoerce(node.index->span(), node.cache.indexTy, node.index);
+
+        this->context.addRevisit(node);
+    }
+
+    void visit(::HIR::ExprNodeDeref& node) override {
+        auto _ = this->pushInnerCoerceScoped(false);
+
+        TRACE_FUNCTION_F(&node << " *...");
+        this->context.addIvars(node.mValue->resType);
+
+        node.mValue->visit(*this);
+
+        // Resolve native dereference versus an overloaded Deref before
+        // the enclosing expression's coercion is considered.  A trait
+        // target is an output constraint, not an expected result type.
+        const auto& ty = this->context.getType(node.mValue->resType);
+        const auto& opTrait = this->context.crate.getLangItemPathOpt("deref");
+        const ::HIR::TypeData* inner = nullptr;
+        bool isOwnedBox = false;
+        if (const auto* e = ty->opt_Borrow()) {
+            inner = e->inner;
+        } else if (const auto* e = ty->opt_Pointer()) {
+            inner = e->inner;
+        } else if (const auto* e = this->context.mResolve.typeIsOwnedBox(node.span(), ty)) {
+            inner = e;
+            isOwnedBox = true;
+        }
+        if (!inner) {
+            this->context.addRevisit(node);
+            return;
+        }
+
+        const bool hasVisibleImpl = !isOwnedBox && !opTrait.components().empty() && !this->context.isCurrentNativeDerefReceiver(opTrait, ty) && this->context.mResolve.findTraitImpls(node.span(), opTrait, {}, ty, [&](ImplRef impl, HIR::Compare) {
+            return !this->context.isCurrentOperatorImpl(impl);
+        });
+        if (hasVisibleImpl) {
+            node.traitUsed = ::HIR::ExprNodeDeref::TraitUsed::Trait;
+            this->context.equateTypesAssoc(node.span(), node.resType, opTrait, {}, node.mValue->resType, "Target", {}, true, TypeckPrimitiveOperator::Deref);
+        } else {
+            node.traitUsed = ::HIR::ExprNodeDeref::TraitUsed::Builtin;
+            this->context.equateTypes(node.span(), node.resType, inner);
+        }
+    }
+
+    void visit(::HIR::ExprNodeEmplace& node) override {
+        auto _ = this->pushInnerCoerceScoped(false);
+        TRACE_FUNCTION_F(&node << " ... <- ... ");
+        this->context.addIvars(node.place->resType);
+        this->context.addIvars(node.mValue->resType);
+
+        node.place->visit(*this);
+        auto _2 = this->pushInnerCoerceScoped(true);
+        node.mValue->visit(*this);
+
+        this->context.addRevisit(node);
+    }
+
+    void addIvarsGenericPath(const Span& sp, ::HIR::GenericPath& gp) {
+        for (auto& ty : gp.mParams.types) {
+            this->context.addIvars(ty);
+        }
+    }
+
+    void addIvarsPath(const Span& sp, ::HIR::Path& path) {
+        TU_MATCH(::HIR::Path::Data, (path.mData), (e), (Generic, this->addIvarsGenericPath(sp, e);), (UfcsKnown, this->context.addIvars(e.type); this->addIvarsGenericPath(sp, e.trait); for (auto& ty : e.params.types) this->context.addIvars(ty);), (UfcsUnknown, TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");), (UfcsInherent, this->context.addIvars(e.type); for (auto& ty : e.params.types) this->context.addIvars(ty);))
+    }
+
+    ::HIR::TypeRef getStructenumTy(const Span& sp, bool isStruct, ::HIR::GenericPath& gp) {
+        if (isStruct) {
+            const auto& e = this->context.crate.getTypeitemByPath(sp, gp.mPath);
+            if (e.is_Struct()) {
+                const auto& str = e.as_Struct();
+                fixParamCount(sp, this->context, ::HIR::TypeRef(), false, gp, str.mParams, gp.mParams);
+
+                return this->context.crate.types.path(gp.clone(), ::HIR::TypePathBinding::make_Struct(&str));
+            } else if (e.is_Union()) {
+                const auto& u = e.as_Union();
+                fixParamCount(sp, this->context, ::HIR::TypeRef(), false, gp, u.mParams, gp.mParams);
+
+                return this->context.crate.types.path(gp.clone(), ::HIR::TypePathBinding::make_Union(&u));
+            } else {
+                BUG(sp, "Path " << gp << " doesn't refer to a struct/union");
             }
-            this->context.ivars.addIvarsParams(node.mPath.mParams);
+        } else {
+            auto sPath = getRuleParentPath(gp.mPath);
 
-            // - Create ivars in path, and set result type
-            const auto ty = this->getStructenumTy(node.span(), node.isStruct, node.mPath);
-            this->context.equateTypes(node.span(), node.resType, ty);
+            const auto& enm = this->context.crate.getEnumByPath(sp, sPath);
+            fixParamCount(sp, this->context, ::HIR::TypeRef(), false, gp, enm.mParams, gp.mParams);
 
-            const ::HIR::tTupleFields* fieldsPtr = nullptr;
+            return this->context.crate.types.path(::HIR::GenericPath(mv$(sPath), gp.mParams.clone()), ::HIR::TypePathBinding::make_Enum(&enm));
+        }
+    }
+
+    void visit(::HIR::ExprNodeTupleVariant& node) override {
+        const auto& sp = node.span();
+        TRACE_FUNCTION_F(&node << " " << node.mPath << "(...) [" << (node.isStruct ? "struct" : "enum") << "]");
+        for (auto& val : node.mArgs) {
+            this->context.addIvars(val->resType);
+        }
+        this->context.ivars.addIvarsParams(node.mPath.mParams);
+
+        // - Create ivars in path, and set result type
+        const auto ty = this->getStructenumTy(node.span(), node.isStruct, node.mPath);
+        this->context.equateTypes(node.span(), node.resType, ty);
+
+        const ::HIR::tTupleFields* fieldsPtr = nullptr;
             TU_MATCH_HDRA( (ty->as_Path().binding), {)
             TU_ARMA(Unbound, e) {
-                }
-                TU_ARMA(Opaque, e) {
-                }
-                TU_ARMA(Enum, e) {
-                    const auto& varName = node.mPath.mPath.components().back();
-                    const auto& enm = *e;
-                    size_t idx = enm.findVariant(varName);
-                    ASSERT_BUG(sp, idx < enm.mData.as_Data().size(), "Unknown variant - " << node.mPath);
-                    const auto& varTy = enm.mData.as_Data()[idx].type;
-                    ASSERT_BUG(sp, varTy->as_Path().binding.is_Struct(), "Pointed variant of TupleVariant (" << node.mPath << ") isn't a Tuple");
-                    ASSERT_BUG(sp, varTy->as_Path().binding.as_Struct() != nullptr, "Pointed variant of TupleVariant (" << node.mPath << ") isn't a Tuple");
-                    const auto& str = *varTy->as_Path().binding.as_Struct();
-                    ASSERT_BUG(sp, str.mData.is_Tuple(), "Pointed variant of TupleVariant (" << node.mPath << ") isn't a Tuple");
-                    fieldsPtr = &str.mData.as_Tuple();
-                }
-                TU_ARMA(Struct, e) {
-                    ASSERT_BUG(sp, e->mData.is_Tuple(), "Pointed struct in TupleVariant (" << node.mPath << ") isn't a Tuple");
-                    fieldsPtr = &e->mData.as_Tuple();
-                }
-                TU_ARMA(Union, e) {
-                    BUG(sp, "TupleVariant pointing to a union");
-                }
-                TU_ARMA(ExternType, e) {
-                    BUG(sp, "TupleVariant pointing to a extern type");
-                }
+            }
+            TU_ARMA(Opaque, e) {
+            }
+            TU_ARMA(Enum, e) {
+                const auto& varName = node.mPath.mPath.components().back();
+                const auto& enm = *e;
+                size_t idx = enm.findVariant(varName);
+                ASSERT_BUG(sp, idx < enm.mData.as_Data().size(), "Unknown variant - " << node.mPath);
+                const auto& varTy = enm.mData.as_Data()[idx].type;
+                ASSERT_BUG(sp, varTy->as_Path().binding.is_Struct(), "Pointed variant of TupleVariant (" << node.mPath << ") isn't a Tuple");
+                ASSERT_BUG(sp, varTy->as_Path().binding.as_Struct() != nullptr, "Pointed variant of TupleVariant (" << node.mPath << ") isn't a Tuple");
+                const auto& str = *varTy->as_Path().binding.as_Struct();
+                ASSERT_BUG(sp, str.mData.is_Tuple(), "Pointed variant of TupleVariant (" << node.mPath << ") isn't a Tuple");
+                fieldsPtr = &str.mData.as_Tuple();
+            }
+            TU_ARMA(Struct, e) {
+                ASSERT_BUG(sp, e->mData.is_Tuple(), "Pointed struct in TupleVariant (" << node.mPath << ") isn't a Tuple");
+                fieldsPtr = &e->mData.as_Tuple();
+            }
+            TU_ARMA(Union, e) {
+                BUG(sp, "TupleVariant pointing to a union");
+            }
+            TU_ARMA(ExternType, e) {
+                BUG(sp, "TupleVariant pointing to a extern type");
+            }
             }
             assert(fieldsPtr);
             const ::HIR::tTupleFields& fields = *fieldsPtr;
             if( fields.size() != node.mArgs.size() ) {
-                ERROR(node.span(), E0000, "Tuple variant constructor argument count doesn't match type - " << node.mPath);
+            ERROR(node.span(), E0000, "Tuple variant constructor argument count doesn't match type - " << node.mPath);
             }
 
             auto monomorphCb = MonomorphStatePtr(this->context.crate.types, ty, &node.mPath.mParams, nullptr);
@@ -10121,136 +10013,127 @@ namespace {
             node.argTypes.resize( node.mArgs.size() );
             for( unsigned int i = 0; i < node.mArgs.size(); i ++ )
             {
-                const auto& desTyR = fields[i].ent;
-                const auto* desTy = &desTyR;
-                if (monomorphiseTypeNeeded(desTyR)) {
-                    node.argTypes[i] = monomorphCb.monomorphType(sp, desTyR);
-                    desTy = &node.argTypes[i];
-                }
+            const auto& desTyR = fields[i].ent;
+            const auto* desTy = &desTyR;
+            if (monomorphiseTypeNeeded(desTyR)) {
+                node.argTypes[i] = monomorphCb.monomorphType(sp, desTyR);
+                desTy = &node.argTypes[i];
+            }
 
-                this->context.equateTypesCoerce(node.span(), *desTy, node.mArgs[i]);
+            this->context.equateTypesCoerce(node.span(), *desTy, node.mArgs[i]);
             }
 
             auto _ = this->pushInnerCoerceScoped(true);
             for( auto& val : node.mArgs ) {
-                val->visit(*this);
-                this->context.requireSized(node.span(), val->resType);
+            val->visit(*this);
+            this->context.requireSized(node.span(), val->resType);
             }
+    }
+
+    void visit(::HIR::ExprNodeStructLiteral& node) override {
+        const auto& sp = node.span();
+        TRACE_FUNCTION_F(&node << " " << node.mType << " (" << node.realPath << ") {...} [" << (node.isStruct ? "struct" : "enum") << "]");
+        auto _ = this->pushInnerCoerceScoped(true);
+
+        // Note: This can happen if doing a second pass on a const function (run first time for const eval)
+        if (node.realPath == HIR::GenericPath()) {
+            this->context.addIvars(node.mType);
         }
 
-        void visit(::HIR::ExprNodeStructLiteral& node) override {
-            const auto& sp = node.span();
-            TRACE_FUNCTION_F(&node << " " << node.mType << " (" << node.realPath << ") {...} [" << (node.isStruct ? "struct" : "enum") << "]");
-            auto _ = this->pushInnerCoerceScoped(true);
+        for (auto& val : node.values) {
+            this->context.addIvars(val.second->resType);
+        }
+        if (node.baseValue) {
+            this->context.addIvars(node.baseValue->resType);
+        }
 
-            // Note: This can happen if doing a second pass on a const function (run first time for const eval)
-            if (node.realPath == HIR::GenericPath()) {
-                this->context.addIvars(node.mType);
+        if (node.realPath == HIR::GenericPath()) {
+            auto t = this->context.mResolve.expandAssociatedTypes(sp, mv$(node.mType));
+            node.mType = HIR::TypeRef();
+            if (node.isStruct) {
+                ASSERT_BUG(sp, TU_TEST1((*t), Path, .path.mData.is_Generic()), "Struct literal with non-Generic path - " << t);
+                node.realPath = t->as_Path().path.mData.as_Generic().clone();
+            } else {
+                ASSERT_BUG(sp, TU_TEST1((*t), Path, .path.mData.is_UfcsInherent()), "Enum struct literal with non-UfcsInherent path - " << t);
+                auto& it = t->as_Path().path.mData.as_UfcsInherent().type;
+                auto& name = t->as_Path().path.mData.as_UfcsInherent().item;
+                ASSERT_BUG(sp, TU_TEST1((*it), Path, .path.mData.is_Generic()), "Struct literal with non-Generic path - " << t);
+                node.realPath = it->as_Path().path.mData.as_Generic().clone();
+                node.realPath.mPath += name;
             }
+        }
+        auto& tyPath = node.realPath;
 
-            for (auto& val : node.values) {
-                this->context.addIvars(val.second->resType);
+        // - Create ivars in path, and set result type
+        const auto ty = this->getStructenumTy(node.span(), node.isStruct, tyPath);
+        this->context.equateTypes(node.span(), node.resType, ty);
+        if (const auto* expectedHint = this->context.coercionHint(node)) {
+            const auto* expected = this->context.getType(expectedHint);
+            const auto* actualPath = ty->opt_Path();
+            const auto* expectedPath = expected->opt_Path();
+            if (actualPath && expectedPath && actualPath->path.mData.is_Generic() && expectedPath->path.mData.is_Generic() && actualPath->path.mData.as_Generic().mPath == expectedPath->path.mData.as_Generic().mPath && ty->compareWithPlaceholders(sp, expected, this->context.ivars.callbackResolveInfer()) != ::HIR::Compare::Unequal) {
+                this->context.equateTypes(sp, ty, expected);
             }
-            if (node.baseValue) {
-                this->context.addIvars(node.baseValue->resType);
-            }
+        }
+        if (node.baseValue) {
+            this->context.equateTypes(node.span(), node.baseValue->resType, ty);
+        }
 
-            if (node.realPath == HIR::GenericPath()) {
-                auto t = this->context.mResolve.expandAssociatedTypes(sp, mv$(node.mType));
-                node.mType = HIR::TypeRef();
-                if (node.isStruct) {
-                    ASSERT_BUG(sp, TU_TEST1((*t), Path, .path.mData.is_Generic()), "Struct literal with non-Generic path - " << t);
-                    node.realPath = t->as_Path().path.mData.as_Generic().clone();
-                } else {
-                    ASSERT_BUG(sp, TU_TEST1((*t), Path, .path.mData.is_UfcsInherent()), "Enum struct literal with non-UfcsInherent path - " << t);
-                    auto& it = t->as_Path().path.mData.as_UfcsInherent().type;
-                    auto& name = t->as_Path().path.mData.as_UfcsInherent().item;
-                    ASSERT_BUG(sp, TU_TEST1((*it), Path, .path.mData.is_Generic()), "Struct literal with non-Generic path - " << t);
-                    node.realPath = it->as_Path().path.mData.as_Generic().clone();
-                    node.realPath.mPath += name;
-                }
-            }
-            auto& tyPath = node.realPath;
-
-            // - Create ivars in path, and set result type
-            const auto ty = this->getStructenumTy(node.span(), node.isStruct, tyPath);
-            this->context.equateTypes(node.span(), node.resType, ty);
-            if (const auto* expectedHint = this->context.coercionHint(node)) {
-                const auto* expected = this->context.getType(expectedHint);
-                const auto* actualPath = ty->opt_Path();
-                const auto* expectedPath = expected->opt_Path();
-                if (actualPath && expectedPath
-                    && actualPath->path.mData.is_Generic()
-                    && expectedPath->path.mData.is_Generic()
-                    && actualPath->path.mData.as_Generic().mPath
-                        == expectedPath->path.mData.as_Generic().mPath
-                    && ty->compareWithPlaceholders(
-                           sp,
-                           expected,
-                           this->context.ivars.callbackResolveInfer()
-                       ) != ::HIR::Compare::Unequal) {
-                    this->context.equateTypes(sp, ty, expected);
-                }
-            }
-            if (node.baseValue) {
-                this->context.equateTypes(node.span(), node.baseValue->resType, ty);
-            }
-
-            const ::HIR::tStructFields* fieldsPtr = nullptr;
-            const ::HIR::GenericParams* generics = nullptr;
+        const ::HIR::tStructFields* fieldsPtr = nullptr;
+        const ::HIR::GenericParams* generics = nullptr;
             TU_MATCH_HDRA( (ty->as_Path().binding), {)
             TU_ARMA(Unbound, e) {
+            }
+            TU_ARMA(Opaque, e) {
+            }
+            TU_ARMA(ExternType, e) {
+            } // Error?
+            TU_ARMA(Enum, e) {
+                const auto& varName = tyPath.mPath.components().back();
+                const auto& enm = *e;
+                auto idx = enm.findVariant(varName);
+                ASSERT_BUG(sp, idx != SIZE_MAX, "");
+                ASSERT_BUG(sp, enm.mData.is_Data(), "");
+                const auto& var = enm.mData.as_Data()[idx];
+                if (var.type == this->context.crate.types.unit()) {
+                    ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for unit-like variant");
+                    ASSERT_BUG(node.span(), !node.baseValue, "Values provided for unit-like variant");
+                    return;
                 }
-                TU_ARMA(Opaque, e) {
-                }
-                TU_ARMA(ExternType, e) {
-                } // Error?
-                TU_ARMA(Enum, e) {
-                    const auto& varName = tyPath.mPath.components().back();
-                    const auto& enm = *e;
-                    auto idx = enm.findVariant(varName);
-                    ASSERT_BUG(sp, idx != SIZE_MAX, "");
-                    ASSERT_BUG(sp, enm.mData.is_Data(), "");
-                    const auto& var = enm.mData.as_Data()[idx];
-                    if (var.type == this->context.crate.types.unit()) {
-                        ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for unit-like variant");
-                        ASSERT_BUG(node.span(), !node.baseValue, "Values provided for unit-like variant");
-                        return;
-                    }
-                    const auto& str = *var.type->as_Path().binding.as_Struct();
-                    /*
+                const auto& str = *var.type->as_Path().binding.as_Struct();
+                /*
                 if( it->second.is_Unit() || it->second.is_Value() || it->second.is_Tuple() ) {
                 }
                 */
-                    ASSERT_BUG(sp, var.isStruct, "Struct literal for enum on non-struct variant");
-                    fieldsPtr = &str.mData.as_Named();
-                    generics = &enm.mParams;
+                ASSERT_BUG(sp, var.isStruct, "Struct literal for enum on non-struct variant");
+                fieldsPtr = &str.mData.as_Named();
+                generics = &enm.mParams;
+            }
+            TU_ARMA(Union, e) {
+                fieldsPtr = &e->mVariants;
+                generics = &e->mParams;
+                // Errors are done here, as from_ast may not know yet
+                if (node.baseValue) {
+                    ERROR(node.span(), E0000, "Union can't have a base value");
                 }
-                TU_ARMA(Union, e) {
-                    fieldsPtr = &e->mVariants;
-                    generics = &e->mParams;
-                    // Errors are done here, as from_ast may not know yet
+                ASSERT_BUG(node.span(), node.values.size() > 0, "Union literal with no values");
+                ASSERT_BUG(node.span(), node.values.size() == 1, "Union literal with multiple values");
+            }
+            TU_ARMA(Struct, e) {
+                if (e->mData.is_Unit() || e->mData.is_Tuple()) {
+                    ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for " << e->mData.tagStr() << "-like struct");
+
                     if (node.baseValue) {
-                        ERROR(node.span(), E0000, "Union can't have a base value");
+                        auto _ = this->pushInnerCoerceScoped(false);
+                        node.baseValue->visit(*this);
                     }
-                    ASSERT_BUG(node.span(), node.values.size() > 0, "Union literal with no values");
-                    ASSERT_BUG(node.span(), node.values.size() == 1, "Union literal with multiple values");
+                    return;
                 }
-                TU_ARMA(Struct, e) {
-                    if (e->mData.is_Unit() || e->mData.is_Tuple()) {
-                        ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for " << e->mData.tagStr() << "-like struct");
 
-                        if (node.baseValue) {
-                            auto _ = this->pushInnerCoerceScoped(false);
-                            node.baseValue->visit(*this);
-                        }
-                        return;
-                    }
-
-                    ASSERT_BUG(node.span(), e->mData.is_Named(), "StructLiteral not pointing to a braced struct, instead " << e->mData.tagStr() << " - " << ty);
-                    fieldsPtr = &e->mData.as_Named();
-                    generics = &e->mParams;
-                }
+                ASSERT_BUG(node.span(), e->mData.is_Named(), "StructLiteral not pointing to a braced struct, instead " << e->mData.tagStr() << " - " << ty);
+                fieldsPtr = &e->mData.as_Named();
+                generics = &e->mParams;
+            }
             }
             ASSERT_BUG(node.span(), fieldsPtr, "");
             assert(generics);
@@ -10263,697 +10146,697 @@ namespace {
             // Bind fields with type params (coercable)
             for( auto& val : node.values)
             {
-                const auto& name = val.first;
-                auto it = ::std::find_if(fields.begin(), fields.end(), [&](const HIR::StructField& v) -> bool {
-                    return v.name == name;
-                });
-                ASSERT_BUG(node.span(), it != fields.end(), "Field '" << name << "' not found in struct " << tyPath);
-                const auto& desTyR = it->ty;
-                auto& desTyCache = node.valueTypes[it - fields.begin()];
-                const auto* desTy = &desTyR;
+            const auto& name = val.first;
+            auto it = ::std::find_if(fields.begin(), fields.end(), [&](const HIR::StructField& v) -> bool {
+                return v.name == name;
+            });
+            ASSERT_BUG(node.span(), it != fields.end(), "Field '" << name << "' not found in struct " << tyPath);
+            const auto& desTyR = it->ty;
+            auto& desTyCache = node.valueTypes[it - fields.begin()];
+            const auto* desTy = &desTyR;
 
-                DEBUG(name << " : " << desTyR);
-                if (monomorphiseTypeNeeded(desTyR)) {
-                    if (desTyCache == ::HIR::TypeRef()) {
-                        desTyCache = monomorphCb.monomorphType(node.span(), desTyR);
-                    } else {
-                        // TODO: Is it an error when it's already populated?
-                    }
-                    desTy = &desTyCache;
+            DEBUG(name << " : " << desTyR);
+            if (monomorphiseTypeNeeded(desTyR)) {
+                if (desTyCache == ::HIR::TypeRef()) {
+                    desTyCache = monomorphCb.monomorphType(node.span(), desTyR);
+                } else {
+                    // TODO: Is it an error when it's already populated?
                 }
-                this->context.equateTypesCoerce(node.span(), *desTy, val.second);
+                desTy = &desTyCache;
+            }
+            this->context.equateTypesCoerce(node.span(), *desTy, val.second);
             }
 
             // Convert bounds on the type into rules
             applyBoundsAsRules(context, node.span(), *generics, monomorphCb, /*is_impl_level=*/true);
 
             for( auto& val : node.values ) {
-                val.second->visit(*this);
-                this->context.requireSized(node.span(), val.second->resType);
+            val.second->visit(*this);
+            this->context.requireSized(node.span(), val.second->resType);
             }
             if( node.baseValue ) {
-                auto _ = this->pushInnerCoerceScoped(false);
-                node.baseValue->visit(*this);
-            }
-        }
-
-        void visit(::HIR::ExprNodeUnitVariant& node) override {
-            TRACE_FUNCTION_F(&node << " " << node.mPath << " [" << (node.isStruct ? "struct" : "enum") << "]");
-
-            // TODO: Check?
-
-            // - Create ivars in path, and set result type
-            const auto ty = this->getStructenumTy(node.span(), node.isStruct, node.mPath);
-            this->context.equateTypes(node.span(), node.resType, ty);
-        }
-
-        void visit(::HIR::ExprNodeCallPath& node) override {
-            this->visitPath(node.span(), node.mPath);
-            TRACE_FUNCTION_F(&node << " " << node.mPath << "(...)");
-            for (auto& val : node.mArgs) {
-                this->context.addIvars(val->resType);
-            }
-
-            // Populate cache
-            // - If the path is still ambiguous, defer the equates to a revisit rather than aborting.
-            const bool cacheOk = visitCallPopulateCache(this->context, node.span(), node.mPath, node.cache);
-            if (cacheOk) {
-                assert(node.cache.argTypes.size() >= 1);
-                unsigned int expArgc = node.cache.argTypes.size() - 1;
-
-                if (node.mArgs.size() != expArgc) {
-                    if (node.cache.fcn->variadic && node.mArgs.size() > expArgc) {
-                    } else {
-                        ERROR(node.span(), E0000, "Incorrect number of arguments to " << node.mPath << " - exp " << expArgc << " got " << node.mArgs.size());
-                    }
-                }
-
-                // TODO: Figure out a way to disable coercions in desugared for loops (will speed up typecheck)
-
-                // Link arguments
-                // - NOTE: Uses the cache for the count because vaargs aren't checked (they're checked for suitability in expr_check.cpp)
-                for (unsigned int i = 0; i < node.cache.argTypes.size() - 1; i++) {
-                    this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.mArgs[i]);
-                }
-                this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
-            } else {
-                // Ambiguous callee - revisit once inference has progressed.
-                this->context.addRevisit(node);
-            }
-
-            // Type-check the argument subtrees (independent of the cache).
-            {
-                auto _ = this->pushInnerCoerceScoped(true);
-                for (auto& val : node.mArgs) {
-                    val->visit(*this);
-                    //this->context.require_sized(node.span(), val->m_res_type);
-                }
-            }
-            if (cacheOk) {
-                this->context.requireSized(node.span(), node.resType);
-            }
-        }
-
-        void visit(::HIR::ExprNodeCallValue& node) override {
-            TRACE_FUNCTION_F(&node << " ...(...)");
-            this->context.addIvars(node.mValue->resType);
-            // Add ivars to node result types and create fresh ivars for coercion targets
-            for (auto& val : node.mArgs) {
-                this->context.addIvars(val->resType);
-                node.argIvars.push_back(this->context.ivars.newIvarTr());
-            }
-
-            {
-                auto _ = this->pushInnerCoerceScoped(false);
-                node.mValue->visit(*this);
-            }
-            auto _ = this->pushInnerCoerceScoped(true);
-            for (unsigned int i = 0; i < node.mArgs.size(); i++) {
-                auto& val = node.mArgs[i];
-                this->context.equateTypesCoerce(val->span(), node.argIvars[i], val);
-                val->visit(*this);
-                //this->context.require_sized(node.span(), val->m_res_type);
-            }
-            this->context.requireSized(node.span(), node.resType);
-
-            // Nothing can be done until type is known
-            this->context.addRevisit(node);
-        }
-
-        void visit(::HIR::ExprNodeCallMethod& node) override {
-            TRACE_FUNCTION_F(&node << " (...)." << node.method << "(...)");
-            this->context.addIvars(node.mValue->resType);
-            for (auto& val : node.mArgs) {
-                this->context.addIvars(val->resType);
-            }
-            for (auto& ty : node.mParams.types) {
-                this->context.addIvars(ty);
-            }
-
-            // - Search in-scope trait list for traits that provide a method of this name
-            const RcString& methodName = node.method;
-            ::HIR::tTraitList possibleTraits;
-            unsigned int maxNumParams = 0;
-            unsigned int maxNumValueParams = 0;
-            auto visitTraitInner = [&methodName, &maxNumParams, &maxNumValueParams, &possibleTraits](const HIR::SimplePath& p, const HIR::Trait& tr, bool push) {
-                auto it = tr.values.find(methodName);
-                if (it == tr.values.end()) {
-                    return;
-                }
-                if (!it->second.is_Function()) {
-                    return;
-                }
-                if (tr.mParams.types.size() > maxNumParams) {
-                    maxNumParams = tr.mParams.types.size();
-                }
-                if (tr.mParams.values.size() > maxNumValueParams) {
-                    maxNumValueParams = tr.mParams.values.size();
-                }
-
-                if (push) {
-                    DEBUG("Found method in " << p << " (push)");
-                    if (::std::none_of(possibleTraits.begin(), possibleTraits.end(), [&](const auto& x) {
-                        return x.second == &tr;
-                    })) {
-                        possibleTraits.push_back(std::make_pair(&p, &tr));
-                    }
-                } else {
-                    DEBUG("Found method in " << p << " (no push)");
-                }
-            };
-            auto visitTrait = [&visitTraitInner](const HIR::SimplePath& p, const HIR::Trait& trait) {
-                DEBUG("[visit_trait] ? " << p);
-                visitTraitInner(p, trait, true);
-                for (const auto& pt : trait.allParentTraits) {
-                    visitTraitInner(pt.mPath.mPath, *pt.traitPtr, false);
-                }
-            };
-            for (const auto& traitRef : ::reverse(traits)) {
-                if (traitRef.first == nullptr) {
-                    break;
-                }
-                visitTrait(*traitRef.first, *traitRef.second);
-            }
-            if (context.mResolve.currentTraitPath()) {
-                const HIR::SimplePath& tp = context.mResolve.currentTraitPath()->mPath;
-                const HIR::Trait& tr = context.mResolve.crate.getTraitByPath(node.span(), tp);
-                visitTrait(tp, tr);
-            }
-            //  > Store the possible set of traits for later
-            node.traits = mv$(possibleTraits);
-            node.traitParamTypeIvars = maxNumParams;
-            node.traitParamIvars.reserve(maxNumParams + maxNumValueParams);
-            for (unsigned int i = 0; i < maxNumParams; i++) {
-                node.traitParamIvars.push_back(this->context.ivars.newIvar());
-            }
-            for (unsigned int i = 0; i < maxNumValueParams; i++) {
-                node.traitParamIvars.push_back(this->context.ivars.newIvarVal());
-            }
-
-            {
-                auto _ = this->pushInnerCoerceScoped(false);
-                node.mValue->visit(*this);
-            }
-            auto _ = this->pushInnerCoerceScoped(true);
-            for (auto& val : node.mArgs) {
-                val->visit(*this);
-                //this->context.require_sized(node.span(), val->m_res_type);
-            }
-            this->context.requireSized(node.span(), node.resType);
-
-            // Resolution can't be done until lefthand type is known.
-            // > Has to be done during iteraton
-            this->context.addRevisit(node);
-        }
-
-        void visit(::HIR::ExprNodeField& node) override {
             auto _ = this->pushInnerCoerceScoped(false);
-            TRACE_FUNCTION_F(&node << " (...)." << node.field);
-            this->context.addIvars(node.mValue->resType);
+            node.baseValue->visit(*this);
+            }
+    }
 
-            node.mValue->visit(*this);
+    void visit(::HIR::ExprNodeUnitVariant& node) override {
+        TRACE_FUNCTION_F(&node << " " << node.mPath << " [" << (node.isStruct ? "struct" : "enum") << "]");
 
+        // TODO: Check?
+
+        // - Create ivars in path, and set result type
+        const auto ty = this->getStructenumTy(node.span(), node.isStruct, node.mPath);
+        this->context.equateTypes(node.span(), node.resType, ty);
+    }
+
+    void visit(::HIR::ExprNodeCallPath& node) override {
+        this->visitPath(node.span(), node.mPath);
+        TRACE_FUNCTION_F(&node << " " << node.mPath << "(...)");
+        for (auto& val : node.mArgs) {
+            this->context.addIvars(val->resType);
+        }
+
+        // Populate cache
+        // - If the path is still ambiguous, defer the equates to a revisit rather than aborting.
+        const bool cacheOk = visitCallPopulateCache(this->context, node.span(), node.mPath, node.cache);
+        if (cacheOk) {
+            assert(node.cache.argTypes.size() >= 1);
+            unsigned int expArgc = node.cache.argTypes.size() - 1;
+
+            if (node.mArgs.size() != expArgc) {
+                if (node.cache.fcn->variadic && node.mArgs.size() > expArgc) {
+                } else {
+                    ERROR(node.span(), E0000, "Incorrect number of arguments to " << node.mPath << " - exp " << expArgc << " got " << node.mArgs.size());
+                }
+            }
+
+            // TODO: Figure out a way to disable coercions in desugared for loops (will speed up typecheck)
+
+            // Link arguments
+            // - NOTE: Uses the cache for the count because vaargs aren't checked (they're checked for suitability in expr_check.cpp)
+            for (unsigned int i = 0; i < node.cache.argTypes.size() - 1; i++) {
+                this->context.equateTypesCoerce(node.span(), node.cache.argTypes[i], node.mArgs[i]);
+            }
+            this->context.equateTypes(node.span(), node.resType, node.cache.argTypes.back());
+        } else {
+            // Ambiguous callee - revisit once inference has progressed.
             this->context.addRevisit(node);
         }
 
-        void visit(::HIR::ExprNodeTuple& node) override {
-            TRACE_FUNCTION_F(&node << " (...,)");
-            for (auto& val : node.vals) {
-                this->context.addIvars(val->resType);
+        // Type-check the argument subtrees (independent of the cache).
+        {
+            auto _ = this->pushInnerCoerceScoped(true);
+            for (auto& val : node.mArgs) {
+                val->visit(*this);
+                //this->context.require_sized(node.span(), val->m_res_type);
+            }
+        }
+        if (cacheOk) {
+            this->context.requireSized(node.span(), node.resType);
+        }
+    }
+
+    void visit(::HIR::ExprNodeCallValue& node) override {
+        TRACE_FUNCTION_F(&node << " ...(...)");
+        this->context.addIvars(node.mValue->resType);
+        // Add ivars to node result types and create fresh ivars for coercion targets
+        for (auto& val : node.mArgs) {
+            this->context.addIvars(val->resType);
+            node.argIvars.push_back(this->context.ivars.newIvarTr());
+        }
+
+        {
+            auto _ = this->pushInnerCoerceScoped(false);
+            node.mValue->visit(*this);
+        }
+        auto _ = this->pushInnerCoerceScoped(true);
+        for (unsigned int i = 0; i < node.mArgs.size(); i++) {
+            auto& val = node.mArgs[i];
+            this->context.equateTypesCoerce(val->span(), node.argIvars[i], val);
+            val->visit(*this);
+            //this->context.require_sized(node.span(), val->m_res_type);
+        }
+        this->context.requireSized(node.span(), node.resType);
+
+        // Nothing can be done until type is known
+        this->context.addRevisit(node);
+    }
+
+    void visit(::HIR::ExprNodeCallMethod& node) override {
+        TRACE_FUNCTION_F(&node << " (...)." << node.method << "(...)");
+        this->context.addIvars(node.mValue->resType);
+        for (auto& val : node.mArgs) {
+            this->context.addIvars(val->resType);
+        }
+        for (auto& ty : node.mParams.types) {
+            this->context.addIvars(ty);
+        }
+
+        // - Search in-scope trait list for traits that provide a method of this name
+        const RcString& methodName = node.method;
+        ::HIR::tTraitList possibleTraits;
+        unsigned int maxNumParams = 0;
+        unsigned int maxNumValueParams = 0;
+        auto visitTraitInner = [&methodName, &maxNumParams, &maxNumValueParams, &possibleTraits](const HIR::SimplePath& p, const HIR::Trait& tr, bool push) {
+            auto it = tr.values.find(methodName);
+            if (it == tr.values.end()) {
+                return;
+            }
+            if (!it->second.is_Function()) {
+                return;
+            }
+            if (tr.mParams.types.size() > maxNumParams) {
+                maxNumParams = tr.mParams.types.size();
+            }
+            if (tr.mParams.values.size() > maxNumValueParams) {
+                maxNumValueParams = tr.mParams.values.size();
             }
 
-            if (canCoerceInnerResult()) {
-                DEBUG("Tuple inner coerce");
-                const auto& ty = this->context.getType(node.resType);
-                if (const auto* e = ty->opt_Tuple()) {
-                    if (e->size() != node.vals.size()) {
-                        ERROR(node.span(), E0000, "Tuple literal node count mismatches with return type");
-                    }
-                } else if (ty->is_Infer()) {
-                    ::std::vector<::HIR::TypeRef> tupleTys;
-                    for (const auto& val : node.vals) {
-                        (void)val;
-                        tupleTys.push_back(this->context.ivars.newIvarTr());
-                    }
-                    this->context.equateTypes(node.span(), node.resType, this->context.crate.types.tuple(mv$(tupleTys)));
-                } else {
-                    // mismatch
-                    ERROR(node.span(), E0000, "Tuple literal used where a non-tuple expected - " << ty);
-                }
-                const auto& innerTys = this->context.getType(node.resType)->as_Tuple();
-                assert(innerTys.size() == node.vals.size());
-
-                for (unsigned int i = 0; i < innerTys.size(); i++) {
-                    this->context.equateTypesCoerce(node.span(), innerTys[i], node.vals[i]);
+            if (push) {
+                DEBUG("Found method in " << p << " (push)");
+                if (::std::none_of(possibleTraits.begin(), possibleTraits.end(), [&](const auto& x) {
+                    return x.second == &tr;
+                })) {
+                    possibleTraits.push_back(std::make_pair(&p, &tr));
                 }
             } else {
-                // No inner coerce, just equate the return type.
+                DEBUG("Found method in " << p << " (no push)");
+            }
+        };
+        auto visitTrait = [&visitTraitInner](const HIR::SimplePath& p, const HIR::Trait& trait) {
+            DEBUG("[visit_trait] ? " << p);
+            visitTraitInner(p, trait, true);
+            for (const auto& pt : trait.allParentTraits) {
+                visitTraitInner(pt.mPath.mPath, *pt.traitPtr, false);
+            }
+        };
+        for (const auto& traitRef : ::reverse(traits)) {
+            if (traitRef.first == nullptr) {
+                break;
+            }
+            visitTrait(*traitRef.first, *traitRef.second);
+        }
+        if (context.mResolve.currentTraitPath()) {
+            const HIR::SimplePath& tp = context.mResolve.currentTraitPath()->mPath;
+            const HIR::Trait& tr = context.mResolve.crate.getTraitByPath(node.span(), tp);
+            visitTrait(tp, tr);
+        }
+        //  > Store the possible set of traits for later
+        node.traits = mv$(possibleTraits);
+        node.traitParamTypeIvars = maxNumParams;
+        node.traitParamIvars.reserve(maxNumParams + maxNumValueParams);
+        for (unsigned int i = 0; i < maxNumParams; i++) {
+            node.traitParamIvars.push_back(this->context.ivars.newIvar());
+        }
+        for (unsigned int i = 0; i < maxNumValueParams; i++) {
+            node.traitParamIvars.push_back(this->context.ivars.newIvarVal());
+        }
+
+        {
+            auto _ = this->pushInnerCoerceScoped(false);
+            node.mValue->visit(*this);
+        }
+        auto _ = this->pushInnerCoerceScoped(true);
+        for (auto& val : node.mArgs) {
+            val->visit(*this);
+            //this->context.require_sized(node.span(), val->m_res_type);
+        }
+        this->context.requireSized(node.span(), node.resType);
+
+        // Resolution can't be done until lefthand type is known.
+        // > Has to be done during iteraton
+        this->context.addRevisit(node);
+    }
+
+    void visit(::HIR::ExprNodeField& node) override {
+        auto _ = this->pushInnerCoerceScoped(false);
+        TRACE_FUNCTION_F(&node << " (...)." << node.field);
+        this->context.addIvars(node.mValue->resType);
+
+        node.mValue->visit(*this);
+
+        this->context.addRevisit(node);
+    }
+
+    void visit(::HIR::ExprNodeTuple& node) override {
+        TRACE_FUNCTION_F(&node << " (...,)");
+        for (auto& val : node.vals) {
+            this->context.addIvars(val->resType);
+        }
+
+        if (canCoerceInnerResult()) {
+            DEBUG("Tuple inner coerce");
+            const auto& ty = this->context.getType(node.resType);
+            if (const auto* e = ty->opt_Tuple()) {
+                if (e->size() != node.vals.size()) {
+                    ERROR(node.span(), E0000, "Tuple literal node count mismatches with return type");
+                }
+            } else if (ty->is_Infer()) {
                 ::std::vector<::HIR::TypeRef> tupleTys;
                 for (const auto& val : node.vals) {
-                    tupleTys.push_back(val->resType);
+                    (void)val;
+                    tupleTys.push_back(this->context.ivars.newIvarTr());
                 }
                 this->context.equateTypes(node.span(), node.resType, this->context.crate.types.tuple(mv$(tupleTys)));
+            } else {
+                // mismatch
+                ERROR(node.span(), E0000, "Tuple literal used where a non-tuple expected - " << ty);
             }
+            const auto& innerTys = this->context.getType(node.resType)->as_Tuple();
+            assert(innerTys.size() == node.vals.size());
 
-            for (auto& val : node.vals) {
-                val->visit(*this);
-                this->context.requireSized(node.span(), val->resType);
+            for (unsigned int i = 0; i < innerTys.size(); i++) {
+                this->context.equateTypesCoerce(node.span(), innerTys[i], node.vals[i]);
             }
+        } else {
+            // No inner coerce, just equate the return type.
+            ::std::vector<::HIR::TypeRef> tupleTys;
+            for (const auto& val : node.vals) {
+                tupleTys.push_back(val->resType);
+            }
+            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.tuple(mv$(tupleTys)));
         }
 
-        void visit(::HIR::ExprNodeArrayList& node) override {
-            TRACE_FUNCTION_F(&node << " [...,]");
-            auto _ = this->pushInnerCoerceScoped(true);
-            for (auto& val : node.vals) {
-                this->context.addIvars(val->resType);
-            }
+        for (auto& val : node.vals) {
+            val->visit(*this);
+            this->context.requireSized(node.span(), val->resType);
+        }
+    }
 
-            auto arrayTy = this->context.crate.types.array(context.ivars.newIvarTr(), node.vals.size());
-            this->context.equateTypes(node.span(), node.resType, arrayTy);
-            // Cleanly equate into array (with coercions)
-            const auto& innerTy = arrayTy->as_Array().inner;
-            for (auto& val : node.vals) {
-                this->equateTypesInnerCoerce(node.span(), innerTy, val);
-            }
-
-            for (auto& val : node.vals) {
-                val->visit(*this);
-            }
+    void visit(::HIR::ExprNodeArrayList& node) override {
+        TRACE_FUNCTION_F(&node << " [...,]");
+        auto _ = this->pushInnerCoerceScoped(true);
+        for (auto& val : node.vals) {
+            this->context.addIvars(val->resType);
         }
 
-        void visit(::HIR::ExprNodeArraySized& node) override {
-            TRACE_FUNCTION_F(&node << " [...; " << node.mSize << "]");
-            this->context.addIvars(node.val->resType);
-
-            // Create result type (can't be known until after const expansion)
-            // - Should it be created in const expansion?
-            auto ty = this->context.crate.types.array(context.ivars.newIvarTr(), node.mSize.clone());
-            this->context.equateTypes(node.span(), node.resType, ty);
-            // Equate with coercions
-            const auto& innerTy = ty->as_Array().inner;
-            this->equateTypesInnerCoerce(node.span(), innerTy, node.val);
-            //this->context.equate_types(node.span(), ::HIR::TypeRef(::HIR::CoreType::Usize), node.m_size->m_res_type);
-
-            node.val->visit(*this);
+        auto arrayTy = this->context.crate.types.array(context.ivars.newIvarTr(), node.vals.size());
+        this->context.equateTypes(node.span(), node.resType, arrayTy);
+        // Cleanly equate into array (with coercions)
+        const auto& innerTy = arrayTy->as_Array().inner;
+        for (auto& val : node.vals) {
+            this->equateTypesInnerCoerce(node.span(), innerTy, val);
         }
 
-        void visit(::HIR::ExprNodeLiteral& node) override {
-            HIR::TypeRef ty;
+        for (auto& val : node.vals) {
+            val->visit(*this);
+        }
+    }
+
+    void visit(::HIR::ExprNodeArraySized& node) override {
+        TRACE_FUNCTION_F(&node << " [...; " << node.mSize << "]");
+        this->context.addIvars(node.val->resType);
+
+        // Create result type (can't be known until after const expansion)
+        // - Should it be created in const expansion?
+        auto ty = this->context.crate.types.array(context.ivars.newIvarTr(), node.mSize.clone());
+        this->context.equateTypes(node.span(), node.resType, ty);
+        // Equate with coercions
+        const auto& innerTy = ty->as_Array().inner;
+        this->equateTypesInnerCoerce(node.span(), innerTy, node.val);
+        //this->context.equate_types(node.span(), ::HIR::TypeRef(::HIR::CoreType::Usize), node.m_size->m_res_type);
+
+        node.val->visit(*this);
+    }
+
+    void visit(::HIR::ExprNodeLiteral& node) override {
+        HIR::TypeRef ty;
             TU_MATCH_HDRA( (node.mData), {)
             TU_ARMA(Integer, e) {
-                    DEBUG("_Literal (: " << e.mType << " = " << e.mValue << ")");
-                    if (e.mType != ::HIR::CoreType::Str) {
-                        ty = this->context.crate.types.primitive(e.mType);
-                    } else {
-                        ty = this->context.crate.types.infer(~0, ::HIR::InferClass::Integer);
-                    }
+                DEBUG("_Literal (: " << e.mType << " = " << e.mValue << ")");
+                if (e.mType != ::HIR::CoreType::Str) {
+                    ty = this->context.crate.types.primitive(e.mType);
+                } else {
+                    ty = this->context.crate.types.infer(~0, ::HIR::InferClass::Integer);
                 }
-                TU_ARMA(Float, e) {
-                    DEBUG("_Literal (: " << node.resType << " = " << e.mValue << ")");
-                    if (e.mType != ::HIR::CoreType::Str) {
-                        ty = this->context.crate.types.primitive(e.mType);
-                    } else {
-                        ty = this->context.crate.types.infer(~0, ::HIR::InferClass::Float);
-                    }
+            }
+            TU_ARMA(Float, e) {
+                DEBUG("_Literal (: " << node.resType << " = " << e.mValue << ")");
+                if (e.mType != ::HIR::CoreType::Str) {
+                    ty = this->context.crate.types.primitive(e.mType);
+                } else {
+                    ty = this->context.crate.types.infer(~0, ::HIR::InferClass::Float);
                 }
-                TU_ARMA(Boolean, e) {
-                    DEBUG("_Literal ( " << (e ? "true" : "false") << ")");
-                    ty = this->context.crate.types.primitive(::HIR::CoreType::Bool);
-                }
-                TU_ARMA(String, e) {
-                    // TODO: &'static
-                    DEBUG("_Literal (&str)");
-                    ty = this->context.crate.types.borrow(::HIR::BorrowType::Shared, this->context.crate.types.primitive(::HIR::CoreType::Str), ::HIR::LifetimeRef::newStatic());
-                }
-                TU_ARMA(ByteString, e) {
-                    // TODO: &'static
-                    DEBUG("_Literal (&[u8])");
-                    ty = this->context.crate.types.borrow(::HIR::BorrowType::Shared, this->context.crate.types.array(this->context.crate.types.primitive(::HIR::CoreType::U8), e.size()), ::HIR::LifetimeRef::newStatic());
-                }
-                TU_ARMA(CString, e) {
-                    DEBUG("_Literal (&CStr)");
-                    auto p = context.crate.getLangItemPath(node.span(), "CStr");
-                    ty = this->context.crate.types.path(p, &context.crate.getStructByPath(node.span(), p));
-                    ty = this->context.crate.types.borrow(::HIR::BorrowType::Shared, ty, ::HIR::LifetimeRef::newStatic());
-                }
+            }
+            TU_ARMA(Boolean, e) {
+                DEBUG("_Literal ( " << (e ? "true" : "false") << ")");
+                ty = this->context.crate.types.primitive(::HIR::CoreType::Bool);
+            }
+            TU_ARMA(String, e) {
+                // TODO: &'static
+                DEBUG("_Literal (&str)");
+                ty = this->context.crate.types.borrow(::HIR::BorrowType::Shared, this->context.crate.types.primitive(::HIR::CoreType::Str), ::HIR::LifetimeRef::newStatic());
+            }
+            TU_ARMA(ByteString, e) {
+                // TODO: &'static
+                DEBUG("_Literal (&[u8])");
+                ty = this->context.crate.types.borrow(::HIR::BorrowType::Shared, this->context.crate.types.array(this->context.crate.types.primitive(::HIR::CoreType::U8), e.size()), ::HIR::LifetimeRef::newStatic());
+            }
+            TU_ARMA(CString, e) {
+                DEBUG("_Literal (&CStr)");
+                auto p = context.crate.getLangItemPath(node.span(), "CStr");
+                ty = this->context.crate.types.path(p, &context.crate.getStructByPath(node.span(), p));
+                ty = this->context.crate.types.borrow(::HIR::BorrowType::Shared, ty, ::HIR::LifetimeRef::newStatic());
+            }
             }
             this->context.addIvars(ty);
             this->context.equateTypes(node.span(), node.resType, ty);
-        }
+    }
 
-        void visit(::HIR::ExprNodePathValue& node) override {
-            const auto& sp = node.span();
-            this->visitPath(sp, node.mPath);
-            TRACE_FUNCTION_F(&node << " " << node.mPath);
+    void visit(::HIR::ExprNodePathValue& node) override {
+        const auto& sp = node.span();
+        this->visitPath(sp, node.mPath);
+        TRACE_FUNCTION_F(&node << " " << node.mPath);
 
-            this->addIvarsPath(node.span(), node.mPath);
+        this->addIvarsPath(node.span(), node.mPath);
 
             TU_MATCH_HDRA( (node.mPath.mData), {)
             TU_ARMA(Generic, e) {
-                    switch (node.target) {
-                        case ::HIR::ExprNodePathValue::UNKNOWN:
-                            BUG(sp, "_PathValue with target=UNKNOWN and a Generic path - " << e.mPath);
-                        case ::HIR::ExprNodePathValue::FUNCTION: {
-                            const auto& f = this->context.crate.getFunctionByPath(sp, e.mPath);
-                            fixParamCount(sp, this->context, ::HIR::TypeRef(), false, e, f.mParams, e.mParams);
+                switch (node.target) {
+                    case ::HIR::ExprNodePathValue::UNKNOWN:
+                        BUG(sp, "_PathValue with target=UNKNOWN and a Generic path - " << e.mPath);
+                    case ::HIR::ExprNodePathValue::FUNCTION: {
+                        const auto& f = this->context.crate.getFunctionByPath(sp, e.mPath);
+                        fixParamCount(sp, this->context, ::HIR::TypeRef(), false, e, f.mParams, e.mParams);
 
-                            auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, nullptr, &e.mParams);
-                            auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), &f}));
+                        auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, nullptr, &e.mParams);
+                        auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), &f}));
 
-                            // Apply bounds
-                            applyBoundsAsRules(this->context, sp, f.mParams, ms, /*is_impl_level=*/false);
+                        // Apply bounds
+                        applyBoundsAsRules(this->context, sp, f.mParams, ms, /*is_impl_level=*/false);
 
-                            DEBUG("> " << node.mPath << " = " << ty);
-                            this->context.equateTypes(sp, node.resType, ty);
-                        } break;
-                        case ::HIR::ExprNodePathValue::STRUCT_CONSTR: {
-                            const auto& s = this->context.crate.getStructByPath(sp, e.mPath);
-                            //const auto& se = s.m_data.as_Tuple();
-                            fixParamCount(sp, this->context, ::HIR::TypeRef(), false, e, s.mParams, e.mParams);
+                        DEBUG("> " << node.mPath << " = " << ty);
+                        this->context.equateTypes(sp, node.resType, ty);
+                    } break;
+                    case ::HIR::ExprNodePathValue::STRUCT_CONSTR: {
+                        const auto& s = this->context.crate.getStructByPath(sp, e.mPath);
+                        //const auto& se = s.m_data.as_Tuple();
+                        fixParamCount(sp, this->context, ::HIR::TypeRef(), false, e, s.mParams, e.mParams);
 
-                            auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.mParams, nullptr);
-                            //apply_bounds_as_rules(this->context, sp, s.m_params, monomorph_cb, /*is_impl_level=*/true);
-                            auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), &s}));
+                        auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.mParams, nullptr);
+                        //apply_bounds_as_rules(this->context, sp, s.m_params, monomorph_cb, /*is_impl_level=*/true);
+                        auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), &s}));
 
-                            this->context.equateTypes(sp, node.resType, ty);
-                        } break;
-                        case ::HIR::ExprNodePathValue::ENUM_VAR_CONSTR: {
-                            const auto& varName = e.mPath.components().back();
-                            auto enumPath = getRuleParentPath(e.mPath);
-                            const auto& enm = this->context.crate.getEnumByPath(sp, enumPath);
-                            fixParamCount(sp, this->context, ::HIR::TypeRef(), false, e, enm.mParams, e.mParams);
-                            size_t idx = enm.findVariant(varName);
-                            ASSERT_BUG(sp, idx != SIZE_MAX, "Missing variant - " << e.mPath);
-                            ASSERT_BUG(sp, enm.mData.is_Data(), "Enum " << enumPath << " isn't a data-holding enum");
-                            //const auto& var_ty = enm.m_data.as_Data()[idx].type;
-                            //const auto& str = *var_ty->as_Path().binding.as_Struct();
-                            //const auto& var_data = str.m_data.as_Tuple();
+                        this->context.equateTypes(sp, node.resType, ty);
+                    } break;
+                    case ::HIR::ExprNodePathValue::ENUM_VAR_CONSTR: {
+                        const auto& varName = e.mPath.components().back();
+                        auto enumPath = getRuleParentPath(e.mPath);
+                        const auto& enm = this->context.crate.getEnumByPath(sp, enumPath);
+                        fixParamCount(sp, this->context, ::HIR::TypeRef(), false, e, enm.mParams, e.mParams);
+                        size_t idx = enm.findVariant(varName);
+                        ASSERT_BUG(sp, idx != SIZE_MAX, "Missing variant - " << e.mPath);
+                        ASSERT_BUG(sp, enm.mData.is_Data(), "Enum " << enumPath << " isn't a data-holding enum");
+                        //const auto& var_ty = enm.m_data.as_Data()[idx].type;
+                        //const auto& str = *var_ty->as_Path().binding.as_Struct();
+                        //const auto& var_data = str.m_data.as_Tuple();
 
-                            auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.mParams, nullptr);
-                            //apply_bounds_as_rules(this->context, sp, enm.m_params, monomorph_cb, /*is_impl_level=*/true);
-                            auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), HIR::TypeDataNamedFunctionTy::make_EnumConstructor({&enm, idx})}));
-                            this->context.equateTypes(sp, node.resType, ty);
-                        } break;
-                        case ::HIR::ExprNodePathValue::STATIC: {
-                            const auto& v = this->context.crate.getStaticByPath(sp, e.mPath);
-                            DEBUG("static v.m_type = " << v.mType);
-                            this->context.equateTypes(sp, node.resType, v.mType);
-                        } break;
-                        case ::HIR::ExprNodePathValue::CONSTANT: {
-                            const auto& v = this->context.crate.getConstantByPath(sp, e.mPath);
-                            DEBUG("const" << v.mParams.fmtArgs() << " v.m_type = " << v.mType);
-                            if (v.mParams.types.size() > 0) {
-                                TODO(sp, "Support generic constants in typeck");
-                            }
-                            this->context.equateTypes(sp, node.resType, v.mType);
-                        } break;
-                    }
+                        auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.mParams, nullptr);
+                        //apply_bounds_as_rules(this->context, sp, enm.m_params, monomorph_cb, /*is_impl_level=*/true);
+                        auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), HIR::TypeDataNamedFunctionTy::make_EnumConstructor({&enm, idx})}));
+                        this->context.equateTypes(sp, node.resType, ty);
+                    } break;
+                    case ::HIR::ExprNodePathValue::STATIC: {
+                        const auto& v = this->context.crate.getStaticByPath(sp, e.mPath);
+                        DEBUG("static v.m_type = " << v.mType);
+                        this->context.equateTypes(sp, node.resType, v.mType);
+                    } break;
+                    case ::HIR::ExprNodePathValue::CONSTANT: {
+                        const auto& v = this->context.crate.getConstantByPath(sp, e.mPath);
+                        DEBUG("const" << v.mParams.fmtArgs() << " v.m_type = " << v.mType);
+                        if (v.mParams.types.size() > 0) {
+                            TODO(sp, "Support generic constants in typeck");
+                        }
+                        this->context.equateTypes(sp, node.resType, v.mType);
+                    } break;
                 }
-                TU_ARMA(UfcsUnknown, e) {
-                    BUG(sp, "Encountered UfcsUnknown");
+            }
+            TU_ARMA(UfcsUnknown, e) {
+                BUG(sp, "Encountered UfcsUnknown");
+            }
+            TU_ARMA(UfcsKnown, e) {
+                const auto& trait = this->context.crate.getTraitByPath(sp, e.trait.mPath);
+                fixParamCount(sp, this->context, e.type, true, e.trait, trait.mParams, e.trait.mParams);
+
+                // 1. Add trait bound to be checked.
+                this->context.addTraitBound(sp, e.type, e.trait.mPath, e.trait.mParams.clone());
+
+                // 2. Locate this item in the trait
+                // - If it's an associated `const`, will have to revisit
+                auto it = trait.values.find(e.item);
+                if (it == trait.values.end()) {
+                    ERROR(sp, E0000, "`" << e.item << "` is not a value member of trait " << e.trait.mPath);
                 }
-                TU_ARMA(UfcsKnown, e) {
-                    const auto& trait = this->context.crate.getTraitByPath(sp, e.trait.mPath);
-                    fixParamCount(sp, this->context, e.type, true, e.trait, trait.mParams, e.trait.mParams);
-
-                    // 1. Add trait bound to be checked.
-                    this->context.addTraitBound(sp, e.type, e.trait.mPath, e.trait.mParams.clone());
-
-                    // 2. Locate this item in the trait
-                    // - If it's an associated `const`, will have to revisit
-                    auto it = trait.values.find(e.item);
-                    if (it == trait.values.end()) {
-                        ERROR(sp, E0000, "`" << e.item << "` is not a value member of trait " << e.trait.mPath);
-                    }
                 TU_MATCH_HDRA( (it->second), {)
                 TU_ARMA(Constant, ie) {
-                            auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.mParams, nullptr);
-                            ::HIR::TypeRef tmp;
-                            const auto& ty = ms.maybeMonomorphType(sp, tmp, ie.mType);
-                            this->context.equateTypes(sp, node.resType, ty);
-                        }
-                        TU_ARMA(Static, ie) {
-                            TODO(sp, "Monomorpise associated static type - " << ie.mType);
-                        }
-                        TU_ARMA(Function, ie) {
-                            fixParamCount(sp, this->context, e.type, false, node.mPath, ie.mParams, e.params);
-
-                            auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.mParams, &e.params);
-                            applyBoundsAsRules(this->context, sp, ie.mParams, ms, /*is_impl_level=*/false);
-
-                            auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), &ie}));
-                            this->context.equateTypes(node.span(), node.resType, ty);
-                        }
-                }
-                }
-                TU_ARMA(UfcsInherent, e) {
-                    // TODO: Share code with visit_call_populate_cache
-
-                    // - Locate function (and impl block)
-                    const ::HIR::Function* fcnPtr = nullptr;
-                    const ::HIR::Constant* constPtr = nullptr;
-                    const ::HIR::TypeImpl* implPtr = nullptr;
-                    // TODO: Support mutiple matches here (if there's a fuzzy match) and retry if so
-                    unsigned int count = 0;
-                    this->context.crate.findTypeImpls(e.type, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
-                        DEBUG("- impl" << impl.mParams.fmtArgs() << " " << impl.mType);
-                        {
-                            auto it = impl.methods.find(e.item);
-                            if (it != impl.methods.end()) {
-                                fcnPtr = &it->second.data;
-                                implPtr = &impl;
-                                count += 1;
-                                return false;
-                                //return true;
-                            }
-                        }
-                        {
-                            auto it = impl.constants.find(e.item);
-                            if (it != impl.constants.end()) {
-                                constPtr = &it->second.data;
-                                implPtr = &impl;
-                                count += 1;
-                                return false;
-                            }
-                        }
-                        return false;
-                    });
-                    if (count == 0) {
-                        ERROR(sp, E0000, "Failed to locate associated value " << node.mPath);
-                    }
-                    if (count > 1) {
-                        TODO(sp, "Revisit _PathValue when UfcsInherent has multiple options - " << node.mPath);
-                    }
-
-                    assert(fcnPtr || constPtr);
-                    assert(implPtr);
-
-                    if (fcnPtr) {
-                        fixParamCount(sp, this->context, e.type, false, node.mPath, fcnPtr->mParams, e.params);
-                    } else {
-                        fixParamCount(sp, this->context, e.type, false, node.mPath, constPtr->mParams, e.params);
-                    }
-
-                    // If the impl block has parameters, figure out what types they map to
-                    // - The function params are already mapped (from fix_param_count)
-                    auto& implParams = e.implParams;
-                    implParams.mLifetimes.resize(implPtr->mParams.mLifetimes.size());
-                    if (implPtr->mParams.isGeneric()) {
-                        while (implParams.types.size() < implPtr->mParams.types.size()) {
-                            implParams.types.push_back(this->context.crate.types.infer());
-                        }
-                        implParams.values.resize(implPtr->mParams.values.size());
-                        OwnedImplMatcher matcher(implParams);
-                        // NOTE: Could be fuzzy.
-                        bool r = implPtr->mType->matchTestGenerics(sp, e.type, this->context.ivars.callbackResolveInfer(), matcher);
-                        for (auto& ty : implParams.types) {
-                            // Create new ivars if there's holes
-                            if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
-                                this->context.addIvars(ty);
-                            }
-                        }
-                        if (!r) {
-                            auto t = MonomorphStatePtr(this->context.crate.types, nullptr, &implParams, nullptr).monomorphType(sp, implPtr->mType);
-                            this->context.equateTypes(node.span(), t, e.type);
-                        }
-                    }
-
-                    if (fcnPtr) {
-                        // Create monomorphise callback
-                        const auto& fcnParams = e.params;
-                        // TODO: call `context.get_type` in this?
-                        auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, &fcnParams);
-
-                        // Bounds (both impl and fn)
-                        applyBoundsAsRules(this->context, sp, implPtr->mParams, ms, /*is_impl_level=*/true);
-                        applyBoundsAsRules(this->context, sp, fcnPtr->mParams, ms, /*is_impl_level=*/false);
-
-                        auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), fcnPtr}));
-                        this->context.equateTypes(node.span(), node.resType, ty);
-                    } else // !fcn_ptr, ergo const_ptr
-                    {
-                        assert(constPtr);
-                        auto monomorphCb = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, &e.params);
-
+                        auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.mParams, nullptr);
                         ::HIR::TypeRef tmp;
-                        const auto& ty = monomorphCb.maybeMonomorphType(sp, tmp, constPtr->mType);
+                        const auto& ty = ms.maybeMonomorphType(sp, tmp, ie.mType);
+                        this->context.equateTypes(sp, node.resType, ty);
+                    }
+                    TU_ARMA(Static, ie) {
+                        TODO(sp, "Monomorpise associated static type - " << ie.mType);
+                    }
+                    TU_ARMA(Function, ie) {
+                        fixParamCount(sp, this->context, e.type, false, node.mPath, ie.mParams, e.params);
 
-                        applyBoundsAsRules(this->context, sp, implPtr->mParams, monomorphCb, /*is_impl_level=*/true);
+                        auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.mParams, &e.params);
+                        applyBoundsAsRules(this->context, sp, ie.mParams, ms, /*is_impl_level=*/false);
+
+                        auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), &ie}));
                         this->context.equateTypes(node.span(), node.resType, ty);
                     }
                 }
             }
-        }
+            TU_ARMA(UfcsInherent, e) {
+                // TODO: Share code with visit_call_populate_cache
 
-        void visit(::HIR::ExprNodeVariable& node) override {
-            TRACE_FUNCTION_F(&node << " " << node.mName << "{" << node.slot << "}");
+                // - Locate function (and impl block)
+                const ::HIR::Function* fcnPtr = nullptr;
+                const ::HIR::Constant* constPtr = nullptr;
+                const ::HIR::TypeImpl* implPtr = nullptr;
+                // TODO: Support mutiple matches here (if there's a fuzzy match) and retry if so
+                unsigned int count = 0;
+                this->context.crate.findTypeImpls(e.type, context.ivars.callbackResolveInfer(), [&](const auto& impl) {
+                    DEBUG("- impl" << impl.mParams.fmtArgs() << " " << impl.mType);
+                    {
+                        auto it = impl.methods.find(e.item);
+                        if (it != impl.methods.end()) {
+                            fcnPtr = &it->second.data;
+                            implPtr = &impl;
+                            count += 1;
+                            return false;
+                            //return true;
+                        }
+                    }
+                    {
+                        auto it = impl.constants.find(e.item);
+                        if (it != impl.constants.end()) {
+                            constPtr = &it->second.data;
+                            implPtr = &impl;
+                            count += 1;
+                            return false;
+                        }
+                    }
+                    return false;
+                });
+                if (count == 0) {
+                    ERROR(sp, E0000, "Failed to locate associated value " << node.mPath);
+                }
+                if (count > 1) {
+                    TODO(sp, "Revisit _PathValue when UfcsInherent has multiple options - " << node.mPath);
+                }
 
-            this->context.equateTypes(node.span(), node.resType, this->context.getVar(node.span(), node.slot));
-        }
+                assert(fcnPtr || constPtr);
+                assert(implPtr);
 
-        void visit(::HIR::ExprNodeConstParam& node) override {
-            TRACE_FUNCTION_F(&node << " " << node.mName << "{" << node.mBinding << "}");
+                if (fcnPtr) {
+                    fixParamCount(sp, this->context, e.type, false, node.mPath, fcnPtr->mParams, e.params);
+                } else {
+                    fixParamCount(sp, this->context, e.type, false, node.mPath, constPtr->mParams, e.params);
+                }
 
-            this->context.equateTypes(node.span(), node.resType, this->context.mResolve.getConstParamType(node.span(), node.mBinding));
-        }
+                // If the impl block has parameters, figure out what types they map to
+                // - The function params are already mapped (from fix_param_count)
+                auto& implParams = e.implParams;
+                implParams.mLifetimes.resize(implPtr->mParams.mLifetimes.size());
+                if (implPtr->mParams.isGeneric()) {
+                    while (implParams.types.size() < implPtr->mParams.types.size()) {
+                        implParams.types.push_back(this->context.crate.types.infer());
+                    }
+                    implParams.values.resize(implPtr->mParams.values.size());
+                    OwnedImplMatcher matcher(implParams);
+                    // NOTE: Could be fuzzy.
+                    bool r = implPtr->mType->matchTestGenerics(sp, e.type, this->context.ivars.callbackResolveInfer(), matcher);
+                    for (auto& ty : implParams.types) {
+                        // Create new ivars if there's holes
+                        if (ty->is_Infer() && ty->as_Infer().index == ~0u) {
+                            this->context.addIvars(ty);
+                        }
+                    }
+                    if (!r) {
+                        auto t = MonomorphStatePtr(this->context.crate.types, nullptr, &implParams, nullptr).monomorphType(sp, implPtr->mType);
+                        this->context.equateTypes(node.span(), t, e.type);
+                    }
+                }
 
-        void visit(::HIR::ExprNodeClosure& node) override {
-            TRACE_FUNCTION_F(&node << " |...| ...");
-            for (auto& arg : node.mArgs) {
-                this->context.addIvars(arg.second);
-                this->context.handlePattern(node.span(), arg.first, arg.second);
+                if (fcnPtr) {
+                    // Create monomorphise callback
+                    const auto& fcnParams = e.params;
+                    // TODO: call `context.get_type` in this?
+                    auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, &fcnParams);
+
+                    // Bounds (both impl and fn)
+                    applyBoundsAsRules(this->context, sp, implPtr->mParams, ms, /*is_impl_level=*/true);
+                    applyBoundsAsRules(this->context, sp, fcnPtr->mParams, ms, /*is_impl_level=*/false);
+
+                    auto ty = this->context.crate.types.intern(HIR::TypeData::make_NamedFunction({node.mPath.clone(), fcnPtr}));
+                    this->context.equateTypes(node.span(), node.resType, ty);
+                } else // !fcn_ptr, ergo const_ptr
+                {
+                    assert(constPtr);
+                    auto monomorphCb = MonomorphStatePtr(this->context.crate.types, e.type, &implParams, &e.params);
+
+                    ::HIR::TypeRef tmp;
+                    const auto& ty = monomorphCb.maybeMonomorphType(sp, tmp, constPtr->mType);
+
+                    applyBoundsAsRules(this->context, sp, implPtr->mParams, monomorphCb, /*is_impl_level=*/true);
+                    this->context.equateTypes(node.span(), node.resType, ty);
+                }
             }
-            this->context.addIvars(node.returnType);
-            this->context.addIvars(node.mCode->resType);
-
-            // Closure result type
-            ::std::vector<::HIR::TypeRef> argTypes;
-            for (auto& arg : node.mArgs) {
-                argTypes.push_back(arg.second);
             }
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.closure(&node));
+    }
 
-            this->context.equateTypesCoerce(node.span(), node.returnType, node.mCode);
+    void visit(::HIR::ExprNodeVariable& node) override {
+        TRACE_FUNCTION_F(&node << " " << node.mName << "{" << node.slot << "}");
 
-            // Save/clear/restore loop labels
-            auto savedLoops = ::std::move(this->loopBlocks);
+        this->context.equateTypes(node.span(), node.resType, this->context.getVar(node.span(), node.slot));
+    }
 
-            auto _ = this->pushInnerCoerceScoped(true);
-            this->closureRetTypes.push_back(RetTarget(node.returnType));
-            node.mCode->visit(*this);
-            this->closureRetTypes.pop_back();
+    void visit(::HIR::ExprNodeConstParam& node) override {
+        TRACE_FUNCTION_F(&node << " " << node.mName << "{" << node.mBinding << "}");
 
-            this->loopBlocks = ::std::move(savedLoops);
+        this->context.equateTypes(node.span(), node.resType, this->context.mResolve.getConstParamType(node.span(), node.mBinding));
+    }
+
+    void visit(::HIR::ExprNodeClosure& node) override {
+        TRACE_FUNCTION_F(&node << " |...| ...");
+        for (auto& arg : node.mArgs) {
+            this->context.addIvars(arg.second);
+            this->context.handlePattern(node.span(), arg.first, arg.second);
+        }
+        this->context.addIvars(node.returnType);
+        this->context.addIvars(node.mCode->resType);
+
+        // Closure result type
+        ::std::vector<::HIR::TypeRef> argTypes;
+        for (auto& arg : node.mArgs) {
+            argTypes.push_back(arg.second);
+        }
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.closure(&node));
+
+        this->context.equateTypesCoerce(node.span(), node.returnType, node.mCode);
+
+        // Save/clear/restore loop labels
+        auto savedLoops = ::std::move(this->loopBlocks);
+
+        auto _ = this->pushInnerCoerceScoped(true);
+        this->closureRetTypes.push_back(RetTarget(node.returnType));
+        node.mCode->visit(*this);
+        this->closureRetTypes.pop_back();
+
+        this->loopBlocks = ::std::move(savedLoops);
+    }
+
+    void visit(::HIR::ExprNodeGenerator& node) override {
+        TRACE_FUNCTION_F(&node << " /*gen*/ || ...");
+        //for(auto& arg : node.m_args) {
+        //    this->context.add_ivars( arg.second );
+        //    this->context.handle_pattern( node.span(), arg.first, arg.second );
+        //}
+        this->context.addIvars(node.returnType);
+        this->context.addIvars(node.yieldTy);
+        this->context.addIvars(node.resumeTy);
+        this->context.addIvars(node.mCode->resType);
+
+        // Generator result type
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.generator(&node));
+
+        this->context.equateTypesCoerce(node.span(), node.returnType, node.mCode);
+        // TODO: Save/clear/restore loop labels
+        auto _ = this->pushInnerCoerceScoped(true);
+        this->closureRetTypes.push_back(RetTarget(node.returnType, node.resumeTy, node.yieldTy));
+        node.mCode->visit(*this);
+        this->closureRetTypes.pop_back();
+    }
+
+    void visit(::HIR::ExprNodeGeneratorWrapper& node) override {
+        BUG(node.span(), "ExprNode_GeneratorWrapper unexpected at this time");
+    }
+
+    void visit(::HIR::ExprNodeAsyncBlock& node) override {
+        TRACE_FUNCTION_F(&node << " async { ... }");
+        ASSERT_BUG(node.span(), node.mCode, "empty async?");
+        this->context.addIvars(node.mCode->resType);
+
+        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.asyncBlock(&node));
+
+        // TODO: Save/clear/restore loop labels
+        auto _ = this->pushInnerCoerceScoped(true);
+        this->closureRetTypes.push_back(RetTarget(node.mCode->resType));
+        node.mCode->visit(*this);
+        this->closureRetTypes.pop_back();
+    }
+
+private:
+    void pushTraits(const ::HIR::tTraitList& list) {
+        this->traits.insert(this->traits.end(), list.begin(), list.end());
+    }
+
+    void popTraits(const ::HIR::tTraitList& list) {
+        this->traits.erase(this->traits.end() - list.size(), this->traits.end());
+    }
+
+    void visitGenericPath(const Span& sp, ::HIR::GenericPath& gp) {
+        for (auto& ty : gp.mParams.types) {
+            this->context.addIvars(ty);
+        }
+    }
+
+    void visitPath(const Span& sp, ::HIR::Path& path) {
+        TU_MATCH(::HIR::Path::Data, (path.mData), (e), (Generic, this->visitGenericPath(sp, e);), (UfcsKnown, this->context.addIvars(e.type); this->visitGenericPath(sp, e.trait); for (auto& ty : e.params.types) this->context.addIvars(ty);), (UfcsUnknown, TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");), (UfcsInherent, this->context.addIvars(e.type); for (auto& ty : e.params.types) this->context.addIvars(ty);))
+    }
+
+    class InnerCoerceGuard {
+        ExprVisitorEnum& t;
+
+    public:
+        InnerCoerceGuard(ExprVisitorEnum& t)
+            : t(t)
+        {
         }
 
-        void visit(::HIR::ExprNodeGenerator& node) override {
-            TRACE_FUNCTION_F(&node << " /*gen*/ || ...");
-            //for(auto& arg : node.m_args) {
-            //    this->context.add_ivars( arg.second );
-            //    this->context.handle_pattern( node.span(), arg.first, arg.second );
-            //}
-            this->context.addIvars(node.returnType);
-            this->context.addIvars(node.yieldTy);
-            this->context.addIvars(node.resumeTy);
-            this->context.addIvars(node.mCode->resType);
-
-            // Generator result type
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.generator(&node));
-
-            this->context.equateTypesCoerce(node.span(), node.returnType, node.mCode);
-            // TODO: Save/clear/restore loop labels
-            auto _ = this->pushInnerCoerceScoped(true);
-            this->closureRetTypes.push_back(RetTarget(node.returnType, node.resumeTy, node.yieldTy));
-            node.mCode->visit(*this);
-            this->closureRetTypes.pop_back();
-        }
-
-        void visit(::HIR::ExprNodeGeneratorWrapper& node) override {
-            BUG(node.span(), "ExprNode_GeneratorWrapper unexpected at this time");
-        }
-
-        void visit(::HIR::ExprNodeAsyncBlock& node) override {
-            TRACE_FUNCTION_F(&node << " async { ... }");
-            ASSERT_BUG(node.span(), node.mCode, "empty async?");
-            this->context.addIvars(node.mCode->resType);
-
-            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.asyncBlock(&node));
-
-            // TODO: Save/clear/restore loop labels
-            auto _ = this->pushInnerCoerceScoped(true);
-            this->closureRetTypes.push_back(RetTarget(node.mCode->resType));
-            node.mCode->visit(*this);
-            this->closureRetTypes.pop_back();
-        }
-
-    private:
-        void pushTraits(const ::HIR::tTraitList& list) {
-            this->traits.insert(this->traits.end(), list.begin(), list.end());
-        }
-
-        void popTraits(const ::HIR::tTraitList& list) {
-            this->traits.erase(this->traits.end() - list.size(), this->traits.end());
-        }
-
-        void visitGenericPath(const Span& sp, ::HIR::GenericPath& gp) {
-            for (auto& ty : gp.mParams.types) {
-                this->context.addIvars(ty);
-            }
-        }
-
-        void visitPath(const Span& sp, ::HIR::Path& path) {
-            TU_MATCH(::HIR::Path::Data, (path.mData), (e), (Generic, this->visitGenericPath(sp, e);), (UfcsKnown, this->context.addIvars(e.type); this->visitGenericPath(sp, e.trait); for (auto& ty : e.params.types) this->context.addIvars(ty);), (UfcsUnknown, TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");), (UfcsInherent, this->context.addIvars(e.type); for (auto& ty : e.params.types) this->context.addIvars(ty);))
-        }
-
-        class InnerCoerceGuard {
-            ExprVisitorEnum& t;
-
-        public:
-            InnerCoerceGuard(ExprVisitorEnum& t)
-                : t(t)
-            {
-            }
-
-            ~InnerCoerceGuard() {
-                t.innerCoerceEnabledStack.pop_back();
-                DEBUG("inner_coerce POP (S) " << t.canCoerceInnerResult());
-            }
-        };
-
-        InnerCoerceGuard pushInnerCoerceScoped(bool val) {
-            DEBUG("inner_coerce PUSH (S) " << val);
-            this->innerCoerceEnabledStack.push_back(val);
-            return InnerCoerceGuard(*this);
-        }
-
-        void pushInnerCoerce(bool val) {
-            DEBUG("inner_coerce PUSH " << val);
-            this->innerCoerceEnabledStack.push_back(val);
-        }
-
-        void popInnerCoerce() {
-            assert(this->innerCoerceEnabledStack.size());
-            this->innerCoerceEnabledStack.pop_back();
-            DEBUG("inner_coerce POP " << canCoerceInnerResult());
-        }
-
-        bool canCoerceInnerResult() const {
-            if (this->innerCoerceEnabledStack.size() == 0) {
-                return true;
-            } else {
-                return this->innerCoerceEnabledStack.back();
-            }
-        }
-
-        void equateTypesInnerCoerce(const Span& sp, const ::HIR::TypeData* target, ::HIR::ExprNodeP& node) {
-            DEBUG("can_coerce_inner_result() = " << canCoerceInnerResult());
-            if (canCoerceInnerResult()) {
-                this->context.equateTypesCoerce(sp, target, node);
-            } else {
-                this->context.equateTypes(sp, target, node->resType);
-            }
+        ~InnerCoerceGuard() {
+            t.innerCoerceEnabledStack.pop_back();
+            DEBUG("inner_coerce POP (S) " << t.canCoerceInnerResult());
         }
     };
+
+    InnerCoerceGuard pushInnerCoerceScoped(bool val) {
+        DEBUG("inner_coerce PUSH (S) " << val);
+        this->innerCoerceEnabledStack.push_back(val);
+        return InnerCoerceGuard(*this);
+    }
+
+    void pushInnerCoerce(bool val) {
+        DEBUG("inner_coerce PUSH " << val);
+        this->innerCoerceEnabledStack.push_back(val);
+    }
+
+    void popInnerCoerce() {
+        assert(this->innerCoerceEnabledStack.size());
+        this->innerCoerceEnabledStack.pop_back();
+        DEBUG("inner_coerce POP " << canCoerceInnerResult());
+    }
+
+    bool canCoerceInnerResult() const {
+        if (this->innerCoerceEnabledStack.size() == 0) {
+            return true;
+        } else {
+            return this->innerCoerceEnabledStack.back();
+        }
+    }
+
+    void equateTypesInnerCoerce(const Span& sp, const ::HIR::TypeData* target, ::HIR::ExprNodeP& node) {
+        DEBUG("can_coerce_inner_result() = " << canCoerceInnerResult());
+        if (canCoerceInnerResult()) {
+            this->context.equateTypesCoerce(sp, target, node);
+        } else {
+            this->context.equateTypes(sp, target, node->resType);
+        }
+    }
+};
 
 void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr) {
     TRACE_FUNCTION;
@@ -11072,8 +10955,10 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
 
 Context::IVarPossible::CoerceTy::CoerceTy(::HIR::TypeRef ty, bool isCoerce)
     : op(isCoerce ? Coercion : Unsizing)
-    , ty(ty) {
+    , ty(ty)
+{
 }
+
 void Context::IVarPossible::reset() {
     // Manually clear, to avoid needing to reallocate the lists all the time.
     this->forceDisable = false;
@@ -11086,6 +10971,7 @@ void Context::IVarPossible::reset() {
     this->boundsIncludeSelf = false;
     this->bounded.clear();
 }
+
 bool Context::IVarPossible::hasRules() const {
     if (forceDisable) {
         return true;
@@ -11103,6 +10989,7 @@ bool Context::IVarPossible::hasRules() const {
     }
     return false;
 }
+
 void Context::IVarPossible::mergeFrom(const IVarPossible& source) {
     forceDisable |= source.forceDisable;
     forceNoTo |= source.forceNoTo;
@@ -11141,36 +11028,47 @@ void Context::IVarPossible::mergeFrom(const IVarPossible& source) {
         }
     } else {
         bounded.erase(
-            ::std::remove_if(bounded.begin(), bounded.end(), [&](const auto type) {
-                return ::std::find(source.bounded.begin(), source.bounded.end(), type) == source.bounded.end();
-            }),
+            ::std::remove_if(
+                bounded.begin(),
+                bounded.end(),
+                [&](const auto type) {
+            return ::std::find(source.bounded.begin(), source.bounded.end(), type) == source.bounded.end();
+        }
+            ),
             bounded.end()
         );
     }
 }
+
 Context::TaitEntry::TaitEntry(const HIR::PathParams& p, HIR::TypeRef t)
     : params(p.clone())
-    , ourType(std::move(t)) {
+    , ourType(std::move(t))
+{
 }
+
 Context::Context(const ::HIR::Crate& crate, const ::HIR::GenericParams* implParams, const ::HIR::GenericParams* itemParams, const ::HIR::SimplePath& modPath, const ::HIR::GenericPath* currentTrait, const ::HIR::TraitImpl* currentTraitImpl)
     : crate(crate)
     , currentTraitImpl(currentTraitImpl)
     , ivars(crate.types)
     , mResolve(ivars, crate, implParams, itemParams, modPath, currentTrait)
     , nextRuleIdx(0)
-    , mLangBox(crate.getLangItemPathOpt("owned_box")) {
+    , mLangBox(crate.getLangItemPathOpt("owned_box"))
+{
     mResolve.setInherentTypeConstraint([this](const Span& sp, const ::HIR::TypeData* receiver, const ::HIR::TypeData* implType) {
         this->equateTypesInner(sp, receiver, implType);
     });
 }
+
 const ::HIR::TypeData* Context::coercionHint(const ::HIR::ExprNode& node) const {
     const auto it = coercionHints.find(&node);
     return it == coercionHints.end() ? nullptr : it->second;
 }
+
 bool Context::isCurrentOperatorImpl(const ImplRef& impl) const {
     const auto* traitImpl = impl.mData.opt_TraitImpl();
     return currentTraitImpl && traitImpl && traitImpl->impl == currentTraitImpl;
 }
+
 // A Deref implementation for a native pointer/reference receives `&Self`.
 // Dereferencing that receiver is the native step needed to recover `Self`,
 // not another dispatch through a potentially overlapping Deref impl.
@@ -11178,18 +11076,14 @@ bool Context::isCurrentNativeDerefReceiver(const ::HIR::SimplePath& derefTrait, 
     const auto* currentTrait = mResolve.currentTraitPath();
     const auto& ty = ivars.getType(operand);
     const auto* borrow = ty->opt_Borrow();
-    return currentTraitImpl
-        && currentTrait
-        && currentTrait->mPath == derefTrait
-        && borrow
-        && primitiveOperatorHasBuiltin(TypeckPrimitiveOperator::Deref, borrow->inner)
-        && currentTraitImpl->matchesType(borrow->inner, ivars.callbackResolveInfer());
+    return currentTraitImpl && currentTrait && currentTrait->mPath == derefTrait && borrow && primitiveOperatorHasBuiltin(TypeckPrimitiveOperator::Deref, borrow->inner) && currentTraitImpl->matchesType(borrow->inner, ivars.callbackResolveInfer());
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Context::Coercion& v) {
     os << "R" << v.ruleIdx << " " << v.leftTy << " := " << v.rightNodePtr << " " << &**v.rightNodePtr << " (" << (*v.rightNodePtr)->resType << ")";
     return os;
 }
+
 ::std::ostream& operator<<(::std::ostream& os, const Context::Associated& v) {
     os << "R" << v.ruleIdx << " ";
     if (v.name == "") {

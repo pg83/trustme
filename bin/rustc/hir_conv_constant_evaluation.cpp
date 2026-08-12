@@ -1,21 +1,22 @@
 #include "hir_conv_constant_evaluation.h"
-#include "hir_conv_main_bindings.h"
+
+#include "floats.h"
+#include "int128.h" // 128 bit integer support
 #include "hir_hir.h"
-#include "hir_expr.h"
-#include "hir_typeck_expr_visit.h"
-#include "hir_visitor.h"
-#include <algorithm>
-#include <cmath>
 #include "mir_mir.h"
-#include "hir_typeck_common.h" // Monomorph
+#include "hir_expr.h"
+#include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "trans_target.h"
+#include "trans_codegen.h" // For encoding as part of transmute
 #include "hir_expr_state.h"
-#include "int128.h" // 128 bit integer support
-#include "floats.h"
-
+#include "hir_typeck_common.h"  // Monomorph
 #include "trans_monomorphise.h" // For handling monomorph of MIR in provided associated constants
-#include "trans_codegen.h"      // For encoding as part of transmute
+#include "hir_typeck_expr_visit.h"
+#include "hir_conv_main_bindings.h"
+
+#include <cmath>
+#include <algorithm>
 
 namespace {
     void ConvertHIRConstantEvaluateStatic(const ::HIR::Crate& crate, const ::HIR::GenericParams* implParams, const ::HIR::ItemPath& ip, ::HIR::Static& e);
@@ -2960,9 +2961,9 @@ namespace HIR {
                         const auto* filename = caller ? caller->filename.c_str() : "";
                         const auto filenameLen = caller ? caller->filename.size() : 0;
                         rv.slice(repr->fields[0].offset + 0, pb).writePtr(state, EncodedLiteral::PTR_BASE, ConstantPtr::allocate(localState.valuePool, filename, filenameLen + 1)); // file.ptr, including trailing NUL
-                        rv.slice(repr->fields[0].offset + pb, pb).writeUint(state, TargetGetPointerBits(), filenameLen);                                                             // file.len
-                        rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller ? caller->startLine : 0);                                                                     // line: u32
-                        rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, 0);                                                                                                   // col: u32 (expression AST stores only the end point)
+                        rv.slice(repr->fields[0].offset + pb, pb).writeUint(state, TargetGetPointerBits(), filenameLen);                                                            // file.len
+                        rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller ? caller->startLine : 0);                                                                   // line: u32
+                        rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, 0);                                                                                                // col: u32 (expression AST stores only the end point)
                     }
                     // ---
                     else if (te->name == "ctpop") {
@@ -3282,8 +3283,9 @@ namespace HIR {
                     else if (te->name == "copy_nonoverlapping") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
-                        if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
+                        if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
                             throw Defer();
+                        }
                         auto ptrSrc = localState.getLval(e.args.at(0).as_LValue()).readPtr(state);
                         auto ptrDst = localState.getLval(e.args.at(1).as_LValue()).readPtr(state);
                         U128 count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
@@ -3298,8 +3300,9 @@ namespace HIR {
                     } else if (te->name == "offset") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0)->as_Pointer().inner);
                         size_t elementSize;
-                        if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
+                        if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
                             throw Defer();
+                        }
                         auto ptrPair = localState.readParamPtr(e.args.at(0));
                         auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
                         dst.writePtr(state, ptrPair.first + ofs.truncateU64() * elementSize, ptrPair.second);
@@ -3308,8 +3311,9 @@ namespace HIR {
                     else if (te->name == "arith_offset") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
-                        if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
+                        if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
                             throw Defer();
+                        }
                         auto ptrPair = localState.readParamPtr(e.args.at(0));
                         auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
                         dst.writePtr(state, ptrPair.first + ofs.truncateU64() * elementSize, ptrPair.second);
@@ -3323,8 +3327,9 @@ namespace HIR {
                     } else if (te->name == "write_bytes") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
                         size_t elementSize;
-                        if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize))
+                        if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
                             throw Defer();
+                        }
                         auto ptrDst = localState.getLval(e.args.at(0).as_LValue()).readPtr(state);
                         auto val = localState.readParamUint(8, e.args.at(1));
                         U128 count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
@@ -3480,26 +3485,28 @@ namespace HIR {
         }
         const auto& path = *pathP;
 
-        if (requireConstCalls) if (const auto* e = path.mData.opt_UfcsKnown()) {
-            const auto& trait = resolve.crate.getTraitByPath(state.sp, e->trait.mPath);
-            if (trait.isConst) {
-                ImplRef bestImpl;
-                bool hasConstBound = false;
-                resolve.findImpl(state.sp, e->trait.mPath, e->trait.mParams, e->type, [&](ImplRef impl, bool isFuzzed) {
-                    if (isFuzzed) {
+        if (requireConstCalls) {
+            if (const auto* e = path.mData.opt_UfcsKnown()) {
+                const auto& trait = resolve.crate.getTraitByPath(state.sp, e->trait.mPath);
+                if (trait.isConst) {
+                    ImplRef bestImpl;
+                    bool hasConstBound = false;
+                    resolve.findImpl(state.sp, e->trait.mPath, e->trait.mParams, e->type, [&](ImplRef impl, bool isFuzzed) {
+                        if (isFuzzed) {
+                            return false;
+                        }
+                        if (!impl.mData.is_TraitImpl()) {
+                            hasConstBound |= impl.boundConstness() != HIR::BoundConstness::Never;
+                            return false;
+                        }
+                        if (!bestImpl.isValid() || impl.moreSpecificThan(resolve.crate.types, bestImpl)) {
+                            bestImpl = mv$(impl);
+                        }
                         return false;
-                    }
-                    if (!impl.mData.is_TraitImpl()) {
-                        hasConstBound |= impl.boundConstness() != HIR::BoundConstness::Never;
-                        return false;
-                    }
-                    if (!bestImpl.isValid() || impl.moreSpecificThan(resolve.crate.types, bestImpl)) {
-                        bestImpl = mv$(impl);
-                    }
-                    return false;
-                });
-                MIR_ASSERT(state, hasConstBound || bestImpl.isValid(), "const trait call did not resolve to an impl: " << path);
-                MIR_ASSERT(state, hasConstBound || bestImpl.mData.as_TraitImpl().impl->isConst, "const trait call requires a const impl: " << path);
+                    });
+                    MIR_ASSERT(state, hasConstBound || bestImpl.isValid(), "const trait call did not resolve to an impl: " << path);
+                    MIR_ASSERT(state, hasConstBound || bestImpl.mData.as_TraitImpl().impl->isConst, "const trait call requires a const impl: " << path);
+                }
             }
         }
 
@@ -3638,12 +3645,7 @@ namespace HIR {
         if (const auto* erased = exp->opt_ErasedType()) {
             if (const auto* alias = erased->inner.opt_Alias()) {
                 if (alias->inner->type != ::HIR::TypeRef()) {
-                    exp = MonomorphStatePtr(
-                        resolve.crate.types,
-                        nullptr,
-                        &alias->params,
-                        nullptr
-                    ).monomorphType(expr.span(), alias->inner->type);
+                    exp = MonomorphStatePtr(resolve.crate.types, nullptr, &alias->params, nullptr).monomorphType(expr.span(), alias->inner->type);
                     resolve.expandAssociatedTypes(expr.span(), exp);
                 }
             }
@@ -4455,26 +4457,32 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const ::HIR::Crate& 
 
 namespace HIR {
 
-Evaluator::CsePtr::CsePtr(::MIR::eval::CallStackEntry* ptr)
-    : inner(ptr) {
-}
-Evaluator::CsePtr::CsePtr(CsePtr&& x)
-    : inner(x.inner) {
-    x.inner = nullptr;
-}
-Evaluator::CsePtr& Evaluator::CsePtr::operator=(CsePtr&& x) {
-    this->~CsePtr();
-    this->inner = x.inner;
-    x.inner = nullptr;
-    return *this;
-}
-Evaluator::Evaluator(const Span& sp, const ::HIR::Crate& crate, Newval& nvs)
-    : rootSpan(sp)
-    , valuePool(stl::ObjPool::fromMemory())
-    , resolve(crate)
-    , nvs(nvs)
-    , evalIndex(sNextEvalIndex++)
-    , numFrames(0)
-    , requireConstCalls(false) {
-}
+    Evaluator::CsePtr::CsePtr(::MIR::eval::CallStackEntry* ptr)
+        : inner(ptr)
+    {
+    }
+
+    Evaluator::CsePtr::CsePtr(CsePtr&& x)
+        : inner(x.inner)
+    {
+        x.inner = nullptr;
+    }
+
+    Evaluator::CsePtr& Evaluator::CsePtr::operator=(CsePtr&& x) {
+        this->~CsePtr();
+        this->inner = x.inner;
+        x.inner = nullptr;
+        return *this;
+    }
+
+    Evaluator::Evaluator(const Span& sp, const ::HIR::Crate& crate, Newval& nvs)
+        : rootSpan(sp)
+        , valuePool(stl::ObjPool::fromMemory())
+        , resolve(crate)
+        , nvs(nvs)
+        , evalIndex(sNextEvalIndex++)
+        , numFrames(0)
+        , requireConstCalls(false)
+    {
+    }
 }

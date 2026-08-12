@@ -91,7 +91,6 @@ FsPath FsPath::normalise() const {
     return rv;
 }
 
-
 void FsPath::ComponentsIter::operator++() {
     if (end == p.mStr.size()) {
         pos = end;
@@ -104,12 +103,14 @@ void FsPath::ComponentsIter::operator++() {
     }
 }
 
-
 FsPath::FsPath() {
 }
+
 FsPath::FsPath(const ::std::string& s)
-    : FsPath(s.c_str()) {
+    : FsPath(s.c_str())
+{
 }
+
 FsPath& FsPath::operator/=(const FsPath& p) {
     if (!p.isValid()) {
         throw ::std::runtime_error("Appending from an invalid path");
@@ -117,6 +118,7 @@ FsPath& FsPath::operator/=(const FsPath& p) {
 
     return *this /= p.mStr.c_str();
 }
+
 FsPath& FsPath::operator/=(const char* o) {
     if (!this->isValid()) {
         throw ::std::runtime_error("Appending to an invalid path");
@@ -128,6 +130,7 @@ FsPath& FsPath::operator/=(const char* o) {
     this->mStr.append(o);
     return *this;
 }
+
 FsPath& FsPath::operator/=(::std::string_view o) {
     if (!this->isValid()) {
         throw ::std::runtime_error("Appending to an invalid path");
@@ -139,17 +142,20 @@ FsPath& FsPath::operator/=(::std::string_view o) {
     this->mStr.append(o);
     return *this;
 }
+
 FsPath FsPath::operator/(const FsPath& p) const {
     auto rv = *this;
     rv /= p;
     return rv;
 }
+
 /// Append a relative path
 FsPath FsPath::operator/(const char* o) const {
     auto rv = *this;
     rv /= o;
     return rv;
 }
+
 /// Add an arbitary string to the  component
 FsPath FsPath::operator+(const char* o) const {
     if (!this->isValid()) {
@@ -162,6 +168,7 @@ FsPath FsPath::operator+(const char* o) const {
     rv.mStr.append(o);
     return rv;
 }
+
 bool FsPath::popComponent() {
     if (!this->isValid()) {
         throw ::std::runtime_error("Calling pop_component() on an invalid path");
@@ -174,6 +181,7 @@ bool FsPath::popComponent() {
         return true;
     }
 }
+
 FsPath FsPath::parent() const {
     if (!this->isValid()) {
         throw ::std::runtime_error("Calling parent() on an invalid path");
@@ -187,6 +195,7 @@ FsPath FsPath::parent() const {
         return rv;
     }
 }
+
 ::std::string FsPath::basename() const {
     if (!this->isValid()) {
         throw ::std::runtime_error("Calling basename() on an invalid path");
@@ -199,9 +208,11 @@ FsPath FsPath::parent() const {
         return mStr.substr(pos + 1);
     }
 }
+
 FsPath::ComponentsIter::ComponentsIter(const FsPath& p, size_t i)
     : p(p)
-    , pos(i) {
+    , pos(i)
+{
     end = p.mStr.find(SEP, pos);
     if (end == ::std::string::npos) {
         end = p.mStr.size();

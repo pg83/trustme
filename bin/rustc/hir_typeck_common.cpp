@@ -1,4 +1,5 @@
 #include "hir_typeck_common.h"
+
 #include "hir_path.h"
 #include "trans_target.h"
 #include "hir_conv_main_bindings.h"
@@ -218,23 +219,30 @@ namespace {
 
         bool rewritePathParams(HIR::PathParams& params) {
             for (auto& type : params.types) {
-                if (rewriteType(type)) return true;
+                if (rewriteType(type)) {
+                    return true;
+                }
             }
             return false;
         }
 
         bool rewriteTraitPath(HIR::TraitPath& trait) {
-            if (rewritePathParams(trait.mPath.mParams)) return true;
+            if (rewritePathParams(trait.mPath.mParams)) {
+                return true;
+            }
             for (auto& assoc : trait.typeBounds) {
-                if (rewritePathParams(assoc.second.sourceTrait.mParams)
-                    || rewritePathParams(assoc.second.atyParams)
-                    || rewriteType(assoc.second.type)) return true;
+                if (rewritePathParams(assoc.second.sourceTrait.mParams) || rewritePathParams(assoc.second.atyParams) || rewriteType(assoc.second.type)) {
+                    return true;
+                }
             }
             for (auto& assoc : trait.traitBounds) {
-                if (rewritePathParams(assoc.second.sourceTrait.mParams)
-                    || rewritePathParams(assoc.second.atyParams)) return true;
+                if (rewritePathParams(assoc.second.sourceTrait.mParams) || rewritePathParams(assoc.second.atyParams)) {
+                    return true;
+                }
                 for (auto& bound : assoc.second.traits) {
-                    if (rewriteTraitPath(bound)) return true;
+                    if (rewriteTraitPath(bound)) {
+                        return true;
+                    }
                 }
             }
             return false;
@@ -243,15 +251,17 @@ namespace {
         bool rewritePath(HIR::Path& path) {
             TU_MATCH_HDRA((path.mData), {)
             TU_ARMA(Generic, e) return rewritePathParams(e.mParams);
-            TU_ARMA(UfcsInherent, e) return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.implParams);
-            TU_ARMA(UfcsKnown, e) return rewriteType(e.type) || rewritePathParams(e.trait.mParams) || rewritePathParams(e.params);
-            TU_ARMA(UfcsUnknown, e) return rewriteType(e.type) || rewritePathParams(e.params);
+                TU_ARMA(UfcsInherent, e) return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.implParams);
+                TU_ARMA(UfcsKnown, e) return rewriteType(e.type) || rewritePathParams(e.trait.mParams) || rewritePathParams(e.params);
+                TU_ARMA(UfcsUnknown, e) return rewriteType(e.type) || rewritePathParams(e.params);
             }
             throw "";
         }
 
         bool rewriteType(HIR::TypeRef& type) {
-            if (!type || ::std::find(stack.begin(), stack.end(), type) != stack.end()) return false;
+            if (!type || ::std::find(stack.begin(), stack.end(), type) != stack.end()) {
+                return false;
+            }
             const auto original = type;
             auto data = original->cloneData();
             HIR::TypeRef rewritten = original;
@@ -265,37 +275,58 @@ namespace {
             bool childStop = false;
             if (!stop) {
                 TU_MATCH_HDRA((data), {)
-                TU_ARMA(Infer, e) {}
-                TU_ARMA(Diverge, e) {}
-                TU_ARMA(Primitive, e) {}
-                TU_ARMA(Generic, e) {}
-                TU_ARMA(Path, e) childStop = rewritePath(e.path);
-                TU_ARMA(TraitObject, e) {
-                    childStop = rewriteTraitPath(e.mTrait);
-                    for (auto& marker : e.markers) if (!childStop) childStop = rewritePathParams(marker.mParams);
-                }
-                TU_ARMA(ErasedType, e) {
-                    for (auto& trait : e.traits) if (!childStop) childStop = rewriteTraitPath(trait);
-                    if (!childStop) childStop = rewritePathParams(e.use);
-                    if (!childStop) {
-                        TU_MATCH_HDRA((e.inner), {)
-                        TU_ARMA(Fcn, inner) childStop = rewritePath(inner.origin);
-                        TU_ARMA(Known, inner) childStop = rewriteType(inner);
-                        TU_ARMA(Alias, inner) childStop = rewritePathParams(inner.params);
+                TU_ARMA(Infer, e) {
+                    }
+                    TU_ARMA(Diverge, e) {
+                    }
+                    TU_ARMA(Primitive, e) {
+                    }
+                    TU_ARMA(Generic, e) {
+                    }
+                    TU_ARMA(Path, e) childStop = rewritePath(e.path);
+                    TU_ARMA(TraitObject, e) {
+                        childStop = rewriteTraitPath(e.mTrait);
+                        for (auto& marker : e.markers) {
+                            if (!childStop) {
+                                childStop = rewritePathParams(marker.mParams);
+                            }
                         }
                     }
-                }
-                TU_ARMA(Array, e) childStop = rewriteType(e.inner);
-                TU_ARMA(Slice, e) childStop = rewriteType(e.inner);
-                TU_ARMA(Tuple, e) for (auto& inner : e) if (!childStop) childStop = rewriteType(inner);
-                TU_ARMA(Borrow, e) childStop = rewriteType(e.inner);
-                TU_ARMA(Pointer, e) childStop = rewriteType(e.inner);
-                TU_ARMA(NamedFunction, e) childStop = rewritePath(e.path);
-                TU_ARMA(Function, e) {
-                    for (auto& arg : e.argTypes) if (!childStop) childStop = rewriteType(arg);
-                    if (!childStop) childStop = rewriteType(e.mRettype);
-                }
-                TU_ARMA(NodeType, e) {}
+                    TU_ARMA(ErasedType, e) {
+                        for (auto& trait : e.traits) {
+                            if (!childStop) {
+                                childStop = rewriteTraitPath(trait);
+                            }
+                        }
+                        if (!childStop) {
+                            childStop = rewritePathParams(e.use);
+                        }
+                        if (!childStop) {
+                        TU_MATCH_HDRA((e.inner), {)
+                        TU_ARMA(Fcn, inner) childStop = rewritePath(inner.origin);
+                                TU_ARMA(Known, inner) childStop = rewriteType(inner);
+                                TU_ARMA(Alias, inner) childStop = rewritePathParams(inner.params);
+                        }
+                        }
+                    }
+                    TU_ARMA(Array, e) childStop = rewriteType(e.inner);
+                    TU_ARMA(Slice, e) childStop = rewriteType(e.inner);
+                    TU_ARMA(Tuple, e) for (auto& inner : e) if (!childStop) childStop = rewriteType(inner);
+                    TU_ARMA(Borrow, e) childStop = rewriteType(e.inner);
+                    TU_ARMA(Pointer, e) childStop = rewriteType(e.inner);
+                    TU_ARMA(NamedFunction, e) childStop = rewritePath(e.path);
+                    TU_ARMA(Function, e) {
+                        for (auto& arg : e.argTypes) {
+                            if (!childStop) {
+                                childStop = rewriteType(arg);
+                            }
+                        }
+                        if (!childStop) {
+                            childStop = rewriteType(e.mRettype);
+                        }
+                    }
+                    TU_ARMA(NodeType, e) {
+                    }
                 }
             }
             stack.pop_back();
@@ -480,12 +511,14 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
             return types.pointer(e.type, this->monomorphType(sp, e.inner, allowInfer));
         }
         TU_ARMA(NamedFunction, e) {
-            return types.intern(::HIR::TypeData::make_NamedFunction(
-                ::HIR::TypeData::Data_NamedFunction{
-                    this->monomorphPath(sp, e.path, allowInfer),
-                    e.def.clone() // Should this become `nullptr`? Or should the definition be fixed
-                }
-            ));
+            return types.intern(
+                ::HIR::TypeData::make_NamedFunction(
+                    ::HIR::TypeData::Data_NamedFunction{
+                        this->monomorphPath(sp, e.path, allowInfer),
+                        e.def.clone() // Should this become `nullptr`? Or should the definition be fixed
+                    }
+                )
+            );
         }
         TU_ARMA(Function, e) {
             auto _ = pushHrb(e.hrls);
@@ -647,7 +680,10 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
 struct CloneTyWithMonomorph: Monomorphiser {
     tCbCloneTy callback;
 
-    explicit CloneTyWithMonomorph(HIR::TypeInterner& types): Monomorphiser(types) {}
+    explicit CloneTyWithMonomorph(HIR::TypeInterner& types)
+        : Monomorphiser(types)
+    {
+    }
 
     ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& g) const override {
         return types.generic(g.name, g.binding);
@@ -863,7 +899,6 @@ void checkTypeClassPrimitive(const Span& sp, const ::HIR::TypeData* type, ::HIR:
     }
 }
 
-
 bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
     const auto* leftPrimitive = left->opt_Primitive();
     const auto* rightPrimitive = right->opt_Primitive();
@@ -923,6 +958,7 @@ bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const ::HIR::TypeDa
     }
     throw "";
 }
+
 // For these binary language operations, once the left-hand type is known
 // it also fixes an otherwise untyped right-hand operand. Shifts are
 // deliberately excluded: their right-hand side need only be an integer
@@ -970,13 +1006,14 @@ bool primitiveOperatorLhsDeterminesRhs(TypeckPrimitiveOperator op, const ::HIR::
     }
     throw "";
 }
+
 // A binary language candidate is available either when both operands are
 // already known to be valid primitive inputs, or when the known lhs
 // determines the still-inferred rhs.
 bool primitiveOperatorHasLanguageCandidate(TypeckPrimitiveOperator op, const ::HIR::TypeData* left, const ::HIR::TypeData* right) {
-    return primitiveOperatorHasBuiltin(op, left, right)
-        || (right->is_Infer() && primitiveOperatorLhsDeterminesRhs(op, left));
+    return primitiveOperatorHasBuiltin(op, left, right) || (right->is_Infer() && primitiveOperatorLhsDeterminesRhs(op, left));
 }
+
 bool primitiveOperatorHasBuiltin(TypeckPrimitiveOperator op, const ::HIR::TypeData* value) {
     if (op == TypeckPrimitiveOperator::Deref) {
         return value->is_Borrow() || value->is_Pointer();

@@ -1,13 +1,14 @@
 #pragma once
 
+#include "span.h"
+#include "hir_expr.h"
+#include "hir_expr_ptr.h"
+#include "hir_type_ref.h"
+#include "hir_typeck_helpers.h"
+#include "hir_typeck_expr_visit.h"
+
 #include <algorithm>
 #include <unordered_map>
-#include "hir_type_ref.h"
-#include "hir_expr_ptr.h"
-#include "hir_expr.h"
-#include "hir_typeck_expr_visit.h"
-#include "span.h"
-#include "hir_typeck_helpers.h"
 
 // PLAN: Build up a set of conditions that are easier to solve
 struct Context {
@@ -259,6 +260,6 @@ private:
     }
 };
 
-    extern bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warnUnusedResult));
+extern bool visitCallPopulateCache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warnUnusedResult));
 
 extern void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeData* resultType, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);

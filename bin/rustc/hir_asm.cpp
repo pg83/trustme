@@ -1,10 +1,11 @@
 #include "hir_asm.h"
 
-
 AsmLineFragment::AsmLineFragment()
     : index(UINT_MAX)
-    , modifier('\0') {
+    , modifier('\0')
+{
 }
+
 AsmOptions::AsmOptions()
     : pure(0)
     , nomem(0)
@@ -12,8 +13,10 @@ AsmOptions::AsmOptions()
     , preservesFlags(0)
     , noreturn(0)
     , nostack(0)
-    , attSyntax(0) {
+    , attSyntax(0)
+{
 }
+
 bool AsmOptions::any() const {
 #define _(n) \
     if (n)   \
@@ -29,6 +32,7 @@ bool AsmOptions::any() const {
 #undef _
     return false;
 }
+
 void AsmOptions::fmt(std::ostream& os) const {
     os << "options(";
 #define _(n) \
@@ -45,6 +49,7 @@ void AsmOptions::fmt(std::ostream& os) const {
 #undef _
     os << ")";
 }
+
 bool AsmOptions::operator==(const AsmOptions& x) const {
 #define _(n)      \
     if (n != x.n) \
@@ -61,7 +66,6 @@ bool AsmOptions::operator==(const AsmOptions& x) const {
     return true;
 }
 
-
 std::ostream& operator<<(std::ostream& os, const AsmDirection& d) {
     switch (d) {
         case AsmDirection::In:
@@ -77,6 +81,7 @@ std::ostream& operator<<(std::ostream& os, const AsmDirection& d) {
     }
     return os;
 }
+
 bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
     if (a.tag() != b.tag()) {
         return false;
@@ -89,6 +94,7 @@ bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
     }
     return true;
 }
+
 const char* to_string(const AsmRegisterClass& c) {
     switch (c) {
         case AsmRegisterClass::x86Reg:
@@ -112,6 +118,7 @@ const char* to_string(const AsmRegisterClass& c) {
     }
     throw "";
 }
+
 std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s) {
     TU_MATCH_HDRA((s), {)
     TU_ARMA(Class, c) {

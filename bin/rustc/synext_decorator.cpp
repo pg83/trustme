@@ -1,18 +1,18 @@
 #include "synext_decorator.h"
 
-#include "synext.h"
-#include "ast_generics.h"
-#include "ast_ast.h"
-#include "parse_ttstream.h"
-#include "expand_cfg.h"
-#include "ast_crate.h"
 #include "common.h"
+#include "synext.h"
+#include "ast_ast.h"
+#include "hir_hir.h" // ABI_RUST
 #include "ast_expr.h"
-#include "hir_hir.h"      // ABI_RUST
-#include "parse_common.h" // Parse_ModRoot_Items
-#include "expand_proc_macro.h"
+#include "ast_crate.h"
+#include "expand_cfg.h"
+#include "ast_generics.h"
+#include "parse_common.h"  // Parse_ModRoot_Items
 #include "expand_common.h" // Expand_LookupMacro
+#include "parse_ttstream.h"
 #include "parse_parseerror.h" // ParseError
+#include "expand_proc_macro.h"
 #include "parse_interpolated_fragment.h"
 
 namespace {
@@ -662,7 +662,6 @@ class CHandlerUnsafe: public ExpandDecorator {
 
 STATIC_DECORATOR("unsafe", CHandlerUnsafe);
 
-
 class DecoratorCrateType: public ExpandDecorator {
 public:
     AttrStage stage() const override {
@@ -760,7 +759,6 @@ STATIC_DECORATOR("crate_name", DecoratorCrateName)
 STATIC_DECORATOR("allocator", DecoratorAllocator)
 STATIC_DECORATOR("panic_runtime", DecoratorPanicRuntime)
 STATIC_DECORATOR("needs_panic_runtime", DecoratorNeedsPanicRuntime)
-
 
 namespace {
     const RcString rcstringSelf = RcString::newInterned("Self");
@@ -2314,7 +2312,7 @@ public:
 // Select and dispatch the correct derive() handler
 // --------------------------------------------------------------------
 static const Deriver* findImpl(const RcString& traitName) {
-#define _(obj)                          \
+#define _(obj)                        \
     if (traitName == obj.traitName()) \
         return &obj;
     _(gDeriveDebug)
@@ -2533,7 +2531,6 @@ STATIC_DECORATOR("derive", DecoratorDerive)
 class DecoratorDeriveConst: public DecoratorDerive {};
 STATIC_DECORATOR("derive_const", DecoratorDeriveConst)
 
-
 class CDocHandler: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -2565,7 +2562,6 @@ class CDocHandler: public ExpandDecorator {
 };
 
 STATIC_DECORATOR("doc", CDocHandler);
-
 
 enum eItemType {
     ITEM_TRAIT,
@@ -3203,7 +3199,6 @@ STATIC_DECORATOR("rustc_std_internal_symbol", DecoratorRustcStdInternalSymbol);
 STATIC_DECORATOR("alloc_error_handler", DecoratorAllocErrorHandler);
 STATIC_DECORATOR("global_allocator", DecoratorGlobalAllocator);
 
-
 class CMultiHandlerLint: public ExpandDecorator {
     AttrStage stage() const override {
         return AttrStage::Pre;
@@ -3255,7 +3250,6 @@ STATIC_DECORATOR("deny", CHandlerDeny);
 class CHandlerForbid: public CMultiHandlerLint {};
 
 STATIC_DECORATOR("forbid", CHandlerForbid);
-
 
 // #[must_use] - Marks a type needing to be consumed
 class CHandlerMustUse: public ExpandDecorator {
@@ -3358,7 +3352,6 @@ class CHandlerRustcOnUnimiplemented: public ExpandDecorator {
 
 STATIC_DECORATOR("rustc_on_unimplemented", CHandlerRustcOnUnimiplemented);
 
-
 // #[rustc_box] - Marks the `Box::new` inner constructor
 class CHandlerRustBox: public ExpandDecorator {
     AttrStage stage() const override {
@@ -3377,7 +3370,6 @@ class CHandlerRustBox: public ExpandDecorator {
 };
 
 STATIC_DECORATOR("rustc_box", CHandlerRustBox);
-
 
 class CMultiHandlerStability: public ExpandDecorator {
     AttrStage stage() const override {
@@ -3437,7 +3429,6 @@ class CHandlerAllowInternalUnstable: public ExpandDecorator {
 };
 
 STATIC_DECORATOR("allow_internal_unstable", CHandlerAllowInternalUnstable);
-
 
 class DecoratorNoStd: public ExpandDecorator {
 public:
@@ -3540,7 +3531,6 @@ void ExpandInitStdPrelude() {
     RegisterSynextDecoratorG<DecoratorPreludeImport>("prelude_import");
     RegisterSynextDecoratorG<DecoratorNoPrelude>("no_prelude");
 }
-
 
 class CTestHandler: public ExpandDecorator {
     AttrStage stage() const override {
@@ -3656,6 +3646,7 @@ STATIC_DECORATOR("ignore", CTestHandlerIgnore);
 DecoratorDef::DecoratorDef(::std::string name, ::std::unique_ptr<ExpandDecorator> def)
     : prev(nullptr)
     , name(::std::move(name))
-    , def(::std::move(def)) {
+    , def(::std::move(def))
+{
     RegisterSynextDecoratorStatic(this);
 }

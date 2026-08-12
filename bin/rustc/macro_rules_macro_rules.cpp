@@ -1,17 +1,18 @@
 #include "macro_rules_macro_rules.h"
+#include "macro_rules_macro_rules.h"
 
 #include "common.h"
-#include "macro_rules_macro_rules.h"
-#include "parse_parseerror.h"
-#include "parse_ttstream.h"
-#include "parse_common.h"
-#include <limits.h>
-#include "macro_rules_pattern_checks.h"
-#include "parse_interpolated_fragment.h"
+#include "hir_hir.h" // HIR::Crate
 #include "ast_expr.h"
 #include "ast_crate.h"
-#include "hir_hir.h" // HIR::Crate
+#include "parse_common.h"
+#include "parse_ttstream.h"
 #include "parse_tokentree.h"
+#include "parse_parseerror.h"
+#include "macro_rules_pattern_checks.h"
+#include "parse_interpolated_fragment.h"
+
+#include <limits.h>
 
 // Map of: LoopIndex=>(Path=>Count)
 typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCountsT;
@@ -2042,6 +2043,7 @@ unsigned int MacroInvokeRulesMatchPattern(const Span& sp, const MacroRules& rule
         ::std::vector<bool> conditionHistory;
         ::std::vector<bool> stmtIsItemHistory;
     };
+
     ::std::vector<Match> matches;
     ::std::vector<std::pair<size_t, eTokenType>> failPos;
     for (size_t i = 0; i < rules.rules.size(); i++) {
@@ -2511,8 +2513,6 @@ const ::std::vector<MacroExpansionEnt>* MacroExpandState::getCurLayer() const {
     return ents;
 }
 
-
-
 bool isTokenPath(eTokenType tt) {
     switch (tt) {
         case TOK_IDENT:
@@ -2858,7 +2858,6 @@ MacroRules::~MacroRules() {
 
 MacroRulesArm::~MacroRulesArm() {
 }
-
 
 MacroRulesPtr ParseMacroRules(TokenStream& lex);
 
@@ -3905,22 +3904,28 @@ namespace {
 
 MacroPatEnt::MacroPatEnt()
     : tok(TOK_NULL)
-    , type(PAT_TOKEN) {
+    , type(PAT_TOKEN)
+{
 }
+
 // Literal token
 MacroPatEnt::MacroPatEnt(Span sp, Token tok)
     : sp(mv$(sp))
     , tok(mv$(tok))
-    , type(PAT_TOKEN) {
+    , type(PAT_TOKEN)
+{
 }
+
 // Variable reference
 MacroPatEnt::MacroPatEnt(Span sp, RcString name, unsigned int nameIndex, Type type)
     : sp(mv$(sp))
     , name(mv$(name))
     , nameIndex(nameIndex)
     , tok()
-    , type(type) {
+    , type(type)
+{
 }
+
 // Loop/optional
 MacroPatEnt::MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::std::vector<MacroPatEnt> ents)
     : sp(mv$(sp))
@@ -3928,18 +3933,24 @@ MacroPatEnt::MacroPatEnt(Span sp, Token sep, const char* op, unsigned index, ::s
     , nameIndex(index)
     , tok(mv$(sep))
     , subpats(mv$(ents))
-    , type(PAT_LOOP) {
+    , type(PAT_LOOP)
+{
 }
+
 MacroRulesArm::MacroRulesArm() {
 }
+
 MacroRulesArm::MacroRulesArm(::std::vector<SimplePatEnt> pattern, ::std::vector<MacroExpansionEnt> contents)
     : pattern(mv$(pattern))
-    , contents(mv$(contents)) {
+    , contents(mv$(contents))
+{
 }
+
 MacroRules::MacroRules(RcString sourceCrate, AST::Edition edition)
     : definitionId(++gNextDefinitionId)
     , sourceCrate(std::move(sourceCrate))
-    , edition(edition) {
+    , edition(edition)
+{
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const SimplePatIfCheck& x) {

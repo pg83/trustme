@@ -1,11 +1,12 @@
 #include "hir_typeck_main_bindings.h"
-
-#include "hir_visitor.h"
-#include "hir_expr.h"
-#include "hir_typeck_static.h"
 #include "hir_typeck_main_bindings.h"
-#include <algorithm>
+
 #include "hir_hir.h"
+#include "hir_expr.h"
+#include "hir_visitor.h"
+#include "hir_typeck_static.h"
+
+#include <algorithm>
 
 namespace {
     typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> tArgs;
@@ -300,9 +301,7 @@ namespace {
                             break;
                     }
                     assert(itemName);
-                    auto operatorKind = node.op == ::HIR::ExprNodeBinOp::Op::CmpEqu || node.op == ::HIR::ExprNodeBinOp::Op::CmpNEqu
-                        ? TypeckPrimitiveOperator::Equal
-                        : TypeckPrimitiveOperator::Order;
+                    auto operatorKind = node.op == ::HIR::ExprNodeBinOp::Op::CmpEqu || node.op == ::HIR::ExprNodeBinOp::Op::CmpNEqu ? TypeckPrimitiveOperator::Equal : TypeckPrimitiveOperator::Order;
                     if (!primitiveOperatorHasBuiltin(operatorKind, node.left->resType, node.right->resType)) {
                         const auto& opTrait = this->getLangItemPath(node.span(), itemName);
                         checkTraitBound(node.span(), opTrait, {node.right->resType}, node.left->resType);
@@ -577,9 +576,7 @@ namespace {
             TRACE_FUNCTION_F(&node << " *...");
             const auto& ty = node.mValue->resType;
 
-            const bool builtin = node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Builtin
-                || (node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Unknown
-                    && primitiveOperatorHasBuiltin(TypeckPrimitiveOperator::Deref, ty));
+            const bool builtin = node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Builtin || (node.traitUsed == ::HIR::ExprNodeDeref::TraitUsed::Unknown && primitiveOperatorHasBuiltin(TypeckPrimitiveOperator::Deref, ty));
             if (builtin && ty->is_Pointer()) {
                 checkTypesEqual(node.span(), node.resType, ty->as_Pointer().inner);
             } else if (builtin && ty->is_Borrow()) {
@@ -1212,7 +1209,10 @@ namespace {
                 HIR::TypeInterner& types;
                 mutable ::HIR::TypeRef tmp;
 
-                explicit Resolve(HIR::TypeInterner& types): types(types) {}
+                explicit Resolve(HIR::TypeInterner& types)
+                    : types(types)
+                {
+                }
 
                 const ::HIR::TypeData* getType(const Span& sp, const HIR::TypeData* ty) const override {
                     //ASSERT_BUG(sp, ty->is_Infer(), "Unexpected ivar");
@@ -1253,12 +1253,7 @@ namespace {
             }
         }
 
-        void checkTraitBound(
-            const Span& sp,
-            const ::HIR::SimplePath& trait,
-            const ::HIR::PathParams& params,
-            const ::HIR::TypeData* ity
-        ) const {
+        void checkTraitBound(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams& params, const ::HIR::TypeData* ity) const {
             DEBUG(sp << " - " << ity << " : " << trait << params);
             auto normalizedType = ity;
             auto normalizedParams = params.clone();
@@ -1266,15 +1261,9 @@ namespace {
             for (auto& type : normalizedParams.types) {
                 mResolve.expandAssociatedTypes(sp, type);
             }
-            const bool found = mResolve.findImpl(
-                sp,
-                trait,
-                &normalizedParams,
-                normalizedType,
-                [](auto, bool) {
+            const bool found = mResolve.findImpl(sp, trait, &normalizedParams, normalizedType, [](auto, bool) {
                 return true;
-                }
-            );
+            });
             if (!found) {
                 ERROR(sp, E0000, "Cannot find an impl of " << trait << normalizedParams << " for " << normalizedType);
             }
@@ -1540,7 +1529,6 @@ void TypecheckExpressionsValidate(::HIR::Crate& crate) {
     ov.visitCrate(crate);
 }
 
-
 namespace {
 
     const ::HIR::GenericParams& getParamsForItem(const Span& sp, const ::HIR::Crate& crate, const ::HIR::SimplePath& path, ::HIR::Visitor::PathContext pc) {
@@ -1754,32 +1742,51 @@ namespace {
             }
 
             TU_MATCH_HDRA((data), {)
-            TU_ARMA(Infer, e) {}
-            TU_ARMA(Diverge, e) {}
-            TU_ARMA(Primitive, e) {}
-            TU_ARMA(Generic, e) {}
-            TU_ARMA(Path, e) this->visitPath(e.path, ::HIR::Visitor::PathContext::TYPE);
-            TU_ARMA(TraitObject, e) {
-                if (e.mTrait.mPath != ::HIR::SimplePath()) this->visitTraitPath(e.mTrait);
-                for (auto& marker : e.markers) this->visitGenericPath(marker, ::HIR::Visitor::PathContext::TYPE);
-            }
-            TU_ARMA(ErasedType, e) {
+            TU_ARMA(Infer, e) {
+                }
+                TU_ARMA(Diverge, e) {
+                }
+                TU_ARMA(Primitive, e) {
+                }
+                TU_ARMA(Generic, e) {
+                }
+                TU_ARMA(Path, e) this->visitPath(e.path, ::HIR::Visitor::PathContext::TYPE);
+                TU_ARMA(TraitObject, e) {
+                    if (e.mTrait.mPath != ::HIR::SimplePath()) {
+                        this->visitTraitPath(e.mTrait);
+                    }
+                    for (auto& marker : e.markers) {
+                        this->visitGenericPath(marker, ::HIR::Visitor::PathContext::TYPE);
+                    }
+                }
+                TU_ARMA(ErasedType, e) {
                 TU_MATCH_HDRA((e.inner), {)
                 TU_ARMA(Known, inner) this->visitType(inner);
-                TU_ARMA(Alias, inner) this->visitPathParams(inner.params);
-                TU_ARMA(Fcn, inner) if (inner.origin != ::HIR::SimplePath()) this->visitPath(inner.origin, ::HIR::Visitor::PathContext::VALUE);
+                        TU_ARMA(Alias, inner) this->visitPathParams(inner.params);
+                        TU_ARMA(Fcn, inner) if (inner.origin != ::HIR::SimplePath()) this->visitPath(inner.origin, ::HIR::Visitor::PathContext::VALUE);
                 }
                 this->visitPathParams(e.use);
                 for (auto& trait : e.traits) this->visitTraitPath(trait);
-            }
-            TU_ARMA(Array, e) { this->visitType(e.inner); if (auto* size = e.size.opt_Unevaluated()) this->visitConstgeneric(*size); }
-            TU_ARMA(Slice, e) this->visitType(e.inner);
-            TU_ARMA(Tuple, e) for (auto& inner : e) this->visitType(inner);
-            TU_ARMA(Borrow, e) this->visitType(e.inner);
-            TU_ARMA(Pointer, e) this->visitType(e.inner);
-            TU_ARMA(NamedFunction, e) this->visitPath(e.path, ::HIR::Visitor::PathContext::VALUE);
-            TU_ARMA(Function, e) { for (auto& arg : e.argTypes) this->visitType(arg); this->visitType(e.mRettype); }
-            TU_ARMA(NodeType, e) {}
+                }
+                TU_ARMA(Array, e) {
+                    this->visitType(e.inner);
+                    if (auto* size = e.size.opt_Unevaluated()) {
+                        this->visitConstgeneric(*size);
+                    }
+                }
+                TU_ARMA(Slice, e) this->visitType(e.inner);
+                TU_ARMA(Tuple, e) for (auto& inner : e) this->visitType(inner);
+                TU_ARMA(Borrow, e) this->visitType(e.inner);
+                TU_ARMA(Pointer, e) this->visitType(e.inner);
+                TU_ARMA(NamedFunction, e) this->visitPath(e.path, ::HIR::Visitor::PathContext::VALUE);
+                TU_ARMA(Function, e) {
+                    for (auto& arg : e.argTypes) {
+                        this->visitType(arg);
+                    }
+                    this->visitType(e.mRettype);
+                }
+                TU_ARMA(NodeType, e) {
+                }
             }
 
             curParams = savedParams.first;
@@ -1799,7 +1806,9 @@ namespace {
             }
 
             if (auto* e = data.opt_ErasedType()) {
-                for (auto& lft : e->lifetimeBounds) visitLifetime(sp, lft);
+                for (auto& lft : e->lifetimeBounds) {
+                    visitLifetime(sp, lft);
+                }
             }
 
             ty = crate.types.intern(mv$(data));

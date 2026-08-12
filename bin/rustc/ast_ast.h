@@ -1,30 +1,26 @@
 #pragma once
 
+#include "hir_asm.h"
+#include "ast_item.h"
+#include "ast_attrs.h"
+#include "ast_macro.h" // MacroInvocation
+#include "ast_types.h"
+#include "coretypes.h"
+#include "ast_pattern.h"
+#include "ast_expr_ptr.h"
+#include "ast_generics.h"
+#include "expand_common.h"
 #include "target_version.h"
+#include "parse_tokentree.h"
+#include "macro_rules_macro_rules_ptr.h"
 
+#include <map>
+#include <memory>
 #include <string>
 #include <vector>
-#include <stdexcept>
-#include "coretypes.h"
-#include <memory>
-#include <map>
-#include <unordered_map>
 #include <algorithm>
-
-#include "parse_tokentree.h"
-#include "ast_types.h"
-
-#include "ast_pattern.h"
-#include "ast_attrs.h"
-#include "ast_expr_ptr.h"
-#include "ast_item.h"
-#include "ast_macro.h" // MacroInvocation
-
-#include "ast_generics.h"
-
-#include "macro_rules_macro_rules_ptr.h"
-#include "expand_common.h"
-#include "hir_asm.h"
+#include <stdexcept>
+#include <unordered_map>
 
 namespace AST {
 

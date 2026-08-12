@@ -1,11 +1,12 @@
 #pragma once
 
-#include "hir_pattern.h"
-#include "hir_type.h"
 #include "span.h"
+#include "hir_asm.h"
+#include "hir_type.h"
+#include "hir_pattern.h"
 #include "hir_visitor.h"
 #include "hir_typeck_common.h"
-#include "hir_asm.h"
+
 #include <memory>
 
 namespace HIR {
@@ -754,15 +755,7 @@ namespace HIR {
         // State data type (needed for initialising)
         ::HIR::TypeRef stateDataType;
 
-        ExprNodeGenerator(
-            Span sp,
-            ::HIR::TypeRef rv,
-            ::HIR::TypeRef resumeTy,
-            ::HIR::TypeRef yieldTy,
-            ::HIR::ExprNodeP code,
-            bool isMove,
-            bool isPinned
-        );
+        ExprNodeGenerator(Span sp, ::HIR::TypeRef rv, ::HIR::TypeRef resumeTy, ::HIR::TypeRef yieldTy, ::HIR::ExprNodeP code, bool isMove, bool isPinned);
 
         static constexpr unsigned int kind = 37;
         unsigned int nodeKind() const override;
@@ -790,13 +783,7 @@ namespace HIR {
 
         ::std::vector<HIR::ValueUsage> captureUsages;
 
-        ExprNodeGeneratorWrapper(
-            Span sp,
-            ::HIR::TypeRef rv,
-            ::HIR::TypeRef yieldTy,
-            ::HIR::ExprNodeP code,
-            bool isFuture
-        );
+        ExprNodeGeneratorWrapper(Span sp, ::HIR::TypeRef rv, ::HIR::TypeRef yieldTy, ::HIR::ExprNodeP code, bool isFuture);
 
         static constexpr unsigned int kind = 38;
         unsigned int nodeKind() const override;
@@ -885,7 +872,10 @@ namespace HIR {
 
     public:
         explicit ExprVisitorDef(TypeInterner& types);
-        TypeInterner& typeInterner() const { return types; }
+
+        TypeInterner& typeInterner() const {
+            return types;
+        }
 
 #define NV(nt) virtual void visit(nt& n) override;
 

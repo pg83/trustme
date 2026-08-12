@@ -1,22 +1,24 @@
 #include "parse_common.h"
-
-#include "parse_parseerror.h"
-#include "ast_ast.h"
-#include "ast_expr.h"
 #include "parse_common.h"
-#include <iostream>
-#include "parse_tokentree.h"
-#include "parse_interpolated_fragment.h"
-#include "ast_crate.h"
-#include <std/mem/obj_pool.h>
-#include <cassert>
-#include "hir_hir.h"    // ABI_RUST - TODO: Move elsewhere?
-#include "expand_cfg.h" // check_cfg - for `mod nonexistant;`
-#include <fstream>        // Used by directory path
-#include "parse_lex.h"  // New file lexer
-#include "macro_rules_macro_rules.h"
+
 #include "path.h"
+#include "ast_ast.h"
+#include "hir_hir.h" // ABI_RUST - TODO: Move elsewhere?
+#include "ast_expr.h"
+#include "ast_crate.h"
 #include "ast_types.h"
+#include "parse_lex.h"  // New file lexer
+#include "expand_cfg.h" // check_cfg - for `mod nonexistant;`
+#include "parse_tokentree.h"
+#include "parse_parseerror.h"
+#include "macro_rules_macro_rules.h"
+#include "parse_interpolated_fragment.h"
+
+#include <std/mem/obj_pool.h>
+
+#include <cassert>
+#include <fstream> // Used by directory path
+#include <iostream>
 
 using AST::ExprNode;
 using AST::ExprNodeP;
@@ -894,14 +896,7 @@ ExprNodeP ParseExpr1a(TokenStream& lex) {
 
     return NEWNODE(AST::ExprNodeBinOp, AST::ExprNodeBinOp::RANGE, ::std::move(left), ::std::move(right));
 }
-LEFTASSOC(ParseExpr1b, ParseExpr1e,
-    case TOK_TRIPLE_DOT:
-        rv = NEWNODE( AST::ExprNodeBinOp, AST::ExprNodeBinOp::RANGE_INC, mv$(rv), next(lex) );
-        break;
-    case TOK_DOUBLE_DOT_EQUAL:
-        rv = NEWNODE( AST::ExprNodeBinOp, AST::ExprNodeBinOp::RANGE_INC, mv$(rv), next(lex) );
-        break;
-)
+LEFTASSOC(ParseExpr1b, ParseExpr1e, case TOK_TRIPLE_DOT : rv = NEWNODE(AST::ExprNodeBinOp, AST::ExprNodeBinOp::RANGE_INC, mv$(rv), next(lex)); break; case TOK_DOUBLE_DOT_EQUAL : rv = NEWNODE(AST::ExprNodeBinOp, AST::ExprNodeBinOp::RANGE_INC, mv$(rv), next(lex)); break;)
 // 1: Bool OR
 LEFTASSOC(ParseExpr1e, ParseExpr2, case TOK_DOUBLE_PIPE : rv = NEWNODE(AST::ExprNodeBinOp, AST::ExprNodeBinOp::BOOLOR, ::std::move(rv), next(lex)); break;)
 // 2: Bool AND
@@ -1556,7 +1551,6 @@ TokenTree ParseTT(TokenStream& lex, bool unwrapped) {
 #undef NEWNODE
 #undef LEFTASSOC
 
-
 AST::Path ParsePath(TokenStream& lex, eParsePathGenericMode genericMode);
 AST::Path ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMode);
 ::std::vector<AST::PathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
@@ -1839,7 +1833,6 @@ AST::Path ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericM
 
     return rv;
 }
-
 
 // NEWNODE is needed for the Value pattern type
 typedef ::std::unique_ptr<AST::ExprNode> PatternExprNodeP;
@@ -2416,7 +2409,6 @@ AST::Pattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, AST::Path path) 
 
 #undef NEWNODE
 
-
 template <typename T>
 Spanned<T> getSpanned(TokenStream& lex, ::std::function<T()> f) {
     auto ps = lex.startSpan();
@@ -2425,7 +2417,7 @@ Spanned<T> getSpanned(TokenStream& lex, ::std::function<T()> f) {
 }
 
 #define GET_SPANNED(type, lex, val) \
-    getSpanned<type>(lex, [&]() {  \
+    getSpanned<type>(lex, [&]() {   \
         return val;                 \
     })
 
@@ -2591,9 +2583,7 @@ namespace {
         if (lex.getTokenIf(TOK_RWORD_CONST)) {
             return AST::BoundConstness::Always;
         }
-        if (lex.lookahead(0) == TOK_SQUARE_OPEN
-            && lex.lookahead(1) == TOK_RWORD_CONST
-            && lex.lookahead(2) == TOK_SQUARE_CLOSE) {
+        if (lex.lookahead(0) == TOK_SQUARE_OPEN && lex.lookahead(1) == TOK_RWORD_CONST && lex.lookahead(2) == TOK_SQUARE_CLOSE) {
             lex.getToken();
             lex.getToken();
             lex.getToken();
@@ -2907,8 +2897,7 @@ AST::Function ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBeProto
                 GET_TOK(tok, lex);
                 break;
             }
-            if ((lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE)
-                && lex.lookahead(1) == TOK_COLON && lex.lookahead(2) == TOK_TRIPLE_DOT) {
+            if ((lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE) && lex.lookahead(1) == TOK_COLON && lex.lookahead(2) == TOK_TRIPLE_DOT) {
                 GET_TOK(tok, lex);
                 GET_TOK(tok, lex);
                 GET_TOK(tok, lex);
@@ -4017,7 +4006,6 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv) {
     return true;
 }
 
-
 ::AST::Named<::AST::Item> ParseModItemS(TokenStream& lex, const AST::Module::FileInfo& modFileinfo, const ::AST::AbsolutePath& modPath, AST::AttributeList metaItems) {
     TRACE_FUNCTION_F("mod_path=" << modPath << ", meta_items=" << metaItems);
     Token tok;
@@ -4383,34 +4371,32 @@ bool ParseMacroInvocationOpt(TokenStream& lex, AST::MacroInvocation& outInv) {
             break;
         }
 
-        case TOK_RWORD_MACRO:
-            {
-                GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                auto name = tok.ident().name;
-                DEBUG("name = " << name);
-                MacroRulesPtr mrp;
-                if (lex.lookahead(0) == TOK_BRACE_OPEN) {
-                    GET_TOK(tok, lex);
-                    mrp = ParseMacroRules(lex);
-                } else if (lex.lookahead(0) == TOK_PAREN_OPEN) {
-                    mrp = ParseMacroRulesSingleArm(lex);
-                } else {
-                    GET_TOK(tok, lex);
-                    throw ParseErrorUnexpected(lex, tok);
-                }
-
-                {
-                    Ident::ModPath mp;
-                    mp.crate = "";
-                    mp.ents = modPath.nodes;
-                    mrp->mHygiene.setModPath(::std::move(mp));
-                    mrp->isMacroItem = true;
-                }
-
-                itemName = name;
-                itemData = ::AST::Item(mv$(mrp));
+        case TOK_RWORD_MACRO: {
+            GET_CHECK_TOK(tok, lex, TOK_IDENT);
+            auto name = tok.ident().name;
+            DEBUG("name = " << name);
+            MacroRulesPtr mrp;
+            if (lex.lookahead(0) == TOK_BRACE_OPEN) {
+                GET_TOK(tok, lex);
+                mrp = ParseMacroRules(lex);
+            } else if (lex.lookahead(0) == TOK_PAREN_OPEN) {
+                mrp = ParseMacroRulesSingleArm(lex);
+            } else {
+                GET_TOK(tok, lex);
+                throw ParseErrorUnexpected(lex, tok);
             }
-            break;
+
+            {
+                Ident::ModPath mp;
+                mp.crate = "";
+                mp.ents = modPath.nodes;
+                mrp->mHygiene.setModPath(::std::move(mp));
+                mrp->isMacroItem = true;
+            }
+
+            itemName = name;
+            itemData = ::AST::Item(mv$(mrp));
+        } break;
 
         case TOK_RWORD_MOD: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
@@ -4644,7 +4630,6 @@ AST::Crate* ParseCrate(stl::ObjPool* pool, HIR::TypeInterner& types, ::std::stri
 
 #undef GET_SPANNED
 #undef LOOKAHEAD2
-
 
 // === PROTOTYPES ===
 //TypeRef Parse_Type(TokenStream& lex, bool allow_trait_list);

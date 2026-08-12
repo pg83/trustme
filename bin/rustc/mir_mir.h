@@ -1,13 +1,14 @@
 #pragma once
 
-#include "tagged_union.h"
-#include <vector>
-#include <string>
-#include <memory> // std::unique_ptr
-#include "hir_type.h"
-#include "hir_asm.h"
-#include "int128.h"
 #include "floats.h"
+#include "int128.h"
+#include "hir_asm.h"
+#include "hir_type.h"
+#include "tagged_union.h"
+
+#include <memory> // std::unique_ptr
+#include <string>
+#include <vector>
 #include <cstdint>
 
 struct MonomorphState;
@@ -482,21 +483,27 @@ namespace MIR {
         explicit operator bool() const {
             return static_cast<bool>(p);
         }
+
         const ::HIR::Path* get() const {
             return p.get();
         }
+
         ::HIR::Path* get() {
             return p.get();
         }
+
         const ::HIR::Path& operator*() const {
             return *p;
         }
+
         ::HIR::Path& operator*() {
             return *p;
         }
+
         const ::HIR::Path* operator->() const {
             return p.get();
         }
+
         ::HIR::Path* operator->() {
             return p.get();
         }
@@ -656,14 +663,7 @@ namespace MIR {
                  }));
     TAGGED_UNION_EX(SwitchValues, (), Unsigned, ((Unsigned, ::std::vector<uint64_t>), (Signed, ::std::vector<int64_t>), (String, ::std::vector<::std::string>), (ByteString, ::std::vector<::std::vector<uint8_t>>)), (), (), (SwitchValues clone() const; bool operator==(const SwitchValues& x) const; bool operator!=(const SwitchValues& x) const { return !(*this == x); }));
 
-    TAGGED_UNION(
-        UnwindAction,
-        Continue,
-        (Continue, struct {}),
-        (Cleanup, BasicBlockId),
-        (Terminate, struct {}),
-        (Unreachable, struct {})
-    );
+    TAGGED_UNION(UnwindAction, Continue, (Continue, struct {}), (Cleanup, BasicBlockId), (Terminate, struct {}), (Unreachable, struct {}));
 
     enum class eDropKind {
         SHALLOW,
@@ -673,12 +673,12 @@ namespace MIR {
     TAGGED_UNION(
         Terminator,
         Incomplete,
-        (Incomplete, struct {}),               // Block isn't complete (ERROR in output)
-        (Return, struct {}),                   // Return clealy to caller
-        (UnwindResume, struct {}),             // Resume the currently caught exception
-        (UnwindTerminate, struct {}),          // Abort if unwinding reaches this point
-        (Unreachable, struct {}),              // This control-flow edge cannot be reached
-        (Goto, BasicBlockId),                  // Jump to another block
+        (Incomplete, struct {}),      // Block isn't complete (ERROR in output)
+        (Return, struct {}),          // Return clealy to caller
+        (UnwindResume, struct {}),    // Resume the currently caught exception
+        (UnwindTerminate, struct {}), // Abort if unwinding reaches this point
+        (Unreachable, struct {}),     // This control-flow edge cannot be reached
+        (Goto, BasicBlockId),         // Jump to another block
         (If,
          struct {
              LValue cond;
@@ -698,14 +698,15 @@ namespace MIR {
              BasicBlockId defTarget;
              ::std::vector<BasicBlockId> targets;
              SwitchValues values;
-        }),
-        (Drop, struct {
-            eDropKind kind;
-            LValue slot;
-            unsigned int flagIdx;
-            BasicBlockId target;
-            UnwindAction unwind;
-        }),
+         }),
+        (Drop,
+         struct {
+             eDropKind kind;
+             LValue slot;
+             unsigned int flagIdx;
+             BasicBlockId target;
+             UnwindAction unwind;
+         }),
         (Call, struct {
             BasicBlockId retBlock;
             UnwindAction unwind;

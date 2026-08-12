@@ -1,4 +1,5 @@
 #include "parse_parseerror.h"
+
 #include <iostream>
 
 CompileErrorBase::~CompileErrorBase() throw() {

@@ -1,4 +1,5 @@
 #include "hir_typeck_expr_visit.h"
+
 #include "hir_hir.h"
 #include "hir_expr.h"
 #include "hir_visitor.h"
@@ -12,76 +13,76 @@ void TypecheckCode(const TypeckModuleState& ms, tArgs& args, const ::HIR::TypeDa
     }
 }
 
-    void TypeckModuleState::prepareFromPath(const ::HIR::ItemPath& ip) {
-        static Span sp;
-        ASSERT_BUG(sp, ip.parent, "prepare_from_path with too-short path - " << ip);
+void TypeckModuleState::prepareFromPath(const ::HIR::ItemPath& ip) {
+    static Span sp;
+    ASSERT_BUG(sp, ip.parent, "prepare_from_path with too-short path - " << ip);
 
-        struct H {
-            static const ::HIR::Module& getModForIp(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip) {
-                if (ip.parent) {
-                    const auto& mod = H::getModForIp(crate, *ip.parent);
-                    return mod.modItems.at(ip.name)->ent.as_Module();
-                } else {
-                    assert(ip.crateName);
-                    return (ip.crateName[0] ? crate.extCrates.at(ip.crateName).mData->mRootModule : crate.mRootModule);
-                }
-            }
-
-            static void addTraitsFromMod(TypeckModuleState& ms, const ::HIR::Module& mod) {
-                // In-scope traits.
-                ms.traits.clear();
-                for (const auto& tp : mod.traits) {
-                    const auto& trait = ms.crate.getTraitByPath(sp, tp);
-                    ms.traits.push_back(::std::make_pair(&tp, &trait));
-                }
-            }
-        };
-
-        if (ip.parent->trait && ip.parent->ty) {
-            // Trait impl
-            TODO(sp, "prepare_from_path - Trait impl " << ip);
-        } else if (ip.parent->trait) {
-            // Trait definition
-            //const auto& trait_mod = H::get_mod_for_ip(m_crate, *ip.parent->trait->parent);
-            //const auto& trait = trait_mod.m_mod_items.at(ip.parent->trait->name).ent.as_Trait();
-            const auto& trait = crate.getTraitByPath(sp, *ip.parent->trait);
-            const auto& item = trait.values.at(ip.name);
-            TU_MATCH_HDRA( (item), { )
-            TU_ARMA(Function, e) {
-                    mItemGenerics = &e.mParams;
-                }
-                TU_ARMA(Constant, e) {
-                    mItemGenerics = &e.mParams;
-                }
-                TU_ARMA(Static, e) {
-                    mItemGenerics = nullptr;
-                }
-            }
-        } else if (ip.parent->ty) {
-            // Inherent impl
-            TODO(sp, "prepare_from_path - Type impl " << ip);
-        } else {
-            // Namespace path
-            const auto& mod = H::getModForIp(crate, *ip.parent);
-            H::addTraitsFromMod(*this, mod);
-            const auto& item = mod.valueItems.at(ip.name)->ent;
-            mImplGenerics = nullptr;
-            TU_MATCH_HDRA( (item), { )
-            TU_ARMA(Constant, e) {
-                    mItemGenerics = &e.mParams;
-                }
-                TU_ARMA(Static, e) {
-                    //m_item_generics = &e.m_params;
-                }
-                TU_ARMA(Function, e) {
-                    mItemGenerics = &e.mParams;
-                }
-                TU_ARMA(StructConstant, _e) BUG(sp, ip << " is StructConstant");
-                TU_ARMA(StructConstructor, _e) BUG(sp, ip << " is StructConstructor");
-                TU_ARMA(Import, _e) BUG(sp, ip << " is Import");
+    struct H {
+        static const ::HIR::Module& getModForIp(const ::HIR::Crate& crate, const ::HIR::ItemPath& ip) {
+            if (ip.parent) {
+                const auto& mod = H::getModForIp(crate, *ip.parent);
+                return mod.modItems.at(ip.name)->ent.as_Module();
+            } else {
+                assert(ip.crateName);
+                return (ip.crateName[0] ? crate.extCrates.at(ip.crateName).mData->mRootModule : crate.mRootModule);
             }
         }
+
+        static void addTraitsFromMod(TypeckModuleState& ms, const ::HIR::Module& mod) {
+            // In-scope traits.
+            ms.traits.clear();
+            for (const auto& tp : mod.traits) {
+                const auto& trait = ms.crate.getTraitByPath(sp, tp);
+                ms.traits.push_back(::std::make_pair(&tp, &trait));
+            }
+        }
+    };
+
+    if (ip.parent->trait && ip.parent->ty) {
+        // Trait impl
+        TODO(sp, "prepare_from_path - Trait impl " << ip);
+    } else if (ip.parent->trait) {
+        // Trait definition
+        //const auto& trait_mod = H::get_mod_for_ip(m_crate, *ip.parent->trait->parent);
+        //const auto& trait = trait_mod.m_mod_items.at(ip.parent->trait->name).ent.as_Trait();
+        const auto& trait = crate.getTraitByPath(sp, *ip.parent->trait);
+        const auto& item = trait.values.at(ip.name);
+            TU_MATCH_HDRA( (item), { )
+            TU_ARMA(Function, e) {
+                mItemGenerics = &e.mParams;
+            }
+            TU_ARMA(Constant, e) {
+                mItemGenerics = &e.mParams;
+            }
+            TU_ARMA(Static, e) {
+                mItemGenerics = nullptr;
+            }
+            }
+    } else if (ip.parent->ty) {
+        // Inherent impl
+        TODO(sp, "prepare_from_path - Type impl " << ip);
+    } else {
+        // Namespace path
+        const auto& mod = H::getModForIp(crate, *ip.parent);
+        H::addTraitsFromMod(*this, mod);
+        const auto& item = mod.valueItems.at(ip.name)->ent;
+        mImplGenerics = nullptr;
+            TU_MATCH_HDRA( (item), { )
+            TU_ARMA(Constant, e) {
+                mItemGenerics = &e.mParams;
+            }
+            TU_ARMA(Static, e) {
+                //m_item_generics = &e.m_params;
+            }
+            TU_ARMA(Function, e) {
+                mItemGenerics = &e.mParams;
+            }
+            TU_ARMA(StructConstant, _e) BUG(sp, ip << " is StructConstant");
+            TU_ARMA(StructConstructor, _e) BUG(sp, ip << " is StructConstructor");
+            TU_ARMA(Import, _e) BUG(sp, ip << " is Import");
+            }
     }
+}
 
 namespace {
 
@@ -231,34 +232,39 @@ void TypecheckExpressions(::HIR::Crate& crate) {
     visitor.visitCrate(crate);
 }
 
-
 TypeckModuleState::TypeckModuleState(const ::HIR::Crate& crate)
     : crate(crate)
     , currentTrait(nullptr)
     , currentTraitImpl(nullptr)
     , mImplGenerics(nullptr)
-    , mItemGenerics(nullptr) {
+    , mItemGenerics(nullptr)
+{
 }
+
 TypeckModuleState::NullOnDrop<const ::HIR::GenericPath> TypeckModuleState::setCurrentTrait(const ::HIR::GenericPath& p) {
     assert(!currentTrait);
     currentTrait = &p;
     return NullOnDrop<const ::HIR::GenericPath>(currentTrait);
 }
+
 TypeckModuleState::NullOnDrop<const ::HIR::TraitImpl> TypeckModuleState::setCurrentTraitImpl(const ::HIR::TraitImpl& impl) {
     assert(!currentTraitImpl);
     currentTraitImpl = &impl;
     return NullOnDrop<const ::HIR::TraitImpl>(currentTraitImpl);
 }
+
 TypeckModuleState::NullOnDrop<const ::HIR::GenericParams> TypeckModuleState::setImplGenerics(const ::HIR::GenericParams& gps) {
     assert(!mImplGenerics);
     mImplGenerics = &gps;
     return NullOnDrop<const ::HIR::GenericParams>(mImplGenerics);
 }
+
 TypeckModuleState::NullOnDrop<const ::HIR::GenericParams> TypeckModuleState::setItemGenerics(const ::HIR::GenericParams& gps) {
     assert(!mItemGenerics);
     mItemGenerics = &gps;
     return NullOnDrop<const ::HIR::GenericParams>(mItemGenerics);
 }
+
 void TypeckModuleState::pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod) {
     auto sp = Span();
     modPaths.push_back(p.getSimplePath());
@@ -270,6 +276,7 @@ void TypeckModuleState::pushTraits(::HIR::ItemPath p, const ::HIR::Module& mod) 
         traits.push_back(::std::make_pair(&traitPath, &this->crate.getTraitByPath(sp, traitPath)));
     }
 }
+
 void TypeckModuleState::popTraits(const ::HIR::Module& mod) {
     DEBUG("Module has " << mod.traits.size() << " in-scope traits");
     for (unsigned int i = 0; i < mod.traits.size(); i++) {

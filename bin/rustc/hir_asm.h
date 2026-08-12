@@ -12,115 +12,114 @@
 #define ABI_RUST "Rust"
 #define CRATE_BUILTINS "#builtins" // used for macro re-exports of builtins
 
+enum class AsmDirection {
+    In,
+    Out,
+    LateOut,
+    InOut,
+    InLateOut
+};
 
-    enum class AsmDirection {
-        In,
-        Out,
-        LateOut,
-        InOut,
-        InLateOut
-    };
+std::ostream& operator<<(std::ostream& os, const AsmDirection& d);
 
-    std::ostream& operator<<(std::ostream& os, const AsmDirection& d);
+enum class AsmRegisterClass {
+    x86Reg,
+    x86RegAbcd,
+    x86RegByte,
+    x86Xmm,
+    x86Ymm,
+    x86Zmm,
+    //x86_mm, // Requires
+    x86Kreg,
 
-    enum class AsmRegisterClass {
-        x86Reg,
-        x86RegAbcd,
-        x86RegByte,
-        x86Xmm,
-        x86Ymm,
-        x86Zmm,
-        //x86_mm, // Requires
-        x86Kreg,
+    //aarch64_reg,
+    //aarch64_vreg,
 
-        //aarch64_reg,
-        //aarch64_vreg,
+    //arm_reg,
+    //arm_sreg,
+    //arm_dreg,
+    //arm_qreg,
 
-        //arm_reg,
-        //arm_sreg,
-        //arm_dreg,
-        //arm_qreg,
+    //mips_reg,
+    //mips_freg,
 
-        //mips_reg,
-        //mips_freg,
+    //nvptx_reg16,
+    //nvptx_reg32,
+    //nvptx_reg64,
 
-        //nvptx_reg16,
-        //nvptx_reg32,
-        //nvptx_reg64,
+    riscvReg,
+    riscvFreg,
 
-        riscvReg,
-        riscvFreg,
+    //hexagon_reg,
 
-        //hexagon_reg,
+    //powerpc_reg,
+    //powerpc_reg_nonzero,
+    //powerpc_freg,
 
-        //powerpc_reg,
-        //powerpc_reg_nonzero,
-        //powerpc_freg,
+    //wasm32_local,
 
-        //wasm32_local,
+    //bpf_reg,
+    //bpf_wreg,
+};
 
-        //bpf_reg,
-        //bpf_wreg,
-    };
-
-    TAGGED_UNION_EX(AsmRegisterSpec, (), Explicit, ((Class, AsmRegisterClass), (Explicit, std::string)), (), (), (AsmRegisterSpec clone() const {
+TAGGED_UNION_EX(AsmRegisterSpec, (), Explicit, ((Class, AsmRegisterClass), (Explicit, std::string)), (), (), (AsmRegisterSpec clone() const {
                 TU_MATCH_HDRA((*this),{)
                 TU_ARMA(Class, e)   return e;
-            TU_ARMA(Explicit, e) return e;
+        TU_ARMA(Explicit, e) return e;
                 }
                 throw "";
-                    }));
+                }));
 
-    bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b);
+bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b);
 
-    static inline bool operator!=(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
-        return !(a == b);
+static inline bool operator!=(const AsmRegisterSpec& a, const AsmRegisterSpec& b) {
+    return !(a == b);
+}
+
+const char* to_string(const AsmRegisterClass& c);
+
+std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s);
+
+struct AsmLineFragment {
+    std::string before;
+
+    unsigned index;
+    char modifier;
+
+    AsmLineFragment();
+
+    bool operator==(const AsmLineFragment& x) const {
+        return before == x.before && index == x.index && modifier == x.modifier;
     }
+};
 
-    const char* to_string(const AsmRegisterClass& c);
+struct AsmLine {
+    std::vector<AsmLineFragment> frags;
+    std::string trailing;
 
-    std::ostream& operator<<(std::ostream& os, const AsmRegisterSpec& s);
+    void fmt(std::ostream& os) const;
 
-    struct AsmLineFragment {
-        std::string before;
+    bool operator==(const AsmLine& x) const {
+        return frags == x.frags && trailing == x.trailing;
+    }
+};
 
-        unsigned index;
-        char modifier;
+struct AsmOptions {
+    unsigned pure : 1;
+    unsigned nomem : 1;
+    unsigned readonly : 1;
+    unsigned preservesFlags : 1;
+    unsigned noreturn : 1;
+    unsigned nostack : 1;
+    unsigned attSyntax : 1;
+    // Indicates `naked_asm!`
+    unsigned naked : 1;
 
-        AsmLineFragment();
+    AsmOptions();
 
-        bool operator==(const AsmLineFragment& x) const {
-            return before == x.before && index == x.index && modifier == x.modifier;
-        }
-    };
+    bool any() const;
 
-    struct AsmLine {
-        std::vector<AsmLineFragment> frags;
-        std::string trailing;
+    void fmt(std::ostream& os) const;
 
-        void fmt(std::ostream& os) const;
-
-        bool operator==(const AsmLine& x) const {
-            return frags == x.frags && trailing == x.trailing;
-        }
-    };
-
-    struct AsmOptions {
-        unsigned pure : 1;
-        unsigned nomem : 1;
-        unsigned readonly : 1;
-        unsigned preservesFlags : 1;
-        unsigned noreturn : 1;
-        unsigned nostack : 1;
-        unsigned attSyntax : 1;
-        // Indicates `naked_asm!`
-        unsigned naked : 1;
-
-        AsmOptions();
-
-        bool any() const;
-
-        void fmt(std::ostream& os) const;
-
-        bool operator==(const AsmOptions& x) const;
-    };
+    bool operator==(const AsmOptions& x) const;
+};

@@ -1,10 +1,11 @@
 #include "parse_token.h"
+
 #include "common.h"
-#include "parse_parseerror.h"
-#include "parse_interpolated_fragment.h"
-#include "ast_types.h"
 #include "ast_ast.h"
 #include "ast_expr.h" // for reasons
+#include "ast_types.h"
+#include "parse_parseerror.h"
+#include "parse_interpolated_fragment.h"
 
 Token::~Token() {
     switch (mType) {
@@ -741,18 +742,23 @@ struct EscapedString {
 Position::Position()
     : filename("")
     , line(0)
-    , ofs(0) {
+    , ofs(0)
+{
 }
+
 Position::Position(Span sp)
     : span(std::move(sp))
     , filename("")
     , line(0)
-    , ofs(0) {
+    , ofs(0)
+{
 }
+
 Position::Position(RcString filename, unsigned int line, unsigned int ofs)
     : filename(filename)
     , line(line)
-    , ofs(ofs) {
+    , ofs(ofs)
+{
 }
 
 // Only for strings, for formatting
@@ -760,8 +766,10 @@ Position::Position(RcString filename, unsigned int line, unsigned int ofs)
 Token::Token(enum eTokenType t, Data d, Position p)
     : mType(t)
     , mData(::std::move(d))
-    , pos(::std::move(p)) {
+    , pos(::std::move(p))
+{
 }
+
 Token& Token::operator=(Token&& t) {
     if (this == &t) {
         return *this;
@@ -770,35 +778,43 @@ Token& Token::operator=(Token&& t) {
     new (this) Token(::std::move(t));
     return *this;
 }
+
 Token::Token(Token&& t)
     : mType(t.mType)
     , mData(::std::move(t.mData))
     , pos(::std::move(t.pos))
-    , mHygiene(std::move(t.mHygiene)) {
+    , mHygiene(std::move(t.mHygiene))
+{
     t.mType = TOK_NULL;
 }
+
 Token& Token::operator=(const Token& t) {
     this->~Token();
     new (this) Token(t);
     return *this;
 }
+
 // TODO: Replace these with a way of getting a InterpolatedFragment&
 TypeRef& Token::fragType() {
     assert(mType == TOK_INTERPOLATED_TYPE);
     return *reinterpret_cast<TypeRef*>(mData.as_Fragment());
 }
+
 AST::Path& Token::fragPath() {
     assert(mType == TOK_INTERPOLATED_PATH);
     return *reinterpret_cast<AST::Path*>(mData.as_Fragment());
 }
+
 AST::Pattern& Token::fragPattern() {
     assert(mType == TOK_INTERPOLATED_PATTERN);
     return *reinterpret_cast<AST::Pattern*>(mData.as_Fragment());
 }
+
 AST::Attribute& Token::fragMeta() {
     assert(mType == TOK_INTERPOLATED_META);
     return *reinterpret_cast<AST::Attribute*>(mData.as_Fragment());
 }
+
 bool Token::operator==(const Token& r) const {
     if (type() != r.type()) {
         return false;

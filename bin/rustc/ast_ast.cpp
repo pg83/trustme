@@ -1,16 +1,17 @@
 #include "ast_ast.h"
+
+#include "common.h"
+#include "synext.h" // Expand_ParseAndExpand_ExprVal
+#include "ast_expr.h"
 #include "ast_crate.h"
 #include "ast_types.h"
-#include "ast_expr.h"
-#include "common.h"
-#include <iostream>
-#include "parse_parseerror.h"
-#include <algorithm>
-
-#include "parse_ttstream.h"
 #include "parse_common.h"
+#include "parse_ttstream.h"
+#include "parse_parseerror.h"
 #include "parse_interpolated_fragment.h"
-#include "synext.h" // Expand_ParseAndExpand_ExprVal
+
+#include <iostream>
+#include <algorithm>
 
 namespace AST {
 
@@ -613,133 +614,173 @@ AST::AttributeList::AttributeList(const AttributeList&) = default;
 
 namespace AST {
 
-//StructItem() {}
+    //StructItem() {}
 
-StructItem::StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr defaultValue)
-    : mAttrs(mv$(attrs))
-    , vis(mv$(vis))
-    , mName(mv$(name))
-    , mType(mv$(ty))
-    , defaultValue(mv$(defaultValue)) {
-}
-//TupleItem() {}
-
-TupleItem::TupleItem(::AST::AttributeList attrs, AST::Visibility vis, TypeRef ty)
-    : mAttrs(mv$(attrs))
-    , vis(mv$(vis))
-    , mType(mv$(ty)) {
-}
-//TypeAlias() {}
-TypeAlias::TypeAlias(GenericParams params, TypeRef type)
-    : mParams(std::move(params))
-    , mType(std::move(type)) {
-}
-TypeAlias TypeAlias::newAssociatedType(GenericParams params, GenericParams typeBounds, TypeRef defaultType) {
-    TypeAlias rv{std::move(params), std::move(defaultType)};
-    rv.selfBounds = std::move(typeBounds);
-    return rv;
-}
-TraitAlias TraitAlias::clone() const {
-    TraitAlias rv;
-    for (const auto& p : this->traits) {
-        rv.traits.push_back(p);
+    StructItem::StructItem(::AST::AttributeList attrs, AST::Visibility vis, RcString name, TypeRef ty, Expr defaultValue)
+        : mAttrs(mv$(attrs))
+        , vis(mv$(vis))
+        , mName(mv$(name))
+        , mType(mv$(ty))
+        , defaultValue(mv$(defaultValue))
+    {
     }
-    return rv;
-}
-Static::Static(Class sClass, TypeRef type, Expr value)
-    : cls(sClass)
-    , mType(std::move(type))
-    , mValue(std::move(value)) {
-}
-Function::Arg::Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs)
-    : attrs(mv$(attrs))
-    , pat(mv$(pat))
-    , ty(mv$(ty)) {
-}
-Function::Flags::Flags()
-    : isConst(false)
-    , isUnsafe(false)
-    , isAsync(false) {
-}
-Function::Flags Function::Flags::setUnsafe() const {
-    auto rv = *this;
-    rv.isUnsafe = true;
-    return rv;
-}
-Function::Flags Function::Flags::setConst() const {
-    auto rv = *this;
-    rv.isConst = true;
-    return rv;
-}
-Function::Flags Function::Flags::setAsync() const {
-    auto rv = *this;
-    rv.isAsync = true;
-    return rv;
-}
-// Helper for derive, defines an ABI_RUST function with no generics
-Function::Function(Span sp, TypeRef retType, Arglist args)
-    : Function(sp, ABI_RUST, Flags(), GenericParams(), std::move(retType), std::move(args), false) {
-}
-EnumVariant::EnumVariant() {
-}
-EnumVariant::EnumVariant(AttributeList attrs, RcString name)
-    : mAttrs(mv$(attrs))
-    , mName(mv$(name))
-    , mData(EnumVariantData::make_Unit({})) {
-}
-EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> subTypes)
-    : mAttrs(mv$(attrs))
-    , mName(::std::move(name))
-    , mData(EnumVariantData::make_Tuple({std::move(subTypes)})) {
-}
-EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields)
-    : mAttrs(mv$(attrs))
-    , mName(::std::move(name))
-    , mData(EnumVariantData::make_Struct({std::move(fields)})) {
-}
-Enum::Enum() {
-}
-Enum::Enum(GenericParams params, ::std::vector<EnumVariant> variants)
-    : mParams(::std::move(params))
-    , mVariants(::std::move(variants)) {
-}
-Struct::Markings::Markings() {
-}
-Struct::Struct() {
-}
-Struct::Struct(GenericParams params)
-    : mParams(::std::move(params))
-    , mData(StructData::make_Unit({})) {
-}
-Struct::Struct(GenericParams params, ::std::vector<StructItem> fields)
-    : mParams(::std::move(params))
-    , mData(StructData::make_Struct({mv$(fields)})) {
-}
-Struct::Struct(GenericParams params, ::std::vector<TupleItem> fields)
-    : mParams(::std::move(params))
-    , mData(StructData::make_Tuple({mv$(fields)})) {
-}
-Union::Union(GenericParams params, ::std::vector<StructItem> fields)
-    : mParams(::std::move(params))
-    , mVariants(::std::move(fields)) {
-}
-ImplDef::ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef implType)
-    : mIsUnsafe(false)
-    , mIsConst(false)
-    , mParams(mv$(params))
-    , mTrait(mv$(traitType))
-    , mType(mv$(implType)) {
-}
+
+    //TupleItem() {}
+
+    TupleItem::TupleItem(::AST::AttributeList attrs, AST::Visibility vis, TypeRef ty)
+        : mAttrs(mv$(attrs))
+        , vis(mv$(vis))
+        , mType(mv$(ty))
+    {
+    }
+
+    //TypeAlias() {}
+    TypeAlias::TypeAlias(GenericParams params, TypeRef type)
+        : mParams(std::move(params))
+        , mType(std::move(type))
+    {
+    }
+
+    TypeAlias TypeAlias::newAssociatedType(GenericParams params, GenericParams typeBounds, TypeRef defaultType) {
+        TypeAlias rv{std::move(params), std::move(defaultType)};
+        rv.selfBounds = std::move(typeBounds);
+        return rv;
+    }
+
+    TraitAlias TraitAlias::clone() const {
+        TraitAlias rv;
+        for (const auto& p : this->traits) {
+            rv.traits.push_back(p);
+        }
+        return rv;
+    }
+
+    Static::Static(Class sClass, TypeRef type, Expr value)
+        : cls(sClass)
+        , mType(std::move(type))
+        , mValue(std::move(value))
+    {
+    }
+
+    Function::Arg::Arg(::AST::Pattern pat, TypeRef ty, ::AST::AttributeList attrs)
+        : attrs(mv$(attrs))
+        , pat(mv$(pat))
+        , ty(mv$(ty))
+    {
+    }
+
+    Function::Flags::Flags()
+        : isConst(false)
+        , isUnsafe(false)
+        , isAsync(false)
+    {
+    }
+
+    Function::Flags Function::Flags::setUnsafe() const {
+        auto rv = *this;
+        rv.isUnsafe = true;
+        return rv;
+    }
+
+    Function::Flags Function::Flags::setConst() const {
+        auto rv = *this;
+        rv.isConst = true;
+        return rv;
+    }
+
+    Function::Flags Function::Flags::setAsync() const {
+        auto rv = *this;
+        rv.isAsync = true;
+        return rv;
+    }
+
+    // Helper for derive, defines an ABI_RUST function with no generics
+    Function::Function(Span sp, TypeRef retType, Arglist args)
+        : Function(sp, ABI_RUST, Flags(), GenericParams(), std::move(retType), std::move(args), false)
+    {
+    }
+
+    EnumVariant::EnumVariant() {
+    }
+
+    EnumVariant::EnumVariant(AttributeList attrs, RcString name)
+        : mAttrs(mv$(attrs))
+        , mName(mv$(name))
+        , mData(EnumVariantData::make_Unit({}))
+    {
+    }
+
+    EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> subTypes)
+        : mAttrs(mv$(attrs))
+        , mName(::std::move(name))
+        , mData(EnumVariantData::make_Tuple({std::move(subTypes)}))
+    {
+    }
+
+    EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields)
+        : mAttrs(mv$(attrs))
+        , mName(::std::move(name))
+        , mData(EnumVariantData::make_Struct({std::move(fields)}))
+    {
+    }
+
+    Enum::Enum() {
+    }
+
+    Enum::Enum(GenericParams params, ::std::vector<EnumVariant> variants)
+        : mParams(::std::move(params))
+        , mVariants(::std::move(variants))
+    {
+    }
+
+    Struct::Markings::Markings() {
+    }
+
+    Struct::Struct() {
+    }
+
+    Struct::Struct(GenericParams params)
+        : mParams(::std::move(params))
+        , mData(StructData::make_Unit({}))
+    {
+    }
+
+    Struct::Struct(GenericParams params, ::std::vector<StructItem> fields)
+        : mParams(::std::move(params))
+        , mData(StructData::make_Struct({mv$(fields)}))
+    {
+    }
+
+    Struct::Struct(GenericParams params, ::std::vector<TupleItem> fields)
+        : mParams(::std::move(params))
+        , mData(StructData::make_Tuple({mv$(fields)}))
+    {
+    }
+
+    Union::Union(GenericParams params, ::std::vector<StructItem> fields)
+        : mParams(::std::move(params))
+        , mVariants(::std::move(fields))
+    {
+    }
+
+    ImplDef::ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef implType)
+        : mIsUnsafe(false)
+        , mIsConst(false)
+        , mParams(mv$(params))
+        , mTrait(mv$(traitType))
+        , mType(mv$(implType))
+    {
+    }
 }
 
 namespace AST {
 
-::std::ostream& operator<<(::std::ostream& os, const EnumVariant& x) {
-    os << "EnumVariant(" << x.mName;
-    TU_MATCH(EnumVariantData, (x.mData), (e), (Unit, ), (Tuple, os << "(" << e.mItems << ")";), (Struct, os << " { " << e.fields << " }";))
-    if (x.discriminantValue) {
-        os << " = " << x.discriminantValue;
+    ::std::ostream& operator<<(::std::ostream& os, const EnumVariant& x) {
+        os << "EnumVariant(" << x.mName;
+        TU_MATCH(EnumVariantData, (x.mData), (e), (Unit, ), (Tuple, os << "(" << e.mItems << ")";), (Struct, os << " { " << e.fields << " }";))
+        if (x.discriminantValue) {
+            os << " = " << x.discriminantValue;
+        }
+        return os << ")";
     }
-    return os << ")";
-}
 }

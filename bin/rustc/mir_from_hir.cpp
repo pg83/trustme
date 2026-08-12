@@ -1,22 +1,24 @@
 #include "mir_from_hir.h"
-#include <type_traits> // for TU_MATCHA
-#include <algorithm>
-#include "mir_mir.h"
-#include "mir_mir_ptr.h"
-#include "hir_expr.h"
+
 #include "hir_hir.h"
+#include "mir_mir.h"
+#include "hir_expr.h"
 #include "hir_visitor.h"
+#include "mir_helpers.h"
+#include "mir_mir_ptr.h"
+#include "trans_target.h" // Target_GetSizeAndAlignOf - for `box`
+#include "hir_expr_state.h"
+#include "mir_operations.h"
 #include "hir_typeck_common.h" // monomorphise_type
 #include "mir_main_bindings.h"
-#include "mir_operations.h"
 #include "mir_visit_crate_mir.h"
-#include "hir_expr_state.h"
-#include "trans_target.h" // Target_GetSizeAndAlignOf - for `box`
-#include <cctype>           // isdigit
-#include "mir_helpers.h"
-#include <numeric>
-#include <limits> // std::numeric_limits
 #include "hir_conv_main_bindings.h" // For consteval
+
+#include <cctype> // isdigit
+#include <limits> // std::numeric_limits
+#include <numeric>
+#include <algorithm>
+#include <type_traits> // for TU_MATCHA
 
 namespace {
     class ExprVisitorConv: public MirConverter {
@@ -155,10 +157,10 @@ namespace {
             // Set all drop flags from input
             if (!dropFlagMapping.empty()) {
                 auto slot = ::MIR::LValue::newArgument(0);
-                slot.wrappers.push_back(::MIR::LValue::Wrapper::newDeref());                     // Deref `&mut Self`
-                slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                    // Get state field
-                slot.wrappers.push_back(::MIR::LValue::Wrapper::newDowncast(1));                 // .value (From MaybeUninit)
-                slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                    // .value (From ManuallyDrop)
+                slot.wrappers.push_back(::MIR::LValue::Wrapper::newDeref());                  // Deref `&mut Self`
+                slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                 // Get state field
+                slot.wrappers.push_back(::MIR::LValue::Wrapper::newDowncast(1));              // .value (From MaybeUninit)
+                slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                 // .value (From ManuallyDrop)
                 slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(dropStateFieldIdx)); // drop flag bitset
                 for (const auto& flagMapping : dropFlagMapping) {
                     auto i = outBuilder.newDropFlag(false);
@@ -229,17 +231,23 @@ namespace {
 
         void schedulePatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) override {
             (void)sp;
-            visitPatternSlots(pat, order, [&](unsigned slot) { builder.scheduleVariableDrop(slot); });
+            visitPatternSlots(pat, order, [&](unsigned slot) {
+                builder.scheduleVariableDrop(slot);
+            });
         }
 
         void registerPatternVariables(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) override {
             (void)sp;
-            visitPatternSlots(pat, order, [&](unsigned slot) { builder.registerVariableState(slot); });
+            visitPatternSlots(pat, order, [&](unsigned slot) {
+                builder.registerVariableState(slot);
+            });
         }
 
         void scheduleRegisteredPatternDrops(const Span& sp, const ::HIR::Pattern& pat, PatternDropOrder order) override {
             (void)sp;
-            visitPatternSlots(pat, order, [&](unsigned slot) { builder.scheduleRegisteredVariableDrop(slot); });
+            visitPatternSlots(pat, order, [&](unsigned slot) {
+                builder.scheduleRegisteredVariableDrop(slot);
+            });
         }
 
         MIR::LValue getValueForBindingPath(const Span& sp, const ::HIR::TypeData* outerTy, const ::MIR::LValue& outerLval, const PatternBinding& b) {
@@ -1883,7 +1891,7 @@ namespace {
                 builder.setCurBlock(okBlock);
             }
 
-            builder.setResult( node.span(), ::MIR::LValue::newDeref( mv$(val) ) );
+            builder.setResult(node.span(), ::MIR::LValue::newDeref(mv$(val)));
         }
 
         void visit(::HIR::ExprNodeEmplace& node) override {
@@ -1990,7 +1998,6 @@ namespace {
 
                 // TODO: Validation?
                 ASSERT_BUG(sp, enm.mData.is_Data(), "TupleVariant on non-data enum - " << node.mPath.mPath);
-
 
                 builder.setResult(node.span(), ::MIR::RValue::make_EnumVariant({mv$(enumPath), static_cast<unsigned>(idx), mv$(values)}));
             }
@@ -2812,7 +2819,7 @@ namespace {
                             std::vector<MIR::LValue::Wrapper>{
                                 ::MIR::LValue::Wrapper::newField(0),
                                 ::MIR::LValue::Wrapper::newDowncast(valueVarIdx), // MaybeUninit.value
-                                ::MIR::LValue::Wrapper::newField(0),                // ManuallyDrop.value
+                                ::MIR::LValue::Wrapper::newField(0),              // ManuallyDrop.value
                                 ::MIR::LValue::Wrapper::newField(fieldIdx)
                             }
                         )
@@ -2883,11 +2890,11 @@ namespace {
                 bool visitStmt(::MIR::Statement& stmt) override {
                     auto getDropFlagsSlot = [this]() -> MIR::LValue {
                         ::MIR::LValue slot = ::MIR::LValue::newArgument(0);
-                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                  // Pin.ptr
-                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newDeref());                   // *
-                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                  // .0
-                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newDowncast(1));               // .value (From MaybeUninit)
-                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));                  // .value (From ManuallyDrop)
+                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));              // Pin.ptr
+                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newDeref());               // *
+                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));              // .0
+                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newDowncast(1));           // .value (From MaybeUninit)
+                        slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));              // .value (From ManuallyDrop)
                         slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(dropFlagsField)); // .drop_flags
                         return slot;
                     };
@@ -2945,11 +2952,13 @@ namespace {
                                 slot.wrappers.push_back(::MIR::LValue::Wrapper::newDowncast(1));
                                 slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(0));
                                 slot.wrappers.push_back(::MIR::LValue::Wrapper::newField(dropFlagsField));
-                                newStatements.push_back(::MIR::Statement::make_LoadDropFlag({
-                                    s->flagIdx,
-                                    std::move(slot),
-                                    dropFlagMapping.at(s->flagIdx),
-                                }));
+                                newStatements.push_back(
+                                    ::MIR::Statement::make_LoadDropFlag({
+                                        s->flagIdx,
+                                        std::move(slot),
+                                        dropFlagMapping.at(s->flagIdx),
+                                    })
+                                );
                             }
                         }
                         this->visitTerminator(bb.terminator);
@@ -3030,7 +3039,6 @@ void HIRGenerateMIR(::HIR::Crate& crate) {
     }};
     ov.visitCrate(crate);
 }
-
 
 void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, ::HIR::ExprNodeMatch& node, ::MIR::LValue matchVal, const std::vector<unsigned>& letElseInitializerTemps);
 
@@ -4204,18 +4212,15 @@ void PatternRulesetBuilder::multiplyRulesets(size_t n, std::function<void(size_t
         }
         cb(i);
         DEBUG("-- " << i);
-        assert(this->subsetStart == origStart);                     // This should always be unchanged (even if the callback splits again). The end can change though.
+        assert(this->subsetStart == origStart);                    // This should always be unchanged (even if the callback splits again). The end can change though.
         assert(this->subsetEnd >= this->subsetStart + subsetSize); // The end should always be at least equal to start + size (i.e. hasn't shrunk)
         this->subsetStart = this->subsetEnd;
     }
     // Update the subset again to cover everything
     this->subsetStart = savedStart;
-    ::std::stable_sort(
-        rulesets.begin() + this->subsetStart,
-        rulesets.begin() + this->subsetEnd,
-        [](const Ruleset& a, const Ruleset& b) {
-            return a.orPath < b.orPath;
-        });
+    ::std::stable_sort(rulesets.begin() + this->subsetStart, rulesets.begin() + this->subsetEnd, [](const Ruleset& a, const Ruleset& b) {
+        return a.orPath < b.orPath;
+    });
     // NOTE: Can't asser that the end is as-expected, as there might be inner subsets created that makes this assumption no longer valid
     //ASSERT_BUG(Span(), this->subset_end == new_subset_end, this->subset_end << " == " << new_subset_end);
     for (size_t i = this->subsetStart; i < this->subsetEnd; i += 1) {
@@ -6391,8 +6396,7 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, ::MIR::Basi
             // earlier selector, otherwise e.g. a byte literal can move past
             // an equal-length slice pattern and change the selected arm.
             for (size_t prev = start; prev < idx; prev++) {
-                if (!ruleCompatible(armRules[prev][ofs], armRules[idx][ofs])
-                    && rulesOverlap(armRules[prev][ofs], armRules[idx][ofs])) {
+                if (!ruleCompatible(armRules[prev][ofs], armRules[idx][ofs]) && rulesOverlap(armRules[prev][ofs], armRules[idx][ofs])) {
                     stoppedAtOverlap = true;
                     break;
                 }
@@ -7051,7 +7055,6 @@ void MatchGenGrouped::genDispatchSplitslice(const fieldPathT& fieldPath, const P
     }
 }
 
-
 // --------------------------------------------------------------------
 // MirBuilder
 // --------------------------------------------------------------------
@@ -7549,9 +7552,7 @@ void MirBuilder::pushDropTerminator(const Span& sp, ::MIR::eDropKind kind, ::MIR
     ASSERT_BUG(sp, mBlockActive, "Dropping a value with no active block");
 
     const auto nextBlock = newBbUnlinked();
-    auto unwind = buildingCleanup
-        ? ::MIR::UnwindAction::make_Terminate({})
-        : makeUnwindAction(sp, &val);
+    auto unwind = buildingCleanup ? ::MIR::UnwindAction::make_Terminate({}) : makeUnwindAction(sp, &val);
     endBlock(::MIR::Terminator::make_Drop({kind, mv$(val), flag, nextBlock, mv$(unwind)}));
     setCurBlock(nextBlock);
 }
@@ -7996,7 +7997,7 @@ void MirBuilder::terminateScope(const Span& sp, ScopeHandle scope, bool emitClea
         // 2. Emit drops for all non-moved variables (share with below)
         dropScopeValues(scopeDef);
 
-// Emit ScopeEnd for all controlled values
+        // Emit ScopeEnd for all controlled values
     }
 
     // 3. Pop scope (last because `drop_scope_values` uses the stack)
@@ -8149,7 +8150,6 @@ void MirBuilder::terminateScopeEarly(const Span& sp, const ScopeHandle& scope, b
         frozenExitArgStates.clear();
         frozenExitStateActive = false;
     }
-
 }
 
 namespace {
@@ -9292,9 +9292,7 @@ void MirBuilder::dropScopeValues(ScopeDef& sd) {
         (Owning,
          for (const auto& slot : ::reverse(e.dropSlots)) {
              const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
-             auto lvalue = slot.isArgument
-                 ? ::MIR::LValue::newArgument(slot.index)
-                 : ::MIR::LValue::newLocal(slot.index);
+             auto lvalue = slot.isArgument ? ::MIR::LValue::newArgument(slot.index) : ::MIR::LValue::newLocal(slot.index);
              if (buildingCleanup) {
                  if (unwindConsumedValue && lvalue == *unwindConsumedValue) {
                      continue;
@@ -9496,25 +9494,35 @@ bool VarState::getUsedDropFlags(std::set<unsigned>* out) const {
 
 ScopeHandle::ScopeHandle(const MirBuilder& builder, unsigned int idx)
     : builder(builder)
-    , idx(idx) {
+    , idx(idx)
+{
 }
+
 ScopeHandle::ScopeHandle(ScopeHandle&& x)
     : builder(x.builder)
-    , idx(x.idx) {
+    , idx(x.idx)
+{
     x.idx = ~0;
 }
+
 PatternBinding::PatternBinding(fieldPathT field, const ::HIR::PatternBinding& binding)
     : field(std::move(field))
     , binding(&binding)
-    , splitSlice(SIZE_MAX, SIZE_MAX) {
+    , splitSlice(SIZE_MAX, SIZE_MAX)
+{
 }
+
 MirBuilder::ScopeDef::ScopeDef(const Span& span)
-    : span(span) {
+    : span(span)
+{
 }
+
 MirBuilder::ScopeDef::ScopeDef(const Span& span, ScopeType data)
     : span(span)
-    , data(mv$(data)) {
+    , data(mv$(data))
+{
 }
+
 /// Save the current state of aliases (see add_variable_alias)
 MirBuilder::SavedAliases MirBuilder::saveAliases() const {
     SavedAliases rv;
@@ -9524,6 +9532,7 @@ MirBuilder::SavedAliases MirBuilder::saveAliases() const {
     }
     return rv;
 }
+
 void MirBuilder::restoreAliases(SavedAliases a) {
     assert(a.setAliases.size() == variableAliases.size());
     for (size_t i = 0; i < a.setAliases.size(); i++) {
@@ -9532,6 +9541,7 @@ void MirBuilder::restoreAliases(SavedAliases a) {
         }
     }
 }
+
 // Variable aliases (used for match guards)
 void MirBuilder::addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBinding::Type ty, MIR::LValue lv) {
     DEBUG("#" << idx << " = " << int(ty) << " " << lv);
@@ -9539,6 +9549,7 @@ void MirBuilder::addVariableAlias(const Span& sp, unsigned idx, HIR::PatternBind
     ASSERT_BUG(sp, variableAliases[idx].second == MIR::LValue(), "Variable alias #" << idx << " already exists: " << variableAliases[idx].second << " setting " << lv);
     variableAliases[idx] = std::make_pair(ty, mv$(lv));
 }
+
 const MirBuilder::varAliasT* MirBuilder::getVariableAlias(const Span& sp, unsigned idx) const {
     ASSERT_BUG(sp, idx < variableAliases.size(), "Variable alias #" << idx << " out of bounds");
     if (variableAliases[idx].second == MIR::LValue()) {
@@ -9547,6 +9558,7 @@ const MirBuilder::varAliasT* MirBuilder::getVariableAlias(const Span& sp, unsign
         return &variableAliases[idx];
     }
 }
+
 // - Values
 ::MIR::LValue MirBuilder::getVariable(const Span& sp, unsigned idx) const {
     auto it = varArgMappings.find(idx);
@@ -9555,18 +9567,22 @@ const MirBuilder::varAliasT* MirBuilder::getVariableAlias(const Span& sp, unsign
     }
     return ::MIR::LValue::newLocal(idx);
 }
+
 ::MIR::LValue MirBuilder::getRvalInIfCond(const Span& sp, ::MIR::RValue val) {
     pushStmtAssign(sp, ifCondLval.clone(), mv$(val));
     return ifCondLval.clone();
 }
+
 MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
-    : state(mv$(vs)) {
+    : state(mv$(vs))
+{
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ScopeHandle& x) {
     os << x.idx;
     return os;
 }
+
 ::std::ostream& operator<<(::std::ostream& os, const fieldPathT& x) {
     for (auto idx : x.data) {
         os << ".";
@@ -9582,6 +9598,7 @@ MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
     }
     return os;
 }
+
 ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x) {
     os << *x.binding << x.field;
     if (x.isSplitSlice()) {

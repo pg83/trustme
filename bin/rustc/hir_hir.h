@@ -1,28 +1,25 @@
 #pragma once
 
-#include "target_version.h"
 #include "int128.h"
-
-#include <cassert>
-#include <unordered_map>
-#include <vector>
-#include <memory>
-#include <optional>
-#include <set>
-
-#include "tagged_union.h"
-
-#include "ast_edition.h"
-#include "macro_rules_macro_rules_ptr.h"
-
-#include "hir_type.h"
+#include "hir_asm.h"
 #include "hir_path.h"
+#include "hir_type.h"
+#include "ast_edition.h"
 #include "hir_pattern.h"
 #include "hir_expr_ptr.h"
+#include "tagged_union.h"
+#include "target_version.h"
 #include "hir_generic_params.h"
-#include "hir_encoded_literal.h"
 #include "hir_inherent_cache.h"
-#include "hir_asm.h"
+#include "hir_encoded_literal.h"
+#include "macro_rules_macro_rules_ptr.h"
+
+#include <set>
+#include <memory>
+#include <vector>
+#include <cassert>
+#include <optional>
+#include <unordered_map>
 
 class Monomorphiser;
 
@@ -417,13 +414,7 @@ namespace HIR {
         bool hasDefault;
         ::HIR::TypeRef defaultValue;
 
-        AssociatedType(
-            ::HIR::GenericParams generics,
-            bool isSized,
-            LifetimeRef lifetimeBound,
-            ::std::vector<::HIR::TraitPath> traitBounds,
-            ::HIR::TypeRef defaultType
-        );
+        AssociatedType(::HIR::GenericParams generics, bool isSized, LifetimeRef lifetimeBound, ::std::vector<::HIR::TraitPath> traitBounds, ::HIR::TypeRef defaultType);
     };
 
     TAGGED_UNION(TraitValueItem, Constant, (Constant, Constant), (Static, Static), (Function, Function));
@@ -630,7 +621,7 @@ namespace HIR {
     public:
         ::HIR::Crate* mData = nullptr;
         ::std::string basename; // Just the filename (serialised)
-        ::std::string mPath;     // The path used to load this crate
+        ::std::string mPath;    // The path used to load this crate
     };
 
     class ExternLibrary {

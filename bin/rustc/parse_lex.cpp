@@ -1,14 +1,16 @@
 #include "parse_lex.h"
+
+#include "common.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
-#include "common.h"
+
+#include <cctype>
+#include <limits> // std::numeric_limits
 #include <cassert>
-#include <iostream>
 #include <cstdlib> // strtol
+#include <iostream>
 #include <typeinfo>
 #include <algorithm> // std::count
-#include <limits>    // std::numeric_limits
-#include <cctype>
 
 //#define TRACE_CHARS
 //#define TRACE_RAW_TOKENS
@@ -1387,15 +1389,20 @@ Token LexFindReservedWord(const ::std::string& s, AST::Edition edition) {
 }
 
 Codepoint::Codepoint()
-    : v(0) {
+    : v(0)
+{
 }
+
 Codepoint::Codepoint(uint32_t v)
-    : v(v) {
+    : v(v)
+{
 }
+
 void Lexer::pushHygine() {
     mHygiene = Ident::Hygiene::newScopeChained(mHygiene);
     DEBUG(">> " << mHygiene);
 }
+
 void Lexer::popHygine() {
     DEBUG("<< " << mHygiene << " -> " << mHygiene.getParent());
     mHygiene = mHygiene.getParent();
