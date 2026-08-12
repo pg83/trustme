@@ -40,27 +40,27 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ## P1 — 25–99 targets одним общим исправлением
 
-1. [ ] **Macro matcher: 25 targets.** Одна сигнатура `macro_rules_macro_rules.cpp:2113`, `Macro_InvokeRules_MatchPattern - No arm matched`, проходит через UI, doctest, Rust 1.90, Reference и lib tests. Минимизировать по одной matcher state transition; отдельно проверить interpolated block/type/visibility/meta fragments и statement boundaries.
+1. [ ] **Conditional const bounds `[const]`: 28 targets.** Parser одинаково видит `TOK_SQUARE_OPEN, expected TOK_IDENT` в const-trait bounds. Реализовать синтаксис, HIR-представление и trait-selection semantics; простого принятия токенов недостаточно.
 
-2. [ ] **Conditional const bounds `[const]`: 28 targets.** Parser одинаково видит `TOK_SQUARE_OPEN, expected TOK_IDENT` в const-trait bounds. Реализовать синтаксис, HIR-представление и trait-selection semantics; простого принятия токенов недостаточно.
+2. [ ] **`pin!` statement expansion: 29 targets.** 22 targets падают внутри `core::pin!` с `let` после path separator, ещё 7 `coretests/pin_macro` доходят до `fn` вместо раскрытого block. Исправить expansion macro в block/expression context и проверить expression, `let`, function item, unsafe block, unsize coercion и lifetime temporary.
 
-3. [ ] **`pin!` statement expansion: 28 targets.** 21 target падает внутри `core::pin!` с `let` после path separator, ещё 7 `coretests/pin_macro` доходят до `fn` вместо раскрытого block. Исправить expansion macro в block/expression context и проверить expression, `let`, function item, unsafe block, unsize coercion и lifetime temporary.
-
-4. [ ] **`-Z unpretty`: 30 прямых отказов.** Определить реально используемые режимы каждого trigger и реализовать соответствующий вывод/stop point. Не превращать их в обычную компиляцию игнорированием флага.
+3. [ ] **`-Z unpretty`: 30 прямых отказов.** Определить реально используемые режимы каждого trigger и реализовать соответствующий вывод/stop point. Не превращать их в обычную компиляцию игнорированием флага.
 
 ## P2 — 10–24 targets одним общим исправлением
 
 1. [ ] **Inherent associated types: 24 targets.** Одна сигнатура `hir_from_ast.cpp:2365`, `Unexpected item type in inherent impl - Type`. После HIR lowering проверить lookup, normalization, generics и visibility, а не только убрать assert.
 
-2. [ ] **`-Cdebuginfo`: 16 targets.** Связать уровни с backend output либо доказанно классифицировать tests, которым нужен только принятый driver contract. Не принимать option без эффекта там, где тест проверяет debug info.
+2. [ ] **Macro matcher: 20 targets.** Одна сигнатура `macro_rules_macro_rules.cpp:2113`, `Macro_InvokeRules_MatchPattern - No arm matched`, проходит через UI, Rust 1.90 и Reference tests. Минимизировать по одной matcher state transition; отдельно проверить interpolated block/type/visibility/meta fragments и statement boundaries.
 
-3. [ ] **CTFE `simd_extract`: 16 targets.** Одна сигнатура `hir_conv_constant_evaluation.cpp:3408`; покрывает Rust 1.90, library, Miri и doctest. Реализовать bounds/type/layout semantics и unit для valid и out-of-bounds lane.
+3. [ ] **`-Cdebuginfo`: 16 targets.** Связать уровни с backend output либо доказанно классифицировать tests, которым нужен только принятый driver contract. Не принимать option без эффекта там, где тест проверяет debug info.
 
-4. [ ] **Delegation `reuse`: 13 прямых parser failures.** Реализовать современный синтаксис delegation вместе с HIR/resolution, включая glob/list/rename/override и impl-trait cases.
+4. [ ] **CTFE `simd_extract`: 16 targets.** Одна сигнатура `hir_conv_constant_evaluation.cpp:3408`; покрывает Rust 1.90, library, Miri и doctest. Реализовать bounds/type/layout semantics и unit для valid и out-of-bounds lane.
 
-5. [ ] **CTFE null relocation: 11 targets.** `hir_conv_constant_evaluation.cpp:1571`, `Null (<PTR_BASE) pointer deref`. Искать место потери relocation/provenance, а не ослаблять assert.
+5. [ ] **Delegation `reuse`: 13 прямых parser failures.** Реализовать современный синтаксис delegation вместе с HIR/resolution, включая glob/list/rename/override и impl-trait cases.
 
-6. [ ] **Const pattern literal borrow: 11 targets.** `mir_from_hir.cpp:4443`, `append_from_lit Match literal Borrow`. Добавить корректное MIR lowering и проверить custom equality/branch selection.
+6. [ ] **CTFE null relocation: 11 targets.** `hir_conv_constant_evaluation.cpp:1571`, `Null (<PTR_BASE) pointer deref`. Искать место потери relocation/provenance, а не ослаблять assert.
+
+7. [ ] **Const pattern literal borrow: 11 targets.** `mir_from_hir.cpp:4443`, `append_from_lit Match literal Borrow`. Добавить корректное MIR lowering и проверить custom equality/branch selection.
 
 ## P3 — измеренные, но раздробленные группы
 
@@ -78,8 +78,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c env CC
 
 ### Parser, resolver и type system
 
-- [ ] После вынесенных выше `[const]`, `pin!` и `reuse` остаётся 279 `Unexpected token` targets. Крупнейшие наблюдаемые формы — `fn` вместо `{` (32, несколько разных причин), lifetime/function modifiers, async closures, range/or-pattern syntax и interpolated macro fragments. Каждую форму минимизировать до grammar/expansion причины до назначения приоритета.
-- [ ] 93 `Type mismatch`, 65 `Failed to find an impl`, 23 `Unknown macro` и 14 `No applicable methods` сначала кластеризовать по semantic path. Trait objects, HRTB/binders, projections, const inference, TAIT/RPITIT и async lowering не объединять по тексту diagnostic.
+- [ ] После вынесенных выше `[const]`, `pin!` и `reuse` остаётся 280 `Unexpected token` targets. Крупнейшие наблюдаемые формы — `fn` вместо `{` (32, несколько разных причин), lifetime/function modifiers, async closures, range/or-pattern syntax и interpolated macro fragments. Каждую форму минимизировать до grammar/expansion причины до назначения приоритета.
+- [ ] 94 `Type mismatch`, 66 `Failed to find an impl`, 23 `Unknown macro` и 14 `No applicable methods` сначала кластеризовать по semantic path. Trait objects, HRTB/binders, projections, const inference, TAIT/RPITIT и async lowering не объединять по тексту diagnostic.
 - [ ] Полный source-scoped lint store отсутствует: кроме CLI-level `unexpected_cfgs`, `allow/warn/deny/forbid/force-warn` пока не производят rustc diagnostics, а positive harness их не сравнивает. Добавить diagnostic-verifying nodes и измерить fan-out.
 - [ ] Настоящий check-only driver (`--emit=metadata`/stop after typeck) остаётся отдельной задачей. Перед повышением приоритета заново измерить текущие красные `check-pass`; `build-pass` обязан проходить полный pipeline.
 

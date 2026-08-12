@@ -1272,6 +1272,11 @@ namespace {
                 case TOK_TRIPLE_DOT:
                     break;
 
+                case TOK_RWORD_ASYNC:
+                    lex.consume();
+                    lex.consume_if(TOK_RWORD_MOVE);
+                    return consume_expr(lex, no_struct_lit);
+
                 case TOK_RWORD_UNSAFE:
                     lex.consume();
                     if (lex.next() != TOK_BRACE_OPEN) {
