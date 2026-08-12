@@ -24,7 +24,7 @@ ItemPath::ItemPath(const ::HIR::TypeData* type)
 ItemPath::ItemPath(const ::HIR::TypeData* type, const ::HIR::SimplePath& path, const ::HIR::PathParams& params)
     : ty(type)
     , trait(&path)
-    , trait_params(&params) {
+    , traitParams(&params) {
 }
 ItemPath::ItemPath(const ::HIR::SimplePath& path)
     : trait(&path) {
@@ -56,8 +56,8 @@ ItemPath::ItemPath(const ::HIR::SimplePath& path)
         return getSimplePath();
     } else if (parent->trait) {
         assert(parent->ty);
-        assert(parent->trait_params);
-        return ::HIR::Path(parent->ty, ::HIR::GenericPath(parent->trait->clone(), parent->trait_params->clone()), RcString::newInterned(name));
+        assert(parent->traitParams);
+        return ::HIR::Path(parent->ty, ::HIR::GenericPath(parent->trait->clone(), parent->traitParams->clone()), RcString::newInterned(name));
     } else {
         assert(parent->ty);
         return ::HIR::Path(parent->ty, RcString::newInterned(name));
@@ -107,8 +107,8 @@ namespace HIR {
         os << "<" << *x.ty;
         if (x.trait) {
             os << " as " << *x.trait;
-            if (x.trait_params) {
-                os << *x.trait_params;
+            if (x.traitParams) {
+                os << *x.traitParams;
             }
         }
         os << ">";

@@ -63,8 +63,8 @@ namespace {
     TargetSpec loadSpecFromFile(const ::std::string& filename) {
         TargetSpec rv;
 
-        TomlFile toml_file(filename);
-        for (auto keyVal : toml_file) {
+        TomlFile tomlFile(filename);
+        for (auto keyVal : tomlFile) {
             // Assertion: The way toml works, there has to be at least two entries in every path.
             assert(keyVal.path.size() > 1);
             DEBUG(keyVal.path << " = " << keyVal.value);
@@ -297,80 +297,80 @@ namespace {
            << "\n";
     }
 
-    TargetSpec initFromSpecName(const ::std::string& target_name) {
+    TargetSpec initFromSpecName(const ::std::string& targetName) {
 // Options for all the fully-GNU environments
 #define BACKEND_C_OPTS_GNU {"-ffunction-sections", "-pthread"}, {"-Wl,--start-group"}, {"-Wl,--end-group", "-Wl,--gc-sections", "-l", "atomic"}
         // If there's a '/' in the filename, open it as a path, otherwise assume it's a triple.
-        if (target_name.find('/') != ::std::string::npos) {
-            return loadSpecFromFile(target_name);
-        } else if (target_name == "i586-linux-gnu" || target_name == "i586-unknown-linux-gnu") {
+        if (targetName.find('/') != ::std::string::npos) {
+            return loadSpecFromFile(targetName);
+        } else if (targetName == "i586-linux-gnu" || targetName == "i586-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {true, "i586-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_X86};
-        } else if (target_name == "x86_64-linux-gnu" || target_name == "x86_64-unknown-linux-gnu") {
+        } else if (targetName == "x86_64-linux-gnu" || targetName == "x86_64-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {true /*false*/, "x86_64-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
-        } else if (target_name == "x86_64-linux-musl" || target_name == "x86_64-unknown-linux-musl") {
+        } else if (targetName == "x86_64-linux-musl" || targetName == "x86_64-unknown-linux-musl") {
             return TargetSpec{"unix", "linux", "musl", {true /*false*/, "x86_64-linux-musl", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
-        } else if (target_name == "x86_64-unknown-linux-gnux32") {
+        } else if (targetName == "x86_64-unknown-linux-gnux32") {
             return TargetSpec{"unix", "linux", "gnu", {true, "x86_64-unknown-linux-gnux32", BACKEND_C_OPTS_GNU}, ARCH_X32};
-        } else if (target_name == "arm-linux-gnu" || target_name == "arm-unknown-linux-gnu") {
+        } else if (targetName == "arm-linux-gnu" || targetName == "arm-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {true, "arm-elf-eabi", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
-        } else if (target_name == "aarch64-linux-gnu" || target_name == "aarch64-unknown-linux-gnu") {
+        } else if (targetName == "aarch64-linux-gnu" || targetName == "aarch64-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {false, "aarch64-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
-        } else if (target_name == "m68k-linux-gnu" || target_name == "m68k-unknown-linux-gnu") {
+        } else if (targetName == "m68k-linux-gnu" || targetName == "m68k-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {true, "m68k-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_M68K};
-        } else if (target_name == "powerpc64-unknown-linux-gnu") {
+        } else if (targetName == "powerpc64-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {false, "powerpc64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_POWERPC64};
-        } else if (target_name == "powerpc64le-unknown-linux-gnu") {
+        } else if (targetName == "powerpc64le-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {false, "powerpc64le-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_POWERPC64LE};
-        } else if (target_name == "riscv64-unknown-linux-gnu") {
+        } else if (targetName == "riscv64-unknown-linux-gnu") {
             return TargetSpec{"unix", "linux", "gnu", {false, "riscv64-unknown-linux-gnu", BACKEND_C_OPTS_GNU}, ARCH_RISCV64};
-        } else if (target_name == "riscv64-unknown-linux-musl") {
+        } else if (targetName == "riscv64-unknown-linux-musl") {
             return TargetSpec{"unix", "linux", "musl", {false, "riscv64-unknown-linux-musl", BACKEND_C_OPTS_GNU}, ARCH_RISCV64};
-        } else if (target_name == "i686-unknown-freebsd") {
+        } else if (targetName == "i686-unknown-freebsd") {
             return TargetSpec{"unix", "freebsd", "gnu", {true, "i686-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_X86};
-        } else if (target_name == "x86_64-unknown-freebsd") {
+        } else if (targetName == "x86_64-unknown-freebsd") {
             return TargetSpec{"unix", "freebsd", "gnu", {false, "x86_64-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
-        } else if (target_name == "arm-unknown-freebsd") {
+        } else if (targetName == "arm-unknown-freebsd") {
             return TargetSpec{"unix", "freebsd", "gnu", {true, "arm-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
-        } else if (target_name == "aarch64-unknown-freebsd") {
+        } else if (targetName == "aarch64-unknown-freebsd") {
             return TargetSpec{"unix", "freebsd", "gnu", {false, "aarch64-unknown-freebsd", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
-        } else if (target_name == "x86_64-unknown-netbsd") {
+        } else if (targetName == "x86_64-unknown-netbsd") {
             return TargetSpec{"unix", "netbsd", "gnu", {false, "x86_64-unknown-netbsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
-        } else if (target_name == "i686-unknown-openbsd") {
+        } else if (targetName == "i686-unknown-openbsd") {
             return TargetSpec{"unix", "openbsd", "gnu", {true, "i686-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_X86};
-        } else if (target_name == "x86_64-unknown-openbsd") {
+        } else if (targetName == "x86_64-unknown-openbsd") {
             return TargetSpec{"unix", "openbsd", "gnu", {false, "x86_64-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
-        } else if (target_name == "arm-unknown-openbsd") {
+        } else if (targetName == "arm-unknown-openbsd") {
             return TargetSpec{"unix", "openbsd", "gnu", {true, "arm-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_ARM32};
-        } else if (target_name == "aarch64-unknown-openbsd") {
+        } else if (targetName == "aarch64-unknown-openbsd") {
             return TargetSpec{"unix", "openbsd", "gnu", {false, "aarch64-unknown-openbsd", BACKEND_C_OPTS_GNU}, ARCH_ARM64};
-        } else if (target_name == "x86_64-unknown-dragonfly") {
+        } else if (targetName == "x86_64-unknown-dragonfly") {
             return TargetSpec{"unix", "dragonfly", "gnu", {false, "x86_64-unknown-dragonfly", BACKEND_C_OPTS_GNU}, ARCH_X86_64};
         }
         // `*-apple-darwin` has an empty target_env (as in rustc); "gnu" selects glibc-only code on a platform with no glibc.
-        else if (target_name == "i686-apple-darwin") {
+        else if (targetName == "i686-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             // The first 32bit Intel Mac was Core Solo aka yonah. It allows to use `-march=yonah` like Rust.
             return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=yonah"}, {}}, ARCH_X86_64};
-        } else if (target_name == "x86_64-apple-darwin") {
+        } else if (targetName == "x86_64-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             // The first 64bit Intel Mac was Core Duo. It allows to use `-march=core2` like Rust.
             return TargetSpec{"unix", "macos", "", {false, "x86_64-apple-darwin", {"-march=core2"}, {}}, ARCH_X86_64};
-        } else if (target_name == "aarch64-apple-darwin") {
+        } else if (targetName == "aarch64-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             return TargetSpec{"unix", "macos", "", {false, "aarch64-apple-darwin", {}, {}}, ARCH_ARM64};
-        } else if (target_name == "powerpc-apple-darwin") {
+        } else if (targetName == "powerpc-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             // NOTE: 32-bit PowerPC needs libatomic for the 8-byte atomics (see ARCH_POWERPC)
             return TargetSpec{"unix", "macos", "", {true, "powerpc-apple-darwin", {}, {}, {"-l", "atomic"}}, ARCH_POWERPC};
-        } else if (target_name == "powerpc64-apple-darwin") {
+        } else if (targetName == "powerpc64-apple-darwin") {
             // NOTE: OSX uses Mach-O binaries, which don't fully support the defaults used for GNU targets
             return TargetSpec{"unix", "macos", "", {false, "powerpc64-apple-darwin", {}, {}}, ARCH_POWERPC64};
-        } else if (target_name == "arm-unknown-haiku") {
+        } else if (targetName == "arm-unknown-haiku") {
             return TargetSpec{"unix", "haiku", "gnu", {true, "arm-unknown-haiku", {}, {}}, ARCH_ARM32};
-        } else if (target_name == "x86_64-unknown-haiku") {
+        } else if (targetName == "x86_64-unknown-haiku") {
             return TargetSpec{"unix", "haiku", "gnu", {false, "x86_64-unknown-haiku", {}, {}}, ARCH_X86_64};
         } else {
-            ::std::cerr << "Unknown target name '" << target_name << "'" << ::std::endl;
+            ::std::cerr << "Unknown target name '" << targetName << "'" << ::std::endl;
             abort();
         }
         throw "";
@@ -385,8 +385,8 @@ void TargetExportCurSpec(const ::std::string& filename) {
     saveSpecToFile(filename, gTarget);
 }
 
-void TargetSetCfg(const ::std::string& target_name) {
-    gTarget = initFromSpecName(target_name);
+void TargetSetCfg(const ::std::string& targetName) {
+    gTarget = initFromSpecName(targetName);
 
     if (gTarget.family == "unix") {
         CfgSetFlag("unix");
@@ -698,7 +698,7 @@ bool TargetGetAlignOf(const Span& sp, const StaticTraitResolve& resolve, const :
 }
 
 namespace {
-    void set_type_repr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr);
+    void setTypeRepr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr);
 
     struct Ent {
         unsigned int field;
@@ -726,7 +726,7 @@ namespace {
         return true;
     }
 
-    bool struct_enumerate_fields(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents) {
+    bool structEnumerateFields(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents) {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         // TODO: Wipe lifetimes?
@@ -771,7 +771,7 @@ namespace {
         All,
     };
 
-    size_t struct_field_alignment_group(const Ent& e, unsigned maxAlignment) {
+    size_t structFieldAlignmentGroup(const Ent& e, unsigned maxAlignment) {
         if (maxAlignment > 0) {
             return ::std::min<size_t>(e.align, maxAlignment);
         }
@@ -780,11 +780,11 @@ namespace {
         // stronger power-of-two factor than its ABI alignment is grouped with
         // fields of that effective alignment. For example, [u8; 4] belongs to
         // the align-4 group, while [u8; 6] belongs to align-2.
-        const size_t size_as_align = ::std::max(e.size, e.align);
-        return size_as_align & (~size_as_align + 1);
+        const size_t sizeAsAlign = ::std::max(e.size, e.align);
+        return sizeAsAlign & (~sizeAsAlign + 1);
     }
 
-    bool sortfn_enum_variant_fields(const Ent& a, const Ent& b) {
+    bool sortfnEnumVariantFields(const Ent& a, const Ent& b) {
         return a.align != b.align ? a.align < b.align : a.size < b.size;
     }
 
@@ -793,19 +793,19 @@ namespace {
     /// - Handles (optional) sorting and packing
     ::std::unique_ptr<TypeRepr> makeTypeReprStructInner(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<Ent>& ents, StructSorting sorting, unsigned forced_alignment, unsigned maxAlignment) {
         if (ents.size() > 0) {
-            auto sort_fields = [&](auto first, auto last) {
+            auto sortFields = [&](auto first, auto last) {
                 ::std::stable_sort(first, last, [&](const Ent& a, const Ent& b) {
-                    return struct_field_alignment_group(a, maxAlignment) > struct_field_alignment_group(b, maxAlignment);
+                    return structFieldAlignmentGroup(a, maxAlignment) > structFieldAlignmentGroup(b, maxAlignment);
                 });
             };
             switch (sorting) {
                 case StructSorting::None:
                     break;
                 case StructSorting::AllButFinal:
-                    sort_fields(ents.begin(), ents.end() - 1);
+                    sortFields(ents.begin(), ents.end() - 1);
                     break;
                 case StructSorting::All:
-                    sort_fields(ents.begin(), ents.end());
+                    sortFields(ents.begin(), ents.end());
                     break;
             }
         }
@@ -900,7 +900,7 @@ namespace {
             const auto& te = ty->as_Path();
             const auto& str = *te.binding.as_Struct();
 
-            if (!struct_enumerate_fields(sp, resolve, ty, ents)) {
+            if (!structEnumerateFields(sp, resolve, ty, ents)) {
                 return nullptr;
             }
 
@@ -984,7 +984,7 @@ namespace {
                 }
                 for (size_t i = 0; i < repr->fields.size(); i++) {
                     if (getNonzeroPath(sp, resolve, repr->fields[i].ty, outPath)) {
-                        outPath.sub_fields.push_back(i);
+                        outPath.subFields.push_back(i);
                         return true;
                     }
                 }
@@ -992,7 +992,7 @@ namespace {
             break;
             TU_ARM(*ty, Array, te) {
                 if (te.size.is_Known() && te.size.as_Known() > 0 && getNonzeroPath(sp, resolve, te.inner, outPath)) {
-                    outPath.sub_fields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
+                    outPath.subFields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
             }
@@ -1011,14 +1011,14 @@ namespace {
                     }
                     for (size_t i = 0; i < r->fields.size(); i++) {
                         if (getNonzeroPath(sp, resolve, r->fields[i].ty, outPath)) {
-                            outPath.sub_fields.push_back(i);
+                            outPath.subFields.push_back(i);
                             return true;
                         }
                     }
                     // 1.39 marks these with #[rustc_nonnull_optimization_guaranteed] instead
                     if (str->structMarkings.isNonzero) {
                         DEBUG(ty << " tagged NonZero");
-                        outPath.sub_fields.push_back(0);
+                        outPath.subFields.push_back(0);
                         outPath.size = r->size;
                         return true;
                     }
@@ -1030,8 +1030,8 @@ namespace {
                     }
                     if (const auto* values = repr->variants.opt_Values()) {
                         if (std::find(values->values.begin(), values->values.end(), 0) == values->values.end()) {
-                            outPath.sub_fields.insert(outPath.sub_fields.end(), values->field.sub_fields.rbegin(), values->field.sub_fields.rend());
-                            outPath.sub_fields.push_back(values->field.index);
+                            outPath.subFields.insert(outPath.subFields.end(), values->field.subFields.rbegin(), values->field.subFields.rend());
+                            outPath.subFields.push_back(values->field.index);
                             outPath.size = values->field.size;
                             return true;
                         }
@@ -1069,7 +1069,7 @@ namespace {
         size_t ofs = r->fields[outPath.index].offset;
 
         const auto* ty = &r->fields[outPath.index].ty;
-        for (const auto& f : outPath.sub_fields) {
+        for (const auto& f : outPath.subFields) {
             if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
                 const auto* array = (*ty)->opt_Array();
                 assert(array && array->size.is_Known() && array->size.as_Known() > 0);
@@ -1110,7 +1110,7 @@ namespace {
                         continue;
                     } else if (f.offset + size > minOffset) {
                         if (auto rv = getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, outPath)) {
-                            outPath.sub_fields.push_back(i);
+                            outPath.subFields.push_back(i);
                             return rv;
                         }
                     }
@@ -1139,9 +1139,9 @@ namespace {
                         if (size > maxOffset) {
                             return 0;
                         }
-                        outPath.sub_fields.push_back(0);
+                        outPath.subFields.push_back(0);
                         outPath.size = size;
-                        return str->structMarkings.boundedMaxValue.truncate_u64() + 1;
+                        return str->structMarkings.boundedMaxValue.truncateU64() + 1;
                     }
 
                     for (size_t i = 0; i < r->fields.size(); i++) {
@@ -1152,7 +1152,7 @@ namespace {
                             continue;
                         } else if (f.offset + size > minOffset) {
                             if (auto rv = getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, outPath)) {
-                                outPath.sub_fields.push_back(i);
+                                outPath.subFields.push_back(i);
                                 return rv;
                             }
                         }
@@ -1171,7 +1171,7 @@ namespace {
                             } else {
                                 auto rv = getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, outPath);
                                 if (rv) {
-                                    outPath.sub_fields.push_back(0);
+                                    outPath.subFields.push_back(0);
                                 }
                                 return rv;
                             }
@@ -1182,9 +1182,9 @@ namespace {
                             DEBUG("Linear - Tag offset: " << ofs);
                             if (minOffset <= ofs && ofs + ve.field.size <= maxOffset) {
                                 outPath.size = ve.field.size;
-                                outPath.sub_fields.clear();
-                                outPath.sub_fields.insert(outPath.sub_fields.begin(), ve.field.sub_fields.rbegin(), ve.field.sub_fields.rend());
-                                outPath.sub_fields.push_back(ve.field.index);
+                                outPath.subFields.clear();
+                                outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
+                                outPath.subFields.push_back(ve.field.index);
                                 return ve.offset + ve.numVariants; // NOTE: The niche variant leaves hole in the values.
                             }
                         }
@@ -1195,10 +1195,10 @@ namespace {
                                 auto lastValue = *std::max_element(ve.values.begin(), ve.values.end());
                                 if (lastValue < UINT_MAX) {
                                     outPath.size = ve.field.size;
-                                    outPath.sub_fields.clear();
-                                    outPath.sub_fields.insert(outPath.sub_fields.begin(), ve.field.sub_fields.rbegin(), ve.field.sub_fields.rend());
-                                    outPath.sub_fields.push_back(ve.field.index);
-                                    return lastValue.truncate_u64() + 1;
+                                    outPath.subFields.clear();
+                                    outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
+                                    outPath.subFields.push_back(ve.field.index);
+                                    return lastValue.truncateU64() + 1;
                                 }
                             }
                             return 0;
@@ -1279,11 +1279,11 @@ namespace {
                         }
                         DEBUG("max_size = " << max_size << ", max_align = " << maxAlign);
 
-                        auto tag_ty = enm.tagRepr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.getReprType(enm.tagRepr);
-                        rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tag_ty)});
-                        size_t tag_size, tag_align;
-                        TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tag_size, tag_align);
-                        size_t dataOfs = tag_size;
+                        auto tagTy = enm.tagRepr == ::HIR::Enum::Repr::Auto ? ::HIR::CoreType::U32 : enm.getReprType(enm.tagRepr);
+                        rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tagTy)});
+                        size_t tagSize, tagAlign;
+                        TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tagSize, tagAlign);
+                        size_t dataOfs = tagSize;
 
                         while (dataOfs % maxAlign != 0) {
                             dataOfs++;
@@ -1293,11 +1293,11 @@ namespace {
                             rv.fields[i].offset = dataOfs;
                         }
                         rv.size = dataOfs + max_size;
-                        rv.align = std::max(tag_align, maxAlign);
+                        rv.align = std::max(tagAlign, maxAlign);
                         while (rv.size % rv.align != 0) {
                             rv.size++;
                         }
-                        rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tag_size, {}}, 0, e.size()});
+                        rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
                     } else if (enm.tagRepr == ::HIR::Enum::Repr::Auto && e.size() <= 1) {
                         // If there are not multiple variants, then only include the one body
                         if (e.size() == 1) {
@@ -1342,7 +1342,7 @@ namespace {
                             if (var.type == resolve.crate.types.unit()) {
                                 continue;
                             }
-                            if (!struct_enumerate_fields(sp, resolve, variants.back().type, variants.back().ents)) {
+                            if (!structEnumerateFields(sp, resolve, variants.back().type, variants.back().ents)) {
                                 DEBUG("Generic type in enum - " << variants.back().type);
                                 return nullptr;
                             }
@@ -1371,10 +1371,10 @@ namespace {
                                     for (size_t i = 0; i < variants[nzVar].ents.size(); i++) {
                                         TypeRepr::FieldPath nzPath;
                                         if (getNonzeroPath(sp, resolve, variants[nzVar].ents[i].ty, nzPath)) {
-                                            nzPath.sub_fields.push_back(i);
+                                            nzPath.subFields.push_back(i);
                                             nzPath.index = nzVar;
-                                            ::std::reverse(nzPath.sub_fields.begin(), nzPath.sub_fields.end());
-                                            DEBUG("nz_path = " << nzPath.sub_fields);
+                                            ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            DEBUG("nz_path = " << nzPath.subFields);
 
                                             size_t size0, size1;
                                             size_t align0, align1;
@@ -1457,13 +1457,13 @@ namespace {
                                             if (offset <= maxVar && offset + e.size() <= maxVar) {
                                                 // TODO: Get the niche offset, store so structure updating can add it...
                                                 nzPath.index = i;
-                                                ::std::reverse(nzPath.sub_fields.begin(), nzPath.sub_fields.end());
+                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
                                                 nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
-                                                ::std::reverse(nzPath.sub_fields.begin(), nzPath.sub_fields.end());
+                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
-                                                nzPath.sub_fields.push_back(i);
+                                                nzPath.subFields.push_back(i);
                                                 nzPath.index = biggestVar;
-                                                ::std::reverse(nzPath.sub_fields.begin(), nzPath.sub_fields.end());
+                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
                                                 DEBUG("Niche optimisation (trailing): value offset=" << offset << " path=" << nzPath << " (@" << nicheOffset << ")");
 
                                                 assert(rv.variants.is_None());
@@ -1471,7 +1471,7 @@ namespace {
                                                 break;
                                             } else {
                                                 if (debugEnabled()) {
-                                                    nzPath.sub_fields.push_back(i);
+                                                    nzPath.subFields.push_back(i);
                                                     nzPath.index = biggestVar;
                                                 }
                                                 DEBUG("Out of space in this niche: " << (offset + e.size()) << " > " << maxVar << " (path=" << nzPath << ")");
@@ -1504,18 +1504,18 @@ namespace {
                                                 if (offset <= maxVar && offset + e.size() <= maxVar) {
                                                     // TODO: Get the niche offset, store so structure updating can add it...
                                                     nzPath.index = i;
-                                                    ::std::reverse(nzPath.sub_fields.begin(), nzPath.sub_fields.end());
+                                                    ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
                                                     nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
                                                     if (nicheOffset != 0) {
                                                         // - For now, only accept zero offsets
                                                         DEBUG("Ignore niche not at the start of the struture");
                                                         continue;
                                                     }
-                                                    ::std::reverse(nzPath.sub_fields.begin(), nzPath.sub_fields.end());
+                                                    ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
-                                                    nzPath.sub_fields.push_back(i);
+                                                    nzPath.subFields.push_back(i);
                                                     nzPath.index = biggestVar;
-                                                    ::std::reverse(nzPath.sub_fields.begin(), nzPath.sub_fields.end());
+                                                    ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
                                                     DEBUG("Niche optimisation (leading): linear offset=" << offset << " path=" << nzPath << " @byte " << nicheOffset);
 
                                                     nicheBeforeData = true;
@@ -1590,7 +1590,7 @@ namespace {
                                                 assert(reprs[i]->size <= max_size);
                                                 assert(reprs[i]->align <= maxAlign);
                                             } else {
-                                                auto tag_fld_idx = variants[i].ents.size();
+                                                auto tagFldIdx = variants[i].ents.size();
                                                 size_t maxOfs = 0;
                                                 for (const auto& f : reprs[i]->fields) {
                                                     maxOfs = std::max(maxOfs, f.offset + getSizeOrZero(sp, resolve, f.ty));
@@ -1612,7 +1612,7 @@ namespace {
                                                 variants[i].ents.push_back(Ent());
                                                 variants[i].ents.back().align = nichePath.size;
                                                 variants[i].ents.back().size = nichePath.size;
-                                                variants[i].ents.back().field = tag_fld_idx;
+                                                variants[i].ents.back().field = tagFldIdx;
                                                 variants[i].ents.back().ty = nicheTy;
                                                 // Create the new repr
                                                 reprs[i] = makeTypeReprStructInner(sp, variants[i].type, variants[i].ents, StructSorting::None, variants[i].forced_alignment, 0);
@@ -1622,7 +1622,7 @@ namespace {
                                             }
                                             finalSize = std::max(finalSize, reprs[i]->size);
                                             finalAlign = std::max(finalAlign, reprs[i]->align);
-                                            set_type_repr(sp, variants[i].type, std::move(reprs[i]));
+                                            setTypeRepr(sp, variants[i].type, std::move(reprs[i]));
                                         } else {
                                             // Note: unit type (any empty type) doesn't need the tag added
                                             // NOTE: Unit type should already have a repr, but make sure
@@ -1651,11 +1651,11 @@ namespace {
                                     }
 
                                     // Ensure that the tag offset is still valid
-                                    auto tag_offset = getOffset(sp, resolve, &rv, nichePath);
+                                    auto tagOffset = getOffset(sp, resolve, &rv, nichePath);
                                     if (nonNicheOffset != 0) {
-                                        ASSERT_BUG(sp, tag_offset < nonNicheOffset, "Niche offset invalid: " << tag_offset << " >= " << nonNicheOffset);
+                                        ASSERT_BUG(sp, tagOffset < nonNicheOffset, "Niche offset invalid: " << tagOffset << " >= " << nonNicheOffset);
                                     } else {
-                                        ASSERT_BUG(sp, tag_offset >= minOffset, "Niche offset invalid: " << tag_offset << " < " << minOffset);
+                                        ASSERT_BUG(sp, tagOffset >= minOffset, "Niche offset invalid: " << tagOffset << " < " << minOffset);
                                     }
                                 }
                             } // Niche optimisation
@@ -1671,31 +1671,31 @@ namespace {
                         // }
                         // ```
                         if (rv.variants.is_None()) {
-                            ::HIR::TypeRef tag_ty;
+                            ::HIR::TypeRef tagTy;
                             // If the tag size is specified, then force that
                             if (enm.tagRepr != HIR::Enum::Repr::Auto) {
-                                tag_ty = resolve.crate.types.primitive(enm.getReprType(enm.tagRepr));
+                                tagTy = resolve.crate.types.primitive(enm.getReprType(enm.tagRepr));
                             } else {
                                 ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
                                 if (e.size() <= 1) {
                                     // Unreachable
                                     BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
                                 } else if (e.size() <= 255) {
-                                    tag_ty = resolve.crate.types.primitive(::HIR::CoreType::U8);
+                                    tagTy = resolve.crate.types.primitive(::HIR::CoreType::U8);
                                     DEBUG("u8 data tag");
                                 } else if (e.size() <= UINT16_MAX) {
-                                    tag_ty = resolve.crate.types.primitive(::HIR::CoreType::U16);
+                                    tagTy = resolve.crate.types.primitive(::HIR::CoreType::U16);
                                 } else {
                                     ASSERT_BUG(sp, e.size() <= UINT32_MAX, "");
-                                    tag_ty = resolve.crate.types.primitive(::HIR::CoreType::U32);
+                                    tagTy = resolve.crate.types.primitive(::HIR::CoreType::U32);
                                 }
                             }
 
-                            size_t tag_size;
-                            size_t tag_align;
-                            TargetGetSizeAndAlignOf(sp, resolve, tag_ty, tag_size, tag_align);
-                            size_t max_size = tag_size;
-                            size_t maxAlign = tag_align;
+                            size_t tagSize;
+                            size_t tagAlign;
+                            TargetGetSizeAndAlignOf(sp, resolve, tagTy, tagSize, tagAlign);
+                            size_t max_size = tagSize;
+                            size_t maxAlign = tagAlign;
                             // Sort all varaint fields (fully)
                             // Add the tag to the start of all variants
                             // Generate a struct repr (with sorting off)
@@ -1704,26 +1704,26 @@ namespace {
                                 auto& var_ty = variants[var_i].type;
                                 if (e[var_i].type != resolve.crate.types.unit()) {
                                     if (enm.tagRepr == HIR::Enum::Repr::Auto) {
-                                        ::std::sort(ents.begin(), ents.end(), sortfn_enum_variant_fields);
+                                        ::std::sort(ents.begin(), ents.end(), sortfnEnumVariantFields);
                                     }
                                     // - Add tag
                                     ents.insert(ents.begin(), Ent());
-                                    ents[0].align = tag_align;
-                                    ents[0].size = tag_size;
+                                    ents[0].align = tagAlign;
+                                    ents[0].size = tagSize;
                                     ents[0].field = ents.size() - 1;
-                                    ents[0].ty = tag_ty;
+                                    ents[0].ty = tagTy;
 
                                     // - Create repr and assign
                                     auto repr = makeTypeReprStructInner(sp, var_ty, ents, StructSorting::None, variants[var_i].forced_alignment, 0);
                                     max_size = std::max(max_size, repr->size);
                                     maxAlign = std::max(maxAlign, repr->align);
-                                    set_type_repr(sp, var_ty, std::move(repr));
+                                    setTypeRepr(sp, var_ty, std::move(repr));
                                 }
 
                                 // - Push the field
                                 rv.fields.push_back(TypeRepr::Field{0, mv$(var_ty)});
                             }
-                            rv.fields.push_back(TypeRepr::Field{0, mv$(tag_ty)});
+                            rv.fields.push_back(TypeRepr::Field{0, mv$(tagTy)});
 
                             // Size must be a multiple of alignment
                             rv.size = max_size;
@@ -1738,9 +1738,9 @@ namespace {
                                     vals.push_back(v.discriminant_value);
                                 }
                                 DEBUG("vals = " << vals);
-                                rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tag_size, {}}, ::std::move(vals)});
+                                rv.variants = TypeRepr::VariantMode::make_Values({{e.size(), tagSize, {}}, ::std::move(vals)});
                             } else {
-                                rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tag_size, {}}, 0, e.size()});
+                                rv.variants = TypeRepr::VariantMode::make_Linear({{e.size(), tagSize, {}}, 0, e.size()});
                             }
                         }
                     }
@@ -1757,33 +1757,33 @@ namespace {
                                 int64_t minValue = INT64_MAX;
                                 int64_t maxValue = INT64_MIN;
                                 for (const auto& variant : e.variants) {
-                                    const auto value = S128(variant.val).truncate_i64();
+                                    const auto value = S128(variant.val).truncateI64();
                                     minValue = std::min(minValue, value);
                                     maxValue = std::max(maxValue, value);
                                 }
 
-                                ::HIR::CoreType tag_type;
+                                ::HIR::CoreType tagType;
                                 if (minValue >= 0) {
                                     const auto maxUnsigned = static_cast<uint64_t>(maxValue);
                                     if (maxUnsigned <= UINT8_MAX) {
-                                        tag_type = ::HIR::CoreType::U8;
+                                        tagType = ::HIR::CoreType::U8;
                                     } else if (maxUnsigned <= UINT16_MAX) {
-                                        tag_type = ::HIR::CoreType::U16;
+                                        tagType = ::HIR::CoreType::U16;
                                     } else if (maxUnsigned <= UINT32_MAX) {
-                                        tag_type = ::HIR::CoreType::U32;
+                                        tagType = ::HIR::CoreType::U32;
                                     } else {
-                                        tag_type = ::HIR::CoreType::U64;
+                                        tagType = ::HIR::CoreType::U64;
                                     }
                                 } else if (minValue >= INT8_MIN && maxValue <= INT8_MAX) {
-                                    tag_type = ::HIR::CoreType::I8;
+                                    tagType = ::HIR::CoreType::I8;
                                 } else if (minValue >= INT16_MIN && maxValue <= INT16_MAX) {
-                                    tag_type = ::HIR::CoreType::I16;
+                                    tagType = ::HIR::CoreType::I16;
                                 } else if (minValue >= INT32_MIN && maxValue <= INT32_MAX) {
-                                    tag_type = ::HIR::CoreType::I32;
+                                    tagType = ::HIR::CoreType::I32;
                                 } else {
-                                    tag_type = ::HIR::CoreType::I64;
+                                    tagType = ::HIR::CoreType::I64;
                                 }
-                                rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tag_type)});
+                                rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tagType)});
                             }
                             break;
                         default:
@@ -1927,7 +1927,7 @@ namespace {
             && !ty->is_NodeType();
     }
 
-    void set_type_repr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
+    void setTypeRepr(const Span& sp, const ::HIR::TypeData* ty, ::std::unique_ptr<TypeRepr> repr) {
         if (!hasAbiIdentity(ty)) {
             const auto* reprPtr = repr.get();
             auto ires = sUnencodedCache.emplace(ty, mv$(repr));
@@ -1945,7 +1945,7 @@ namespace {
 }
 
 void TargetForceTypeRepr(const Span& sp, const ::HIR::TypeData* ty, TypeRepr repr) {
-    set_type_repr(sp, ty, box$(repr));
+    setTypeRepr(sp, ty, box$(repr));
 }
 
 bool TargetCapsMemberAlignment() {
@@ -2003,10 +2003,10 @@ const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& reso
     return rv;
 }
 
-const ::HIR::TypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& sub_fields, size_t ofs) {
+const ::HIR::TypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& subFields, size_t ofs) {
     const auto* ty = &repr.fields.at(idx).ty;
-    while (ofs < sub_fields.size()) {
-        const auto field = sub_fields[ofs++];
+    while (ofs < subFields.size()) {
+        const auto field = subFields[ofs++];
         if (field == TypeRepr::FieldPath::ARRAY_ELEMENT) {
             const auto* array = (*ty)->opt_Array();
             ASSERT_BUG(sp, array && array->size.is_Known() && array->size.as_Known() > 0, "Array field path on non-array " << *ty);
@@ -2026,7 +2026,7 @@ size_t TypeRepr::getOffset(const Span& sp, const StaticTraitResolve& resolve, co
     size_t ofs = r->fields[path.index].offset;
 
     const auto* ty = &r->fields[path.index].ty;
-    for (const auto& f : path.sub_fields) {
+    for (const auto& f : path.subFields) {
         if (f == TypeRepr::FieldPath::ARRAY_ELEMENT) {
             const auto* array = (*ty)->opt_Array();
             assert(array && array->size.is_Known() && array->size.as_Known() > 0);
@@ -2045,7 +2045,7 @@ size_t TypeRepr::getOffset(const Span& sp, const StaticTraitResolve& resolve, co
 
 std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const {
     unsigned var_idx = 0;
-    bool sub_has_tag = false;
+    bool subHasTag = false;
     TU_MATCH_HDRA( (this->variants), {)
     TU_ARMA(None, ve) {
         }
@@ -2053,11 +2053,11 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
             if (v < ve.offset) {
                 var_idx = ve.field.index;
-                sub_has_tag = false; // TODO: is this correct?
+                subHasTag = false; // TODO: is this correct?
                 DEBUG("VariantMode::Linear - Niche #" << var_idx);
             } else {
-                var_idx = v.truncate_u64() - ve.offset;
-                sub_has_tag = true;
+                var_idx = v.truncateU64() - ve.offset;
+                subHasTag = true;
                 DEBUG("VariantMode::Linear - Other #" << var_idx);
             }
         }
@@ -2082,7 +2082,7 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
             DEBUG("VariantMode::NonZero - #" << var_idx);
         }
     }
-    return std::make_pair(var_idx, sub_has_tag);
+    return std::make_pair(var_idx, subHasTag);
 }
 
 TargetArch::Atomics::Atomics(bool u8, bool u16, bool u32, bool u64, bool ptr)
@@ -2104,7 +2104,7 @@ TargetArch::Alignments::Alignments(uint8_t u16, uint8_t u32, uint8_t u64, uint8_
 
 std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x) {
     os << x.size << "@" << x.index;
-    for (auto idx : x.sub_fields) {
+    for (auto idx : x.subFields) {
         if (idx == TypeRepr::FieldPath::ARRAY_ELEMENT) {
             os << "[0]";
         } else {

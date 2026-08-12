@@ -14,7 +14,7 @@
 ::HIR::ExprPtr::ExprPtr(ExprPtr&&) = default;
 ::HIR::ExprPtr& ::HIR::ExprPtr::operator=(ExprPtr&&) = default;
 
-::HIR::ExprNodeP HIR::ExprPtr::take_node() {
+::HIR::ExprNodeP HIR::ExprPtr::takeNode() {
     return ::HIR::ExprNodeP(node.release());
 }
 
@@ -37,11 +37,11 @@
 }
 
 const Span& HIR::ExprPtr::span() const {
-    static Span static_sp;
+    static Span staticSp;
     if (*this) {
         return (*this)->span();
     }
-    return static_sp;
+    return staticSp;
 }
 
 const ::MIR::Function* HIR::ExprPtr::getMirOpt() const {
@@ -85,7 +85,7 @@ const ::MIR::Function* HIR::ExprPtr::getExtMir() const {
     return &*this->mir;
 }
 
-void HIR::ExprPtr::set_mir(::MIR::FunctionPointer mir) {
+void HIR::ExprPtr::setMir(::MIR::FunctionPointer mir) {
     assert(!this->mir);
     this->mir = ::std::move(mir);
 }

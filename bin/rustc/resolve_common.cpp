@@ -22,7 +22,7 @@
 
 namespace {
 
-    AST::AbsolutePath sp_to_ap(const HIR::SimplePath& sp) {
+    AST::AbsolutePath spToAp(const HIR::SimplePath& sp) {
         return AST::AbsolutePath(sp.crate_name(), sp.componentsVec());
     }
 
@@ -122,10 +122,10 @@ namespace {
                     size_t i = 0;
                     do {
                         // Get a reference to the module, given the current path
-                        const auto& start_mod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
+                        const auto& startMod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
 
                         // Find the top of the path in that namespace
-                        auto realMod = as_Namespace(this->findItem(start_mod, name, ResolveNamespace::Namespace, outPath));
+                        auto realMod = as_Namespace(this->findItem(startMod, name, ResolveNamespace::Namespace, outPath));
                     TU_MATCH_HDRA( (realMod), {)
                     TU_ARMA(Ast, iData) {
                                 // TODO: What about an enum?
@@ -170,7 +170,7 @@ namespace {
                                 //    return get_module_hir(crate.m_extern_crates.at(imp->path.m_crate_name).m_hir->m_root_module, path, 1, ignore_last, out_path);
                                 //}
                                 //else {
-                                ASSERT_BUG(sp, iEntPtr->is_Module(), "Expected Module, got " << iEntPtr->tag_str() << " for " << name << " in [" << baseNodes << "]");
+                                ASSERT_BUG(sp, iEntPtr->is_Module(), "Expected Module, got " << iEntPtr->tagStr() << " for " << name << " in [" << baseNodes << "]");
                                 return getModuleHir(iEntPtr->as_Module(), path, 1, ignoreLast, outPath);
                                 //}
                             }
@@ -220,8 +220,8 @@ namespace {
                     while (i < baseNodes.size() && baseNodes[baseNodes.size() - i - 1].name().c_str()[0] == '#') {
                         i += 1;
                     }
-                    const auto& start_mod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
-                    return getModuleAst(start_mod, path, 0, ignoreLast, outPath);
+                    const auto& startMod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
+                    return getModuleAst(startMod, path, 0, ignoreLast, outPath);
                 }
                 TU_ARMA(Super, e) {
                     DEBUG("Super " << path);
@@ -233,8 +233,8 @@ namespace {
                     }
                     i += 1;
                     ASSERT_BUG(sp, i <= baseNodes.size(), "");
-                    const auto& start_mod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
-                    return getModuleAst(start_mod, path, 0, ignoreLast, outPath);
+                    const auto& startMod = this->getModByTruePath(baseNodes, baseNodes.size() - i);
+                    return getModuleAst(startMod, path, 0, ignoreLast, outPath);
                 }
                 TU_ARMA(Absolute, e) {
                     DEBUG("Absolute " << path);
@@ -278,12 +278,12 @@ namespace {
             throw "";
         }
 
-        ResolveModuleRef getModuleAst(const AST::Module& start_mod, const AST::Path& path, size_t start_offset, bool ignoreLast, ::AST::AbsolutePath* outPath) {
-            TRACE_FUNCTION_F("start_offset=" << start_offset << ", ignore_last=" << ignoreLast);
-            const AST::Module* mod = &start_mod;
+        ResolveModuleRef getModuleAst(const AST::Module& startMod, const AST::Path& path, size_t startOffset, bool ignoreLast, ::AST::AbsolutePath* outPath) {
+            TRACE_FUNCTION_F("start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
+            const AST::Module* mod = &startMod;
             ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
 
-            for (size_t idx = start_offset; idx < path.nodes().size() - (ignoreLast ? 1 : 0); idx++) {
+            for (size_t idx = startOffset; idx < path.nodes().size() - (ignoreLast ? 1 : 0); idx++) {
                 const auto& name = path.nodes()[idx].name();
 
                 auto res = findItem(*mod, name, ResolveNamespace::Namespace, outPath);
@@ -311,7 +311,7 @@ namespace {
                                 return getModuleHir(crate.externCrates.at(i->name).hir->rootModule, path, idx + 1, ignoreLast, outPath);
                             }
                         } else {
-                            DEBUG("Found " << e->tag_str() << ", not module");
+                            DEBUG("Found " << e->tagStr() << ", not module");
                             return ResolveModuleRef();
                         }
                     }
@@ -322,7 +322,7 @@ namespace {
                         if (const auto* i = e->opt_Module()) {
                             return getModuleHir(*i, path, idx + 1, ignoreLast, outPath);
                         } else {
-                            DEBUG("Found HIR " << e->tag_str() << ", not module");
+                            DEBUG("Found HIR " << e->tagStr() << ", not module");
                             return ResolveModuleRef();
                         }
                     }
@@ -341,11 +341,11 @@ namespace {
             return ResolveModuleRef(mod);
         }
 
-        ResolveModuleRef getModuleHir(const HIR::Module& start_mod, const AST::Path& path, size_t start_offset, bool ignoreLast, ::AST::AbsolutePath* outPath) {
-            TRACE_FUNCTION_F("path=" << path << ", start_offset=" << start_offset << ", ignore_last=" << ignoreLast);
-            const HIR::Module* mod = &start_mod;
+        ResolveModuleRef getModuleHir(const HIR::Module& startMod, const AST::Path& path, size_t startOffset, bool ignoreLast, ::AST::AbsolutePath* outPath) {
+            TRACE_FUNCTION_F("path=" << path << ", start_offset=" << startOffset << ", ignore_last=" << ignoreLast);
+            const HIR::Module* mod = &startMod;
             ASSERT_BUG(Span(), path.nodes().size() >= (ignoreLast ? 1 : 0), "" << path);
-            for (size_t i = start_offset; i < path.nodes().size() - (ignoreLast ? 1 : 0); i++) {
+            for (size_t i = startOffset; i < path.nodes().size() - (ignoreLast ? 1 : 0); i++) {
                 const auto& name = path.nodes()[i].name();
                 // Find the module for this node
                 auto it = mod->modItems.find(name);
@@ -362,7 +362,7 @@ namespace {
                         continue;
                     }
                     if (outPath) {
-                        *outPath = sp_to_ap(imp->path);
+                        *outPath = spToAp(imp->path);
                     }
                     ti = &ext_crate.getTypeitemByPath(sp, imp->path, /*ignore_crate*/ true, /*ignore_last*/ false);
                 } else {
@@ -372,7 +372,7 @@ namespace {
                 }
                 TU_MATCH_HDRA( (*ti), {)
                 default:
-                    DEBUG(name << " Not Module, instead " << ti->tag_str());
+                    DEBUG(name << " Not Module, instead " << ti->tagStr());
                     return ResolveModuleRef();
                     TU_ARMA(Module, m) {
                         mod = &m;
@@ -388,9 +388,9 @@ namespace {
         const AST::Module& getModByTruePath(const std::vector<AST::PathNode>& baseNodes, size_t len) {
             const AST::Module* mod = &crate.rootModule;
             for (size_t i = 0; i < len; i++) {
-                const auto& tgt_name = baseNodes[i].name();
-                if (tgt_name.c_str()[0] == '#') {
-                    auto idx = strtol(tgt_name.c_str() + 1, nullptr, 10);
+                const auto& tgtName = baseNodes[i].name();
+                if (tgtName.c_str()[0] == '#') {
+                    auto idx = strtol(tgtName.c_str() + 1, nullptr, 10);
                     mod = &*mod->anonMods()[idx];
                     continue;
                 }
@@ -398,14 +398,14 @@ namespace {
                 for (const auto& i : mod->mItems) {
                     if (const auto* m = i->data.opt_Module()) {
                         //DEBUG(i.name);
-                        if (i->name == tgt_name) {
+                        if (i->name == tgtName) {
                             nextMod = m;
                             break;
                         }
                     }
                 }
                 if (!nextMod) {
-                    BUG(sp, "Unable to find component `" << tgt_name << "` of [" << baseNodes << "] in module " << mod->path());
+                    BUG(sp, "Unable to find component `" << tgtName << "` of [" << baseNodes << "] in module " << mod->path());
                 }
                 mod = nextMod;
             }
@@ -531,7 +531,7 @@ namespace {
                     if (outPath) {
                         outPath->nodes.push_back(name);
                     }
-                    DEBUG("Found in ast (" << i->data.tag_str() << ")");
+                    DEBUG("Found in ast (" << i->data.tagStr() << ")");
                     switch (ns) {
                         case ResolveNamespace::Macro:
                             if (const auto* mac = i->data.opt_Macro()) {
@@ -576,8 +576,8 @@ namespace {
                             if (e.path.cls.is_Absolute() && e.path.cls.as_Absolute().nodes.empty()) {
                                 if (ns == ResolveNamespace::Namespace) {
                                     AST::AbsolutePath tmp;
-                                    auto tgt_mod = this->getModule(mod.path(), e.path, false, &tmp);
-                                    TU_MATCH_HDRA( (tgt_mod), {)
+                                    auto tgtMod = this->getModule(mod.path(), e.path, false, &tmp);
+                                    TU_MATCH_HDRA( (tgtMod), {)
                                     TU_ARMA(Ast, modPtr) {
                                             if (outPath) {
                                                 *outPath = tmp;
@@ -601,10 +601,10 @@ namespace {
                             }
 
                             const auto& itemName = e.path.nodes().back().name();
-                            auto tgt_mod = this->getModule(mod.path(), e.path, true, outPath);
-                            DEBUG(tgt_mod.tag_str());
+                            auto tgtMod = this->getModule(mod.path(), e.path, true, outPath);
+                            DEBUG(tgtMod.tagStr());
 
-                            TU_MATCH_HDRA( (tgt_mod), {)
+                            TU_MATCH_HDRA( (tgtMod), {)
                             TU_ARMA(Ast, modPtr) {
                                     // NOTE: Recursion
                                     auto rv = this->findItem(*modPtr, itemName, ns, outPath);
@@ -655,8 +655,8 @@ namespace {
 
                             // - Outer recurse
                             //  > Get the module for this path
-                            auto src_mod = this->getModule(mod.path(), e.path, /*ignore_last=*/false, outPath);
-                            TU_MATCH_HDRA( (src_mod), {)
+                            auto srcMod = this->getModule(mod.path(), e.path, /*ignore_last=*/false, outPath);
+                            TU_MATCH_HDRA( (srcMod), {)
                             TU_ARMA(None, _) {
                                     //BUG(use_stmt->sp, "Unable to resolve use statement path " << e.path);
                                     DEBUG("Unable to find " << e.path);
@@ -690,12 +690,12 @@ namespace {
                 DEBUG("Recurse to parent");
                 const AST::Module* m = &crate.rootModule;
                 for (size_t i = 0; i < mod.path().nodes.size() - 1; i++) {
-                    auto& tgt_name = mod.path().nodes[i];
-                    if (tgt_name.c_str()[0] == '#') {
-                        auto idx = strtol(tgt_name.c_str() + 1, nullptr, 10);
+                    auto& tgtName = mod.path().nodes[i];
+                    if (tgtName.c_str()[0] == '#') {
+                        auto idx = strtol(tgtName.c_str() + 1, nullptr, 10);
                         m = &*m->anonMods()[idx];
                     } else {
-                        m = &as_Namespace(this->findItem(*m, tgt_name, ResolveNamespace::Namespace)).as_Ast()->as_Module();
+                        m = &as_Namespace(this->findItem(*m, tgtName, ResolveNamespace::Namespace)).as_Ast()->as_Module();
                     }
                 }
                 return findItem(*m, name, ns, outPath);
@@ -732,7 +732,7 @@ namespace {
                         const HIR::TypeItem* ti;
                         if (const auto* p = it->second->ent.opt_Import()) {
                             if (outPath) {
-                                *outPath = sp_to_ap(p->path);
+                                *outPath = spToAp(p->path);
                             }
                             const auto& ext_crate = H::getCrate(sp, crate, p->path);
                             if (p->path.components().empty()) {
@@ -756,7 +756,7 @@ namespace {
                         const HIR::ValueItem* vi;
                         if (const auto* p = it->second->ent.opt_Import()) {
                             if (outPath) {
-                                *outPath = sp_to_ap(p->path);
+                                *outPath = spToAp(p->path);
                             }
                             vi = &H::getCrate(sp, crate, p->path).getValitemByPath(sp, p->path, true);
                         } else {
@@ -780,7 +780,7 @@ namespace {
                         const HIR::MacroItem* mi;
                         if (const auto* p = it->second->ent.opt_Import()) {
                             if (outPath) {
-                                *outPath = sp_to_ap(p->path);
+                                *outPath = spToAp(p->path);
                             }
 
                             struct H2 {
@@ -867,23 +867,23 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const AST::Crate& crate
             if (rv.is_None()) {
                 return ResolveItemRefMacro::make_None({});
             }
-            ASSERT_BUG(span, rv.is_Macro(), rv.tag_str());
+            ASSERT_BUG(span, rv.is_Macro(), rv.tagStr());
             return std::move(rv.as_Macro());
         }
         TU_ARMA(Hir, modPtr) {
             const ::HIR::SimplePath* vis_path = nullptr;
-            ::HIR::SimplePath tmp_p;
+            ::HIR::SimplePath tmpP;
             if (path.cls.is_Relative() && path.cls.as_Relative().hygiene.hasModPath()) {
                 const auto& inP = path.cls.as_Relative().hygiene.mod_path();
-                tmp_p = HIR::SimplePath(inP.crate, inP.ents);
-                DEBUG("vis_path=" << tmp_p);
-                vis_path = &tmp_p;
+                tmpP = HIR::SimplePath(inP.crate, inP.ents);
+                DEBUG("vis_path=" << tmpP);
+                vis_path = &tmpP;
             }
             auto rv = rs.findItemHir(*modPtr, itemName, ResolveNamespace::Macro, outPath, vis_path);
             if (rv.is_None()) {
                 return ResolveItemRefMacro::make_None({});
             }
-            ASSERT_BUG(span, rv.is_Macro(), rv.tag_str());
+            ASSERT_BUG(span, rv.is_Macro(), rv.tagStr());
             return std::move(rv.as_Macro());
         }
         TU_ARMA(ImplicitPrelude, _e) {

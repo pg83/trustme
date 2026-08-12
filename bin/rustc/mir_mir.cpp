@@ -999,7 +999,7 @@ LValue::RefCommon::RefCommon(const LValue& lv, size_t wrapper_count)
     assert(wrapper_count <= lv.wrappers.size());
 }
 /// Unwrap one level, returning false if already at the root
-bool LValue::RefCommon::try_unwrap() {
+bool LValue::RefCommon::tryUnwrap() {
     if (wrapperCount == 0) {
         return false;
     } else {

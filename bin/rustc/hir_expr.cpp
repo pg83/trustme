@@ -394,7 +394,7 @@ void ::HIR::ExprVisitorDef::visit_pattern(const Span& sp, ::HIR::Pattern& pat) {
             this->visit_pattern(sp, *e.sub);
         }
         TU_ARMA(Tuple, e) {
-            for (auto& subpat : e.sub_patterns) {
+            for (auto& subpat : e.subPatterns) {
                 this->visit_pattern(sp, subpat);
             }
         }
@@ -421,7 +421,7 @@ void ::HIR::ExprVisitorDef::visit_pattern(const Span& sp, ::HIR::Pattern& pat) {
         }
         TU_ARMA(PathNamed, e) {
             this->visit_path(HIR::Visitor::PathContext::TYPE, e.path);
-            for (auto& fldPat : e.sub_patterns) {
+            for (auto& fldPat : e.subPatterns) {
                 this->visit_pattern(sp, fldPat.second);
             }
         }
@@ -430,7 +430,7 @@ void ::HIR::ExprVisitorDef::visit_pattern(const Span& sp, ::HIR::Pattern& pat) {
         TU_ARMA(Range, e) {
         }
         TU_ARMA(Slice, e) {
-            for (auto& subpat : e.sub_patterns) {
+            for (auto& subpat : e.subPatterns) {
                 this->visit_pattern(sp, subpat);
             }
         }
@@ -802,14 +802,14 @@ ExprNodeConstParam::ExprNodeConstParam(Span sp, RcString name, unsigned int bind
     , mName(mv$(name))
     , mBinding(binding) {
 }
-ExprNodeStructLiteral::ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, ::HIR::ExprNodeP base_value, t_values values)
+ExprNodeStructLiteral::ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, ::HIR::ExprNodeP base_value, tValues values)
     : ExprNode(mv$(sp))
     , mType(mv$(ty))
     , isStruct(is_struct)
     , baseValue(mv$(base_value))
     , values(mv$(values)) {
 }
-ExprNodeStructLiteral::ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, bool, t_values values)
+ExprNodeStructLiteral::ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, bool, tValues values)
     : ExprNode(mv$(sp))
     , mType(mv$(ty))
     , isStruct(is_struct)

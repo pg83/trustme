@@ -31,7 +31,7 @@ namespace AST {
             return LifetimeRef("_", BINDING_INFER);
         }
 
-        void set_binding(uint16_t b);
+        void setBinding(uint16_t b);
 
         bool isUnbound() const {
             return mBinding == BINDING_UNBOUND;

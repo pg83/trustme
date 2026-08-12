@@ -239,10 +239,10 @@ void memoryDump(const char* phase) {
                     memcpy(buf.data() + r.v_start % chunkSize, (const void*)r.v_start, headSize);
                     flushChunk(r.v_start / chunkSize * chunkSize);
                     // Fill whole chunks
-                    const auto tail_size = r.v_end % chunkSize;
-                    const auto tail_pos = r.v_end - tail_size;
+                    const auto tailSize = r.v_end % chunkSize;
+                    const auto tailPos = r.v_end - tailSize;
                     uint64_t va = r.v_start + headSize;
-                    while (va < tail_pos) {
+                    while (va < tailPos) {
                         //printf("%lx+%lx (mid)\n", va, chunk_size);
                         memcpy(buf.data(), (const void*)va, chunkSize);
                         flushChunk(va / chunkSize * chunkSize);
@@ -250,7 +250,7 @@ void memoryDump(const char* phase) {
                     }
                     // Fill tail chunk (no flush)
                     //printf("%lx+%lx (tail)\n", tail_pos, tail_size);
-                    memcpy(buf.data(), (const void*)tail_pos, tail_size);
+                    memcpy(buf.data(), (const void*)tailPos, tailSize);
                     // - No flush, next push will do that
                 }
                 lastVaddr = r.v_end;

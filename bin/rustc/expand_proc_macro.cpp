@@ -39,7 +39,7 @@ public:
         ::std::vector<::std::string> attributes;
         TTStream lex(sp, ParseState(), attr.data());
         lex.getTokenCheck(TOK_PAREN_OPEN);
-        auto trait_name = lex.getTokenCheck(TOK_IDENT).ident().name;
+        auto traitName = lex.getTokenCheck(TOK_IDENT).ident().name;
         while (lex.getTokenIf(TOK_COMMA)) {
             if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
                 break;
@@ -60,7 +60,7 @@ public:
         }
         lex.getTokenCheck(TOK_PAREN_CLOSE);
 
-        crate.procMacros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Derive, RcString::newInterned(FMT(trait_name)), path, mv$(attributes)});
+        crate.procMacros.push_back(AST::ProcMacroDef{AST::ProcMacroTy::Derive, RcString::newInterned(FMT(traitName)), path, mv$(attributes)});
     }
 };
 STATIC_DECORATOR("proc_macro_derive", DecoratorProcMacroDerive)
@@ -126,11 +126,11 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
     auto mainFn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
         auto callNode = NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("main")}), ::makeVec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("proc_macro#"), ::AST::PathNode("MACROS")})))));
-        mainFn.set_code(mv$(callNode));
+        mainFn.setCode(mv$(callNode));
     }
 
     // ---- test list ----
-    ::std::vector<::AST::ExprNodeP> test_nodes;
+    ::std::vector<::AST::ExprNodeP> testNodes;
 
     for (const auto& desc : crate.procMacros) {
         const char* type_name = "SingleStream";
@@ -141,18 +141,18 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
             default:
                 break;
         }
-        ::AST::ExprNodeStructLiteral::t_values descVals;
+        ::AST::ExprNodeStructLiteral::tValues descVals;
         // `name: "foo",`
         descVals.push_back({{}, "name", NEWNODE(String, desc.name.c_str())});
         // `handler`: ::foo
         descVals.push_back({{}, "handler", NEWNODE(CallPath, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroType"), ::AST::PathNode(type_name)}), ::makeVec1(NEWNODE(NamedValue, AST::Path(desc.path))))});
 
-        test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroDesc")}), nullptr, mv$(descVals)));
+        testNodes.push_back(NEWNODE(StructLiteral, ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroDesc")}), nullptr, mv$(descVals)));
     }
-    auto* tests_array = new ::AST::ExprNodeArray(mv$(test_nodes));
+    auto* testsArray = new ::AST::ExprNodeArray(mv$(testNodes));
 
-    size_t test_count = tests_array->values.size();
-    auto tests_list = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), TypeRef(Span(), ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroDesc")})), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(test_count), CORETYPE_UINT))), ::AST::Expr(mv$(tests_array))};
+    size_t testCount = testsArray->values.size();
+    auto testsList = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), TypeRef(Span(), ::AST::Path(crate.extCratenameProcmacro, {::AST::PathNode("MacroDesc")})), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(testCount), CORETYPE_UINT))), ::AST::Expr(mv$(testsArray))};
 
     // ---- module ----
     auto newmod = ::AST::Module{::AST::AbsolutePath("", {"proc_macro#"})};
@@ -162,7 +162,7 @@ void ExpandProcMacroHarness(::AST::Crate& crate) {
     newmod.addExtCrate(Span(), vis_private, crate.extCratenameProcmacro, "proc_macro", {});
 
     newmod.addItem(Span(), vis_private, "main", mv$(mainFn), {});
-    newmod.addItem(Span(), vis_private, "MACROS", mv$(tests_list), {});
+    newmod.addItem(Span(), vis_private, "MACROS", mv$(testsList), {});
 
     crate.rootModule.addItem(Span(), vis_private, "proc_macro#", mv$(newmod), {});
     crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"proc_macro#", "main"});
@@ -206,7 +206,7 @@ struct ProcMacroInv: public TokenStream {
     /// Spans that have had an index assigned
     ::std::unordered_map<const SpanInner*, size_t> knownSpans;
     /// Span indexes that have been sent
-    ::std::unordered_set<size_t> sent_spans;
+    ::std::unordered_set<size_t> sentSpans;
     size_t nextSpanIndex = 2;
 
     struct Handles {
@@ -236,59 +236,59 @@ public:
 
     bool checkGood();
 
-    void send_done() {
-        this->send_u8(static_cast<uint8_t>(TokenClass::EndOfStream));
+    void sendDone() {
+        this->sendU8(static_cast<uint8_t>(TokenClass::EndOfStream));
         dumpFileOut.flush();
         DEBUG("Input tokens sent");
     }
 
-    void send_symbol(const char* val) {
-        this->send_u8(static_cast<uint8_t>(TokenClass::Symbol));
-        this->send_bytes(val, ::std::strlen(val));
+    void sendSymbol(const char* val) {
+        this->sendU8(static_cast<uint8_t>(TokenClass::Symbol));
+        this->sendBytes(val, ::std::strlen(val));
     }
 
-    void send_rword(const char* val) {
-        this->send_u8(static_cast<uint8_t>(TokenClass::Ident));
-        this->send_bytes(val, ::std::strlen(val));
+    void sendRword(const char* val) {
+        this->sendU8(static_cast<uint8_t>(TokenClass::Ident));
+        this->sendBytes(val, ::std::strlen(val));
     }
 
-    void send_ident(const char* val) {
-        this->send_u8(static_cast<uint8_t>(TokenClass::Ident));
+    void sendIdent(const char* val) {
+        this->sendU8(static_cast<uint8_t>(TokenClass::Ident));
         if (LexFindReservedWord(val, edition) != TOK_NULL) {
             auto size = ::std::strlen(val);
-            this->send_v128u(2 + size);
-            this->send_bytes_raw("r#", 2);
-            this->send_bytes_raw(val, size);
+            this->sendV128u(2 + size);
+            this->sendBytesRaw("r#", 2);
+            this->sendBytesRaw(val, size);
         } else {
-            this->send_bytes(val, ::std::strlen(val));
+            this->sendBytes(val, ::std::strlen(val));
         }
     }
 
-    void send_ident(const Ident& val) {
-        send_ident(val.name.c_str());
+    void sendIdent(const Ident& val) {
+        sendIdent(val.name.c_str());
     }
 
-    void send_lifetime(const char* val) {
-        this->send_u8(static_cast<uint8_t>(TokenClass::Lifetime));
-        this->send_bytes(val, ::std::strlen(val));
+    void sendLifetime(const char* val) {
+        this->sendU8(static_cast<uint8_t>(TokenClass::Lifetime));
+        this->sendBytes(val, ::std::strlen(val));
     }
 
-    void send_string(const ::std::string& s) {
-        this->send_u8(static_cast<uint8_t>(TokenClass::String));
-        this->send_bytes(s.data(), s.size());
+    void sendString(const ::std::string& s) {
+        this->sendU8(static_cast<uint8_t>(TokenClass::String));
+        this->sendBytes(s.data(), s.size());
     }
 
-    void send_bytestring(const ::std::string& s) {
-        this->send_u8(static_cast<uint8_t>(TokenClass::ByteString));
-        this->send_bytes(s.data(), s.size());
+    void sendBytestring(const ::std::string& s) {
+        this->sendU8(static_cast<uint8_t>(TokenClass::ByteString));
+        this->sendBytes(s.data(), s.size());
     }
 
-    void send_char(uint32_t ch) {
-        this->send_u8(static_cast<uint8_t>(TokenClass::CharLit));
-        this->send_v128u(ch);
+    void sendChar(uint32_t ch) {
+        this->sendU8(static_cast<uint8_t>(TokenClass::CharLit));
+        this->sendV128u(ch);
     }
 
-    void send_int(eCoreType ct, U128 v) {
+    void sendInt(eCoreType ct, U128 v) {
         uint8_t size;
         switch (ct) {
             case CORETYPE_ANY:
@@ -319,8 +319,8 @@ public:
                 }
                 if (0)
                     ;
-                this->send_u8(static_cast<uint8_t>(TokenClass::UnsignedInt));
-                this->send_u8(size);
+                this->sendU8(static_cast<uint8_t>(TokenClass::UnsignedInt));
+                this->sendU8(size);
                 break;
             case CORETYPE_INT:
                 size = 1;
@@ -346,55 +346,55 @@ public:
                 }
                 if (0)
                     ;
-                this->send_u8(static_cast<uint8_t>(TokenClass::SignedInt));
-                this->send_u8(size);
+                this->sendU8(static_cast<uint8_t>(TokenClass::SignedInt));
+                this->sendU8(size);
                 break;
             default:
                 BUG(parentSpan, "Unknown integer type");
         }
-        this->send_v128u(v);
+        this->sendV128u(v);
     }
 
-    void send_float(eCoreType ct, FloatValue v) {
-        this->send_u8(static_cast<uint8_t>(TokenClass::Float));
+    void sendFloat(eCoreType ct, FloatValue v) {
+        this->sendU8(static_cast<uint8_t>(TokenClass::Float));
         switch (ct) {
             case CORETYPE_ANY:
-                this->send_u8(0);
+                this->sendU8(0);
                 break;
             case CORETYPE_F32:
-                this->send_u8(32);
+                this->sendU8(32);
                 break;
             case CORETYPE_F64:
-                this->send_u8(64);
+                this->sendU8(64);
                 break;
             default:
                 BUG(parentSpan, "Unknown float type");
         }
         double wire_value = static_cast<double>(v);
-        this->send_bytes_raw(&wire_value, sizeof(wire_value));
+        this->sendBytesRaw(&wire_value, sizeof(wire_value));
     }
 
-    void send_span_def(size_t index, const Span& sp) {
+    void sendSpanDef(size_t index, const Span& sp) {
         this->knownSpans[sp.get()] = index;
-        this->sent_spans.insert(index);
+        this->sentSpans.insert(index);
 
-        this->send_u8(static_cast<uint8_t>(TokenClass::SpanDef));
-        this->send_v128u(index);
-        this->send_v128u(0); // TODO: Parent span
-        if (const auto* sp_p = cast<const SpanInnerSource>(sp.get())) {
-            this->send_bytes(sp_p->filename.c_str(), sp_p->filename.size());
-            this->send_u8(1); // path_is_real
-            this->send_v128u(sp_p->start_line);
-            this->send_v128u(sp_p->endLine);
-            this->send_v128u(sp_p->start_ofs);
-            this->send_v128u(sp_p->endOfs);
+        this->sendU8(static_cast<uint8_t>(TokenClass::SpanDef));
+        this->sendV128u(index);
+        this->sendV128u(0); // TODO: Parent span
+        if (const auto* spP = cast<const SpanInnerSource>(sp.get())) {
+            this->sendBytes(spP->filename.c_str(), spP->filename.size());
+            this->sendU8(1); // path_is_real
+            this->sendV128u(spP->startLine);
+            this->sendV128u(spP->endLine);
+            this->sendV128u(spP->startOfs);
+            this->sendV128u(spP->endOfs);
         } else {
-            this->send_bytes("MACRO", 5); // TODO: better filename?
-            this->send_u8(0);             // path_is_real
-            this->send_v128u(0);
-            this->send_v128u(0);
-            this->send_v128u(0);
-            this->send_v128u(0);
+            this->sendBytes("MACRO", 5); // TODO: better filename?
+            this->sendU8(0);             // path_is_real
+            this->sendV128u(0);
+            this->sendV128u(0);
+            this->sendV128u(0);
+            this->sendV128u(0);
         }
     }
 
@@ -416,11 +416,11 @@ public:
 
 private:
     Token realGetToken_();
-    void send_u8(uint8_t v);
-    void send_bytes(const void* val, size_t size);
-    void send_bytes_raw(const void* val, size_t size);
-    void send_v128u(uint64_t val);
-    void send_v128u(U128 val);
+    void sendU8(uint8_t v);
+    void sendBytes(const void* val, size_t size);
+    void sendBytesRaw(const void* val, size_t size);
+    void sendV128u(uint64_t val);
+    void sendV128u(U128 val);
 
     uint8_t recvU8();
     ::std::string recvBytes();
@@ -478,7 +478,7 @@ namespace {
         bool emitAllAttrs;
         // Derive inputs must not include `#[derive(...)]` attributes themselves (rustc
         // strips them before invoking a derive macro).
-        bool skip_derive_attrs = false;
+        bool skipDeriveAttrs = false;
 
         Visitor(const Span& sp, ProcMacroInv& pmi)
             : sp(sp)
@@ -490,11 +490,11 @@ namespace {
 
         void visit_bound_constness(AST::BoundConstness constness) {
             if (constness == AST::BoundConstness::Always) {
-                pmi.send_rword("const");
+                pmi.sendRword("const");
             } else if (constness == AST::BoundConstness::Maybe) {
-                pmi.send_symbol("[");
-                pmi.send_rword("const");
-                pmi.send_symbol("]");
+                pmi.sendSymbol("[");
+                pmi.sendRword("const");
+                pmi.sendSymbol("]");
             }
         }
 
@@ -529,361 +529,361 @@ namespace {
                     TODO(sp, "TOK_INTERPOLATED_...");
                 // Value tokens
                 case TOK_IDENT:
-                    pmi.send_ident(tok.ident().name.c_str());
+                    pmi.sendIdent(tok.ident().name.c_str());
                     break; // TODO: Raw idents
                 case TOK_LIFETIME:
-                    pmi.send_lifetime(tok.ident().name.c_str());
+                    pmi.sendLifetime(tok.ident().name.c_str());
                     break; // TODO: Hygine?
                 case TOK_INTEGER:
                     if (tok.datatype() == CORETYPE_CHAR) {
-                        pmi.send_char(tok.intval().truncate_u64());
+                        pmi.sendChar(tok.intval().truncateU64());
                     } else {
-                        pmi.send_int(tok.datatype(), tok.intval());
+                        pmi.sendInt(tok.datatype(), tok.intval());
                     }
                     break;
                 case TOK_CHAR:
-                    pmi.send_char(tok.intval().truncate_u64());
+                    pmi.sendChar(tok.intval().truncateU64());
                     break;
                 case TOK_FLOAT:
-                    pmi.send_float(tok.datatype(), tok.floatval());
+                    pmi.sendFloat(tok.datatype(), tok.floatval());
                     break;
                 case TOK_STRING:
-                    pmi.send_string(tok.str());
+                    pmi.sendString(tok.str());
                     break;
                 case TOK_BYTESTRING:
-                    pmi.send_bytestring(tok.str());
+                    pmi.sendBytestring(tok.str());
                     break;
                 case TOK_CSTRING:
                     TODO(sp, "TOK_CSTRING");
 
                 case TOK_HASH:
-                    pmi.send_symbol("#");
+                    pmi.sendSymbol("#");
                     break;
                 case TOK_UNDERSCORE:
-                    pmi.send_rword("_");
+                    pmi.sendRword("_");
                     break;
 
                 // Symbols
                 case TOK_PAREN_OPEN:
-                    pmi.send_symbol("(");
+                    pmi.sendSymbol("(");
                     break;
                 case TOK_PAREN_CLOSE:
-                    pmi.send_symbol(")");
+                    pmi.sendSymbol(")");
                     break;
                 case TOK_BRACE_OPEN:
-                    pmi.send_symbol("{");
+                    pmi.sendSymbol("{");
                     break;
                 case TOK_BRACE_CLOSE:
-                    pmi.send_symbol("}");
+                    pmi.sendSymbol("}");
                     break;
                 case TOK_LT:
-                    pmi.send_symbol("<");
+                    pmi.sendSymbol("<");
                     break;
                 case TOK_GT:
-                    pmi.send_symbol(">");
+                    pmi.sendSymbol(">");
                     break;
                 case TOK_SQUARE_OPEN:
-                    pmi.send_symbol("[");
+                    pmi.sendSymbol("[");
                     break;
                 case TOK_SQUARE_CLOSE:
-                    pmi.send_symbol("]");
+                    pmi.sendSymbol("]");
                     break;
                 case TOK_COMMA:
-                    pmi.send_symbol(",");
+                    pmi.sendSymbol(",");
                     break;
                 case TOK_SEMICOLON:
-                    pmi.send_symbol(";");
+                    pmi.sendSymbol(";");
                     break;
                 case TOK_COLON:
-                    pmi.send_symbol(":");
+                    pmi.sendSymbol(":");
                     break;
                 case TOK_DOUBLE_COLON:
-                    pmi.send_symbol("::");
+                    pmi.sendSymbol("::");
                     break;
                 case TOK_STAR:
-                    pmi.send_symbol("*");
+                    pmi.sendSymbol("*");
                     break;
                 case TOK_AMP:
-                    pmi.send_symbol("&");
+                    pmi.sendSymbol("&");
                     break;
                 case TOK_PIPE:
-                    pmi.send_symbol("|");
+                    pmi.sendSymbol("|");
                     break;
 
                 case TOK_FATARROW:
-                    pmi.send_symbol("=>");
+                    pmi.sendSymbol("=>");
                     break;
                 case TOK_THINARROW:
-                    pmi.send_symbol("->");
+                    pmi.sendSymbol("->");
                     break;
                 case TOK_THINARROW_LEFT:
-                    pmi.send_symbol("<-");
+                    pmi.sendSymbol("<-");
                     break;
 
                 case TOK_PLUS:
-                    pmi.send_symbol("+");
+                    pmi.sendSymbol("+");
                     break;
                 case TOK_DASH:
-                    pmi.send_symbol("-");
+                    pmi.sendSymbol("-");
                     break;
                 case TOK_EXCLAM:
-                    pmi.send_symbol("!");
+                    pmi.sendSymbol("!");
                     break;
                 case TOK_PERCENT:
-                    pmi.send_symbol("%");
+                    pmi.sendSymbol("%");
                     break;
                 case TOK_SLASH:
-                    pmi.send_symbol("/");
+                    pmi.sendSymbol("/");
                     break;
 
                 case TOK_DOT:
-                    pmi.send_symbol(".");
+                    pmi.sendSymbol(".");
                     break;
                 case TOK_DOUBLE_DOT:
-                    pmi.send_symbol("..");
+                    pmi.sendSymbol("..");
                     break;
                 case TOK_DOUBLE_DOT_EQUAL:
-                    pmi.send_symbol("..=");
+                    pmi.sendSymbol("..=");
                     break;
                 case TOK_TRIPLE_DOT:
-                    pmi.send_symbol("...");
+                    pmi.sendSymbol("...");
                     break;
 
                 case TOK_EQUAL:
-                    pmi.send_symbol("=");
+                    pmi.sendSymbol("=");
                     break;
                 case TOK_PLUS_EQUAL:
-                    pmi.send_symbol("+=");
+                    pmi.sendSymbol("+=");
                     break;
                 case TOK_DASH_EQUAL:
-                    pmi.send_symbol("-");
+                    pmi.sendSymbol("-");
                     break;
                 case TOK_PERCENT_EQUAL:
-                    pmi.send_symbol("%=");
+                    pmi.sendSymbol("%=");
                     break;
                 case TOK_SLASH_EQUAL:
-                    pmi.send_symbol("/=");
+                    pmi.sendSymbol("/=");
                     break;
                 case TOK_STAR_EQUAL:
-                    pmi.send_symbol("*=");
+                    pmi.sendSymbol("*=");
                     break;
                 case TOK_AMP_EQUAL:
-                    pmi.send_symbol("&=");
+                    pmi.sendSymbol("&=");
                     break;
                 case TOK_PIPE_EQUAL:
-                    pmi.send_symbol("|=");
+                    pmi.sendSymbol("|=");
                     break;
 
                 case TOK_DOUBLE_EQUAL:
-                    pmi.send_symbol("==");
+                    pmi.sendSymbol("==");
                     break;
                 case TOK_EXCLAM_EQUAL:
-                    pmi.send_symbol("!=");
+                    pmi.sendSymbol("!=");
                     break;
                 case TOK_GTE:
-                    pmi.send_symbol(">=");
+                    pmi.sendSymbol(">=");
                     break;
                 case TOK_LTE:
-                    pmi.send_symbol("<=");
+                    pmi.sendSymbol("<=");
                     break;
 
                 case TOK_DOUBLE_AMP:
-                    pmi.send_symbol("&&");
+                    pmi.sendSymbol("&&");
                     break;
                 case TOK_DOUBLE_PIPE:
-                    pmi.send_symbol("||");
+                    pmi.sendSymbol("||");
                     break;
                 case TOK_DOUBLE_LT:
-                    pmi.send_symbol("<<");
+                    pmi.sendSymbol("<<");
                     break;
                 case TOK_DOUBLE_GT:
-                    pmi.send_symbol(">>");
+                    pmi.sendSymbol(">>");
                     break;
                 case TOK_DOUBLE_LT_EQUAL:
-                    pmi.send_symbol("<=");
+                    pmi.sendSymbol("<=");
                     break;
                 case TOK_DOUBLE_GT_EQUAL:
-                    pmi.send_symbol(">=");
+                    pmi.sendSymbol(">=");
                     break;
 
                 case TOK_DOLLAR:
-                    pmi.send_symbol("$");
+                    pmi.sendSymbol("$");
                     break;
 
                 case TOK_QMARK:
-                    pmi.send_symbol("?");
+                    pmi.sendSymbol("?");
                     break;
                 case TOK_AT:
-                    pmi.send_symbol("@");
+                    pmi.sendSymbol("@");
                     break;
                 case TOK_TILDE:
-                    pmi.send_symbol("~");
+                    pmi.sendSymbol("~");
                     break;
                 case TOK_BACKSLASH:
-                    pmi.send_symbol("\\");
+                    pmi.sendSymbol("\\");
                     break;
                 case TOK_CARET:
-                    pmi.send_symbol("^");
+                    pmi.sendSymbol("^");
                     break;
                 case TOK_CARET_EQUAL:
-                    pmi.send_symbol("^=");
+                    pmi.sendSymbol("^=");
                     break;
                 case TOK_BACKTICK:
-                    pmi.send_symbol("`");
+                    pmi.sendSymbol("`");
                     break;
 
                 // Reserved Words
                 case TOK_RWORD_PUB:
-                    pmi.send_rword("pub");
+                    pmi.sendRword("pub");
                     break;
                 case TOK_RWORD_PRIV:
-                    pmi.send_rword("priv");
+                    pmi.sendRword("priv");
                     break;
                 case TOK_RWORD_MUT:
-                    pmi.send_rword("mut");
+                    pmi.sendRword("mut");
                     break;
                 case TOK_RWORD_CONST:
-                    pmi.send_rword("const");
+                    pmi.sendRword("const");
                     break;
                 case TOK_RWORD_STATIC:
-                    pmi.send_rword("static");
+                    pmi.sendRword("static");
                     break;
                 case TOK_RWORD_UNSAFE:
-                    pmi.send_rword("unsafe");
+                    pmi.sendRword("unsafe");
                     break;
                 case TOK_RWORD_EXTERN:
-                    pmi.send_rword("extern");
+                    pmi.sendRword("extern");
                     break;
                 case TOK_RWORD_CRATE:
-                    pmi.send_rword("crate");
+                    pmi.sendRword("crate");
                     break;
                 case TOK_RWORD_MOD:
-                    pmi.send_rword("mod");
+                    pmi.sendRword("mod");
                     break;
                 case TOK_RWORD_STRUCT:
-                    pmi.send_rword("struct");
+                    pmi.sendRword("struct");
                     break;
                 case TOK_RWORD_ENUM:
-                    pmi.send_rword("enum");
+                    pmi.sendRword("enum");
                     break;
                 case TOK_RWORD_TRAIT:
-                    pmi.send_rword("trait");
+                    pmi.sendRword("trait");
                     break;
                 case TOK_RWORD_FN:
-                    pmi.send_rword("fn");
+                    pmi.sendRword("fn");
                     break;
                 case TOK_RWORD_USE:
-                    pmi.send_rword("use");
+                    pmi.sendRword("use");
                     break;
                 case TOK_RWORD_IMPL:
-                    pmi.send_rword("impl");
+                    pmi.sendRword("impl");
                     break;
                 case TOK_RWORD_TYPE:
-                    pmi.send_rword("type");
+                    pmi.sendRword("type");
                     break;
                 case TOK_RWORD_WHERE:
-                    pmi.send_rword("where");
+                    pmi.sendRword("where");
                     break;
                 case TOK_RWORD_AS:
-                    pmi.send_rword("as");
+                    pmi.sendRword("as");
                     break;
                 case TOK_RWORD_LET:
-                    pmi.send_rword("let");
+                    pmi.sendRword("let");
                     break;
                 case TOK_RWORD_MATCH:
-                    pmi.send_rword("match");
+                    pmi.sendRword("match");
                     break;
                 case TOK_RWORD_IF:
-                    pmi.send_rword("if");
+                    pmi.sendRword("if");
                     break;
                 case TOK_RWORD_ELSE:
-                    pmi.send_rword("else");
+                    pmi.sendRword("else");
                     break;
                 case TOK_RWORD_LOOP:
-                    pmi.send_rword("loop");
+                    pmi.sendRword("loop");
                     break;
                 case TOK_RWORD_WHILE:
-                    pmi.send_rword("while");
+                    pmi.sendRword("while");
                     break;
                 case TOK_RWORD_FOR:
-                    pmi.send_rword("for");
+                    pmi.sendRword("for");
                     break;
                 case TOK_RWORD_IN:
-                    pmi.send_rword("in");
+                    pmi.sendRword("in");
                     break;
                 case TOK_RWORD_DO:
-                    pmi.send_rword("do");
+                    pmi.sendRword("do");
                     break;
                 case TOK_RWORD_CONTINUE:
-                    pmi.send_rword("continue");
+                    pmi.sendRword("continue");
                     break;
                 case TOK_RWORD_BREAK:
-                    pmi.send_rword("break");
+                    pmi.sendRword("break");
                     break;
                 case TOK_RWORD_RETURN:
-                    pmi.send_rword("return");
+                    pmi.sendRword("return");
                     break;
                 case TOK_RWORD_YIELD:
-                    pmi.send_rword("yeild");
+                    pmi.sendRword("yeild");
                     break;
                 case TOK_RWORD_BOX:
-                    pmi.send_rword("box");
+                    pmi.sendRword("box");
                     break;
                 case TOK_RWORD_REF:
-                    pmi.send_rword("ref");
+                    pmi.sendRword("ref");
                     break;
                 case TOK_RWORD_FALSE:
-                    pmi.send_rword("false");
+                    pmi.sendRword("false");
                     break;
                 case TOK_RWORD_TRUE:
-                    pmi.send_rword("true");
+                    pmi.sendRword("true");
                     break;
                 case TOK_RWORD_SELF:
-                    pmi.send_rword("self");
+                    pmi.sendRword("self");
                     break;
                 case TOK_RWORD_SUPER:
-                    pmi.send_rword("super");
+                    pmi.sendRword("super");
                     break;
                 case TOK_RWORD_MOVE:
-                    pmi.send_rword("move");
+                    pmi.sendRword("move");
                     break;
                 case TOK_RWORD_ABSTRACT:
-                    pmi.send_rword("abstract");
+                    pmi.sendRword("abstract");
                     break;
                 case TOK_RWORD_FINAL:
-                    pmi.send_rword("final");
+                    pmi.sendRword("final");
                     break;
                 case TOK_RWORD_OVERRIDE:
-                    pmi.send_rword("override");
+                    pmi.sendRword("override");
                     break;
                 case TOK_RWORD_VIRTUAL:
-                    pmi.send_rword("virtual");
+                    pmi.sendRword("virtual");
                     break;
                 case TOK_RWORD_TYPEOF:
-                    pmi.send_rword("typeof");
+                    pmi.sendRword("typeof");
                     break;
                 case TOK_RWORD_BECOME:
-                    pmi.send_rword("become");
+                    pmi.sendRword("become");
                     break;
                 case TOK_RWORD_UNSIZED:
-                    pmi.send_rword("unsized");
+                    pmi.sendRword("unsized");
                     break;
                 case TOK_RWORD_MACRO:
-                    pmi.send_rword("macro");
+                    pmi.sendRword("macro");
                     break;
 
                 // 2018
                 case TOK_RWORD_ASYNC:
-                    pmi.send_rword("async");
+                    pmi.sendRword("async");
                     break;
                 case TOK_RWORD_AWAIT:
-                    pmi.send_rword("await");
+                    pmi.sendRword("await");
                     break;
                 case TOK_RWORD_DYN:
-                    pmi.send_rword("dyn");
+                    pmi.sendRword("dyn");
                     break;
                 case TOK_RWORD_TRY:
-                    pmi.send_rword("try");
+                    pmi.sendRword("try");
                     break;
             }
         }
@@ -901,59 +901,59 @@ namespace {
         void visit_pattern(const ::AST::Pattern& pat) {
             for (const auto& b : pat.bindings()) {
                 if (b.isMutable) {
-                    pmi.send_rword("mut");
+                    pmi.sendRword("mut");
                 }
                 switch (b.mType) {
                     case ::AST::PatternBinding::Type::MOVE:
                         break;
                     case ::AST::PatternBinding::Type::REF:
-                        pmi.send_rword("ref");
+                        pmi.sendRword("ref");
                         break;
                     case ::AST::PatternBinding::Type::MUTREF:
-                        pmi.send_rword("ref");
-                        pmi.send_rword("mut");
+                        pmi.sendRword("ref");
+                        pmi.sendRword("mut");
                         break;
                 }
                 if (b.mName == "self") {
-                    pmi.send_rword("self");
+                    pmi.sendRword("self");
                     return;
                 } else {
-                    pmi.send_ident(b.mName);
+                    pmi.sendIdent(b.mName);
                 }
-                pmi.send_symbol("@");
+                pmi.sendSymbol("@");
             }
             TU_MATCH_HDRA( (pat.data()), { )
             default:
-                TODO(sp, "visit_pattern " << pat.data().tag_str() << " - " << pat);
+                TODO(sp, "visit_pattern " << pat.data().tagStr() << " - " << pat);
                 TU_ARMA(Any, e) {
-                    pmi.send_rword("_");
+                    pmi.sendRword("_");
                 }
                 TU_ARMA(MaybeBind, e) {
                     if (e.name == "self") {
-                        pmi.send_rword("self");
+                        pmi.sendRword("self");
                     } else {
-                        pmi.send_ident(e.name);
+                        pmi.sendIdent(e.name);
                     }
                 }
                 TU_ARMA(Tuple, e) {
-                    pmi.send_symbol("(");
+                    pmi.sendSymbol("(");
                     visit_tuple_pattern(e);
-                    pmi.send_symbol(")");
+                    pmi.sendSymbol(")");
                 }
                 TU_ARMA(Struct, e) {
                     this->visit_path(e.path);
-                    pmi.send_symbol("{");
-                    for (const auto& spe : e.sub_patterns) {
+                    pmi.sendSymbol("{");
+                    for (const auto& spe : e.subPatterns) {
                         this->visit_attrs(spe.attrs);
-                        pmi.send_ident(spe.name);
-                        pmi.send_symbol(":");
+                        pmi.sendIdent(spe.name);
+                        pmi.sendSymbol(":");
                         this->visit_pattern(spe.pat);
-                        pmi.send_symbol(",");
+                        pmi.sendSymbol(",");
                     }
                     if (!e.isExhaustive) {
-                        pmi.send_symbol("...");
+                        pmi.sendSymbol("...");
                     }
-                    pmi.send_symbol("}");
+                    pmi.sendSymbol("}");
                 }
             }
         }
@@ -961,27 +961,27 @@ namespace {
         void visit_tuple_pattern(const AST::Pattern::TuplePat& v) {
             for (const auto& p : v.start) {
                 visit_pattern(p);
-                pmi.send_symbol(",");
+                pmi.sendSymbol(",");
             }
             if (v.hasWildcard) {
-                pmi.send_symbol("..");
-                pmi.send_symbol(",");
+                pmi.sendSymbol("..");
+                pmi.sendSymbol(",");
                 for (const auto& p : v.end) {
                     visit_pattern(p);
-                    pmi.send_symbol(",");
+                    pmi.sendSymbol(",");
                 }
             }
         }
 
         void visit_lifetime(const AST::LifetimeRef& x) {
             if (x.binding() == AST::LifetimeRef::BINDING_STATIC) {
-                pmi.send_lifetime("static");
+                pmi.sendLifetime("static");
             } else if (x.binding() == AST::LifetimeRef::BINDING_INFER) {
-                pmi.send_lifetime("_");
+                pmi.sendLifetime("_");
             } else if (x.binding() == AST::LifetimeRef::BINDING_UNSPECIFIED) {
                 // Nothing
             } else {
-                pmi.send_lifetime(x.name().name.c_str());
+                pmi.sendLifetime(x.name().name.c_str());
             }
         }
 
@@ -991,32 +991,32 @@ namespace {
                 (ty.mData),
                 (te),
                 (None, BUG(sp, ty);),
-                (Any, pmi.send_rword("_");),
-                (Bang, pmi.send_symbol("!");),
-                (Unit, pmi.send_symbol("("); pmi.send_symbol(")");),
-                (Macro, visit_path(te.inv->path()); pmi.send_symbol("!"); pmi.send_symbol("("); visit_tokentree(te.inv->input_tt()); pmi.send_symbol(")");),
+                (Any, pmi.sendRword("_");),
+                (Bang, pmi.sendSymbol("!");),
+                (Unit, pmi.sendSymbol("("); pmi.sendSymbol(")");),
+                (Macro, visit_path(te.inv->path()); pmi.sendSymbol("!"); pmi.sendSymbol("("); visit_tokentree(te.inv->input_tt()); pmi.sendSymbol(")");),
                 (Primitive, TODO(sp, "proc_macro send primitive - " << ty);),
                 (Function, ::std::stringstream ss; ss << ty << " "; DEBUG("STRING: " << ss.str());
 
                  parseString(ss.str());),
                 (
-                    Tuple, pmi.send_symbol("("); for (const auto& st : te.innerTypes) {
+                    Tuple, pmi.sendSymbol("("); for (const auto& st : te.innerTypes) {
                         this->visit_type(st);
-                        pmi.send_symbol(",");
-                    } pmi.send_symbol(")");
+                        pmi.sendSymbol(",");
+                    } pmi.sendSymbol(")");
                 ),
-                (Borrow, pmi.send_symbol("&"); this->visit_lifetime(te.lifetime); if (te.is_mut) pmi.send_rword("mut"); pmi.send_symbol("("); this->visit_type(*te.inner); pmi.send_symbol(")");),
-                (Pointer, pmi.send_symbol("*"); if (te.is_mut) pmi.send_rword("mut"); else pmi.send_rword("const"); pmi.send_symbol("("); this->visit_type(*te.inner); pmi.send_symbol(")");),
-                (Array, pmi.send_symbol("["); this->visit_type(*te.inner); pmi.send_symbol(";"); if (te.size) { this->visit_node(*te.size); } else { pmi.send_rword("_"); } pmi.send_symbol("]");),
-                (Slice, pmi.send_symbol("["); this->visit_type(*te.inner); pmi.send_symbol("]");),
+                (Borrow, pmi.sendSymbol("&"); this->visit_lifetime(te.lifetime); if (te.is_mut) pmi.sendRword("mut"); pmi.sendSymbol("("); this->visit_type(*te.inner); pmi.sendSymbol(")");),
+                (Pointer, pmi.sendSymbol("*"); if (te.is_mut) pmi.sendRword("mut"); else pmi.sendRword("const"); pmi.sendSymbol("("); this->visit_type(*te.inner); pmi.sendSymbol(")");),
+                (Array, pmi.sendSymbol("["); this->visit_type(*te.inner); pmi.sendSymbol(";"); if (te.size) { this->visit_node(*te.size); } else { pmi.sendRword("_"); } pmi.sendSymbol("]");),
+                (Slice, pmi.sendSymbol("["); this->visit_type(*te.inner); pmi.sendSymbol("]");),
                 (Generic,
                  // TODO: This may already be resolved?... Wait, how?
-                 pmi.send_ident(te.name.c_str());),
+                 pmi.sendIdent(te.name.c_str());),
                 (Path, this->visit_path(*te);),
                 (
-                    TraitObject, pmi.send_symbol("("); pmi.send_rword("dyn"); bool needsPlus = false; for (const auto& t : te.traits) {
+                    TraitObject, pmi.sendSymbol("("); pmi.sendRword("dyn"); bool needsPlus = false; for (const auto& t : te.traits) {
                         if (needsPlus) {
-                            pmi.send_symbol("+");
+                            pmi.sendSymbol("+");
                         }
                         needsPlus = true;
                         this->visit_hrbs(t.hrbs);
@@ -1025,16 +1025,16 @@ namespace {
                     } for (const auto& lft : te.lifetimes) {
                         if (lft != AST::LifetimeRef()) {
                             if (needsPlus) {
-                                pmi.send_symbol("+");
+                                pmi.sendSymbol("+");
                             }
                             needsPlus = true;
                             this->visit_lifetime(lft);
                         }
-                    } pmi.send_symbol(")");
+                    } pmi.sendSymbol(")");
                 ),
-                (ErasedType, pmi.send_rword("impl"); bool needsPlus = false; for (const auto& t : te->traits) {
+                (ErasedType, pmi.sendRword("impl"); bool needsPlus = false; for (const auto& t : te->traits) {
                     if (needsPlus) {
-                        pmi.send_symbol("+");
+                        pmi.sendSymbol("+");
                     }
                     needsPlus = true;
                     this->visit_hrbs(t.hrbs);
@@ -1042,18 +1042,18 @@ namespace {
                     this->visit_path(*t.path);
                 } for (const auto& t : te->maybeTraits) {
                     if (needsPlus) {
-                        pmi.send_symbol("+");
+                        pmi.sendSymbol("+");
                     }
                     needsPlus = true;
-                    pmi.send_symbol("?");
+                    pmi.sendSymbol("?");
                     this->visit_hrbs(t.hrbs);
                     this->visit_path(*t.path);
                 } for (const auto& lft : te->lifetimes) {
                     if (needsPlus) {
-                        pmi.send_symbol("+");
+                        pmi.sendSymbol("+");
                     }
                     needsPlus = true;
-                    pmi.send_symbol("+");
+                    pmi.sendSymbol("+");
                     this->visit_lifetime(lft);
                 } if (te->use) { TODO(Span(), "`use`"); })
             )
@@ -1061,70 +1061,70 @@ namespace {
 
         void visit_hrbs(const AST::HigherRankedBounds& hrbs) {
             if (!hrbs.empty()) {
-                pmi.send_rword("for");
-                pmi.send_symbol("<");
+                pmi.sendRword("for");
+                pmi.sendSymbol("<");
                 for (const auto& v : hrbs.mLifetimes) {
-                    pmi.send_lifetime(v.name().name.c_str());
-                    pmi.send_symbol(",");
+                    pmi.sendLifetime(v.name().name.c_str());
+                    pmi.sendSymbol(",");
                 }
-                pmi.send_symbol(">");
+                pmi.sendSymbol(">");
             }
         }
 
         void visit_path_node(const AST::PathNode& e, bool isExpr) {
-            pmi.send_ident(e.name().c_str());
+            pmi.sendIdent(e.name().c_str());
             if (!e.args().is_empty()) {
                 if (e.args().isParen) {
                     auto& t = e.args().entries.at(0).as_Type();
                     this->visit_type(t); // Should be a tuple
                     auto& rv = e.args().entries.at(1).as_AssociatedTyEqual();
-                    pmi.send_symbol("->");
+                    pmi.sendSymbol("->");
                     this->visit_type(rv.second);
                     return;
                 }
 
                 if (isExpr) {
-                    pmi.send_symbol("::");
+                    pmi.sendSymbol("::");
                 }
-                pmi.send_symbol("<");
+                pmi.sendSymbol("<");
                 for (const auto& ent : e.args().entries) {
                     TU_MATCH_HDRA( (ent), {)
                     TU_ARMA(Null, _) {
                         }
                         TU_ARMA(Lifetime, l) {
-                            pmi.send_lifetime(l.name().name.c_str());
-                            pmi.send_symbol(",");
+                            pmi.sendLifetime(l.name().name.c_str());
+                            pmi.sendSymbol(",");
                         }
                         TU_ARMA(Type, t) {
                             this->visit_type(t);
-                            pmi.send_symbol(",");
+                            pmi.sendSymbol(",");
                         }
                         TU_ARMA(Value, n) {
-                            pmi.send_symbol("{");
+                            pmi.sendSymbol("{");
                             this->visit_node(*n);
-                            pmi.send_symbol("}");
-                            pmi.send_symbol(",");
+                            pmi.sendSymbol("}");
+                            pmi.sendSymbol(",");
                         }
                         TU_ARMA(AssociatedTyEqual, a) {
                             visit_path_node(a.first, false);
-                            pmi.send_symbol("=");
+                            pmi.sendSymbol("=");
                             this->visit_type(a.second);
-                            pmi.send_symbol(",");
+                            pmi.sendSymbol(",");
                         }
                         TU_ARMA(AssociatedTyBound, a) {
                             visit_path_node(a.first, false);
-                            pmi.send_symbol(":");
+                            pmi.sendSymbol(":");
                             for (const auto& p : a.second) {
                                 if (&p != a.second.data()) {
-                                    pmi.send_symbol("+");
+                                    pmi.sendSymbol("+");
                                 }
                                 this->visit_path(p);
                             }
-                            pmi.send_symbol(",");
+                            pmi.sendSymbol(",");
                         }
                     }
                 }
-                pmi.send_symbol(">");
+                pmi.sendSymbol(">");
             }
         }
 
@@ -1135,16 +1135,16 @@ namespace {
                     BUG(sp, "Invalid path");
                 }
                 TU_ARMA(Local, pe) {
-                    pmi.send_ident(pe.name.c_str());
+                    pmi.sendIdent(pe.name.c_str());
                 }
                 TU_ARMA(Relative, pe) {
                     // TODO: Send hygiene information
                     nodes = &pe.nodes;
                 }
                 TU_ARMA(Self, pe) {
-                    pmi.send_rword("self");
+                    pmi.sendRword("self");
                     if (!pe.nodes.empty()) {
-                        pmi.send_symbol("::");
+                        pmi.sendSymbol("::");
                     }
                     nodes = &pe.nodes;
                 }
@@ -1152,36 +1152,36 @@ namespace {
                     assert(pe.count > 0);
                     for (unsigned i = 0; i < pe.count; i++) {
                         if (i > 0) {
-                            pmi.send_symbol("::");
+                            pmi.sendSymbol("::");
                         }
-                        pmi.send_rword("super");
+                        pmi.sendRword("super");
                     }
                     if (!pe.nodes.empty()) {
-                        pmi.send_symbol("::");
+                        pmi.sendSymbol("::");
                     }
                     nodes = &pe.nodes;
                 }
                 TU_ARMA(Absolute, pe) {
                     if (pe.crate == "") {
-                        pmi.send_rword("crate");
+                        pmi.sendRword("crate");
                     } else {
-                        pmi.send_symbol("::");
+                        pmi.sendSymbol("::");
                         //m_pmi.send_string(pe.crate.c_str());
                         assert(pe.crate.c_str()[0] == '=');
-                        pmi.send_ident(pe.crate.c_str() + 1);
+                        pmi.sendIdent(pe.crate.c_str() + 1);
                     }
-                    pmi.send_symbol("::");
+                    pmi.sendSymbol("::");
                     nodes = &pe.nodes;
                 }
                 TU_ARMA(UFCS, pe) {
-                    pmi.send_symbol("<");
+                    pmi.sendSymbol("<");
                     this->visit_type(*pe.type);
                     if (pe.trait) {
-                        pmi.send_rword("as");
+                        pmi.sendRword("as");
                         this->visit_path(*pe.trait);
                     }
-                    pmi.send_symbol(">");
-                    pmi.send_symbol("::");
+                    pmi.sendSymbol(">");
+                    pmi.sendSymbol("::");
                     nodes = &pe.nodes;
                 }
             }
@@ -1189,7 +1189,7 @@ namespace {
             for(const auto& e : *nodes)
             {
                 if (!first) {
-                    pmi.send_symbol("::");
+                    pmi.sendSymbol("::");
                 }
                 first = false;
                 visit_path_node(e, isExpr);
@@ -1199,10 +1199,10 @@ namespace {
         void visit_params(const AST::GenericParams& params) {
             if (!params.mParams.empty()) {
                 bool isFirst = true;
-                pmi.send_symbol("<");
+                pmi.sendSymbol("<");
                 for (const auto& param : params.mParams) {
                     if (!isFirst) {
-                        pmi.send_symbol(",");
+                        pmi.sendSymbol(",");
                     }
                     TU_MATCH_HDRA( (param), {)
                     TU_ARMA(None, p) {
@@ -1210,15 +1210,15 @@ namespace {
                             BUG(sp, "Enountered GenericParam::None");
                         }
                         TU_ARMA(Lifetime, p) {
-                            pmi.send_lifetime(p.name().name.c_str());
+                            pmi.sendLifetime(p.name().name.c_str());
                             bool first = true;
                             for (size_t i = param.boundsStart; i < param.boundsEnd; i++) {
                                 if (!params.bounds[i].is_None()) {
                                     if (first) {
-                                        pmi.send_symbol(":");
+                                        pmi.sendSymbol(":");
                                         first = false;
                                     } else {
-                                        pmi.send_symbol("+");
+                                        pmi.sendSymbol("+");
                                     }
                                 }
                             TU_MATCH_HDRA((params.bounds[i]), {)
@@ -1227,22 +1227,22 @@ namespace {
                                     TU_ARMA(None, be) {
                                     }
                                     TU_ARMA(Lifetime, be) {
-                                        pmi.send_lifetime(be.test.name().name.c_str());
+                                        pmi.sendLifetime(be.test.name().name.c_str());
                                     }
                             }
                             }
                         }
                         TU_ARMA(Type, p) {
                             this->visit_attrs(p.attrs());
-                            pmi.send_ident(p.name().c_str());
+                            pmi.sendIdent(p.name().c_str());
                             bool first = true;
                             for (size_t i = param.boundsStart; i < param.boundsEnd; i++) {
                                 if (!params.bounds[i].is_None()) {
                                     if (first) {
-                                        pmi.send_symbol(":");
+                                        pmi.sendSymbol(":");
                                         first = false;
                                     } else {
-                                        pmi.send_symbol("+");
+                                        pmi.sendSymbol("+");
                                     }
                                 }
                             TU_MATCH_HDRA((params.bounds[i]), {)
@@ -1251,7 +1251,7 @@ namespace {
                                     TU_ARMA(None, be) {
                                     }
                                     TU_ARMA(TypeLifetime, be) {
-                                        pmi.send_lifetime(be.bound.name().name.c_str());
+                                        pmi.sendLifetime(be.bound.name().name.c_str());
                                     }
                                     TU_ARMA(IsTrait, be) {
                                         assert(be.outerHrbs.empty()); // Shouldn't be possible in this position
@@ -1262,40 +1262,40 @@ namespace {
                                         visit_path(be.trait);
                                     }
                                     TU_ARMA(MaybeTrait, be) {
-                                        pmi.send_symbol("?");
+                                        pmi.sendSymbol("?");
                                         visit_path(be.trait);
                                     }
                             }
                             }
                             if (!p.getDefault().isWildcard()) {
-                                pmi.send_symbol("=");
+                                pmi.sendSymbol("=");
                                 this->visit_type(p.getDefault());
                             }
                         }
                         TU_ARMA(Value, p) {
                             this->visit_attrs(p.attrs());
-                            pmi.send_rword("const");
-                            pmi.send_ident(p.name().name.c_str());
-                            pmi.send_symbol(":");
+                            pmi.sendRword("const");
+                            pmi.sendIdent(p.name().name.c_str());
+                            pmi.sendSymbol(":");
                             visit_type(p.type());
                             assert(param.boundsStart == param.boundsEnd);
                         }
                     }
                     isFirst = false;
                 }
-                pmi.send_symbol(">");
+                pmi.sendSymbol(">");
             }
         }
 
         void visit_hrb(const AST::HigherRankedBounds& hrb) {
             if (!hrb.empty()) {
-                pmi.send_rword("for");
-                pmi.send_symbol("<");
+                pmi.sendRword("for");
+                pmi.sendSymbol("<");
                 for (const auto& lft : hrb.mLifetimes) {
-                    pmi.send_lifetime(lft.name().name.c_str());
-                    pmi.send_symbol(",");
+                    pmi.sendLifetime(lft.name().name.c_str());
+                    pmi.sendSymbol(",");
                 }
-                pmi.send_symbol(">");
+                pmi.sendSymbol(">");
             }
         }
 
@@ -1319,48 +1319,48 @@ namespace {
                     }
 
                     if (!where_sent) {
-                        pmi.send_rword("where");
+                        pmi.sendRword("where");
                         where_sent = true;
                     }
                     TU_MATCH_HDRA((e), {)
                     TU_ARMA(None, be)   continue;
                         TU_ARMA(Lifetime, be) {
-                            pmi.send_lifetime(be.bound.name().name.c_str());
-                            pmi.send_symbol(":");
-                            pmi.send_lifetime(be.test.name().name.c_str());
+                            pmi.sendLifetime(be.bound.name().name.c_str());
+                            pmi.sendSymbol(":");
+                            pmi.sendLifetime(be.test.name().name.c_str());
                         }
                         TU_ARMA(TypeLifetime, be) {
                             visit_type(be.type);
-                            pmi.send_symbol(":");
-                            pmi.send_lifetime(be.bound.name().name.c_str());
+                            pmi.sendSymbol(":");
+                            pmi.sendLifetime(be.bound.name().name.c_str());
                         }
                         TU_ARMA(IsTrait, be) {
                             visit_hrbs(be.outerHrbs);
                             visit_type(be.type);
-                            pmi.send_symbol(":");
+                            pmi.sendSymbol(":");
                             visit_hrbs(be.innerHrbs);
                             visit_bound_constness(be.constness);
                             visit_path(be.trait);
                         }
                         TU_ARMA(MaybeTrait, be) {
                             visit_type(be.type);
-                            pmi.send_symbol(":");
-                            pmi.send_symbol("?");
+                            pmi.sendSymbol(":");
+                            pmi.sendSymbol("?");
                             visit_path(be.trait);
                         }
                         TU_ARMA(NotTrait, be) {
                             visit_type(be.type);
-                            pmi.send_symbol(":");
-                            pmi.send_symbol("!");
+                            pmi.sendSymbol(":");
+                            pmi.sendSymbol("!");
                             visit_path(be.trait);
                         }
                         TU_ARMA(Equality, be) {
                             visit_type(be.type);
-                            pmi.send_symbol("=");
+                            pmi.sendSymbol("=");
                             visit_type(be.replacement);
                         }
                     }
-                    pmi.send_symbol(",");
+                    pmi.sendSymbol(",");
                 }
             }
         }
@@ -1414,7 +1414,7 @@ namespace {
                     this->visit_attr(na);
                 }
             }
-            if (this->skip_derive_attrs && a.name().is_trivial() && (a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
+            if (this->skipDeriveAttrs && a.name().is_trivial() && (a.name().asTrivial() == "derive" || a.name().asTrivial() == "derive_const")) {
                 DEBUG("Skip " << a << " (derive input)");
                 return;
             }
@@ -1424,10 +1424,10 @@ namespace {
                     a.markInert();
                 }
                 DEBUG("Send " << a);
-                pmi.send_symbol("#");
-                pmi.send_symbol("[");
+                pmi.sendSymbol("#");
+                pmi.sendSymbol("[");
                 this->visit_meta_item(a);
-                pmi.send_symbol("]");
+                pmi.sendSymbol("]");
             } else {
                 DEBUG("Skip " << a << " (" << pmi.procMacroDesc.attributes << ")");
             }
@@ -1435,13 +1435,13 @@ namespace {
 
         void visit_meta_item(const ::AST::Attribute& i) {
             if (i.name().hasLeading) {
-                pmi.send_symbol("::");
+                pmi.sendSymbol("::");
             }
             for (const auto& e : i.name().elems) {
                 if (&e != &i.name().elems.front()) {
-                    pmi.send_symbol("::");
+                    pmi.sendSymbol("::");
                 }
-                pmi.send_ident(e.c_str());
+                pmi.sendIdent(e.c_str());
             }
 
             visit_tokentree(i.data());
@@ -1452,78 +1452,78 @@ namespace {
                 case ::AST::Visibility::Ty::Private:
                     break;
                 case ::AST::Visibility::Ty::Pub:
-                    pmi.send_rword("pub");
+                    pmi.sendRword("pub");
                     break;
                 case ::AST::Visibility::Ty::Crate:
-                    pmi.send_rword("crate");
+                    pmi.sendRword("crate");
                     break;
                 case ::AST::Visibility::Ty::PubCrate:
-                    pmi.send_rword("pub");
-                    pmi.send_symbol("(");
-                    pmi.send_rword("crate");
-                    pmi.send_symbol(")");
+                    pmi.sendRword("pub");
+                    pmi.sendSymbol("(");
+                    pmi.sendRword("crate");
+                    pmi.sendSymbol(")");
                     break;
                 case ::AST::Visibility::Ty::PubSuper:
-                    pmi.send_rword("pub");
-                    pmi.send_symbol("(");
-                    pmi.send_rword("super");
-                    pmi.send_symbol(")");
+                    pmi.sendRword("pub");
+                    pmi.sendSymbol("(");
+                    pmi.sendRword("super");
+                    pmi.sendSymbol(")");
                     break;
                 case ::AST::Visibility::Ty::PubSelf:
-                    pmi.send_rword("pub");
-                    pmi.send_symbol("(");
-                    pmi.send_rword("self");
-                    pmi.send_symbol(")");
+                    pmi.sendRword("pub");
+                    pmi.sendSymbol("(");
+                    pmi.sendRword("self");
+                    pmi.sendSymbol(")");
                     break;
                 case ::AST::Visibility::Ty::PubIn:
-                    pmi.send_rword("pub");
-                    pmi.send_symbol("(");
-                    pmi.send_rword("in");
+                    pmi.sendRword("pub");
+                    pmi.sendSymbol("(");
+                    pmi.sendRword("in");
                     visit_path(vis.in_path());
-                    pmi.send_symbol(")");
+                    pmi.sendSymbol(")");
                     break;
             }
         }
 
         void visit_struct(const RcString& name, const AST::Visibility& vis, const ::AST::Struct& str) {
             this->visit_vis(vis);
-            pmi.send_rword("struct");
-            pmi.send_ident(name.c_str());
+            pmi.sendRword("struct");
+            pmi.sendIdent(name.c_str());
             this->visit_params(str.params());
             TU_MATCH_HDRA((str.mData), {)
             TU_ARMA(Unit, se) {
                     this->visit_bounds(str.params());
-                    pmi.send_symbol(";");
+                    pmi.sendSymbol(";");
                 }
                 TU_ARMA(Tuple, se) {
-                    pmi.send_symbol("(");
+                    pmi.sendSymbol("(");
                     for (const auto& si : se.ents) {
                         this->visit_attrs(si.mAttrs);
                         this->visit_vis(si.vis);
                         this->visit_type(si.mType);
-                        pmi.send_symbol(",");
+                        pmi.sendSymbol(",");
                     }
-                    pmi.send_symbol(")");
+                    pmi.sendSymbol(")");
                     this->visit_bounds(str.params());
-                    pmi.send_symbol(";");
+                    pmi.sendSymbol(";");
                 }
                 TU_ARMA(Struct, se) {
                     this->visit_bounds(str.params());
-                    pmi.send_symbol("{");
+                    pmi.sendSymbol("{");
 
                     for (const auto& si : se.ents) {
                         this->visit_attrs(si.mAttrs);
                         this->visit_vis(si.vis);
-                        pmi.send_ident(si.mName.c_str());
-                        pmi.send_symbol(":");
+                        pmi.sendIdent(si.mName.c_str());
+                        pmi.sendSymbol(":");
                         this->visit_type(si.mType);
                         if (si.defaultValue) {
-                            pmi.send_symbol("=");
+                            pmi.sendSymbol("=");
                             this->visit_nodes(si.defaultValue);
                         }
-                        pmi.send_symbol(",");
+                        pmi.sendSymbol(",");
                     }
-                    pmi.send_symbol("}");
+                    pmi.sendSymbol("}");
                 }
             }
         }
@@ -1531,46 +1531,46 @@ namespace {
         void visit_enum(const RcString& name, const AST::Visibility& vis, const ::AST::Enum& enm) {
             this->visit_vis(vis);
 
-            pmi.send_rword("enum");
-            pmi.send_ident(name.c_str());
+            pmi.sendRword("enum");
+            pmi.sendIdent(name.c_str());
             this->visit_params(enm.params());
             this->visit_bounds(enm.params());
-            pmi.send_symbol("{");
+            pmi.sendSymbol("{");
             for (const auto& v : enm.variants()) {
                 this->visit_attrs(v.mAttrs);
-                pmi.send_ident(v.mName.c_str());
+                pmi.sendIdent(v.mName.c_str());
                 TU_MATCH_HDRA( (v.mData), { )
                 TU_ARMA(Unit, e) {
                     }
                     TU_ARMA(Tuple, e) {
-                        pmi.send_symbol("(");
+                        pmi.sendSymbol("(");
                         for (const auto& f : e.mItems) {
                             this->visit_attrs(f.mAttrs);
                             this->visit_type(f.mType);
-                            pmi.send_symbol(",");
+                            pmi.sendSymbol(",");
                         }
-                        pmi.send_symbol(")");
+                        pmi.sendSymbol(")");
                     }
                     TU_ARMA(Struct, e) {
-                        pmi.send_symbol("{");
+                        pmi.sendSymbol("{");
                         for (const auto& f : e.fields) {
                             this->visit_attrs(f.mAttrs);
-                            pmi.send_ident(f.mName.c_str());
-                            pmi.send_symbol(":");
+                            pmi.sendIdent(f.mName.c_str());
+                            pmi.sendSymbol(":");
                             this->visit_type(f.mType);
-                            pmi.send_symbol(",");
+                            pmi.sendSymbol(",");
                         }
-                        pmi.send_symbol("}");
+                        pmi.sendSymbol("}");
                     }
                 }
                 if( v.discriminantValue)
                 {
-                    pmi.send_symbol("=");
+                    pmi.sendSymbol("=");
                     this->visit_nodes(v.discriminantValue);
                 }
-                pmi.send_symbol(",");
+                pmi.sendSymbol(",");
             }
-            pmi.send_symbol("}");
+            pmi.sendSymbol("}");
         }
 
         void visit_union(const RcString& name, const AST::Visibility& vis, const ::AST::Union& unn) {
@@ -1581,35 +1581,35 @@ namespace {
             this->visit_vis(vis);
 
             if (fcn.is_unsafe()) {
-                pmi.send_rword("unsafe");
+                pmi.sendRword("unsafe");
             }
             if (fcn.is_const()) {
-                pmi.send_rword("const");
+                pmi.sendRword("const");
             }
             if (fcn.isAsync()) {
-                pmi.send_rword("async");
+                pmi.sendRword("async");
             }
             if (fcn.abi() != ABI_RUST) {
-                pmi.send_rword("extern");
-                pmi.send_string(fcn.abi());
+                pmi.sendRword("extern");
+                pmi.sendString(fcn.abi());
             }
-            pmi.send_rword("fn");
-            pmi.send_ident(name.c_str());
+            pmi.sendRword("fn");
+            pmi.sendIdent(name.c_str());
             this->visit_params(fcn.params());
-            pmi.send_symbol("(");
+            pmi.sendSymbol("(");
             for (const auto& arg : fcn.args()) {
                 this->visit_attrs(arg.attrs);
                 this->visit_pattern(arg.pat);
-                pmi.send_symbol(":");
+                pmi.sendSymbol(":");
                 this->visit_type(arg.ty);
-                pmi.send_symbol(",");
+                pmi.sendSymbol(",");
             }
             if (fcn.is_variadic()) {
-                pmi.send_symbol("...");
+                pmi.sendSymbol("...");
             }
-            pmi.send_symbol(")");
+            pmi.sendSymbol(")");
             //if( fcn.rettype() != TypeRef() ) {
-            pmi.send_symbol("->");
+            pmi.sendSymbol("->");
             this->visit_type(fcn.rettype());
             //}
             this->visit_bounds(fcn.params());
@@ -1617,7 +1617,7 @@ namespace {
             if (fcn.code().isValid()) {
                 this->visit_nodes(fcn.code());
             } else {
-                pmi.send_symbol(";");
+                pmi.sendSymbol(";");
             }
         }
 
@@ -1625,59 +1625,59 @@ namespace {
             this->visit_vis(vis);
             switch (i.sClass()) {
                 case ::AST::Static::CONST:
-                    pmi.send_rword("const");
+                    pmi.sendRword("const");
                     break;
                 case ::AST::Static::MUT:
-                    pmi.send_rword("static");
-                    pmi.send_rword("mut");
+                    pmi.sendRword("static");
+                    pmi.sendRword("mut");
                     break;
                 case ::AST::Static::STATIC:
-                    pmi.send_rword("static");
+                    pmi.sendRword("static");
                     break;
             }
-            pmi.send_ident(name.c_str());
+            pmi.sendIdent(name.c_str());
             //this->visit_params(i.params());
-            pmi.send_symbol(":");
+            pmi.sendSymbol(":");
             this->visit_type(i.type());
 
             if (i.value()) {
-                pmi.send_symbol("=");
+                pmi.sendSymbol("=");
                 this->visit_node(i.value().node());
             }
             //this->visit_bounds(i.params());
-            pmi.send_symbol(";");
+            pmi.sendSymbol(";");
         }
 
         void visit_use(const RcString& /*name*/, const AST::Visibility& vis, const ::AST::UseItem& item) {
             this->visit_vis(vis);
-            pmi.send_rword("use");
+            pmi.sendRword("use");
 
             if (item.entries.size() == 1) {
                 visit_path(item.entries[0].path);
                 if (item.entries[0].name == "") {
-                    pmi.send_symbol("::");
-                    pmi.send_symbol("*");
+                    pmi.sendSymbol("::");
+                    pmi.sendSymbol("*");
                 } else if (item.entries[0].name != item.entries[0].path.nodes().back().name()) {
-                    pmi.send_rword("as");
-                    pmi.send_ident(item.entries[0].name.c_str());
+                    pmi.sendRword("as");
+                    pmi.sendIdent(item.entries[0].name.c_str());
                 } else {
                 }
             } else {
                 TODO(sp, "Multiple items");
             }
-            pmi.send_symbol(";");
+            pmi.sendSymbol(";");
         }
 
         void visit_impl_hdr(const ::AST::ImplDef& impl) {
-            pmi.send_rword("impl");
+            pmi.sendRword("impl");
             if (impl.is_const()) {
-                pmi.send_rword("const");
+                pmi.sendRword("const");
             }
             visit_params(impl.params());
 
             if (impl.trait().ent.isValid()) {
                 visit_path(impl.trait().ent);
-                pmi.send_rword("for");
+                pmi.sendRword("for");
             }
             visit_type(impl.type());
             visit_bounds(impl.params());
@@ -1687,36 +1687,36 @@ namespace {
         void visit_trait(const RcString& name, const AST::Visibility& vis, const ::AST::Trait& trait) {
             this->visit_vis(vis);
             if (trait.is_unsafe()) {
-                pmi.send_rword("unsafe");
+                pmi.sendRword("unsafe");
             }
-            pmi.send_rword("trait");
-            pmi.send_ident(name.c_str());
+            pmi.sendRword("trait");
+            pmi.sendIdent(name.c_str());
             this->visit_params(trait.params());
 
             // Supertraits and trait-level lifetime bounds: `trait Foo: Bar + 'a`
             bool first = true;
             for (const auto& st : trait.supertraits()) {
-                pmi.send_symbol(first ? ":" : "+");
+                pmi.sendSymbol(first ? ":" : "+");
                 first = false;
                 this->visit_hrbs(st.ent.hrbs);
                 this->visit_bound_constness(st.ent.constness);
                 this->visit_path(*st.ent.path);
             }
             for (const auto& lft : trait.lifetimes()) {
-                pmi.send_symbol(first ? ":" : "+");
+                pmi.sendSymbol(first ? ":" : "+");
                 first = false;
-                pmi.send_lifetime(lft.ent.name().name.c_str());
+                pmi.sendLifetime(lft.ent.name().name.c_str());
             }
             this->visit_bounds(trait.params());
 
-            pmi.send_symbol("{");
+            pmi.sendSymbol("{");
             // Trait items inherit the trait's visibility; mrustc records them as `pub`, which the plugin's parser rejects. Send them unqualified.
             const auto itemVis = ::AST::Visibility::makeBarePrivate();
             for (const auto& i : trait.items()) {
                 this->visit_attrs(i.attrs);
                 TU_MATCH_HDRA((i.data), {)
                 default:
-                    TODO(i.span, "visit_trait item - " << i.data.tag_str());
+                    TODO(i.span, "visit_trait item - " << i.data.tagStr());
                     break;
                     TU_ARMA(Function, e) {
                         this->visit_function(i.name, itemVis, e);
@@ -1730,29 +1730,29 @@ namespace {
                             TODO(i.span, "visit_trait - associated type with bounds - " << i.name);
                         }
                         this->visit_vis(itemVis);
-                        pmi.send_rword("type");
-                        pmi.send_ident(i.name.c_str());
+                        pmi.sendRword("type");
+                        pmi.sendIdent(i.name.c_str());
                         this->visit_params(e.mParams);
                         if (e.mType.isValid()) {
-                            pmi.send_symbol("=");
+                            pmi.sendSymbol("=");
                             this->visit_type(e.mType);
                         }
-                        pmi.send_symbol(";");
+                        pmi.sendSymbol(";");
                     }
                 }
             }
-            pmi.send_symbol("}");
+            pmi.sendSymbol("}");
         }
 
         void visit_impl(const ::AST::Impl& impl) {
             visit_impl_hdr(impl.def());
-            pmi.send_symbol("{");
+            pmi.sendSymbol("{");
             for (const auto& i : impl.items()) {
                 const auto& sp = i.sp;
                 const auto& item = *i.data;
                 TU_MATCH_HDRA((item), {)
                 default:
-                    TODO(sp, "Item " << item.tag_str());
+                    TODO(sp, "Item " << item.tagStr());
                     break;
                     TU_ARMA(Function, e) {
                         visit_function(i.name.c_str(), i.vis, e);
@@ -1762,13 +1762,13 @@ namespace {
                     }
                 }
             }
-            pmi.send_symbol("}");
+            pmi.sendSymbol("}");
         }
 
         void visit_item(const RcString& name, const AST::Visibility& vis, const ::AST::Item& item) {
             TU_MATCH_HDRA((item), {)
             default:
-                TODO(sp, "visit_item - " << item.tag_str());
+                TODO(sp, "visit_item - " << item.tagStr());
                 break;
                 TU_ARMA(Impl, e) {
                     visit_impl(e);
@@ -1817,12 +1817,12 @@ namespace {
                 v.visit_tokentree((*attrInput)[i]);
             }
         }
-        pmi.send_done();
+        pmi.sendDone();
     }
     // 2. Feed item as a token stream.
     Visitor v(sp, pmi);
     cb(v);
-    pmi.send_done();
+    pmi.sendDone();
     // 3. Return boxed invocation instance
     return box$(pmi);
 }
@@ -1831,7 +1831,7 @@ namespace {
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Struct& i) {
     return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         DEBUG("derive on struct");
-        v.skip_derive_attrs = true;
+        v.skipDeriveAttrs = true;
         v.visit_top_attrs(attrs);
         v.visit_struct(itemName, vis, i);
     });
@@ -1840,7 +1840,7 @@ namespace {
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Enum& i) {
     return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         DEBUG("derive on enum");
-        v.skip_derive_attrs = true;
+        v.skipDeriveAttrs = true;
         v.visit_top_attrs(attrs);
         v.visit_enum(itemName, vis, i);
     });
@@ -1849,7 +1849,7 @@ namespace {
 ::std::unique_ptr<TokenStream> ProcMacroInvoke(const Span& sp, const ::AST::Crate& crate, const ::std::vector<RcString>& macPath, slice<const AST::Attribute> attrs, const AST::Visibility& vis, const RcString& itemName, const ::AST::Union& i) {
     return ProcMacroInvoke(sp, crate, macPath, nullptr, [&](Visitor& v) {
         DEBUG("derive on union");
-        v.skip_derive_attrs = true;
+        v.skipDeriveAttrs = true;
         v.visit_top_attrs(attrs);
         v.visit_union(itemName, vis, i);
     });
@@ -1890,25 +1890,25 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
     } else {
         DEBUG("Set MRUSTC_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`");
     }
-    int stdin_pipes[2];
-    if (pipe(stdin_pipes) != 0) {
+    int stdinPipes[2];
+    if (pipe(stdinPipes) != 0) {
         BUG(sp, "Unable to create stdin pipe pair for proc macro, " << strerror(errno));
     }
-    this->handles.childStdin = stdin_pipes[1]; // Write end
-    int stdout_pipes[2];
-    if (pipe(stdout_pipes) != 0) {
+    this->handles.childStdin = stdinPipes[1]; // Write end
+    int stdoutPipes[2];
+    if (pipe(stdoutPipes) != 0) {
         BUG(sp, "Unable to create stdout pipe pair for proc macro, " << strerror(errno));
     }
-    this->handles.childStdout = stdout_pipes[0]; // Read end
+    this->handles.childStdout = stdoutPipes[0]; // Read end
 
     posix_spawn_file_actions_t file_actions;
     posix_spawn_file_actions_init(&file_actions);
-    posix_spawn_file_actions_adddup2(&file_actions, stdin_pipes[0], 0);
-    posix_spawn_file_actions_adddup2(&file_actions, stdout_pipes[1], 1);
-    posix_spawn_file_actions_addclose(&file_actions, stdin_pipes[0]);
-    posix_spawn_file_actions_addclose(&file_actions, stdin_pipes[1]);
-    posix_spawn_file_actions_addclose(&file_actions, stdout_pipes[0]);
-    posix_spawn_file_actions_addclose(&file_actions, stdout_pipes[1]);
+    posix_spawn_file_actions_adddup2(&file_actions, stdinPipes[0], 0);
+    posix_spawn_file_actions_adddup2(&file_actions, stdoutPipes[1], 1);
+    posix_spawn_file_actions_addclose(&file_actions, stdinPipes[0]);
+    posix_spawn_file_actions_addclose(&file_actions, stdinPipes[1]);
+    posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[0]);
+    posix_spawn_file_actions_addclose(&file_actions, stdoutPipes[1]);
 
     char* argv[3] = {const_cast<char*>(executable), const_cast<char*>(proc_macro_desc.name.c_str()), nullptr};
     DEBUG(argv[0] << " " << argv[1]);
@@ -1920,11 +1920,11 @@ ProcMacroInv::ProcMacroInv(const Span& sp, AST::Edition edition, const char* exe
 
     posix_spawn_file_actions_destroy(&file_actions);
     // Close the ends we don't care about.
-    close(stdin_pipes[0]);
-    close(stdout_pipes[1]);
+    close(stdinPipes[0]);
+    close(stdoutPipes[1]);
 
     // Invocation span is #1 (#0 is always empty/undefined)
-    this->send_span_def(1, sp);
+    this->sendSpanDef(1, sp);
 }
 
 ProcMacroInv::Handles::Handles(Handles&& x)
@@ -1966,16 +1966,16 @@ bool ProcMacroInv::checkGood() {
     return true;
 }
 
-void ProcMacroInv::send_u8(uint8_t v) {
-    this->send_bytes_raw(&v, 1);
+void ProcMacroInv::sendU8(uint8_t v) {
+    this->sendBytesRaw(&v, 1);
 }
 
-void ProcMacroInv::send_bytes(const void* val, size_t size) {
-    this->send_v128u(static_cast<uint64_t>(size));
-    this->send_bytes_raw(val, size);
+void ProcMacroInv::sendBytes(const void* val, size_t size) {
+    this->sendV128u(static_cast<uint64_t>(size));
+    this->sendBytesRaw(val, size);
 }
 
-void ProcMacroInv::send_bytes_raw(const void* val, size_t size) {
+void ProcMacroInv::sendBytesRaw(const void* val, size_t size) {
     if (dumpFileOut.is_open()) {
         dumpFileOut.write(reinterpret_cast<const char*>(val), size);
     }
@@ -1984,20 +1984,20 @@ void ProcMacroInv::send_bytes_raw(const void* val, size_t size) {
     }
 }
 
-void ProcMacroInv::send_v128u(uint64_t val) {
+void ProcMacroInv::sendV128u(uint64_t val) {
     while (val >= 128) {
-        this->send_u8(static_cast<uint8_t>(val & 0x7F) | 0x80);
+        this->sendU8(static_cast<uint8_t>(val & 0x7F) | 0x80);
         val >>= 7;
     }
-    this->send_u8(static_cast<uint8_t>(val & 0x7F));
+    this->sendU8(static_cast<uint8_t>(val & 0x7F));
 }
 
-void ProcMacroInv::send_v128u(U128 val) {
+void ProcMacroInv::sendV128u(U128 val) {
     while (val >= U128(128)) {
-        this->send_u8(static_cast<uint8_t>(val.truncate_u64() & 0x7F) | 0x80);
+        this->sendU8(static_cast<uint8_t>(val.truncateU64() & 0x7F) | 0x80);
         val >>= 7;
     }
-    this->send_u8(static_cast<uint8_t>(val.truncate_u64() & 0x7F));
+    this->sendU8(static_cast<uint8_t>(val.truncateU64() & 0x7F));
 }
 
 uint8_t ProcMacroInv::recvU8() {
@@ -2191,7 +2191,7 @@ Token ProcMacroInv::realGetToken_() {
                     BUG(this->parentSpan, "Invalid integer size from child process");
             }
             auto val = this->recvV128uU128();
-            if (val.truncate_u64() & 1) {
+            if (val.truncateU64() & 1) {
                 val = ~(val >> 1) + 1; // Negative (Is this even possible?)
                 TODO(this->parentSpan, "Negative literal from proc macro, what?");
             } else {

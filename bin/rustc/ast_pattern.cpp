@@ -111,7 +111,7 @@ namespace AST {
             }
             TU_ARMA(Struct, ent) {
                 os << ent.path << " {";
-                for (const auto& e : ent.sub_patterns) {
+                for (const auto& e : ent.subPatterns) {
                     os << e.attrs;
                     os << e.name << ": " << e.pat;
                     os << ",";
@@ -123,7 +123,7 @@ namespace AST {
             }
             TU_ARMA(Slice, ent) {
                 os << "[";
-                os << ent.sub_pats;
+                os << ent.subPats;
                 os << "]";
             }
             TU_ARMA(SplitSlice, ent) {
@@ -165,9 +165,9 @@ namespace AST {
     Pattern::~Pattern() {
     }
 
-    AST::Pattern::Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> sub_patterns, bool isExhaustive)
+    AST::Pattern::Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> subPatterns, bool isExhaustive)
         : mSpan(mv$(sp))
-        , mData(Data::make_Struct({::std::move(path), ::std::move(sub_patterns), isExhaustive}))
+        , mData(Data::make_Struct({::std::move(path), ::std::move(subPatterns), isExhaustive}))
     {
     }
 
@@ -232,13 +232,13 @@ namespace AST {
             }
             TU_ARMA(Struct, e) {
                 ::std::vector<AST::StructPatternEntry> sps;
-                for (const auto& sp : e.sub_patterns) {
+                for (const auto& sp : e.subPatterns) {
                     sps.push_back(AST::StructPatternEntry{sp.attrs.clone(), sp.name, sp.pat.clone()});
                 }
                 rv.mData = Data::make_Struct({::AST::Path(e.path), mv$(sps)});
             }
             TU_ARMA(Slice, e) {
-                rv.mData = Data::make_Slice({H::cloneList(e.sub_pats)});
+                rv.mData = Data::make_Slice({H::cloneList(e.subPats)});
             }
             TU_ARMA(SplitSlice, e) {
                 rv.mData = Data::make_SplitSlice({H::cloneList(e.leading), e.extraBind, H::cloneList(e.trailing)});
@@ -292,9 +292,9 @@ Pattern::Pattern(TagValue, Span sp, Value val, Value end)
     : mSpan(mv$(sp))
     , mData(Data::make_Value({::std::move(val), ::std::move(end)})) {
 }
-Pattern::Pattern(TagReference, Span sp, bool is_mutable, Pattern sub_pattern)
+Pattern::Pattern(TagReference, Span sp, bool is_mutable, Pattern subPattern)
     : mSpan(mv$(sp))
-    , mData(Data::make_Ref(/*Data::Data_Ref */ {is_mutable, unique_ptr<Pattern>(new Pattern(::std::move(sub_pattern)))})) {
+    , mData(Data::make_Ref(/*Data::Data_Ref */ {is_mutable, unique_ptr<Pattern>(new Pattern(::std::move(subPattern)))})) {
 }
 Pattern::Pattern(TagTuple, Span sp, ::std::vector<Pattern> pats)
     : mSpan(mv$(sp))

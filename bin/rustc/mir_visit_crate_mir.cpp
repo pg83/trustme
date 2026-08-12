@@ -31,7 +31,7 @@ void MIR::OuterVisitor::visit_constgeneric(::HIR::ConstGeneric& value) {
 }
 
 void MIR::OuterVisitor::visit_function(::HIR::ItemPath p, ::HIR::Function& item) {
-    auto _ = this->mResolve.set_item_generics(item.mParams);
+    auto _ = this->mResolve.setItemGenerics(item.mParams);
     if (item.mCode || item.mCode.mir) {
         DEBUG("Function code " << p);
 
@@ -43,7 +43,7 @@ void MIR::OuterVisitor::visit_function(::HIR::ItemPath p, ::HIR::Function& item)
 }
 
 void MIR::OuterVisitor::visit_static(::HIR::ItemPath p, ::HIR::Static& item) {
-    auto _ = this->mResolve.set_item_generics(item.mParams);
+    auto _ = this->mResolve.setItemGenerics(item.mParams);
     if (item.mValue) {
         DEBUG("`static` value " << p);
         cb(mResolve, p, item.mValue, {}, item.mType);
@@ -51,7 +51,7 @@ void MIR::OuterVisitor::visit_static(::HIR::ItemPath p, ::HIR::Static& item) {
 }
 
 void MIR::OuterVisitor::visit_constant(::HIR::ItemPath p, ::HIR::Constant& item) {
-    auto _ = this->mResolve.set_item_generics(item.mParams);
+    auto _ = this->mResolve.setItemGenerics(item.mParams);
     if (item.mValue) {
         DEBUG("`const` value " << p);
         cb(mResolve, p, item.mValue, {}, item.mType);
@@ -59,17 +59,17 @@ void MIR::OuterVisitor::visit_constant(::HIR::ItemPath p, ::HIR::Constant& item)
 }
 
 void MIR::OuterVisitor::visit_struct(::HIR::ItemPath p, ::HIR::Struct& item) {
-    auto _ = this->mResolve.set_impl_generics(item.structMarkings.dst_type, item.mParams);
+    auto _ = this->mResolve.setImplGenerics(item.structMarkings.dst_type, item.mParams);
     ::HIR::Visitor::visit_struct(p, item);
 }
 
 void MIR::OuterVisitor::visit_union(::HIR::ItemPath p, ::HIR::Union& item) {
-    auto _ = this->mResolve.set_impl_generics(MetadataType::Unknown, item.mParams);
+    auto _ = this->mResolve.setImplGenerics(MetadataType::Unknown, item.mParams);
     ::HIR::Visitor::visit_union(p, item);
 }
 
 void MIR::OuterVisitor::visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) {
-    auto _ = this->mResolve.set_impl_generics(MetadataType::None, item.mParams);
+    auto _ = this->mResolve.setImplGenerics(MetadataType::None, item.mParams);
 
     if (auto* e = item.mData.opt_Value()) {
         auto enumType = mResolve.crate.types.primitive(::HIR::Enum::getReprType(item.tagRepr));
@@ -83,22 +83,22 @@ void MIR::OuterVisitor::visit_enum(::HIR::ItemPath p, ::HIR::Enum& item) {
 }
 
 void MIR::OuterVisitor::visit_trait(::HIR::ItemPath p, ::HIR::Trait& item) {
-    auto _ = this->mResolve.set_impl_generics(MetadataType::TraitObject, item.mParams);
+    auto _ = this->mResolve.setImplGenerics(MetadataType::TraitObject, item.mParams);
     ::HIR::Visitor::visit_trait(p, item);
 }
 
 void MIR::OuterVisitor::visit_type_impl(::HIR::TypeImpl& impl) {
-    auto _ = this->mResolve.set_impl_generics(impl.mType, impl.mParams);
+    auto _ = this->mResolve.setImplGenerics(impl.mType, impl.mParams);
     ::HIR::Visitor::visit_type_impl(impl);
 }
 
 void MIR::OuterVisitor::visit_inherent_type(::HIR::ItemPath p, ::HIR::TypeAlias& item) {
-    auto _ = this->mResolve.set_item_generics(item.mParams);
+    auto _ = this->mResolve.setItemGenerics(item.mParams);
     ::HIR::Visitor::visit_inherent_type(p, item);
 }
 
 void MIR::OuterVisitor::visit_trait_impl(const ::HIR::SimplePath& trait_path, ::HIR::TraitImpl& impl) {
-    auto _ = this->mResolve.set_impl_generics(impl.mType, impl.mParams);
+    auto _ = this->mResolve.setImplGenerics(impl.mType, impl.mParams);
     ::HIR::Visitor::visit_trait_impl(trait_path, impl);
 }
 

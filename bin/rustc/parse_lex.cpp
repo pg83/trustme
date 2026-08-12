@@ -419,7 +419,7 @@ Token Lexer::getTokenInt() {
                                 this->nextTokens.push_back(TOK_DOT);
                                 return Token(val, CORETYPE_ANY);
                             } else {
-                                FloatValue fval = val.to_double();
+                                FloatValue fval = val.toDouble();
                                 return Token::makeFloat(fval, CORETYPE_ANY);
                             }
                         } else {
@@ -779,7 +779,7 @@ Token Lexer::getTokenIntRawString(bool isByte) {
     ::std::string val;
     DEBUG("terminator = '" << terminator << "', hashes = " << hashes);
 
-    unsigned terminating_hashes = 0;
+    unsigned terminatingHashes = 0;
     for (;;) {
         try {
             ch = this->getc();
@@ -787,20 +787,20 @@ Token Lexer::getTokenIntRawString(bool isByte) {
             throw ParseError::Generic(*this, "EOF reached in raw string");
         }
 
-        if (terminating_hashes > 0) {
-            assert(terminating_hashes > 0);
+        if (terminatingHashes > 0) {
+            assert(terminatingHashes > 0);
             if (ch != '#') {
                 val += terminator;
-                while (terminating_hashes < hashes) {
+                while (terminatingHashes < hashes) {
                     val += '#';
-                    terminating_hashes += 1;
+                    terminatingHashes += 1;
                 }
-                terminating_hashes = 0;
+                terminatingHashes = 0;
 
                 this->ungetc();
             } else {
-                terminating_hashes -= 1;
-                if (terminating_hashes == 0) {
+                terminatingHashes -= 1;
+                if (terminatingHashes == 0) {
                     break;
                 }
             }
@@ -809,7 +809,7 @@ Token Lexer::getTokenIntRawString(bool isByte) {
                 if (hashes == 0) {
                     break;
                 }
-                terminating_hashes = hashes;
+                terminatingHashes = hashes;
             } else {
                 val += ch;
             }

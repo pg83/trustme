@@ -154,16 +154,16 @@ struct fieldPathT {
 struct PatternBinding {
     fieldPathT field;
     const ::HIR::PatternBinding* binding;
-    std::pair<size_t, size_t> split_slice;
+    std::pair<size_t, size_t> splitSlice;
 
     PatternBinding(fieldPathT field, const ::HIR::PatternBinding& binding);
 
     bool isSplitSlice() const {
-        return split_slice.first != SIZE_MAX;
+        return splitSlice.first != SIZE_MAX;
     }
 
     bool operator==(const PatternBinding& x) const {
-        return field == x.field && binding == x.binding && split_slice == x.split_slice;
+        return field == x.field && binding == x.binding && splitSlice == x.splitSlice;
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x);
@@ -253,7 +253,7 @@ public:
     class SavedAliases {
         friend class MirBuilder;
         // Just remember which variables had aliases on them, as we want to clear anything added while saving.
-        ::std::vector<bool> set_aliases;
+        ::std::vector<bool> setAliases;
     };
 
     /// Save the current state of aliases (see add_variable_alias)
@@ -279,7 +279,7 @@ public:
         return resultValid;
     }
 
-    void set_result(const Span& sp, ::MIR::RValue val);
+    void setResult(const Span& sp, ::MIR::RValue val);
     ::MIR::RValue getResult(const Span& sp);
     /// Obtains the result, unwrapping into a LValue (and erroring if not)
     ::MIR::LValue getResultUnwrapLvalue(const Span& sp);
@@ -323,8 +323,8 @@ public:
     void markValueAssigned(const Span& sp, const ::MIR::LValue& val);
 
     // Moves control of temporaries up to the specified scope (or to above it)
-    void raiseTemporaries(const Span& sp, const ::MIR::LValue& val, const ScopeHandle& scope, bool to_above = false);
-    void raiseTemporaries(const Span& sp, const ::MIR::RValue& rval, const ScopeHandle& scope, bool to_above = false);
+    void raiseTemporaries(const Span& sp, const ::MIR::LValue& val, const ScopeHandle& scope, bool toAbove = false);
+    void raiseTemporaries(const Span& sp, const ::MIR::RValue& rval, const ScopeHandle& scope, bool toAbove = false);
 
     class SaveCodeProto {
         friend class MirBuilder;
@@ -362,7 +362,7 @@ private:
     std::vector<CodeSaveStackEnt> codeSaveStack;
 
 public:
-    void set_cur_block(unsigned int newBlock);
+    void setCurBlock(unsigned int newBlock);
     ::MIR::BasicBlockId pauseCurBlock();
 
     void endBlock(::MIR::Terminator term);
@@ -371,7 +371,7 @@ public:
     ::MIR::BasicBlockId newBbUnlinked();
 
     unsigned int newDropFlag(bool defaultState);
-    unsigned int newDropFlagAndSet(const Span& sp, bool set_state);
+    unsigned int newDropFlagAndSet(const Span& sp, bool setState);
     bool getDropFlagDefault(const Span& sp, unsigned int index);
     /// Add a drop flag to be set when another is also set (used to rewrite drop flags after the fact)
     void dropFlagAlias(unsigned int oldIdx, unsigned int newIdx);
@@ -391,9 +391,9 @@ public:
     /// Raises every variable defined in the source scope into the target scope
     void raiseAll(const Span& sp, ScopeHandle src, const ScopeHandle& target);
     /// Drop all defined values in the scope (emits the drops if `cleanup` is set)
-    void terminate_scope(const Span& sp, ScopeHandle, bool cleanup = true);
+    void terminateScope(const Span& sp, ScopeHandle, bool cleanup = true);
     /// Terminates a scope early (e.g. via return/break/...)
-    void terminate_scope_early(const Span& sp, const ScopeHandle&, bool loopExit = false);
+    void terminateScopeEarly(const Span& sp, const ScopeHandle&, bool loopExit = false);
     /// Marks the end of a split arm (end match arm, if body, ...)
     void endSplitArm(const Span& sp, const ScopeHandle&, bool reachable, bool early = false);
     /// Terminates the current split early (TODO: What does this mean?)
@@ -438,7 +438,7 @@ private:
 
     void mergeSplitLists(const Span& sp, const ScopeHandle& handle, const ::std::map<unsigned int, VarState>& states, ::std::map<unsigned int, VarState>& endStates, MirBuilder::SlotType type);
 
-    void terminate_loop_early(const Span& sp, ScopeType::Data_Loop& sdLoop);
+    void terminateLoopEarly(const Span& sp, ScopeType::Data_Loop& sdLoop);
 
     void dropValueFromState(const Span& sp, VarState& vs, ::MIR::LValue lv);
     void dropScopeValues(ScopeDef& sd);
@@ -448,7 +448,7 @@ private:
     void completeScope(ScopeDef& sd);
 
 public:
-    void with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const ::MIR::LValue::Wrapper* stop_wrapper = nullptr) const;
+    void with_val_type(const Span& sp, const ::MIR::LValue& val, ::std::function<void(const ::HIR::TypeData*)> cb, const ::MIR::LValue::Wrapper* stopWrapper = nullptr) const;
     bool lvalueIsCopy(const Span& sp, const ::MIR::LValue& lv) const;
 
     // Obtain the base fat poiner for a dst reference. Errors if it wasn't via a fat pointer

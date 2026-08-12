@@ -343,7 +343,7 @@ bool HIR::Publicity::isVisible(const ::HIR::SimplePath& p) const {
     return ms.type_interner().function(std::move(ft));
 }
 
-::HIR::TypeRef HIR::fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const t_tuple_fields& fields) {
+::HIR::TypeRef HIR::fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const tTupleFields& fields) {
     ::HIR::TypeDataFunctionPointer ft;
     ft.is_unsafe = false;
     ft.is_variadic = false;
@@ -537,7 +537,7 @@ const ::HIR::Trait& ::HIR::Crate::getTraitByPath(const Span& sp, const ::HIR::Si
     const auto& ti = this->getTypeitemByPath(sp, path);
     TU_IFLET(::HIR::TypeItem, ti, Trait, e, return e;)
     else {
-        BUG(sp, "Trait path " << path << " didn't point to a trait (" << ti.tag_str() << ")");
+        BUG(sp, "Trait path " << path << " didn't point to a trait (" << ti.tagStr() << ")");
     }
 }
 
@@ -585,7 +585,7 @@ const ::HIR::Struct& ::HIR::Crate::getStructByPath(const Span& sp, const ::HIR::
     const auto& ti = this->getTypeitemByPath(sp, path);
     TU_IFLET(::HIR::TypeItem, ti, Struct, e, return e;)
     else {
-        BUG(sp, "Struct path " << path << " didn't point to a struct (" << ti.tag_str() << ")");
+        BUG(sp, "Struct path " << path << " didn't point to a struct (" << ti.tagStr() << ")");
     }
 }
 
@@ -593,7 +593,7 @@ const ::HIR::Union& ::HIR::Crate::getUnionByPath(const Span& sp, const ::HIR::Si
     const auto& ti = this->getTypeitemByPath(sp, path);
     TU_IFLET(::HIR::TypeItem, ti, Union, e, return e;)
     else {
-        BUG(sp, "Path " << path << " didn't point to a union (" << ti.tag_str() << ")");
+        BUG(sp, "Path " << path << " didn't point to a union (" << ti.tagStr() << ")");
     }
 }
 
@@ -601,7 +601,7 @@ const ::HIR::Enum& ::HIR::Crate::getEnumByPath(const Span& sp, const ::HIR::Simp
     const auto& ti = this->getTypeitemByPath(sp, path, ignoreCrateName, ignoreLastNode);
     TU_IFLET(::HIR::TypeItem, ti, Enum, e, return e;)
     else {
-        BUG(sp, "Enum path " << path << " didn't point to an enum (" << ti.tag_str() << ")");
+        BUG(sp, "Enum path " << path << " didn't point to an enum (" << ti.tagStr() << ")");
     }
 }
 
@@ -640,7 +640,7 @@ const ::HIR::Function& ::HIR::Crate::getFunctionByPath(const Span& sp, const ::H
     const auto& ti = this->getValitemByPath(sp, path);
     TU_IFLET(::HIR::ValueItem, ti, Function, e, return e;)
     else {
-        BUG(sp, "Function path " << path << " didn't point to an function (" << ti.tag_str() << ")");
+        BUG(sp, "Function path " << path << " didn't point to an function (" << ti.tagStr() << ")");
     }
 }
 
@@ -648,7 +648,7 @@ const ::HIR::Static& ::HIR::Crate::getStaticByPath(const Span& sp, const ::HIR::
     const auto& m = this->getModByPath(sp, path, /*ignore_last*/ true);
     auto it = m.valueItems.find(path.components().back());
     if (it != m.valueItems.end()) {
-        ASSERT_BUG(sp, it->second->ent.is_Static(), "`static` path " << path << " didn't point to a static - " << it->second->ent.tag_str());
+        ASSERT_BUG(sp, it->second->ent.is_Static(), "`static` path " << path << " didn't point to a static - " << it->second->ent.tagStr());
         return it->second->ent.as_Static();
     }
     for (const auto& e : m.inlineStatics) {
@@ -694,7 +694,7 @@ namespace {
         {
         }
 
-        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type resolveCb) override {
+        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::tCbResolveType resolveCb) override {
             assert(g.binding < implTypes.size());
             if (implTypes[g.binding]) {
                 return (*implTypes[g.binding])->compareWithPlaceholders(Span(), ty, resolveCb);
@@ -711,7 +711,7 @@ namespace {
         }
     };
 
-    bool matchesTypeRoot(const ::HIR::GenericParams& params, const ::HIR::TypeData* implTy, const ::HIR::TypeData* matchType, ::HIR::t_cb_resolve_type ty_res) {
+    bool matchesTypeRoot(const ::HIR::GenericParams& params, const ::HIR::TypeData* implTy, const ::HIR::TypeData* matchType, ::HIR::tCbResolveType ty_res) {
         // A nominal path deserialises without its pointer-valued binding
         // metadata. Its SimplePath is nevertheless complete and is exactly
         // what the impl index and matcher use. Only an unresolved UFCS path is
@@ -732,7 +732,7 @@ namespace {
     }
 }
 
-bool ::HIR::TraitImpl::matchesType(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
+bool ::HIR::TraitImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res) const {
     // NOTE: Don't return any impls when the type is an unbouned ivar. Wouldn't be able to pick anything anyway
     // TODO: For `Unbound`, it could be valid, if the target is a generic.
     // - Pure infer could also be useful (for knowing if there's any other potential impls)
@@ -744,11 +744,11 @@ bool ::HIR::TraitImpl::matchesType(const ::HIR::TypeData* type, ::HIR::t_cb_reso
     return matchesTypeRoot(mParams, mType, type, ty_res);
 }
 
-bool ::HIR::TypeImpl::matchesType(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
+bool ::HIR::TypeImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res) const {
     return matchesTypeRoot(mParams, mType, type, ty_res);
 }
 
-bool ::HIR::MarkerImpl::matchesType(const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res) const {
+bool ::HIR::MarkerImpl::matchesType(const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res) const {
     return matchesTypeRoot(mParams, mType, type, ty_res);
 }
 
@@ -961,11 +961,11 @@ namespace {
         const auto& tr = *curTrait.traitPtr;
         auto monomorphCb = MonomorphStatePtr(types, type, &curTrait.mPath.mParams, nullptr);
 
-        for (const auto& trait_path_raw : tr.allParentTraits) {
+        for (const auto& traitPathRaw : tr.allParentTraits) {
             // 1. Monomorph
-            auto trait_path_mono = monomorphCb.monomorphTraitpath(sp, trait_path_raw, false, false);
+            auto traitPathMono = monomorphCb.monomorphTraitpath(sp, traitPathRaw, false, false);
             // 2. Add
-            rv.push_back(::HIR::GenericBound::make_TraitBound({hrtbs ? box$(hrtbs->clone()) : nullptr, type, mv$(trait_path_mono)}));
+            rv.push_back(::HIR::GenericBound::make_TraitBound({hrtbs ? box$(hrtbs->clone()) : nullptr, type, mv$(traitPathMono)}));
         }
 
         // TODO: Add traits from `Self: Foo` bounds?
@@ -1100,7 +1100,7 @@ namespace {
         {
         }
 
-        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::t_cb_resolve_type _resolve_cb) override {
+        ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, ::HIR::tCbResolveType _resolve_cb) override {
             assert(g.binding < implTys.size());
             if (implTys.at(g.binding)) {
                 DEBUG("Compare " << ty << " and " << *implTys.at(g.binding));
@@ -1423,10 +1423,10 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
             for (const auto& tb : id.mParams.bounds) {
                 DEBUG(tb);
                 if (tb.is_TraitBound()) {
-                    ::HIR::TypeRef tmp_ty;
-                    ::HIR::TraitPath tmp_tp;
-                    const auto& ty = H2::monomorph(sp, tb.as_TraitBound().type, ms, tmp_ty);
-                    const auto& trait = H2::monomorph(sp, tb.as_TraitBound().trait, ms, tmp_tp);
+                    ::HIR::TypeRef tmpTy;
+                    ::HIR::TraitPath tmpTp;
+                    const auto& ty = H2::monomorph(sp, tb.as_TraitBound().type, ms, tmpTy);
+                    const auto& trait = H2::monomorph(sp, tb.as_TraitBound().trait, ms, tmpTp);
                     ;
 
                     // Determine if `ty` would be bounded (it's an ATY or generic)
@@ -1514,7 +1514,7 @@ bool ::HIR::TraitImpl::overlapsWith(const Crate& crate, const ::HIR::TraitImpl& 
 
 namespace {
     template <typename ImplType>
-    bool findImplsList(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::listT& implList, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
+    bool findImplsList(const typename ::HIR::Crate::ImplGroup<::std::unique_ptr<ImplType>>::listT& implList, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ImplType&)> callback) {
         for (const auto& impl : implList) {
             if (impl->matchesType(type, ty_res)) {
                 if (callback(*impl)) {
@@ -1526,7 +1526,7 @@ namespace {
     }
 
     template <typename ImplType>
-    bool findImplsList(const typename ::HIR::Crate::ImplGroup<const ImplType*>::listT& implList, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ImplType&)> callback) {
+    bool findImplsList(const typename ::HIR::Crate::ImplGroup<const ImplType*>::listT& implList, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ImplType&)> callback) {
         for (const auto& impl : implList) {
             if (impl->matchesType(type, ty_res)) {
                 if (callback(*impl)) {
@@ -1539,7 +1539,7 @@ namespace {
 }
 
 namespace {
-    bool findTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) {
+    bool findTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) {
         auto it = crate.traitImpls.find(trait);
         if (it != crate.traitImpls.end()) {
             // 1. Find named impls (associated with named types)
@@ -1569,7 +1569,7 @@ namespace {
 
 }
 
-bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const {
+bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const {
     if (this->allTraitImpls.size() > 0) {
         auto it = this->allTraitImpls.find(trait);
         if (it != this->allTraitImpls.end()) {
@@ -1611,7 +1611,7 @@ bool ::HIR::Crate::findTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::T
 }
 
 namespace {
-    bool findAutoTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) {
+    bool findAutoTraitImplsInt(const ::HIR::Crate& crate, const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) {
         auto it = crate.markerImpls.find(trait);
         if (it != crate.markerImpls.end()) {
             // 1. Find named impls (associated with named types)
@@ -1631,7 +1631,7 @@ namespace {
     }
 }
 
-bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const {
+bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const {
     if (this->allMarkerImpls.size() > 0) {
         auto it = this->allMarkerImpls.find(trait);
         if (it != this->allMarkerImpls.end()) {
@@ -1663,7 +1663,7 @@ bool ::HIR::Crate::findAutoTraitImpls(const ::HIR::SimplePath& trait, const ::HI
 }
 
 namespace {
-    bool findTypeImplsInt(const ::HIR::Crate& crate, const ::HIR::TypeData* type, ::HIR::t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) {
+    bool findTypeImplsInt(const ::HIR::Crate& crate, const ::HIR::TypeData* type, ::HIR::tCbResolveType ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) {
         // 1. Find named impls (associated with named types)
         if (const auto* implList = crate.typeImpls.getListForType(type)) {
             if (findImplsList(*implList, type, ty_res, callback)) {
@@ -1680,7 +1680,7 @@ namespace {
     }
 }
 
-bool ::HIR::Crate::findTypeImpls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const {
+bool ::HIR::Crate::findTypeImpls(const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const {
     if (allTraitImpls.size() > 0) {
         // 1. Find named impls (associated with named types)
         if (const auto* implList = this->allTypeImpls.getListForType(type)) {
@@ -1861,10 +1861,10 @@ unsigned HIR::Trait::getVtableValueIndex(const HIR::GenericPath& trait_path, con
     return 0;
 }
 
-unsigned HIR::Trait::getVtableParentIndex(HIR::TypeInterner& types, const Span& sp, const HIR::PathParams& this_params, const HIR::GenericPath& trait_path) const {
+unsigned HIR::Trait::getVtableParentIndex(HIR::TypeInterner& types, const Span& sp, const HIR::PathParams& thisParams, const HIR::GenericPath& trait_path) const {
     for (const auto& pt : this->allParentTraits) {
         if (pt.mPath.mPath == trait_path.mPath) {
-            auto p = MonomorphStatePtr(types, nullptr, &this_params, nullptr).monomorphGenericpath(sp, pt.mPath);
+            auto p = MonomorphStatePtr(types, nullptr, &thisParams, nullptr).monomorphGenericpath(sp, pt.mPath);
             if (p == trait_path) {
                 return vtableParentTraitsStart + (&pt - this->allParentTraits.data());
             }
@@ -1889,12 +1889,12 @@ unsigned HIR::Trait::getVtableParentIndex(HIR::TypeInterner& types, const Span& 
 
 /// Helper for getting the struct associated with a pattern path
 const ::HIR::Struct& HIR::patternGetStruct(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding, bool isTuple) {
-    const ::HIR::Struct* str_p = nullptr;
+    const ::HIR::Struct* strP = nullptr;
     TU_MATCH_HDRA( (binding), { )
     TU_ARMA(Unbound, be)
         BUG(sp, "Unexpected unbound named pattern - " << path);
         TU_ARMA(Struct, be) {
-            str_p = be;
+            strP = be;
         }
         TU_ARMA(Union, be) {
             BUG(sp, "Tuple pattern used on union " << path);
@@ -1913,13 +1913,13 @@ const ::HIR::Struct& HIR::patternGetStruct(const Span& sp, const ::HIR::Path& pa
             } else {
                 ASSERT_BUG(sp, enmD[be.var_idx].is_struct, "PathNamed pattern with non-brace enum variant - " << path);
             }
-            str_p = enmD[be.var_idx].type->as_Path().binding.as_Struct();
+            strP = enmD[be.var_idx].type->as_Path().binding.as_Struct();
         }
     }
-    const auto& str = *str_p;
+    const auto& str = *strP;
 
     if(isTuple) {
-        ASSERT_BUG(sp, str.mData.is_Tuple(), "PathTuple pattern with non-tuple struct - " << str.mData.tag_str());
+        ASSERT_BUG(sp, str.mData.is_Tuple(), "PathTuple pattern with non-tuple struct - " << str.mData.tagStr());
     }
     else {
         ASSERT_BUG(sp, str.mData.is_Named(), "Struct pattern on non-brace struct");
@@ -1927,11 +1927,11 @@ const ::HIR::Struct& HIR::patternGetStruct(const Span& sp, const ::HIR::Path& pa
     return str;
 }
 
-const ::HIR::t_tuple_fields& HIR::patternGetTuple(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding) {
+const ::HIR::tTupleFields& HIR::patternGetTuple(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding) {
     return patternGetStruct(sp, path, binding, true).mData.as_Tuple();
 }
 
-const ::HIR::t_struct_fields& HIR::patternGetNamed(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding) {
+const ::HIR::tStructFields& HIR::patternGetNamed(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding) {
     if (binding.is_Union()) {
         return binding.as_Union()->mVariants;
     }
@@ -1989,7 +1989,7 @@ void EncodedLiteral::write_usize(size_t ofs, uint64_t v) {
 }
 
 uint64_t EncodedLiteral::readUsize(size_t ofs) const {
-    return EncodedLiteralSlice(*this).slice(ofs).readUint(TargetGetPointerBits() / 8).truncate_u64();
+    return EncodedLiteralSlice(*this).slice(ofs).readUint(TargetGetPointerBits() / 8).truncateU64();
 }
 
 U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {

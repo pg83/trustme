@@ -127,7 +127,7 @@ InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
             break;
         case InterpolatedFragment::STMT_ITEM: {
             const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(x.ptr);
-            os << "stmt-item[" << namedItem.data.tag_str() << "(" << namedItem.name << ")]";
+            os << "stmt-item[" << namedItem.data.tagStr() << "(" << namedItem.name << ")]";
         } break;
         case InterpolatedFragment::BLOCK:
             os << "block[" << *reinterpret_cast<const AST::ExprNode*>(x.ptr) << "]";
@@ -138,7 +138,7 @@ InterpolatedFragment::InterpolatedFragment(AST::Visibility v)
             break;
         case InterpolatedFragment::ITEM: {
             const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(x.ptr);
-            os << "item[" << namedItem.data.tag_str() << "(" << namedItem.name << ")]";
+            os << "item[" << namedItem.data.tagStr() << "(" << namedItem.name << ")]";
         } break;
         case InterpolatedFragment::VIS:
             os << "vis[" << *reinterpret_cast<const AST::Visibility*>(x.ptr) << "]";

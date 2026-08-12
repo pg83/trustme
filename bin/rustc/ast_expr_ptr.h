@@ -93,7 +93,7 @@ namespace AST {
 
         ExprNode& node();
 
-        ::std::shared_ptr<ExprNode> take_node();
+        ::std::shared_ptr<ExprNode> takeNode();
 
         void visit_nodes(NodeVisitor& v);
         void visit_nodes(NodeVisitor& v) const;

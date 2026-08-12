@@ -149,8 +149,8 @@ class CMacroUseHandler: public ExpandDecorator {
                     mod.macroImports.push_back(mv$(mi));
                 }
             }
-        } else if (const auto* submod_p = i.opt_Module()) {
-            const auto& submod = *submod_p;
+        } else if (const auto* submodP = i.opt_Module()) {
+            const auto& submod = *submodP;
             for (const auto& mr : submod.macros()) {
                 if (!filterValid(mr.name)) {
                     continue;
@@ -173,7 +173,7 @@ class CMacroUseHandler: public ExpandDecorator {
                 }
             }
         } else {
-            WARNING(sp, W0000, "Use of #[macro_use] on non-module/crate - " << i.tag_str());
+            WARNING(sp, W0000, "Use of #[macro_use] on non-module/crate - " << i.tagStr());
             return;
         }
 
@@ -212,7 +212,7 @@ class CMacroExportHandler: public ExpandDecorator {
             if (u->entries.size() == 1 && u->entries.back().path.is_absolute() && u->entries.back().path.cls.as_Absolute().crate == CRATE_BUILTINS && u->entries.back().path.cls.as_Absolute().nodes.size() == 1)
                 ;
             else {
-                ERROR(sp, E0000, "Use of #[macro_export] on non-macro - " << i.tag_str());
+                ERROR(sp, E0000, "Use of #[macro_export] on non-macro - " << i.tagStr());
             }
             const auto& p = u->entries.back().path.cls.as_Absolute();
             const auto& name = p.nodes.front().name();
@@ -245,7 +245,7 @@ class CMacroExportHandler: public ExpandDecorator {
                 // Empty node list, will search the crate root
                 // TODO: Strictly speaking, this shouldn't apply to non-macro paths
                 DEBUG("#[macro_export(local_inner_macros)] mp=" << mp);
-                e.data->mHygiene.set_mod_path(mv$(mp));
+                e.data->mHygiene.setModPath(mv$(mp));
             }
 
             e.data->exported = true;
@@ -260,7 +260,7 @@ class CMacroExportHandler: public ExpandDecorator {
                 //crate.m_root_module.macros().push_back( mv$(*i.as_Macro()) );
             }
         } else {
-            ERROR(sp, E0000, "Use of #[macro_export] on non-macro - " << i.tag_str());
+            ERROR(sp, E0000, "Use of #[macro_export] on non-macro - " << i.tagStr());
         }
     }
 };
@@ -272,7 +272,7 @@ class CMacroReexportHandler: public ExpandDecorator {
 
     void handle(const Span& sp, const AST::Attribute& mi, ::AST::Crate& crate, const AST::AbsolutePath& path, AST::Module&, size_t, slice<const AST::Attribute> attrs, const AST::Visibility& vis, AST::Item& i) const override {
         if (!i.is_Crate()) {
-            ERROR(sp, E0000, "Use of #[macro_reexport] on non-crate - " << i.tag_str());
+            ERROR(sp, E0000, "Use of #[macro_reexport] on non-crate - " << i.tagStr());
         }
 
         const auto& crate_name = i.as_Crate().name;
@@ -300,13 +300,13 @@ class CBuiltinMacroHandler: public ExpandDecorator {
         if (i.is_MacroInv()) {
             const auto& e = i.as_MacroInv();
             if (!(e.path().is_trivial() && e.path().asTrivial() == "macro_rules")) {
-                ERROR(sp, E0000, "Use of #[rustc_builtin_macro] on macro other than macro_rules! - " << i.tag_str());
+                ERROR(sp, E0000, "Use of #[rustc_builtin_macro] on macro other than macro_rules! - " << i.tagStr());
             }
             name = e.inputIdent();
         } else if (i.is_Macro()) {
             name = path.nodes.back();
         } else {
-            ERROR(sp, E0000, "Use of #[rustc_builtin_macro] on non-macro - " << i.tag_str());
+            ERROR(sp, E0000, "Use of #[rustc_builtin_macro] on non-macro - " << i.tagStr());
         }
 
         AST::UseItem ui;

@@ -84,20 +84,20 @@ namespace MIR {
         const ::HIR::SimplePath* mLangBox = nullptr;
 
         unsigned int bbIdx = 0;
-        unsigned int stmt_idx = 0;
+        unsigned int stmtIdx = 0;
 
     public:
         TypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const ::HIR::TypeData* ret_type, const argsT& args, const ::MIR::Function& fcn);
 
-        void set_cur_stmt(const ::MIR::BasicBlock& bb, const ::MIR::Statement& stmt);
+        void setCurStmt(const ::MIR::BasicBlock& bb, const ::MIR::Statement& stmt);
 
-        void set_cur_stmt(const ::MIR::BasicBlock& bb, unsigned int stmt_idx);
+        void setCurStmt(const ::MIR::BasicBlock& bb, unsigned int stmtIdx);
 
-        void set_cur_stmt(unsigned int bbIdx, unsigned int stmt_idx);
+        void setCurStmt(unsigned int bbIdx, unsigned int stmtIdx);
 
-        void set_cur_stmt_term(const ::MIR::BasicBlock& bb);
+        void setCurStmtTerm(const ::MIR::BasicBlock& bb);
 
-        void set_cur_stmt_term(unsigned int bbIdx);
+        void setCurStmtTerm(unsigned int bbIdx);
 
         unsigned int getCurBlock() const {
             return bbIdx;
@@ -176,8 +176,8 @@ namespace MIR {
         ::std::vector<size_t> blockOffsets;
         ::std::vector<ValueLifetime> slots;
 
-        bool slot_valid(unsigned idx, unsigned bbIdx, unsigned stmt_idx) const {
-            return slots.at(idx).valid_at(blockOffsets[bbIdx] + stmt_idx);
+        bool slotValid(unsigned idx, unsigned bbIdx, unsigned stmtIdx) const {
+            return slots.at(idx).valid_at(blockOffsets[bbIdx] + stmtIdx);
         }
     };
 
@@ -477,13 +477,13 @@ namespace MIR {
                 for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
                     auto& block = fcn.blocks[blockIdx];
                     for (auto& stmt : block.statements) {
-                        state.set_cur_stmt(blockIdx, (&stmt - &block.statements.front()));
+                        state.setCurStmt(blockIdx, (&stmt - &block.statements.front()));
                         visit_stmt(stmt);
                     }
                     if (block.terminator.tag() == ::MIR::Terminator::TAGDEAD) {
                         continue;
                     }
-                    state.set_cur_stmt_term(blockIdx);
+                    state.setCurStmtTerm(blockIdx);
                     visit_terminator(block.terminator);
                 }
             }

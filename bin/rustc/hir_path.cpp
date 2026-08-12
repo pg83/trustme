@@ -98,11 +98,11 @@ namespace HIR {
             os << v << ",";
         }
         for (const auto& assoc : x.typeBounds) {
-            os << assoc.first << "{" << assoc.second.source_trait << "}=" << assoc.second << ",";
+            os << assoc.first << "{" << assoc.second.sourceTrait << "}=" << assoc.second << ",";
         }
         for (const auto& assoc : x.traitBounds) {
             for (const auto& trait : assoc.second.traits) {
-                os << assoc.first << "{" << assoc.second.source_trait << "}: " << trait << ",";
+                os << assoc.first << "{" << assoc.second.sourceTrait << "}: " << trait << ",";
             }
         }
         if (hasArgs) {
@@ -179,15 +179,15 @@ void HIR::SimplePath::update_last_component(RcString v) {
     members.back() = std::move(v);
 }
 
-bool HIR::SimplePath::starts_with(const HIR::SimplePath& p, bool skip_last /*=false*/) const {
+bool HIR::SimplePath::starts_with(const HIR::SimplePath& p, bool skipLast /*=false*/) const {
     if (p.members.empty()) {
         return crate_name() == RcString();
     }
     // This path can't start with `p` if it's shorter than `p`
-    if (members.size() < p.members.size() - (skip_last ? 1 : 0)) {
+    if (members.size() < p.members.size() - (skipLast ? 1 : 0)) {
         return false;
     }
-    for (size_t i = 0; i < p.members.size() - (skip_last ? 1 : 0); i++) {
+    for (size_t i = 0; i < p.members.size() - (skipLast ? 1 : 0); i++) {
         if (p.members[i] != this->members[i]) {
             return false;
         }
@@ -302,7 +302,7 @@ bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
         const auto& lhs = lhsType->second;
         const auto& rhs = rhsType->second;
         if (lhsType->first != rhsType->first
-            || !lhs.source_trait.equalsIgnoringRegions(rhs.source_trait)
+            || !lhs.sourceTrait.equalsIgnoringRegions(rhs.sourceTrait)
             || !lhs.atyParams.equalsIgnoringRegions(rhs.atyParams)
             || (lhs.type != rhs.type && !lhs.type->equalsIgnoringRegions(rhs.type))) {
             return false;
@@ -315,7 +315,7 @@ bool HIR::TraitPath::equalsIgnoringRegions(const TraitPath& x) const {
         const auto& lhs = lhsBound->second;
         const auto& rhs = rhsBound->second;
         if (lhsBound->first != rhsBound->first
-            || !lhs.source_trait.equalsIgnoringRegions(rhs.source_trait)
+            || !lhs.sourceTrait.equalsIgnoringRegions(rhs.sourceTrait)
             || !lhs.atyParams.equalsIgnoringRegions(rhs.atyParams)
             || lhs.traits.size() != rhs.traits.size()) {
             return false;
@@ -396,7 +396,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     throw "";
 }
 
-::HIR::Compare HIR::PathParams::compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& x, ::HIR::t_cb_resolve_type resolvePlaceholder) const {
+::HIR::Compare HIR::PathParams::compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& x, ::HIR::tCbResolveType resolvePlaceholder) const {
     using ::HIR::Compare;
 
     auto rv = Compare::Equal;
@@ -448,7 +448,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     return rv;
 }
 
-::HIR::Compare HIR::PathParams::matchTestGenericsFuzz(const Span& sp, const PathParams& x, t_cb_resolve_type resolvePlaceholder, ::HIR::MatchGenerics& match) const {
+::HIR::Compare HIR::PathParams::matchTestGenericsFuzz(const Span& sp, const PathParams& x, tCbResolveType resolvePlaceholder, ::HIR::MatchGenerics& match) const {
     using ::HIR::Compare;
     auto rv = Compare::Equal;
     TRACE_FUNCTION_F("(PathParams) " << *this << " with " << x);
@@ -545,7 +545,7 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
     return rv;
 }
 
-::HIR::Compare HIR::GenericPath::compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& x, ::HIR::t_cb_resolve_type resolvePlaceholder) const {
+::HIR::Compare HIR::GenericPath::compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& x, ::HIR::tCbResolveType resolvePlaceholder) const {
     if (this->mPath != x.mPath) {
         return ::HIR::Compare::Unequal;
     }
@@ -554,11 +554,11 @@ Ordering HIR::TraitPath::ord(const TraitPath& x) const {
 }
 
 namespace {
-    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& l, const ::HIR::PathParams& r, ::HIR::t_cb_resolve_type resolvePlaceholder) {
+    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::PathParams& l, const ::HIR::PathParams& r, ::HIR::tCbResolveType resolvePlaceholder) {
         return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
     }
 
-    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& l, const ::HIR::GenericPath& r, ::HIR::t_cb_resolve_type resolvePlaceholder) {
+    ::HIR::Compare compareWithPlaceholders(const Span& sp, const ::HIR::GenericPath& l, const ::HIR::GenericPath& r, ::HIR::tCbResolveType resolvePlaceholder) {
         return l.compareWithPlaceholders(sp, r, resolvePlaceholder);
     }
 }
@@ -576,7 +576,7 @@ namespace {
         }                                       \
     } while (0)
 
-::HIR::Compare HIR::TraitPath::compareWithPlaceholders(const Span& sp, const TraitPath& x, t_cb_resolve_type resolvePlaceholder) const {
+::HIR::Compare HIR::TraitPath::compareWithPlaceholders(const Span& sp, const TraitPath& x, tCbResolveType resolvePlaceholder) const {
     auto rv = mPath.compareWithPlaceholders(sp, x.mPath, resolvePlaceholder);
     if (rv == Compare::Unequal) {
         return rv;
@@ -615,7 +615,7 @@ namespace {
     return rv;
 }
 
-::HIR::Compare HIR::Path::compareWithPlaceholders(const Span& sp, const Path& x, t_cb_resolve_type resolvePlaceholder) const {
+::HIR::Compare HIR::Path::compareWithPlaceholders(const Span& sp, const Path& x, tCbResolveType resolvePlaceholder) const {
     if (this->mData.tag() != x.mData.tag()) {
         return Compare::Unequal;
     }
@@ -776,13 +776,13 @@ Ordering PathParams::ord(const PathParams& x) const {
     return OrdEqual;
 }
 Ordering TraitPath::AtyEqual::ord(const AtyEqual& x) const {
-    ORD(source_trait, x.source_trait);
+    ORD(sourceTrait, x.sourceTrait);
     ORD(atyParams, x.atyParams);
     ORD(type, x.type);
     return OrdEqual;
 }
 Ordering TraitPath::AtyBound::ord(const AtyBound& x) const {
-    ORD(source_trait, x.source_trait);
+    ORD(sourceTrait, x.sourceTrait);
     ORD(atyParams, x.atyParams);
     ORD(traits, x.traits);
     return OrdEqual;
@@ -793,7 +793,7 @@ TraitPath::AtyBound TraitPath::AtyBound::clone() const {
     for (const auto& t : traits) {
         newTraits.push_back(t.clone());
     }
-    return AtyBound{source_trait.clone(), atyParams.clone(), ::std::move(newTraits)};
+    return AtyBound{sourceTrait.clone(), atyParams.clone(), ::std::move(newTraits)};
 }
 Path::Path(Data data)
     : mData(mv$(data)) {

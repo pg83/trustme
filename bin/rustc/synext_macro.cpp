@@ -37,7 +37,7 @@ namespace {
             return tok.ident().name;
         }
         if (Token::type_is_rword(tok.type())) {
-            return tok.to_str().c_str();
+            return tok.toStr().c_str();
         }
         throw ParseError::Unexpected(lex, tok, TOK_IDENT);
     }
@@ -231,7 +231,7 @@ public:
 
         std::vector<std::pair<Span, std::string>> rawLines;
         do {
-            auto ps = lex.start_span();
+            auto ps = lex.startSpan();
             auto attrs = ParseItemAttrs(lex);
             auto text = getString(sp, lex, crate, mod);
             auto sp = lex.endSpan(ps);
@@ -524,7 +524,7 @@ public:
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
-        auto node = o->getToken().take_frag_node();
+        auto node = o->getToken().takeFragNode();
         auto* nodeAp = cast<AST::ExprNodeAsm2>(node.get());
         ASSERT_BUG(sp, nodeAp, "");
         auto& nodeA = *nodeAp;
@@ -547,7 +547,7 @@ public:
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const ::AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
         auto o = CAsmExpander().expand(sp, crate, tt, mod);
 
-        auto node = o->getToken().take_frag_node();
+        auto node = o->getToken().takeFragNode();
         auto* nodeAp = cast<AST::ExprNodeAsm2>(node.get());
         ASSERT_BUG(sp, nodeAp, "");
         nodeAp->options.naked = true;
@@ -677,7 +677,7 @@ class CConcatExpander: public ExpandProcMacro {
                 rv += vp->mValue;
             } else if (auto* vp = cast<AST::ExprNodeInteger>(v.get())) {
                 if (vp->datatype == CORETYPE_CHAR) {
-                    rv += Codepoint{static_cast<uint32_t>(vp->mValue.truncate_u64())};
+                    rv += Codepoint{static_cast<uint32_t>(vp->mValue.truncateU64())};
                 } else {
                     rv += FMT(vp->mValue);
                 }
@@ -741,11 +741,11 @@ namespace {
         }
         ExpandBareExpr(crate, mod, n);
 
-        auto* string_np = cast<AST::ExprNodeString>(&*n);
-        if (!string_np) {
+        auto* stringNp = cast<AST::ExprNodeString>(&*n);
+        if (!stringNp) {
             ERROR(sp, E0000, "Expected a string literal - got " << *n);
         }
-        return mv$(string_np->mValue);
+        return mv$(stringNp->mValue);
     }
 }
 
@@ -805,13 +805,13 @@ class CExpanderFile: public ExpandProcMacro {
 
 class CExpanderLine: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(getTopSpan(sp)->start_line), CORETYPE_U32))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(getTopSpan(sp)->startLine), CORETYPE_U32))));
     }
 };
 
 class CExpanderColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
-        const auto offset = getTopSpan(sp)->start_ofs;
+        const auto offset = getTopSpan(sp)->startOfs;
         ASSERT_BUG(sp, offset >= 10, "column! invocation span is too short");
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - 10), CORETYPE_U32))));
     }
@@ -819,7 +819,7 @@ class CExpanderColumn: public ExpandProcMacro {
 
 class CExpanderUnstableColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const AST::Crate& crate, const TokenTree& tt, AST::Module& mod) override {
-        const auto offset = getTopSpan(sp)->start_ofs;
+        const auto offset = getTopSpan(sp)->startOfs;
         constexpr unsigned macroWidth = sizeof("__rust_unstable_column!()") - 1 + 1;
         ASSERT_BUG(sp, offset >= macroWidth, "__rust_unstable_column! invocation span is too short");
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - macroWidth), CORETYPE_U32))));
@@ -953,7 +953,7 @@ namespace {
         unsigned int argIndex;
 
         /// Trait to use for formatting
-        const char* trait_name;
+        const char* traitName;
 
         // TODO: Support case where this hasn't been edited (telling the formatter that it has nothing to apply)
         /// Options
@@ -1074,7 +1074,7 @@ namespace {
                 auto fmtFragStr = ::std::string_view{s, s2};
 
                 unsigned int index = ~0u;
-                const char* trait_name;
+                const char* traitName;
                 FmtArgs args;
 
                 // Formatting parameter
@@ -1247,52 +1247,52 @@ namespace {
                     // Parse ident?
                     // - Lazy way is to just handle a single char and ensure that it is just a single char
                     if (s[0] == '}') {
-                        trait_name = "Display";
+                        traitName = "Display";
                     } else if (s[1] == '}') {
                         switch (s[0]) {
                             default:
                                 ERROR(sp, E0000, "Unknown formatting type specifier '" << *s << "'");
                             case '?':
                                 s++;
-                                trait_name = "Debug";
+                                traitName = "Debug";
                                 break;
                             case 'b':
                                 s++;
-                                trait_name = "Binary";
+                                traitName = "Binary";
                                 break;
                             case 'o':
                                 s++;
-                                trait_name = "Octal";
+                                traitName = "Octal";
                                 break;
                             case 'x':
                                 s++;
-                                trait_name = "LowerHex";
+                                traitName = "LowerHex";
                                 break;
                             case 'X':
                                 s++;
-                                trait_name = "UpperHex";
+                                traitName = "UpperHex";
                                 break;
                             case 'p':
                                 s++;
-                                trait_name = "Pointer";
+                                traitName = "Pointer";
                                 break;
                             case 'e':
                                 s++;
-                                trait_name = "LowerExp";
+                                traitName = "LowerExp";
                                 break;
                             case 'E':
                                 s++;
-                                trait_name = "UpperExp";
+                                traitName = "UpperExp";
                                 break;
                         }
                         assert(*s == '}');
                     } else {
                         if (strncmp(s, "x?}", 3) == 0) {
                             args.debugTy = FmtArgs::Debug::LowerHex;
-                            trait_name = "Debug";
+                            traitName = "Debug";
                         } else if (strncmp(s, "X?}", 3) == 0) {
                             args.debugTy = FmtArgs::Debug::UpperHex;
-                            trait_name = "Debug";
+                            traitName = "Debug";
                         } else {
                             TODO(sp, "Parse formatting fragment at \"" << fmtFragStr << "\" (long type) - s=...\"" << s << "\"");
                         }
@@ -1302,7 +1302,7 @@ namespace {
                         ERROR(sp, E0000, "Malformed formatting fragment, unexpected " << *s);
                     }
                     // Otherwise, it's just a trivial Display call
-                    trait_name = "Display";
+                    traitName = "Display";
                 }
 
                 // Set index if unspecified
@@ -1314,7 +1314,7 @@ namespace {
                     nextFree++;
                 }
 
-                frags.push_back(FmtFrag{mv$(curLiteral), index, trait_name, mv$(args)});
+                frags.push_back(FmtFrag{mv$(curLiteral), index, traitName, mv$(args)});
             }
         }
 
@@ -1400,7 +1400,7 @@ namespace {
             // - Named parameters
             if ((lex.lookahead(0) == TOK_IDENT || Token::type_is_rword(lex.lookahead(0))) && lex.lookahead(1) == TOK_EQUAL) {
                 GET_TOK(tok, lex);
-                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.to_str());
+                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
                 DEBUG("Named `" << name << "`");
 
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
@@ -1506,7 +1506,7 @@ namespace {
                     // Hacky option: Convert `LowerHex` into `_lower_hex`
                     ::std::stringstream newFnSs;
                     newFnSs << "new";
-                    for (const char* s = frag.trait_name; *s; s++) {
+                    for (const char* s = frag.traitName; *s; s++) {
                         if (isupper(*s)) {
                             newFnSs << "_" << char(tolower(*s));
                         } else {
@@ -1749,11 +1749,11 @@ namespace {
         }
         ExpandBareExpr(crate, mod, n);
 
-        auto* string_np = cast<AST::ExprNodeString>(&*n);
-        if (!string_np) {
+        auto* stringNp = cast<AST::ExprNodeString>(&*n);
+        if (!stringNp) {
             ERROR(sp, E0000, "include! requires a string literal - got " << *n);
         }
-        return mv$(string_np->mValue);
+        return mv$(stringNp->mValue);
     }
 
     ::std::string getPathRelativeTo(const ::std::string& basePath, ::std::string path) {
@@ -2007,7 +2007,7 @@ class CExpander: public ExpandProcMacro {
                 rv += " ";
             }
             DEBUG(" += " << tok);
-            rv += tok.to_str();
+            rv += tok.toStr();
         }
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, mv$(rv), {}))));

@@ -216,7 +216,7 @@ TomlKeyValue TomlFile::getNextValue() {
         case TomlToken::Type::SquareOpen: {
             rv.path = this->getPath(std::move(keyName));
             rv.value.mType = TomlValue::Type::List;
-            bool skipped_nested = false;
+            bool skippedNested = false;
             while ((t = mLexer.get_token()).mType != TomlToken::Type::SquareClose) {
                 while (t.mType == TomlToken::Type::Newline) {
                     t = mLexer.get_token();
@@ -246,8 +246,8 @@ TomlKeyValue TomlFile::getNextValue() {
                     // turns out to matter.
                     case TomlToken::Type::SquareOpen:
                     case TomlToken::Type::BraceOpen:
-                        skipped_nested = true;
-                        this->skip_composite_value();
+                        skippedNested = true;
+                        this->skipCompositeValue();
                         break;
                     default:
                         throw ::std::runtime_error(::format(mLexer, ": Unexpected token in array value position - ", t));
@@ -264,7 +264,7 @@ TomlKeyValue TomlFile::getNextValue() {
             if (t.mType != TomlToken::Type::SquareClose) {
                 throw ::std::runtime_error(::format(mLexer, ": Unexpected token after array - ", t));
             }
-            if (skipped_nested) {
+            if (skippedNested) {
                 ::std::string key;
                 for (const auto& c : rv.path) {
                     if (!key.empty()) {
@@ -319,7 +319,7 @@ TomlKeyValue TomlFile::getNextValue() {
     return rv;
 }
 
-void TomlFile::skip_composite_value() {
+void TomlFile::skipCompositeValue() {
     // The opening `[` or `{` has already been consumed by the caller. Read
     // tokens (including any nested groups) until the matching close balances
     // the count back to zero. Contents are discarded.

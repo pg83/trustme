@@ -150,36 +150,36 @@
 #define TU_ARM(VAR, TAG, NAME)                                    \
     break;                                                        \
     case ::std::remove_reference<decltype(VAR)>::type::TAG_##TAG: \
-        for (bool tu_lc = true; tu_lc; tu_lc = false)             \
-            for (decltype((VAR).as_##TAG()) NAME = (VAR).as_##TAG(); (void)NAME, tu_lc; tu_lc = false)
+        for (bool tuLc = true; tuLc; tuLc = false)             \
+            for (decltype((VAR).as_##TAG()) NAME = (VAR).as_##TAG(); (void)NAME, tuLc; tuLc = false)
 
 #define TU_MATCH_HDRA(VARS, brace) TU_MATCH_HDRA_(::std::remove_reference<decltype(TU_FIRST VARS)>::type, VARS, brace)
 #define TU_MATCH_HDRA_(CLASS, VARS, brace) /*
     */                           \
-    for (bool tu_lc = true; tu_lc; tu_lc = false)                       \
-        for (TU_EXP1(TUMATCHHDRADecl VARS); tu_lc; tu_lc = false) /*
+    for (bool tuLc = true; tuLc; tuLc = false)                       \
+        for (TU_EXP1(TUMATCHHDRADecl VARS); tuLc; tuLc = false) /*
         */ \
-            switch (tu_match_hdr2_v.tag())                              \
+            switch (tuMatchHdr2V.tag())                              \
             brace /*
         */                                                    \
                 case CLASS::TAGDEAD:                                    \
                 assert(!"ERROR: destructed tagged union used");
-#define TUMATCHHDRADeclRest1(v1) &tu_match_hdr2_v = v1
-#define TUMATCHHDRADeclRest2(v1, v2) TUMATCHHDRADeclRest1(v1), &tu_match_hdr2_v2 = v2
-#define TUMATCHHDRADeclRest3(v1, v2, v3) TUMATCHHDRADeclRest2(_, v2), &tu_match_hdr2_v3 = v3
+#define TUMATCHHDRADeclRest1(v1) &tuMatchHdr2V = v1
+#define TUMATCHHDRADeclRest2(v1, v2) TUMATCHHDRADeclRest1(v1), &tuMatchHdr2V2 = v2
+#define TUMATCHHDRADeclRest3(v1, v2, v3) TUMATCHHDRADeclRest2(_, v2), &tuMatchHdr2V3 = v3
 #define TUMATCHHDRADecl(...) auto TU_EXP1(TU_GM(TUMATCHHDRADeclRest, __VA_ARGS__)(__VA_ARGS__))
-#define TUARMADeclInner1(TAG, v1) v1 = tu_match_hdr2_v.as_##TAG()
-#define TUARMADeclInner2(TAG, v1, v2) TUARMADeclInner1(TAG, v1), v2 = tu_match_hdr2_v2.as_##TAG()
-#define TUARMADeclInner3(TAG, v1, v2, v3) TUARMADeclInner1(TAG, v1, v2), v3 = tu_match_hdr2_v3.as_##TAG()
-#define TUARMADecl(TAG, ...) decltype(tu_match_hdr2_v.as_##TAG()) TU_EXP1(TU_GM(TUARMADeclInner, __VA_ARGS__)(TAG, __VA_ARGS__))
+#define TUARMADeclInner1(TAG, v1) v1 = tuMatchHdr2V.as_##TAG()
+#define TUARMADeclInner2(TAG, v1, v2) TUARMADeclInner1(TAG, v1), v2 = tuMatchHdr2V2.as_##TAG()
+#define TUARMADeclInner3(TAG, v1, v2, v3) TUARMADeclInner1(TAG, v1, v2), v3 = tuMatchHdr2V3.as_##TAG()
+#define TUARMADecl(TAG, ...) decltype(tuMatchHdr2V.as_##TAG()) TU_EXP1(TU_GM(TUARMADeclInner, __VA_ARGS__)(TAG, __VA_ARGS__))
 #define TUARMAIgnVal(v) (void)v,
 // Nested single-iteration loops provide a declaration scope for the arm bindings.
 #define TU_ARMA(TAG, ...)                                                        \
     break;                                                                       \
-    case ::std::remove_reference<decltype(tu_match_hdr2_v)>::type::TAG_##TAG: /*
+    case ::std::remove_reference<decltype(tuMatchHdr2V)>::type::TAG_##TAG: /*
     */ \
-        for (bool tu_lc = true; tu_lc; tu_lc = false)                            \
-            for (TUARMADecl(TAG, __VA_ARGS__); TU_EXP1(TU_GMO(__VA_ARGS__)(TUARMAIgnVal, __VA_ARGS__)) tu_lc; tu_lc = false)
+        for (bool tuLc = true; tuLc; tuLc = false)                            \
+            for (TUARMADecl(TAG, __VA_ARGS__); TU_EXP1(TU_GMO(__VA_ARGS__)(TUARMAIgnVal, __VA_ARGS__)) tuLc; tuLc = false)
 
 //#define TU_TEST(VAL, ...)    (VAL.is_##TAG() && VAL.as_##TAG() TEST)
 #define TU_TEST1(VAL, TAG1, TEST) ((VAL).is_##TAG1() && ((VAL).as_##TAG1() TEST))
@@ -198,11 +198,11 @@
         : mTag(TAG_##__tag) {                         \
         TUCopyInplace(mData.__tag, v);              \
     }                                                  \
-    static self_t make_##__tag(__type&& v) {           \
+    static selfT make_##__tag(__type&& v) {           \
         return __name(::std::move(v));                 \
     }                                                  \
     template <typename _TU_Dummy = void>               \
-    static self_t make_##__tag(const __type& v) {      \
+    static selfT make_##__tag(const __type& v) {      \
         return __name(v);                              \
     }                                                  \
     bool is_##__tag() const {                          \
@@ -237,7 +237,7 @@
 // complete until later in the translation unit.
 #define TU_CONS_I_DECL(__name, __tag, __type) \
     __name(__type v);                         \
-    static self_t make_##__tag(__type v);     \
+    static selfT make_##__tag(__type v);     \
     bool is_##__tag() const {                 \
         return mTag == TAG_##__tag;          \
     }                                         \
@@ -348,7 +348,7 @@
 
 #define _TAGGED_UNION_EX(_name, _inherit, _def, _variants, _extra_move, _extra_assign, _extra) \
     class _name TU_EXP _inherit {                                                              \
-        typedef _name self_t; /*
+        typedef _name selfT; /*
 */                                                               \
     public:                                                                                    \
         TU_TYPEDEFS _variants /*
@@ -412,13 +412,13 @@
         Tag tag() const {                                                                      \
             return mTag;                                                                      \
         }                                                                                      \
-        const char* tag_str() const {                                                          \
-            return tag_to_str(mTag);                                                          \
+        const char* tagStr() const {                                                          \
+            return tagToStr(mTag);                                                          \
         }                                                                                      \
         TU_CONSS(_name, TU_EXP _variants)                                                      \
         /*
 */                                                                                     \
-        static const char* tag_to_str(Tag tag) {                                               \
+        static const char* tagToStr(Tag tag) {                                               \
             switch (tag) { /*
 */                                                                  \
                 case TAGDEAD:                                                                  \
@@ -430,7 +430,7 @@
             return "";                                                                         \
         } /*
 */                                                                                   \
-        static Tag tag_from_str(const ::std::string& str) {                                    \
+        static Tag tagFromStr(const ::std::string& str) {                                    \
             if (0)                                                                             \
                 ;                      /*
 */                                                      \
@@ -458,7 +458,7 @@
 
 #define _TAGGED_UNION_OUT_OF_LINE(_name, _def, _variants)                         \
     class _name {                                                                 \
-        typedef _name self_t; /*
+        typedef _name selfT; /*
 */                                                  \
     public:                                                                       \
         TU_TYPEDEFS _variants /*
@@ -491,13 +491,13 @@
         Tag tag() const {                                                         \
             return mTag;                                                         \
         }                                                                         \
-        const char* tag_str() const {                                             \
-            return tag_to_str(mTag);                                             \
+        const char* tagStr() const {                                             \
+            return tagToStr(mTag);                                             \
         }                                                                         \
         TU_CONSS_DECL(_name, TU_EXP _variants)                                    \
         /*
 */                                                                        \
-        static const char* tag_to_str(Tag tag) {                                  \
+        static const char* tagToStr(Tag tag) {                                  \
             switch (tag) { /*
 */                                                     \
                 case TAGDEAD:                                                     \
@@ -509,7 +509,7 @@
             return "";                                                            \
         } /*
 */                                                                      \
-        static Tag tag_from_str(const ::std::string& str) {                       \
+        static Tag tagFromStr(const ::std::string& str) {                       \
             if (0)                                                                \
                 ;                      /*
 */                                         \

@@ -122,7 +122,7 @@ public:
         return mData.as_String();
     }
 
-    const Ident::Hygiene& str_hygiene() const {
+    const Ident::Hygiene& strHygiene() const {
         return mHygiene;
     }
 
@@ -149,10 +149,10 @@ public:
 
     AST::ExprNode& fragNode();
 
-    ::std::unique_ptr<AST::ExprNode> take_frag_node();
-    ::AST::Named<AST::Item> take_frag_item();
-    ::AST::Named<AST::Item> take_frag_stmt_item();
-    ::AST::Visibility take_frag_vis();
+    ::std::unique_ptr<AST::ExprNode> takeFragNode();
+    ::AST::Named<AST::Item> takeFragItem();
+    ::AST::Named<AST::Item> takeFragStmtItem();
+    ::AST::Visibility takeFragVis();
 
     bool operator==(eTokenType tty) const {
         return type() == tty;
@@ -169,9 +169,9 @@ public:
     }
 
     /// Return a re-parseable version of the token
-    ::std::string to_str() const;
+    ::std::string toStr() const;
 
-    void set_pos(Position pos) {
+    void setPos(Position pos) {
         this->pos = pos;
     }
 

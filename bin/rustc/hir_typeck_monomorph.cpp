@@ -5,7 +5,7 @@ Monomorphiser::Monomorphiser(HIR::TypeInterner& types)
     , constevalCrate(nullptr)
     , constevalPath("") {
 }
-void Monomorphiser::set_consteval_state(const HIR::Crate& crate, HIR::ItemPath ip) {
+void Monomorphiser::setConstevalState(const HIR::Crate& crate, HIR::ItemPath ip) {
     this->constevalCrate = &crate;
     this->constevalPath = ip;
 }
@@ -74,7 +74,7 @@ MonomorphState MonomorphState::clone() const {
     rv.ppMethod = this->ppMethod;
     return rv;
 }
-void MonomorphState::set_impl_params(HIR::PathParams pp) {
+void MonomorphState::setImplParams(HIR::PathParams pp) {
     ppImpl = &ppImplData;
     ppImplData = std::move(pp);
 }

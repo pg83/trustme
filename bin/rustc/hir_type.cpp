@@ -543,7 +543,7 @@ namespace {
         auto bi = b.typeBounds.begin();
         for (; ai != a.typeBounds.end(); ++ai, ++bi) {
             if (ai->first != bi->first
-                || !exactGenericPathEqual(ai->second.source_trait, bi->second.source_trait)
+                || !exactGenericPathEqual(ai->second.sourceTrait, bi->second.sourceTrait)
                 || !exactPathParamsEqual(ai->second.atyParams, bi->second.atyParams)
                 || ai->second.type != bi->second.type) return false;
         }
@@ -551,7 +551,7 @@ namespace {
         auto bti = b.traitBounds.begin();
         for (; ati != a.traitBounds.end(); ++ati, ++bti) {
             if (ati->first != bti->first
-                || !exactGenericPathEqual(ati->second.source_trait, bti->second.source_trait)
+                || !exactGenericPathEqual(ati->second.sourceTrait, bti->second.sourceTrait)
                 || !exactPathParamsEqual(ati->second.atyParams, bti->second.atyParams)
                 || ati->second.traits.size() != bti->second.traits.size()) return false;
             for (size_t i = 0; i < ati->second.traits.size(); i++) {
@@ -705,12 +705,12 @@ namespace {
     uint32_t type_flags(const TraitPath& trait) {
         auto flags = type_flags(trait.mPath);
         for (const auto& bound : trait.typeBounds) {
-            flags |= type_flags(bound.second.source_trait);
+            flags |= type_flags(bound.second.sourceTrait);
             flags |= type_flags(bound.second.atyParams);
             addTypeFlags(flags, bound.second.type);
         }
         for (const auto& bound : trait.traitBounds) {
-            flags |= type_flags(bound.second.source_trait);
+            flags |= type_flags(bound.second.sourceTrait);
             flags |= type_flags(bound.second.atyParams);
             for (const auto& nested : bound.second.traits) {
                 flags |= type_flags(nested);
@@ -956,7 +956,7 @@ namespace {
             }
             for (const auto& bound : e.mTrait.typeBounds) {
                 h = hashMix(h, ::std::hash<RcString>()(bound.first));
-                h = hashMix(h, hashGenericPath(bound.second.source_trait));
+                h = hashMix(h, hashGenericPath(bound.second.sourceTrait));
                 h = hashMix(h, hashPathParams(bound.second.atyParams));
                 h = hashMix(h, hashTypeRef(bound.second.type));
             }
@@ -1258,7 +1258,7 @@ Ordering HIR::TypeData::ordIgnoringRegions(::HIR::TypeRef x) const {
 }
 
 namespace {
-    ::HIR::Compare matchGenericsPp(const Span& sp, const ::HIR::PathParams& t, const ::HIR::PathParams& x, ::HIR::t_cb_resolve_type resolvePlaceholder, ::HIR::MatchGenerics& callback) {
+    ::HIR::Compare matchGenericsPp(const Span& sp, const ::HIR::PathParams& t, const ::HIR::PathParams& x, ::HIR::tCbResolveType resolvePlaceholder, ::HIR::MatchGenerics& callback) {
         return t.matchTestGenericsFuzz(sp, x, resolvePlaceholder, callback);
     }
 
@@ -1301,11 +1301,11 @@ namespace {
     }
 }
 
-bool ::HIR::TypeData::matchTestGenerics(const Span& sp, ::HIR::TypeRef x_in, t_cb_resolve_type resolvePlaceholder, ::HIR::MatchGenerics& callback) const {
+bool ::HIR::TypeData::matchTestGenerics(const Span& sp, ::HIR::TypeRef x_in, tCbResolveType resolvePlaceholder, ::HIR::MatchGenerics& callback) const {
     return this->matchTestGenericsFuzz(sp, x_in, resolvePlaceholder, callback) == ::HIR::Compare::Equal;
 }
 
-::HIR::Compare HIR::TypeData::matchTestGenericsFuzz(const Span& sp, ::HIR::TypeRef x_in, t_cb_resolve_type resolvePlaceholder, ::HIR::MatchGenerics& callback) const {
+::HIR::Compare HIR::TypeData::matchTestGenericsFuzz(const Span& sp, ::HIR::TypeRef x_in, tCbResolveType resolvePlaceholder, ::HIR::MatchGenerics& callback) const {
     const TypeRef self = this;
     return callback.cmpType(sp, self, x_in, resolvePlaceholder);
 }
@@ -1315,7 +1315,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::pushHrb(const std::unique_ptr<
     return params ? pushHrb(*params) : PopOnDrop();
 }
 
-::HIR::Compare HIR::MatchGenerics::cmpPath(const Span& sp, const ::HIR::Path& pathL, const ::HIR::Path& pathR, t_cb_resolve_type resolvePlaceholder) {
+::HIR::Compare HIR::MatchGenerics::cmpPath(const Span& sp, const ::HIR::Path& pathL, const ::HIR::Path& pathR, tCbResolveType resolvePlaceholder) {
     ::HIR::Compare rv = Compare::Unequal;
     if (pathL.mData.tag() != pathR.mData.tag()) {
         rv = Compare::Unequal;
@@ -1359,7 +1359,7 @@ HIR::TrackHrbStack::PopOnDrop HIR::TrackHrbStack::pushHrb(const std::unique_ptr<
     return rv;
 }
 
-::HIR::Compare HIR::MatchGenerics::cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, t_cb_resolve_type resolvePlaceholder) {
+::HIR::Compare HIR::MatchGenerics::cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, tCbResolveType resolvePlaceholder) {
     if (const auto* e = ty_l->opt_Generic()) {
         return this->matchTy(*e, ty_r, resolvePlaceholder);
     }
@@ -1827,7 +1827,7 @@ HIR::TypeDataNamedFunctionTy HIR::TypeDataNamedFunctionTy::clone() const {
     throw "";
 }
 
-::HIR::Compare HIR::TypeData::compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, t_cb_resolve_type resolvePlaceholder) const {
+::HIR::Compare HIR::TypeData::compareWithPlaceholders(const Span& sp, ::HIR::TypeRef x, tCbResolveType resolvePlaceholder) const {
     //TRACE_FUNCTION_F(*this << " ?= " << x);
     const TypeRef self = this;
     const auto& left = resolvePlaceholder.getType(sp, self);

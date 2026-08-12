@@ -69,4 +69,4 @@ extern AST::ExprNodeP ParseStmt(TokenStream& lex);
 // unwrapped = Exclude the enclosing brackets (used by macro parse code)
 extern TokenTree ParseTT(TokenStream& lex, bool unwrapped);
 
-extern bool ParseIsTokValue(eTokenType tok_type);
+extern bool ParseIsTokValue(eTokenType tokType);

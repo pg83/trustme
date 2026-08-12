@@ -55,33 +55,33 @@ void ExpandTestHarness(::AST::Crate& crate) {
     auto mainFn = ::AST::Function{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
     {
         auto callNode = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("test_main_static")}), ::makeVec1(NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, NEWNODE(NamedValue, ::AST::Path("", {::AST::PathNode("test#"), ::AST::PathNode("TESTS")})))));
-        mainFn.set_code(mv$(callNode));
+        mainFn.setCode(mv$(callNode));
     }
 
     // ---- test list ----
-    ::std::vector<::AST::ExprNodeP> test_nodes;
+    ::std::vector<::AST::ExprNodeP> testNodes;
 
     for (const auto& test : crate.tests) {
-        ::AST::ExprNodeStructLiteral::t_values descVals;
+        ::AST::ExprNodeStructLiteral::tValues descVals;
         // `name: "foo",`
         descVals.push_back({{}, "name", NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("StaticTestName")}), ::makeVec1(NEWNODE(String, test.name)))});
         // `ignore: false,`
         descVals.push_back({{}, "ignore", NEWNODE(Bool, test.ignore)});
         // `should_panic: ShouldPanic::No,`
         {
-            ::AST::ExprNodeP should_panic_val;
+            ::AST::ExprNodeP shouldPanicVal;
             switch (test.panicType) {
                 case ::AST::TestDesc::ShouldPanic::No:
-                    should_panic_val = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("No")}));
+                    shouldPanicVal = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("No")}));
                     break;
                 case ::AST::TestDesc::ShouldPanic::Yes:
-                    should_panic_val = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("Yes")}));
+                    shouldPanicVal = NEWNODE(NamedValue, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("Yes")}));
                     break;
                 case ::AST::TestDesc::ShouldPanic::YesWithMessage:
-                    should_panic_val = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), makeVec1(NEWNODE(String, test.expectedPanicMessage)));
+                    shouldPanicVal = NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("ShouldPanic"), ::AST::PathNode("YesWithMessage")}), makeVec1(NEWNODE(String, test.expectedPanicMessage)));
                     break;
             }
-            descVals.push_back({{}, "should_panic", mv$(should_panic_val)});
+            descVals.push_back({{}, "should_panic", mv$(shouldPanicVal)});
         }
         {
             // TODO: Get this from attributes
@@ -93,40 +93,40 @@ void ExpandTestHarness(::AST::Crate& crate) {
             descVals.push_back({{}, "ignore_message", NEWNODE(NamedValue, ::AST::Path(crate.extCratenameStd, {AST::PathNode("option"), AST::PathNode("Option"), AST::PathNode("None")}))});
             auto sp = test.span.getTopFileSpan();
             descVals.push_back({{}, "source_file", NEWNODE(String, sp.filename.c_str())});
-            descVals.push_back({{}, "start_line", NEWNODE(Integer, U128(sp.start_line), CORETYPE_UINT)});
-            descVals.push_back({{}, "start_col", NEWNODE(Integer, U128(sp.start_ofs), CORETYPE_UINT)});
+            descVals.push_back({{}, "start_line", NEWNODE(Integer, U128(sp.startLine), CORETYPE_UINT)});
+            descVals.push_back({{}, "start_col", NEWNODE(Integer, U128(sp.startOfs), CORETYPE_UINT)});
             descVals.push_back({{}, "end_line", NEWNODE(Integer, U128(sp.endLine), CORETYPE_UINT)});
             descVals.push_back({{}, "end_col", NEWNODE(Integer, U128(sp.endOfs), CORETYPE_UINT)});
         }
         auto descExpr = NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDesc")}), nullptr, mv$(descVals));
 
-        ::AST::ExprNodeStructLiteral::t_values descandfnVals;
+        ::AST::ExprNodeStructLiteral::tValues descandfnVals;
         descandfnVals.push_back({{}, RcString::newInterned("desc"), mv$(descExpr)});
 
-        auto test_fcn_node = NEWNODE(NamedValue, AST::Path(test.path));
+        auto testFcnNode = NEWNODE(NamedValue, AST::Path(test.path));
         {
             // Convert `fn()` into `fn()->Result<(),String>`
             // Use `|| ::test::assert_test_result( fcn() )`
-            test_fcn_node = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, AST::Path(test.path), {}))), false, false);
+            testFcnNode = NEWNODE(Closure, {}, TypeRef(Span()), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, AST::Path(test.path), {}))), false, false);
         }
-        auto test_type_var_name = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
-        descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(test_type_var_name)}), ::makeVec1(std::move(test_fcn_node)))});
+        auto testTypeVarName = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
+        descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ::AST::Path(cTest, {::AST::PathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});
 
-        test_nodes.push_back(NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
+        testNodes.push_back(NEWNODE(StructLiteral, ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}), nullptr, mv$(descandfnVals)));
         // NOTE: 1.39+ needs &TestDescAndFn here
         {
-            test_nodes.back() = NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, mv$(test_nodes.back()));
+            testNodes.back() = NEWNODE(UniOp, ::AST::ExprNodeUniOp::REF, mv$(testNodes.back()));
         }
     }
-    auto* tests_array = new ::AST::ExprNodeArray(mv$(test_nodes));
+    auto* testsArray = new ::AST::ExprNodeArray(mv$(testNodes));
 
-    size_t test_count = tests_array->values.size();
+    size_t testCount = testsArray->values.size();
     auto listItemTy = TypeRef(Span(), ::AST::Path(cTest, {::AST::PathNode("TestDescAndFn")}));
     // NOTE: 1.39+ needs &TestDescAndFn here
     {
         listItemTy = TypeRef(TypeRef::TagReference(), Span(), AST::LifetimeRef::new_static(), false, mv$(listItemTy));
     }
-    auto tests_list = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(test_count), CORETYPE_UINT))), ::AST::Expr(mv$(tests_array))};
+    auto testsList = ::AST::Static{::AST::Static::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<::AST::ExprNode>(new ::AST::ExprNodeInteger(U128(testCount), CORETYPE_UINT))), ::AST::Expr(mv$(testsArray))};
 
     // ---- module ----
     auto newmod = ::AST::Module{::AST::AbsolutePath("", {"test#"})};
@@ -137,7 +137,7 @@ void ExpandTestHarness(::AST::Crate& crate) {
     //newmod.add_ext_crate(Span(), false, "test", "test", {});
 
     newmod.addItem(Span(), vis_private, "main", mv$(mainFn), {});
-    newmod.addItem(Span(), vis_private, "TESTS", mv$(tests_list), {});
+    newmod.addItem(Span(), vis_private, "TESTS", mv$(testsList), {});
 
     crate.rootModule.addItem(Span(), vis_private, "test#", mv$(newmod), {});
     crate.mLangItems["mrustc-main"] = ::AST::AbsolutePath("", {"test#", "main"});
@@ -194,14 +194,14 @@ struct ProgramParams {
     bool test_harness = false;
 
     // NOTE: If populated, nothing happens except for loading the target
-    ::std::string target_saveback;
+    ::std::string targetSaveback;
     // NOTE: if true, no parse/compilation performed (target is loaded though)
     bool printCfgs = false;
 
     //
     bool runBorrowcheck = false;
 
-    TraitSolverConfig trait_solver;
+    TraitSolverConfig traitSolver;
 
     ::std::vector<const char*> libSearchDirs;
     ::std::vector<const char*> libraries;
@@ -241,18 +241,18 @@ struct ProgramParams {
         return debugAssertionsExplicit ? debugAssertions : optLevel == OptimizationLevel::None;
     }
 
-    void show_help() const;
+    void showHelp() const;
 };
 
 template <typename Rv, typename Fcn>
 Rv CompilePhase(const char* name, Fcn f) {
-    DebugTimedPhase timed_phase(name);
+    DebugTimedPhase timedPhase(name);
     return f();
 }
 
 template <typename Fcn>
 void CompilePhaseV(const char* name, Fcn f) {
-    DebugTimedPhase timed_phase(name);
+    DebugTimedPhase timedPhase(name);
     f();
 }
 
@@ -324,7 +324,7 @@ void initDebugList() {
 int main(int argc, char* argv[]) {
     initDebugList();
     ProgramParams params(argc, argv);
-    gTraitSolverConfig = params.trait_solver;
+    gTraitSolverConfig = params.traitSolver;
     const auto mirOptLevel = params.effectiveMirOptLevel();
     const auto enableMirInlining = params.enableMirInlining();
     if (params.codegen.panicType.empty()) {
@@ -356,8 +356,8 @@ int main(int argc, char* argv[]) {
         CfgDump(std::cout);
         return 0;
     }
-    if (params.target_saveback != "") {
-        TargetExportCurSpec(params.target_saveback);
+    if (params.targetSaveback != "") {
+        TargetExportCurSpec(params.targetSaveback);
         return 0;
     }
 
@@ -405,8 +405,8 @@ int main(int argc, char* argv[]) {
             }
             crate.loadExterns();
             if (params.test_harness) {
-                auto test_crate_name = RcString::newInterned("test");
-                AST::gImplicitCrates.insert(std::make_pair(test_crate_name, crate.loadExternCrate(Span(), test_crate_name)));
+                auto testCrateName = RcString::newInterned("test");
+                AST::gImplicitCrates.insert(std::make_pair(testCrateName, crate.loadExternCrate(Span(), testCrateName)));
             }
         });
 
@@ -422,7 +422,7 @@ int main(int argc, char* argv[]) {
             }
             crate.crateType = crate_type;
 
-            crate.set_crate_name(params.crate_name);
+            crate.setCrateName(params.crate_name);
             crate.crateType = ::AST::Crate::Type::Unknown;
         }
 
@@ -488,7 +488,7 @@ int main(int argc, char* argv[]) {
         if (params.test_harness) {
             crate_name += "$test";
         }
-        crate.set_crate_name(crate_name);
+        crate.setCrateName(crate_name);
 
         if (params.outfile == "") {
             switch (crate.crateType) {
@@ -845,12 +845,12 @@ int main(int argc, char* argv[]) {
         // - Signature Exportable (public)
         // - MIR Exportable (public generic, #[inline], or used by a either of those)
         // - Require codegen (public or used by an exported function)
-        TransOptions trans_opt;
-        trans_opt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
-        trans_opt.buildCommandFile = params.codegen.emitBuildCommand;
-        trans_opt.linkerArgs = params.codegen.linkerArgs;
-        trans_opt.optLevel = params.optLevel;
-        trans_opt.panicCrate = "panic_" + params.codegen.panicType;
+        TransOptions transOpt;
+        transOpt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
+        transOpt.buildCommandFile = params.codegen.emitBuildCommand;
+        transOpt.linkerArgs = params.codegen.linkerArgs;
+        transOpt.optLevel = params.optLevel;
+        transOpt.panicCrate = "panic_" + params.codegen.panicType;
         for (const char* libdir : params.libSearchDirs) {
             // Store these paths for use in final linking.
             hirCrate->linkPaths.push_back(libdir);
@@ -858,7 +858,7 @@ int main(int argc, char* argv[]) {
         for (const char* libname : params.libraries) {
             hirCrate->extLibs.push_back(::HIR::ExternLibrary{libname});
         }
-        trans_opt.debugInfo = params.debugInfo;
+        transOpt.debugInfo = params.debugInfo;
 
         // Generate code for non-generic public items (if requested)
         if (params.test_harness) {
@@ -874,7 +874,7 @@ int main(int argc, char* argv[]) {
                 crateForSer.crateName = hirCrate->crateName;
                 crateForSer.edition = hirCrate->edition;
                 for (const auto& i : hirCrate->rootModule.macroItems) {
-                    DEBUG(i.first << ": " << i.second->ent.tag_str());
+                    DEBUG(i.first << ": " << i.second->ent.tagStr());
                     if (const auto* e = i.second->ent.opt_ProcMacro()) {
                         crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, box$(HIR::VisEnt<HIR::MacroItem>{i.second->publicity, *e})));
                     }
@@ -959,27 +959,27 @@ int main(int argc, char* argv[]) {
             case ::AST::Crate::Type::RustLib:
                 // Generate a linkable .o
                 CompilePhaseV("Trans Codegen", [&]() {
-                    TransCodegen(params.outfile, CodegenOutput::StaticLibrary, trans_opt, hirCrate, std::move(items), hirFile);
+                    TransCodegen(params.outfile, CodegenOutput::StaticLibrary, transOpt, hirCrate, std::move(items), hirFile);
                 });
                 break;
             case ::AST::Crate::Type::RustDylib:
             case ::AST::Crate::Type::CDylib:
                 // Generate a shared library
                 CompilePhaseV("Trans Codegen", [&]() {
-                    TransCodegen(params.outfile, CodegenOutput::DynamicLibrary, trans_opt, hirCrate, std::move(items), hirFile);
+                    TransCodegen(params.outfile, CodegenOutput::DynamicLibrary, transOpt, hirCrate, std::move(items), hirFile);
                 });
                 break;
             case ::AST::Crate::Type::ProcMacro: {
                 // Needs: An executable (the actual macro handler), metadata (for `extern crate foo;`)
                 // - Metadata was done before enumerate
                 CompilePhaseV("Trans Codegen", [&]() {
-                    TransCodegen(params.outfile, CodegenOutput::Executable, trans_opt, hirCrate, std::move(items), hirFile);
+                    TransCodegen(params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), hirFile);
                 });
                 break;
             }
             case ::AST::Crate::Type::Executable:
                 CompilePhaseV("Trans Codegen", [&]() {
-                    TransCodegen(params.outfile, CodegenOutput::Executable, trans_opt, hirCrate, std::move(items), "");
+                    TransCodegen(params.outfile, CodegenOutput::Executable, transOpt, hirCrate, std::move(items), "");
                 });
                 break;
         }
@@ -1252,14 +1252,14 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                         this->mirOptLevelExplicit = true;
                     } else if (optname == "next-solver") {
                         if (eqPos == ::std::string::npos || optval == "globally") {
-                            this->trait_solver.coherence = true;
-                            this->trait_solver.globally = true;
+                            this->traitSolver.coherence = true;
+                            this->traitSolver.globally = true;
                         } else if (optval == "coherence") {
-                            this->trait_solver.coherence = true;
-                            this->trait_solver.globally = false;
+                            this->traitSolver.coherence = true;
+                            this->traitSolver.globally = false;
                         } else if (optval == "no") {
-                            this->trait_solver.coherence = false;
-                            this->trait_solver.globally = false;
+                            this->traitSolver.coherence = false;
+                            this->traitSolver.globally = false;
                         } else {
                             ::std::cerr << "Invalid value for -Z next-solver: '" << optval
                                        << "' (expected 'no', 'coherence', or 'globally')"
@@ -1359,7 +1359,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
             };
 
             if (strcmp(arg, "--help") == 0) {
-                this->show_help();
+                this->showHelp();
                 exit(0);
             } else if (strcmp(arg, "--version") == 0) {
                 const char* rustcTarget = RUSTC_TARGET_VERSION;
@@ -1468,14 +1468,14 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
                 ::std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
             }
             // `--target <triple>`  - Override the default compiler target
-            else if (const char* target_name = checkWithArg("target")) {
-                this->target = target_name;
+            else if (const char* targetName = checkWithArg("target")) {
+                this->target = targetName;
             } else if (strcmp(arg, "--dump-target-spec") == 0) {
                 if (i == argc - 1) {
                     ::std::cerr << "Flag " << arg << " requires an argument" << ::std::endl;
                     exit(1);
                 }
-                this->target_saveback = argv[++i];
+                this->targetSaveback = argv[++i];
             } else if (strcmp(arg, "--test") == 0) {
                 this->test_harness = true;
             } else if (const char* editionStr = checkWithArg("edition")) {
@@ -1528,7 +1528,7 @@ ProgramParams::ProgramParams(int argc, char* argv[]) {
     }
 }
 
-void ProgramParams::show_help() const {
+void ProgramParams::showHelp() const {
     ::std::cout << "USAGE: mrustc <sourcefile>\n"
                    "\n"
                    "OPTIONS:\n"

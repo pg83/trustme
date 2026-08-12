@@ -58,7 +58,7 @@ namespace {
             throw ::std::runtime_error(message);
         }
 
-        void skip_ws() {
+        void skipWs() {
             while (pos < input.size()) {
                 const auto c = static_cast<unsigned char>(input[pos]);
                 if (c != ' ' && c != '\t' && c != '\r' && c != '\n') {
@@ -69,7 +69,7 @@ namespace {
         }
 
         bool take(char c) {
-            skip_ws();
+            skipWs();
             if (pos < input.size() && input[pos] == c) {
                 pos += 1;
                 return true;
@@ -92,7 +92,7 @@ namespace {
         }
 
         ::std::string ident() {
-            skip_ws();
+            skipWs();
             const auto start = pos;
             if (pos >= input.size() || !isIdentStart(static_cast<unsigned char>(input[pos]))) {
                 fail("expected an identifier");
@@ -117,8 +117,8 @@ namespace {
             return 16;
         }
 
-        ::std::string string_literal() {
-            skip_ws();
+        ::std::string stringLiteral() {
+            skipWs();
             if (pos >= input.size() || input[pos] != '"') {
                 fail("expected a string literal");
             }
@@ -165,7 +165,7 @@ namespace {
         }
 
         bool atEnd() {
-            skip_ws();
+            skipWs();
             return pos == input.size();
         }
 
@@ -173,7 +173,7 @@ namespace {
             auto name = ident();
             ::std::optional<::std::string> value;
             if (take('=')) {
-                value = string_literal();
+                value = stringLiteral();
             }
             if (!atEnd()) {
                 fail("expected `key` or `key=\"value\"`");
@@ -216,12 +216,12 @@ namespace {
                         bool sawAny = false;
                         if (!take(')')) {
                             for (;;) {
-                                skip_ws();
+                                skipWs();
                                 if (pos < input.size() && input[pos] == '"') {
                                     if (sawAny) {
                                         fail("`values()` cannot combine string literals with `any()`");
                                     }
-                                    rv.values.values.insert(string_literal());
+                                    rv.values.values.insert(stringLiteral());
                                 } else {
                                     auto value_kind = ident();
                                     expect('(', "`(` in `values()` special value");
@@ -507,7 +507,7 @@ namespace {
                 GET_CHECK_TOK(tok, lex, TOK_EQUAL);
                 std::string val;
                 if (lex.lookahead(0) == TOK_INTERPOLATED_EXPR) {
-                    auto n = lex.getTokenCheck(TOK_INTERPOLATED_EXPR).take_frag_node();
+                    auto n = lex.getTokenCheck(TOK_INTERPOLATED_EXPR).takeFragNode();
                     const auto* np = cast<AST::ExprNodeString>(n.get());
                     ASSERT_BUG(n->span(), np, "");
                     val = np->mValue;

@@ -29,7 +29,7 @@ public:
 
     HIR::TypeInterner& type_interner() const { return types; }
 
-    void set_consteval_state(const HIR::Crate& crate, HIR::ItemPath ip);
+    void setConstevalState(const HIR::Crate& crate, HIR::ItemPath ip);
 
     virtual ::HIR::TypeRef getType(const Span& sp, const ::HIR::GenericRef& g) const = 0;
     virtual ::HIR::ConstGeneric getValue(const Span& sp, const ::HIR::GenericRef& g) const = 0;
@@ -166,7 +166,7 @@ struct MonomorphState: public MonomorphiserPP {
 
     MonomorphState clone() const;
 
-    void set_impl_params(HIR::PathParams pp);
+    void setImplParams(HIR::PathParams pp);
 
     bool hasTypes() const {
         return (ppMethod && ppMethod->hasParams()) || (ppImpl && ppImpl->hasParams());

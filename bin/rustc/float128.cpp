@@ -10,12 +10,12 @@ namespace {
     using u128 = unsigned __int128;
 
     // binary128: 1 sign bit, 15 exponent bits, 112 fraction bits
-    constexpr int significand_bits = 112;
+    constexpr int significandBits = 112;
     constexpr int exponentBias = 16383;
     constexpr int min_exponent = -16382;  // of normal values
     constexpr int max_exponent = 16383;
 
-    const u128 implicitBit = u128(1) << significand_bits;
+    const u128 implicitBit = u128(1) << significandBits;
     const u128 fractionMask = implicitBit - 1;
 
     static int clz128(u128 v) {
@@ -65,7 +65,7 @@ namespace {
             } else {
                 // Subnormal: value = fraction * 2^(min_exponent - 112)
                 r.kind = Kind::Finite;
-                const int shift = clz128(fraction) - (128 - (significand_bits + 1));
+                const int shift = clz128(fraction) - (128 - (significandBits + 1));
                 r.significand = fraction << shift;
                 r.exponent = min_exponent - shift;
             }
@@ -98,7 +98,7 @@ namespace {
         return Float128::fromBits(hi, static_cast<uint64_t>(significand));
     }
 
-    static u128 shift_right_sticky(u128 v, unsigned n, bool& sticky) {
+    static u128 shiftRightSticky(u128 v, unsigned n, bool& sticky) {
         if (n == 0) {
             return v;
         }
@@ -122,17 +122,17 @@ namespace {
             return packZero(negative);
         }
         const int length = bitLength128(significand);
-        if (length > significand_bits + 2) {
-            significand = shift_right_sticky(significand, static_cast<unsigned>(length - (significand_bits + 2)), sticky);
-            exponent += length - (significand_bits + 2);
-        } else if (length < significand_bits + 2) {
-            significand <<= (significand_bits + 2) - length;
-            exponent -= (significand_bits + 2) - length;
+        if (length > significandBits + 2) {
+            significand = shiftRightSticky(significand, static_cast<unsigned>(length - (significandBits + 2)), sticky);
+            exponent += length - (significandBits + 2);
+        } else if (length < significandBits + 2) {
+            significand <<= (significandBits + 2) - length;
+            exponent -= (significandBits + 2) - length;
         }
         // significand now in [2^113, 2^114): 113 result bits plus a round bit
         if (exponent < min_exponent) {
             const int32_t shift = min_exponent - exponent;
-            significand = shift_right_sticky(significand, shift > 128 ? 128 : static_cast<unsigned>(shift), sticky);
+            significand = shiftRightSticky(significand, shift > 128 ? 128 : static_cast<unsigned>(shift), sticky);
             exponent = min_exponent;
         }
         const bool roundBit = (significand & 1) != 0;
@@ -140,7 +140,7 @@ namespace {
         if (roundBit && (sticky || (result & 1) != 0)) {
             result += 1;
         }
-        if ((result >> (significand_bits + 1)) != 0) {
+        if ((result >> (significandBits + 1)) != 0) {
             result >>= 1;
             exponent += 1;
         }
@@ -254,7 +254,7 @@ namespace {
         }
 
         // Discards the low `bits` bits; sets sticky if any of them was set
-        void shift_right_sticky(size_t bits, bool& sticky) {
+        void shiftRightSticky(size_t bits, bool& sticky) {
             if (bits == 0) {
                 return;
             }
@@ -292,12 +292,12 @@ namespace {
 
         // The value truncated to its top `bits` bits; sets sticky if any
         // dropped bit was set
-        u128 top_bits(size_t bits, bool& sticky) const {
+        u128 topBits(size_t bits, bool& sticky) const {
             assert(bits <= 128);
             const size_t length = bitLength();
             BigUint copy = *this;
             if (length > bits) {
-                copy.shift_right_sticky(length - bits, sticky);
+                copy.shiftRightSticky(length - bits, sticky);
             }
             u128 v = 0;
             for (size_t i = copy.limbs_.size(); i-- > 0;) {
@@ -307,7 +307,7 @@ namespace {
         }
 
         // Decimal digits, most significant first ("0" for zero)
-        std::string to_decimal() const {
+        std::string toDecimal() const {
             if (isZero()) {
                 return "0";
             }
@@ -359,39 +359,39 @@ namespace {
     // Round the value significand * 2^(exponent - 112) (significand
     // normalized to [2^112, 2^113)) into a float/double-shaped format and
     // return the raw target bits (without the sign bit).
-    static uint64_t roundToNarrow(int32_t exponent, u128 significand, int target_mantissa_bits, int32_t target_min_exponent, int32_t target_max_exponent) {
+    static uint64_t roundToNarrow(int32_t exponent, u128 significand, int targetMantissaBits, int32_t targetMinExponent, int32_t targetMaxExponent) {
         bool sticky = false;
         // Keep target_mantissa_bits + 2 bits: the result plus a round bit
-        u128 sig = shift_right_sticky(significand, static_cast<unsigned>(significand_bits - (target_mantissa_bits + 1)), sticky);
-        if (exponent < target_min_exponent) {
-            const int32_t shift = target_min_exponent - exponent;
-            sig = shift_right_sticky(sig, shift > 128 ? 128 : static_cast<unsigned>(shift), sticky);
-            exponent = target_min_exponent;
+        u128 sig = shiftRightSticky(significand, static_cast<unsigned>(significandBits - (targetMantissaBits + 1)), sticky);
+        if (exponent < targetMinExponent) {
+            const int32_t shift = targetMinExponent - exponent;
+            sig = shiftRightSticky(sig, shift > 128 ? 128 : static_cast<unsigned>(shift), sticky);
+            exponent = targetMinExponent;
         }
         const bool roundBit = (sig & 1) != 0;
         uint64_t result = static_cast<uint64_t>(sig >> 1);
         if (roundBit && (sticky || (result & 1) != 0)) {
             result += 1;
         }
-        const uint64_t target_implicit = uint64_t(1) << target_mantissa_bits;
-        if (result >= target_implicit * 2) {
+        const uint64_t targetImplicit = uint64_t(1) << targetMantissaBits;
+        if (result >= targetImplicit * 2) {
             result >>= 1;
             exponent += 1;
         }
-        const uint64_t bias = static_cast<uint64_t>(1 - target_min_exponent);
-        if (exponent > target_max_exponent && result >= target_implicit) {
+        const uint64_t bias = static_cast<uint64_t>(1 - targetMinExponent);
+        if (exponent > targetMaxExponent && result >= targetImplicit) {
             // Overflow to infinity
-            const uint64_t infiniteBiased = static_cast<uint64_t>(target_max_exponent) + bias + 1;
-            return infiniteBiased << target_mantissa_bits;
+            const uint64_t infiniteBiased = static_cast<uint64_t>(targetMaxExponent) + bias + 1;
+            return infiniteBiased << targetMantissaBits;
         }
         if (result == 0) {
             return 0;
         }
-        if (result < target_implicit) {
+        if (result < targetImplicit) {
             return result;  // subnormal: biased exponent 0
         }
         const uint64_t biased = static_cast<uint64_t>(exponent) + bias;
-        return (biased << target_mantissa_bits) | (result - target_implicit);
+        return (biased << targetMantissaBits) | (result - targetImplicit);
     }
 
     // floor(|value| / 10^lowest_exponent10) rounded to nearest (ties to
@@ -403,7 +403,7 @@ namespace {
         // exact: the extra digit separates above-half from below-half, and
         // sticky distinguishes a true tie
         const int64_t scale10 = -lowestExponent10 + 1;
-        const int32_t exponent2 = value.exponent - significand_bits;
+        const int32_t exponent2 = value.exponent - significandBits;
         bool sticky = false;
         BigUint work = BigUint::fromU128(value.significand);
         if (scale10 > 0) {
@@ -417,9 +417,9 @@ namespace {
             dividePow5Sticky(work, static_cast<uint64_t>(-scale10), sticky);
         }
         if (shift2 < 0) {
-            work.shift_right_sticky(static_cast<size_t>(-shift2), sticky);
+            work.shiftRightSticky(static_cast<size_t>(-shift2), sticky);
         }
-        std::string wide = work.to_decimal();
+        std::string wide = work.toDecimal();
         const char extra = wide.back();
         wide.pop_back();
         while (!wide.empty() && wide.front() == '0') {
@@ -610,7 +610,7 @@ Float128::Float128(double value) {
         exponent = static_cast<int32_t>(biased) - 1023;
     }
     // Exact: widen 53 significant bits to 113
-    *this = packFinite(negative, exponent, u128(significand) << (significand_bits - 52));
+    *this = packFinite(negative, exponent, u128(significand) << (significandBits - 52));
 }
 
 Float128 Float128::fromBits(uint64_t hi, uint64_t lo) {
@@ -716,7 +716,7 @@ Float128::operator int64_t() const {
         }
         return value.negative ? INT64_MIN : INT64_MAX;
     }
-    const uint64_t magnitude = static_cast<uint64_t>(value.significand >> (significand_bits - value.exponent));
+    const uint64_t magnitude = static_cast<uint64_t>(value.significand >> (significandBits - value.exponent));
     return value.negative ? -static_cast<int64_t>(magnitude) : static_cast<int64_t>(magnitude);
 }
 
@@ -737,7 +737,7 @@ Float128::operator uint64_t() const {
     if (value.exponent >= 64) {
         return UINT64_MAX;
     }
-    return static_cast<uint64_t>(value.significand >> (significand_bits - value.exponent));
+    return static_cast<uint64_t>(value.significand >> (significandBits - value.exponent));
 }
 
 Float128 Float128::operator-() const {
@@ -776,16 +776,16 @@ Float128 Float128::operator+(const Float128& other) const {
         small = &a;
     }
     const u128 bigSignificand = big->significand << 3;
-    u128 small_significand = small->significand << 3;
+    u128 smallSignificand = small->significand << 3;
     const int32_t diff = big->exponent - small->exponent;
     bool jam = false;
-    small_significand = shift_right_sticky(small_significand, diff > 128 ? 128 : static_cast<unsigned>(diff), jam);
-    small_significand |= jam ? 1 : 0;
+    smallSignificand = shiftRightSticky(smallSignificand, diff > 128 ? 128 : static_cast<unsigned>(diff), jam);
+    smallSignificand |= jam ? 1 : 0;
     u128 sum;
     if (big->negative == small->negative) {
-        sum = bigSignificand + small_significand;
+        sum = bigSignificand + smallSignificand;
     } else {
-        sum = bigSignificand - small_significand;
+        sum = bigSignificand - smallSignificand;
         if (sum == 0) {
             return packZero(false);
         }
@@ -947,19 +947,19 @@ Float128 Float128::abs() const {
 
 Float128 Float128::trunc() const {
     const auto value = unpack(hi, lo);
-    if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
+    if (value.kind != Kind::Finite || value.exponent >= significandBits) {
         return *this;
     }
     if (value.exponent < 0) {
         return packZero(value.negative);
     }
-    const u128 mask = (u128(1) << (significand_bits - value.exponent)) - 1;
+    const u128 mask = (u128(1) << (significandBits - value.exponent)) - 1;
     return packFinite(value.negative, value.exponent, value.significand & ~mask);
 }
 
 Float128 Float128::floor() const {
     const auto value = unpack(hi, lo);
-    if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
+    if (value.kind != Kind::Finite || value.exponent >= significandBits) {
         return *this;
     }
     const Float128 truncated = trunc();
@@ -971,7 +971,7 @@ Float128 Float128::floor() const {
 
 Float128 Float128::ceil() const {
     const auto value = unpack(hi, lo);
-    if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
+    if (value.kind != Kind::Finite || value.exponent >= significandBits) {
         return *this;
     }
     const Float128 truncated = trunc();
@@ -983,7 +983,7 @@ Float128 Float128::ceil() const {
 
 Float128 Float128::round() const {
     const auto value = unpack(hi, lo);
-    if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
+    if (value.kind != Kind::Finite || value.exponent >= significandBits) {
         return *this;
     }
     if (value.exponent < -1) {
@@ -993,7 +993,7 @@ Float128 Float128::round() const {
         // Magnitude in [0.5, 1): ties away from zero
         return value.negative ? Float128(-1.0) : Float128(1.0);
     }
-    const u128 half = u128(1) << (significand_bits - value.exponent - 1);
+    const u128 half = u128(1) << (significandBits - value.exponent - 1);
     const u128 fraction = value.significand & (half * 2 - 1);
     const Float128 truncated = trunc();
     if (fraction < half) {
@@ -1004,7 +1004,7 @@ Float128 Float128::round() const {
 
 Float128 Float128::roundEven() const {
     const auto value = unpack(hi, lo);
-    if (value.kind != Kind::Finite || value.exponent >= significand_bits) {
+    if (value.kind != Kind::Finite || value.exponent >= significandBits) {
         return *this;
     }
     if (value.exponent < -1) {
@@ -1017,7 +1017,7 @@ Float128 Float128::roundEven() const {
         }
         return value.negative ? Float128(-1.0) : Float128(1.0);
     }
-    const u128 half = u128(1) << (significand_bits - value.exponent - 1);
+    const u128 half = u128(1) << (significandBits - value.exponent - 1);
     const u128 fraction = value.significand & (half * 2 - 1);
     const Float128 truncated = trunc();
     bool roundAway;
@@ -1065,7 +1065,7 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
         return packZero(a.negative);
     }
     // value = rem * 2^(b.exponent - 112), |value| < |denominator|
-    const int shortfall = significand_bits + 1 - bitLength128(rem);
+    const int shortfall = significandBits + 1 - bitLength128(rem);
     const int32_t exponent = b.exponent - shortfall;
     if (exponent < min_exponent) {
         // Subnormal result: express as fraction * 2^(min_exponent - 112).
@@ -1113,12 +1113,12 @@ Float128 Float128::parseDecimal(const char* text) {
     const char* cursor = text;
     BigUint digits;
     int64_t fractionDigits = 0;
-    int64_t significant_digits = 0;
+    int64_t significantDigits = 0;
     assert(*cursor == '.' || ('0' <= *cursor && *cursor <= '9'));
     for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
         digits.multiplyAddSmall(10, static_cast<uint64_t>(*cursor - '0'));
         if (!digits.isZero()) {
-            significant_digits += 1;
+            significantDigits += 1;
         }
     }
     if (*cursor == '.') {
@@ -1127,7 +1127,7 @@ Float128 Float128::parseDecimal(const char* text) {
             digits.multiplyAddSmall(10, static_cast<uint64_t>(*cursor - '0'));
             fractionDigits += 1;
             if (!digits.isZero()) {
-                significant_digits += 1;
+                significantDigits += 1;
             }
         }
     }
@@ -1155,11 +1155,11 @@ Float128 Float128::parseDecimal(const char* text) {
     }
     // Magnitude guards: beyond these the value is certainly out of range
     // (max f128 ~ 1.19e4932, half the smallest subnormal ~ 3.2e-4966)
-    const int64_t top_weight = significant_digits + exponent10;
-    if (top_weight > 4940) {
+    const int64_t topWeight = significantDigits + exponent10;
+    if (topWeight > 4940) {
         return infinity(false);
     }
-    if (top_weight < -4975) {
+    if (topWeight < -4975) {
         return packZero(false);
     }
     bool sticky = false;
@@ -1178,11 +1178,11 @@ Float128 Float128::parseDecimal(const char* text) {
         scaledUp = need > have ? need - have : 0;
         digits.shift_left(scaledUp);
         dividePow5Sticky(digits, power, sticky);
-        digits.shift_right_sticky(static_cast<size_t>(power), sticky);
+        digits.shiftRightSticky(static_cast<size_t>(power), sticky);
     }
     // value = digits * 2^-scaled_up
     const size_t length = digits.bitLength();
-    const u128 significand = digits.top_bits(114, sticky);
+    const u128 significand = digits.topBits(114, sticky);
     // significand = floor(digits / 2^max(0, length - 114)), so
     // value = significand * 2^(max(length, 114) - 114 - scaled_up)
     const int64_t exponent2 = static_cast<int64_t>(length < 114 ? 114 : length) - 1 - static_cast<int64_t>(scaledUp);

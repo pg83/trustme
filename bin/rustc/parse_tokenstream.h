@@ -92,11 +92,11 @@ public:
         return edition < e;
     }
 
-    ProtoSpan start_span() const;
+    ProtoSpan startSpan() const;
     Span endSpan(ProtoSpan ps) const;
     Span pointSpan() const;
 
-    Span sub_span(const Position& p) const {
+    Span subSpan(const Position& p) const {
         return Span(outerSpan(), p);
     }
 

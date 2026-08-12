@@ -41,7 +41,7 @@ namespace AST {
             return isExpanded;
         }
 
-        void set_expanded() {
+        void setExpanded() {
             isExpanded = true;
         }
 

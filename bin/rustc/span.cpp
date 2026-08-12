@@ -4,8 +4,8 @@
 #include "parse_lex.h"
 #include "common.h"
 
-Span::Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs)
-    : ptr(SpanInnerSource::alloc(parent, ::std::move(filename), start_line, start_ofs, endLine, endOfs))
+Span::Span(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs)
+    : ptr(SpanInnerSource::alloc(parent, ::std::move(filename), startLine, startOfs, endLine, endOfs))
 {
 }
 
@@ -38,11 +38,11 @@ Span::~Span() {
 }
 
 const SpanInnerSource& Span::getTopFileSpan() const {
-    auto* top_span = this;
-    while (top_span->get() && (*top_span)->parent_span != Span()) {
-        top_span = &(*top_span)->parent_span;
+    auto* topSpan = this;
+    while (topSpan->get() && (*topSpan)->parent_span != Span()) {
+        topSpan = &(*topSpan)->parent_span;
     }
-    if (const auto* ts = cast<const SpanInnerSource>(top_span->get())) {
+    if (const auto* ts = cast<const SpanInnerSource>(topSpan->get())) {
         return *ts;
     }
     TODO(*this, "Top span isn't source?");
@@ -105,12 +105,12 @@ unsigned int SpanInnerSource::nodeKind() const {
 
 void SpanInnerSource::fmt(::std::ostream& os) const {
     os << this->filename;
-    if (this->start_line != this->endLine) {
-        os << ":" << this->start_line << "-" << this->endLine;
-    } else if (this->start_ofs != this->endOfs) {
-        os << ":" << this->start_line << ":" << this->start_ofs << "-" << this->endOfs;
+    if (this->startLine != this->endLine) {
+        os << ":" << this->startLine << "-" << this->endLine;
+    } else if (this->startOfs != this->endOfs) {
+        os << ":" << this->startLine << ":" << this->startOfs << "-" << this->endOfs;
     } else {
-        os << ":" << this->start_line << ":" << this->start_ofs;
+        os << ":" << this->startLine << ":" << this->startOfs;
     }
 }
 
@@ -161,13 +161,13 @@ Span& Span::operator=(Span&& x) {
     new (this) Span(std::move(x));
     return *this;
 }
-SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs) {
+SpanInner* SpanInnerSource::alloc(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs) {
     auto* rv = new SpanInnerSource();
     rv->referenceCount = 1;
     rv->parent_span = parent;
     rv->filename = ::std::move(filename);
-    rv->start_line = start_line;
-    rv->start_ofs = start_ofs;
+    rv->startLine = startLine;
+    rv->startOfs = startOfs;
     rv->endLine = endLine;
     rv->endOfs = endOfs;
     return rv;

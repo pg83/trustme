@@ -262,14 +262,14 @@ AST::ExprNode& Token::fragNode() {
     return *reinterpret_cast<AST::ExprNode*>(ptr);
 }
 
-::std::unique_ptr<AST::ExprNode> Token::take_frag_node() {
+::std::unique_ptr<AST::ExprNode> Token::takeFragNode() {
     assert(mType == TOK_INTERPOLATED_EXPR || mType == TOK_INTERPOLATED_STMT || mType == TOK_INTERPOLATED_BLOCK);
     auto ptr = mData.as_Fragment();
     mData.as_Fragment() = nullptr;
     return ::std::unique_ptr<AST::ExprNode>(reinterpret_cast<AST::ExprNode*>(ptr));
 }
 
-::AST::Named<AST::Item> Token::take_frag_item() {
+::AST::Named<AST::Item> Token::takeFragItem() {
     assert(mType == TOK_INTERPOLATED_ITEM);
     auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(mData.as_Fragment());
     mData.as_Fragment() = nullptr;
@@ -278,7 +278,7 @@ AST::ExprNode& Token::fragNode() {
     return mv$(rv);
 }
 
-::AST::Named<AST::Item> Token::take_frag_stmt_item() {
+::AST::Named<AST::Item> Token::takeFragStmtItem() {
     assert(mType == TOK_INTERPOLATED_STMT_ITEM);
     auto ptr = reinterpret_cast<AST::Named<AST::Item>*>(mData.as_Fragment());
     mData.as_Fragment() = nullptr;
@@ -287,7 +287,7 @@ AST::ExprNode& Token::fragNode() {
     return mv$(rv);
 }
 
-::AST::Visibility Token::take_frag_vis() {
+::AST::Visibility Token::takeFragVis() {
     assert(mType == TOK_INTERPOLATED_VIS);
     auto ptr = reinterpret_cast<AST::Visibility*>(mData.as_Fragment());
     mData.as_Fragment() = nullptr;
@@ -352,7 +352,7 @@ struct EscapedString {
     }
 };
 
-::std::string Token::to_str() const {
+::std::string Token::toStr() const {
     ::std::stringstream ss;
     switch (mType) {
         case TOK_NULL:
@@ -403,13 +403,13 @@ struct EscapedString {
             switch (mData.as_Integer().datatype) {
                 case CORETYPE_CHAR:
                     if (v >= 0x20 && v < 128) {
-                        switch (v.truncate_u64()) {
+                        switch (v.truncateU64()) {
                             case '\'':
                                 return "'\\''";
                             case '\\':
                                 return "'\\\\'";
                             default:
-                                return FMT("'" << (char)v.truncate_u64() << "'");
+                                return FMT("'" << (char)v.truncateU64() << "'");
                         }
                     }
                     return FMT("'\\u{" << ::std::hex << v << ::std::dec << "}'");
@@ -716,7 +716,7 @@ struct EscapedString {
             break;
         case TOK_INTERPOLATED_STMT_ITEM: {
             const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
-            os << ":" << namedItem.data.tag_str() << "(" << namedItem.name << ")";
+            os << ":" << namedItem.data.tagStr() << "(" << namedItem.name << ")";
         } break;
         case TOK_INTERPOLATED_BLOCK:
             os << ":" << *reinterpret_cast<const AST::ExprNode*>(tok.mData.as_Fragment());
@@ -726,7 +726,7 @@ struct EscapedString {
             break;
         case TOK_INTERPOLATED_ITEM: {
             const auto& namedItem = *reinterpret_cast<const AST::Named<AST::Item>*>(tok.mData.as_Fragment());
-            os << ":" << namedItem.data.tag_str() << "(" << namedItem.name << ")";
+            os << ":" << namedItem.data.tagStr() << "(" << namedItem.name << ")";
         } break;
         default:
             break;

@@ -132,6 +132,6 @@ namespace AST {
         friend ::std::ostream& operator<<(::std::ostream& os, const Attribute& x);
     };
 
-    TAGGED_UNION(AttributeData, None, (None, struct {}), (ValueUnexpanded, AST::ExprNodeP), (String, struct { ::std::string val; }), (List, struct { ::std::vector<Attribute> sub_items; }));
+    TAGGED_UNION(AttributeData, None, (None, struct {}), (ValueUnexpanded, AST::ExprNodeP), (String, struct { ::std::string val; }), (List, struct { ::std::vector<Attribute> subItems; }));
 
 } // namespace AST

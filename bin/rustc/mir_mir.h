@@ -301,7 +301,7 @@ namespace MIR {
             }
 
             /// Unwrap one level, returning false if already at the root
-            bool try_unwrap();
+            bool tryUnwrap();
 
             enum Tag {
                 TAGDEAD,
@@ -832,7 +832,7 @@ namespace MIR {
         ::std::vector<BasicBlock> blocks;
 
         // Cache filled/used by enumerate
-        mutable EnumCachePtr trans_enum_state;
+        mutable EnumCachePtr transEnumState;
     };
 
     class Cloner {

@@ -133,7 +133,7 @@ public:
     // Automatic FnPtr impls
     ::std::set<::HIR::TypeRef> autoFnptrImpls;
     // Trait methods
-    ::std::set<::HIR::Path> trait_object_methods;
+    ::std::set<::HIR::Path> traitObjectMethods;
 
     ::std::vector<::std::unique_ptr<::HIR::Static>> autoStatics;
     ::std::vector<::std::unique_ptr<::HIR::Function>> autoFunctions;

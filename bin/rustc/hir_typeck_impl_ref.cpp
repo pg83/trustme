@@ -81,15 +81,15 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
 {
     if (ge.isSelf()) {
         // Store (or cache) a monomorphisation of Self, and error if this recurses
-        if (this->ti.self_cache == ::HIR::TypeRef()) {
-            this->ti.self_cache = types.diverge();
-            this->ti.self_cache = this->monomorphType(sp, this->ti.impl->mType);
-        } else if (this->ti.self_cache == types.diverge()) {
+        if (this->ti.selfCache == ::HIR::TypeRef()) {
+            this->ti.selfCache = types.diverge();
+            this->ti.selfCache = this->monomorphType(sp, this->ti.impl->mType);
+        } else if (this->ti.selfCache == types.diverge()) {
             // BUG!
             BUG(sp, "Use of `Self` in expansion of `Self`");
         } else {
         }
-        return this->ti.self_cache;
+        return this->ti.selfCache;
     }
     return MonomorphStatePtr(types, nullptr, &this->ti.impl_params, &this->params).getType(sp, ge);
 }
@@ -187,9 +187,9 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
                 }
                 return ::HIR::TypeRef();
             }
-            const ::HIR::TypeData* tpl_ty = it->second.data;
-            DEBUG("name=" << name << " tpl_ty=" << tpl_ty << " " << *this);
-            return this->getCbMonomorphTraitimpl(types, sp, params).monomorphType(sp, tpl_ty);
+            const ::HIR::TypeData* tplTy = it->second.data;
+            DEBUG("name=" << name << " tpl_ty=" << tplTy << " " << *this);
+            return this->getCbMonomorphTraitimpl(types, sp, params).monomorphType(sp, tplTy);
         }
         TU_ARMA(BoundedPtr, e) {
             auto it = e.assoc->find(name);
@@ -274,8 +274,8 @@ ImplRef::Monomorph ImplRef::getCbMonomorphTraitimpl(HIR::TypeInterner& types, co
 ImplRef::ImplRef()
     : mData(Data::make_TraitImpl({{}, nullptr, nullptr, nullptr})) {
 }
-ImplRef::ImplRef(HIR::PathParams impl_params, const HIR::Trait& trait_ref, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl)
-    : mData(Data::make_TraitImpl({mv$(impl_params), &trait_ref, &trait, &impl})) {
+ImplRef::ImplRef(HIR::PathParams impl_params, const HIR::Trait& traitRef, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl)
+    : mData(Data::make_TraitImpl({mv$(impl_params), &traitRef, &trait, &impl})) {
 }
 ImplRef::ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness)
     : mData(Data::make_BoundedPtr({HIR::PathParams(), type, args, assoc, constness})) {

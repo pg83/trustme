@@ -31,28 +31,28 @@ public:
         return hi == 0;
     }
 
-    uint64_t truncate_u64() const {
+    uint64_t truncateU64() const {
         return lo;
     }
 
     uint64_t encodeFloat(int bits, int zero_exp) const;
 
-    double to_double() const;
+    double toDouble() const;
 
-    float to_float() const;
+    float toFloat() const;
 
-    void to_le_bytes(uint8_t* dst, size_t maxLen) {
+    void toLeBytes(uint8_t* dst, size_t maxLen) {
         maxLen = maxLen > 16 ? 16 : maxLen;
 #if __LITTLE_ENDIAN__
         memcpy(dst, this, maxLen);
 #else
         for (size_t i = 0; i < maxLen; i++) {
-            dst[i] = static_cast<uint8_t>((*this >> static_cast<unsigned>(i * 8)).truncate_u64());
+            dst[i] = static_cast<uint8_t>((*this >> static_cast<unsigned>(i * 8)).truncateU64());
         }
 #endif
     }
 
-    void to_be_bytes(uint8_t* dst, size_t maxLen);
+    void toBeBytes(uint8_t* dst, size_t maxLen);
 
     void fromLeBytes(const uint8_t* src, size_t maxLen) {
         maxLen = maxLen > 16 ? 16 : maxLen;
@@ -214,7 +214,7 @@ private:
 
     static bool add128O(U128 a, U128 b, U128* o);
 
-    static bool sub128_o(U128 a, U128 b, U128* o);
+    static bool sub128O(U128 a, U128 b, U128* o);
 
     static bool mul128O(U128 a, U128 b, U128* o);
 
@@ -244,14 +244,14 @@ public:
         return inner.hi == ((inner.lo >> 63) ? UINT64_MAX : 0);
     }
 
-    int64_t truncate_i64() const;
+    int64_t truncateI64() const;
 
-    double to_double() const {
-        return (*this < 0 ? -1.0 : 1.0) * this->u_abs().to_double();
+    double toDouble() const {
+        return (*this < 0 ? -1.0 : 1.0) * this->u_abs().toDouble();
     }
 
-    float to_float() const {
-        return (*this < 0 ? -1.0f : 1.0f) * this->u_abs().to_float();
+    float toFloat() const {
+        return (*this < 0 ? -1.0f : 1.0f) * this->u_abs().toFloat();
     }
 
     U128 getInner() const {
@@ -259,7 +259,7 @@ public:
     }
 
 private:
-    void sign_extend(size_t nBytes);
+    void signExtend(size_t nBytes);
 
 public:
     void fromLeBytes(const uint8_t* src, size_t maxLen);
@@ -301,7 +301,7 @@ public:
     S128 operator%(S128 x) const;
 
     bool isNeg() const {
-        return (inner >> 127).truncate_u64() != 0;
+        return (inner >> 127).truncateU64() != 0;
     }
 
     /// Unsigned absolute value (handles MIN correctly)

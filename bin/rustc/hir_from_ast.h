@@ -32,7 +32,7 @@ extern ::HIR::ExprPtr LowerHIRExprNode(const ::AST::ExprNode& e);
 extern ::HIR::Path LowerHIRPath(const Span& sp, const ::AST::Path& path, FromASTPathClass pc);
 extern ::HIR::GenericPath LowerHIRGenericPath(const Span& sp, const ::AST::Path& path, FromASTPathClass pc, bool allowAssoc = false);
 extern ::HIR::SimplePath LowerHIRSimplePath(const Span& sp, const ::AST::Path& path, FromASTPathClass pc, bool allowFinalGeneric = false);
-extern ::HIR::PathParams LowerHIRPathParams(const Span& sp, const ::AST::PathParams& src_params, bool allowAssoc);
+extern ::HIR::PathParams LowerHIRPathParams(const Span& sp, const ::AST::PathParams& srcParams, bool allowAssoc);
 extern ::HIR::TypeRef LowerHIRType(const ::TypeRef& ty);
 extern ::HIR::Pattern LowerHIRPattern(const ::AST::Pattern& pat);
 

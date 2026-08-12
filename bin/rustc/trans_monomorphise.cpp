@@ -136,7 +136,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         auto ty = pp.monomorph(resolve, c.mType);
         // 1. Evaluate the constant
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
-        eval.resolve.set_both_generics_raw(pp.gdefImpl, &c.mParams);
+        eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.mParams);
         MonomorphState ms(crate.types);
         ms.self_ty = pp.self_type;
         ms.ppImpl = &pp.ppImpl;
@@ -165,7 +165,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
         auto ty = pp.monomorph(resolve, s.mType);
         // 1. Evaluate the constant
         auto eval = ::HIR::Evaluator{pp.sp, crate, nvs};
-        eval.resolve.set_both_generics_raw(pp.gdefImpl, &s.mParams);
+        eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.mParams);
         MonomorphState ms(crate.types);
         ms.self_ty = pp.self_type;
         ms.ppImpl = &pp.ppImpl;
@@ -199,7 +199,7 @@ void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned 
             if (fcnEnt.second->pp.ppImpl.hasParams()) {
                 assert(pp.gdefImpl);
             }
-            resolve.set_both_generics_raw(pp.gdefImpl, &fcn.mParams);
+            resolve.setBothGenericsRaw(pp.gdefImpl, &fcn.mParams);
 
             auto mir = TransMonomorphise(resolve, fcnEnt.second->pp, fcn.mCode.mir);
 

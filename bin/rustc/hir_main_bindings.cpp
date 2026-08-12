@@ -325,8 +325,8 @@ public:
             DEBUG((isSpec ? "default " : "") << "const " << name);
             rv.constants.insert(::std::make_pair(mv$(name), ::HIR::TraitImpl::ImplEnt<::HIR::Constant>{isSpec, deserialiseConstant()}));
         }
-        size_t static_count = in.readCount();
-        for (size_t i = 0; i < static_count; i++) {
+        size_t staticCount = in.readCount();
+        for (size_t i = 0; i < staticCount; i++) {
             auto name = in.readIstring();
             auto isSpec = in.readBool();
             DEBUG((isSpec ? "default " : "") << "static " << name);
@@ -365,7 +365,7 @@ public:
                 assert(crateName != "");
                 mp.crate = crateName;
             }
-            rv.set_mod_path(mv$(mp));
+            rv.setModPath(mv$(mp));
         }
         return rv;
     }
@@ -760,7 +760,7 @@ public:
         auto _ = in.openObject("HIR::Function::Markings");
         ::HIR::Function::Markings rv;
         rv.rustcLegacyConstGenerics = deserialiseVec<unsigned>();
-        rv.track_caller = in.readBool();
+        rv.trackCaller = in.readBool();
         return rv;
     }
 
@@ -1257,9 +1257,9 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
     unsigned max_field_alignment = in.readCount();
     DEBUG("align = " << forced_alignment);
     auto markings = deserialiseMarkings();
-    auto str_markings = deserialiseStrMarkings();
+    auto strMarkings = deserialiseStrMarkings();
 
-    auto rv = ::HIR::Struct{mv$(params), repr, mv$(data), forced_alignment, mv$(markings), mv$(str_markings)};
+    auto rv = ::HIR::Struct{mv$(params), repr, mv$(data), forced_alignment, mv$(markings), mv$(strMarkings)};
     rv.maxFieldAlignment = max_field_alignment;
     return rv;
 }
@@ -1278,11 +1278,11 @@ DEF_D(::HIR::ExternLibrary, return d.deserialiseExtlib();)
         {}
     };
     rv.lifetime = deserialiseLifetimeref();
-    const auto trait_flags = in.readU8();
-    rv.isMarker = trait_flags & 1;
-    rv.isFundamental = trait_flags & 2;
-    rv.isCoinductive = (trait_flags & 4) || rv.isMarker;
-    rv.isConst = trait_flags & 8;
+    const auto traitFlags = in.readU8();
+    rv.isMarker = traitFlags & 1;
+    rv.isFundamental = traitFlags & 2;
+    rv.isCoinductive = (traitFlags & 4) || rv.isMarker;
+    rv.isConst = traitFlags & 8;
     rv.types = deserialiseIstrumap<::HIR::AssociatedType>();
     rv.values = deserialiseIstrumap<::HIR::TraitValueItem>();
     rv.valueIndexes = deserialiseIstrummap<::std::pair<unsigned int, ::HIR::GenericPath>>();
@@ -2094,12 +2094,12 @@ namespace {
                     break;
             }
 
-            bool skip_parens = this->nodeIsLeaf(*node.mValue) || NODE_IS(node.mValue, Deref);
-            if (!skip_parens) {
+            bool skipParens = this->nodeIsLeaf(*node.mValue) || NODE_IS(node.mValue, Deref);
+            if (!skipParens) {
                 os << "(";
             }
             this->visit_node_ptr(node.mValue);
-            if (!skip_parens) {
+            if (!skipParens) {
                 os << ")";
             }
         }
@@ -2117,12 +2117,12 @@ namespace {
                     break;
             }
 
-            bool skip_parens = this->nodeIsLeaf(*node.mValue) || NODE_IS(node.mValue, Deref);
-            if (!skip_parens) {
+            bool skipParens = this->nodeIsLeaf(*node.mValue) || NODE_IS(node.mValue, Deref);
+            if (!skipParens) {
                 os << "(";
             }
             this->visit_node_ptr(node.mValue);
-            if (!skip_parens) {
+            if (!skipParens) {
                 os << ")";
             }
         }
@@ -2150,12 +2150,12 @@ namespace {
         void visit(::HIR::ExprNodeDeref& node) override {
             os << "*";
 
-            bool skip_parens = this->nodeIsLeaf(*node.mValue);
-            if (!skip_parens) {
+            bool skipParens = this->nodeIsLeaf(*node.mValue);
+            if (!skipParens) {
                 os << "(";
             }
             this->visit_node_ptr(node.mValue);
-            if (!skip_parens) {
+            if (!skipParens) {
                 os << ")";
             }
         }
@@ -2265,7 +2265,7 @@ namespace {
                             os << /*I128*/ (e.mValue) << "_isize";
                             break;
                         case ::HIR::CoreType::Char: {
-                            auto v = e.mValue.truncate_u64();
+                            auto v = e.mValue.truncateU64();
                             if (v == '\\' || v == '\'') {
                                 os << "'\\" << static_cast<char>(v) << "'";
                             } else if (' ' <= v && v <= 0x7F) {
@@ -2498,7 +2498,7 @@ public:
     }
 
     template <typename V>
-    void serialise_strmap(const ::std::map<RcString, V>& map) {
+    void serialiseStrmap(const ::std::map<RcString, V>& map) {
         out.write_count(map.size());
         for (const auto& v : map) {
             DEBUG(v.first);
@@ -2508,7 +2508,7 @@ public:
     }
 
     template <typename V>
-    void serialise_strmap(const ::std::map<::std::string, V>& map) {
+    void serialiseStrmap(const ::std::map<::std::string, V>& map) {
         out.write_count(map.size());
         for (const auto& v : map) {
             out.write_string(v.first);
@@ -2517,7 +2517,7 @@ public:
     }
 
     template <typename V>
-    void serialise_pathmap(const ::std::map<::HIR::SimplePath, V>& map) {
+    void serialisePathmap(const ::std::map<::HIR::SimplePath, V>& map) {
         out.write_count(map.size());
         for (const auto& v : map) {
             DEBUG("- " << v.first);
@@ -2527,7 +2527,7 @@ public:
     }
 
     template <typename V>
-    void serialise_strmap(const ::std::unordered_map<RcString, V>& map) {
+    void serialiseStrmap(const ::std::unordered_map<RcString, V>& map) {
         out.write_count(map.size());
         for (const auto& v : map) {
             DEBUG("- " << v.first);
@@ -2537,7 +2537,7 @@ public:
     }
 
     template <typename V>
-    void serialise_strmap(const ::std::unordered_map<::std::string, V>& map) {
+    void serialiseStrmap(const ::std::unordered_map<::std::string, V>& map) {
         out.write_count(map.size());
         for (const auto& v : map) {
             DEBUG("- " << v.first);
@@ -2547,7 +2547,7 @@ public:
     }
 
     template <typename V>
-    void serialise_strmap(const ::std::unordered_multimap<RcString, V>& map) {
+    void serialiseStrmap(const ::std::unordered_multimap<RcString, V>& map) {
         out.write_count(map.size());
         for (const auto& v : map) {
             DEBUG("- " << v.first);
@@ -2557,7 +2557,7 @@ public:
     }
 
     template <typename V>
-    void serialise_strmap(const ::std::unordered_multimap<::std::string, V>& map) {
+    void serialiseStrmap(const ::std::unordered_multimap<::std::string, V>& map) {
         out.write_count(map.size());
         for (const auto& v : map) {
             DEBUG("- " << v.first);
@@ -2567,7 +2567,7 @@ public:
     }
 
     template <typename T>
-    void serialise_vec(const ThinVector<T>& vec) {
+    void serialiseVec(const ThinVector<T>& vec) {
         TRACE_FUNCTION_F("<" << typeid(T).name() << "> size=" << vec.size());
         auto _ = out.openObject(typeid(ThinVector<T>).name());
         out.write_count(vec.size());
@@ -2577,7 +2577,7 @@ public:
     }
 
     template <typename T>
-    void serialise_vec(const ::std::vector<T>& vec) {
+    void serialiseVec(const ::std::vector<T>& vec) {
         TRACE_FUNCTION_F("<" << typeid(T).name() << "> size=" << vec.size());
         auto _ = out.openObject(typeid(::std::vector<T>).name());
         out.write_count(vec.size());
@@ -2588,7 +2588,7 @@ public:
 
     template <typename T>
     void serialise(const ::std::vector<T>& vec) {
-        serialise_vec(vec);
+        serialiseVec(vec);
     }
 
     template <typename T>
@@ -2671,7 +2671,7 @@ public:
         out.write_u16(ge.binding);
     }
 
-    void serialise_arraysize(const ::HIR::ArraySize& as) {
+    void serialiseArraysize(const ::HIR::ArraySize& as) {
         out.write_tag(static_cast<int>(as.tag()));
             TU_MATCH_HDRA( (as), { )
             TU_ARMA(Unevaluated, se) {
@@ -2683,7 +2683,7 @@ public:
             }
     }
 
-    void serialise_type(const ::HIR::TypeData* ty) {
+    void serialiseType(const ::HIR::TypeData* ty) {
         // Use string comparison to ensure that lifetimes are checked
         auto ty_str = FMT(ty);
         if (ty_str[0] == '{') {
@@ -2712,18 +2712,18 @@ public:
                 out.write_tag(static_cast<int>(e));
             }
             TU_ARMA(Path, e) {
-                serialise_path(e.path);
+                serialisePath(e.path);
                 out.write_bool(e.hrtbs.get() != nullptr);
                 if (e.hrtbs) {
-                    serialise_generics(*e.hrtbs);
+                    serialiseGenerics(*e.hrtbs);
                 }
             }
             TU_ARMA(Generic, e) {
                 serialise(e);
             }
             TU_ARMA(TraitObject, e) {
-                serialise_traitpath(e.mTrait);
-                serialise_vec(e.markers);
+                serialiseTraitpath(e.mTrait);
+                serialiseVec(e.markers);
                 serialise(e.lifetime);
             }
             TU_ARMA(ErasedType, e) {
@@ -2732,39 +2732,39 @@ public:
                 //m_out.write_count(e.m_index);
 
                 out.write_bool(e.isSized);
-                serialise_vec(e.traits);
-                serialise_vec(e.lifetimeBounds);
-                serialise_pathparams(e.use);
+                serialiseVec(e.traits);
+                serialiseVec(e.lifetimeBounds);
+                serialisePathparams(e.use);
             }
             TU_ARMA(Array, e) {
-                serialise_type(e.inner);
-                serialise_arraysize(e.size);
+                serialiseType(e.inner);
+                serialiseArraysize(e.size);
             }
             TU_ARMA(Slice, e) {
-                serialise_type(e.inner);
+                serialiseType(e.inner);
             }
             TU_ARMA(Tuple, e) {
-                serialise_vec(e);
+                serialiseVec(e);
             }
             TU_ARMA(Borrow, e) {
                 serialise(e.lifetime);
                 out.write_tag(static_cast<int>(e.type));
-                serialise_type(e.inner);
+                serialiseType(e.inner);
             }
             TU_ARMA(Pointer, e) {
                 out.write_tag(static_cast<int>(e.type));
-                serialise_type(e.inner);
+                serialiseType(e.inner);
             }
             TU_ARMA(NamedFunction, e) {
-                serialise_path(e.path);
+                serialisePath(e.path);
             }
             TU_ARMA(Function, e) {
-                serialise_generics(e.hrls);
+                serialiseGenerics(e.hrls);
                 out.write_bool(e.is_unsafe);
                 out.write_bool(e.is_variadic);
                 out.write_string(e.mAbi);
-                serialise_type(e.mRettype);
-                serialise_vec(e.argTypes);
+                serialiseType(e.mRettype);
+                serialiseVec(e.argTypes);
             }
             break;
             case ::HIR::TypeData::TAG_NodeType:
@@ -2775,77 +2775,77 @@ public:
             types.insert(std::make_pair( std::move(ty_str), types.size() ));
     }
 
-    void serialise_simplepath(const ::HIR::SimplePath& path) {
+    void serialiseSimplepath(const ::HIR::SimplePath& path) {
         TRACE_FUNCTION_F(path);
-        serialise_vec(path.members);
+        serialiseVec(path.members);
     }
 
-    void serialise_pathparams(const ::HIR::PathParams& pp) {
-        serialise_vec(pp.mLifetimes);
-        serialise_vec(pp.types);
-        serialise_vec(pp.values);
+    void serialisePathparams(const ::HIR::PathParams& pp) {
+        serialiseVec(pp.mLifetimes);
+        serialiseVec(pp.types);
+        serialiseVec(pp.values);
     }
 
-    void serialise_genericpath(const ::HIR::GenericPath& path) {
+    void serialiseGenericpath(const ::HIR::GenericPath& path) {
         TRACE_FUNCTION_F(path);
-        serialise_simplepath(path.mPath);
-        serialise_pathparams(path.mParams);
+        serialiseSimplepath(path.mPath);
+        serialisePathparams(path.mParams);
     }
 
     void serialise(const ::HIR::GenericPath& path) {
-        serialise_genericpath(path);
+        serialiseGenericpath(path);
     }
 
-    void serialise_traitpath(const ::HIR::TraitPath& path) {
+    void serialiseTraitpath(const ::HIR::TraitPath& path) {
         auto _ = out.openObject("HIR::TraitPath");
         assert(!path.lifetimeElision);
         out.write_bool(static_cast<bool>(path.hrtbs));
         if (path.hrtbs) {
-            serialise_generics(*path.hrtbs);
+            serialiseGenerics(*path.hrtbs);
         }
-        serialise_genericpath(path.mPath);
-        serialise_strmap(path.typeBounds);
-        serialise_strmap(path.traitBounds);
+        serialiseGenericpath(path.mPath);
+        serialiseStrmap(path.typeBounds);
+        serialiseStrmap(path.traitBounds);
         out.write_u8(static_cast<uint8_t>(path.constness));
     }
 
     void serialise(const ::HIR::TraitPath::AtyEqual& e) {
-        serialise(e.source_trait);
-        serialise_pathparams(e.atyParams);
+        serialise(e.sourceTrait);
+        serialisePathparams(e.atyParams);
         serialise(e.type);
     }
 
     void serialise(const ::HIR::TraitPath::AtyBound& e) {
-        serialise(e.source_trait);
-        serialise_pathparams(e.atyParams);
-        serialise_vec(e.traits);
+        serialise(e.sourceTrait);
+        serialisePathparams(e.atyParams);
+        serialiseVec(e.traits);
     }
 
-    void serialise_path(const ::HIR::Path& path) {
+    void serialisePath(const ::HIR::Path& path) {
         TRACE_FUNCTION_F("path=" << path);
             TU_MATCH_HDRA( (path.mData), {)
             TU_ARMA(Generic, e) {
                 out.write_tag(0);
-                serialise_genericpath(e);
+                serialiseGenericpath(e);
             }
             TU_ARMA(UfcsInherent, e) {
                 out.write_tag(1);
-                serialise_type(e.type);
+                serialiseType(e.type);
                 out.write_string(e.item);
-                serialise_pathparams(e.params);
-                serialise_pathparams(e.impl_params);
+                serialisePathparams(e.params);
+                serialisePathparams(e.impl_params);
             }
             TU_ARMA(UfcsKnown, e) {
                 if (e.hrtbs) {
                     out.write_tag(3);
-                    serialise_generics(*e.hrtbs);
+                    serialiseGenerics(*e.hrtbs);
                 } else {
                     out.write_tag(2);
                 }
-                serialise_type(e.type);
-                serialise_genericpath(e.trait);
+                serialiseType(e.type);
+                serialiseGenericpath(e.trait);
                 out.write_string(e.item);
-                serialise_pathparams(e.params);
+                serialisePathparams(e.params);
             }
             TU_ARMA(UfcsUnknown, e) {
                 DEBUG("-- UfcsUnknown - " << path);
@@ -2854,23 +2854,23 @@ public:
             }
     }
 
-    void serialise_generics(const ::HIR::GenericParams& params) {
+    void serialiseGenerics(const ::HIR::GenericParams& params) {
         DEBUG("params = " << params.fmtArgs() << ", " << params.fmtBounds());
-        serialise_vec(params.types);
-        serialise_vec(params.values);
-        serialise_vec(params.mLifetimes);
-        serialise_vec(params.bounds);
+        serialiseVec(params.types);
+        serialiseVec(params.values);
+        serialiseVec(params.mLifetimes);
+        serialiseVec(params.bounds);
     }
 
     void serialise(const ::HIR::TypeParamDef& pd) {
         out.write_string(pd.mName);
-        serialise_type(pd.defaultValue);
+        serialiseType(pd.defaultValue);
         out.write_bool(pd.isSized);
     }
 
     void serialise(const ::HIR::ValueParamDef& pd) {
         out.write_string(pd.mName);
-        serialise_type(pd.mType);
+        serialiseType(pd.mType);
         serialise(pd.defaultValue);
     }
 
@@ -2884,23 +2884,23 @@ public:
             }
             TU_ARMA(TypeLifetime, e) {
                 out.write_tag(1);
-                serialise_type(e.type);
+                serialiseType(e.type);
                 serialise(e.valid_for);
             }
             TU_ARMA(TraitBound, e) {
                 out.write_tag(2);
                 out.write_bool(static_cast<bool>(e.hrtbs));
                 if (e.hrtbs) {
-                    serialise_generics(*e.hrtbs);
+                    serialiseGenerics(*e.hrtbs);
                 }
-                serialise_type(e.type);
-                serialise_traitpath(e.trait);
+                serialiseType(e.type);
+                serialiseTraitpath(e.trait);
                 out.write_u8(static_cast<uint8_t>(e.constness));
             }
             TU_ARMA(TypeEquality, e) {
                 out.write_tag(3);
-                serialise_type(e.type);
-                serialise_type(e.otherType);
+                serialiseType(e.type);
+                serialiseType(e.otherType);
             }
             }
     }
@@ -2920,26 +2920,26 @@ public:
         }
         serialise(pm.name);
         serialise(pm.path);
-        serialise_vec(pm.attributes);
+        serialiseVec(pm.attributes);
     }
 
     template <typename T>
     void serialise(const ::HIR::Crate::ImplGroup<T>& ig) {
-        serialise_pathmap(ig.named);
-        serialise_vec(ig.nonNamed);
-        serialise_vec(ig.generic);
+        serialisePathmap(ig.named);
+        serialiseVec(ig.nonNamed);
+        serialiseVec(ig.generic);
     }
 
-    void serialise_crate(const ::HIR::Crate& crate) {
+    void serialiseCrate(const ::HIR::Crate& crate) {
         out.write_string(crate.crateName);
         out.write_tag(static_cast<int>(crate.edition));
-        serialise_module(crate.rootModule);
+        serialiseModule(crate.rootModule);
 
         serialise(crate.typeImpls);
-        serialise_pathmap(crate.traitImpls);
-        serialise_pathmap(crate.markerImpls);
+        serialisePathmap(crate.traitImpls);
+        serialisePathmap(crate.markerImpls);
 
-        serialise_vec(crate.exportedMacroNames);
+        serialiseVec(crate.exportedMacroNames);
 
         {
             decltype(crate.mLangItems) langItemsFiltered;
@@ -2948,7 +2948,7 @@ public:
                     langItemsFiltered.insert(ent);
                 }
             }
-            serialise_strmap(langItemsFiltered);
+            serialiseStrmap(langItemsFiltered);
         }
 
         out.write_count(crate.extCrates.size());
@@ -2957,29 +2957,29 @@ public:
             out.write_string(ext.second.basename);
             //m_out.write_string(ext.second.m_path);
         }
-        serialise_vec(crate.extLibs);
-        serialise_vec(crate.linkPaths);
+        serialiseVec(crate.extLibs);
+        serialiseVec(crate.linkPaths);
     }
 
     void serialise(const ::HIR::ExternLibrary& lib) {
         out.write_string(lib.name);
     }
 
-    void serialise_module(const ::HIR::Module& mod) {
+    void serialiseModule(const ::HIR::Module& mod) {
         TRACE_FUNCTION;
         auto _ = out.openObject("HIR::Module");
 
         // m_traits doesn't need to be serialised
 
-        serialise_strmap(mod.valueItems);
-        serialise_strmap(mod.modItems);
-        serialise_strmap(mod.macroItems);
+        serialiseStrmap(mod.valueItems);
+        serialiseStrmap(mod.modItems);
+        serialiseStrmap(mod.macroItems);
     }
 
-    void serialise_typeimpl(const ::HIR::TypeImpl& impl) {
+    void serialiseTypeimpl(const ::HIR::TypeImpl& impl) {
         TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << impl.mType);
-        serialise_generics(impl.mParams);
-        serialise_type(impl.mType);
+        serialiseGenerics(impl.mParams);
+        serialiseType(impl.mType);
 
         out.write_count(impl.methods.size());
         for (const auto& v : impl.methods) {
@@ -3006,14 +3006,14 @@ public:
     }
 
     void serialise(const ::HIR::TypeImpl& impl) {
-        serialise_typeimpl(impl);
+        serialiseTypeimpl(impl);
     }
 
-    void serialise_traitimpl(const ::HIR::TraitImpl& impl) {
+    void serialiseTraitimpl(const ::HIR::TraitImpl& impl) {
         TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " ?" << impl.traitArgs << " for " << impl.mType);
-        serialise_generics(impl.mParams);
-        serialise_pathparams(impl.traitArgs);
-        serialise_type(impl.mType);
+        serialiseGenerics(impl.mParams);
+        serialisePathparams(impl.traitArgs);
+        serialiseType(impl.mType);
         out.write_bool(impl.isConst);
 
         out.write_count(impl.methods.size());
@@ -3048,30 +3048,30 @@ public:
     }
 
     void serialise(const ::HIR::TraitImpl& impl) {
-        serialise_traitimpl(impl);
+        serialiseTraitimpl(impl);
     }
 
-    void serialise_markerimpl(const ::HIR::MarkerImpl& impl) {
-        serialise_generics(impl.mParams);
-        serialise_pathparams(impl.traitArgs);
+    void serialiseMarkerimpl(const ::HIR::MarkerImpl& impl) {
+        serialiseGenerics(impl.mParams);
+        serialisePathparams(impl.traitArgs);
         out.write_bool(impl.isPositive);
-        serialise_type(impl.mType);
+        serialiseType(impl.mType);
     }
 
     void serialise(const ::HIR::MarkerImpl& impl) {
-        serialise_markerimpl(impl);
+        serialiseMarkerimpl(impl);
     }
 
     void serialise(const ::HIR::TypeData* ty) {
-        serialise_type(ty);
+        serialiseType(ty);
     }
 
     void serialise(const ::HIR::SimplePath& p) {
-        serialise_simplepath(p);
+        serialiseSimplepath(p);
     }
 
     void serialise(const ::HIR::TraitPath& p) {
-        serialise_traitpath(p);
+        serialiseTraitpath(p);
     }
 
     void serialise(const ::std::string& v) {
@@ -3087,7 +3087,7 @@ public:
         out.write_bool(h.hasModPath());
         if (h.hasModPath()) {
             out.write_string(h.mod_path().crate);
-            serialise_vec(h.mod_path().ents);
+            serialiseVec(h.mod_path().ents);
         }
     }
 
@@ -3101,7 +3101,7 @@ public:
         out.write_tag(static_cast<unsigned int>(mac.edition));
         assert(mac.rules.size() > 0);
         out.write_bool(mac.isMacroItem);
-        serialise_vec(mac.rules);
+        serialiseVec(mac.rules);
         serialise(mac.mHygiene);
     }
 
@@ -3113,7 +3113,7 @@ public:
             serialise(pe.tok);
         } else if (pe.type == ::MacroPatEnt::PAT_LOOP) {
             serialise(pe.tok);
-            serialise_vec(pe.subpats);
+            serialiseVec(pe.subpats);
         }
     }
 
@@ -3147,15 +3147,15 @@ public:
             TU_ARMA(If, e) {
                 out.write_bool(e.is_equal);
                 out.write_count(e.jumpTarget);
-                serialise_vec(e.ents);
+                serialiseVec(e.ents);
             }
             }
     }
 
     void serialise(const ::MacroRulesArm& arm) {
-        serialise_vec(arm.paramNames);
-        serialise_vec(arm.pattern);
-        serialise_vec(arm.contents);
+        serialiseVec(arm.paramNames);
+        serialiseVec(arm.pattern);
+        serialiseVec(arm.contents);
     }
 
     void serialise(const ::MacroExpansionEnt& ent) {
@@ -3171,13 +3171,13 @@ public:
             }
             TU_ARMA(Loop, e) {
                 out.write_tag(2);
-                serialise_vec(e.entries);
+                serialiseVec(e.entries);
                 serialise(e.joiner);
                 serialise(e.controllingInputLoops);
             }
             TU_ARMA(Concat, e) {
                 out.write_tag(3);
-                serialise_vec(e);
+                serialiseVec(e);
             }
             }
     }
@@ -3241,7 +3241,7 @@ public:
             out.write_count(reloc.len);
             if (reloc.p) {
                 out.write_tag(0);
-                serialise_path(*reloc.p);
+                serialisePath(*reloc.p);
             } else {
                 out.write_tag(1);
                 serialise(reloc.bytes);
@@ -3251,8 +3251,8 @@ public:
 
     void serialise(const ::HIR::ConstGenericUnevaluated& v) {
         ASSERT_BUG(v.expr->span(), v.expr->mir, "Encountered non-translated value in ConstGeneric: " << v);
-        serialise_pathparams(v.paramsImpl);
-        serialise_pathparams(v.paramsItem);
+        serialisePathparams(v.paramsImpl);
+        serialisePathparams(v.paramsItem);
         serialise(*v.expr);
     }
 
@@ -3278,19 +3278,19 @@ public:
         if (saveMir) {
             serialise(*exp.mir);
         }
-        serialise_vec(exp.erasedTypes);
+        serialiseVec(exp.erasedTypes);
     }
 
     void serialise(const ::MIR::Function& mir) {
         // Write out MIR.
-        serialise_vec(mir.locals);
+        serialiseVec(mir.locals);
         //serialise_vec( mir.slot_names );
-        serialise_vec(mir.dropFlags);
-        serialise_vec(mir.blocks);
+        serialiseVec(mir.dropFlags);
+        serialiseVec(mir.blocks);
     }
 
     void serialise(const ::MIR::BasicBlock& block) {
-        serialise_vec(block.statements);
+        serialiseVec(block.statements);
         serialise(block.terminator);
         out.write_bool(block.isCleanup);
     }
@@ -3302,7 +3302,7 @@ public:
     }
 
     void serialise(const ::AsmCommon::Line& l) {
-        serialise_vec(l.frags);
+        serialiseVec(l.frags);
         serialise(l.trailing);
     }
 
@@ -3322,7 +3322,7 @@ public:
         out.write_tag(static_cast<unsigned>(p.tag()));
             TU_MATCH_HDRA( (p), {)
             TU_ARMA(Sym, e) {
-                serialise_path(e);
+                serialisePath(e);
             }
             TU_ARMA(Const, e) {
                 serialise(e);
@@ -3369,10 +3369,10 @@ public:
             TU_ARMA(Asm, e) {
                 out.write_tag(2);
                 out.write_string(e.tpl);
-                serialise_vec(e.outputs);
-                serialise_vec(e.inputs);
-                serialise_vec(e.clobbers);
-                serialise_vec(e.flags);
+                serialiseVec(e.outputs);
+                serialiseVec(e.inputs);
+                serialiseVec(e.clobbers);
+                serialiseVec(e.flags);
             }
             TU_ARMA(SetDropFlag, e) {
                 out.write_tag(3);
@@ -3382,13 +3382,13 @@ public:
             }
             TU_ARMA(ScopeEnd, e) {
                 out.write_tag(4);
-                serialise_vec(e.slots);
+                serialiseVec(e.slots);
             }
             TU_ARMA(Asm2, e) {
                 out.write_tag(5);
                 serialise(e.options);
-                serialise_vec(e.lines);
-                serialise_vec(e.params);
+                serialiseVec(e.lines);
+                serialiseVec(e.params);
             }
             TU_ARMA(SaveDropFlag, e) {
                 out.write_tag(6);
@@ -3406,7 +3406,7 @@ public:
     }
 
     void serialise(const ::MIR::Terminator& term) {
-        auto serialise_unwind = [this](const ::MIR::UnwindAction& action) {
+        auto serialiseUnwind = [this](const ::MIR::UnwindAction& action) {
             out.write_tag(static_cast<int>(action.tag()));
             TU_IFLET(::MIR::UnwindAction, action, Cleanup, target, out.write_count(target);)
         };
@@ -3425,10 +3425,10 @@ public:
             (Unreachable, ),
             (Goto, out.write_count(e);),
             (If, serialise(e.cond); out.write_count(e.bbTrue); out.write_count(e.bbFalse);),
-            (Switch, serialise(e.val); serialise_vec(e.targets); out.write_count(e.valid_flag); out.write_count(e.invalidTarget);),
-            (SwitchValue, serialise(e.val); out.write_count(e.defTarget); serialise_vec(e.targets); serialise(e.values);),
-            (Drop, out.write_tag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.write_count(e.flagIdx); out.write_count(e.target); serialise_unwind(e.unwind);),
-            (Call, out.write_count(e.retBlock); serialise_unwind(e.unwind); serialise(e.retVal); serialise(e.fcn); serialise_vec(e.args);)
+            (Switch, serialise(e.val); serialiseVec(e.targets); out.write_count(e.valid_flag); out.write_count(e.invalidTarget);),
+            (SwitchValue, serialise(e.val); out.write_count(e.defTarget); serialiseVec(e.targets); serialise(e.values);),
+            (Drop, out.write_tag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.write_count(e.flagIdx); out.write_count(e.target); serialiseUnwind(e.unwind);),
+            (Call, out.write_count(e.retBlock); serialiseUnwind(e.unwind); serialise(e.retVal); serialise(e.fcn); serialiseVec(e.args);)
         )
     }
 
@@ -3436,23 +3436,23 @@ public:
         out.write_tag(static_cast<int>(sv.tag()));
             TU_MATCH_HDRA( (sv), {)
             TU_ARMA(Unsigned, e) {
-                serialise_vec(e);
+                serialiseVec(e);
             }
             TU_ARMA(Signed, e) {
-                serialise_vec(e);
+                serialiseVec(e);
             }
             TU_ARMA(String, e) {
-                serialise_vec(e);
+                serialiseVec(e);
             }
             TU_ARMA(ByteString, e) {
-                serialise_vec(e);
+                serialiseVec(e);
             }
             }
     }
 
     void serialise(const ::MIR::CallTarget& ct) {
         out.write_tag(static_cast<int>(ct.tag()));
-        TU_MATCHA((ct), (e), (Value, serialise(e);), (Path, serialise_path(e);), (Intrinsic, out.write_string(e.name); serialise_pathparams(e.params);))
+        TU_MATCHA((ct), (e), (Value, serialise(e);), (Path, serialisePath(e);), (Intrinsic, out.write_string(e.name); serialisePathparams(e.params);))
     }
 
     void serialise(const ::MIR::Param& p) {
@@ -3465,11 +3465,11 @@ public:
         TRACE_FUNCTION_F("LValue = " << lv);
         if (lv.root.is_Static()) {
             out.write_count(3);
-            serialise_path(lv.root.as_Static());
+            serialisePath(lv.root.as_Static());
         } else {
             out.write_count(lv.root.getInner());
         }
-        serialise_vec(lv.wrappers);
+        serialiseVec(lv.wrappers);
     }
 
     void serialise(const ::MIR::LValue::Wrapper& w) {
@@ -3479,16 +3479,16 @@ public:
     void serialise(const ::MIR::RValue& val) {
         TRACE_FUNCTION_F("RValue = " << val);
         out.write_tag(val.tag());
-        TU_MATCHA((val), (e), (Use, serialise(e);), (Constant, serialise(e);), (SizedArray, serialise(e.val); serialise_arraysize(e.count);), (Borrow, out.write_tag(static_cast<int>(e.type)); out.write_bool(e.isRaw); serialise(e.val);), (Cast, serialise(e.val); serialise(e.type);), (BinOp, serialise(e.val_l); out.write_tag(static_cast<int>(e.op)); serialise(e.val_r);), (UniOp, serialise(e.val); out.write_tag(static_cast<int>(e.op));), (DstMeta, serialise(e.val);), (DstPtr, serialise(e.val);), (MakeDst, serialise(e.ptrVal); auto b = !TU_TEST2(e.metaVal, Constant, , ItemAddr, .get() == nullptr); out.write_bool(b); if (b) serialise(e.metaVal);), (Tuple, serialise_vec(e.vals);), (Array, serialise_vec(e.vals);), (UnionVariant, serialise_genericpath(e.path); out.write_count(e.index); serialise(e.val);), (EnumVariant, serialise_genericpath(e.path); out.write_count(e.index); serialise_vec(e.vals);), (Struct, serialise_genericpath(e.path); serialise_vec(e.vals);))
+        TU_MATCHA((val), (e), (Use, serialise(e);), (Constant, serialise(e);), (SizedArray, serialise(e.val); serialiseArraysize(e.count);), (Borrow, out.write_tag(static_cast<int>(e.type)); out.write_bool(e.isRaw); serialise(e.val);), (Cast, serialise(e.val); serialise(e.type);), (BinOp, serialise(e.val_l); out.write_tag(static_cast<int>(e.op)); serialise(e.val_r);), (UniOp, serialise(e.val); out.write_tag(static_cast<int>(e.op));), (DstMeta, serialise(e.val);), (DstPtr, serialise(e.val);), (MakeDst, serialise(e.ptrVal); auto b = !TU_TEST2(e.metaVal, Constant, , ItemAddr, .get() == nullptr); out.write_bool(b); if (b) serialise(e.metaVal);), (Tuple, serialiseVec(e.vals);), (Array, serialiseVec(e.vals);), (UnionVariant, serialiseGenericpath(e.path); out.write_count(e.index); serialise(e.val);), (EnumVariant, serialiseGenericpath(e.path); out.write_count(e.index); serialiseVec(e.vals);), (Struct, serialiseGenericpath(e.path); serialiseVec(e.vals);))
     }
 
     void serialise(const ::MIR::Constant& v) {
         out.write_tag(v.tag());
-        TU_MATCHA((v), (e), (Int, out.write_u128(e.v.getInner()); out.write_tag(static_cast<unsigned>(e.t));), (Uint, out.write_u128(e.v); out.write_tag(static_cast<unsigned>(e.t));), (Float, out.write_float_value(e.v); out.write_tag(static_cast<unsigned>(e.t));), (Bool, out.write_bool(e.v);), (Bytes, out.write_count(e.size()); out.write(e.data(), e.size());), (StaticString, out.write_string(e);), (Const, ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), "Unexpected Constant: " << *e.p); serialise_path(*e.p);), (Generic, serialise(e);), (Function, serialise_path(*e.p);), (ItemAddr, serialise_path(*e); out.write_u128(e.offset);))
+        TU_MATCHA((v), (e), (Int, out.write_u128(e.v.getInner()); out.write_tag(static_cast<unsigned>(e.t));), (Uint, out.write_u128(e.v); out.write_tag(static_cast<unsigned>(e.t));), (Float, out.write_float_value(e.v); out.write_tag(static_cast<unsigned>(e.t));), (Bool, out.write_bool(e.v);), (Bytes, out.write_count(e.size()); out.write(e.data(), e.size());), (StaticString, out.write_string(e);), (Const, ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), "Unexpected Constant: " << *e.p); serialisePath(*e.p);), (Generic, serialise(e);), (Function, serialisePath(*e.p);), (ItemAddr, serialisePath(*e); out.write_u128(e.offset);))
     }
 
     void serialise(const ::HIR::TypeItem& item) {
-        TU_MATCHA((item), (e), (Import, out.write_tag(0); serialise_simplepath(e.path); out.write_bool(e.isVariant); out.write_count(e.idx);), (Module, out.write_tag(1); serialise_module(e);), (TypeAlias, out.write_tag(2); serialise(e);), (Enum, out.write_tag(3); serialise(e);), (Struct, out.write_tag(4); serialise(e);), (Trait, out.write_tag(5); serialise(e);), (Union, out.write_tag(6); serialise(e);), (ExternType, out.write_tag(7); serialise(e);), (TraitAlias, out.write_tag(8); serialise(e);))
+        TU_MATCHA((item), (e), (Import, out.write_tag(0); serialiseSimplepath(e.path); out.write_bool(e.isVariant); out.write_count(e.idx);), (Module, out.write_tag(1); serialiseModule(e);), (TypeAlias, out.write_tag(2); serialise(e);), (Enum, out.write_tag(3); serialise(e);), (Struct, out.write_tag(4); serialise(e);), (Trait, out.write_tag(5); serialise(e);), (Union, out.write_tag(6); serialise(e);), (ExternType, out.write_tag(7); serialise(e);), (TraitAlias, out.write_tag(8); serialise(e);))
     }
 
     void serialise(const ::HIR::MacroItem& item) {
@@ -3508,7 +3508,7 @@ public:
     }
 
     void serialise(const ::HIR::ValueItem& item) {
-        TU_MATCHA((item), (e), (Import, out.write_tag(0); serialise_simplepath(e.path); out.write_bool(e.isVariant); out.write_count(e.idx);), (Constant, out.write_tag(1); serialise(e);), (Static, out.write_tag(2); serialise(e);), (StructConstant, out.write_tag(3); serialise_simplepath(e.ty);), (Function, out.write_tag(4); serialise(e);), (StructConstructor, out.write_tag(5); serialise_simplepath(e.ty);))
+        TU_MATCHA((item), (e), (Import, out.write_tag(0); serialiseSimplepath(e.path); out.write_bool(e.isVariant); out.write_count(e.idx);), (Constant, out.write_tag(1); serialise(e);), (Static, out.write_tag(2); serialise(e);), (StructConstant, out.write_tag(3); serialiseSimplepath(e.ty);), (Function, out.write_tag(4); serialise(e);), (StructConstructor, out.write_tag(5); serialiseSimplepath(e.ty);))
     }
 
     void serialise(const ::HIR::Linkage& linkage) {
@@ -3530,7 +3530,7 @@ public:
         out.write_bool(fcn.isConst);
         serialise(fcn.markings);
 
-        serialise_generics(fcn.mParams);
+        serialiseGenerics(fcn.mParams);
         out.write_count(fcn.mArgs.size());
         for (const auto& a : fcn.mArgs) {
             serialise(a.second);
@@ -3544,14 +3544,14 @@ public:
 
     void serialise(const ::HIR::Function::Markings& m) {
         auto _ = out.openObject("HIR::Function::Markings");
-        serialise_vec(m.rustcLegacyConstGenerics);
-        out.write_bool(m.track_caller);
+        serialiseVec(m.rustcLegacyConstGenerics);
+        out.write_bool(m.trackCaller);
     }
 
     void serialise(const ::HIR::Constant& item) {
         TRACE_FUNCTION_F("_constant:");
 
-        serialise_generics(item.mParams);
+        serialiseGenerics(item.mParams);
         serialise(item.mType);
         serialise(item.mValue);
         bool write_val = item.valueState == ::HIR::Constant::ValueState::Known;
@@ -3565,7 +3565,7 @@ public:
         TRACE_FUNCTION_F("_static:");
 
         serialise(item.linkage);
-        serialise_generics(item.mParams);
+        serialiseGenerics(item.mParams);
 
         uint8_t bitflag1 = 0;
 #define BIT(i, fld) \
@@ -3589,18 +3589,18 @@ public:
 
     // - Type items
     void serialise(const ::HIR::TypeAlias& ta) {
-        serialise_generics(ta.mParams);
-        serialise_type(ta.mType);
+        serialiseGenerics(ta.mParams);
+        serialiseType(ta.mType);
     }
 
     void serialise(const ::HIR::TraitAlias& ta) {
-        serialise_generics(ta.mParams);
-        serialise_vec(ta.traits);
+        serialiseGenerics(ta.mParams);
+        serialiseVec(ta.traits);
     }
 
     void serialise(const ::HIR::Enum& item) {
         auto _ = out.openObject("HIR::Enum");
-        serialise_generics(item.mParams);
+        serialiseGenerics(item.mParams);
         out.write_bool(item.isCRepr);
         out.write_tag(static_cast<int>(item.tagRepr));
         serialise(item.mData);
@@ -3610,20 +3610,20 @@ public:
 
     void serialise(const ::HIR::Enum::Class& v) {
         out.write_tag(v.tag());
-        TU_MATCHA((v), (e), (Value, serialise_vec(e.variants);), (Data, serialise_vec(e);))
+        TU_MATCHA((v), (e), (Value, serialiseVec(e.variants);), (Data, serialiseVec(e);))
     }
 
     void serialise(const ::HIR::Enum::ValueVariant& v) {
         out.write_string(v.name);
         // NOTE: No expr, no longer needed
-        out.write_u64(v.val.truncate_u64());
+        out.write_u64(v.val.truncateU64());
     }
 
     void serialise(const ::HIR::Enum::DataVariant& v) {
         out.write_string(v.name);
         out.write_bool(v.is_struct);
         serialise(v.type);
-        out.write_u64(v.discriminant_value.truncate_u64());
+        out.write_u64(v.discriminant_value.truncateU64());
     }
 
     void serialise(const ::HIR::TraitMarkings& m) {
@@ -3668,11 +3668,11 @@ public:
         TRACE_FUNCTION_F("Struct");
         auto _ = out.openObject("HIR::Struct");
 
-        serialise_generics(item.mParams);
+        serialiseGenerics(item.mParams);
         out.write_tag(static_cast<int>(item.repr));
 
         out.write_tag(item.mData.tag());
-        TU_MATCHA((item.mData), (e), (Unit, ), (Tuple, serialise_vec(e);), (Named, serialise_vec(e);))
+        TU_MATCHA((item.mData), (e), (Unit, ), (Tuple, serialiseVec(e);), (Named, serialiseVec(e);))
 
         out.write_count(item.forcedAlignment);
         out.write_count(item.maxFieldAlignment);
@@ -3693,10 +3693,10 @@ public:
     void serialise(const ::HIR::Union& item) {
         TRACE_FUNCTION_F("Union");
 
-        serialise_generics(item.mParams);
+        serialiseGenerics(item.mParams);
         out.write_tag(static_cast<int>(item.repr));
 
-        serialise_vec(item.mVariants);
+        serialiseVec(item.mVariants);
 
         serialise(item.markings);
     }
@@ -3710,7 +3710,7 @@ public:
         TRACE_FUNCTION_F("_trait:");
         auto _ = out.openObject("HIR::Trait");
 
-        serialise_generics(item.mParams);
+        serialiseGenerics(item.mParams);
         serialise(item.lifetime);
         // Kept as one byte for compatibility with metadata written before
         // the fundamental bit was represented in HIR.
@@ -3720,12 +3720,12 @@ public:
             | (item.isCoinductive ? 4u : 0u)
             | (item.isConst ? 8u : 0u)
         );
-        serialise_strmap(item.types);
-        serialise_strmap(item.values);
-        serialise_strmap(item.valueIndexes);
-        serialise_strmap(item.typeIndexes);
+        serialiseStrmap(item.types);
+        serialiseStrmap(item.values);
+        serialiseStrmap(item.valueIndexes);
+        serialiseStrmap(item.typeIndexes);
         out.write_count(item.vtableParentTraitsStart);
-        serialise_vec(item.allParentTraits);
+        serialiseVec(item.allParentTraits);
         serialise(item.vtablePath);
     }
 
@@ -3735,11 +3735,11 @@ public:
     }
 
     void serialise(const ::HIR::AssociatedType& at) {
-        serialise_generics(at.generics);
+        serialiseGenerics(at.generics);
         out.write_bool(at.is_sized);
         serialise(at.lifetimeBound);
-        serialise_vec(at.traitBounds);
-        serialise_type(at.defaultValue);
+        serialiseVec(at.traitBounds);
+        serialiseType(at.defaultValue);
     }
 };
 
@@ -3748,8 +3748,8 @@ public:
 void HIRSerialise(const ::std::string& filename, const ::HIR::Crate& crate) {
     ::HIR::serialise::Writer out;
     HirSerialiser s{out, crate.types};
-    s.serialise_crate(crate);
+    s.serialiseCrate(crate);
     s.clear();
     out.open(filename);
-    s.serialise_crate(crate);
+    s.serialiseCrate(crate);
 }

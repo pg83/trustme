@@ -36,13 +36,13 @@ namespace typeck {
             }
         };
 
-        NullOnDrop<const ::HIR::GenericPath> set_current_trait(const ::HIR::GenericPath& p);
+        NullOnDrop<const ::HIR::GenericPath> setCurrentTrait(const ::HIR::GenericPath& p);
 
-        NullOnDrop<const ::HIR::TraitImpl> set_current_trait_impl(const ::HIR::TraitImpl& impl);
+        NullOnDrop<const ::HIR::TraitImpl> setCurrentTraitImpl(const ::HIR::TraitImpl& impl);
 
-        NullOnDrop<const ::HIR::GenericParams> set_impl_generics(const ::HIR::GenericParams& gps);
+        NullOnDrop<const ::HIR::GenericParams> setImplGenerics(const ::HIR::GenericParams& gps);
 
-        NullOnDrop<const ::HIR::GenericParams> set_item_generics(const ::HIR::GenericParams& gps);
+        NullOnDrop<const ::HIR::GenericParams> setItemGenerics(const ::HIR::GenericParams& gps);
 
         void prepareFromPath(const ::HIR::ItemPath& ip);
 
@@ -52,8 +52,8 @@ namespace typeck {
     };
 }
 
-typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> t_args;
+typedef ::std::vector<::std::pair<::HIR::Pattern, ::HIR::TypeRef>> tArgs;
 // Needs to mutate the pattern
-extern void TypecheckCode(const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr);
-extern void TypecheckCodeCS(const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr);
-extern void TypecheckCodeSimple(const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr);
+extern void TypecheckCode(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr);
+extern void TypecheckCodeCS(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr);
+extern void TypecheckCodeSimple(const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr);

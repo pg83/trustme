@@ -446,8 +446,8 @@ namespace {
                     auto cStartPath = mResolve.crate.getLangItemPathOpt("mrustc-start");
                     if (cStartPath == ::HIR::SimplePath()) {
                         auto mainPath = mResolve.crate.getLangItemPath(Span(), "mrustc-main");
-                        const auto& start_path = mResolve.crate.getLangItemPathOpt("start");
-                        if (crate.isNoCore && start_path == ::HIR::SimplePath()) {
+                        const auto& startPath = mResolve.crate.getLangItemPathOpt("start");
+                        if (crate.isNoCore && startPath == ::HIR::SimplePath()) {
                             const auto& mainFcn = crate.getFunctionByPath(Span(), mainPath);
                             of << "\tlet direct_main_result: " << fmt(mainFcn.returnType) << ";\n";
                             of << "\t0: {\n";
@@ -501,10 +501,10 @@ namespace {
         void emitType(const ::HIR::TypeData* ty) override {
             TRACE_FUNCTION_F(ty);
             ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve top_mir_res {
+            ::MIR::TypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "type " << ty;), ::HIR::TypeRef(), {}, emptyFcn
             };
-            mirRes = &top_mir_res;
+            mirRes = &topMirRes;
 
             if (const auto* te = ty->opt_Tuple()) {
                 if (te->size() > 0) {
@@ -577,10 +577,10 @@ namespace {
 
         void emitStruct(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Struct& item) override {
             ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve top_mir_res {
+            ::MIR::TypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "struct " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
-            mirRes = &top_mir_res;
+            mirRes = &topMirRes;
 
             auto dropGluePath = ::HIR::Path(crate.types.path(p.clone(), &item), "#drop_glue");
 
@@ -707,10 +707,10 @@ namespace {
 
         void emitUnion(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Union& item) override {
             ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve top_mir_res {
+            ::MIR::TypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "union " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
-            mirRes = &top_mir_res;
+            mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
@@ -733,10 +733,10 @@ namespace {
 
         void emitEnum(const Span& sp, const ::HIR::GenericPath& p, const ::HIR::Enum& item) override {
             ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve top_mir_res {
+            ::MIR::TypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "enum " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
-            mirRes = &top_mir_res;
+            mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
             ::HIR::TypeRef ty = crate.types.path(p.clone(), &item);
@@ -759,7 +759,7 @@ namespace {
             auto emitValue = [&](const TypeRepr::FieldPath& path, U128 v) {
                 of << "\"";
                 for (size_t i = 0; i < path.size; i++) {
-                    int val = ((v >> (i * 8)) & U128(0xFF)).truncate_u64();
+                    int val = ((v >> (i * 8)) & U128(0xFF)).truncateU64();
                     if (val < 16) {
                         of << ::std::hex << "\\x0" << val << ::std::dec;
                     } else {
@@ -775,7 +775,7 @@ namespace {
                     TU_ARM(repr->variants, None, _e) {
                     }
                     TU_ARM(repr->variants, Linear, e) {
-                        of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = {\n";
+                        of << "\t@[" << e.field.index << ", " << e.field.subFields << "] = {\n";
                         for (size_t i = 0; i < e.numVariants; i++) {
                             of << "\t\t";
 
@@ -793,7 +793,7 @@ namespace {
                         of << "\t\t}\n";
                     }
                     TU_ARM(repr->variants, Values, e) {
-                        of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = {\n";
+                        of << "\t@[" << e.field.index << ", " << e.field.subFields << "] = {\n";
                         for (size_t idx = 0; idx < e.values.size(); idx++) {
                             of << "\t\t";
                             // - Tag value
@@ -807,7 +807,7 @@ namespace {
                         of << "\t}\n";
                     }
                     TU_ARM(repr->variants, NonZero, e) {
-                        of << "\t@[" << e.field.index << ", " << e.field.sub_fields << "] = { ";
+                        of << "\t@[" << e.field.index << ", " << e.field.subFields << "] = { ";
                         for (size_t i = 0; i < 2; i++) {
                             if (i == 1) {
                                 of << ", ";
@@ -849,10 +849,10 @@ namespace {
 
         void emitStaticLocal(const ::HIR::Path& p, const ::HIR::Static& item, const TransParams& params, const EncodedLiteral& encoded) override {
             ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve top_mir_res {
+            ::MIR::TypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "static " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
-            mirRes = &top_mir_res;
+            mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
 
@@ -881,10 +881,10 @@ namespace {
 
         void emitFunctionExt(const ::HIR::Path& p, const ::HIR::Function& item, const TransParams& params) override {
             ::MIR::Function emptyFcn;
-            ::MIR::TypeResolve top_mir_res {
+            ::MIR::TypeResolve topMirRes {
                 sp, mResolve, FMT_CB(ss, ss << "extern fn " << p;), ::HIR::TypeRef(), {}, emptyFcn
             };
-            mirRes = &top_mir_res;
+            mirRes = &topMirRes;
             TRACE_FUNCTION_F(p);
 
             // If the function is a C external, emit as such
@@ -952,7 +952,7 @@ namespace {
 
                 for (const auto& stmt : code->blocks[i].statements) {
                     of << "\t\t";
-                    mir_res.set_cur_stmt(i, (&stmt - &code->blocks[i].statements.front()));
+                    mir_res.setCurStmt(i, (&stmt - &code->blocks[i].statements.front()));
                     DEBUG(stmt);
                     switch (stmt.tag()) {
                         case ::MIR::Statement::TAGDEAD:
@@ -1192,7 +1192,7 @@ namespace {
                     of << ";\n";
                 }
 
-                mir_res.set_cur_stmt_term(i);
+                mir_res.setCurStmtTerm(i);
                 const auto& term = code->blocks[i].terminator;
                 DEBUG("- " << term);
                 of << "\t\t";
@@ -1287,7 +1287,7 @@ namespace {
                             of << "DROP " << fmt(e.slot);
                             if (e.kind == ::MIR::eDropKind::SHALLOW) of << " SHALLOW";
                             if (e.flagIdx != ~0u) of << " IF df" << e.flagIdx;
-                            of << " goto " << e.target << " unwind " << e.unwind.tag_str() << "\n";
+                            of << " goto " << e.target << " unwind " << e.unwind.tagStr() << "\n";
                         }
                         break;
                         TU_ARM(term, Call, e) {
@@ -1323,7 +1323,7 @@ namespace {
                             for (const auto& a : e.args) {
                                 of << fmt(a) << ", ";
                             }
-                            of << ") goto " << e.retBlock << " unwind " << e.unwind.tag_str() << "\n";
+                            of << ") goto " << e.retBlock << " unwind " << e.unwind.tagStr() << "\n";
                         }
                         break;
                 }

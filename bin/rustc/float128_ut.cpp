@@ -14,7 +14,7 @@ namespace {
         uint64_t aHi, aLo;
         uint64_t bHi, bLo;
         uint64_t addHi, addLo;
-        uint64_t sub_hi, sub_lo;
+        uint64_t subHi, subLo;
         uint64_t mulHi, mulLo;
         uint64_t divHi, divLo;
         uint64_t modHi, modLo;
@@ -35,7 +35,7 @@ namespace {
 
     struct RoundingVector {
         uint64_t hi, lo;
-        uint64_t trunc_hi, trunc_lo;
+        uint64_t truncHi, truncLo;
         uint64_t floorHi, floorLo;
         uint64_t ceilHi, ceilLo;
         uint64_t roundHi, roundLo;
@@ -86,7 +86,7 @@ STD_TEST_SUITE(Float128Vectors) {
             const auto b = Float128::fromBits(v.bHi, v.bLo);
             STD_INSIST(sameBits(a + b, v.addHi, v.addLo));
             STD_INSIST(sameBits(b + a, v.addHi, v.addLo));
-            STD_INSIST(sameBits(a - b, v.sub_hi, v.sub_lo));
+            STD_INSIST(sameBits(a - b, v.subHi, v.subLo));
             STD_INSIST(sameBits(a * b, v.mulHi, v.mulLo));
             STD_INSIST(sameBits(b * a, v.mulHi, v.mulLo));
             STD_INSIST(sameBits(a / b, v.divHi, v.divLo));
@@ -113,7 +113,7 @@ STD_TEST_SUITE(Float128Vectors) {
     STD_TEST(testRounding) {
         for (const auto& v : roundingVectors) {
             const auto value = Float128::fromBits(v.hi, v.lo);
-            STD_INSIST(sameBits(value.trunc(), v.trunc_hi, v.trunc_lo));
+            STD_INSIST(sameBits(value.trunc(), v.truncHi, v.truncLo));
             STD_INSIST(sameBits(value.floor(), v.floorHi, v.floorLo));
             STD_INSIST(sameBits(value.ceil(), v.ceilHi, v.ceilLo));
             STD_INSIST(sameBits(value.round(), v.roundHi, v.roundLo));

@@ -115,7 +115,7 @@ namespace HIR {
         ExprPtr(ExprPtr&&);
         ExprPtr& operator=(ExprPtr&&);
 
-        ::HIR::ExprNodeP take_node();
+        ::HIR::ExprNodeP takeNode();
 
         operator bool() const {
             return node;
@@ -156,7 +156,7 @@ namespace HIR {
         const ::MIR::Function* getExtMir() const;
         ::MIR::Function* getExtMirMut();
 
-        void set_mir(::MIR::FunctionPointer mir);
+        void setMir(::MIR::FunctionPointer mir);
     };
 
 } // namespace HIR

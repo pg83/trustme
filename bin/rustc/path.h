@@ -62,7 +62,7 @@ namespace helpers {
 
         path parent() const;
 
-        path to_absolute() const;
+        path toAbsolute() const;
 
         ::std::string basename() const;
 

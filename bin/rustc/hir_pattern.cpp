@@ -70,7 +70,7 @@ namespace HIR {
             }
             TU_ARMA(Tuple, e) {
                 os << "(";
-                for (const auto& s : e.sub_patterns) {
+                for (const auto& s : e.subPatterns) {
                     os << s << ", ";
                 }
                 os << ")";
@@ -106,7 +106,7 @@ namespace HIR {
             TU_ARMA(PathNamed, e) {
                 os << e.path;
                 os << "{ ";
-                for (const auto& ns : e.sub_patterns) {
+                for (const auto& ns : e.subPatterns) {
                     os << ns.first << ": " << ns.second << ", ";
                 }
                 os << "}";
@@ -127,7 +127,7 @@ namespace HIR {
 
             TU_ARMA(Slice, e) {
                 os << "[";
-                for (const auto& s : e.sub_patterns) {
+                for (const auto& s : e.subPatterns) {
                     os << s << ", ";
                 }
                 os << "]";
@@ -173,14 +173,14 @@ namespace {
             (Any, ),
             (Box, visit_pattern_declaration_slots(*e.sub, slots);),
             (Ref, visit_pattern_declaration_slots(*e.sub, slots);),
-            (Tuple, for (const auto& subpattern : e.sub_patterns) { visit_pattern_declaration_slots(subpattern, slots); }),
+            (Tuple, for (const auto& subpattern : e.subPatterns) { visit_pattern_declaration_slots(subpattern, slots); }),
             (SplitTuple, for (const auto& subpattern : e.leading) visit_pattern_declaration_slots(subpattern, slots); for (const auto& subpattern : e.trailing) visit_pattern_declaration_slots(subpattern, slots);),
             (PathValue, ),
             (PathTuple, for (const auto& subpattern : e.leading) visit_pattern_declaration_slots(subpattern, slots); for (const auto& subpattern : e.trailing) visit_pattern_declaration_slots(subpattern, slots);),
-            (PathNamed, for (const auto& field : e.sub_patterns) { visit_pattern_declaration_slots(field.second, slots); }),
+            (PathNamed, for (const auto& field : e.subPatterns) { visit_pattern_declaration_slots(field.second, slots); }),
             (Value, ),
             (Range, ),
-            (Slice, for (const auto& subpattern : e.sub_patterns) { visit_pattern_declaration_slots(subpattern, slots); }),
+            (Slice, for (const auto& subpattern : e.subPatterns) { visit_pattern_declaration_slots(subpattern, slots); }),
             (SplitSlice, for (const auto& subpattern : e.leading) { visit_pattern_declaration_slots(subpattern, slots); } if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); } for (const auto& subpattern : e.trailing) { visit_pattern_declaration_slots(subpattern, slots); }),
             (Or, assert(!e.empty()); visit_pattern_declaration_slots(e.front(), slots);)
         )
@@ -196,14 +196,14 @@ namespace {
                 (Any, ),
                 (Box, visit_immediate(*e.sub);),
                 (Ref, visit_immediate(*e.sub);),
-                (Tuple, for (const auto& subpattern : e.sub_patterns) { visit_immediate(subpattern); }),
+                (Tuple, for (const auto& subpattern : e.subPatterns) { visit_immediate(subpattern); }),
                 (SplitTuple, for (const auto& subpattern : e.leading) visit_immediate(subpattern); for (const auto& subpattern : e.trailing) visit_immediate(subpattern);),
                 (PathValue, ),
                 (PathTuple, for (const auto& subpattern : e.leading) visit_immediate(subpattern); for (const auto& subpattern : e.trailing) visit_immediate(subpattern);),
-                (PathNamed, for (const auto& field : e.sub_patterns) { visit_immediate(field.second); }),
+                (PathNamed, for (const auto& field : e.subPatterns) { visit_immediate(field.second); }),
                 (Value, ),
                 (Range, ),
-                (Slice, for (const auto& subpattern : e.sub_patterns) { visit_immediate(subpattern); }),
+                (Slice, for (const auto& subpattern : e.subPatterns) { visit_immediate(subpattern); }),
                 (SplitSlice,
                  for (const auto& subpattern : e.leading) { visit_immediate(subpattern); }
                  if (e.extraBind.isValid()) { slots.push_back(e.extraBind.slot); }
@@ -286,19 +286,19 @@ namespace {
                 return ::HIR::Pattern::Data::make_Ref({e.type, box$(e.sub->clone())});
             }
             TU_ARMA(Tuple, e) {
-                return ::HIR::Pattern::Data::make_Tuple({clonePatVec(e.sub_patterns)});
+                return ::HIR::Pattern::Data::make_Tuple({clonePatVec(e.subPatterns)});
             }
             TU_ARMA(SplitTuple, e) {
-                return ::HIR::Pattern::Data::make_SplitTuple({clonePatVec(e.leading), clonePatVec(e.trailing), e.total_size});
+                return ::HIR::Pattern::Data::make_SplitTuple({clonePatVec(e.leading), clonePatVec(e.trailing), e.totalSize});
             }
             TU_ARMA(PathValue, e) {
                 return ::HIR::Pattern::Data::make_PathValue({e.path.clone(), e.binding.clone()});
             }
             TU_ARMA(PathTuple, e) {
-                return ::HIR::Pattern::Data::make_PathTuple({e.path.clone(), e.binding.clone(), clonePatVec(e.leading), e.isSplit, clonePatVec(e.trailing), e.total_size});
+                return ::HIR::Pattern::Data::make_PathTuple({e.path.clone(), e.binding.clone(), clonePatVec(e.leading), e.isSplit, clonePatVec(e.trailing), e.totalSize});
             }
             TU_ARMA(PathNamed, e) {
-                return ::HIR::Pattern::Data::make_PathNamed({e.path.clone(), e.binding.clone(), clonePatFields(e.sub_patterns), e.isExhaustive});
+                return ::HIR::Pattern::Data::make_PathNamed({e.path.clone(), e.binding.clone(), clonePatFields(e.subPatterns), e.isExhaustive});
             }
 
             TU_ARMA(Value, e) {
@@ -309,7 +309,7 @@ namespace {
             }
 
             TU_ARMA(Slice, e) {
-                return ::HIR::Pattern::Data::make_Slice({clonePatVec(e.sub_patterns)});
+                return ::HIR::Pattern::Data::make_Slice({clonePatVec(e.subPatterns)});
             }
             TU_ARMA(SplitSlice, e) {
                 return ::HIR::Pattern::Data::make_SplitSlice({clonePatVec(e.leading), e.extraBind, clonePatVec(e.trailing)});

@@ -18,8 +18,8 @@ public:
     /// </summary>
     /// <param name="server_jobs">Number of downstream job slots to expose</param>
     /// <returns></returns>
-    static ::std::unique_ptr<JobServer> create(size_t server_jobs);
+    static ::std::unique_ptr<JobServer> create(size_t serverJobs);
 
-    virtual bool take_one(unsigned long timeout_ms) = 0;
+    virtual bool takeOne(unsigned long timeoutMs) = 0;
     virtual void returnOne() = 0;
 };

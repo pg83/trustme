@@ -10,7 +10,7 @@
 
 namespace HIR {
 
-    typedef ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> t_trait_list;
+    typedef ::std::vector<::std::pair<const ::HIR::SimplePath*, const ::HIR::Trait*>> tTraitList;
 
     // Indicates how a result is used
     enum class ValueUsage {
@@ -57,7 +57,7 @@ namespace HIR {
         ExprNodeP valueNode; // can be null
 
         ::HIR::SimplePath localMod;
-        t_trait_list traits;
+        tTraitList traits;
 
         ExprNodeBlock(Span sp);
 
@@ -90,9 +90,9 @@ namespace HIR {
         ::std::vector<::std::string> clobbers;
         ::std::vector<::std::string> flags;
 
-        ExprNodeAsm(Span sp, ::std::string tpl_str, ::std::vector<ValRef> outputs, ::std::vector<ValRef> inputs, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags)
+        ExprNodeAsm(Span sp, ::std::string tplStr, ::std::vector<ValRef> outputs, ::std::vector<ValRef> inputs, ::std::vector<::std::string> clobbers, ::std::vector<::std::string> flags)
             : ExprNode(mv$(sp))
-            , templateText(mv$(tpl_str))
+            , templateText(mv$(tplStr))
             , outputs(mv$(outputs))
             , inputs(mv$(inputs))
             , clobbers(mv$(clobbers))
@@ -516,7 +516,7 @@ namespace HIR {
         ExprCallCache cache;
 
         // - List of possible traits (in-scope traits that contain this method)
-        t_trait_list traits;
+        tTraitList traits;
         // - A pool of ivars to use for searching for trait impls, with type
         // ivars first and const value ivars after them.
         ::std::vector<unsigned int> traitParamIvars;
@@ -624,7 +624,7 @@ namespace HIR {
     };
 
     struct ExprNodeStructLiteral: public ExprNode {
-        typedef ::std::vector<::std::pair<RcString, ExprNodeP>> t_values;
+        typedef ::std::vector<::std::pair<RcString, ExprNodeP>> tValues;
 
         ::HIR::TypeRef mType;
         bool isStruct;
@@ -632,16 +632,16 @@ namespace HIR {
         bool useDefaults;
         /// Base value (`..foo`)
         ::HIR::ExprNodeP baseValue;
-        t_values values;
+        tValues values;
 
         /// Actual path extracted from the TypeRef (populated after inner UFCS expansion)
         ::HIR::GenericPath realPath;
         /// Monomorphised types of each field.
         ::std::vector<::HIR::TypeRef> valueTypes;
 
-        ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, ::HIR::ExprNodeP base_value, t_values values);
+        ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, ::HIR::ExprNodeP base_value, tValues values);
 
-        ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, bool, t_values values);
+        ExprNodeStructLiteral(Span sp, ::HIR::TypeRef ty, bool is_struct, bool, tValues values);
 
         static constexpr unsigned int kind = 32;
         unsigned int nodeKind() const override;

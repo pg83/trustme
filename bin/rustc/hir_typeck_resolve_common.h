@@ -103,7 +103,7 @@ struct TraitResolveCommon {
     void prepIndexes(const Span& sp);
 
 protected:
-    void prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef longTy, ::HIR::TypeRef short_ty);
+    void prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef longTy, ::HIR::TypeRef shortTy);
     void prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool addParents = true);
 
     /// Iterate over in-scope bounds (function then type)

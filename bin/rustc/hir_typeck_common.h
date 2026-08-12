@@ -5,23 +5,23 @@
 #include "hir_type.h"
 #include "hir_typeck_monomorph.h"
 
-typedef ::std::function<bool(const ::HIR::TypeData*)> t_cb_visit_ty;
+typedef ::std::function<bool(const ::HIR::TypeData*)> tCbVisitTy;
 /// Calls the provided callback on every type seen when recursing the type.
 /// If the callback returns `true`, no further types are visited and the function returns `true`.
-extern bool visit_ty_with(const ::HIR::TypeData*, t_cb_visit_ty callback);
-extern bool visit_trait_path_tys_with(const ::HIR::TraitPath&, t_cb_visit_ty callback);
-extern bool visit_path_tys_with(const ::HIR::Path&, t_cb_visit_ty callback);
+extern bool visit_ty_with(const ::HIR::TypeData*, tCbVisitTy callback);
+extern bool visit_trait_path_tys_with(const ::HIR::TraitPath&, tCbVisitTy callback);
+extern bool visit_path_tys_with(const ::HIR::Path&, tCbVisitTy callback);
 
-typedef ::std::function<bool(::HIR::TypeRef& rewritten, ::HIR::TypeData& data)> t_cb_rewrite_ty;
-extern bool rewriteTyWith(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, t_cb_rewrite_ty callback);
-extern bool rewritePathTysWith(::HIR::TypeInterner& types, ::HIR::Path& path, t_cb_rewrite_ty callback);
+typedef ::std::function<bool(::HIR::TypeRef& rewritten, ::HIR::TypeData& data)> tCbRewriteTy;
+extern bool rewriteTyWith(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, tCbRewriteTy callback);
+extern bool rewritePathTysWith(::HIR::TypeInterner& types, ::HIR::Path& path, tCbRewriteTy callback);
 
-typedef ::std::function<bool(const ::HIR::TypeData*, ::HIR::TypeRef&)> t_cb_clone_ty;
+typedef ::std::function<bool(const ::HIR::TypeData*, ::HIR::TypeRef&)> tCbCloneTy;
 /// Clones a type, calling the provided callback on every type (optionally providing a replacement)
 ///
 /// Closure should return `true` if the passed output slot was populated.
-extern ::HIR::TypeRef cloneTyWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeData* tpl, t_cb_clone_ty callback);
-extern ::HIR::PathParams clonePathParamsWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& tpl, t_cb_clone_ty callback);
+extern ::HIR::TypeRef cloneTyWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeData* tpl, tCbCloneTy callback);
+extern ::HIR::PathParams clonePathParamsWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& tpl, tCbCloneTy callback);
 
 extern void checkTypeClassPrimitive(const Span& sp, const ::HIR::TypeData* type, ::HIR::InferClass ic, ::HIR::CoreType ct);
 

@@ -186,9 +186,9 @@ namespace {
         std::pair<const RcString*, bool> insertIntoBlock(std::vector<Block>::iterator block, std::vector<RcString>::iterator slot, RcString rv) {
 #define VALIDATE 0
 #if VALIDATE
-            size_t start_len = 0;
+            size_t startLen = 0;
             for (const auto& v : *this) {
-                start_len += 1;
+                startLen += 1;
             }
 #endif
             if (block->ents.size() == block->ents.capacity()) {
@@ -196,17 +196,17 @@ namespace {
                 // - The new block should go after the current one, and get half of its contents
                 auto newBlock = blocks.insert(block + 1, Block());
                 block = newBlock - 1;
-                const auto split_point = block->ents.size() / 2;
-                if (static_cast<size_t>(slot - block->ents.begin()) >= split_point) {
+                const auto splitPoint = block->ents.size() / 2;
+                if (static_cast<size_t>(slot - block->ents.begin()) >= splitPoint) {
                     // The target location is in the second half of the range, so we're inserting into the new block
-                    newBlock->ents.insert(newBlock->ents.end(), block->ents.begin() + split_point, slot);
+                    newBlock->ents.insert(newBlock->ents.end(), block->ents.begin() + splitPoint, slot);
                     newBlock->ents.push_back(rv);
                     slot = newBlock->ents.insert(newBlock->ents.end(), slot, block->ents.end()) - 1;
-                    block->ents.resize(split_point);
+                    block->ents.resize(splitPoint);
                 } else {
                     // Target is in the lower half, so copy the entities and then insert
-                    newBlock->ents.insert(newBlock->ents.end(), block->ents.begin() + split_point, block->ents.end());
-                    block->ents.resize(split_point);
+                    newBlock->ents.insert(newBlock->ents.end(), block->ents.begin() + splitPoint, block->ents.end());
+                    block->ents.resize(splitPoint);
                     slot = block->ents.insert(slot, rv);
                 }
             } else {
@@ -228,8 +228,8 @@ namespace {
                 prev.l = v.size();
                 endLen += 1;
             }
-            if (start_len + 1 != endLen) {
-                std::cerr << "BUG: Counts failed after addition of `" << rv << " (was " << start_len << ", now " << endLen << ")`\n";
+            if (startLen + 1 != endLen) {
+                std::cerr << "BUG: Counts failed after addition of `" << rv << " (was " << startLen << ", now " << endLen << ")`\n";
                 abort();
             }
             ::std::cerr << "ADDED #" << endLen << ": `" << rv << "`\n";

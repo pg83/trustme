@@ -37,12 +37,12 @@ public:
         }
     }
 
-    bool take_one(unsigned long timeout_ms) override {
-        if (timeout_ms != ~0ul) {
+    bool takeOne(unsigned long timeoutMs) override {
+        if (timeoutMs != ~0ul) {
             assert(fdRead >= 0);
             struct timeval timeout;
-            timeout.tv_sec = timeout_ms / 1000;
-            timeout.tv_usec = (timeout_ms % 1000) * 1000;
+            timeout.tv_sec = timeoutMs / 1000;
+            timeout.tv_usec = (timeoutMs % 1000) * 1000;
             fd_set fds;
             FD_ZERO(&fds);
             FD_SET(fdRead, &fds);
@@ -165,8 +165,8 @@ public:
     ~JobServerServer() {
     }
 
-    bool take_one(unsigned long timeout_ms) override {
-        return client.take_one(timeout_ms);
+    bool takeOne(unsigned long timeoutMs) override {
+        return client.takeOne(timeoutMs);
     }
 
     void returnOne() override {
@@ -174,7 +174,7 @@ public:
     }
 };
 
-::std::unique_ptr<JobServer> JobServer::create(size_t server_jobs) {
+::std::unique_ptr<JobServer> JobServer::create(size_t serverJobs) {
     const auto* makeflags = getenv("MAKEFLAGS");
 
     const char* jobserverAuth = nullptr;
@@ -219,10 +219,10 @@ public:
         }
     }
     // If no `-j` option is passed to this application, then don't create a jobserver
-    if (server_jobs == 0) {
+    if (serverJobs == 0) {
         return nullptr;
     }
-    return ::std::make_unique<JobServerServer>(server_jobs);
+    return ::std::make_unique<JobServerServer>(serverJobs);
 }
 
 JobServer::~JobServer() {

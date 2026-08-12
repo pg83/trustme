@@ -34,14 +34,14 @@ void TraitResolveCommon::prepIndexes(const Span& sp) {
     }
 }
 
-void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef longTy, ::HIR::TypeRef short_ty) {
-    DEBUG("ADD " << longTy << " => " << short_ty);
+void TraitResolveCommon::prepIndexesAddEquality(const Span& sp, const ::HIR::GenericParams* hrtbs, ::HIR::TypeRef longTy, ::HIR::TypeRef shortTy) {
+    DEBUG("ADD " << longTy << " => " << shortTy);
     if (!hrtbs) {
         static const HIR::GenericParams emptyHrtbs;
         hrtbs = &emptyHrtbs;
     }
     // TODO: Sort the two types by "complexity" (most of the time long >= short)
-    this->typeEqualities.insert(::std::make_pair(mv$(longTy), CachedEquality{hrtbs->clone(), mv$(short_ty)}));
+    this->typeEqualities.insert(::std::make_pair(mv$(longTy), CachedEquality{hrtbs->clone(), mv$(shortTy)}));
 }
 
 void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::GenericParams* outerHrtbs, ::HIR::TypeRef type, ::HIR::TraitPath trait_path, bool addParents /*=true*/) {
@@ -76,27 +76,27 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
         return rv;
     };
     auto pushType = [&](const RcString& name, const HIR::GenericParams* hrbs, const HIR::TraitPath::AtyEqual& atye) {
-        auto& b = getOrAddTraitBound(hrbs, atye.source_trait);
+        auto& b = getOrAddTraitBound(hrbs, atye.sourceTrait);
         b.assoc.insert(std::make_pair(name, atye.clone()));
     };
 
-    auto& trait_params = trait_path.mPath.mParams;
-    auto monomorph = MonomorphStatePtr(crate.types, type, &trait_params, nullptr);
+    auto& traitParams = trait_path.mPath.mParams;
+    auto monomorph = MonomorphStatePtr(crate.types, type, &traitParams, nullptr);
 
     const auto& trait = crate.getTraitByPath(sp, trait_path.mPath.mPath);
 #if 1
-    while (trait_params.types.size() < trait.mParams.types.size()) {
-        trait_params.types.push_back(monomorph.monomorphType(sp, trait.mParams.types[trait_params.types.size()].defaultValue));
+    while (traitParams.types.size() < trait.mParams.types.size()) {
+        traitParams.types.push_back(monomorph.monomorphType(sp, trait.mParams.types[traitParams.types.size()].defaultValue));
     }
 #endif
 
     getOrAddTraitBound(trait_path.hrtbs.get(), trait_path.mPath);
 
     for (const auto& tb : trait_path.typeBounds) {
-        DEBUG("Equality (TB) - <" << type << " as " << tb.second.source_trait << ">::" << tb.first << " = " << tb.second);
+        DEBUG("Equality (TB) - <" << type << " as " << tb.second.sourceTrait << ">::" << tb.first << " = " << tb.second);
         pushType(tb.first, trait_path.hrtbs.get(), tb.second);
 
-        auto ty_l = crate.types.path(::HIR::Path(type, tb.second.source_trait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
+        auto ty_l = crate.types.path(::HIR::Path(type, tb.second.sourceTrait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
         prepIndexesAddEquality(sp, trait_path.hrtbs.get(), ty_l, tb.second.type);
     }
 
@@ -110,8 +110,8 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
     // ATY Trait bounds
     for (const auto& tb : trait_path.traitBounds) {
         for (const auto& trait : tb.second.traits) {
-            auto ty_l = crate.types.path(::HIR::Path(type, tb.second.source_trait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
-            DEBUG("Bound (TB) - <" << type << " as " << tb.second.source_trait << ">::" << tb.first << " : " << trait);
+            auto ty_l = crate.types.path(::HIR::Path(type, tb.second.sourceTrait.clone(), tb.first), ::HIR::TypePathBinding::make_Opaque({}));
+            DEBUG("Bound (TB) - <" << type << " as " << tb.second.sourceTrait << ">::" << tb.first << " : " << trait);
             prepIndexesAddTraitBound(sp, outerHrtbs, std::move(ty_l), trait.clone());
         }
     }
@@ -135,19 +135,19 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, const ::HIR::G
 
         for (const auto& aTyB : aTy.second.traitBounds) {
             DEBUG("(Assoc) " << aTyB);
-            auto trait_mono = monomorph.monomorphTraitpath(sp, aTyB, false);
-            for (auto& tb : trait_mono.typeBounds) {
-                DEBUG("Equality (ATB) - <" << ty_a << " as " << tb.second.source_trait << ">::" << tb.first << " = " << tb.second);
+            auto traitMono = monomorph.monomorphTraitpath(sp, aTyB, false);
+            for (auto& tb : traitMono.typeBounds) {
+                DEBUG("Equality (ATB) - <" << ty_a << " as " << tb.second.sourceTrait << ">::" << tb.first << " = " << tb.second);
 
-                auto ty_l = crate.types.path(::HIR::Path(ty_a, tb.second.source_trait.clone(), tb.first, tb.second.atyParams.clone()), ::HIR::TypePathBinding::make_Opaque({}));
+                auto ty_l = crate.types.path(::HIR::Path(ty_a, tb.second.sourceTrait.clone(), tb.first, tb.second.atyParams.clone()), ::HIR::TypePathBinding::make_Opaque({}));
 
                 if (outerHrtbs && outerHrtbs->is_empty()) {
                     outerHrtbs = nullptr;
                 }
 
                 // TODO: what if `trait_mono` has HRLs too?
-                if (outerHrtbs && trait_mono.hrtbs) {
-                    TODO(sp, "Double-layerd HRLs - outer=" << outerHrtbs->fmtArgs() << " and inner=" << trait_mono.hrtbs->fmtArgs());
+                if (outerHrtbs && traitMono.hrtbs) {
+                    TODO(sp, "Double-layerd HRLs - outer=" << outerHrtbs->fmtArgs() << " and inner=" << traitMono.hrtbs->fmtArgs());
                 }
                 auto* innerHrtbs = outerHrtbs ? outerHrtbs : aTyB.hrtbs.get();
                 prepIndexesAddEquality(sp, innerHrtbs, mv$(ty_l), std::move(tb.second.type));

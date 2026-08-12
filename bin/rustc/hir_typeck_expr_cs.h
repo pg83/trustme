@@ -101,8 +101,8 @@ struct Context {
         typeck::PrimitiveOperator operatorKind;
         bool isAmbiguous = false;
 
-        ::std::vector<StallDependency> stalled_on;
-        ::std::vector<CapturedIvarPossible> stalled_possibilities;
+        ::std::vector<StallDependency> stalledOn;
+        ::std::vector<CapturedIvarPossible> stalledPossibilities;
 
         friend ::std::ostream& operator<<(::std::ostream& os, const Associated& v);
     };
@@ -122,7 +122,7 @@ struct Context {
     ::std::unordered_map<const ::HIR::ExprNode*, ::HIR::TypeRef> coercionHints;
     ::std::vector<Associated> linkAssoc;
     /// Nodes that need revisiting (e.g. method calls when the receiver isn't known)
-    ::std::vector<::HIR::ExprNode*> to_visit;
+    ::std::vector<::HIR::ExprNode*> toVisit;
     /// Callback-based revisits (e.g. for slice patterns handling slices/arrays)
     ::std::vector<::std::unique_ptr<Revisitor>> advRevisits;
 
@@ -149,12 +149,12 @@ struct Context {
 
     void dump() const;
 
-    bool take_changed() {
-        return ivars.take_changed();
+    bool takeChanged() {
+        return ivars.takeChanged();
     }
 
     bool hasRules() const {
-        return !(linkCoerce.empty() && linkAssoc.empty() && to_visit.empty() && advRevisits.empty());
+        return !(linkCoerce.empty() && linkAssoc.empty() && toVisit.empty() && advRevisits.empty());
     }
 
     inline void addIvars(::HIR::TypeRef& ty) {
@@ -205,7 +205,7 @@ struct Context {
         Bound,
     };
     /// Type is unknown (e.g. no used/results from a trait impl that can't be looked up)
-    void possibleEquateTypeUnknown(const Span& sp, const ::HIR::TypeData* ty, IvarUnknownType src_ty);
+    void possibleEquateTypeUnknown(const Span& sp, const ::HIR::TypeData* ty, IvarUnknownType srcTy);
     /// Type must be one of the provided set
     void possibleEquateTypeBounds(const Span& sp, const ::HIR::TypeData* ty, ::std::vector<::HIR::TypeRef> t);
 
@@ -224,11 +224,11 @@ struct Context {
     //void possible_equate_ivar_def(unsigned int ivar_index, const ::HIR::TypeData* t);
 
     /// Record that the IVar may be this type (and what the source is)
-    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const ::HIR::TypeData* t, PossibleTypeSource src_ty);
+    void possibleEquateIvar(const Span& sp, unsigned int ivarIndex, const ::HIR::TypeData* t, PossibleTypeSource srcTy);
     /// Add a possible type for an ivar (which is used if only one possibility meets available bounds)
     void possibleEquateIvarBounds(const Span& sp, unsigned int ivarIndex, ::std::vector<::HIR::TypeRef> t);
     /// Record that the IVar is equated to an unknown type
-    void possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType src_ty);
+    void possibleEquateIvarUnknown(const Span& sp, unsigned int ivarIndex, IvarUnknownType srcTy);
 
     // ----
     // Patterns and bindings
@@ -263,4 +263,4 @@ namespace typecheck {
     extern bool visit_call_populate_cache(Context& context, const Span& sp, ::HIR::Path& path, ::HIR::ExprCallCache& cache) __attribute__((warn_unused_result));
 }
 
-extern void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, t_args& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);
+extern void TypecheckCodeCSEnumerateRules(Context& context, const typeck::ModuleState& ms, tArgs& args, const ::HIR::TypeData* result_type, ::HIR::ExprPtr& expr, ::HIR::ExprNodeP& rootPtr);

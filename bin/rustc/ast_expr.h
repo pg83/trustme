@@ -28,7 +28,7 @@ namespace AST {
         virtual ExprNodeP clone() const = 0;
         virtual unsigned int nodeKind() const = 0;
 
-        void set_span(Span s) {
+        void setSpan(Span s) {
             mSpan = ::std::move(s);
         }
 
@@ -36,7 +36,7 @@ namespace AST {
             return mSpan;
         }
 
-        void set_attrs(AttributeList&& mi);
+        void setAttrs(AttributeList&& mi);
 
         AttributeList& attrs() {
             return mAttrs;
@@ -520,12 +520,12 @@ namespace AST {
             ExprNodeP value;
         };
 
-        typedef ::std::vector<Ent> t_values;
+        typedef ::std::vector<Ent> tValues;
         Path mPath;
         ExprNodeP baseValue;
-        t_values values;
+        tValues values;
 
-        ExprNodeStructLiteral(Path path, ExprNodeP base_value, t_values&& values);
+        ExprNodeStructLiteral(Path path, ExprNodeP base_value, tValues&& values);
 
         static constexpr unsigned int kind = 27;
         unsigned int nodeKind() const override;
@@ -537,11 +537,11 @@ namespace AST {
     // Struct literal pattern only
     // This implicitly has a `..` in it
     struct ExprNodeStructLiteralPattern: public ExprNode {
-        typedef ::std::vector<ExprNodeStructLiteral::Ent> t_values;
+        typedef ::std::vector<ExprNodeStructLiteral::Ent> tValues;
         Path mPath;
-        t_values values;
+        tValues values;
 
-        ExprNodeStructLiteralPattern(Path path, t_values&& values);
+        ExprNodeStructLiteralPattern(Path path, tValues&& values);
 
         static constexpr unsigned int kind = 28;
         unsigned int nodeKind() const override;

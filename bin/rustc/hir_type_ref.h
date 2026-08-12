@@ -46,7 +46,7 @@ namespace HIR {
         }
     };
 
-    using t_cb_resolve_type = const ResolvePlaceholders&;
+    using tCbResolveType = const ResolvePlaceholders&;
 
     class TrackHrbStack {
         mutable std::vector<const HIR::GenericParams*> hrbStack;
@@ -75,10 +75,10 @@ namespace HIR {
 
     class MatchGenerics: virtual public TrackHrbStack {
     public:
-        ::HIR::Compare cmpPath(const Span& sp, const ::HIR::Path& ty_l, const ::HIR::Path& ty_r, t_cb_resolve_type resolveCb);
-        virtual ::HIR::Compare cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, t_cb_resolve_type resolveCb);
+        ::HIR::Compare cmpPath(const Span& sp, const ::HIR::Path& ty_l, const ::HIR::Path& ty_r, tCbResolveType resolveCb);
+        virtual ::HIR::Compare cmpType(const Span& sp, const ::HIR::TypeData* ty_l, const ::HIR::TypeData* ty_r, tCbResolveType resolveCb);
 
-        virtual ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, t_cb_resolve_type resolveCb) = 0;
+        virtual ::HIR::Compare matchTy(const ::HIR::GenericRef& g, const ::HIR::TypeData* ty, tCbResolveType resolveCb) = 0;
         virtual ::HIR::Compare matchVal(const ::HIR::GenericRef& g, const ::HIR::ConstGeneric& sz) = 0;
         virtual ::HIR::Compare matchLft(const ::HIR::GenericRef&, const ::HIR::LifetimeRef&) {
             return HIR::Compare::Equal;

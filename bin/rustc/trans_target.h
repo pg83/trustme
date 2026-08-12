@@ -61,7 +61,7 @@ struct TypeRepr {
 
         size_t index;
         size_t size;
-        ::std::vector<size_t> sub_fields;
+        ::std::vector<size_t> subFields;
     };
 
     TAGGED_UNION(
@@ -79,7 +79,7 @@ struct TypeRepr {
              size_t numVariants;
 
              bool uses_niche() const {
-                 return !field.sub_fields.empty();
+                 return !field.subFields.empty();
              }
              bool isNiche(unsigned var_idx) const {
                  return uses_niche() && var_idx == field.index;
@@ -143,7 +143,7 @@ struct TypeRepr {
 std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x);
 
 extern const TargetSpec& TargetGetCurSpec();
-extern void TargetSetCfg(const ::std::string& target_name);
+extern void TargetSetCfg(const ::std::string& targetName);
 extern void TargetExportCurSpec(const ::std::string& filename);
 
 static inline unsigned TargetGetPointerBits() {
@@ -163,4 +163,4 @@ extern bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve&
 extern void TargetForceTypeRepr(const Span& sp, const ::HIR::TypeData* ty, TypeRepr repr);
 extern const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const ::HIR::TypeData* ty);
 
-extern const ::HIR::TypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& sub_fields = {}, size_t ofs = 0);
+extern const ::HIR::TypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& subFields = {}, size_t ofs = 0);

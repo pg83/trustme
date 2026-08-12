@@ -114,7 +114,7 @@ namespace AST {
             return rootModule;
         }
 
-        void set_crate_name(std::string name);
+        void setCrateName(std::string name);
 
         /// Load referenced crates
         void loadExterns();

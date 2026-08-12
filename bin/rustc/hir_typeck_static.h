@@ -44,25 +44,25 @@ private:
 public:
     /// \brief State manipulation
     /// \{
-    NullOnDrop<const ::HIR::GenericParams> set_impl_generics(HIR::StructMarkings::DstType struct_dst_type, const ::HIR::GenericParams& gps);
+    NullOnDrop<const ::HIR::GenericParams> setImplGenerics(HIR::StructMarkings::DstType structDstType, const ::HIR::GenericParams& gps);
 
-    NullOnDrop<const ::HIR::GenericParams> set_impl_generics(MetadataType self_meta_type, const ::HIR::GenericParams& gps);
+    NullOnDrop<const ::HIR::GenericParams> setImplGenerics(MetadataType selfMetaType, const ::HIR::GenericParams& gps);
 
-    NullOnDrop<const ::HIR::GenericParams> set_impl_generics(const ::HIR::TypeData* self_ty, const ::HIR::GenericParams& gps);
+    NullOnDrop<const ::HIR::GenericParams> setImplGenerics(const ::HIR::TypeData* self_ty, const ::HIR::GenericParams& gps);
 
     void update_impl_self_metadata(const ::HIR::TypeData* self_ty);
 
-    NullOnDrop<const ::HIR::GenericParams> set_item_generics(const ::HIR::GenericParams& gps);
+    NullOnDrop<const ::HIR::GenericParams> setItemGenerics(const ::HIR::GenericParams& gps);
 
-    void set_impl_generics_raw(MetadataType self_meta_type, const ::HIR::GenericParams& gps);
+    void setImplGenericsRaw(MetadataType selfMetaType, const ::HIR::GenericParams& gps);
 
     void clearImplGenerics();
 
-    void set_item_generics_raw(const ::HIR::GenericParams& gps);
+    void setItemGenericsRaw(const ::HIR::GenericParams& gps);
 
     void clearItemGenerics();
 
-    void set_both_generics_raw(const ::HIR::GenericParams* gpsImpl, const ::HIR::GenericParams* gpsFcn);
+    void setBothGenericsRaw(const ::HIR::GenericParams* gpsImpl, const ::HIR::GenericParams* gpsFcn);
 
     void clearBothGenerics();
 
@@ -75,17 +75,17 @@ public:
 
     /// \brief Lookups
     /// \{
-    typedef ::std::function<bool(ImplRef, bool isFuzzed)> t_cb_find_impl;
+    typedef ::std::function<bool(ImplRef, bool isFuzzed)> tCbFindImpl;
 
-    bool findImpl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb) const {
-        return this->findImpl(sp, trait_path, &trait_params, type, foundCb);
+    bool findImpl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& traitParams, const ::HIR::TypeData* type, tCbFindImpl foundCb) const {
+        return this->findImpl(sp, trait_path, &traitParams, type, foundCb);
     }
 
-    bool findImpl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb, bool dontHandoffToSpecialised = false) const;
+    bool findImpl(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* traitParams, const ::HIR::TypeData* type, tCbFindImpl foundCb, bool dontHandoffToSpecialised = false) const;
 
 private:
-    bool findImplBounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb) const;
-    bool findImplCheckCrate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* trait_params, const ::HIR::TypeData* type, t_cb_find_impl foundCb, const ::HIR::TraitImpl& impl) const;
+    bool findImplBounds(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* traitParams, const ::HIR::TypeData* type, tCbFindImpl foundCb) const;
+    bool findImplCheckCrate(const Span& sp, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams* traitParams, const ::HIR::TypeData* type, tCbFindImpl foundCb, const ::HIR::TraitImpl& impl) const;
     bool findImplCheckCrateRaw(const Span& sp, const ::HIR::SimplePath& desTraitPath, const ::HIR::PathParams* desTraitParams, const ::HIR::TypeData* desType, const ::HIR::GenericParams& implParamsDef, const ::HIR::PathParams& implTraitParams, const ::HIR::TypeData* impl_type, ::std::function<bool(HIR::PathParams, ::HIR::Compare)>) const;
     ::HIR::Compare checkAutoTraitImplDestructure(const Span& sp, const ::HIR::SimplePath& trait, const ::HIR::PathParams* paramsPtr, const ::HIR::TypeData* type) const;
 
@@ -122,7 +122,7 @@ public:
     /// Locate a named trait in the provied trait (either itself or as a parent trait)
     bool findNamedTraitInTrait(const Span& sp, const ::HIR::SimplePath& des, const ::HIR::PathParams& params, const ::HIR::Trait& trait_ptr, const ::HIR::SimplePath& trait_path, const ::HIR::PathParams& pp, const ::HIR::TypeData* self_type, ::std::function<bool(const ::HIR::PathParams&, ::HIR::TraitPath::assocListT)> callback) const;
     ///
-    bool trait_contains_type(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const char* name, ::HIR::GenericPath& outPath) const;
+    bool traitContainsType(const Span& sp, const ::HIR::GenericPath& trait_path, const ::HIR::Trait& trait_ptr, const char* name, ::HIR::GenericPath& outPath) const;
     bool iterateAtyBounds(const Span& sp, const ::HIR::Path::Data::Data_UfcsKnown& pe, ::std::function<bool(const ::HIR::TraitPath&)> cb) const;
 
     // --------------
@@ -180,5 +180,5 @@ public:
     );
 
     /// `signature_only` - Returns a pointer to an item with the correct signature, not the actual implementation (faster)
-    ValuePtr getValue(const Span& sp, const ::HIR::Path& p, MonomorphState& outParams, bool signature_only = false, const HIR::GenericParams** outImplParamsDef = nullptr) const;
+    ValuePtr getValue(const Span& sp, const ::HIR::Path& p, MonomorphState& outParams, bool signatureOnly = false, const HIR::GenericParams** outImplParamsDef = nullptr) const;
 };

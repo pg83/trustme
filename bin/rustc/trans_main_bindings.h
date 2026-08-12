@@ -50,7 +50,7 @@ extern TransList TransEnumeratePublic(::HIR::Crate& crate);
 /// Re-run enumeration on monomorphised functions, removing now-unused items
 extern void TransEnumerateCleanup(const ::HIR::Crate& crate, TransList& list);
 
-extern void TransAutoImpls(::HIR::Crate& crate, TransList& trans_list);
+extern void TransAutoImpls(::HIR::Crate& crate, TransList& transList);
 
 extern void TransMonomorphiseList(const ::HIR::Crate& crate, TransList& list, unsigned mirOptLevel);
 

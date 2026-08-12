@@ -186,14 +186,14 @@ namespace AST {
             Flags();
 
             static Flags makeUnsafe() {
-                return Flags().set_unsafe();
+                return Flags().setUnsafe();
             }
 
-            Flags set_unsafe() const;
+            Flags setUnsafe() const;
 
-            Flags set_const() const;
+            Flags setConst() const;
 
-            Flags set_async() const;
+            Flags setAsync() const;
         };
 
     private:
@@ -235,7 +235,7 @@ namespace AST {
         // Helper for derive, defines an ABI_RUST function with no generics
         Function(Span sp, TypeRef ret_type, Arglist args);
 
-        void set_code(Expr code) {
+        void setCode(Expr code) {
             mCode = ::std::move(code);
         }
 
@@ -247,7 +247,7 @@ namespace AST {
             return mAbi;
         };
 
-        void set_abi(std::string s) {
+        void setAbi(std::string s) {
             mAbi = std::move(s);
         }
 
@@ -354,10 +354,10 @@ namespace AST {
         void addFunction(Span sp, RcString name, AttributeList attrs, Function fcn);
         void addStatic(Span sp, RcString name, AttributeList attrs, Static v);
 
-        void set_is_marker();
+        void setIsMarker();
         bool is_marker() const;
 
-        void set_is_unsafe() {
+        void setIsUnsafe() {
             isUnsafe = true;
         }
 
@@ -383,7 +383,7 @@ namespace AST {
 
         EnumVariant(AttributeList attrs, RcString name);
 
-        EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> sub_types);
+        EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> subTypes);
 
         EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields);
 
@@ -519,12 +519,12 @@ namespace AST {
         TypeRef mType;
 
     public:
-        ImplDef(GenericParams params, Spanned<Path> trait_type, TypeRef impl_type);
+        ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef impl_type);
 
         ImplDef(ImplDef&&) /*noexcept*/ = default;
         ImplDef& operator=(ImplDef&&) = default;
 
-        void set_is_unsafe() {
+        void setIsUnsafe() {
             isUnsafe = true;
         }
 
@@ -532,7 +532,7 @@ namespace AST {
             return isUnsafe;
         }
 
-        void set_is_const() {
+        void setIsConst() {
             isConst = true;
         }
 

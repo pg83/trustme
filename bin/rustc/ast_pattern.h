@@ -100,10 +100,10 @@ namespace AST {
             (Struct,
              struct {
                  Path path;
-                 ::std::vector<StructPatternEntry> sub_patterns;
+                 ::std::vector<StructPatternEntry> subPatterns;
                  bool isExhaustive;
              }),
-            (Slice, struct { ::std::vector<Pattern> sub_pats; }),
+            (Slice, struct { ::std::vector<Pattern> subPats; }),
             (SplitSlice,
              struct {
                  ::std::vector<Pattern> leading;
@@ -150,7 +150,7 @@ namespace AST {
 
         struct TagReference {};
 
-        Pattern(TagReference, Span sp, bool is_mutable, Pattern sub_pattern);
+        Pattern(TagReference, Span sp, bool is_mutable, Pattern subPattern);
 
         struct TagTuple {};
 
@@ -166,7 +166,7 @@ namespace AST {
 
         struct TagStruct {};
 
-        Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> sub_patterns, bool isExhaustive);
+        Pattern(TagStruct, Span sp, Path path, ::std::vector<StructPatternEntry> subPatterns, bool isExhaustive);
 
         const Span& span() const {
             return mSpan;

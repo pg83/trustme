@@ -23,7 +23,7 @@ struct Ident {
             // Zero for lexical scopes, otherwise the macro definition whose
             // invocation introduced the corresponding context.
             ::std::vector<unsigned int> macro_definitions;
-            ::std::shared_ptr<ModPath> search_module;
+            ::std::shared_ptr<ModPath> searchModule;
         };
 
         // NOTE: Use a unique pointer to reduce the size to 1 pointer (instead of 5)
@@ -62,16 +62,16 @@ struct Ident {
 
         Hygiene getParent() const;
 
-        bool leaveMacroDefinition(unsigned int definition, const Hygiene& token_context, const Hygiene& definitionContext);
+        bool leaveMacroDefinition(unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext);
 
         bool hasModPath() const {
-            return inner->search_module != 0;
+            return inner->searchModule != 0;
         }
 
         const ModPath& mod_path() const;
 
-        void set_mod_path(ModPath p) {
-            inner->search_module.reset(new ModPath(::std::move(p)));
+        void setModPath(ModPath p) {
+            inner->searchModule.reset(new ModPath(::std::move(p)));
         }
 
         // Returns true if an ident with hygine `source` can see an ident with this hygine

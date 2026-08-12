@@ -111,12 +111,12 @@ namespace HIR {
                  ::HIR::BorrowType type;
                  ::std::unique_ptr<Pattern> sub;
              }),
-            (Tuple, struct { ::std::vector<Pattern> sub_patterns; }),
+            (Tuple, struct { ::std::vector<Pattern> subPatterns; }),
             (SplitTuple,
              struct {
                  ::std::vector<Pattern> leading;
                  ::std::vector<Pattern> trailing;
-                 unsigned int total_size;
+                 unsigned int totalSize;
              }),
             // Maybe refutable
             // - Can be converted into `Value`, or resolved to be an enum/struct value
@@ -134,7 +134,7 @@ namespace HIR {
                  bool isSplit;
                  ::std::vector<Pattern> trailing;
                  // Cache making MIR gen easier for split patterns
-                 unsigned int total_size;
+                 unsigned int totalSize;
              }),
             // - Struct-like enum/struct value
             (PathNamed,
@@ -142,11 +142,11 @@ namespace HIR {
                  ::HIR::Path path;
                  PathBinding binding;
 
-                 ::std::vector<::std::pair<RcString, Pattern>> sub_patterns;
+                 ::std::vector<::std::pair<RcString, Pattern>> subPatterns;
                  bool isExhaustive;
 
                  bool isWildcard() const {
-                     return sub_patterns.empty() && !isExhaustive;
+                     return subPatterns.empty() && !isExhaustive;
                  }
              }),
             // Split/or patterns
@@ -159,7 +159,7 @@ namespace HIR {
                  std::unique_ptr<Value> end;
                  bool isInclusive;
              }),
-            (Slice, struct { ::std::vector<Pattern> sub_patterns; }),
+            (Slice, struct { ::std::vector<Pattern> subPatterns; }),
             (SplitSlice, struct {
                 ::std::vector<Pattern> leading;
                 PatternBinding extraBind;

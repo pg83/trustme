@@ -182,7 +182,7 @@ namespace HIR {
 
         struct Markings {
             std::vector<unsigned> rustcLegacyConstGenerics;
-            bool track_caller = false;
+            bool trackCaller = false;
             bool isNaked = false;
 
             enum Inline {
@@ -213,7 +213,7 @@ namespace HIR {
         ::std::vector<::HIR::TraitPath> traits;
     };
 
-    typedef ::std::vector<VisEnt<::HIR::TypeRef>> t_tuple_fields;
+    typedef ::std::vector<VisEnt<::HIR::TypeRef>> tTupleFields;
 
     struct StructField {
         RcString name;
@@ -223,9 +223,9 @@ namespace HIR {
         ::std::unique_ptr<HIR::GenericPath> default_value;
     };
 
-    typedef ::std::vector<StructField> t_struct_fields;
+    typedef ::std::vector<StructField> tStructFields;
 
-    extern HIR::TypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const t_tuple_fields& types);
+    extern HIR::TypeRef fnPtrTupleConstructor(const Span& sp, const Monomorphiser& ms, HIR::TypeRef ret_ty, const tTupleFields& types);
 
     /// Cache of the state of various language traits on an enum/struct
     struct TraitMarkings {
@@ -365,7 +365,7 @@ namespace HIR {
             Simd,
             Transparent,
         };
-        TAGGED_UNION(Data, Unit, (Unit, struct {}), (Tuple, t_tuple_fields), (Named, t_struct_fields));
+        TAGGED_UNION(Data, Unit, (Unit, struct {}), (Tuple, tTupleFields), (Named, tStructFields));
 
         struct FieldDefault {
             size_t index;
@@ -404,7 +404,7 @@ namespace HIR {
 
         GenericParams mParams;
         Repr repr;
-        t_struct_fields mVariants;
+        tStructFields mVariants;
 
         TraitMarkings markings;
     };
@@ -464,7 +464,7 @@ namespace HIR {
 
         ::HIR::TypeRef getVtableType(const Span& sp, const ::HIR::Crate& crate, const ::HIR::TypeData::Data_TraitObject& te) const;
         unsigned getVtableValueIndex(const HIR::GenericPath& trait_path, const RcString& name) const;
-        unsigned getVtableParentIndex(TypeInterner& types, const Span& sp, const HIR::PathParams& this_params, const HIR::GenericPath& trait_path) const;
+        unsigned getVtableParentIndex(TypeInterner& types, const Span& sp, const HIR::PathParams& thisParams, const HIR::GenericPath& trait_path) const;
         ::std::pair<const ::HIR::AssociatedType*, const ::HIR::PathParams*> getAtyDef(const RcString& name) const;
     };
 
@@ -562,7 +562,7 @@ namespace HIR {
 
         ::HIR::SimplePath srcModule;
 
-        bool matchesType(const ::HIR::TypeData* tr, t_cb_resolve_type ty_res) const;
+        bool matchesType(const ::HIR::TypeData* tr, tCbResolveType ty_res) const;
 
         bool matchesType(const ::HIR::TypeData* tr) const {
             return matchesType(tr, ResolvePlaceholdersNop());
@@ -593,7 +593,7 @@ namespace HIR {
         //
         //const TraitImpl*    m_parent_spec_impl;
 
-        bool matchesType(const ::HIR::TypeData* tr, t_cb_resolve_type ty_res) const;
+        bool matchesType(const ::HIR::TypeData* tr, tCbResolveType ty_res) const;
 
         bool matchesType(const ::HIR::TypeData* tr) const {
             return matchesType(tr, ResolvePlaceholdersNop());
@@ -612,7 +612,7 @@ namespace HIR {
 
         ::HIR::SimplePath srcModule;
 
-        bool matchesType(const ::HIR::TypeData* tr, t_cb_resolve_type ty_res) const;
+        bool matchesType(const ::HIR::TypeData* tr, tCbResolveType ty_res) const;
 
         bool matchesType(const ::HIR::TypeData* tr) const {
             return matchesType(tr, ResolvePlaceholdersNop());
@@ -761,9 +761,9 @@ namespace HIR {
 
         const ::HIR::Constant& getConstantByPath(const Span& sp, const ::HIR::SimplePath& path) const;
 
-        bool findTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const;
-        bool findAutoTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
-        bool findTypeImpls(const ::HIR::TypeData* type, t_cb_resolve_type ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
+        bool findTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::TraitImpl&)> callback) const;
+        bool findAutoTraitImpls(const ::HIR::SimplePath& path, const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::MarkerImpl&)> callback) const;
+        bool findTypeImpls(const ::HIR::TypeData* type, tCbResolveType ty_res, ::std::function<bool(const ::HIR::TypeImpl&)> callback) const;
 
         const ::MIR::Function* getOrGenMir(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& ep, const ::HIR::Function::argsT& args, ::HIR::TypeRef& ret_ty) const;
 
@@ -774,7 +774,7 @@ namespace HIR {
 
     /// Helper for obtaining the matching target for PathTuple/PathNamed
     const ::HIR::Struct& patternGetStruct(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding, bool isTuple);
-    const ::HIR::t_tuple_fields& patternGetTuple(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding);
-    const ::HIR::t_struct_fields& patternGetNamed(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding);
+    const ::HIR::tTupleFields& patternGetTuple(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding);
+    const ::HIR::tStructFields& patternGetNamed(const Span& sp, const ::HIR::Path& path, const ::HIR::Pattern::PathBinding& binding);
 
 } // namespace HIR

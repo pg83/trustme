@@ -23,7 +23,7 @@ private:
 public:
     Span();
 
-    Span(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs);
+    Span(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs);
     Span(Span parent, const Position& position);
     Span(Span parent, RcString source_crate, RcString macroName);
     ~Span();
@@ -75,8 +75,8 @@ struct ProtoSpan {
     Span span;
     RcString filename;
 
-    unsigned int start_line;
-    unsigned int start_ofs;
+    unsigned int startLine;
+    unsigned int startOfs;
 };
 
 struct SpanInner {
@@ -102,8 +102,8 @@ public:
     unsigned int nodeKind() const override;
     RcString filename;
 
-    unsigned int start_line;
-    unsigned int start_ofs;
+    unsigned int startLine;
+    unsigned int startOfs;
     unsigned int endLine;
     unsigned int endOfs;
 
@@ -115,7 +115,7 @@ public:
     }
 
 private:
-    static SpanInner* alloc(Span parent, RcString filename, unsigned int start_line, unsigned int start_ofs, unsigned int endLine, unsigned int endOfs);
+    static SpanInner* alloc(Span parent, RcString filename, unsigned int startLine, unsigned int startOfs, unsigned int endLine, unsigned int endOfs);
 };
 
 struct SpanInnerMacro: public SpanInner {

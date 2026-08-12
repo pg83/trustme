@@ -291,7 +291,7 @@ namespace AST {
         mItems.push_back(Named<Item>(sp, mv$(attrs), AST::Visibility::makeGlobal(), mv$(name), Item::make_Static({mv$(v)})));
     }
 
-    void Trait::set_is_marker() {
+    void Trait::setIsMarker() {
         isMarker = true;
     }
 
@@ -400,7 +400,7 @@ namespace AST {
     ExternBlock& ExternBlock::operator=(ExternBlock&&) = default;
 
     void ExternBlock::addItem(Named<Item> namedItem) {
-        ASSERT_BUG(namedItem.span, namedItem.data.is_Function() || namedItem.data.is_Static() || namedItem.data.is_Type() || namedItem.data.is_MacroInv(), "Incorrect item type for ExternBlock - " << namedItem.data.tag_str());
+        ASSERT_BUG(namedItem.span, namedItem.data.is_Function() || namedItem.data.is_Static() || namedItem.data.is_Type() || namedItem.data.is_MacroInv(), "Incorrect item type for ExternBlock - " << namedItem.data.tagStr());
         mItems.push_back(mv$(namedItem));
     }
 
@@ -434,7 +434,7 @@ namespace AST {
         const auto& i = mItems.back();
         if (i->name == "") {
         } else {
-            DEBUG(myPath << "::" << i->name << " = " << i->data.tag_str() << ", attrs = " << i->attrs);
+            DEBUG(myPath << "::" << i->name << " = " << i->data.tagStr() << ", attrs = " << i->attrs);
         }
     }
 
@@ -472,11 +472,11 @@ namespace AST {
             (MacroInv, TODO(Span(), "Clone on Item::MacroInv");),
             (Macro, TODO(Span(), "Clone on Item::Macro");),
             (Use, return Item(e.clone());),
-            (ExternBlock, TODO(Span(), "Clone on Item::" << this->tag_str());),
-            (GlobalAsm, TODO(Span(), "Clone on Item::" << this->tag_str());),
-            (Impl, TODO(Span(), "Clone on Item::" << this->tag_str());),
-            (NegImpl, TODO(Span(), "Clone on Item::" << this->tag_str());),
-            (Module, TODO(Span(), "Clone on Item::" << this->tag_str());),
+            (ExternBlock, TODO(Span(), "Clone on Item::" << this->tagStr());),
+            (GlobalAsm, TODO(Span(), "Clone on Item::" << this->tagStr());),
+            (Impl, TODO(Span(), "Clone on Item::" << this->tagStr());),
+            (NegImpl, TODO(Span(), "Clone on Item::" << this->tagStr());),
+            (Module, TODO(Span(), "Clone on Item::" << this->tagStr());),
             (Crate, return Item(e);),
             (Type, return AST::Item(e.clone());),
             (Struct, return AST::Item(e.clone());),
@@ -661,17 +661,17 @@ Function::Flags::Flags()
     , is_unsafe(false)
     , isAsync(false) {
 }
-Function::Flags Function::Flags::set_unsafe() const {
+Function::Flags Function::Flags::setUnsafe() const {
     auto rv = *this;
     rv.is_unsafe = true;
     return rv;
 }
-Function::Flags Function::Flags::set_const() const {
+Function::Flags Function::Flags::setConst() const {
     auto rv = *this;
     rv.is_const = true;
     return rv;
 }
-Function::Flags Function::Flags::set_async() const {
+Function::Flags Function::Flags::setAsync() const {
     auto rv = *this;
     rv.isAsync = true;
     return rv;
@@ -687,10 +687,10 @@ EnumVariant::EnumVariant(AttributeList attrs, RcString name)
     , mName(mv$(name))
     , mData(EnumVariantData::make_Unit({})) {
 }
-EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> sub_types)
+EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<TupleItem> subTypes)
     : mAttrs(mv$(attrs))
     , mName(::std::move(name))
-    , mData(EnumVariantData::make_Tuple({std::move(sub_types)})) {
+    , mData(EnumVariantData::make_Tuple({std::move(subTypes)})) {
 }
 EnumVariant::EnumVariant(AttributeList attrs, RcString name, ::std::vector<StructItem> fields)
     : mAttrs(mv$(attrs))
@@ -723,11 +723,11 @@ Union::Union(GenericParams params, ::std::vector<StructItem> fields)
     : mParams(::std::move(params))
     , mVariants(::std::move(fields)) {
 }
-ImplDef::ImplDef(GenericParams params, Spanned<Path> trait_type, TypeRef impl_type)
+ImplDef::ImplDef(GenericParams params, Spanned<Path> traitType, TypeRef impl_type)
     : isUnsafe(false)
     , isConst(false)
     , mParams(mv$(params))
-    , mTrait(mv$(trait_type))
+    , mTrait(mv$(traitType))
     , mType(mv$(impl_type)) {
 }
 }

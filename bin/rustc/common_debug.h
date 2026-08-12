@@ -38,7 +38,7 @@ extern void DebugPrint(dbgCbT cb);
             });                                    \
         } while (0)
     #define TRACE_FUNCTION_F(fmt)               \
-        DebugFunctionScope trace_function_hdr { \
+        DebugFunctionScope traceFunctionHdr { \
             __FUNCTION__, [&](auto& os) {       \
                 os << fmt;                      \
             }                                   \

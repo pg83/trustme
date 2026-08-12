@@ -75,7 +75,7 @@ namespace HIR {
         EncodedLiteral evaluateConstant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp);
         EncodedLiteral evaluateConstant(const ::HIR::ItemPath& ip, const ::HIR::ExprPtr& expr, ::HIR::TypeRef exp, MonomorphState ms);
 
-        void set_require_const_calls() {
+        void setRequireConstCalls() {
             requireConstCalls = true;
         }
 

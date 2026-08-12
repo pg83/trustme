@@ -31,7 +31,7 @@ ExprNode& Expr::node() {
     assert(mNode.get());
     return *mNode;
 }
-::std::shared_ptr<ExprNode> Expr::take_node() {
+::std::shared_ptr<ExprNode> Expr::takeNode() {
     assert(mNode.get());
     return ::std::move(mNode);
 }

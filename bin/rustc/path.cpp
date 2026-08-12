@@ -32,7 +32,7 @@ helpers::path::path(const char* s)
     }
 }
 
-helpers::path helpers::path::to_absolute() const {
+helpers::path helpers::path::toAbsolute() const {
     if (!this->isValid()) {
         throw ::std::runtime_error("Calling to_absolute() on an invalid path");
     }

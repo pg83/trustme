@@ -33,13 +33,13 @@ struct TyVisitor {
             return true;
         }
         for (auto& assoc : tpl.typeBounds) {
-            visit_path_params(assoc.second.source_trait.mParams);
+            visit_path_params(assoc.second.sourceTrait.mParams);
             if (visit_type(assoc.second.type)) {
                 return true;
             }
         }
         for (auto& assoc : tpl.traitBounds) {
-            visit_path_params(assoc.second.source_trait.mParams);
+            visit_path_params(assoc.second.sourceTrait.mParams);
             for (auto& t : assoc.second.traits) {
                 visit_trait_path(t);
             }
@@ -178,7 +178,7 @@ struct TyVisitor {
 };
 
 struct TyVisitorCbConst: TyVisitor<WConst> {
-    t_cb_visit_ty callback;
+    tCbVisitTy callback;
 
     const HIR::TypeData& getTyData(const HIR::TypeData* ty) const override {
         return *ty;
@@ -192,19 +192,19 @@ struct TyVisitorCbConst: TyVisitor<WConst> {
     }
 };
 
-bool visit_ty_with(const ::HIR::TypeData* ty, t_cb_visit_ty callback) {
+bool visit_ty_with(const ::HIR::TypeData* ty, tCbVisitTy callback) {
     TyVisitorCbConst v;
     v.callback = callback;
     return v.visit_type(ty);
 }
 
-bool visit_trait_path_tys_with(const ::HIR::TraitPath& path, t_cb_visit_ty callback) {
+bool visit_trait_path_tys_with(const ::HIR::TraitPath& path, tCbVisitTy callback) {
     TyVisitorCbConst v;
     v.callback = callback;
     return v.visit_trait_path(path);
 }
 
-bool visit_path_tys_with(const ::HIR::Path& path, t_cb_visit_ty callback) {
+bool visit_path_tys_with(const ::HIR::Path& path, tCbVisitTy callback) {
     TyVisitorCbConst v;
     v.callback = callback;
     return v.visit_path(path);
@@ -213,7 +213,7 @@ bool visit_path_tys_with(const ::HIR::Path& path, t_cb_visit_ty callback) {
 namespace {
     struct TyRewriter {
         HIR::TypeInterner& types;
-        t_cb_rewrite_ty callback;
+        tCbRewriteTy callback;
         ::std::vector<HIR::TypeRef> stack;
 
         bool rewritePathParams(HIR::PathParams& params) {
@@ -226,12 +226,12 @@ namespace {
         bool rewriteTraitPath(HIR::TraitPath& trait) {
             if (rewritePathParams(trait.mPath.mParams)) return true;
             for (auto& assoc : trait.typeBounds) {
-                if (rewritePathParams(assoc.second.source_trait.mParams)
+                if (rewritePathParams(assoc.second.sourceTrait.mParams)
                     || rewritePathParams(assoc.second.atyParams)
                     || rewriteType(assoc.second.type)) return true;
             }
             for (auto& assoc : trait.traitBounds) {
-                if (rewritePathParams(assoc.second.source_trait.mParams)
+                if (rewritePathParams(assoc.second.sourceTrait.mParams)
                     || rewritePathParams(assoc.second.atyParams)) return true;
                 for (auto& bound : assoc.second.traits) {
                     if (rewriteTraitPath(bound)) return true;
@@ -305,12 +305,12 @@ namespace {
     };
 }
 
-bool rewriteTyWith(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, t_cb_rewrite_ty callback) {
+bool rewriteTyWith(::HIR::TypeInterner& types, ::HIR::TypeRef& ty, tCbRewriteTy callback) {
     TyRewriter rewriter{types, mv$(callback), {}};
     return rewriter.rewriteType(ty);
 }
 
-bool rewritePathTysWith(::HIR::TypeInterner& types, ::HIR::Path& path, t_cb_rewrite_ty callback) {
+bool rewritePathTysWith(::HIR::TypeInterner& types, ::HIR::Path& path, tCbRewriteTy callback) {
     TyRewriter rewriter{types, mv$(callback), {}};
     return rewriter.rewritePath(path);
 }
@@ -561,7 +561,7 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
         rv.typeBounds.insert(::std::make_pair(assoc.first, this->monomorphTpAtyEqual(sp, assoc.second, allowInfer)));
     }
     for (const auto& assoc : tpl.traitBounds) {
-        auto v = HIR::TraitPath::AtyBound{this->monomorphGenericpath(sp, assoc.second.source_trait, allowInfer, false), {}};
+        auto v = HIR::TraitPath::AtyBound{this->monomorphGenericpath(sp, assoc.second.sourceTrait, allowInfer, false), {}};
         for (const auto& trait : assoc.second.traits) {
             v.traits.push_back(monomorphTraitpath(sp, trait, allowInfer, false));
         }
@@ -572,7 +572,7 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
 }
 
 ::HIR::TraitPath::AtyEqual Monomorphiser::monomorphTpAtyEqual(const Span& sp, const ::HIR::TraitPath::AtyEqual& tpl, bool allowInfer) const {
-    return HIR::TraitPath::AtyEqual{this->monomorphGenericpath(sp, tpl.source_trait, allowInfer, false), {}, this->monomorphType(sp, tpl.type, allowInfer)};
+    return HIR::TraitPath::AtyEqual{this->monomorphGenericpath(sp, tpl.sourceTrait, allowInfer, false), {}, this->monomorphType(sp, tpl.type, allowInfer)};
 }
 
 ::HIR::ConstGeneric Monomorphiser::monomorphConstgeneric(const Span& sp, const ::HIR::ConstGeneric& val, bool allowInfer) const {
@@ -645,7 +645,7 @@ bool monomorphiseTypeNeeded(const ::HIR::TypeData* tpl, bool ignoreLifetimes /*=
 }
 
 struct CloneTyWithMonomorph: Monomorphiser {
-    t_cb_clone_ty callback;
+    tCbCloneTy callback;
 
     explicit CloneTyWithMonomorph(HIR::TypeInterner& types): Monomorphiser(types) {}
 
@@ -672,7 +672,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
     }
 };
 
-::HIR::PathParams clonePathParamsWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& tpl, t_cb_clone_ty callback) {
+::HIR::PathParams clonePathParamsWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::PathParams& tpl, tCbCloneTy callback) {
     ::HIR::PathParams rv;
     for (const auto& v : tpl.mLifetimes) {
         rv.mLifetimes.push_back(v);
@@ -687,7 +687,7 @@ struct CloneTyWithMonomorph: Monomorphiser {
     return rv;
 }
 
-::HIR::TypeRef cloneTyWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeData* tpl, t_cb_clone_ty callback) {
+::HIR::TypeRef cloneTyWith(::HIR::TypeInterner& types, const Span& sp, const ::HIR::TypeData* tpl, tCbCloneTy callback) {
     CloneTyWithMonomorph m(types);
     m.callback = std::move(callback);
     return m.monomorphType(sp, tpl, true);

@@ -12,7 +12,7 @@ LifetimeRef::LifetimeRef()
 LifetimeRef::LifetimeRef(Ident name)
     : LifetimeRef(::std::move(name), BINDING_UNBOUND) {
 }
-void LifetimeRef::set_binding(uint16_t b) {
+void LifetimeRef::setBinding(uint16_t b) {
     assert(mBinding == BINDING_UNBOUND);
     mBinding = b;
 }

@@ -109,7 +109,7 @@ public:
     }
 
     void dumpToken(const Token& t) {
-        os << t.to_str() << " ";
+        os << t.toStr() << " ";
     }
 
     void dumpTokentree(const TokenTree& tt) {
@@ -538,7 +538,7 @@ public:
             case CORETYPE_CHAR:
                 //if( 0x20 <= n.m_value && n.m_value < 128 ) {
                 if (n.mValue >= 0x20 && n.mValue < 128) {
-                    switch (n.mValue.truncate_u64()) {
+                    switch (n.mValue.truncateU64()) {
                         case '\'':
                             os << "'\\''";
                             break;
@@ -546,7 +546,7 @@ public:
                             os << "'\\\\'";
                             break;
                         default:
-                            os << "'" << (char)n.mValue.truncate_u64() << "'";
+                            os << "'" << (char)n.mValue.truncateU64() << "'";
                             break;
                     }
                 } else {
@@ -1102,7 +1102,7 @@ void RustPrinter::handleModule(const AST::Module& mod) {
                 AST::Item,
                 (*it.data),
                 (e),
-                (throw ::std::runtime_error(FMT("Unexpected item type in impl block - " << it.data->tag_str()));),
+                (throw ::std::runtime_error(FMT("Unexpected item type in impl block - " << it.data->tagStr()));),
                 (
                     None,
                     // Ignore, it's been deleted by #[cfg]
@@ -1265,7 +1265,7 @@ void RustPrinter::printPattern(const AST::Pattern& p, bool isRefutable) {
          {
              const auto& v = p.data().as_Struct();
              os << v.path << "{";
-             for (const auto& sp : v.sub_patterns) {
+             for (const auto& sp : v.subPatterns) {
                  os << sp.name << ": ";
                  printPattern(sp.pat, isRefutable);
                  os << ",";
@@ -1277,7 +1277,7 @@ void RustPrinter::printPattern(const AST::Pattern& p, bool isRefutable) {
          }),
         (Tuple, os << "("; this->printPatternTuple(v, isRefutable); os << ")";),
         (
-            Slice, os << "["; for (const auto& sp : v.sub_pats) {
+            Slice, os << "["; for (const auto& sp : v.subPats) {
                 printPattern(sp, isRefutable);
                 os << ", ";
             } os << "]";

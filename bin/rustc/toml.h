@@ -70,7 +70,7 @@ private:
     /// discarding its contents. The opening bracket/brace must already have
     /// been consumed. Used to skip nested arrays / inline tables that only
     /// appear in sections minicargo never reads (e.g. `[package.metadata.*]`).
-    void skip_composite_value();
+    void skipCompositeValue();
 };
 
 struct TomlValue {

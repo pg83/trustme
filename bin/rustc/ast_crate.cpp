@@ -286,7 +286,7 @@ namespace AST {
 
 namespace AST {
 
-void Crate::set_crate_name(std::string name) {
+void Crate::setCrateName(std::string name) {
     crateNameSet = name;
     if (crateType == Type::Executable) {
         crateNameReal = "";

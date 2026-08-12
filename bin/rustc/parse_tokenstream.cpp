@@ -20,7 +20,7 @@ TokenStream::~TokenStream() {
 Token TokenStream::innerGetToken() {
     Token ret = this->realGetToken();
     if (ret != TOK_EOF && ret.getPos().filename == "") {
-        ret.set_pos(this->getPosition());
+        ret.setPos(this->getPosition());
     }
     //DEBUG("ret.get_pos() = " << ret.get_pos());
     return ret;
@@ -109,7 +109,7 @@ Ident::Hygiene TokenStream::getHygiene() const {
     return mHygiene;
 }
 
-ProtoSpan TokenStream::start_span() const {
+ProtoSpan TokenStream::startSpan() const {
     auto p = this->getPosition();
     return ProtoSpan{p.span, p.filename, p.line, p.ofs};
 }
@@ -125,7 +125,7 @@ Span TokenStream::endSpan(ProtoSpan ps) const {
         assert(this->outerSpan());
         return this->outerSpan();
     }
-    return Span(this->outerSpan(), ::std::move(ps.filename), ps.start_line, ps.start_ofs, p.line, p.ofs);
+    return Span(this->outerSpan(), ::std::move(ps.filename), ps.startLine, ps.startOfs, p.line, p.ofs);
 }
 
 Span TokenStream::pointSpan() const {

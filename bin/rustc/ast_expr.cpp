@@ -123,7 +123,7 @@ namespace AST {
 
     namespace {
         static inline ExprNodeP mkExprnodep(const Span& pos, AST::ExprNode* en) {
-            en->set_span(pos);
+            en->setSpan(pos);
             return ExprNodeP(en);
         }
 
@@ -567,7 +567,7 @@ namespace AST {
             os << "}";
         },
         {
-            ExprNodeStructLiteral::t_values vals;
+            ExprNodeStructLiteral::tValues vals;
 
             for (const auto& v : values) {
                 vals.push_back({v.attrs.clone(), v.name, v.value->clone()});
@@ -586,7 +586,7 @@ namespace AST {
             os << ".. }";
         },
         {
-            ExprNodeStructLiteral::t_values vals;
+            ExprNodeStructLiteral::tValues vals;
 
             for (const auto& v : values) {
                 vals.push_back({v.attrs.clone(), v.name, v.value->clone()});
@@ -973,7 +973,7 @@ namespace AST {
 
 namespace AST {
 
-void ExprNode::set_attrs(AttributeList&& mi) {
+void ExprNode::setAttrs(AttributeList&& mi) {
     for (auto& i : mi.mItems) {
         mAttrs.mItems.push_back(mv$(i));
     }
@@ -988,7 +988,7 @@ ExprNodeBlock::ExprNodeBlock(::std::vector<Line> nodes)
 /// Shortcut for a block that returns a contained node
 ExprNodeBlock::ExprNodeBlock(ExprNodeP value)
     : ExprNodeBlock() {
-    set_span(value->span());
+    setSpan(value->span());
     nodes.push_back({false, std::move(value)});
 }
 ExprNodeBlock::ExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::shared_ptr<AST::Module> local_mod)
@@ -1114,12 +1114,12 @@ ExprNodeByteString::ExprNodeByteString(::std::string value)
 ExprNodeCString::ExprNodeCString(::std::string value)
     : mValue(::std::move(value)) {
 }
-ExprNodeStructLiteral::ExprNodeStructLiteral(Path path, ExprNodeP base_value, t_values&& values)
+ExprNodeStructLiteral::ExprNodeStructLiteral(Path path, ExprNodeP base_value, tValues&& values)
     : mPath(std::move(path))
     , baseValue(std::move(base_value))
     , values(std::move(values)) {
 }
-ExprNodeStructLiteralPattern::ExprNodeStructLiteralPattern(Path path, t_values&& values)
+ExprNodeStructLiteralPattern::ExprNodeStructLiteralPattern(Path path, tValues&& values)
     : mPath(std::move(path))
     , values(std::move(values)) {
 }

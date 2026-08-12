@@ -30,7 +30,7 @@ TokenTree TokenTree::clone() const {
                 }
                 break;
         }
-        return os << tt.mTok.to_str();
+        return os << tt.mTok.toStr();
     } else {
         os << "/*" << tt.edition << " " << tt.mHygiene << " TT*/";
         // NOTE: All TTs (except the outer tt on a macro invocation) include the grouping

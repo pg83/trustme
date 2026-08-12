@@ -18,7 +18,7 @@ struct ImplRef {
              const ::HIR::Trait* trait_ptr;
              const ::HIR::SimplePath* trait_path;
              const ::HIR::TraitImpl* impl;
-             mutable ::HIR::TypeRef self_cache;
+             mutable ::HIR::TypeRef selfCache;
          }),
         (BoundedPtr,
          struct {
@@ -42,7 +42,7 @@ struct ImplRef {
 
     ImplRef();
 
-    ImplRef(HIR::PathParams impl_params, const HIR::Trait& trait_ref, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl);
+    ImplRef(HIR::PathParams impl_params, const HIR::Trait& traitRef, const ::HIR::SimplePath& trait, const ::HIR::TraitImpl& impl);
 
     ImplRef(const ::HIR::TypeData* type, const ::HIR::PathParams* args, const ::HIR::TraitPath::assocListT* assoc, ::HIR::BoundConstness constness = ::HIR::BoundConstness::Never);
 
