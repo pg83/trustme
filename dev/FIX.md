@@ -8,7 +8,7 @@ the same set; the erasure itself cost 12 tests, all fixed/re-baselined).
 Classification method: per-case rerun of every failing test with the failure
 signature (assert/BUG location, first error, signal) clustered by root cause.
 
-## P1 — compiler crashes on valid code (~144)
+## P1 — compiler crashes on valid code (~143)
 
 One cluster = one bug.
 

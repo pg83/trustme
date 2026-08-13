@@ -808,7 +808,14 @@ bool MIRCleanupUnsizeGetMetadata(const MIRTypeResolve& state, MirMutator& mutato
             // If the data trait hasn't changed, return the vtable pointer
             if (const auto* se = srcTy->opt_TraitObject()) {
                 outSrcIsDst = true;
-                if (se->mTrait.traitPtr != de.mTrait.traitPtr) {
+                if (de.mTrait.mPath == HIRSimplePath()) {
+                    // A trait object with only auto traits still carries the
+                    // source vtable metadata for drop, size, and alignment.
+                    // Its vtable type is represented as `()`, so retype the
+                    // existing metadata instead of looking for a principal
+                    // trait entry in the source vtable.
+                    outMetaVal = mutator.inTemporary(outMetaTy, MIRRValue::make_DstMeta({ptrValue.clone()}));
+                } else if (se->mTrait.traitPtr != de.mTrait.traitPtr) {
                     assert(se->mTrait.traitPtr);
                     const auto& trait = *se->mTrait.traitPtr;
                     auto vtableTy = trait.getVtableType(state.sp, state.crate, *se);
