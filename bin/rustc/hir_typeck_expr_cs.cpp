@@ -3930,10 +3930,14 @@ void Context::equateTypesAssoc(const Span& sp, const HIRTypeData* l, const HIRSi
         DEBUG("(DUPLICATE " << a << ")");
         return;
     }
-    if (implTy->is_Path() && implTy->as_Path().path.mData.is_UfcsKnown()) {
-        auto& i = implTy->as_Path().path.mData.as_UfcsKnown();
-        this->addTraitBound(sp, i.type, i.trait.mPath, i.trait.mParams.clone());
-    }
+    visitTyWith(implTy, [&](const HIRTypeData* ty) {
+        if (const auto* path = ty->opt_Path()) {
+            if (const auto* projection = path->path.mData.opt_UfcsKnown()) {
+                this->addTraitBound(sp, projection->type, projection->trait.mPath, projection->trait.mParams.clone());
+            }
+        }
+        return false;
+    });
     this->linkAssoc.push_back(
         Associated{
             this->nextRuleIdx++,
