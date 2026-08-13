@@ -326,9 +326,8 @@ int main(int argc, char* argv[]) {
 #else
     auto* pool = stl::ObjPool::fromMemoryRaw();
 #endif
-    auto* types = pool->make<HIRTypeInterner>(*pool);
     WireBoard& wb = *pool->make<WireBoard>(pool);
-    wb.types = types;
+    wb.types = pool->make<HIRTypeInterner>(*pool);
     wb.settings = pool->make<Settings>();
     wb.settings->cfg = CfgCreateState(*pool);
     ProgramParams params(*wb.settings, argc, argv);
@@ -389,7 +388,7 @@ int main(int argc, char* argv[]) {
     try {
         // Parse the crate into AST
         ASTCrate* cratePtr = CompilePhase<ASTCrate*>("Parse", [&]() {
-            return ParseCrate(wb, pool, *types, params.infile, params.edition);
+            return ParseCrate(wb, pool, params.infile, params.edition);
         });
         ASTCrate& crate = *cratePtr;
         wb.astCrate = cratePtr;
@@ -830,7 +829,7 @@ int main(int argc, char* argv[]) {
         if (crateType == ASTCrate::Type::ProcMacro) {
             // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `mrustc-main`)
             CompilePhaseV("HIR Serialise", [&]() {
-                HIRCrate crateForSer(pool, *types);
+                HIRCrate crateForSer(pool, *wb.types);
                 crateForSer.crateName = hirCrate->crateName;
                 crateForSer.edition = hirCrate->edition;
                 for (const auto& i : hirCrate->mRootModule.macroItems) {
