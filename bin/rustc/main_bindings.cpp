@@ -347,7 +347,7 @@ int main(int argc, char* argv[]) {
         });
     });
     CompilePhaseV("Target Load", [&]() {
-        TargetSetCfg(*wb.settings, params.target);
+        TargetSetCfg(wb, params.target);
     });
 
     if (params.printCfgs) {
@@ -355,7 +355,7 @@ int main(int argc, char* argv[]) {
         return 0;
     }
     if (params.targetSaveback != "") {
-        TargetExportCurSpec(params.targetSaveback);
+        TargetExportCurSpec(wb, params.targetSaveback);
         return 0;
     }
 

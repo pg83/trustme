@@ -1863,7 +1863,7 @@ HIREncodedLiteralPtr::~HIREncodedLiteralPtr() {
 // ---
 EncodedLiteral EncodedLiteral::makeUsize(uint64_t v) {
     EncodedLiteral rv;
-    rv.bytes.resize(TargetGetPointerBits() / 8);
+    rv.bytes.resize(8); // 64-bit pointers only (32-bit targets are unsupported)
     rv.writeUsize(0, v);
     return rv;
 }
@@ -1885,7 +1885,7 @@ EncodedLiteral EncodedLiteral::clone() const {
 void EncodedLiteral::writeUint(size_t ofs, size_t size, uint64_t v) {
     assert(ofs + size <= bytes.size());
     for (size_t i = 0; i < size; i++) {
-        size_t bit = (TargetGetCurSpec().arch.bigEndian ? (size - 1 - i) * 8 : i * 8);
+        size_t bit = i * 8; // little-endian only (big-endian targets are unsupported)
         if (bit < 64) {
             auto b = static_cast<uint8_t>(v >> bit);
             bytes[ofs + i] = b;
@@ -1894,11 +1894,11 @@ void EncodedLiteral::writeUint(size_t ofs, size_t size, uint64_t v) {
 }
 
 void EncodedLiteral::writeUsize(size_t ofs, uint64_t v) {
-    this->writeUint(ofs, TargetGetPointerBits() / 8, v);
+    this->writeUint(ofs, 8, v); // 64-bit pointers only
 }
 
 uint64_t EncodedLiteral::readUsize(size_t ofs) const {
-    return EncodedLiteralSlice(*this).slice(ofs).readUint(TargetGetPointerBits() / 8).truncateU64();
+    return EncodedLiteralSlice(*this).slice(ofs).readUint(8).truncateU64(); // 64-bit pointers only
 }
 
 U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {
@@ -1908,7 +1908,7 @@ U128 EncodedLiteralSlice::readUint(size_t size /*=0*/) const {
     ASSERT_BUG(Span(), size <= mSize, "Over-large read (" << size << " > " << mSize << ")");
     U128 v(0);
     for (size_t i = 0; i < size; i++) {
-        size_t bit = (TargetGetCurSpec().arch.bigEndian ? (size - 1 - i) * 8 : i * 8);
+        size_t bit = i * 8; // little-endian only (big-endian targets are unsupported)
         if (bit < 128) {
             v |= U128(base.bytes[ofs + i]) << bit;
         }

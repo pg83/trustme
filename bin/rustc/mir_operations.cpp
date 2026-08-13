@@ -1033,7 +1033,7 @@ void MIRCleanupConstant(const MIRTypeResolve& state, MirMutator& mutator, MIRCon
         switch (e->t) {
             // Constants use U128 storage; truncate usize values to the target pointer width.
             case HIRCoreType::Usize:
-                if (TargetGetCurSpec().arch.pointerBits == 32) {
+                if (TargetGetPointerBits() == 32) {
                     e->v &= U128(0xFFFFFFFF);
                 }
                 break;

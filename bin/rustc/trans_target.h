@@ -144,12 +144,15 @@ struct TypeRepr {
 
 std::ostream& operator<<(std::ostream& os, const TypeRepr::FieldPath& x);
 
-extern const TargetSpec& TargetGetCurSpec();
-extern void TargetSetCfg(Settings& settings, const ::std::string& targetName);
-extern void TargetExportCurSpec(const ::std::string& filename);
+struct WireBoard;
+extern const TargetSpec& TargetGetCurSpec(const WireBoard& wb);
+extern void TargetSetCfg(WireBoard& wb, const ::std::string& targetName);
+extern void TargetExportCurSpec(const WireBoard& wb, const ::std::string& filename);
 
+// Only 64-bit little-endian targets are supported (enforced at target load),
+// so the pointer width is a compile-time constant and needs no target lookup.
 static inline unsigned TargetGetPointerBits() {
-    return TargetGetCurSpec().arch.pointerBits;
+    return 64;
 }
 
 extern bool TargetGetSizeOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize);

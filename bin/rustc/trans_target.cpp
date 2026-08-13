@@ -1,4 +1,7 @@
 #include "trans_target.h"
+#include "wire_board.h"
+#include "settings.h"
+#include <std/mem/obj_pool.h>
 
 #include "toml.h" // tools/common
 #include "hir_hir.h"
@@ -57,7 +60,6 @@ const TargetArch ARCH_POWERPC = {
     TargetArch::Alignments(2, 4, 8, 8, 4, 8, 4)
 };
 const TargetArch ARCH_RISCV64 = {"riscv64", 64, false, {/*atomic(u8)=*/true, true, true, true, true}, TargetArch::Alignments(2, 4, 8, 16, 4, 8, 8)};
-TargetSpec gTarget;
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign);
 
@@ -378,98 +380,106 @@ namespace {
     }
 }
 
-const TargetSpec& TargetGetCurSpec() {
-    return gTarget;
+const TargetSpec& TargetGetCurSpec(const WireBoard& wb) {
+    return *wb.target;
 }
 
-void TargetExportCurSpec(const ::std::string& filename) {
-    saveSpecToFile(filename, gTarget);
+void TargetExportCurSpec(const WireBoard& wb, const ::std::string& filename) {
+    saveSpecToFile(filename, *wb.target);
 }
 
-void TargetSetCfg(Settings& settings, const ::std::string& targetName) {
-    gTarget = initFromSpecName(targetName);
+void TargetSetCfg(WireBoard& wb, const ::std::string& targetName) {
+    auto& settings = *wb.settings;
+    auto* spec = wb.pool->make<TargetSpec>(initFromSpecName(targetName));
+    wb.target = spec;
+    if (spec->arch.pointerBits != 64 || spec->arch.bigEndian) {
+        ::std::cerr << "error: unsupported target `" << targetName
+                    << "`: only 64-bit little-endian targets are supported" << ::std::endl;
+        abort();
+    }
+    const TargetSpec& tgt = *spec;
 
-    if (gTarget.family == "unix") {
+    if (tgt.family == "unix") {
         CfgSetFlag(settings, "unix");
     }
-    CfgSetValue(settings, "target_family", gTarget.family);
+    CfgSetValue(settings, "target_family", tgt.family);
 
-    if (gTarget.osName == "linux") {
+    if (tgt.osName == "linux") {
         CfgSetFlag(settings, "linux");
         CfgSetValue(settings, "target_vendor", "gnu");
     }
 
-    if (gTarget.osName == "macos") {
+    if (tgt.osName == "macos") {
         CfgSetFlag(settings, "apple");
         CfgSetValue(settings, "target_vendor", "apple");
     }
 
-    if (gTarget.osName == "freebsd") {
+    if (tgt.osName == "freebsd") {
         CfgSetFlag(settings, "freebsd");
         CfgSetValue(settings, "target_vendor", "unknown");
     }
 
-    if (gTarget.osName == "netbsd") {
+    if (tgt.osName == "netbsd") {
         CfgSetFlag(settings, "netbsd");
         CfgSetValue(settings, "target_vendor", "unknown");
     }
 
-    if (gTarget.osName == "openbsd") {
+    if (tgt.osName == "openbsd") {
         CfgSetFlag(settings, "openbsd");
         CfgSetValue(settings, "target_vendor", "unknown");
     }
 
-    if (gTarget.osName == "dragonfly") {
+    if (tgt.osName == "dragonfly") {
         CfgSetFlag(settings, "dragonfly");
         CfgSetValue(settings, "target_vendor", "unknown");
     }
 
     CfgSetValue(settings, "target_vendor", ""); // NOTE: Doesn't override a pre-set value
-    CfgSetValue(settings, "target_env", gTarget.envName);
-    CfgSetValue(settings, "target_os", gTarget.osName);
-    CfgSetValue(settings, "target_pointer_width", FMT(gTarget.arch.pointerBits));
-    CfgSetValue(settings, "target_endian", gTarget.arch.bigEndian ? "big" : "little");
-    CfgSetValue(settings, "target_arch", gTarget.arch.mName);
+    CfgSetValue(settings, "target_env", tgt.envName);
+    CfgSetValue(settings, "target_os", tgt.osName);
+    CfgSetValue(settings, "target_pointer_width", FMT(tgt.arch.pointerBits));
+    CfgSetValue(settings, "target_endian", tgt.arch.bigEndian ? "big" : "little");
+    CfgSetValue(settings, "target_arch", tgt.arch.mName);
     CfgSetValue(settings, "target_abi", "llvm"); // This is a lie, but hopefully works?
     // target_has_atomic_equal_alignment="N" means align_of::<AtomicN>() == align_of::<N>().
     // Since libcore declares AtomicN with repr(align(sizeof(N))), only set it when the
     // primitive's natural alignment already matches its size (e.g. u64 on x86 has align 4,
     // so target_has_atomic_equal_alignment="64" must be unset there even with cmpxchg8b).
-    if (gTarget.arch.atomics.u8) {
+    if (tgt.arch.atomics.u8) {
         CfgSetValue(settings, "target_has_atomic", "8");
         CfgSetValue(settings, "target_has_atomic_load_store", "8");
         CfgSetValue(settings, "target_has_atomic_equal_alignment", "8");
     }
-    if (gTarget.arch.atomics.u16) {
+    if (tgt.arch.atomics.u16) {
         CfgSetValue(settings, "target_has_atomic", "16");
         CfgSetValue(settings, "target_has_atomic_load_store", "16");
-        if (gTarget.arch.alignments.u16 >= 2) {
+        if (tgt.arch.alignments.u16 >= 2) {
             CfgSetValue(settings, "target_has_atomic_equal_alignment", "16");
         }
     }
-    if (gTarget.arch.atomics.u32) {
+    if (tgt.arch.atomics.u32) {
         CfgSetValue(settings, "target_has_atomic", "32");
         CfgSetValue(settings, "target_has_atomic_load_store", "32");
-        if (gTarget.arch.alignments.u32 >= 4) {
+        if (tgt.arch.alignments.u32 >= 4) {
             CfgSetValue(settings, "target_has_atomic_equal_alignment", "32");
         }
     }
-    if (gTarget.arch.atomics.u64) {
+    if (tgt.arch.atomics.u64) {
         CfgSetValue(settings, "target_has_atomic", "64");
         CfgSetValue(settings, "target_has_atomic_load_store", "64");
-        if (gTarget.arch.alignments.u64 >= 8) {
+        if (tgt.arch.alignments.u64 >= 8) {
             CfgSetValue(settings, "target_has_atomic_equal_alignment", "64");
         }
     }
-    if (gTarget.arch.atomics.ptr) {
+    if (tgt.arch.atomics.ptr) {
         CfgSetValue(settings, "target_has_atomic", "ptr");
         CfgSetValue(settings, "target_has_atomic_load_store", "ptr");
-        if (gTarget.arch.alignments.ptr * 8u >= gTarget.arch.pointerBits) {
+        if (tgt.arch.alignments.ptr * 8u >= tgt.arch.pointerBits) {
             CfgSetValue(settings, "target_has_atomic_equal_alignment", "ptr");
         }
     }
     // TODO: Atomic compare-and-set option
-    if (gTarget.arch.atomics.ptr) {
+    if (tgt.arch.atomics.ptr) {
         CfgSetValue(settings, "target_has_atomic", "cas");
     }
     CfgSetValueCb(settings, "target_feature", [](const ::std::string& s) {
@@ -499,33 +509,33 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 case HIRCoreType::U16:
                 case HIRCoreType::I16:
                     outSize = 2;
-                    outAlign = gTarget.arch.alignments.u16;
+                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u16;
                     return true;
                 case HIRCoreType::U32:
                 case HIRCoreType::I32:
                 case HIRCoreType::Char:
                     outSize = 4;
-                    outAlign = gTarget.arch.alignments.u32;
+                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u32;
                     return true;
                 case HIRCoreType::U64:
                 case HIRCoreType::I64:
                     outSize = 8;
-                    outAlign = gTarget.arch.alignments.u64;
+                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u64;
                     return true;
                 case HIRCoreType::U128:
                 case HIRCoreType::I128:
                     outSize = 16;
                     // TODO: If i128 is emulated, this can be 8 (as it is on x86, where it's actually 4 due to the above comment)
-                    if (gTarget.backendC.emulatedI128) {
-                        outAlign = gTarget.arch.alignments.u64;
+                    if (TargetGetCurSpec(resolve.wb).backendC.emulatedI128) {
+                        outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u64;
                     } else {
-                        outAlign = gTarget.arch.alignments.u128;
+                        outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u128;
                     }
                     return true;
                 case HIRCoreType::Usize:
                 case HIRCoreType::Isize:
-                    outSize = gTarget.arch.pointerBits / 8;
-                    outAlign = gTarget.arch.alignments.ptr;
+                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
+                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.ptr;
                     return true;
                 case HIRCoreType::F16:
                     outSize = 2;
@@ -533,15 +543,15 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return true;
                 case HIRCoreType::F32:
                     outSize = 4;
-                    outAlign = gTarget.arch.alignments.f32;
+                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.f32;
                     return true;
                 case HIRCoreType::F64:
                     outSize = 8;
-                    outAlign = gTarget.arch.alignments.f64;
+                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.f64;
                     return true;
                 case HIRCoreType::F128:
                     outSize = 16;
-                    outAlign = gTarget.arch.alignments.f64; //f128;
+                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.f64; //f128;
                     return true;
                 case HIRCoreType::Str:
                     DEBUG("sizeof on a `str` - unsized");
@@ -628,7 +638,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         TU_ARMA(Borrow, te) {
             // - Alignment is machine native
-            outAlign = gTarget.arch.pointerBits / 8;
+            outAlign = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
             // TODO: Handle different types of Unsized (ones with different pointer sizes)
             switch (resolve.metadataType(sp, te.inner)) {
@@ -636,29 +646,29 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return false;
                 case MetadataType::None:
                 case MetadataType::Zero:
-                    outSize = gTarget.arch.pointerBits / 8;
+                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
                     break;
                 case MetadataType::Slice:
                 case MetadataType::TraitObject:
-                    outSize = gTarget.arch.pointerBits / 8 * 2;
+                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8 * 2;
                     break;
             }
             return true;
         }
         TU_ARMA(Pointer, te) {
             // - Alignment is machine native
-            outAlign = gTarget.arch.pointerBits / 8;
+            outAlign = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
             switch (resolve.metadataType(sp, te.inner)) {
                 case MetadataType::Unknown:
                     return false;
                 case MetadataType::None:
                 case MetadataType::Zero:
-                    outSize = gTarget.arch.pointerBits / 8;
+                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
                     break;
                 case MetadataType::Slice:
                 case MetadataType::TraitObject:
-                    outSize = gTarget.arch.pointerBits / 8 * 2;
+                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8 * 2;
                     break;
             }
             return true;
@@ -671,8 +681,8 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         TU_ARMA(Function, te) {
             // Pointer size
-            outSize = gTarget.arch.pointerBits / 8;
-            outAlign = gTarget.arch.pointerBits / 8;
+            outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
+            outAlign = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
             return true;
         }
         TU_ARMA(NodeType, te) {
@@ -1942,7 +1952,7 @@ void TargetForceTypeRepr(const Span& sp, const HIRTypeData* ty, TypeRepr repr) {
 }
 
 bool TargetCapsMemberAlignment() {
-    return TargetGetCurSpec().arch.mName == "powerpc";
+    return false; // Darwin/PowerPC "power" alignment: powerpc is unsupported (big-endian)
 }
 
 bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {

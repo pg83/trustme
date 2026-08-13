@@ -209,14 +209,14 @@ namespace {
         ERROR(sp, E0000, "Unknown register for riscv64 - `" << str << "`");
     }
 
-    AsmRegisterClass getRegClass(const Span& sp, const RcString& str) {
-        if (TargetGetCurSpec().arch.mName == "x86_64") {
+    AsmRegisterClass getRegClass(const WireBoard& wb, const Span& sp, const RcString& str) {
+        if (TargetGetCurSpec(wb).arch.mName == "x86_64") {
             return getRegClassX8664(sp, str);
         }
-        if (TargetGetCurSpec().arch.mName == "x86") {
+        if (TargetGetCurSpec(wb).arch.mName == "x86") {
             return getRegClassX8664(sp, str);
         }
-        if (TargetGetCurSpec().arch.mName == "riscv64") {
+        if (TargetGetCurSpec(wb).arch.mName == "riscv64") {
             return getRegClassRiscv(sp, str);
         }
         ERROR(sp, E0000, "Unknown architecture for asm!");
@@ -350,7 +350,7 @@ public:
                 AsmRegisterSpec regSpec;
                 if (tok.type() == TOK_IDENT) {
                     //Target_GetCurSpec().m_arch
-                    regSpec = AsmRegisterSpec::make_Class(getRegClass(lex.pointSpan(), tok.ident().name));
+                    regSpec = AsmRegisterSpec::make_Class(getRegClass(wb, lex.pointSpan(), tok.ident().name));
                 } else if (tok.type() == TOK_STRING) {
                     regSpec = AsmRegisterSpec::make_Explicit(tok.str());
                 } else {

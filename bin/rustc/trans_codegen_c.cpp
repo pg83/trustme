@@ -198,8 +198,8 @@ namespace {
             , of(outfilePathC)
         {
             ASSERT_BUG(Span(), of.is_open(), "Failed to open `" << outfilePathC << "` for writing");
-            options.emulatedI128 = TargetGetCurSpec().backendC.emulatedI128;
-            if (TargetGetCurSpec().arch.pointerBits < 64 && !options.emulatedI128) {
+            options.emulatedI128 = TargetGetCurSpec(mResolve.wb).backendC.emulatedI128;
+            if (TargetGetPointerBits() < 64 && !options.emulatedI128) {
                 WARNING(Span(), W0000, "Potentially misconfigured target, 32-bit targets require i128 emulation");
             }
             options.disallowEmptyStructs = true;
@@ -927,15 +927,15 @@ namespace {
             size_t argFileStart = 0;
             // Pick the C++ compiler.
             {
-                std::string varname = "CXX_" + TargetGetCurSpec().backendC.cCompiler;
+                std::string varname = "CXX_" + TargetGetCurSpec(mResolve.wb).backendC.cCompiler;
                 std::replace(varname.begin(), varname.end(), '-', '_');
 
                 if (getenv(varname.c_str())) {
                     args.push_back(getenv(varname.c_str()));
                 } else if (getenv("CXX")) {
                     args.push_back(getenv("CXX"));
-                } else if (system(("command -v " + TargetGetCurSpec().backendC.cCompiler + "-g++" + " >/dev/null 2>&1").c_str()) == 0) {
-                    args.push_back(TargetGetCurSpec().backendC.cCompiler + "-g++");
+                } else if (system(("command -v " + TargetGetCurSpec(mResolve.wb).backendC.cCompiler + "-g++" + " >/dev/null 2>&1").c_str()) == 0) {
+                    args.push_back(TargetGetCurSpec(mResolve.wb).backendC.cCompiler + "-g++");
                 } else {
                     args.push_back("g++");
                 }
@@ -943,7 +943,7 @@ namespace {
             argFileStart = args.getVec().size();
             args.push_back("-std=gnu++20");
             args.push_back("-fexceptions");
-            for (const auto& a : TargetGetCurSpec().backendC.compilerOpts) {
+            for (const auto& a : TargetGetCurSpec(mResolve.wb).backendC.compilerOpts) {
                 args.push_back(a.c_str());
             }
             switch (opt.optLevel) {
@@ -1006,7 +1006,7 @@ namespace {
                 case CodegenOutput::DynamicLibrary:
                     args.push_back("-shared");
                 case CodegenOutput::Executable:
-                    for (const auto& a : TargetGetCurSpec().backendC.linkerOptsPre) {
+                    for (const auto& a : TargetGetCurSpec(mResolve.wb).backendC.linkerOptsPre) {
                         args.push_back(a.c_str());
                     }
                     for (const auto& c : extCrates) {
@@ -1035,7 +1035,7 @@ namespace {
                                 break;
                         }
                     }
-                    for (const auto& a : TargetGetCurSpec().backendC.linkerOptsPost) {
+                    for (const auto& a : TargetGetCurSpec(mResolve.wb).backendC.linkerOptsPost) {
                         args.push_back(a.c_str());
                     }
                     for (const auto& a : opt.linkerArgs) {
@@ -1123,7 +1123,7 @@ namespace {
 
         void emitGlobalAsm(const HIRGlobalAssembly& se) override {
             of << "__asm__ (\"";
-            if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.attSyntax) {
+            if ((TargetGetCurSpec(mResolve.wb).arch.mName == "x86" || TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64") && !se.options.attSyntax) {
                 of << ".intel_syntax noprefix; ";
             }
             for (const auto& l : se.lines) {
@@ -1135,7 +1135,7 @@ namespace {
                 of << FmtGccAsm(l.trailing, false);
                 of << ";\\n ";
             }
-            if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.attSyntax) {
+            if ((TargetGetCurSpec(mResolve.wb).arch.mName == "x86" || TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64") && !se.options.attSyntax) {
                 of << ".att_syntax; ";
             }
             of << "\");\n";
@@ -1316,7 +1316,7 @@ namespace {
                     MIR_ASSERT(*mirRes, curOfs <= offset, "Current offset is already past expected (#" << fld << "): " << curOfs << " > " << offset);
                     auto fieldAlign = a;
                     // PowerPC 32-bit ABI alignment
-                    if (TargetGetCurSpec().arch.mName == "powerpc") {
+                    if (TargetGetCurSpec(mResolve.wb).arch.mName == "powerpc") {
                         if (s > 0) {
                             if (!isFirstField && fieldAlign >= 4 && fieldAlign <= 8) {
                                 fieldAlign = 4;
@@ -1814,14 +1814,14 @@ namespace {
         bool emitStaticTy(const HIRTypeData* type, const HIRPath& p, bool isProto) {
             size_t size = 0, align = 0;
             TargetGetSizeAndAlignOf(sp, mResolve, type, size, align);
-            bool rv = (align * 8 >= TargetGetCurSpec().arch.pointerBits);
+            bool rv = (align * 8 >= TargetGetPointerBits());
             of << "union u_static_" << TransMangle(p);
             if (isProto) {
                 of << "{ ";
                 emitCtype(type, FMT_CB(ss, ss << "val";));
                 of << "; ";
                 if (rv) {
-                    of << "uintptr_t raw[" << (size / (TargetGetCurSpec().arch.pointerBits / 8)) << "];";
+                    of << "uintptr_t raw[" << (size / (TargetGetPointerBits() / 8)) << "];";
                 } else {
                     of << "uint8_t raw[" << size << "];";
                 }
@@ -1868,7 +1868,7 @@ namespace {
             of << "extern ";
             emitStaticTy(type, p, /*is_proto=*/true);
             if (linkageName != "") {
-                if (TargetGetCurSpec().osName == "macos") { // Not macOS only, but all Apple platforms.
+                if (TargetGetCurSpec(mResolve.wb).osName == "macos") { // Not macOS only, but all Apple platforms.
                     of << " asm(\"_" << linkageName << "\")";
                 } else {
                     of << " asm(\"" << linkageName << "\")";
@@ -1944,17 +1944,12 @@ namespace {
                     DEBUG("encoded.bytes = `" << FMT_CB(ss, for (auto& b : encoded.bytes) ss << std::setw(2) << std::setfill('0') << std::hex << unsigned(b) << (int(&b - encoded.bytes.data()) % 8 == 7 ? " " : "");) << "`");
                     DEBUG("encoded.relocations = " << encoded.relocations);
                     auto relocIt = encoded.relocations.begin();
-                    auto ptrSize = TargetGetCurSpec().arch.pointerBits / 8;
+                    auto ptrSize = TargetGetPointerBits() / 8;
                     for (size_t i = 0; i < encoded.bytes.size(); i += ptrSize) {
                         uint64_t v = 0;
-                        if (TargetGetCurSpec().arch.bigEndian) {
-                            for (size_t o = 0, j = ptrSize; j--; o++) {
-                                v |= static_cast<uint64_t>(encoded.bytes[i + o]) << (j * 8);
-                            }
-                        } else {
-                            for (size_t o = 0, j = 0; j < ptrSize; j++, o++) {
-                                v |= static_cast<uint64_t>(encoded.bytes[i + o]) << (j * 8);
-                            }
+                        // little-endian only (big-endian targets are unsupported)
+                        for (size_t o = 0, j = 0; j < ptrSize; j++, o++) {
+                            v |= static_cast<uint64_t>(encoded.bytes[i + o]) << (j * 8);
                         }
 
                         if (i > 0) {
@@ -2280,7 +2275,7 @@ namespace {
             }
             emitFunctionHeader(p, item, params);
             if (item.linkage.name != "") {
-                if (TargetGetCurSpec().osName == "macos") { // Not macOS only, but all Apple platforms.
+                if (TargetGetCurSpec(mResolve.wb).osName == "macos") { // Not macOS only, but all Apple platforms.
                     of << " asm(\"_" << item.linkage.name << "\")";
                 } else {
                     of << " asm(\"" << item.linkage.name << "\")";
@@ -4689,7 +4684,7 @@ namespace {
                 of << indent << "__asm__ ";
                 of << "__volatile__"; // Default everything to volatile
                 of << "(\"";
-                if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.attSyntax) {
+                if ((TargetGetCurSpec(mResolve.wb).arch.mName == "x86" || TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64") && !se.options.attSyntax) {
                     of << ".intel_syntax noprefix; ";
                 }
                 bool escapePercent = true || !inputs.empty() || !outputs.empty();
@@ -4719,7 +4714,7 @@ namespace {
                     of << FmtGccAsm(l.trailing, escapePercent);
                     of << ";\\n ";
                 }
-                if ((TargetGetCurSpec().arch.mName == "x86" || TargetGetCurSpec().arch.mName == "x86_64") && !se.options.attSyntax) {
+                if ((TargetGetCurSpec(mResolve.wb).arch.mName == "x86" || TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64") && !se.options.attSyntax) {
                     of << ".att_syntax; ";
                 }
                 of << "\" :";
@@ -4998,7 +4993,7 @@ namespace {
             };
             auto getPrimSize = [&localMirRes](const HIRTypeData* ty) -> unsigned {
                 if (ty->is_Pointer()) {
-                    return TargetGetCurSpec().arch.pointerBits;
+                    return TargetGetPointerBits();
                 }
                 if (!ty->is_Primitive()) {
                     MIR_BUG(localMirRes, "Unknown type for getting primitive size - " << ty);
@@ -5022,7 +5017,7 @@ namespace {
                     case HIRCoreType::Usize:
                     case HIRCoreType::Isize:
                         // TODO: Is this a good idea?
-                        return TargetGetCurSpec().arch.pointerBits;
+                        return TargetGetPointerBits();
                     default:
                         MIR_BUG(localMirRes, "Unknown primitive for getting size- " << ty);
                 }
@@ -5030,18 +5025,18 @@ namespace {
             auto getRealPrimTy = [](HIRCoreType ct) -> HIRCoreType {
                 switch (ct) {
                     case HIRCoreType::Usize:
-                        if (TargetGetCurSpec().arch.pointerBits == 64) {
+                        if (TargetGetPointerBits() == 64) {
                             return HIRCoreType::U64;
                         }
-                        if (TargetGetCurSpec().arch.pointerBits == 32) {
+                        if (TargetGetPointerBits() == 32) {
                             return HIRCoreType::U32;
                         }
                         BUG(Span(), "");
                     case HIRCoreType::Isize:
-                        if (TargetGetCurSpec().arch.pointerBits == 64) {
+                        if (TargetGetPointerBits() == 64) {
                             return HIRCoreType::I64;
                         }
-                        if (TargetGetCurSpec().arch.pointerBits == 32) {
+                        if (TargetGetPointerBits() == 32) {
                             return HIRCoreType::I32;
                         }
                         BUG(Span(), "");

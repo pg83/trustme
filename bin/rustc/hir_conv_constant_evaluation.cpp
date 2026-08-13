@@ -792,20 +792,12 @@ public:
 
     void writeUint(const MIRTypeResolve& state, unsigned bits, U128 v) {
         auto nBytes = (bits + 7) / 8;
-        if (TargetGetCurSpec().arch.bigEndian) {
-            v.toBeBytes(extWriteBytes(state, nBytes), nBytes);
-        } else {
-            v.toLeBytes(extWriteBytes(state, nBytes), nBytes);
-        }
+        v.toLeBytes(extWriteBytes(state, nBytes), nBytes); // little-endian only
     }
 
     void writeSint(const MIRTypeResolve& state, unsigned bits, S128 v) {
         auto nBytes = (bits + 7) / 8;
-        if (TargetGetCurSpec().arch.bigEndian) {
-            v.getInner().toBeBytes(extWriteBytes(state, nBytes), nBytes);
-        } else {
-            v.getInner().toLeBytes(extWriteBytes(state, nBytes), nBytes);
-        }
+        v.getInner().toLeBytes(extWriteBytes(state, nBytes), nBytes); // little-endian only
     }
 
     void writePtr(const MIRTypeResolve& state, uint64_t val, MIREvalRelocPtr reloc) {
@@ -862,22 +854,14 @@ public:
         assert(bits <= 128);
         auto nBytes = (bits + 7) / 8;
         U128 rv;
-        if (TargetGetCurSpec().arch.bigEndian) {
-            rv.fromBeBytes(extReadBytes(state, nBytes), nBytes);
-        } else {
-            rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
-        }
+        rv.fromLeBytes(extReadBytes(state, nBytes), nBytes); // little-endian only
         return rv;
     }
 
     S128 readSint(const MIRTypeResolve& state, unsigned bits) const {
         auto nBytes = (bits + 7) / 8;
         S128 rv;
-        if (TargetGetCurSpec().arch.bigEndian) {
-            rv.fromBeBytes(extReadBytes(state, nBytes), nBytes);
-        } else {
-            rv.fromLeBytes(extReadBytes(state, nBytes), nBytes);
-        }
+        rv.fromLeBytes(extReadBytes(state, nBytes), nBytes); // little-endian only
         return rv;
     }
 

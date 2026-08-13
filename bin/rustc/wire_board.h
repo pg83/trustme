@@ -9,6 +9,7 @@ class HIRCrate;
 class HIRTypeInterner;
 class HIRInherentCache;
 struct Settings;
+struct TargetSpec;
 
 // The wiring board: main creates one as the first object of the root pool
 // (so it outlives every subsystem holding the reference) and fills the
@@ -28,6 +29,11 @@ struct WireBoard {
     // Compilation settings: command-line configuration plus the few values
     // the pipeline derives once (crate names, cfg state). See settings.h.
     Settings* settings = nullptr;
+
+    // The target platform spec (pointer width, endianness, ABI, type layout
+    // rules). Derived once from `--target` before parsing; immutable after.
+    // See trans_target.h.
+    const TargetSpec* target = nullptr;
 
     // Filled by the Parse phase; stays valid through Expand/Resolve and is
     // dropped conceptually once HIR Lower is done (the pointer survives but
