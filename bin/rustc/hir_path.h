@@ -2,6 +2,7 @@
 
 #include "span.h"
 #include "common.h"
+#include "thin_vector.h"
 #include "hir_expr_ptr.h"
 #include "hir_type_ref.h"
 #include "tagged_union.h"

@@ -424,7 +424,7 @@ unit_tests = [
         color="green",
     )
 ]
-unit_tests.append(command(
+rustc_ut_run = command(
     name="unit_rustc_ut",
     inputs=UT_SRC,
     outputs=["$(B)/tst/unit/rustc_ut.stamp"],
@@ -435,7 +435,8 @@ unit_tests.append(command(
     deps=[rustc_ut],
     descr="UT",
     color="green",
-))
+)
+unit_tests.append(rustc_ut_run)
 unit_tests.append(command(
     name="unit_node_cast",
     inputs=[
@@ -1468,6 +1469,9 @@ group("test", *lite_tests)
 group("lite_tests", *partition_lite_tests(lite_tests))
 group("slow_tests", *project_tests, *slow_rust_lib_tests)
 group("unit", *(rust_unit_tests if system_rustc_mode else unit_tests))
+# `ut` builds+runs only the C++ *_ut.cpp runner (bin/rustc/*_ut.cpp), without the
+# much larger `unit` group (which also runs the semantic .rs regression corpus).
+group("ut", rustc_ut_run)
 group("perf", *perf_tests)
 group("rust_1_90", *rust_1_90_tests)
 group("rust_ui_compile", *rust_ui_compile_tests)
