@@ -187,6 +187,7 @@ namespace {
 
         ::std::set<HIRTypeRef> emittedFnTypes;
         ::std::set<const TypeRepr*> embeddedTags;
+        ::std::map<HIRTypeRef, HIRTypeRef> normalizedCtypes;
 
     public:
         CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
@@ -7711,6 +7712,17 @@ namespace {
         }
 
         void emitCtype(const HIRTypeData* ty, ::FmtLambda inner, bool isExternC = false) {
+            auto normalizedIt = normalizedCtypes.find(ty);
+            if (normalizedIt == normalizedCtypes.end()) {
+                HIRTypeRef normalized = ty;
+                mResolve.expandAssociatedTypes(sp, normalized);
+                normalizedIt = normalizedCtypes.emplace(ty, mv$(normalized)).first;
+            }
+            if (normalizedIt->second != ty) {
+                emitCtype(normalizedIt->second, mv$(inner), isExternC);
+                return;
+            }
+
             TU_MATCH_HDRA( (*ty), {)
             TU_ARMA(Infer, te) {
                     of << "@" << ty << "@" << inner;
