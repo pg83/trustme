@@ -5362,8 +5362,8 @@ namespace {
 
                 case HIRExprNodeBinOp::Op::BoolAnd:
                 case HIRExprNodeBinOp::Op::BoolOr:
-                    ASSERT_BUG(sp, tyL == crate.types.primitive(HIRCoreType::Bool), "&& operator requires bool");
-                    ASSERT_BUG(sp, tyR == crate.types.primitive(HIRCoreType::Bool), "&& operator requires bool");
+                    ASSERT_BUG(sp, tyL == crate.types.primitive(HIRCoreType::Bool) || tyL->is_Diverge(), "Boolean operator requires bool");
+                    ASSERT_BUG(sp, tyR == crate.types.primitive(HIRCoreType::Bool) || tyR->is_Diverge(), "Boolean operator requires bool");
                     return;
             }
 
