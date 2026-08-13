@@ -304,7 +304,7 @@ S128 S128::operator/(S128 x) const {
     return retNeg ? -S128(rvU) : S128(rvU);
 }
 S128 S128::operator%(S128 x) const {
-    auto retNeg = isNeg() != x.isNeg();
+    auto retNeg = isNeg();
     auto rvU = uAbs() % x.uAbs();
     return retNeg ? -S128(rvU) : S128(rvU);
 }
@@ -342,7 +342,8 @@ S128 S128::operator>>(unsigned bits) const {
         return *this < 0 ? S128(-1) : S128(0);
     }
     if (bits >= 64) {
-        return S128(U128(inner.hi >> (bits - 64), *this < 0 ? UINT64_MAX : 0));
+        auto lo = static_cast<uint64_t>(static_cast<int64_t>(inner.hi) >> (bits - 64));
+        return S128(U128(lo, *this < 0 ? UINT64_MAX : 0));
     }
     return S128(U128(inner.lo >> bits | (inner.hi << (64 - bits)), static_cast<uint64_t>(static_cast<int64_t>(inner.hi) >> bits)));
 }

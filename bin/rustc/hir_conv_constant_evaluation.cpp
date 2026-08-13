@@ -2130,11 +2130,10 @@ namespace {
                     }
                     case MIRBinOp::MUL: {
                         auto res = ti.mask(l * r);
-                        if (l != 0 && r != 0) {
-                            didOverflow = res < l || res < r;
-                        }
+                        auto max = ti.mask(~U128());
+                        didOverflow = r != 0 && l > max / r;
                         if (didOverflow && saturate) {
-                            res = ti.mask(~U128());
+                            res = max;
                         }
                         dst.writeUint(state, ti.bits, res);
                         break;
@@ -2201,53 +2200,43 @@ namespace {
                 auto r = localState.readParamSint(ti.bits, valR);
                 DEBUG(r << " from " << valR);
                 DEBUG(l << " " << int(op) << " " << r);
+                const auto signBit = U128(1) << (ti.bits - 1);
+                const auto minValue = signBit;
+                const auto maxValue = signBit - 1u;
+                const auto lRaw = ti.mask(l.getInner());
+                const auto rRaw = ti.mask(r.getInner());
                 switch (op) {
                     case MIRBinOp::ADD: {
-                        // Convert to raw/unsigned repr
-                        auto v1u = l.getInner();
-                        auto v2u = r.getInner();
-                        // Then convert into a sign and absolute value
-                        auto v1s = (l < 0);
-                        auto v2s = (r < 0);
-                        auto v1a = v1s ? ~v1u + 1 : v1u;
-                        auto v2a = v2s ? ~v2u + 1 : v2u;
-
-                        // Determine the sign
-                        // - Equal has the same sign
-                        // - V2 negative is negative if |v2| > |v1|
-                        // - V1 negative is negative if |v2| < |v1|
-                        bool resSign = (v1s == v2s) ? v1s : (v2s ? v1a < v2a : v1a > v2a);
-                        auto res = S128(v1u + v2u);
-                        didOverflow = ((res < 0) != resSign);
+                        auto res = ti.mask(lRaw + rRaw);
+                        didOverflow = (~(lRaw ^ rRaw) & (lRaw ^ res) & signBit) != 0;
                         if (didOverflow && saturate) {
-                            auto v = U128(0) << (ti.bits - 1);
-                            res = resSign ? S128(v) : S128(v - 1);
+                            res = (lRaw & signBit) != 0 ? minValue : maxValue;
                         }
-                        dst.writeSint(state, ti.bits, res);
+                        dst.writeUint(state, ti.bits, res);
                         break;
                     }
                     case MIRBinOp::SUB: {
-                        auto res = l - r;
-                        // If the masked value isn't equal to the non-masked, then it's an overflow.
-                        // TODO: What about 128 bit arith?
-                        didOverflow = res.getInner() != ti.mask(res);
+                        auto res = ti.mask(lRaw - rRaw);
+                        didOverflow = ((lRaw ^ rRaw) & (lRaw ^ res) & signBit) != 0;
                         if (didOverflow && saturate) {
-                            MIR_TODO(state, "do_arith signed sub overflow - saturate");
+                            res = (lRaw & signBit) != 0 ? minValue : maxValue;
                         }
-                        dst.writeUint(state, ti.bits, ti.mask(res));
+                        dst.writeUint(state, ti.bits, res);
                         break;
                     }
                     case MIRBinOp::MUL: {
-                        auto res = l * r;
-                        if (l != 0 && r != 0) {
-                            if (res.uAbs() < l.uAbs() || res.uAbs() < r.uAbs()) {
-                                didOverflow = true;
-                            }
-                        }
+                        const bool lNegative = (lRaw & signBit) != 0;
+                        const bool rNegative = (rRaw & signBit) != 0;
+                        const bool resultNegative = lNegative != rNegative;
+                        const auto lMagnitude = lNegative ? ti.mask(~lRaw + 1u) : lRaw;
+                        const auto rMagnitude = rNegative ? ti.mask(~rRaw + 1u) : rRaw;
+                        const auto maxMagnitude = resultNegative ? minValue : maxValue;
+                        didOverflow = rMagnitude != 0 && lMagnitude > maxMagnitude / rMagnitude;
+                        auto res = ti.mask(lRaw * rRaw);
                         if (didOverflow && saturate) {
-                            MIR_TODO(state, "do_arith signed mul overflow - saturate");
+                            res = resultNegative ? minValue : maxValue;
                         }
-                        dst.writeUint(state, ti.bits, ti.mask(res));
+                        dst.writeUint(state, ti.bits, res);
                         break;
                     }
                     case MIRBinOp::DIV:
@@ -2513,10 +2502,16 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                         throw Defer();
                                     }
                                     auto& ve = repr->variants.as_Values();
-
-                                    auto v = inval.slice(repr->getOffset(state.sp, resolve, ve.field), ve.field.size).readUint(state, ve.field.size * 8);
+                                    const auto& field = repr->fields.at(ve.field.index);
+                                    auto src = inval.slice(repr->getOffset(state.sp, resolve, ve.field), ve.field.size);
+                                    auto tagTi = TypeInfo::forType(field.ty);
                                     // TODO: Ensure that this is a valid variant?
-                                    dst.writeUint(state, ti.bits, v);
+                                    if (tagTi.ty == TypeInfo::Signed) {
+                                        dst.writeSint(state, ti.bits, src.readSint(state, tagTi.bits));
+                                    } else {
+                                        MIR_ASSERT(state, tagTi.ty == TypeInfo::Unsigned, "Enum tag is not an integer - " << field.ty);
+                                        dst.writeUint(state, ti.bits, src.readUint(state, tagTi.bits));
+                                    }
                                 } break;
                             }
                             break;
@@ -3291,6 +3286,22 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     bool isMin = te->name == "minnumf16" || te->name == "minnumf32" || te->name == "minnumf64" || te->name == "minnumf128";
                     auto value = isMin ? floatValueMinimumNumber(lhs, rhs) : floatValueMaximumNumber(lhs, rhs);
                     dst.writeFloat(state, ti.bits, value);
+                } else if (te->name == "three_way_compare") {
+                    HIRTypeRef tmp;
+                    auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
+                    int64_t result;
+                    if (ti.ty == TypeInfo::Signed) {
+                        auto lhs = localState.readParamSint(ti.bits, e.args.at(0));
+                        auto rhs = localState.readParamSint(ti.bits, e.args.at(1));
+                        result = lhs == rhs ? 0 : lhs < rhs ? -1 : 1;
+                    } else if (ti.ty == TypeInfo::Unsigned) {
+                        auto lhs = localState.readParamUint(ti.bits, e.args.at(0));
+                        auto rhs = localState.readParamUint(ti.bits, e.args.at(1));
+                        result = lhs == rhs ? 0 : lhs < rhs ? -1 : 1;
+                    } else {
+                        MIR_BUG(state, "`three_way_compare` with unsupported type " << state.getParamType(tmp, e.args.at(0)));
+                    }
+                    dst.writeSint(state, dst.getLen() * 8, S128(result));
                 } else if (te->name == "assume") {
                     auto val = localState.readParamUint(8, e.args.at(0));
                     MIR_ASSERT(state, val != 0, "`assume` failed");

@@ -30,32 +30,27 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P0 — largest shared causes
 
-1. CTFE treats a reachable panic while attempting an optional runtime fold as
-   a fatal constant-evaluation error: 123 `rust_lib` tests fail at
-   `hir_conv_constant_evaluation.cpp:3617`. The other seven failures at this
-   location are separate compile-time assertions/dead-code cases and must be
-   checked after the general fallback fix.
-2. The Rust 1.90 harness does not make `librust_test_helpers.a` visible to the
+1. The Rust 1.90 harness does not make `librust_test_helpers.a` visible to the
    generated C++ link: 31 ABI tests fail on the same missing `-lrust_test_helpers`.
-3. Corpus adapters pass unsupported rustc driver/codegen flags to mrustc: 55
+2. Corpus adapters pass unsupported rustc driver/codegen flags to mrustc: 55
    tests. The main groups are `codegen-units` (12), `link-dead-code` (6),
    `debug_assertions` (5), `no-prepopulate-passes` (4), and `lto` (4). Retain a
    test in the fast corpus only if ignoring the flag preserves what it tests.
-4. Inline assembly emitted for clang/assembler is invalid: 19 tests. Most fail
+3. Inline assembly emitted for clang/assembler is invalid: 19 tests. Most fail
    with `unknown token in expression`; the remainder are unsupported register
    constraints/names.
-5. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
+4. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
    backend/runtime family until a smaller reproducer proves otherwise.
 
 ## P1 — internal compiler failures
 
-The 408 failures form 116 location signatures. These are all compiler defects,
-but the generic `mir_helpers.h:108` signature must be subdivided by its message
-before fixing.
+After the targeted CTFE rerun, 285 of the snapshot's internal compiler failures
+remain. The generic `mir_helpers.h:108` signature must be subdivided by its
+message before fixing.
 
 | signature | tests | note |
 |---|---:|---|
-| CTFE panic, `hir_conv_constant_evaluation.cpp:3617` | 130 | 123-test shared fallback bug described above |
+| CTFE panic, `hir_conv_constant_evaluation.cpp:3617` | 7 | independent compile-time assertions/dead-code cases |
 | MIR error, `mir_helpers.h:108` | 31 | mixed intrinsics, pointer operations, raw DSTs and SIMD |
 | CTFE intrinsic TODO, `hir_conv_constant_evaluation.cpp:3498` | 16 | `black_box`, `forget`, `raw_eq`, pointer offsets, SIMD and comparisons |
 | BUG, `trans_target.cpp:1896` | 14 | common codegen target failure |
@@ -99,6 +94,9 @@ the remaining long tail of Rust 1.90 syntax.
   native symbols.
 - 102 executables panic with exit 101. The common `assert_eq!` text covers many
   unrelated semantic failures and is not a root-cause cluster.
+- Repairing the shared CTFE arithmetic path exposed eight former compiler
+  failures as runtime mismatches: seven `core::num::dec2flt` tests and
+  `core::num::int_log::ilog10_u128`.
 - 31 executables abort: 19 f128 doctests, 11 Miri cases, and one allocation
   failure in a library test.
 - 12 output mismatches: nine async-drop tests and RustSmith seeds 15, 19, 102.
@@ -122,13 +120,12 @@ completed in an isolated rerun close to its ten-minute limit.
 
 Fix by shared impact, not by corpus order:
 
-1. CTFE runtime-fold panic fallback (123 tests).
-2. Native test-helper propagation (31 tests).
-3. Adapter flag filtering/reclassification (55 tests).
-4. Invalid inline-assembly emission and f128 runtime aborts (19 tests each).
-5. The remaining P1 clusters, largest verified root cause first.
-6. Generated-C++ families, runtime semantic families, then front-end features.
-7. Missing diagnostics and isolated long-tail failures.
+1. Native test-helper propagation (31 tests).
+2. Adapter flag filtering/reclassification (55 tests).
+3. Invalid inline-assembly emission and f128 runtime aborts (19 tests each).
+4. The remaining P1 clusters, largest verified root cause first.
+5. Generated-C++ families, runtime semantic families, then front-end features.
+6. Missing diagnostics and isolated long-tail failures.
 
 For every compiler change: add a minimal `tst/unit/test_*.rs` that is green on
 Rust 1.90, confirm it is red on current mrustc, fix the shared path, then run
