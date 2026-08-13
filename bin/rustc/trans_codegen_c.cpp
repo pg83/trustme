@@ -172,6 +172,7 @@ namespace {
         static Span sp;
 
         const HIRCrate& crate;
+        const WireBoard& mWb;
         ::StaticTraitResolve mResolve;
 
         ::std::string outfilePath;
@@ -190,20 +191,21 @@ namespace {
         ::std::map<HIRTypeRef, HIRTypeRef> normalizedCtypes;
 
         bool usesIntelCompilerAsmDialect() const {
-            const auto& arch = TargetGetCurSpec(mResolve.wb).arch.mName;
+            const auto& arch = TargetGetCurSpec(mWb).arch.mName;
             return arch == "x86" || arch == "x86_64";
         }
 
     public:
         CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
-            : crate(crate)
+            : mWb(wb)
+            , crate(crate)
             , mResolve(wb)
             , outfilePath(outfile)
             , outfilePathC(outfile + ".cpp")
             , of(outfilePathC)
         {
             ASSERT_BUG(Span(), of.is_open(), "Failed to open `" << outfilePathC << "` for writing");
-            options.emulatedI128 = TargetGetCurSpec(mResolve.wb).backendC.emulatedI128;
+            options.emulatedI128 = TargetGetCurSpec(mWb).backendC.emulatedI128;
             if (TargetGetPointerBits() < 64 && !options.emulatedI128) {
                 WARNING(Span(), W0000, "Potentially misconfigured target, 32-bit targets require i128 emulation");
             }
@@ -938,15 +940,15 @@ namespace {
             size_t argFileStart = 0;
             // Pick the C++ compiler.
             {
-                std::string varname = "CXX_" + TargetGetCurSpec(mResolve.wb).backendC.cCompiler;
+                std::string varname = "CXX_" + TargetGetCurSpec(mWb).backendC.cCompiler;
                 std::replace(varname.begin(), varname.end(), '-', '_');
 
                 if (getenv(varname.c_str())) {
                     args.push_back(getenv(varname.c_str()));
                 } else if (getenv("CXX")) {
                     args.push_back(getenv("CXX"));
-                } else if (system(("command -v " + TargetGetCurSpec(mResolve.wb).backendC.cCompiler + "-g++" + " >/dev/null 2>&1").c_str()) == 0) {
-                    args.push_back(TargetGetCurSpec(mResolve.wb).backendC.cCompiler + "-g++");
+                } else if (system(("command -v " + TargetGetCurSpec(mWb).backendC.cCompiler + "-g++" + " >/dev/null 2>&1").c_str()) == 0) {
+                    args.push_back(TargetGetCurSpec(mWb).backendC.cCompiler + "-g++");
                 } else {
                     args.push_back("g++");
                 }
@@ -966,7 +968,7 @@ namespace {
                 // and `%q0` are expanded by the compiler.
                 args.push_back("-masm=intel");
             }
-            for (const auto& a : TargetGetCurSpec(mResolve.wb).backendC.compilerOpts) {
+            for (const auto& a : TargetGetCurSpec(mWb).backendC.compilerOpts) {
                 args.push_back(a.c_str());
             }
             switch (opt.optLevel) {
@@ -1029,7 +1031,7 @@ namespace {
                 case CodegenOutput::DynamicLibrary:
                     args.push_back("-shared");
                 case CodegenOutput::Executable:
-                    for (const auto& a : TargetGetCurSpec(mResolve.wb).backendC.linkerOptsPre) {
+                    for (const auto& a : TargetGetCurSpec(mWb).backendC.linkerOptsPre) {
                         args.push_back(a.c_str());
                     }
                     for (const auto& c : extCrates) {
@@ -1062,7 +1064,7 @@ namespace {
                                 break;
                         }
                     }
-                    for (const auto& a : TargetGetCurSpec(mResolve.wb).backendC.linkerOptsPost) {
+                    for (const auto& a : TargetGetCurSpec(mWb).backendC.linkerOptsPost) {
                         args.push_back(a.c_str());
                     }
                     for (const auto& a : opt.linkerArgs) {
@@ -1343,7 +1345,7 @@ namespace {
                     MIR_ASSERT(*mirRes, curOfs <= offset, "Current offset is already past expected (#" << fld << "): " << curOfs << " > " << offset);
                     auto fieldAlign = a;
                     // PowerPC 32-bit ABI alignment
-                    if (TargetGetCurSpec(mResolve.wb).arch.mName == "powerpc") {
+                    if (TargetGetCurSpec(mWb).arch.mName == "powerpc") {
                         if (s > 0) {
                             if (!isFirstField && fieldAlign >= 4 && fieldAlign <= 8) {
                                 fieldAlign = 4;
@@ -1895,7 +1897,7 @@ namespace {
             of << "extern ";
             emitStaticTy(type, p, /*is_proto=*/true);
             if (linkageName != "") {
-                if (TargetGetCurSpec(mResolve.wb).osName == "macos") { // Not macOS only, but all Apple platforms.
+                if (TargetGetCurSpec(mWb).osName == "macos") { // Not macOS only, but all Apple platforms.
                     of << " asm(\"_" << linkageName << "\")";
                 } else {
                     of << " asm(\"" << linkageName << "\")";
@@ -2302,7 +2304,7 @@ namespace {
             }
             emitFunctionHeader(p, item, params);
             if (item.linkage.name != "") {
-                if (TargetGetCurSpec(mResolve.wb).osName == "macos") { // Not macOS only, but all Apple platforms.
+                if (TargetGetCurSpec(mWb).osName == "macos") { // Not macOS only, but all Apple platforms.
                     of << " asm(\"_" << item.linkage.name << "\")";
                 } else {
                     of << " asm(\"" << item.linkage.name << "\")";
@@ -4740,7 +4742,7 @@ namespace {
                                         switch (*regClass) {
                                             case AsmRegisterClass::x86Reg:
                                             case AsmRegisterClass::x86RegAbcd:
-                                                of << (TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64" ? 'q' : 'k');
+                                                of << (TargetGetCurSpec(mWb).arch.mName == "x86_64" ? 'q' : 'k');
                                                 break;
                                             case AsmRegisterClass::x86RegByte:
                                                 of << 'b';
