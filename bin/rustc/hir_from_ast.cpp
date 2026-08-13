@@ -733,7 +733,7 @@ HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc) {
                 if (!(!e.trait || e.trait->isValid())) {
                     TODO(sp, "Handle UFCS w/ trait and no nodes - " << path);
                 }
-                auto type = LowerHIRType(*e.type);
+                auto type = LowerHIRType(e.type);
                 ASSERT_BUG(sp, type->is_Path(), "No nodes and non-Path type - " << path);
                 return type->as_Path().path.clone();
             }
@@ -744,9 +744,9 @@ HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc) {
             auto params = LowerHIRPathParams(sp, e.nodes.front().args(), /*allow_assoc*/ false);
 
             if (!e.trait || !e.trait->isValid()) {
-                return HIRPath(HIRPath::Data::make_UfcsUnknown({LowerHIRType(*e.type), e.nodes[0].name(), mv$(params)}));
+                return HIRPath(HIRPath::Data::make_UfcsUnknown({LowerHIRType(e.type), e.nodes[0].name(), mv$(params)}));
             } else {
-                return HIRPath(HIRPath::Data::make_UfcsKnown({LowerHIRType(*e.type), LowerHIRGenericPath(sp, *e.trait, FromASTPathClass::Type), e.nodes[0].name(), mv$(params)}));
+                return HIRPath(HIRPath::Data::make_UfcsKnown({LowerHIRType(e.type), LowerHIRGenericPath(sp, *e.trait, FromASTPathClass::Type), e.nodes[0].name(), mv$(params)}));
             }
         }
     }
@@ -904,9 +904,9 @@ namespace {
 }
 
 HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
-    TU_MATCH_HDRA( (ty.mData), {)
+    TU_MATCH_HDRA( (ty->mData), {)
     TU_ARMA(None, e) {
-            BUG(ty.span(), "TypeData::None");
+            BUG(ty->span(), "TypeData::None");
         }
         TU_ARMA(Bang, e) {
             return gCratePtr->types.diverge();
@@ -918,7 +918,7 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
             return gCratePtr->types.unit();
         }
         TU_ARMA(Macro, e) {
-            BUG(ty.span(), "TypeData::Macro");
+            BUG(ty->span(), "TypeData::Macro");
         }
         TU_ARMA(Primitive, e) {
             switch (e.coreType) {
@@ -964,9 +964,9 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
                 case CORETYPE_UINT:
                     return gCratePtr->types.primitive(HIRCoreType::Usize);
                 case CORETYPE_ANY:
-                    TODO(ty.span(), "TypeData::Primitive - CORETYPE_ANY");
+                    TODO(ty->span(), "TypeData::Primitive - CORETYPE_ANY");
                 case CORETYPE_INVAL:
-                    BUG(ty.span(), "TypeData::Primitive - CORETYPE_INVAL");
+                    BUG(ty->span(), "TypeData::Primitive - CORETYPE_INVAL");
             }
         }
         TU_ARMA(Tuple, e) {
@@ -978,21 +978,21 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
         }
         TU_ARMA(Borrow, e) {
             auto cl = (e.isMut ? HIRBorrowType::Unique : HIRBorrowType::Shared);
-            return gCratePtr->types.borrow(cl, LowerHIRType(*e.inner));
+            return gCratePtr->types.borrow(cl, LowerHIRType(e.inner));
         }
         TU_ARMA(Pointer, e) {
             auto cl = (e.isMut ? HIRBorrowType::Unique : HIRBorrowType::Shared);
-            return gCratePtr->types.pointer(cl, LowerHIRType(*e.inner));
+            return gCratePtr->types.pointer(cl, LowerHIRType(e.inner));
         }
         TU_ARMA(Array, e) {
-            auto inner = LowerHIRType(*e.inner);
+            auto inner = LowerHIRType(e.inner);
             if (e.size) {
                 // If the size expression is an unannotated or usize integer literal, don't bother converting the expression
                 if (const auto* ptr = cast<const ASTExprNodeInteger>(&*e.size)) {
                     if (ptr->datatype == CORETYPE_UINT || ptr->datatype == CORETYPE_ANY) {
                         // TODO: Chage the HIR format to support very large arrays
                         if (ptr->mValue >= U128(UINT64_MAX)) {
-                            ERROR(ty.span(), E0000, "Array size out of bounds - 0x" << ::std::hex << ptr->mValue << " > 0x" << UINT64_MAX << " in " << ::std::dec << ty);
+                            ERROR(ty->span(), E0000, "Array size out of bounds - 0x" << ::std::hex << ptr->mValue << " > 0x" << UINT64_MAX << " in " << ::std::dec << ty);
                         }
                         return gCratePtr->types.array(inner, ptr->mValue.truncateU64());
                     }
@@ -1010,7 +1010,7 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
             }
         }
         TU_ARMA(Slice, e) {
-            auto inner = LowerHIRType(*e.inner);
+            auto inner = LowerHIRType(e.inner);
             return gCratePtr->types.slice(inner);
         }
         TU_ARMA(Path, e) {
@@ -1020,18 +1020,18 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
                 if (const auto* p = e->mBindings.type.binding.opt_TypeParameter()) {
                     slot = p->slot;
                 } else {
-                    BUG(ty.span(), "Unbound local encountered in " << *e);
+                    BUG(ty->span(), "Unbound local encountered in " << *e);
                 }
                 return gCratePtr->types.generic(l->name, slot);
             } else if (e->mBindings.type.path.crate == CRATE_BUILTINS) {
-                return LowerHIRType(TypeRef(ty.span(), coretypeFromstring(e->mBindings.type.path.nodes.back().c_str())));
+                return LowerHIRType(mktype(ty->span(), coretypeFromstring(e->mBindings.type.path.nodes.back().c_str())));
             } else {
-                return gCratePtr->types.path(LowerHIRPath(ty.span(), *e, FromASTPathClass::Type), {});
+                return gCratePtr->types.path(LowerHIRPath(ty->span(), *e, FromASTPathClass::Type), {});
             }
         }
         TU_ARMA(TraitObject, e) {
             HIRTypeData::Data_TraitObject v;
-            TraitObjectLowering lowering(ty.span(), v);
+            TraitObjectLowering lowering(ty->span(), v);
             for (const auto& t : e.traits) {
                 DEBUG("t = " << *t.path);
                 lowering.add(t);
@@ -1042,7 +1042,7 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
             return gCratePtr->types.intern(HIRTypeData::make_TraitObject(mv$(v)));
         }
         TU_ARMA(ErasedType, e) {
-            ASSERT_BUG(ty.span(), e->traits.size() > 0, "ErasedType with no traits");
+            ASSERT_BUG(ty->span(), e->traits.size() > 0, "ErasedType with no traits");
 
             // TODO: There can be associated type bounds, those need to be propagated
 
@@ -1050,34 +1050,34 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
             for (const auto& t : e->traits) {
                 DEBUG("t = " << *t.path);
                 // TODO: Handle ATY bounds
-                traits.push_back(LowerHIRTraitPath(ty.span(), *t.path, t.hrbs, /*allow_aty_trait_bounds=*/true, t.constness));
+                traits.push_back(LowerHIRTraitPath(ty->span(), *t.path, t.hrbs, /*allow_aty_trait_bounds=*/true, t.constness));
             }
             bool isSized = true;
             for (const auto& t : e->maybeTraits) {
-                auto tp = LowerHIRTraitPath(ty.span(), *t.path, t.hrbs, /*allow_aty_trait_bounds=*/true);
+                auto tp = LowerHIRTraitPath(ty->span(), *t.path, t.hrbs, /*allow_aty_trait_bounds=*/true);
                 if (tp.mPath.mPath == pathSized) {
                     isSized = false;
                 } else {
-                    TODO(ty.span(), "Optional trait (not Sized) - " << ty);
+                    TODO(ty->span(), "Optional trait (not Sized) - " << ty);
                 }
             }
             TypeDataErasedTypeInner inner;
             if (gImplTraitSource.path) {
                 if (gImplTraitSource.paramsInner && gImplTraitSource.paramsInner->isGeneric()) {
-                    TODO(ty.span(), "Handle multi-layered generic erased type (used in a GAT)");
+                    TODO(ty->span(), "Handle multi-layered generic erased type (used in a GAT)");
                 }
                 inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{gImplTraitSource.paramsOuter->makeNopParams(gCratePtr->types, 0), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*gImplTraitSource.path, *gImplTraitSource.paramsOuter)});
             } else {
                 inner = TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}; // Populated in bind, could be populated now?
             }
-            return gCratePtr->types.intern(HIRTypeData::make_ErasedType({isSized, mv$(traits), mv$(inner), e->use ? LowerHIRPathParams(ty.span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
+            return gCratePtr->types.intern(HIRTypeData::make_ErasedType({isSized, mv$(traits), mv$(inner), e->use ? LowerHIRPathParams(ty->span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
         }
         TU_ARMA(Function, e) {
             ::std::vector<HIRTypeRef> args;
             for (const auto& arg : e.info.argTypes) {
                 args.push_back(LowerHIRType(arg));
             }
-            HIRTypeDataFunctionPointer f{e.info.isUnsafe, e.info.isVariadic, RcString::newInterned(e.info.mAbi), LowerHIRType(*e.info.mRettype), mv$(args)};
+            HIRTypeDataFunctionPointer f{e.info.isUnsafe, e.info.isVariadic, RcString::newInterned(e.info.mAbi), LowerHIRType(e.info.mRettype), mv$(args)};
             if (f.mAbi == "") {
                 f.mAbi = RcString::newInterned(ABI_RUST);
             }
@@ -1778,10 +1778,10 @@ HIRFunction LowerHIRFunction(HIRItemPath p, const ASTAttributeList& attrs, const
     rv.linkage = mv$(linkage);
     rv.receiver = receiver;
     if (receiver == HIRFunction::Receiver::Custom) {
-        rv.receiverType = MonomorphiserNop(gCratePtr->types).monomorphType(f.args()[0].ty.span(), args.front().second, false);
+        rv.receiverType = MonomorphiserNop(gCratePtr->types).monomorphType(f.args()[0].ty->span(), args.front().second, false);
         // Ensure that the reciever references `Self`
         ASSERT_BUG(
-            f.args()[0].ty.span(),
+            f.args()[0].ty->span(),
             visitTyWith(
                 *rv.receiverType,
                 [](const HIRTypeData* v) {
@@ -1994,7 +1994,7 @@ HIRModule LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::std::vecto
                 _add_mod_ns_item(mod, item.name, getVis(item.vis), HIRTypeItem::make_Import({HIRSimplePath(e.name, {}), false, 0}));
             }
             TU_ARMA(Type, e) {
-                if (e.type().mData.is_Any()) {
+                if (e.type()->mData.is_Any()) {
                     if (!e.params().mParams.empty() || !e.params().bounds.empty()) {
                         ERROR(item.span, E0000, "Generics on extern type");
                     }
@@ -2215,7 +2215,7 @@ void LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 });
                 hirImpl->isConst = impl.def().isConst();
                 hirCrate.traitImpls[mv$(traitName)].generic.push_back(mv$(hirImpl));
-            } else if (impl.def().type().mData.is_None()) {
+            } else if (impl.def().type()->mData.is_None()) {
                 // Ignore - These are encoded in the 'is_marker' field of the trait
             } else {
                 auto type = LowerHIRType(impl.def().type());
@@ -2546,7 +2546,7 @@ HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& cra
                             }
 
                             void emitType(::TypeRef& ty) {
-                                TU_MATCH_HDRA( (ty.mData), { )
+                                TU_MATCH_HDRA( (ty->mData), { )
                                 default:
                                     TODO(Span(), "Convert interpolated macro fragment: " << ty);
                                     TU_ARMA(Path, p) {
@@ -3506,7 +3506,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 }
             }
         }
-        auto ty = LowerHIRType(::TypeRef(v.span(), v.mPath));
+        auto ty = LowerHIRType(::mktype(v.span(), v.mPath));
         if (v.mPath.mBindings.type.binding.is_EnumVar()) {
             ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.mData.is_Generic()), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();
@@ -3529,7 +3529,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         for (auto& val : v.values) {
             values.push_back(::std::make_pair(val.name, lower(val.value)));
         }
-        auto ty = LowerHIRType(::TypeRef(v.span(), v.mPath));
+        auto ty = LowerHIRType(::mktype(v.span(), v.mPath));
         if (v.mPath.mBindings.type.binding.is_EnumVar()) {
             ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.mData.is_Generic()), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();

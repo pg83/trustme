@@ -119,7 +119,7 @@ namespace {
                 if (paramVals.types[i] == HIRTypeRef()) {
                     // TODO: Why is this pulling in the default? Why not just leave it as-is
 
-                    //if( param_def.m_types[i].m_default == ::HIR::TypeRef() )
+                    //if( param_def.m_types[i].m_default == ::HIR::mktype() )
                     // TODO: Monomorphise?
                     paramVals.types[i] = ms.monomorphType(sp, paramDef.types[i].defaultValue);
                     DEBUG("Update `_` param (using default): " << paramDef.types[i].defaultValue << " -> " << paramVals.types[i]);

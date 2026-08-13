@@ -110,13 +110,13 @@ ASTPathParamEnt ASTPathParamEnt::clone() const {
             return v;
         }
         TU_ARMA(Type, v) {
-            return v.clone();
+            return v->clone();
         }
         TU_ARMA(Value, v) {
             return v->clone();
         }
         TU_ARMA(AssociatedTyEqual, v) {
-            return ::std::make_pair(v.first, v.second.clone());
+            return ::std::make_pair(v.first, v.second->clone());
         }
         TU_ARMA(AssociatedTyBound, v) {
             return ::std::make_pair(v.first, v.second);
@@ -229,18 +229,18 @@ ASTPath::~ASTPath() {
 }
 
 ASTPath ASTPath::newUfcsTy(TypeRef type, ::std::vector<ASTPathNode> nodes) {
-    return ASTPath(ASTPath::Class::make_UFCS({box$(type), nullptr, nodes}));
+    return ASTPath(ASTPath::Class::make_UFCS({type, nullptr, nodes}));
 }
 
 ASTPath ASTPath::newUfcsTrait(TypeRef type, ASTPath trait, ::std::vector<ASTPathNode> nodes) {
-    return ASTPath(ASTPath::Class::make_UFCS({box$(type), box$(trait), nodes}));
+    return ASTPath(ASTPath::Class::make_UFCS({type, box$(trait), nodes}));
 }
 
 ASTPath::ASTPath(const ASTPath& x)
     : cls()
     , mBindings(x.mBindings.clone())
 {
-    TU_MATCH(Class, (x.cls), (ent), (Invalid, cls = Class::make_Invalid({});), (Local, cls = Class::make_Local({ent.name});), (Relative, cls = Class::make_Relative({ent.hygiene, ent.nodes});), (Self, cls = Class::make_Self({ent.nodes});), (Super, cls = Class::make_Super({ent.count, ent.nodes});), (Absolute, cls = Class::make_Absolute({ent.crate, ent.nodes});), (UFCS, if (ent.trait) cls = Class::make_UFCS({box$(ent.type->clone()), ::std::unique_ptr<ASTPath>(new ASTPath(*ent.trait)), ent.nodes}); else cls = Class::make_UFCS({box$(ent.type->clone()), nullptr, ent.nodes});))
+    TU_MATCH(Class, (x.cls), (ent), (Invalid, cls = Class::make_Invalid({});), (Local, cls = Class::make_Local({ent.name});), (Relative, cls = Class::make_Relative({ent.hygiene, ent.nodes});), (Self, cls = Class::make_Self({ent.nodes});), (Super, cls = Class::make_Super({ent.count, ent.nodes});), (Absolute, cls = Class::make_Absolute({ent.crate, ent.nodes});), (UFCS, if (ent.trait) cls = Class::make_UFCS({ent.type->clone(), ::std::unique_ptr<ASTPath>(new ASTPath(*ent.trait)), ent.nodes}); else cls = Class::make_UFCS({ent.type->clone(), nullptr, ent.nodes});))
 }
 
 bool ASTPath::isParentOf(const ASTPath& x) const {

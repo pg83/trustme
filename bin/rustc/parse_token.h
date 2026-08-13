@@ -32,7 +32,8 @@ public:
 
 extern ::std::ostream& operator<<(::std::ostream& os, const Position& p);
 
-class TypeRef;
+struct TypeStore;
+typedef TypeStore* TypeRef;
 class TokenTree;
 
 class ASTVisibility;

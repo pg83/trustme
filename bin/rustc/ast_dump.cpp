@@ -1148,7 +1148,7 @@ void RustPrinter::printParams(const ASTGenericParams& params) {
                 TU_ARMA(Type, p) {
                     os << p.attrs();
                     os << p.name();
-                    if (!p.getDefault().isWildcard()) {
+                    if (!p.getDefault()->isWildcard()) {
                         os << " = " << p.getDefault();
                     }
                 }
@@ -1336,7 +1336,7 @@ void RustPrinter::handleStruct(const ASTStruct& s) {
 
          os << indent() << "{\n";
          incIndent();
-         for (const auto& i : e.ents) { os << indent() << i.vis << i.mName << ": " << i.mType.printPretty() << ",\n"; } decIndent();
+         for (const auto& i : e.ents) { os << indent() << i.vis << i.mName << ": " << i.mType->printPretty() << ",\n"; } decIndent();
          os << indent() << "}\n";)
     )
     os << "\n";
@@ -1352,7 +1352,7 @@ void RustPrinter::handleEnum(const ASTEnum& s) {
     unsigned int idx = 0;
     for (const auto& i : s.variants()) {
         os << indent() << "/*" << idx << "*/" << i.mName;
-        TU_MATCH(ASTEnumVariantData, (i.mData), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.mItems) os << t.mType.printPretty() << ", "; os << ")";), (Struct, os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.mName << ": " << i.mType.printPretty() << ",\n"; } decIndent(); os << indent() << "}";))
+        TU_MATCH(ASTEnumVariantData, (i.mData), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.mItems) os << t.mType->printPretty() << ", "; os << ")";), (Struct, os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.mName << ": " << i.mType->printPretty() << ",\n"; } decIndent(); os << indent() << "}";))
         if (i.discriminantValue) {
             os << " = " << i.discriminantValue;
         }
@@ -1417,12 +1417,12 @@ void RustPrinter::handleFunction(const ASTVisibility& vis, const RcString& name,
         }
         printAttrs(a.attrs);
         printPattern(a.pat, false);
-        os << ": " << a.ty.printPretty();
+        os << ": " << a.ty->printPretty();
         isFirst = false;
     }
     os << ")";
-    if (!f.rettype().isUnit()) {
-        os << " -> " << f.rettype().printPretty();
+    if (!f.rettype()->isUnit()) {
+        os << " -> " << f.rettype()->printPretty();
     }
 
     if (f.code().isValid()) {

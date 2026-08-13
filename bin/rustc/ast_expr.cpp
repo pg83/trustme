@@ -447,7 +447,7 @@ NODE(
             }
         }
     },
-    { return NEWNODE(ASTExprNodeLetBinding, pat.clone(), mType.clone(), OPT_CLONE(mValue), OPT_CLONE(elseNode), isSuper); }
+    { return NEWNODE(ASTExprNodeLetBinding, pat.clone(), mType->clone(), OPT_CLONE(mValue), OPT_CLONE(elseNode), isSuper); }
 )
 
 NODE(ASTExprNodeAssign, { os << *slot << " = " << *mValue; }, { return NEWNODE(ASTExprNodeAssign, op, slot->clone(), mValue->clone()); })
@@ -661,9 +661,9 @@ NODE(
     {
         ASTExprNodeClosure::argsT args;
         for (const auto& a : mArgs) {
-            args.push_back(::std::make_pair(a.first.clone(), a.second.clone()));
+            args.push_back(::std::make_pair(a.first.clone(), a.second->clone()));
         }
-        return NEWNODE(ASTExprNodeClosure, mv$(args), returnType.clone(), mCode->clone(), isMove, isPinned);
+        return NEWNODE(ASTExprNodeClosure, mv$(args), returnType->clone(), mCode->clone(), isMove, isPinned);
     }
 );
 
@@ -761,8 +761,8 @@ NODE(ASTExprNodeIndex, { os << "(" << *obj << ")[" << *idx << "]"; }, { return N
 
 NODE(ASTExprNodeDeref, { os << "*(" << *mValue << ")"; }, { return NEWNODE(ASTExprNodeDeref, mValue->clone()); });
 
-NODE(ASTExprNodeCast, { os << "(" << *mValue << " as " << mType << ")"; }, { return NEWNODE(ASTExprNodeCast, mValue->clone(), mType.clone()); })
-NODE(ASTExprNodeTypeAnnotation, { os << "(" << *mValue << ": " << mType << ")"; }, { return NEWNODE(ASTExprNodeTypeAnnotation, mValue->clone(), mType.clone()); })
+NODE(ASTExprNodeCast, { os << "(" << *mValue << " as " << mType << ")"; }, { return NEWNODE(ASTExprNodeCast, mValue->clone(), mType->clone()); })
+NODE(ASTExprNodeTypeAnnotation, { os << "(" << *mValue << ": " << mType << ")"; }, { return NEWNODE(ASTExprNodeTypeAnnotation, mValue->clone(), mType->clone()); })
 
 NODE(
     ASTExprNodeBinOp,

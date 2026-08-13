@@ -225,7 +225,7 @@ namespace {
 
         ::TypeRef getSelf() const {
             for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
-                TU_MATCH_DEF(Ent, (*it), (e), (), (ConcreteSelf, if (false && e) { return e->clone(); } else { return ::TypeRef(Span(), rcstringSelf, GENERICSelf); }))
+                TU_MATCH_DEF(Ent, (*it), (e), (), (ConcreteSelf, if (false && e) { return (*e)->clone(); } else { return ::mktype(Span(), rcstringSelf, GENERICSelf); }))
             }
 
             TODO(Span(), "Error when get_self called with no self");
@@ -657,13 +657,13 @@ namespace {
                                 case LookupMode::Constant:
                                 case LookupMode::Variable:
                                     // TODO: Ensure validity? (I.e. that `Self` is a unit or tuple struct
-                                    if (const auto* p = e->mData.opt_Path()) {
+                                    if (const auto* p = (*e)->mData.opt_Path()) {
                                         // HACK! If `Self` points to a `type`, look through it
                                         // - rustc-1.90.0-src/compiler/rustc_codegen_llvm/src/context.rs:675
                                         if (const auto* pbe = (**p).mBindings.type.binding.opt_TypeAlias()) {
                                             assert(pbe->alias_);
                                             assert(pbe->alias_->mType.isPath());
-                                            return *pbe->alias_->mType.mData.as_Path();
+                                            return *pbe->alias_->mType->mData.as_Path();
                                         }
                                         return **p;
                                     }
@@ -741,7 +741,7 @@ namespace {
                     // Look up primitive types
                     auto ct = coretypeFromstring(name.c_str());
                     if (ct != CORETYPE_INVAL) {
-                        return ASTPath::newUfcsTy(TypeRef(Span(), ct), ::std::vector<ASTPathNode>());
+                        return ASTPath::newUfcsTy(mktype(Span(), ct), ::std::vector<ASTPathNode>());
                     }
                 } break;
                 default:
@@ -872,8 +872,8 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPa
             }
             TU_ARMA(Type, t) {
                 // A trivial path type might be refering to a generic value (e.g. `Foo<T,N>` where `N` is a const generic)
-                if (t.mData.is_Path() && t.mData.as_Path()->isTrivial()) {
-                    auto p = t.mData.as_Path()->cls.as_Relative();
+                if (t->mData.is_Path() && t->mData.as_Path()->isTrivial()) {
+                    auto p = t->mData.as_Path()->cls.as_Relative();
                     // If type lookup fails
                     auto newPath = context.lookupOpt(p.nodes[0].name(), p.hygiene, Context::LookupMode::Type);
                     if (newPath == ASTPath()) {
@@ -889,7 +889,7 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPa
                         }
                     } else {
                         // Normal type, update it then visit
-                        *t.mData.as_Path() = std::move(newPath);
+                        *t->mData.as_Path() = std::move(newPath);
                         ResolveAbsoluteType(context, t);
                     }
                 } else {
@@ -929,11 +929,11 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
         auto innerPath = mv$(path);
         innerPath.cls.as_UFCS().nodes.push_back(mv$(nodes.front()));
         nodes.erase(nodes.begin());
-        path = ASTPath::newUfcsTy(TypeRef(span, mv$(innerPath)), mv$(nodes));
+        path = ASTPath::newUfcsTy(mktype(span, mv$(innerPath)), mv$(nodes));
     }
 
     if (path.cls.as_UFCS().type) {
-        ResolveAbsoluteType(context, *path.cls.as_UFCS().type);
+        ResolveAbsoluteType(context, path.cls.as_UFCS().type);
     }
 
     const auto& ufcs = path.cls.as_UFCS();
@@ -1027,7 +1027,7 @@ namespace {
         typePath.cls.as_Absolute().nodes.resize(i + 1);
         //Resolve_Absolute_Path(
 
-        auto newPath = ASTPath::newUfcsTy(::TypeRef(sp, mv$(typePath)));
+        auto newPath = ASTPath::newUfcsTy(::mktype(sp, mv$(typePath)));
         for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
             newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
         }
@@ -1045,7 +1045,7 @@ namespace {
         if (!n.args().isEmpty()) {
             typePath.nodes().back().args() = mv$(n.args());
         }
-        auto newPath = ASTPath::newUfcsTy(::TypeRef(sp, mv$(typePath)));
+        auto newPath = ASTPath::newUfcsTy(::mktype(sp, mv$(typePath)));
         for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
             newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
         }
@@ -1263,7 +1263,7 @@ namespace {
                     } else {
                         for (const auto& typ : e.mParams.types) {
                             (void)typ;
-                            pp.entries.push_back(::TypeRef(sp));
+                            pp.entries.push_back(::mktype(sp));
                         }
                     }
                     ASTPath traitPath(ap, std::move(pp));
@@ -1287,9 +1287,9 @@ namespace {
                     }
 
                     if (!found) {
-                        newPath = ASTPath::newUfcsTy(::TypeRef(sp, mv$(traitPath)));
+                        newPath = ASTPath::newUfcsTy(::mktype(sp, mv$(traitPath)));
                     } else {
-                        newPath = ASTPath::newUfcsTrait(::TypeRef(sp), mv$(traitPath));
+                        newPath = ASTPath::newUfcsTrait(::mktype(sp), mv$(traitPath));
                     }
                     for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
                         newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
@@ -1552,7 +1552,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                                     TU_ARMA(Lifetime, e) {
                                     }
                                     TU_ARMA(Type, typ) {
-                                        traitPath.nodes().back().args().entries.push_back(::TypeRef(sp));
+                                        traitPath.nodes().back().args().entries.push_back(::mktype(sp));
                                     }
                                     TU_ARMA(Value, val) {
                                     }
@@ -1561,7 +1561,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                         } else {
                             for (const auto& typ : e.hir->mParams.types) {
                                 (void)typ;
-                                traitPath.nodes().back().args().entries.push_back(::TypeRef(sp));
+                                traitPath.nodes().back().args().entries.push_back(::mktype(sp));
                             }
                         }
                     }
@@ -1593,9 +1593,9 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                         }
                     }
                     if (!found) {
-                        newPath = ASTPath::newUfcsTy(::TypeRef(sp, mv$(traitPath)));
+                        newPath = ASTPath::newUfcsTy(::mktype(sp, mv$(traitPath)));
                     } else {
-                        newPath = ASTPath::newUfcsTrait(::TypeRef(sp), mv$(traitPath));
+                        newPath = ASTPath::newUfcsTrait(::mktype(sp), mv$(traitPath));
                     }
                     for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
                         newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
@@ -1780,7 +1780,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                         }
                         if (!found) {
                             auto ct = coretypeFromstring(e.nodes[0].name().c_str());
-                            p = ASTPath::newUfcsTy(TypeRef(Span(), ct), ::std::vector<ASTPathNode>());
+                            p = ASTPath::newUfcsTy(mktype(Span(), ct), ::std::vector<ASTPathNode>());
                         }
 
                         DEBUG("Primitive module hack yeilded " << p);
@@ -1790,7 +1790,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                 if (e.nodes.size() > 1) {
                     // Only primitive types turn `Local` paths
                     if (p.cls.is_Local()) {
-                        p = ASTPath::newUfcsTy(TypeRef(sp, mv$(p)));
+                        p = ASTPath::newUfcsTy(mktype(sp, mv$(p)));
                     }
                     if (!e.nodes[0].args().isEmpty()) {
                         assert(p.nodes().size() > 0);
@@ -1896,7 +1896,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
         }
         TU_ARMA(UFCS, e) {
             DEBUG("- UFCS");
-            ResolveAbsoluteType(context, *e.type);
+            ResolveAbsoluteType(context, e.type);
             if (e.trait && *e.trait != ASTPath()) {
                 ResolveAbsolutePath(context, sp, Context::LookupMode::Type, *e.trait);
             }
@@ -1935,7 +1935,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
 
             if (const auto* selfTy = context.getSelfOpt()) {
                 // Check if we're in an enum
-                if (const auto* tyPath = selfTy->mData.opt_Path()) {
+                if (const auto* tyPath = (*selfTy)->mData.opt_Path()) {
                     const auto& p = **tyPath;
                     if (const auto* pbe = p.mBindings.type.binding.opt_Enum()) {
                         if (pbe->enum_) {
@@ -2027,14 +2027,14 @@ void ResolveAbsoluteLifetime(Context& context, const Span& sp, ASTLifetimeRef& l
 
 void ResolveAbsoluteType(Context& context, TypeRef& type) {
     TRACE_FUNCTION_FR("type = " << type, "type = " << type);
-    const auto& sp = type.span();
+    const auto& sp = type->span();
 
-    if (type.mData.is_Path() && type.mData.as_Path()->mBindings.type.binding.is_TypeParameter()) {
-        auto& e = type.mData.as_Path()->mBindings.type.binding.as_TypeParameter();
-        type.mData = TypeData::make_Generic({type.mData.as_Path()->asTrivial(), e.slot});
+    if (type->mData.is_Path() && type->mData.as_Path()->mBindings.type.binding.is_TypeParameter()) {
+        auto& e = type->mData.as_Path()->mBindings.type.binding.as_TypeParameter();
+        type->mData = TypeData::make_Generic({type->mData.as_Path()->asTrivial(), e.slot});
     }
 
-    TU_MATCH_HDRA( (type.mData), {)
+    TU_MATCH_HDRA( (type->mData), {)
     TU_ARMA(None, e) {
             // invalid type
         }
@@ -2053,7 +2053,7 @@ void ResolveAbsoluteType(Context& context, TypeRef& type) {
         }
         TU_ARMA(Function, e) {
             context.push(e.info.hrbs);
-            ResolveAbsoluteType(context, *e.info.mRettype);
+            ResolveAbsoluteType(context, e.info.mRettype);
             for (auto& t : e.info.argTypes) {
                 ResolveAbsoluteType(context, t);
             }
@@ -2065,37 +2065,36 @@ void ResolveAbsoluteType(Context& context, TypeRef& type) {
             }
         }
         TU_ARMA(Borrow, e) {
-            ResolveAbsoluteLifetime(context, type.span(), e.lifetime);
-            ResolveAbsoluteType(context, *e.inner);
+            ResolveAbsoluteLifetime(context, type->span(), e.lifetime);
+            ResolveAbsoluteType(context, e.inner);
         }
         TU_ARMA(Pointer, e) {
-            ResolveAbsoluteType(context, *e.inner);
+            ResolveAbsoluteType(context, e.inner);
         }
         TU_ARMA(Array, e) {
-            ResolveAbsoluteType(context, *e.inner);
+            ResolveAbsoluteType(context, e.inner);
             if (e.size) {
                 auto _h = context.enterRootblock();
                 ResolveAbsoluteExprNode(context, *e.size);
             }
         }
         TU_ARMA(Slice, e) {
-            ResolveAbsoluteType(context, *e.inner);
+            ResolveAbsoluteType(context, e.inner);
         }
         TU_ARMA(Generic, e) {
             if (e.name == rcstringSelf) {
                 type = context.getSelf();
             } else {
-                auto idx = context.lookupLocal(type.span(), e.name, Context::LookupMode::Type);
+                auto idx = context.lookupLocal(type->span(), e.name, Context::LookupMode::Type);
                 // TODO: Should this be bound to the relevant index, or just leave as-is?
                 e.index = idx;
             }
         }
         TU_ARMA(Path, e) {
-            ResolveAbsolutePath(context, type.span(), Context::LookupMode::Type, *e);
+            ResolveAbsolutePath(context, type->span(), Context::LookupMode::Type, *e);
             if (auto* ufcs = e->cls.opt_UFCS()) {
                 if (ufcs->nodes.size() == 0 /*&& ufcs->trait && *ufcs->trait == ::AST::Path()*/) {
-                    auto ty = mv$(*ufcs->type);
-                    type = mv$(ty);
+                    type = ufcs->type;
                     return;
                 }
                 assert(ufcs->nodes.size() == 1);
@@ -2103,9 +2102,8 @@ void ResolveAbsoluteType(Context& context, TypeRef& type) {
 
             if (e->mBindings.type.binding.opt_Trait()) {
                 auto tp = TypeTraitPath();
-                tp.path = std::move(e);
-                auto ty = ::TypeRef(type.span(), ::makeVec1(mv$(tp)), {});
-                type = mv$(ty);
+                tp.path = std::make_unique<ASTPath>(*e);
+                type = ::mktype(type->span(), ::makeVec1(mv$(tp)), {});
                 return;
             }
             //else if(auto* be = e->m_bindings.type.binding.opt_TypeParameter())
@@ -2115,29 +2113,29 @@ void ResolveAbsoluteType(Context& context, TypeRef& type) {
         TU_ARMA(TraitObject, e) {
             for (auto& trait : e.traits) {
                 context.push(trait.hrbs);
-                ResolveAbsolutePath(context, type.span(), Context::LookupMode::Type, *trait.path);
+                ResolveAbsolutePath(context, type->span(), Context::LookupMode::Type, *trait.path);
                 context.pop(trait.hrbs);
             }
             for (auto& lft : e.lifetimes) {
-                ResolveAbsoluteLifetime(context, type.span(), lft);
+                ResolveAbsoluteLifetime(context, type->span(), lft);
             }
         }
         TU_ARMA(ErasedType, e) {
             for (auto& trait : e->traits) {
                 context.push(trait.hrbs);
-                ResolveAbsolutePath(context, type.span(), Context::LookupMode::Type, *trait.path);
+                ResolveAbsolutePath(context, type->span(), Context::LookupMode::Type, *trait.path);
                 context.pop(trait.hrbs);
             }
             for (auto& trait : e->maybeTraits) {
                 context.push(trait.hrbs);
-                ResolveAbsolutePath(context, type.span(), Context::LookupMode::Type, *trait.path);
+                ResolveAbsolutePath(context, type->span(), Context::LookupMode::Type, *trait.path);
                 context.pop(trait.hrbs);
             }
             for (auto& lft : e->lifetimes) {
-                ResolveAbsoluteLifetime(context, type.span(), lft);
+                ResolveAbsoluteLifetime(context, type->span(), lft);
             }
             if (e->use) {
-                ResolveAbsolutePathParams(context, type.span(), *e->use);
+                ResolveAbsolutePathParams(context, type->span(), *e->use);
             }
         }
     }
@@ -2354,6 +2352,11 @@ void ResolveAbsoluteGeneric(Context& context, ASTGenericParams& params) {
     }
     for (auto& bound : params.bounds) {
         TU_MATCH(ASTGenericBound, (bound), (e), (None, ), (Lifetime, ResolveAbsoluteLifetime(context, bound.span, e.test); ResolveAbsoluteLifetime(context, bound.span, e.bound);), (TypeLifetime, ResolveAbsoluteType(context, e.type); ResolveAbsoluteLifetime(context, bound.span, e.bound);), (IsTrait, context.push(e.outerHrbs); ResolveAbsoluteType(context, e.type); context.push(e.innerHrbs); ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait); context.pop(e.innerHrbs); context.pop(e.outerHrbs);), (MaybeTrait, ResolveAbsoluteType(context, e.type); ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);), (NotTrait, ResolveAbsoluteType(context, e.type); ResolveAbsolutePath(context, bound.span, Context::LookupMode::Type, e.trait);), (Equality, ResolveAbsoluteType(context, e.type); ResolveAbsoluteType(context, e.replacement);))
+    }
+    // Bare `where T:` predicate types carry no constraint, but resolving them
+    // absolutizes any anon-const items they contain (which lowering will visit).
+    for (auto& t : params.mBareBoundTypes) {
+        ResolveAbsoluteType(context, t);
     }
 }
 
@@ -2681,7 +2684,7 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
             }
             TU_ARMA(Impl, e) {
                 auto& def = e.def();
-                if (!def.type().isValid()) {
+                if (!def.type()->isValid()) {
                     TRACE_FUNCTION_F("impl " << def.trait().ent << " for ..");
                     itemContext.push(def.params(), GenericSlot::Level::Top);
 

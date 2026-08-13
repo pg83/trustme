@@ -561,7 +561,7 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
 }
 
 void ExpandType(const ExpandState& es, ASTModule& mod, ::TypeRef& ty) {
-    TU_MATCH_HDRA( (ty.mData), {)
+    TU_MATCH_HDRA( (ty->mData), {)
     TU_ARMA(None, e) {
         }
         TU_ARMA(Any, e) {
@@ -586,7 +586,7 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::TypeRef& ty) {
         }
         TU_ARMA(Function, e) {
             TypeFunction& tf = e.info;
-            ExpandType(es, mod, *tf.mRettype);
+            ExpandType(es, mod, tf.mRettype);
             for (auto& st : tf.argTypes) {
                 ExpandType(es, mod, st);
             }
@@ -597,19 +597,19 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::TypeRef& ty) {
             }
         }
         TU_ARMA(Borrow, e) {
-            ExpandType(es, mod, *e.inner);
+            ExpandType(es, mod, e.inner);
         }
         TU_ARMA(Pointer, e) {
-            ExpandType(es, mod, *e.inner);
+            ExpandType(es, mod, e.inner);
         }
         TU_ARMA(Array, e) {
-            ExpandType(es, mod, *e.inner);
+            ExpandType(es, mod, e.inner);
             if (e.size) {
                 ExpandExpr(es, e.size);
             }
         }
         TU_ARMA(Slice, e) {
-            ExpandType(es, mod, *e.inner);
+            ExpandType(es, mod, e.inner);
         }
         TU_ARMA(Generic, e) {
         }
@@ -690,7 +690,7 @@ void ExpandPath(const ExpandState& es, ASTModule& mod, ASTPath& p) {
             expandNodes(pe.nodes);
         }
         TU_ARMA(UFCS, pe) {
-            ExpandType(es, mod, *pe.type);
+            ExpandType(es, mod, pe.type);
             if (pe.trait) {
                 ExpandPath(es, mod, *pe.trait);
             }
@@ -990,7 +990,7 @@ struct CExpandExpr: public ASTNodeVisitor {
 
         auto coreCrate = crate.extCratenameCore;
         auto pathTry = getPath(coreCrate, "ops", "Try");
-        auto pathTryFromOutput = ASTPath::newUfcsTrait(::TypeRef(node.span()), pathTry, {ASTPathNode(RcString::newInterned("from_output"))});
+        auto pathTryFromOutput = ASTPath::newUfcsTrait(::mktype(node.span()), pathTry, {ASTPathNode(RcString::newInterned("from_output"))});
         auto okNode = ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryFromOutput), ::makeVec1(mv$(node.inner))));
         auto breakNode = ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, loopName, mv$(okNode)));
         this->replacement = ASTExprNodeP(new ASTExprNodeLoop(loopName, mv$(breakNode)));
@@ -1312,7 +1312,7 @@ struct CExpandExpr: public ASTNodeVisitor {
             } else {
                 // Create a block with a `let` and individual assignments
                 auto rv = new ASTExprNodeBlock();
-                rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeLetBinding(std::move(pat), TypeRef(node.span()), std::move(node.mValue)))});
+                rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeLetBinding(std::move(pat), mktype(node.span()), std::move(node.mValue)))});
                 for (auto& slots : v.slots) {
                     rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeAssign(ASTExprNodeAssign::NONE, std::move(slots.second), ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newLocal(std::move(slots.first))))))});
                 }
@@ -1372,11 +1372,11 @@ struct CExpandExpr: public ASTNodeVisitor {
 
         auto nextReceiver = ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newRelative(iteratorHygiene, ::makeVec1(ASTPathNode(rcstringIt)))));
         auto nextReceiverBorrow = ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, mv$(nextReceiver)));
-        auto nextCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::TypeRef(node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(mv$(nextReceiverBorrow))));
+        auto nextCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mktype(node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(mv$(nextReceiverBorrow))));
         auto nextMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(nextCall), mv$(arms)));
         auto loop = ASTExprNodeP(new ASTExprNodeLoop(node.label, mv$(nextMatch)));
 
-        auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::TypeRef(node.span()), pathIntoIterator, {ASTPathNode(rcstringIntoIter)}), ::makeVec1(mv$(node.mValue))));
+        auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mktype(node.span()), pathIntoIterator, {ASTPathNode(rcstringIntoIter)}), ::makeVec1(mv$(node.mValue))));
         auto outerMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(intoIterCall), ::makeVec1(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))), {}, mv$(loop)))));
 
         // rustc wraps the outer match in `DropTemps`: for always yields (), so
@@ -1636,7 +1636,7 @@ struct CExpandExpr: public ASTNodeVisitor {
             static const RcString rcstringR = RcString::newInterned("r");
             // TryV2
             {
-                auto pathTryBranch = ASTPath::newUfcsTrait(::TypeRef(node.span()), pathTry, {ASTPathNode(RcString::newInterned("branch"))});
+                auto pathTryBranch = ASTPath::newUfcsTrait(::mktype(node.span()), pathTry, {ASTPathNode(RcString::newInterned("branch"))});
                 // Not a lang item
                 auto path_ControlFlow_Continue = getPath(coreCrate, "ops", "ControlFlow", "Continue");
                 auto path_ControlFlow_Break = getPath(coreCrate, "ops", "ControlFlow", "Break");
@@ -1707,6 +1707,9 @@ void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams
     }
     for (auto& bound : params.bounds) {
         TU_MATCHA((bound), (be), (None, ), (Lifetime, ), (TypeLifetime, ExpandType(es, mod, be.type);), (IsTrait, ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);), (MaybeTrait, ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);), (NotTrait, ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);), (Equality, ExpandType(es, mod, be.type); ExpandType(es, mod, be.replacement);))
+    }
+    for (auto& t : params.mBareBoundTypes) {
+        ExpandType(es, mod, t);
     }
 }
 
@@ -2185,7 +2188,7 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                                 d.handle(sp, a, es.wb, es.crate, si);
                             });
 
-                            if (!si.mType.isValid()) {
+                            if (!si.mType->isValid()) {
                                 it = sd.ents.erase(it);
                             } else {
                                 ++it;
@@ -2215,7 +2218,7 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                                 ExpandAttrs(es, si.mAttrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
                                     d.handle(sp, a, es.wb, es.crate, si);
                                 });
-                                if (!si.mType.isValid()) {
+                                if (!si.mType->isValid()) {
                                     it = e.mItems.erase(it);
                                 } else {
                                     ++it;

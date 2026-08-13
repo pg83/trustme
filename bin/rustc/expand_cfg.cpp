@@ -514,7 +514,7 @@ class CCfgHandler: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const override {
         DEBUG("#[cfg] tuple item - " << mi);
         if (!checkCfg(*wb.settings, sp, mi)) {
-            i.mType = ::TypeRef(sp);
+            i.mType = ::mktype(sp);
         }
     }
 

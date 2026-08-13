@@ -12,6 +12,10 @@
 //#include "ast/path.h"
 #include "tagged_union.h"
 
+namespace stl {
+    class ObjPool;
+}
+
 class ASTExprNode;
 class ASTExpr;
 class ASTLifetimeParam;
@@ -19,7 +23,8 @@ class ASTLifetimeParam;
 class ASTPath;
 struct ASTPathParams;
 class ASTMacroInvocation;
-class TypeRef;
+struct TypeStore;
+typedef TypeStore* TypeRef;
 
 enum class ASTBoundConstness : uint8_t {
     Never,
@@ -46,10 +51,10 @@ public:
 };
 
 class PrettyPrintType {
-    const TypeRef& mType;
+    const TypeStore* mType;
 
 public:
-    PrettyPrintType(const TypeRef& ty);
+    PrettyPrintType(const TypeStore* ty);
 
     void print(::std::ostream& os) const;
 
@@ -60,12 +65,12 @@ struct TypeFunction {
     ASTHigherRankedBounds hrbs;
     bool isUnsafe;
     ::std::string mAbi;
-    ::std::unique_ptr<TypeRef> mRettype;
+    TypeRef mRettype;
     ::std::vector<TypeRef> argTypes;
     bool isVariadic;
 
     TypeFunction();
-    TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::unique_ptr<TypeRef> ret, ::std::vector<TypeRef> args, bool isVariadic);
+    TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, TypeRef ret, ::std::vector<TypeRef> args, bool isVariadic);
     ~TypeFunction();
     TypeFunction(TypeFunction&& other);
     TypeFunction(const TypeFunction& other);
@@ -96,14 +101,17 @@ struct TypeErasedType {
     bool isEdition2024OrLater;
 };
 
-TAGGED_UNION_OUT_OF_LINE(
+// The sum-type payload of a type. Now an ordinary inline tagged union: it holds
+// only pointers to `TypeStore`, so it no longer needs the out-of-line macro
+// stack. Node metadata (span, owning pool) lives on `TypeStore`.
+TAGGED_UNION(
     TypeData,
     None,
     (None, struct {}),
     (Any, struct {}),
     (Bang, struct {}),
     (Unit, struct {}),
-    (Macro, struct { ::std::unique_ptr<ASTMacroInvocation> inv; }),
+    (Macro, struct { ASTMacroInvocation* inv; }),
     (Primitive, struct { enum eCoreType coreType; }),
     (Function, struct { TypeFunction info; }),
     (Tuple, struct { ::std::vector<TypeRef> innerTypes; }),
@@ -111,107 +119,61 @@ TAGGED_UNION_OUT_OF_LINE(
      struct {
          ASTLifetimeRef lifetime;
          bool isMut;
-         ::std::unique_ptr<TypeRef> inner;
+         TypeRef inner;
      }),
     (Pointer,
      struct {
          bool isMut;
-         ::std::unique_ptr<TypeRef> inner;
+         TypeRef inner;
      }),
     (Array,
      struct {
-         ::std::unique_ptr<TypeRef> inner;
+         TypeRef inner;
          // If `nullptr` - this is an inferred size
          ::std::shared_ptr<ASTExprNode> size;
      }),
-    (Slice, struct { ::std::unique_ptr<TypeRef> inner; }),
+    (Slice, struct { TypeRef inner; }),
     (Generic,
      struct {
          RcString name;
          unsigned int index;
      }),
-    (Path, ::std::unique_ptr<ASTPath>),
+    (Path, ASTPath*),
     (TraitObject,
      struct {
          ::std::vector<TypeTraitPath> traits;
          ::std::vector<ASTLifetimeRef> lifetimes;
      }),
-    (ErasedType, std::unique_ptr<TypeErasedType>)
-);
+    (ErasedType, TypeErasedType*));
 
-/// A type
-class TypeRef {
+// Tag markers for the type factories (mirror the old TypeRef constructors).
+namespace TypeRefTags {
+    struct Invalid {};
+    struct Macro {};
+    struct Unit {};
+    struct Primitive {};
+    struct Tuple {};
+    struct Function {};
+    struct Reference {};
+    struct Pointer {};
+    struct SizedArray {};
+    struct UnsizedArray {};
+    struct Arg {};
+    struct Path {};
+}  // namespace TypeRefTags
+
+/// A pool-allocated type node. `TypeRef` is a pointer to one of these; the node
+/// records the pool it lives in so `clone()` is cheap and self-sufficient.
+struct TypeStore {
     Span mSpan;
-
-public:
     TypeData mData;
+    stl::ObjPool* pool = nullptr;
 
-    ~TypeRef();
-
-    TypeRef(TypeRef&& other) = default;
-    TypeRef& operator=(TypeRef&& other) = default;
-
-    TypeRef(const TypeRef& other) = delete;
-    TypeRef& operator=(const TypeRef& other) = delete;
-
-    TypeRef(Span sp);
-
-    TypeRef(Span sp, TypeData data);
-
-    struct TagInvalid {};
-
-    TypeRef(TagInvalid, Span sp);
-
-    struct TagMacro {};
-
-    TypeRef(TagMacro, ASTMacroInvocation inv);
-
-    struct TagUnit {}; // unit maps to a zero-length tuple, just easier to type
-
-    TypeRef(TagUnit, Span sp);
-
-    struct TagPrimitive {};
-
-    TypeRef(TagPrimitive, Span sp, enum eCoreType type);
-
-    TypeRef(Span sp, enum eCoreType type);
-
-    struct TagTuple {};
-
-    TypeRef(TagTuple, Span sp, ::std::vector<TypeRef> innerTypes);
-
-    struct TagFunction {};
-
-    TypeRef(TagFunction, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret);
-
-    struct TagReference {};
-
-    TypeRef(TagReference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType);
-
-    struct TagPointer {};
-
-    TypeRef(TagPointer, Span sp, bool isMut, TypeRef innerType);
-
-    struct TagSizedArray {};
-
-    TypeRef(TagSizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size);
-
-    struct TagUnsizedArray {};
-
-    TypeRef(TagUnsizedArray, Span sp, TypeRef innerType);
-
-    struct TagArg {};
-
-    TypeRef(TagArg, Span sp, RcString name, unsigned int binding = ~0u);
-
-    TypeRef(Span sp, RcString name, unsigned int binding = ~0u);
-
-    struct TagPath {};
-
-    TypeRef(TagPath, Span sp, ASTPath path);
-    TypeRef(Span sp, ASTPath path);
-
-    TypeRef(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes);
+    TypeStore(Span sp, TypeData data, stl::ObjPool* pool)
+        : mSpan(::std::move(sp))
+        , mData(::std::move(data))
+        , pool(pool) {
+    }
 
     const Span& span() const {
         return mSpan;
@@ -220,86 +182,92 @@ public:
     bool isValid() const {
         return !mData.is_None();
     }
-
     bool isUnbounded() const {
         return mData.is_Any();
     }
-
     bool isWildcard() const {
         return mData.is_Any();
     }
-
     bool isUnit() const {
         return mData.is_Unit();
     }
-
     bool isPrimitive() const {
         return mData.is_Primitive();
     }
-
     bool isPath() const {
         return mData.is_Path();
     }
-
     const ASTPath& path() const {
         return *mData.as_Path();
     }
-
     ASTPath& path() {
         return *mData.as_Path();
     }
-
     bool isTypeParam() const {
         return mData.is_Generic();
     }
-
     const RcString& typeParam() const {
         return mData.as_Generic().name;
     }
-
     bool isReference() const {
         return mData.is_Borrow();
     }
-
     bool isPointer() const {
         return mData.is_Pointer();
     }
-
     bool isTuple() const {
         return mData.is_Tuple();
     }
 
     TypeRef clone() const;
 
-    const TypeRef& innerType() const {
-        TU_MATCH_DEF(TypeData, (mData), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return *e.inner;), (Pointer, return *e.inner;), (Array, return *e.inner;))
+    TypeRef innerType() const {
+        TU_MATCH_DEF(TypeData, (mData), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return e.inner;), (Pointer, return e.inner;), (Array, return e.inner;))
     }
 
-    TypeRef& innerType() {
-        TU_MATCH_DEF(TypeData, (mData), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return *e.inner;), (Pointer, return *e.inner;), (Array, return *e.inner;))
-    }
-
-    Ordering ord(const TypeRef& x) const;
-
-    bool operator==(const TypeRef& x) const {
+    Ordering ord(const TypeStore& x) const;
+    bool operator==(const TypeStore& x) const {
         return ord(x) == OrdEqual;
     }
-
-    bool operator!=(const TypeRef& x) const {
+    bool operator!=(const TypeStore& x) const {
         return ord(x) != OrdEqual;
     }
 
-    bool operator<(const TypeRef& x) const {
-        return ord(x) == OrdLess;
-    };
-
     void print(::std::ostream& os, bool isDebug = false) const;
-
     PrettyPrintType printPretty() const {
-        return PrettyPrintType(*this);
+        return PrettyPrintType(this);
     }
-
-    friend class PrettyPrintType;
-
-    friend ::std::ostream& operator<<(::std::ostream& os, const TypeRef& tr);
 };
+
+// Type factories - allocate a fresh node from `pool` (or the ambient pool).
+extern stl::ObjPool& astTypePool();
+extern void setAstTypePool(stl::ObjPool& pool);
+
+extern TypeRef mktype(stl::ObjPool& pool, Span sp, TypeData data);
+inline TypeRef mktype(Span sp, TypeData data) {
+    return mktype(astTypePool(), sp, ::std::move(data));
+}
+extern TypeRef mktype(Span sp);  // wildcard / Any
+extern TypeRef mktype(TypeRefTags::Invalid, Span sp);
+extern TypeRef mktype(TypeRefTags::Macro, ASTMacroInvocation inv);
+extern TypeRef mktype(TypeRefTags::Unit, Span sp);
+extern TypeRef mktype(TypeRefTags::Primitive, Span sp, enum eCoreType type);
+extern TypeRef mktype(Span sp, enum eCoreType type);
+extern TypeRef mktype(TypeRefTags::Tuple, Span sp, ::std::vector<TypeRef> innerTypes);
+extern TypeRef mktype(TypeRefTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret);
+extern TypeRef mktype(TypeRefTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType);
+extern TypeRef mktype(TypeRefTags::Pointer, Span sp, bool isMut, TypeRef innerType);
+extern TypeRef mktype(TypeRefTags::SizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size);
+extern TypeRef mktype(TypeRefTags::UnsizedArray, Span sp, TypeRef innerType);
+extern TypeRef mktype(TypeRefTags::Arg, Span sp, RcString name, unsigned int binding = ~0u);
+extern TypeRef mktype(Span sp, RcString name, unsigned int binding = ~0u);
+extern TypeRef mktype(TypeRefTags::Path, Span sp, ASTPath path);
+extern TypeRef mktype(Span sp, ASTPath path);
+extern TypeRef mktype(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes);
+
+extern ::std::ostream& operator<<(::std::ostream& os, const TypeStore& tr);
+inline ::std::ostream& operator<<(::std::ostream& os, const TypeStore* tr) {
+    return tr ? (os << *tr) : (os << "(null-type)");
+}
+extern Ordering ord(const TypeRef& a, const TypeRef& b);
+

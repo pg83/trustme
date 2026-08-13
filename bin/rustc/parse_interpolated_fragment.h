@@ -3,7 +3,8 @@
 #include <iosfwd>
 #include <cassert>
 
-class TypeRef;
+struct TypeStore;
+typedef TypeStore* TypeRef;
 class TokenTree;
 struct Ident;
 

@@ -239,19 +239,19 @@ void ASTVisibility::inplaceUnion(const ASTVisibility& x) {
 // ---
 
 ASTStructItem ASTStructItem::clone() const {
-    return ASTStructItem(mAttrs.clone(), vis, mName, mType.clone(), defaultValue.clone());
+    return ASTStructItem(mAttrs.clone(), vis, mName, mType->clone(), defaultValue.clone());
 }
 
 ASTTupleItem ASTTupleItem::clone() const {
-    return ASTTupleItem(mAttrs.clone(), vis, mType.clone());
+    return ASTTupleItem(mAttrs.clone(), vis, mType->clone());
 }
 
 ASTTypeAlias ASTTypeAlias::clone() const {
-    return ASTTypeAlias(mParams.clone(), mType.clone());
+    return ASTTypeAlias(mParams.clone(), mType->clone());
 }
 
 ASTStatic ASTStatic::clone() const {
-    return ASTStatic(cls, mType.clone(), mValue.isValid() ? ASTExpr(mValue.node().clone()) : ASTExpr());
+    return ASTStatic(cls, mType->clone(), mValue.isValid() ? ASTExpr(mValue.node().clone()) : ASTExpr());
 }
 
 ASTFunction::ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, TypeRef retType, Arglist args, bool isVariadic)
@@ -268,10 +268,10 @@ ASTFunction::ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericPara
 ASTFunction ASTFunction::clone() const {
     decltype(mArgs) newArgs;
     for (const auto& arg : mArgs) {
-        newArgs.push_back(ASTFunction::Arg(arg.pat.clone(), arg.ty.clone(), arg.attrs.clone()));
+        newArgs.push_back(ASTFunction::Arg(arg.pat.clone(), arg.ty->clone(), arg.attrs.clone()));
     }
 
-    auto rv = ASTFunction(mSpan, mAbi, flags, mParams.clone(), mRettype.clone(), mv$(newArgs), mIsVariadic);
+    auto rv = ASTFunction(mSpan, mAbi, flags, mParams.clone(), mRettype->clone(), mv$(newArgs), mIsVariadic);
     if (mCode.isValid()) {
         rv.mCode = ASTExpr(mCode.node().clone());
     }

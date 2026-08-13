@@ -321,7 +321,7 @@ public:
              ::std::vector<ASTPathNode> nodes;
          }),
         (UFCS, struct {                       // Type-relative
-            ::std::unique_ptr<TypeRef> type;  // always non-null
+            TypeRef type;  // always non-null
             ::std::unique_ptr<ASTPath> trait; // nullptr = inherent, Invalid = unknown trait
             ::std::vector<ASTPathNode> nodes;
         })

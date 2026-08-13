@@ -3,7 +3,8 @@
 #include "hir_expr_ptr.h"
 
 class RcString;
-class TypeRef;
+struct TypeStore;
+typedef TypeStore* TypeRef;
 struct Span;
 
 class ASTExprNode;

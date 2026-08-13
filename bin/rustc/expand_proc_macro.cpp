@@ -125,7 +125,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     // ```
 
     // ---- main function ----
-    auto mainFn = ASTFunction{Span(), TypeRef(TypeRef::TagUnit(), Span()), {}};
+    auto mainFn = ASTFunction{Span(), mktype(TypeRefTags::Unit(), Span()), {}};
     {
         auto callNode = NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("main")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("proc_macro#"), ASTPathNode("MACROS")})))));
         mainFn.setCode(mv$(callNode));
@@ -154,7 +154,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
 
     size_t testCount = testsArray->values.size();
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, TypeRef(TypeRef::TagSizedArray(), Span(), TypeRef(Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mktype(TypeRefTags::SizedArray(), Span(), mktype(Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
 
     // ---- module ----
     auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
@@ -992,7 +992,7 @@ namespace {
         void visitType(const ::TypeRef& ty) {
             // TODO: Correct handling of visit_type
             TU_MATCHA(
-                (ty.mData),
+                (ty->mData),
                 (te),
                 (None, BUG(sp, ty);),
                 (Any, pmi.sendRword("_");),
@@ -1009,10 +1009,10 @@ namespace {
                         pmi.sendSymbol(",");
                     } pmi.sendSymbol(")");
                 ),
-                (Borrow, pmi.sendSymbol("&"); this->visitLifetime(te.lifetime); if (te.isMut) pmi.sendRword("mut"); pmi.sendSymbol("("); this->visitType(*te.inner); pmi.sendSymbol(")");),
-                (Pointer, pmi.sendSymbol("*"); if (te.isMut) pmi.sendRword("mut"); else pmi.sendRword("const"); pmi.sendSymbol("("); this->visitType(*te.inner); pmi.sendSymbol(")");),
-                (Array, pmi.sendSymbol("["); this->visitType(*te.inner); pmi.sendSymbol(";"); if (te.size) { this->visitNode(*te.size); } else { pmi.sendRword("_"); } pmi.sendSymbol("]");),
-                (Slice, pmi.sendSymbol("["); this->visitType(*te.inner); pmi.sendSymbol("]");),
+                (Borrow, pmi.sendSymbol("&"); this->visitLifetime(te.lifetime); if (te.isMut) pmi.sendRword("mut"); pmi.sendSymbol("("); this->visitType(te.inner); pmi.sendSymbol(")");),
+                (Pointer, pmi.sendSymbol("*"); if (te.isMut) pmi.sendRword("mut"); else pmi.sendRword("const"); pmi.sendSymbol("("); this->visitType(te.inner); pmi.sendSymbol(")");),
+                (Array, pmi.sendSymbol("["); this->visitType(te.inner); pmi.sendSymbol(";"); if (te.size) { this->visitNode(*te.size); } else { pmi.sendRword("_"); } pmi.sendSymbol("]");),
+                (Slice, pmi.sendSymbol("["); this->visitType(te.inner); pmi.sendSymbol("]");),
                 (Generic,
                  // TODO: This may already be resolved?... Wait, how?
                  pmi.sendIdent(te.name.c_str());),
@@ -1178,7 +1178,7 @@ namespace {
                 }
                 TU_ARMA(UFCS, pe) {
                     pmi.sendSymbol("<");
-                    this->visitType(*pe.type);
+                    this->visitType(pe.type);
                     if (pe.trait) {
                         pmi.sendRword("as");
                         this->visitPath(*pe.trait);
@@ -1270,7 +1270,7 @@ namespace {
                                     }
                             }
                             }
-                            if (!p.getDefault().isWildcard()) {
+                            if (!p.getDefault()->isWildcard()) {
                                 pmi.sendSymbol("=");
                                 this->visitType(p.getDefault());
                             }
@@ -1732,7 +1732,7 @@ namespace {
                         pmi.sendRword("type");
                         pmi.sendIdent(i.name.c_str());
                         this->visitParams(e.mParams);
-                        if (e.mType.isValid()) {
+                        if (e.mType->isValid()) {
                             pmi.sendSymbol("=");
                             this->visitType(e.mType);
                         }

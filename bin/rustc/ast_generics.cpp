@@ -4,7 +4,7 @@ ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
     : mAttrs(x.mAttrs)
     , mSpan(x.mSpan)
     , mName(x.mName)
-    , mDefaultValue(x.mDefaultValue.clone())
+    , mDefaultValue(x.mDefaultValue->clone())
 {
 }
 
@@ -12,7 +12,7 @@ ASTTypeParam::ASTTypeParam(Span sp, ASTAttributeList attrs, RcString name)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name))
-    , mDefaultValue(mSpan)
+    , mDefaultValue(mktype(mSpan))
 {
 }
 
@@ -41,7 +41,7 @@ ASTValueParam::ASTValueParam(const ASTValueParam& x)
     : mAttrs(x.mAttrs)
     , mSpan(x.mSpan)
     , mName(x.mName)
-    , mType(x.mType.clone())
+    , mType(x.mType->clone())
     , mDefaultValue(x.mDefaultValue ? x.mDefaultValue.clone() : ASTExpr())
 {
 }
@@ -58,6 +58,10 @@ ASTGenericParams ASTGenericParams::clone() const {
     rv.bounds.reserve(bounds.size());
     for (auto& e : bounds) {
         rv.bounds.push_back(e.clone());
+    }
+    rv.mBareBoundTypes.reserve(mBareBoundTypes.size());
+    for (const auto& e : mBareBoundTypes) {
+        rv.mBareBoundTypes.push_back(e->clone());
     }
     return rv;
 }

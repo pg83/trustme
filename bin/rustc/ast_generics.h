@@ -186,7 +186,7 @@ TAGGED_UNION_EX(
      Span span;
 
      ASTGenericBound clone() const {
-         TU_MATCH(ASTGenericBound, ((*this)), (ent), (None, return make_None({});), (Lifetime, return make_Lifetime({ent.test, ent.bound});), (TypeLifetime, return make_TypeLifetime({ent.type.clone(), ent.bound});), (IsTrait, return make_IsTrait({ent.span, ent.outerHrbs, ent.type.clone(), ent.innerHrbs, ent.trait, ent.constness});), (MaybeTrait, return make_MaybeTrait({ent.type.clone(), ent.trait});), (NotTrait, return make_NotTrait({ent.type.clone(), ent.trait});), (Equality, return make_Equality({ent.type.clone(), ent.replacement.clone()});))
+         TU_MATCH(ASTGenericBound, ((*this)), (ent), (None, return make_None({});), (Lifetime, return make_Lifetime({ent.test, ent.bound});), (TypeLifetime, return make_TypeLifetime({ent.type->clone(), ent.bound});), (IsTrait, return make_IsTrait({ent.span, ent.outerHrbs, ent.type->clone(), ent.innerHrbs, ent.trait, ent.constness});), (MaybeTrait, return make_MaybeTrait({ent.type->clone(), ent.trait});), (NotTrait, return make_NotTrait({ent.type->clone(), ent.trait});), (Equality, return make_Equality({ent.type->clone(), ent.replacement->clone()});))
          return ASTGenericBound();
      })
 );
@@ -197,6 +197,11 @@ class ASTGenericParams {
 public:
     ::std::vector<GenericParam> mParams;
     ::std::vector<ASTGenericBound> bounds;
+    // Types that appear in a `where` clause with an empty bound list (`T:`).
+    // These impose no constraint, but must still be expanded/resolved so that
+    // any side effects they carry (e.g. anon-const blocks with nested items)
+    // are processed consistently with how lowering later visits them.
+    ::std::vector<TypeRef> mBareBoundTypes;
 
     ASTGenericParams();
 
