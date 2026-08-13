@@ -30,7 +30,7 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P1 — internal compiler failures
 
-After the targeted CTFE rerun, 286 of the snapshot's internal compiler failures
+After the targeted CTFE rerun, 272 of the snapshot's internal compiler failures
 remain. The generic `mir_helpers.h:108` signature must be subdivided by its
 message before fixing.
 
@@ -39,7 +39,6 @@ message before fixing.
 | CTFE panic, `hir_conv_constant_evaluation.cpp:3617` | 8 | independent compile-time assertions/dead-code cases |
 | MIR error, `mir_helpers.h:108` | 31 | mixed intrinsics, pointer operations, raw DSTs and SIMD |
 | CTFE intrinsic TODO, `hir_conv_constant_evaluation.cpp:3498` | 16 | `black_box`, `forget`, `raw_eq`, pointer offsets, SIMD and comparisons |
-| BUG, `trans_target.cpp:1896` | 14 | common codegen target failure |
 | CTFE null/invalid pointer, `hir_conv_constant_evaluation.cpp:1585` | 11 | |
 | BUG, `macro_rules_macro_rules.cpp:2189` | 10 | |
 | CTFE unresolved generic, `hir_conv_constant_evaluation.cpp:1751` | 9 | const-generic inference/unevaluated expressions |

@@ -1409,6 +1409,9 @@ public:
             if (!TargetGetSizeOf(state.sp, rootResolve, staticTy, staticSize)) {
                 throw Defer();
             }
+            if (outTy) {
+                *outTy = staticTy;
+            }
 
             if (!s.valueGenerated) {
                 // If there's no MIR and no HIR then this is an external static (which can only be borrowed)
@@ -1446,10 +1449,6 @@ public:
                 }
                 DEBUG(p << " = " << item.valueRes);
             }
-            if (outTy) {
-                // Does this need monomorph? No, becuase the value is known and thus not generic?
-                *outTy = staticTy;
-            }
             const auto* value = s.valueRes.bytes.size() == staticSize ? &s.valueRes : nullptr;
             return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), value, staticSize);
         } else {
@@ -1462,7 +1461,7 @@ public:
     }
 
     MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr) {
-        HIRTypeRef tmpTy;
+        HIRTypeRef tmpTy = nullptr;
         const HIRTypeData* typ = nullptr;
         MIREvalValueRef metadata;
         MIREvalValueRef val;

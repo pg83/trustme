@@ -4574,7 +4574,10 @@ public:
                 /*m_value=*/mv$(valExpr)
             );
             newStatic.mParams = mv$(generics);
-            newStatic.saveLiteral = isConst;
+            // Downstream const evaluation can execute saved `const fn` MIR that
+            // refers to this promoted static. Non-generic statics have no HIR
+            // body in an rlib, so their evaluated bytes must travel with it.
+            newStatic.saveLiteral = !newStatic.mParams.isGeneric();
             DEBUG(path << " = " << newStatic.valueRes);
             list.push_back(NewStatic{path, std::move(newStatic), isConst});
             return path;
