@@ -62,6 +62,11 @@ F16::F16()
 {
 }
 
+F16::F16(FloatValue value)
+    : v(value.toF16Bits())
+{
+}
+
 F16::F16(float f) {
     union {
         float f;

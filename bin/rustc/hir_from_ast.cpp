@@ -3315,9 +3315,23 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             }
         };
 
-        if (v.datatype == CORETYPE_F32 || v.datatype == CORETYPE_F64) {
+        if (v.datatype == CORETYPE_F16 || v.datatype == CORETYPE_F32 || v.datatype == CORETYPE_F64) {
             DEBUG("Integer annotated as float, create float node");
-            mRv.reset(gCratePtr->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Float({(v.datatype == CORETYPE_F32 ? HIRCoreType::F32 : HIRCoreType::F64), v.mValue.toDouble()})));
+            HIRCoreType type;
+            switch (v.datatype) {
+                case CORETYPE_F16:
+                    type = HIRCoreType::F16;
+                    break;
+                case CORETYPE_F32:
+                    type = HIRCoreType::F32;
+                    break;
+                case CORETYPE_F64:
+                    type = HIRCoreType::F64;
+                    break;
+                default:
+                    BUG(v.span(), "Unexpected floating point type");
+            }
+            mRv.reset(gCratePtr->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Float({type, v.mValue.toDouble()})));
             return;
         }
         mRv.reset(gCratePtr->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Integer({H::getType(v.span(), v.datatype), v.mValue})));

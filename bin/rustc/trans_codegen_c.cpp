@@ -465,9 +465,8 @@ namespace {
             }
 
             // Float16 and Float128
-            of << "typedef struct f16 { uint16_t v; } f16;\n"
-               << "static f16 f16_disabled(){ abort(); }\n"
-               << "static int f16_cmp(f16 a, f16 b){ abort(); }\n"
+            of << "typedef _Float16 f16;\n"
+               << "static inline f16 make_f16_bits(uint16_t bits) { f16 rv; __builtin_memcpy(&rv, &bits, sizeof(rv)); return rv; }\n"
                << "typedef struct f128 { uint128_t v; } f128;\n";
             if (options.emulatedI128) {
                 of << "static inline f128 make_f128_bits(uint64_t hi, uint64_t lo) { f128 rv = { make128_raw(hi, lo) }; return rv; }\n";
@@ -2009,7 +2008,8 @@ namespace {
 
         void emitFloat(FloatValue v, HIRCoreType ty) {
             if (ty == HIRCoreType::F16) {
-                of << "f16_disabled()";
+                const F16 bits(v);
+                of << "make_f16_bits(0x" << ::std::hex << bits.v << "u)" << ::std::dec;
             } else if (ty == HIRCoreType::F128) {
                 const F128 bits(v);
                 of << "make_f128_bits(0x" << ::std::hex << bits.hi << "ull, 0x" << bits.lo << "ull)" << ::std::dec;
@@ -3092,9 +3092,11 @@ namespace {
                                     emitParam(ve.valR);
                                 }
                                 break;
-                            } else if (ve.op == MIRBinOp::MOD && (ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
+                            } else if (ve.op == MIRBinOp::MOD && (ty == HIRCoreType::F16 || ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
                                 of << "__builtin_";
-                                if (ty == HIRCoreType::F32) {
+                                if (ty == HIRCoreType::F16) {
+                                    of << "fmodf";
+                                } else if (ty == HIRCoreType::F32) {
                                     of << "remainderf";
                                 } else {
                                     of << "remainder";
@@ -3105,8 +3107,7 @@ namespace {
                                 emitParam(ve.valR);
                                 of << ")";
                                 break;
-                            } else if (ty == HIRCoreType::F16 || ty == HIRCoreType::F128) {
-                                auto tyS = ty == HIRCoreType::F16 ? "f16" : "f128";
+                            } else if (ty == HIRCoreType::F128) {
                                 switch (ve.op) {
                                     case MIRBinOp::EQ:
                                         of << "0 == ";
@@ -3131,14 +3132,14 @@ namespace {
                                                 of << "0 <= ";
                                         }
                                         // NOTE: Reversed order due to reversed logic above
-                                        of << tyS << "_cmp(";
+                                        of << "f128_cmp(";
                                         emitParam(ve.valR);
                                         of << ", ";
                                         emitParam(ve.valL);
                                         of << ")";
                                         break;
                                     default:
-                                        of << tyS << "_disabled()";
+                                        of << "f128_disabled()";
                                         break;
                                 }
                                 break;
@@ -3332,19 +3333,6 @@ namespace {
                                         of << ".hi = ~";
                                         emitLvalue(ve.val);
                                         of << ".hi";
-                                        break;
-                                }
-                                break;
-                            } else if (ty == HIRCoreType::F16) {
-                                switch (ve.op) {
-                                    case MIRUniOp::NEG:
-                                        emitLvalue(e.dst);
-                                        of << " = f16_disabled(/*";
-                                        emitLvalue(ve.val);
-                                        of << "*/)";
-                                        break;
-                                    case MIRUniOp::INV:
-                                        MIR_TODO(*mirRes, "f16 INV");
                                         break;
                                 }
                                 break;
@@ -3704,7 +3692,7 @@ namespace {
                 }
                 return;
             }
-            if (ve.type == HIRCoreType::F16 || ve.type == HIRCoreType::F128 || ty == HIRCoreType::F16 || ty == HIRCoreType::F128) {
+            if (ve.type == HIRCoreType::F128 || ty == HIRCoreType::F128) {
                 of << "abort()";
                 return;
             }
@@ -5362,7 +5350,7 @@ namespace {
                 // Unchecked (can return `undef`) cast from a float to an integer
                 if (this->typeIsEmulatedI128(dstTy)) {
                     of << "abort()";
-                } else if (srcTy == HIRCoreType::F16 || srcTy == HIRCoreType::F128) {
+                } else if (srcTy == HIRCoreType::F128) {
                     of << "abort()";
                 } else {
                     emitLvalue(e.retVal);
@@ -6437,23 +6425,16 @@ namespace {
             }
             // --- Floating Point
             else if ((name.size() > 3 && name.compare(name.size() - 3, 3, "f16") == 0) || (name.size() > 3 && name.compare(name.size() - 3, 3, "f32") == 0) || (name.size() > 3 && name.compare(name.size() - 3, 3, "f64") == 0) || (name.size() > 4 && name.compare(name.size() - 4, 4, "f128") == 0)) {
-                if (name.compare(name.size() - 3, 3, "f16") == 0) {
-                    of << "abort();";
-                    return;
-                }
+                const bool isF16 = name.compare(name.size() - 3, 3, "f16") == 0;
                 if (name.compare(name.size() - 4, 4, "f128") == 0) {
                     of << "abort();";
                     return;
                 }
                 auto emitMathName = [&](const char* op) {
                     of << "__builtin_";
-                    of << op << (name.back() == '2' ? "f" : "");
+                    of << op << (isF16 || name.back() == '2' ? "f" : "");
                 };
                 auto emit1 = [&](const char* op) {
-                    if (name.compare(name.size() - 3, 3, "f16") == 0) {
-                        of << "abort();";
-                        return;
-                    }
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitMathName(op);
@@ -6462,15 +6443,15 @@ namespace {
                     of << ")";
                 };
                 // > Round to nearest integer, half-way rounds away from zero
-                if (name == "rintf32" || name == "rintf64") {
+                if (name == "rintf16" || name == "rintf32" || name == "rintf64") {
                     emit1("round");
                 }
                 // > Round to nearest integer, half-way rounds to even
-                else if (name == "round_ties_even_f32" || name == "round_ties_even_f64") {
+                else if (name == "round_ties_even_f16" || name == "round_ties_even_f32" || name == "round_ties_even_f64") {
                     emit1("roundeven");
-                } else if (name == "fabsf32" || name == "fabsf64") {
+                } else if (name == "fabsf16" || name == "fabsf32" || name == "fabsf64") {
                     emit1("fabs");
-                } else if (name == "copysignf32" || name == "copysignf64") {
+                } else if (name == "copysignf16" || name == "copysignf32" || name == "copysignf64") {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitMathName("copysign");
@@ -6481,9 +6462,9 @@ namespace {
                     of << ")";
                 }
                 // > Returns the integer part of an `f32`.
-                else if (name == "truncf32" || name == "truncf64") {
+                else if (name == "truncf16" || name == "truncf32" || name == "truncf64") {
                     emit1("trunc");
-                } else if (name == "powif32" || name == "powif64") {
+                } else if (name == "powif16" || name == "powif32" || name == "powif64") {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitMathName("pow");
@@ -6492,7 +6473,7 @@ namespace {
                     of << ", ";
                     emitParam(e.args.at(1));
                     of << ")";
-                } else if (name == "powf32" || name == "powf64") {
+                } else if (name == "powf16" || name == "powf32" || name == "powf64") {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitMathName("pow");
@@ -6501,29 +6482,29 @@ namespace {
                     of << ", ";
                     emitParam(e.args.at(1));
                     of << ")";
-                } else if (name == "expf32" || name == "expf64") {
+                } else if (name == "expf16" || name == "expf32" || name == "expf64") {
                     emit1("exp");
-                } else if (name == "exp2f32" || name == "exp2f64") {
+                } else if (name == "exp2f16" || name == "exp2f32" || name == "exp2f64") {
                     emit1("exp2");
-                } else if (name == "logf32" || name == "logf64") {
+                } else if (name == "logf16" || name == "logf32" || name == "logf64") {
                     emit1("log");
-                } else if (name == "log10f32" || name == "log10f64") {
+                } else if (name == "log10f16" || name == "log10f32" || name == "log10f64") {
                     emit1("log10");
-                } else if (name == "log2f32" || name == "log2f64") {
+                } else if (name == "log2f16" || name == "log2f32" || name == "log2f64") {
                     emit1("log2");
-                } else if (name == "sqrtf32" || name == "sqrtf64") {
+                } else if (name == "sqrtf16" || name == "sqrtf32" || name == "sqrtf64") {
                     emit1("sqrt");
                 } else if (name == "ceilf16" || name == "ceilf32" || name == "ceilf64") {
                     emit1("ceil");
-                } else if (name == "floorf32" || name == "floorf64") {
+                } else if (name == "floorf16" || name == "floorf32" || name == "floorf64") {
                     emit1("floor");
-                } else if (name == "roundf32" || name == "roundf64") {
+                } else if (name == "roundf16" || name == "roundf32" || name == "roundf64") {
                     emit1("round");
-                } else if (name == "cosf32" || name == "cosf64") {
+                } else if (name == "cosf16" || name == "cosf32" || name == "cosf64") {
                     emit1("cos");
-                } else if (name == "sinf32" || name == "sinf64") {
+                } else if (name == "sinf16" || name == "sinf32" || name == "sinf64") {
                     emit1("sin");
-                } else if (name == "fmaf32" || name == "fmaf64") {
+                } else if (name == "fmaf16" || name == "fmaf32" || name == "fmaf64") {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitMathName("fma");
@@ -6534,7 +6515,7 @@ namespace {
                     of << ", ";
                     emitParam(e.args.at(2));
                     of << ")";
-                } else if (name == "maxnumf32" || name == "maxnumf64") {
+                } else if (name == "maxnumf16" || name == "maxnumf32" || name == "maxnumf64") {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitMathName("fmax");
@@ -6543,7 +6524,7 @@ namespace {
                     of << ", ";
                     emitParam(e.args.at(1));
                     of << ")";
-                } else if (name == "minnumf32" || name == "minnumf64") {
+                } else if (name == "minnumf16" || name == "minnumf32" || name == "minnumf64") {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitMathName("fmin");

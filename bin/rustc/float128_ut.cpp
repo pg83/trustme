@@ -146,6 +146,20 @@ STD_TEST_SUITE(Float128Specials) {
         STD_INSIST(!Float128(1.5).isInfinite());
     }
 
+    STD_TEST(testF16Narrowing) {
+        STD_INSIST(Float128::parseDecimal("1").toF16Bits() == 0x3c00);
+        STD_INSIST(Float128::parseDecimal("65504").toF16Bits() == 0x7bff);
+        STD_INSIST(Float128::parseDecimal("65520").toF16Bits() == 0x7c00);
+        STD_INSIST(Float128::parseDecimal("0.00006103515625").toF16Bits() == 0x0400);
+        STD_INSIST(Float128::parseDecimal("0.000000059604644775390625").toF16Bits() == 0x0001);
+        STD_INSIST(Float128::parseDecimal("1.00048828125").toF16Bits() == 0x3c00);
+        STD_INSIST(Float128::parseDecimal("1.0004882812500000000000000001").toF16Bits() == 0x3c01);
+        STD_INSIST((-Float128::parseDecimal("0")).toF16Bits() == 0x8000);
+        STD_INSIST(Float128::infinity(false).toF16Bits() == 0x7c00);
+        STD_INSIST(Float128::infinity(true).toF16Bits() == 0xfc00);
+        STD_INSIST(Float128::quietNan().toF16Bits() == 0x7e00);
+    }
+
     STD_TEST(testNanPropagation) {
         const auto nan = Float128::quietNan();
         const auto one = Float128(1.0);

@@ -37,6 +37,7 @@ public:
     bool isInfinite() const;
 
     // Correctly rounded narrowing
+    uint16_t toF16Bits() const;
     explicit operator float() const;
     explicit operator double() const;
     // Truncating, saturating; NaN -> 0

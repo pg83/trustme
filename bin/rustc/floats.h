@@ -32,6 +32,7 @@ struct F16 {
 
     F16();
     F16(float f);
+    F16(FloatValue value);
     operator float() const;
 };
 

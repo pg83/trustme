@@ -758,7 +758,7 @@ public:
     void writeFloat(const MIRTypeResolve& state, unsigned bits, FloatValue v) {
         switch (bits) {
             case 16: {
-                F16 vF = static_cast<float>(v);
+                F16 vF(v);
                 writeBytes(state, &vF, sizeof(vF));
             } break;
             case 32: {
@@ -1813,6 +1813,50 @@ public:
                 }
                 MIR_ASSERT(state, e.is_Float(), "Expected a float, got " << e);
                 return e.as_Float().v;
+            }
+            }
+        abort();
+    }
+
+    U128 readParamFloatBits(unsigned bits, const MIRParam& p) const {
+            TU_MATCH_HDRA( (p), { )
+            TU_ARMA(LValue, e)
+                return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readUint(state, bits);
+            TU_ARMA(Borrow, e)
+            MIR_BUG(state, "Expected a float, got a MIR::Param::Borrow");
+            TU_ARMA(Constant, e) {
+                if (e.is_Const()) {
+                    const auto& val = getConst(*e.as_Const().p, nullptr);
+                    return EncodedLiteralSlice(val).readUint();
+                }
+                if (e.is_Generic()) {
+                    auto ve = ms.getValue(state.sp, e.as_Generic());
+                    EncodedLiteral elTmp;
+                    const auto& el = getConst(ve, elTmp);
+                    return EncodedLiteralSlice(el).readUint();
+                }
+                MIR_ASSERT(state, e.is_Float(), "Expected a float, got " << e);
+                const auto value = e.as_Float().v;
+                switch (bits) {
+                    case 16:
+                        return U128(F16(value).v);
+                    case 32: {
+                        const float narrowed = static_cast<float>(value);
+                        uint32_t raw;
+                        memcpy(&raw, &narrowed, sizeof(raw));
+                        return U128(raw);
+                    }
+                    case 64: {
+                        const double narrowed = static_cast<double>(value);
+                        uint64_t raw;
+                        memcpy(&raw, &narrowed, sizeof(raw));
+                        return U128(raw);
+                    }
+                    case 128:
+                        return U128(value.bitsLo(), value.bitsHi());
+                    default:
+                        MIR_BUG(state, "Unexpected float size: " << bits);
+                }
             }
             }
             abort();
@@ -3157,15 +3201,15 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                    auto bits = localState.readParamUint(ti.bits, e.args.at(0));
+                    auto bits = localState.readParamFloatBits(ti.bits, e.args.at(0));
                     bits &= ~(U128(1) << (ti.bits - 1));
                     dst.writeUint(state, ti.bits, bits);
                 } else if (te->name == "copysignf16" || te->name == "copysignf32" || te->name == "copysignf64" || te->name == "copysignf128") {
                     HIRTypeRef tmp;
                     auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
                     MIR_ASSERT(state, ti.ty == TypeInfo::Float, "`" << te->name << "` with non-float argument");
-                    auto value = localState.readParamUint(ti.bits, e.args.at(0));
-                    auto sign = localState.readParamUint(ti.bits, e.args.at(1));
+                    auto value = localState.readParamFloatBits(ti.bits, e.args.at(0));
+                    auto sign = localState.readParamFloatBits(ti.bits, e.args.at(1));
                     auto signMask = U128(1) << (ti.bits - 1);
                     dst.writeUint(state, ti.bits, (value & ~signMask) | (sign & signMask));
                 } else if (te->name == "floorf16" || te->name == "floorf32" || te->name == "floorf64" || te->name == "floorf128") {

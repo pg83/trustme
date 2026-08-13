@@ -644,6 +644,29 @@ bool Float128::isInfinite() const {
     return unpack(hi, lo).kind == Kind::Infinity;
 }
 
+uint16_t Float128::toF16Bits() const {
+    const auto value = unpack(hi, lo);
+    uint16_t bits = 0;
+    switch (value.kind) {
+        case Kind::Zero:
+            bits = 0;
+            break;
+        case Kind::Infinity:
+            bits = 0x7C00;
+            break;
+        case Kind::NotANumber:
+            bits = 0x7E00;
+            break;
+        case Kind::Finite:
+            bits = static_cast<uint16_t>(roundToNarrow(value.exponent, value.significand, 10, -14, 15));
+            break;
+    }
+    if (value.negative) {
+        bits |= 0x8000;
+    }
+    return bits;
+}
+
 Float128::operator float() const {
     const auto value = unpack(hi, lo);
     uint32_t bits = 0;

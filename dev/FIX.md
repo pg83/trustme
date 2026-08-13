@@ -8,13 +8,12 @@ the same set; the erasure itself cost 12 tests, all fixed/re-baselined).
 Classification method: per-case rerun of every failing test with the failure
 signature (assert/BUG location, first error, signal) clustered by root cause.
 
-## P0 — miscompiles: accepted code runs WRONG (~49)
+## P0 — miscompiles: accepted code runs WRONG (~25)
 
 The compiler silently produces incorrect programs. Highest severity.
 
 | cluster | tests | notes |
 |---|---|---|
-| f16 arithmetic | 24 | every `core/num/f16.rs` doctest aborts at runtime on `assert_eq`; single root in half-float codegen |
 | rust-quiz stdout | 3 | wrong semantics: #033 method resolution `RangeFull` vs `FnOnce` (prints "4" instead of "24"), #001 macro statement counting, #020 break-with-value in condition |
 | rust_lib runtime panics | 18 | std `error.rs` tests; partly blocked on missing backtrace support (borders P2 feature work) |
 | slice doctest | 1 | `core/src/slice/mod.rs` |
@@ -67,12 +66,11 @@ Pass when re-run in isolation; fail only under the parallel gate load
 
 ## Recommended order (by ROI)
 
-1. f16 codegen (24 tests, single root, restores runtime trust)
-2. findImpl recursion guard for normalization cycles (14 tests)
-3. Top-5 crash clusters (~36 tests)
-4. Quiz miscompiles (deep dives: method resolution, macro hygiene)
-5. Parser features, largest-cluster first
-6. Typeck/TAIT epic (largest, hardest)
+1. findImpl recursion guard for normalization cycles (14 tests)
+2. Top-5 crash clusters (~36 tests)
+3. Quiz miscompiles (deep dives: method resolution, macro hygiene)
+4. Parser features, largest-cluster first
+5. Typeck/TAIT epic (largest, hardest)
 
 Raw data: per-case signatures and per-bucket test lists were produced by the
 triage scripts in the session scratchpad (`fail-rows2.json`,
