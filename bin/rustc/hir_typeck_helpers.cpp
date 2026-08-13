@@ -7552,6 +7552,16 @@ TU_ARMA(Alias, ee) {
                     break;
                 }
 
+                if (crate.edition < ASTEdition::Rust2021 && traitRef.second->skipArrayDuringMethodDispatch && ty->is_Array()) {
+                    continue;
+                }
+                if (crate.edition < ASTEdition::Rust2024 && traitRef.second->skipBoxedSliceDuringMethodDispatch) {
+                    const auto* boxedInner = this->typeIsOwnedBox(sp, ty);
+                    if (boxedInner && boxedInner->is_Slice()) {
+                        continue;
+                    }
+                }
+
                 HIRGenericPath finalTraitPath;
                 const HIRFunction* fcnPtr;
                 if (!(fcnPtr = this->traitContainsMethod(sp, *traitRef.first, *traitRef.second, crate.types.self(), methodName, finalTraitPath))) {

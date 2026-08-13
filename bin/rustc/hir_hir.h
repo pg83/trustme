@@ -430,6 +430,10 @@ public:
     /// `#[fundamental]`: absence of an impl for this trait can be used by
     /// coherence once downstream impls have been excluded.
     bool isFundamental;
+    /// Compatibility exclusions requested by
+    /// `#[rustc_skip_during_method_dispatch(array, boxed_slice)]`.
+    bool skipArrayDuringMethodDispatch;
+    bool skipBoxedSliceDuringMethodDispatch;
 
     ::std::unordered_map<RcString, HIRAssociatedType> types;
     ::std::unordered_map<RcString, HIRTraitValueItem> values;

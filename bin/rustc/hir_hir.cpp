@@ -2160,6 +2160,8 @@ HIRTrait::HIRTrait(HIRGenericParams gps, ::std::vector<HIRTraitPath> parents)
     , isConst(false)
     , isCoinductive(false)
     , isFundamental(false)
+    , skipArrayDuringMethodDispatch(false)
+    , skipBoxedSliceDuringMethodDispatch(false)
     , vtableParentTraitsStart(0)
 {
 }

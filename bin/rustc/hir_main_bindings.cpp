@@ -1234,6 +1234,8 @@ HIRTrait HirDeserialiser::deserialiseTrait() {
     rv.isFundamental = traitFlags & 2;
     rv.isCoinductive = (traitFlags & 4) || rv.mIsMarker;
     rv.isConst = traitFlags & 8;
+    rv.skipArrayDuringMethodDispatch = traitFlags & 16;
+    rv.skipBoxedSliceDuringMethodDispatch = traitFlags & 32;
     rv.types = deserialiseIstrumap<HIRAssociatedType>();
     rv.values = deserialiseIstrumap<HIRTraitValueItem>();
     rv.valueIndexes = deserialiseIstrummap<::std::pair<unsigned int, HIRGenericPath>>();
@@ -3602,7 +3604,7 @@ public:
         serialiseGenerics(item.mParams);
         // Kept as one byte for compatibility with metadata written before
         // the fundamental bit was represented in HIR.
-        out.writeU8((item.mIsMarker ? 1u : 0u) | (item.isFundamental ? 2u : 0u) | (item.isCoinductive ? 4u : 0u) | (item.isConst ? 8u : 0u));
+        out.writeU8((item.mIsMarker ? 1u : 0u) | (item.isFundamental ? 2u : 0u) | (item.isCoinductive ? 4u : 0u) | (item.isConst ? 8u : 0u) | (item.skipArrayDuringMethodDispatch ? 16u : 0u) | (item.skipBoxedSliceDuringMethodDispatch ? 32u : 0u));
         serialiseStrmap(item.types);
         serialiseStrmap(item.values);
         serialiseStrmap(item.valueIndexes);

@@ -1472,6 +1472,24 @@ HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttr
     }
     HIRTrait rv{mv$(params), mv$(supertraits)};
     rv.isConst = attrs.has("const_trait");
+    if (const auto* attr = attrs.get("rustc_skip_during_method_dispatch")) {
+        TTStream tokens(attr->span(), ParseState(), attr->data());
+        tokens.getTokenCheck(TOK_PAREN_OPEN);
+        while (tokens.lookahead(0) != TOK_PAREN_CLOSE) {
+            const auto name = tokens.getTokenCheck(TOK_IDENT).ident().name;
+            if (name == "array") {
+                rv.skipArrayDuringMethodDispatch = true;
+            } else if (name == "boxed_slice") {
+                rv.skipBoxedSliceDuringMethodDispatch = true;
+            } else {
+                ERROR(attr->span(), E0000, "Unknown rustc_skip_during_method_dispatch receiver `" << name << "`");
+            }
+            if (!tokens.getTokenIf(TOK_COMMA)) {
+                break;
+            }
+        }
+        tokens.getTokenCheck(TOK_PAREN_CLOSE);
+    }
 
     // HACK: Add a bound of Self: ThisTrait for parts of typeck (TODO: Remove this, it's evil)
     {
