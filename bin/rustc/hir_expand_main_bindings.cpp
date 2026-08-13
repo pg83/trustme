@@ -2938,10 +2938,10 @@ namespace {
 
             // -- Create impl
             HIRTraitImpl impl;
-            impl.mParams = std::move(params);
-            impl.mType = mResolve.crate.types.path(HIRGenericPath(genStructPath, impl.mParams.makeNopParams(mResolve.crate.types, 0)), &genStructRef);
+            impl.mType = mResolve.crate.types.path(HIRGenericPath(genStructPath, params.makeNopParams(mResolve.crate.types, 0)), &genStructRef);
             impl.types.insert(std::make_pair(RcString::newInterned("Output"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, monomorphCb.monomorphType(sp, returnTy)}));
             impl.methods.insert(std::make_pair(RcString::newInterned("poll"), HIRTraitImpl::ImplEnt<HIRFunction>{false, std::move(fcnResume)}));
+            impl.mParams = std::move(params);
             out.traitImpls.push_back(std::make_pair("future_trait", std::move(impl)));
         }
 
