@@ -150,7 +150,7 @@ public:
 /// Reference to a `static`
 class MIREvalStaticRefPtr final: public MIREvalPtr<MIREvalStaticRef> {
 public:
-    static MIREvalStaticRefPtr allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit);
+    static MIREvalStaticRefPtr allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len);
 };
 
 /// Common interface for data storage
@@ -555,12 +555,15 @@ class MIREvalStaticRef final: public IValue {
     stl::ObjPool* pool;
     HIRPath mPath;
     const EncodedLiteral* encoded;
+    size_t length;
 
-    MIREvalStaticRef(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit = nullptr)
+    MIREvalStaticRef(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len)
         : pool(pool)
         , mPath(std::move(p))
         , encoded(lit)
+        , length(len)
     {
+        assert(!encoded || encoded->bytes.size() == length);
     }
 
 public:
@@ -578,7 +581,11 @@ public:
     }
 
     size_t size() const {
-        return encoded ? encoded->bytes.size() : 0;
+        return length;
+    }
+
+    bool hasValue() const {
+        return encoded;
     }
 
     const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const override {
@@ -632,7 +639,7 @@ public:
                 if (r.ofs == ofs) {
                     MIREvalRelocPtr reloc;
                     if (r.p) {
-                        return MIREvalRelocPtr(MIREvalStaticRefPtr::allocate(pool, r.p->clone(), nullptr));
+                        return MIREvalRelocPtr(MIREvalStaticRefPtr::allocate(pool, r.p->clone(), nullptr, 0));
                         TODO(Span(), "Convert relocation pointer - " << *r.p);
                     } else {
                         return MIREvalRelocPtr(MIREvalAllocationPtr::allocateRo(pool, r.bytes.data(), r.bytes.size()));
@@ -931,9 +938,9 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(stl::ObjPool* pool, const 
 }
 
 // ---
-MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit) {
+MIREvalStaticRefPtr MIREvalStaticRefPtr::allocate(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len) {
     MIREvalStaticRefPtr rv;
-    rv.ptr = pool->make<MIREvalStaticRef>(pool, std::move(p), lit);
+    rv.ptr = pool->make<MIREvalStaticRef>(pool, std::move(p), lit, len);
     return rv;
 }
 
@@ -1414,12 +1421,17 @@ public:
         auto ent = getEntFullpath(state.sp, rootResolve, p, EntNS::Value, constMs, &implParamsDef);
         if (ent.is_Static()) {
             const auto& s = *ent.as_Static();
+            auto staticTy = constMs.monomorphType(state.sp, s.mType);
+            size_t staticSize;
+            if (!TargetGetSizeOf(state.sp, rootResolve, staticTy, staticSize)) {
+                throw Defer();
+            }
 
             if (!s.valueGenerated) {
                 // If there's no MIR and no HIR then this is an external static (which can only be borrowed)
                 if (!s.mValue && !s.mValue.mir) {
                     DEBUG("No value and no mir");
-                    return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr);
+                    return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, staticSize);
                 }
 
                 auto& item = const_cast<HIRStatic&>(s);
@@ -1444,7 +1456,7 @@ public:
                 DEBUG("- Evaluate " << p);
                 try {
                     item.valueGenerated = true;
-                    item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.mValue, item.mType, std::move(constMs));
+                    item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.mValue, staticTy, std::move(constMs));
                     item.valueGenerated = true;
                 } catch (const Defer&) {
                     MIR_BUG(state, p << " Defer during value generation");
@@ -1453,15 +1465,16 @@ public:
             }
             if (outTy) {
                 // Does this need monomorph? No, becuase the value is known and thus not generic?
-                *outTy = s.mType;
+                *outTy = staticTy;
             }
-            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), &s.valueRes);
+            const auto* value = s.valueRes.bytes.size() == staticSize ? &s.valueRes : nullptr;
+            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), value, staticSize);
         } else {
             DEBUG(ent.tagStr() << " " << p);
             if (outTy) {
                 MIR_TODO(state, "Get type for " << ent.tagStr() << " (" << p << ")");
             }
-            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr);
+            return MIREvalStaticRefPtr::allocate(valuePool, std::move(p), nullptr, 0);
         }
     }
 
@@ -1567,6 +1580,9 @@ public:
                         metadata = val.slice(TargetGetPointerBits() / 8);
                     }
                     auto p = val.readPtr(state);
+                    if (auto* staticRef = p.second.asStaticref(); staticRef && !staticRef->hasValue()) {
+                        p.second = MIREvalRelocPtr(getStaticref(staticRef->path().clone()));
+                    }
                     MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE, "Null (<PTR_BASE) pointer deref");
                     MIR_ASSERT(state, p.first % al == 0, "Unaligned pointer deref");
                     DEBUG("> " << MIREvalValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
@@ -2970,7 +2986,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.slice(TargetGetPointerBits() / 8).writeUint(state, TargetGetPointerBits(), name.size());
                 } else if (te->name == "type_id") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalStaticRefPtr::allocate(localState.valuePool, HIRPath(mv$(ty), "#type_id"), nullptr));
+                    dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalStaticRefPtr::allocate(localState.valuePool, HIRPath(mv$(ty), "#type_id"), nullptr, 0));
                 } else if (te->name == "needs_drop") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     dst.writeUint(state, 8, resolve.typeNeedsDropGlue(state.sp, ty) ? 1 : 0);

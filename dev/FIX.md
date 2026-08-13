@@ -18,13 +18,12 @@ The compiler silently produces incorrect programs. Highest severity.
 | rust_lib runtime panics | 18 | std `error.rs` tests; partly blocked on missing backtrace support (borders P2 feature work) |
 | slice doctest | 1 | `core/src/slice/mod.rs` |
 
-## P1 — compiler crashes on valid code (~198)
+## P1 — compiler crashes on valid code (~193)
 
-One cluster = one bug. Fixing the top 4 clusters greens ~20 tests.
+One cluster = one bug. Fixing the top 3 clusters greens ~15 tests.
 
 | location | tests | example |
 |---|---|---|
-| `hir_conv_constant_evaluation.cpp:681` | 5 | `consts/const-eval/issue-47971.rs` |
 | `hir_typeck_helpers.cpp:5161` | 5 | `associated-types/issue-69398.rs` |
 | `hir_typeck_expr_cs.cpp:8467` "Spare rules left" | 5 | `nll/unexpected-inference-var-ice-116599.rs` |
 | `hir_typeck_resolve_common.cpp:160` | 5 | `const-generics/generic_const_exprs/issue-82268.rs` |
@@ -61,7 +60,7 @@ Pass when re-run in isolation; fail only under the parallel gate load
 
 ## Recommended order (by ROI)
 
-1. Top-4 crash clusters (~20 tests)
+1. Top-3 crash clusters (~15 tests)
 2. Quiz miscompiles (deep dives: method resolution, macro hygiene)
 3. Parser features, largest-cluster first
 4. Typeck/TAIT epic (largest, hardest)
