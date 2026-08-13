@@ -1028,6 +1028,31 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                     case TOK_INTEGER:
                         val = NEWNODE(ASTExprNodeField, ::std::move(val), RcString::newInterned(FMT(tok.intval())));
                         break;
+                    case TOK_FLOAT: {
+                        const auto value = tok.floatval();
+                        const auto whole = floatValueTrunc(value);
+                        const auto fraction = value - whole;
+                        auto scale = FloatValue(1.0);
+                        FloatValue fractionalIndex;
+                        const auto tolerancePerUnit = parseFloatValue("1e-32");
+                        bool foundFractionalIndex = false;
+                        for (unsigned digits = 0; digits < 20; digits++) {
+                            scale = scale * FloatValue(10.0);
+                            const auto scaled = fraction * scale;
+                            fractionalIndex = floatValueRound(scaled);
+                            if (floatValueAbs(scaled - fractionalIndex) <= scale * tolerancePerUnit) {
+                                foundFractionalIndex = true;
+                                break;
+                            }
+                        }
+                        const auto indexLimit = FloatValue(18446744073709551616.0);
+                        if (!foundFractionalIndex || value < FloatValue() || whole >= indexLimit || fractionalIndex >= indexLimit) {
+                            throw ParseErrorUnexpected(lex, mv$(tok));
+                        }
+                        val = NEWNODE(ASTExprNodeField, ::std::move(val), RcString::newInterned(FMT(static_cast<uint64_t>(whole))));
+                        val = NEWNODE(ASTExprNodeField, ::std::move(val), RcString::newInterned(FMT(static_cast<uint64_t>(fractionalIndex))));
+                        break;
+                    }
                     case TOK_RWORD_AWAIT:
                         val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::AWait, ::std::move(val));
                         break;
@@ -1121,7 +1146,7 @@ ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
     return NEWNODE(ASTExprNodeStructLiteral, path, ::std::move(baseVal), ::std::move(items));
 }
 
-ASTExprNodeP ParseExprValClosure(TokenStream& lex) {
+ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync = false) {
     TRACE_FUNCTION;
     Token tok;
 
@@ -1173,6 +1198,9 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex) {
     }
 
     auto code = ParseExpr0(lex);
+    if (isAsync) {
+        code = NEWNODE(ASTExprNodeAsyncBlock, ::std::move(code), isMove);
+    }
 
     return NEWNODE(ASTExprNodeClosure, ::std::move(args), ::std::move(rt), ::std::move(code), isMove, isImmovable);
 }
@@ -1239,6 +1267,9 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
         case TOK_RWORD_IF:
             return ParseIfStmt(lex);
         case TOK_RWORD_ASYNC: {
+            if (lex.lookahead(0) == TOK_PIPE || lex.lookahead(0) == TOK_DOUBLE_PIPE || (lex.lookahead(0) == TOK_RWORD_MOVE && (lex.lookahead(1) == TOK_PIPE || lex.lookahead(1) == TOK_DOUBLE_PIPE))) {
+                return ParseExprValClosure(lex, true);
+            }
             bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
             return NEWNODE(ASTExprNodeAsyncBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), isMove);
         }
@@ -2534,8 +2565,16 @@ ASTHigherRankedBounds ParseHRB(TokenStream& lex) {
             case TOK_LIFETIME:
                 rv.mLifetimes.push_back(ASTLifetimeParam(lex.pointSpan(), ::std::move(attrs), tok.ident()));
                 break;
+            case TOK_IDENT:
+                // Type parameters in higher-ranked binders are accepted by the
+                // parser so macro `ty` fragments can capture them.  They are
+                // feature-gated before they can have semantic meaning.
+                if (lex.getTokenIf(TOK_EQUAL)) {
+                    ParseType(lex);
+                }
+                break;
             default:
-                throw ParseErrorUnexpected(lex, tok, Token(TOK_LIFETIME));
+                throw ParseErrorUnexpected(lex, tok, {TOK_LIFETIME, TOK_IDENT});
         }
     } while (GET_TOK(tok, lex) == TOK_COMMA);
     CHECK_TOK(tok, TOK_GT);
@@ -4066,9 +4105,12 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     switch (GET_TOK(tok, lex)) {
                         case TOK_RWORD_SELF:
                             itemData = ASTItem::make_Crate({RcString::newInterned("")});
-                            GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);
-                            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                            itemName = tok.ident().name;
+                            if (lex.getTokenIf(TOK_RWORD_AS)) {
+                                GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                                itemName = tok.ident().name;
+                            } else {
+                                itemName = RcString::newInterned("self");
+                            }
                             break;
                         // `extern crate "crate-name" as crate_name;`
                         // NOTE: rustc doesn't allow this, keep in mrustc for for reparse support

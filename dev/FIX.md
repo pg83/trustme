@@ -18,13 +18,12 @@ The compiler silently produces incorrect programs. Highest severity.
 | rust_lib runtime panics | 18 | std `error.rs` tests; partly blocked on missing backtrace support (borders P2 feature work) |
 | slice doctest | 1 | `core/src/slice/mod.rs` |
 
-## P1 — compiler crashes on valid code (~229)
+## P1 — compiler crashes on valid code (~216)
 
-One cluster = one bug. Fixing the top 7 clusters greens ~36 tests.
+One cluster = one bug. Fixing the top 6 clusters greens ~29 tests.
 
 | location | tests | example |
 |---|---|---|
-| `macro_rules_macro_rules.cpp:2116` "No arm matched" | 13 | `attributes/dont-dup-expr-attrs.rs` |
 | `trans_target.cpp:584` "sizeof on an erased type" | 7 | `impl-trait/in-ctfe/array-len.rs` |
 | `mir_from_hir.cpp:4422` | 6 | `consts/const-expr-addr-operator.rs` |
 | `trans_mangling.cpp:269` path-not-Generic | 5 | `const-generics/adt_const_params/116308.rs` |
@@ -65,7 +64,7 @@ Pass when re-run in isolation; fail only under the parallel gate load
 
 ## Recommended order (by ROI)
 
-1. Top-5 crash clusters (~36 tests)
+1. Top-5 crash clusters (~29 tests)
 2. Quiz miscompiles (deep dives: method resolution, macro hygiene)
 3. Parser features, largest-cluster first
 4. Typeck/TAIT epic (largest, hardest)

@@ -192,6 +192,7 @@ Token::Token(const Token& t)
     , mData(Data::make_None({}))
     , pos(t.pos)
     , mHygiene(t.mHygiene)
+    , mIsDocComment(t.mIsDocComment)
 {
     assert(t.mData.tag() != Data::TAGDEAD);
     TU_MATCH_HDRA( (t.mData), {)
@@ -219,6 +220,7 @@ Token Token::clone() const {
     Token rv(mType);
     rv.pos = pos;
     rv.mHygiene = mHygiene;
+    rv.mIsDocComment = mIsDocComment;
 
     assert(mData.tag() != Data::TAGDEAD);
     TU_MATCH(Data, (mData), (e), (None, ), (Ident, rv.mData = Data::make_Ident(e);), (String, rv.mData = Data::make_String(e);), (Integer, rv.mData = Data::make_Integer(e);), (Float, rv.mData = Data::make_Float(e);), (Fragment, assert(e); switch (mType) {
@@ -784,6 +786,7 @@ Token::Token(Token&& t)
     , mData(::std::move(t.mData))
     , pos(::std::move(t.pos))
     , mHygiene(std::move(t.mHygiene))
+    , mIsDocComment(t.mIsDocComment)
 {
     t.mType = TOK_NULL;
 }

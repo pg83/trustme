@@ -588,7 +588,23 @@ Token Lexer::getTokenInt() {
                 this->ungetc();
                 if (ch.isdigit()) {
                     auto val = this->parseInt(nullptr);
-                    nextTokens.push_back(Token(val, CORETYPE_ANY));
+                    ch = this->getc();
+                    if (ch == '.') {
+                        ch = this->getc();
+                        this->ungetc();
+                        if (ch.isdigit()) {
+                            auto fval = this->parseFloat(val);
+                            if (fval == fval) {
+                                nextTokens.push_back(Token::makeFloat(fval, CORETYPE_ANY));
+                            }
+                        } else {
+                            nextTokens.push_back(TOK_DOT);
+                            nextTokens.push_back(Token(val, CORETYPE_ANY));
+                        }
+                    } else {
+                        this->ungetc();
+                        nextTokens.push_back(Token(val, CORETYPE_ANY));
+                    }
                 } else {
                 }
             }
@@ -627,7 +643,9 @@ Token Lexer::getTokenInt() {
                         if (isPdoc) {
                             nextTokens.push_back(TOK_EXCLAM);
                         }
-                        return TOK_HASH;
+                        auto rv = Token(TOK_HASH);
+                        rv.markAsDocComment();
+                        return rv;
                     }
                     return Token(TOK_COMMENT, str, realGetHygiene());
                 }
@@ -691,7 +709,9 @@ Token Lexer::getTokenInt() {
                         if (isPdoc) {
                             nextTokens.push_back(TOK_EXCLAM);
                         }
-                        return TOK_HASH;
+                        auto rv = Token(TOK_HASH);
+                        rv.markAsDocComment();
+                        return rv;
                     }
                     return Token(TOK_COMMENT, str, realGetHygiene());
                 }
@@ -711,6 +731,18 @@ Token Lexer::getTokenInt() {
                         if (ch == '\'') {
                             // Character constant
                             return Token(U128(firstchar.v), CORETYPE_CHAR);
+                        } else if (firstchar == 'r' && ch == '#') {
+                            ::std::string str;
+                            ch = this->getc();
+                            if (!issym(ch)) {
+                                throw CompileErrorGeneric(*this, "Invalid raw lifetime");
+                            }
+                            while (issym(ch)) {
+                                str += ch;
+                                ch = this->getc();
+                            }
+                            this->ungetc();
+                            return Token(TOK_LIFETIME, Ident(this->realGetHygiene(), RcString::newInterned(str)));
                         } else if (issym(firstchar.v)) {
                             // Lifetime name
                             ::std::string str;

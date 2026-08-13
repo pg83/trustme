@@ -530,7 +530,12 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                 const auto& curMod = *lex.parseState().module;
                 return InterpolatedFragment(InterpolatedFragment::STMT_ITEM, ParseModItemS(lex, curMod.fileInfo, curMod.path(), ASTAttributeList{}));
             }
-            return InterpolatedFragment(InterpolatedFragment::STMT, ParseStmt(lex).release());
+            {
+                auto attrs = ParseItemAttrs(lex);
+                auto stmt = ParseStmt(lex);
+                stmt->setAttrs(mv$(attrs));
+                return InterpolatedFragment(InterpolatedFragment::STMT, stmt.release());
+            }
         case MacroPatEnt::PAT_PATH:
             // HACK for `rustc-1.90.0-src/vendor/icu_locid_transform_data-1.5.0/data/macros.rs::23`
             if (lex.lookahead(0) == TOK_INTERPOLATED_TYPE) {
@@ -793,6 +798,17 @@ namespace {
         for (;;) {
             if (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT) {
                 level += (lex.next() == TOK_DOUBLE_LT ? 2 : 1);
+            } else if (lex.next() == TOK_DOUBLE_GT_EQUAL) {
+                assert(level > 0);
+                if (level == 1) {
+                    lex.consumeAndPush(TOK_GTE);
+                    return true;
+                }
+                level -= 2;
+                lex.consumeAndPush(TOK_EQUAL);
+                if (level == 0) {
+                    return true;
+                }
             } else if (lex.next() == TOK_GT || lex.next() == TOK_DOUBLE_GT) {
                 assert(level > 0);
                 if (lex.next() == TOK_DOUBLE_GT) {
@@ -884,7 +900,7 @@ namespace {
             lex.consume();
             if (lex.next() == TOK_STRING) {
                 lex.consume();
-            } else if (!typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
+            } else if (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT) {
                 if (!consumeTtAngle(lex)) {
                     return false;
                 }
@@ -941,6 +957,12 @@ namespace {
             case TOK_RWORD_DYN:
                 lex.consume();
                 return consumeTypeTraitList(lex);
+            case TOK_RWORD_FOR:
+                lex.consume();
+                if (lex.next() != TOK_LT || !consumeTtAngle(lex)) {
+                    return false;
+                }
+                return consumeType(lex);
             case TOK_IDENT:
                 if (lex.nextTok().ident().name == "dyn") {
                     lex.consume();
@@ -1272,6 +1294,14 @@ namespace {
                     lex.consumeIf(TOK_RWORD_MOVE);
                     return consumeExpr(lex, noStructLit);
 
+                case TOK_RWORD_CONST:
+                    lex.consume();
+                    if (lex.next() != TOK_BRACE_OPEN) {
+                        return false;
+                    }
+                    consumeTt(lex);
+                    break;
+
                 case TOK_RWORD_UNSAFE:
                     lex.consume();
                     if (lex.next() != TOK_BRACE_OPEN) {
@@ -1391,7 +1421,7 @@ namespace {
                                     return false;
                                 }
                             }
-                        } else if (lex.consumeIf(TOK_INTEGER))
+                        } else if (lex.consumeIf(TOK_INTEGER) || lex.consumeIf(TOK_FLOAT))
                             ;
                         else {
                             return false;
@@ -1504,6 +1534,16 @@ namespace {
                 *outIsItem = true;
             }
             return true;
+        }
+
+        // Outer attributes are part of a statement fragment.  Item matching
+        // above consumes its own attributes; skip them here before deciding
+        // between a let statement and an expression statement.
+        while (lex.next() == TOK_HASH) {
+            lex.consume();
+            if (lex.consumeIf(TOK_EXCLAM) || !consumeTt(lex)) {
+                return false;
+            }
         }
 
         if (lex.consumeIf(TOK_RWORD_LET)) {
@@ -1869,7 +1909,7 @@ namespace {
             case TOK_RWORD_EXTERN:
                 lex.consume();
                 if (lex.consumeIf(TOK_RWORD_CRATE)) {
-                    if (!lex.consumeIf(TOK_IDENT)) {
+                    if (!lex.consumeIf(TOK_IDENT) && !lex.consumeIf(TOK_RWORD_SELF)) {
                         return false;
                     }
                     if (lex.consumeIf(TOK_RWORD_AS)) {
@@ -1977,6 +2017,8 @@ namespace {
                     lex.consume();
                     switch (lex.next()) {
                         case TOK_PAREN_OPEN:
+                        case TOK_SQUARE_OPEN:
+                        case TOK_BRACE_OPEN:
                             return consumeTt(lex);
                         case TOK_EQUAL:
                             lex.consume();
@@ -2933,6 +2975,15 @@ public:
     auto ps = lex.startSpan();
     while (GET_TOK(tok, lex) != close || depth > 0) {
         DEBUG("tok = " << tok);
+        if (tok.isDocComment()) {
+            lex.getTokenIf(TOK_EXCLAM);
+            GET_CHECK_TOK(tok, lex, TOK_SQUARE_OPEN);
+            GET_CHECK_TOK(tok, lex, TOK_IDENT);
+            GET_CHECK_TOK(tok, lex, TOK_EQUAL);
+            GET_CHECK_TOK(tok, lex, TOK_STRING);
+            GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
+            continue;
+        }
         if (tok.type() == open) {
             depth++;
         } else if (tok.type() == close) {

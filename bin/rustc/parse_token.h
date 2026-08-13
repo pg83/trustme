@@ -74,6 +74,7 @@ class Token {
     Data mData;
     Position pos;
     Ident::Hygiene mHygiene; // Only for strings, for formatting
+    bool mIsDocComment = false;
 
     Token(enum eTokenType t, Data d, Position p);
 
@@ -176,6 +177,14 @@ public:
 
     const Position& getPos() const {
         return pos;
+    }
+
+    void markAsDocComment() {
+        mIsDocComment = true;
+    }
+
+    bool isDocComment() const {
+        return mIsDocComment;
     }
 
     static bool typeIsRword(enum eTokenType type) {
