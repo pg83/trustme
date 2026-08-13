@@ -2776,6 +2776,21 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             BUG(sp, "UfcsUnknown - " << pathMono);
         }
     }
+
+    // A trait method whose Self is the corresponding trait object is always
+    // dispatched through that object's vtable.  This also applies when the
+    // method is used as a function item: resolving the path to a default trait
+    // body here would turn `Trait::method` into a static call once Self is
+    // inferred as `dyn Trait`.
+    if (const auto* pe = pathMono.mData.opt_UfcsKnown()) {
+        if (const auto* tyDyn = pe->type->opt_TraitObject()) {
+            if (pe->item != "vtable#" && tyDyn->mTrait.traitPtr->getVtableValueIndex(pe->trait, pe->item) > 0) {
+                state.rv.traitObjectMethods.insert(mv$(pathMono));
+                return;
+            }
+        }
+    }
+
     // Get the item type
     // - Valid types are Function and Static
     auto itemRef = getEntFullpath(sp, state.resolve.wb, state.crate, pathMono, subPp);

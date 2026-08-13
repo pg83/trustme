@@ -8,13 +8,12 @@ the same set; the erasure itself cost 12 tests, all fixed/re-baselined).
 Classification method: per-case rerun of every failing test with the failure
 signature (assert/BUG location, first error, signal) clustered by root cause.
 
-## P0 — miscompiles: accepted code runs WRONG (~22)
+## P0 — miscompiles: accepted code runs WRONG (1)
 
 The compiler silently produces incorrect programs. Highest severity.
 
 | cluster | tests | notes |
 |---|---|---|
-| rust_lib runtime panics | 18 | std `error.rs` tests; partly blocked on missing backtrace support (borders P2 feature work) |
 | slice doctest | 1 | `core/src/slice/mod.rs` |
 
 ## P1 — compiler crashes on valid code (~178)
