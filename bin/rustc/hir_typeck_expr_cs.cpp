@@ -548,6 +548,45 @@ namespace {
                     this->context.equateTypesAssoc(node.span(), node.resType, langIndex, mv$(traitPp), ty, "Output", {}, false);
                     break;
                 } else if (count > 1) {
+                    const auto* indexInfer = this->context.getType(node.cache.indexTy)->opt_Infer();
+                    if (indexInfer && indexInfer->tyClass == HIRInferClass::Integer) {
+                        // Trait selection constrains an integer literal before its i32 fallback.
+                        // Select a concrete index type only when exactly one integer satisfies
+                        // the complete Index obligation, including candidate where-clauses.
+                        const HIRCoreType integerTypes[] = {
+                            HIRCoreType::Usize,
+                            HIRCoreType::Isize,
+                            HIRCoreType::U8,
+                            HIRCoreType::I8,
+                            HIRCoreType::U16,
+                            HIRCoreType::I16,
+                            HIRCoreType::U32,
+                            HIRCoreType::I32,
+                            HIRCoreType::U64,
+                            HIRCoreType::I64,
+                            HIRCoreType::U128,
+                            HIRCoreType::I128,
+                        };
+                        const HIRTypeData* possibleType = nullptr;
+                        for (const auto integerType : integerTypes) {
+                            const auto* candidateType = this->context.crate.types.primitive(integerType);
+                            const bool isViable = this->context.mResolve.findTraitImpls(node.span(), langIndex, HIRPathParams(candidateType), ty, [](ImplRef, HIRCompare cmp) {
+                                return cmp == HIRCompare::Equal;
+                            });
+                            if (!isViable) {
+                                continue;
+                            }
+                            if (possibleType) {
+                                possibleType = nullptr;
+                                break;
+                            }
+                            possibleType = candidateType;
+                        }
+                        if (possibleType) {
+                            this->context.equateTypes(node.span(), node.cache.indexTy, possibleType);
+                            return;
+                        }
+                    }
                     // Multiple fuzzy matches, don't keep dereferencing until we know.
                     currentTy = nullptr;
                     break;

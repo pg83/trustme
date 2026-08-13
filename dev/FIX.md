@@ -18,13 +18,13 @@ The compiler silently produces incorrect programs. Highest severity.
 | rust_lib runtime panics | 18 | std `error.rs` tests; partly blocked on missing backtrace support (borders P2 feature work) |
 | slice doctest | 1 | `core/src/slice/mod.rs` |
 
-## P1 — compiler crashes on valid code (~187)
+## P1 — compiler crashes on valid code (~186)
 
-One cluster = one bug. Fixing the top 2 clusters greens ~9 tests.
+One cluster = one bug. Fixing the top 2 clusters greens ~8 tests.
 
 | location | tests | example |
 |---|---|---|
-| `hir_typeck_expr_cs.cpp:8471` "Spare rules left" | 4 | `typeck/issue-91633.rs` |
+| `hir_typeck_expr_cs.cpp:8510` "Spare rules left" | 3 | `rust-2021/array-into-iter-ambiguous.rs` |
 | `hir_typeck_resolve_common.cpp:160` | 5 | `const-generics/generic_const_exprs/issue-82268.rs` |
 | ~12 smaller clusters (2-4 each) | ~35 | mangling:98, expr_cs:1909 (TAIT placeholder), hir_hir:482, mir_from_hir:1866/1596/7386, typeck_common:653/397, expand:5452/1997, trans_main:575, mir_operations:640 |
 | unclassified aborts (miri/gccrs/rustlings/doctest categories, not re-run individually) | 81 | |
@@ -59,7 +59,7 @@ Pass when re-run in isolation; fail only under the parallel gate load
 
 ## Recommended order (by ROI)
 
-1. Top-2 crash clusters (~9 tests)
+1. Top-2 crash clusters (~8 tests)
 2. Quiz miscompiles (deep dives: method resolution, macro hygiene)
 3. Parser features, largest-cluster first
 4. Typeck/TAIT epic (largest, hardest)
