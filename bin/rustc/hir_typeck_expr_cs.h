@@ -176,11 +176,6 @@ struct Context {
 
     bool isCurrentOperatorImpl(const ImplRef& impl) const;
 
-    // A Deref implementation for a native pointer/reference receives `&Self`.
-    // Dereferencing that receiver is the native step needed to recover `Self`,
-    // not another dispatch through a potentially overlapping Deref impl.
-    bool isCurrentNativeDerefReceiver(const HIRSimplePath& derefTrait, const HIRTypeData* operand) const;
-
     // Equate const generics (values)
     void equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRConstGeneric& rr);
 

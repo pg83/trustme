@@ -2207,20 +2207,30 @@ bool StaticTraitResolve::traitContainsType(const Span& sp, const HIRGenericPath&
 }
 
 bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const {
+    {
+        auto it = copyCache.find(ty);
+        if (it != copyCache.end()) {
+            return it->second;
+        }
+    }
+
+    // Bounds in the active parameter environment take precedence over the
+    // structural rules below.  This matters for deliberately inconsistent
+    // bounds accepted by `trivial_bounds`, such as `where str: Copy`.
+    if (traitBounds.size() != 0) {
+        auto pp = HIRPathParams();
+        if (this->findImplBounds(sp, mLangCopy, &pp, ty, [](auto, bool) {
+                return true;
+            })) {
+            copyCache.insert(::std::make_pair(ty, true));
+            return true;
+        }
+    }
+
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Generic, e) {
-            {
-                auto it = copyCache.find(ty);
-                if (it != copyCache.end()) {
-                    return it->second;
-                }
-            }
-            auto pp = HIRPathParams();
-            bool rv = this->findImplBounds(sp, mLangCopy, &pp, ty, [&](auto, bool) {
-                return true;
-            });
-            copyCache.insert(::std::make_pair(ty, rv));
-            return rv;
+            copyCache.insert(::std::make_pair(ty, false));
+            return false;
         }
         TU_ARMA(Path, e) {
             const auto* markings = e.binding.getTraitMarkings();
@@ -2236,13 +2246,6 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
                 }
             }
 
-            {
-                auto it = copyCache.find(ty);
-                if (it != copyCache.end()) {
-                    DEBUG("CACHED " << ty << " = " << it->second);
-                    return it->second;
-                }
-            }
             auto pp = HIRPathParams();
             bool rv = this->findImpl(sp, mLangCopy, &pp, ty, [&](auto, bool) {
                 return true;

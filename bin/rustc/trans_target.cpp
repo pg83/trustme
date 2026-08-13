@@ -588,7 +588,11 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 return false;
             }
             if (outSize == SIZE_MAX) {
-                BUG(sp, "Unsized type in array - " << ty);
+                // An inconsistent but accepted parameter environment can make
+                // an otherwise-unsized element usable here (e.g. `str: Copy`
+                // under `trivial_bounds`).  MIR construction must preserve the
+                // symbolic layout just as it does for a generic element.
+                return false;
             }
             if (!te.size.is_Known()) {
                 DEBUG("Size unknown - " << ty);

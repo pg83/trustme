@@ -3359,6 +3359,17 @@ namespace {
     class ReborrowExprVisitorMutate: public HIRExprVisitorDef {
         const HIRCrate& crate;
 
+        void markUniquePlace(HIRExprNodeP& node) {
+            node->usage = HIRValueUsage::Mutate;
+            if (auto* field = cast<HIRExprNodeField>(node.get())) {
+                markUniquePlace(field->mValue);
+            } else if (auto* index = cast<HIRExprNodeIndex>(node.get())) {
+                markUniquePlace(index->mValue);
+            } else if (auto* deref = cast<HIRExprNodeDeref>(node.get())) {
+                markUniquePlace(deref->mValue);
+            }
+        }
+
     public:
         ReborrowExprVisitorMutate(const HIRCrate& crate)
             : HIRExprVisitorDef(crate.types)
@@ -3394,9 +3405,7 @@ namespace {
             if (const auto* e = nodePtr->resType->opt_Borrow()) {
                 if (e->type == HIRBorrowType::Unique) {
                     if (cast<HIRExprNodeIndex>(nodePtr.get()) || cast<HIRExprNodeVariable>(nodePtr.get()) || cast<HIRExprNodeField>(nodePtr.get()) || cast<HIRExprNodeDeref>(nodePtr.get())) {
-                        if (auto* inner = cast<HIRExprNodeDeref>(nodePtr.get())) {
-                            inner->mValue->usage = HIRValueUsage::Mutate;
-                        }
+                        markUniquePlace(nodePtr);
                         DEBUG("Insert reborrow - " << nodePtr->span() << " - type=" << nodePtr->resType);
                         auto sp = nodePtr->span();
                         auto tyMut = nodePtr->resType;

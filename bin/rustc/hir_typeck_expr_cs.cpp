@@ -644,33 +644,11 @@ namespace {
                     return;
                 }
                 TU_ARMA(Borrow, e) {
-                    if (opTrait.components().empty() || this->context.isCurrentNativeDerefReceiver(opTrait, ty)) {
-                        useBuiltin(e.inner);
-                    } else {
-                        bool hasVisibleImpl = this->context.mResolve.findTraitImpls(node.span(), opTrait, {}, ty, [&](ImplRef impl, HIRCompare) {
-                            return !this->context.isCurrentOperatorImpl(impl);
-                        });
-                        if (hasVisibleImpl) {
-                            useTrait();
-                        } else {
-                            useBuiltin(e.inner);
-                        }
-                    }
+                    useBuiltin(e.inner);
                 }
                 TU_ARMA(Pointer, e) {
-                    if (opTrait.components().empty()) {
-                        useBuiltin(e.inner);
-                    } else {
-                        bool hasVisibleImpl = this->context.mResolve.findTraitImpls(node.span(), opTrait, {}, ty, [&](ImplRef impl, HIRCompare) {
-                            return !this->context.isCurrentOperatorImpl(impl);
-                        });
-                        if (hasVisibleImpl) {
-                            useTrait();
-                        } else {
-                            // TODO: Figure out if this node is in an unsafe block.
-                            useBuiltin(e.inner);
-                        }
-                    }
+                    // TODO: Figure out if this node is in an unsafe block.
+                    useBuiltin(e.inner);
                 }
             }
             this->completed = true;
@@ -9745,32 +9723,21 @@ public:
         // the enclosing expression's coercion is considered.  A trait
         // target is an output constraint, not an expected result type.
         const auto& ty = this->context.getType(node.mValue->resType);
-        const auto& opTrait = this->context.crate.getLangItemPathOpt("deref");
         const HIRTypeData* inner = nullptr;
-        bool isOwnedBox = false;
         if (const auto* e = ty->opt_Borrow()) {
             inner = e->inner;
         } else if (const auto* e = ty->opt_Pointer()) {
             inner = e->inner;
         } else if (const auto* e = this->context.mResolve.typeIsOwnedBox(node.span(), ty)) {
             inner = e;
-            isOwnedBox = true;
         }
         if (!inner) {
             this->context.addRevisit(node);
             return;
         }
 
-        const bool hasVisibleImpl = !isOwnedBox && !opTrait.components().empty() && !this->context.isCurrentNativeDerefReceiver(opTrait, ty) && this->context.mResolve.findTraitImpls(node.span(), opTrait, {}, ty, [&](ImplRef impl, HIRCompare) {
-            return !this->context.isCurrentOperatorImpl(impl);
-        });
-        if (hasVisibleImpl) {
-            node.traitUsed = HIRExprNodeDeref::TraitUsed::Trait;
-            this->context.equateTypesAssoc(node.span(), node.resType, opTrait, {}, node.mValue->resType, "Target", {}, true, TypeckPrimitiveOperator::Deref);
-        } else {
-            node.traitUsed = HIRExprNodeDeref::TraitUsed::Builtin;
-            this->context.equateTypes(node.span(), node.resType, inner);
-        }
+        node.traitUsed = HIRExprNodeDeref::TraitUsed::Builtin;
+        this->context.equateTypes(node.span(), node.resType, inner);
     }
 
     void visit(HIRExprNodeEmplace& node) override {
@@ -10899,16 +10866,6 @@ const HIRTypeData* Context::coercionHint(const HIRExprNode& node) const {
 bool Context::isCurrentOperatorImpl(const ImplRef& impl) const {
     const auto* traitImpl = impl.mData.opt_TraitImpl();
     return currentTraitImpl && traitImpl && traitImpl->impl == currentTraitImpl;
-}
-
-// A Deref implementation for a native pointer/reference receives `&Self`.
-// Dereferencing that receiver is the native step needed to recover `Self`,
-// not another dispatch through a potentially overlapping Deref impl.
-bool Context::isCurrentNativeDerefReceiver(const HIRSimplePath& derefTrait, const HIRTypeData* operand) const {
-    const auto* currentTrait = mResolve.currentTraitPath();
-    const auto& ty = ivars.getType(operand);
-    const auto* borrow = ty->opt_Borrow();
-    return currentTraitImpl && currentTrait && currentTrait->mPath == derefTrait && borrow && primitiveOperatorHasBuiltin(TypeckPrimitiveOperator::Deref, borrow->inner) && currentTraitImpl->matchesType(borrow->inner, ivars.callbackResolveInfer());
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Context::Coercion& v) {
