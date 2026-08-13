@@ -386,7 +386,7 @@ namespace {
                                 const auto& path = ty->as_Path().path.mData.as_Generic();
                                 const auto& str = *ty->as_Path().binding.as_Struct();
                                 auto monomorph = [&](const auto& tpl) {
-                                    return mResolve.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, nullptr, &path.mParams, nullptr));
+                                    return mResolve.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.mParams, nullptr));
                                 };
                                 TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");), (Tuple, return metadataType(monomorph(se.back().ent));), (Named, return metadataType(monomorph(se.back().ty));))
                                 //MIR_TODO(*m_mir_res, "Determine DST type when ::Possible - " << ty);

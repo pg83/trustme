@@ -502,6 +502,14 @@ namespace {
             currentTrait = nullptr;
         }
 
+        void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override {
+            auto _ = mResolve.setImplGenerics(MetadataType::TraitObject, item.mParams);
+            auto self = crate.types.self();
+            selfTypes.push_back(self);
+            HIRVisitor::visitTraitAlias(p, item);
+            selfTypes.pop_back();
+        }
+
         void visitStruct(HIRItemPath p, HIRStruct& item) override {
             auto _ = mResolve.setImplGenerics(item.structMarkings.dstType, item.mParams);
             HIRVisitor::visitStruct(p, item);

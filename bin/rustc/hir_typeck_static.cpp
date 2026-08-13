@@ -3082,7 +3082,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
 
             HIRTypeRef tmpTy;
             const auto& pe = e.path.mData.as_Generic();
-            auto monomorphCb = MonomorphStatePtr(crate.types, nullptr, &pe.mParams, nullptr);
+            auto monomorphCb = MonomorphStatePtr(crate.types, ty, &pe.mParams, nullptr);
             auto monomorph = [&](const auto& tpl) -> const HIRTypeData* {
                 return this->monomorphExpandOpt(sp, tmpTy, tpl, monomorphCb);
             };
@@ -3325,11 +3325,13 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 TU_MATCHA((v), (ve), (Constant, return &ve;), (Static, return &ve;), (Function, return &ve;))
             } else {
                 bool bestIsSpec = false;
+                bool hasBoundedImpl = false;
                 ImplRef bestImpl;
                 ValuePtr rv;
                 this->findImpl(sp, pe.trait.mPath, &pe.trait.mParams, pe.type, [&](auto impl, bool isFuzz) -> bool {
                     DEBUG(impl);
                     if (!impl.mData.is_TraitImpl()) {
+                        hasBoundedImpl = true;
                         return false;
                     }
                     const HIRTraitImpl& ti = *impl.mData.as_TraitImpl().impl;
@@ -3378,6 +3380,10 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     }
                 });
                 if (!bestImpl.isValid()) {
+                    if (hasBoundedImpl) {
+                        DEBUG("Trait item is provided by an in-scope bound");
+                        return ValuePtr::make_NotYetKnown({});
+                    }
                     // If the type and impl are fully known, then look for trait provided values/bodies
                     if (!monomorphiseTypeNeeded(pe.type) && !monomorphisePathparamsNeeded(pe.trait.mParams)) {
                         // Look for provided bodies

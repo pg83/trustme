@@ -1009,8 +1009,7 @@ namespace {
         TU_ARMA(NotFound, e)
             return EntPtr();
             TU_ARMA(NotYetKnown, e)
-            return EntPtr();
-            //TODO(sp, "Handle NotYetKnown - " << path);
+            throw Defer();
             TU_ARMA(Constant, e)
             return e;
             TU_ARMA(Static, e)
@@ -1661,6 +1660,9 @@ public:
             MonomorphState tempMs(rootResolve.crate.types);
             tempMs.ppImpl = &tempPpImpl;
             tempMs.ppMethod = &tempPpMethod;
+            if (!p.mData.is_Generic()) {
+                tempMs.selfTy = rootResolve.crate.types.self();
+            }
             DEBUG("- Evaluate " << p);
             try {
                 item.valueRes = eval.evaluateConstant(HIRItemPath(p), item.mValue, item.mType, std::move(tempMs));
@@ -3805,6 +3807,8 @@ namespace {
 
             auto ppImpl = getParamsForDef(impl.mParams);
             monomorphState.ppImpl = &ppImpl;
+            auto savedSelf = std::move(monomorphState.selfTy);
+            monomorphState.selfTy = monomorphState.monomorphType(sp, impl.mType);
             implParams = &impl.mParams;
 
             HIRVisitor::visitTraitImpl(traitPath, impl);
@@ -3812,6 +3816,7 @@ namespace {
             assert(implParams);
             implParams = nullptr;
             monomorphState.ppImpl = nullptr;
+            monomorphState.selfTy = std::move(savedSelf);
 
             mMod = nullptr;
             modPath = nullptr;
@@ -3827,6 +3832,8 @@ namespace {
 
             auto ppImpl = getParamsForDef(impl.mParams);
             monomorphState.ppImpl = &ppImpl;
+            auto savedSelf = std::move(monomorphState.selfTy);
+            monomorphState.selfTy = monomorphState.monomorphType(sp, impl.mType);
             implParams = &impl.mParams;
 
             HIRVisitor::visitTypeImpl(impl);
@@ -3834,6 +3841,7 @@ namespace {
             assert(implParams);
             implParams = nullptr;
             monomorphState.ppImpl = nullptr;
+            monomorphState.selfTy = std::move(savedSelf);
 
             mMod = nullptr;
             modPath = nullptr;
@@ -3850,6 +3858,7 @@ namespace {
 
         void visitTrait(HIRItemPath ip, HIRTrait& trait) override {
             auto ppImpl = getParamsForDef(trait.mParams);
+            auto savedSelf = std::move(monomorphState.selfTy);
             monomorphState.selfTy = crate.types.self();
             monomorphState.ppImpl = &ppImpl;
             implParams = &trait.mParams;
@@ -3859,6 +3868,7 @@ namespace {
             assert(implParams);
             implParams = nullptr;
             monomorphState.ppImpl = nullptr;
+            monomorphState.selfTy = std::move(savedSelf);
         }
 
         void evalulateConstGeneric(const Span& sp, const HIRTypeData* ty, HIRConstGeneric& v) {

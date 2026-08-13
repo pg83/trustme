@@ -7913,7 +7913,7 @@ namespace {
                                 const auto& path = ty->as_Path().path.mData.as_Generic();
                                 const auto& str = *ty->as_Path().binding.as_Struct();
                                 auto monomorph = [&](const auto& tpl) {
-                                    return mResolve.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, nullptr, &path.mParams, nullptr));
+                                    return mResolve.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.mParams, nullptr));
                                 };
                         TU_MATCH_HDRA( (str.mData), { )
                         TU_ARMA(Unit, se) MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");

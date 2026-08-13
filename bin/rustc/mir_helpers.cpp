@@ -100,14 +100,14 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                     // TODO: Cache result (to avoid needing to re-monomorph)
                     if (const auto* tep = te.binding.opt_Struct()) {
                         const auto& str = **tep;
-                        auto maybeMonomorph = [&](const auto& ty) {
-                            return mResolve.monomorphExpandOpt(sp, tmp, ty, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                        auto maybeMonomorph = [&](const auto& fieldType) {
+                            return mResolve.monomorphExpandOpt(sp, tmp, fieldType, MonomorphStatePtr(crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr));
                         };
                         TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*this, "Field on unit-like struct - " << ty);), (Tuple, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in tuple-struct " << te.path); return maybeMonomorph(se[fieldIndex].ent);), (Named, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in struct " << te.path); return maybeMonomorph(se[fieldIndex].ty);))
                     } else if (const auto* tep = te.binding.opt_Union()) {
                         const auto& unm = **tep;
                         auto maybeMonomorph = [&](const HIRTypeData* t) -> const HIRTypeData* {
-                            return mResolve.monomorphExpandOpt(sp, tmp, t, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                            return mResolve.monomorphExpandOpt(sp, tmp, t, MonomorphStatePtr(crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr));
                         };
                         MIR_ASSERT(*this, fieldIndex < unm.mVariants.size(), "Field index out of range for union");
                         return maybeMonomorph(unm.mVariants.at(fieldIndex).ty);
@@ -162,14 +162,14 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                         const auto& variant = variants[variantIndex];
 
                         const auto& varTy = variant.type;
-                        return mResolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                        return mResolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr));
                     } else {
                         const auto& unm = *te.binding.as_Union();
                         MIR_ASSERT(*this, variantIndex < unm.mVariants.size(), "Variant index out of range");
                         const auto& variant = unm.mVariants[variantIndex];
                         const auto& varTy = variant.ty;
 
-                        return mResolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr));
+                        return mResolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr));
                     }
                 }
         }

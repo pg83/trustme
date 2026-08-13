@@ -46,7 +46,7 @@ namespace {
                         const auto& path = tep->path.mData.as_Generic();
                         const auto& str = *tep->binding.as_Struct();
                         auto monomorph = [&](const auto& tpl) {
-                            auto rv = MonomorphStatePtr(types, nullptr, &path.mParams, nullptr).monomorphType(sp, tpl);
+                            auto rv = MonomorphStatePtr(types, unsizedTy, &path.mParams, nullptr).monomorphType(sp, tpl);
                             state.mResolve.expandAssociatedTypes(sp, rv);
                             return rv;
                         };
@@ -667,7 +667,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
                 const auto& str = *te.binding.as_Struct();
                 HIRTypeRef tmp;
                 auto monomorph = [&](const auto& t) {
-                    return MonomorphStatePtr(state.crate.types, nullptr, &tyPath.mParams, nullptr).monomorphType(state.sp, t);
+                    return MonomorphStatePtr(state.crate.types, ty, &tyPath.mParams, nullptr).monomorphType(state.sp, t);
                 };
                 ::std::vector<MIRParam> vals;
                 TU_MATCH_HDRA( (str.mData), {)
@@ -757,8 +757,8 @@ bool MIRCleanupUnsizeGetMetadata(const MIRTypeResolve& state, MirMutator& mutato
             const auto& str = *de.binding.as_Struct();
             MIR_ASSERT(state, str.structMarkings.unsizedField != ~0u, "Unsize on type that doesn't implement have a ?Sized field - " << dstTy);
 
-            auto monomorphCbD = MonomorphStatePtr(state.crate.types, nullptr, &de.path.mData.as_Generic().mParams, nullptr);
-            auto monomorphCbS = MonomorphStatePtr(state.crate.types, nullptr, &se.path.mData.as_Generic().mParams, nullptr);
+            auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &de.path.mData.as_Generic().mParams, nullptr);
+            auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &se.path.mData.as_Generic().mParams, nullptr);
 
             // Return GetMetadata on the inner type
         TU_MATCH_HDRA( (str.mData), {)
@@ -869,8 +869,8 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
         const auto& str = *dte.binding.as_Struct();
         MIR_ASSERT(state, str.structMarkings.coerceUnsizedIndex != ~0u, "Struct " << srcTy << " doesn't impl CoerceUnsized");
 
-        auto monomorphCbD = MonomorphStatePtr(state.crate.types, nullptr, &dte.path.mData.as_Generic().mParams, nullptr);
-        auto monomorphCbS = MonomorphStatePtr(state.crate.types, nullptr, &ste.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCbD = MonomorphStatePtr(state.crate.types, dstTy, &dte.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCbS = MonomorphStatePtr(state.crate.types, srcTy, &ste.path.mData.as_Generic().mParams, nullptr);
 
         // - Destructure and restrucure with the unsized fields
         ::std::vector<MIRParam> ents;
@@ -1003,7 +1003,7 @@ void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValu
                         tyTpl = se[0].ty;
                     }
                 }
-                tmp = MonomorphStatePtr(state.crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr).monomorphType(state.sp, tyTpl);
+                tmp = MonomorphStatePtr(state.crate.types, typ, &te.path.mData.as_Generic().mParams, nullptr).monomorphType(state.sp, tyTpl);
                 typ = tmp;
 
                 numInjectedFldZeros ++;

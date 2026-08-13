@@ -733,7 +733,7 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         // TODO: Wipe lifetimes?
-        auto monomorphCb = MonomorphStatePtr(resolve.crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(resolve.crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };
@@ -1241,7 +1241,7 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
 
-        auto monomorphCb = MonomorphStatePtr(resolve.crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(resolve.crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };
@@ -1830,7 +1830,7 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
-        auto monomorphCb = MonomorphStatePtr(resolve.crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(resolve.crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };

@@ -17,7 +17,7 @@ ASTTypeParam::ASTTypeParam(Span sp, ASTAttributeList attrs, RcString name)
 }
 
 void ASTTypeParam::setDefault(TypeRef type) {
-    assert(mDefaultValue.isWildcard());
+    assert(mDefaultValue->isWildcard());
     mDefaultValue = ::std::move(type);
 }
 

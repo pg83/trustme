@@ -383,7 +383,7 @@ namespace {
             const auto& str = *te.binding.as_Struct();
             HIRTypeRef tmp;
             auto monomorph = [&](const auto& t) {
-                return MonomorphStatePtr(mutator.state.crate.types, nullptr, &tyPath.mParams, nullptr).monomorphType(sp, t);
+                return MonomorphStatePtr(mutator.state.crate.types, ty, &tyPath.mParams, nullptr).monomorphType(sp, t);
             };
             ::std::vector<MIRParam> vals;
             TU_MATCH_HDRA( (str.mData), {)
@@ -922,7 +922,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 const auto& fld = repr->fields.at(trait.vtableParentTraitsStart + i);
                 ASSERT_BUG(sp, fld.offset == ofs, "");
                 if (!fld.ty->is_Tuple()) {
-                    auto ptMono = MonomorphStatePtr(crate.types, nullptr, &traitPath.mParams, nullptr).monomorphGenericpath(sp, pt.mPath);
+                    auto ptMono = MonomorphStatePtr(crate.types, type, &traitPath.mParams, nullptr).monomorphGenericpath(sp, pt.mPath);
                     auto ptVtablePath = HIRPath(type, mv$(ptMono), ent.first.mData.as_UfcsKnown().item);
                     pushPtr(mv$(ptVtablePath));
                 }
@@ -2094,10 +2094,10 @@ namespace {
             DEBUG("Emitted a total of " << out.types.size() << " type entries");
         }
 
-        void visitStruct(const HIRGenericPath& path, const HIRStruct& item) {
+        void visitStruct(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRStruct& item) {
             static Span sp;
             HIRTypeRef tmp;
-            MonomorphStatePtr ms(crate.types, nullptr, &path.mParams, nullptr);
+            MonomorphStatePtr ms(crate.types, selfType, &path.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
                 DEBUG(x);
                 return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
@@ -2105,10 +2105,10 @@ namespace {
             TU_MATCHA((item.mData), (e), (Unit, ), (Tuple, for (const auto& fld : e) { visitType(monomorph(fld.ent)); }), (Named, for (const auto& fld : e) visitType(monomorph(fld.ty));))
         }
 
-        void visitUnion(const HIRGenericPath& path, const HIRUnion& item) {
+        void visitUnion(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRUnion& item) {
             static Span sp;
             HIRTypeRef tmp;
-            MonomorphStatePtr ms(crate.types, nullptr, &path.mParams, nullptr);
+            MonomorphStatePtr ms(crate.types, selfType, &path.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
                 return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
             };
@@ -2117,10 +2117,10 @@ namespace {
             }
         }
 
-        void visitEnum(const HIRGenericPath& path, const HIREnum& item) {
+        void visitEnum(const HIRTypeData* selfType, const HIRGenericPath& path, const HIREnum& item) {
             static Span sp;
             HIRTypeRef tmp;
-            MonomorphStatePtr ms(crate.types, nullptr, &path.mParams, nullptr);
+            MonomorphStatePtr ms(crate.types, selfType, &path.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
                 return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
             };
@@ -2207,12 +2207,12 @@ namespace {
                                 ExternType,
                                 // No innards to visit
                             ),
-                            (Struct, visitStruct(te.path.mData.as_Generic(), *tpb);),
-                            (Union, visitUnion(te.path.mData.as_Generic(), *tpb);),
+                            (Struct, visitStruct(ty, te.path.mData.as_Generic(), *tpb);),
+                            (Union, visitUnion(ty, te.path.mData.as_Generic(), *tpb);),
                             (Enum,
                              // NOTE: Force repr generation before recursing into enums (allows layout optimisation to be calculated)
                              TargetGetTypeRepr(sp, mResolve, ty);
-                             visitEnum(te.path.mData.as_Generic(), *tpb);)
+                             visitEnum(ty, te.path.mData.as_Generic(), *tpb);)
                         )
                     }
                     TU_ARMA(TraitObject, te) {
@@ -3042,7 +3042,7 @@ void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, const Tr
         ASSERT_BUG(sp, ptPath.traitPtr, "Unset trait pointer - " << ptPath);
         const auto& pt = *ptPath.traitPtr;
         if (pt.vtablePath != HIRSimplePath()) {
-            auto ptMono = MonomorphStatePtr(state.crate.types, nullptr, &traitPath.mParams, nullptr).monomorphGenericpath(sp, ptPath.mPath);
+            auto ptMono = MonomorphStatePtr(state.crate.types, type, &traitPath.mParams, nullptr).monomorphGenericpath(sp, ptPath.mPath);
             auto ptVtablePath = HIRPath(type, mv$(ptMono), vtablePath.mData.as_UfcsKnown().item);
             state.rv.addVtable(mv$(ptVtablePath), TransParams(state.crate.types));
             // No need to recurse.

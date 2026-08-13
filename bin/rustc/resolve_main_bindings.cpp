@@ -662,7 +662,7 @@ namespace {
                                         // - rustc-1.90.0-src/compiler/rustc_codegen_llvm/src/context.rs:675
                                         if (const auto* pbe = (**p).mBindings.type.binding.opt_TypeAlias()) {
                                             assert(pbe->alias_);
-                                            assert(pbe->alias_->mType.isPath());
+                                            assert(pbe->alias_->mType->isPath());
                                             return *pbe->alias_->mType->mData.as_Path();
                                         }
                                         return **p;
