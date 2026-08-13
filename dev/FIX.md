@@ -30,10 +30,7 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P0 — largest shared causes
 
-1. Inline assembly emitted for clang/assembler is invalid: 19 tests. Most fail
-   with `unknown token in expression`; the remainder are unsupported register
-   constraints/names.
-2. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
+1. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
    backend/runtime family until a smaller reproducer proves otherwise.
 
 ## P1 — internal compiler failures
@@ -117,7 +114,7 @@ completed in an isolated rerun close to its ten-minute limit.
 
 Fix by shared impact, not by corpus order:
 
-1. Invalid inline-assembly emission and f128 runtime aborts (19 tests each).
+1. f128 runtime aborts (19 tests).
 2. The remaining P1 clusters, largest verified root cause first.
 3. Generated-C++ families, runtime semantic families, then front-end features.
 4. Missing diagnostics and isolated long-tail failures.

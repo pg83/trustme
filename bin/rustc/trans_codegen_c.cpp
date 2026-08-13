@@ -189,6 +189,11 @@ namespace {
         ::std::set<const TypeRepr*> embeddedTags;
         ::std::map<HIRTypeRef, HIRTypeRef> normalizedCtypes;
 
+        bool usesIntelCompilerAsmDialect() const {
+            const auto& arch = TargetGetCurSpec(mResolve.wb).arch.mName;
+            return arch == "x86" || arch == "x86_64";
+        }
+
     public:
         CodeGeneratorC(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
             : crate(crate)
@@ -954,6 +959,13 @@ namespace {
             // optimisation, where native signed overflow would otherwise be
             // undefined behaviour.
             args.push_back("-fwrapv");
+            if (usesIntelCompilerAsmDialect()) {
+                // Rust's default x86 asm dialect is Intel syntax. Keep the C++
+                // compiler's operand printer in that dialect too: an inline
+                // `.intel_syntax` directive does not change how `%0`, `%k0`,
+                // and `%q0` are expanded by the compiler.
+                args.push_back("-masm=intel");
+            }
             for (const auto& a : TargetGetCurSpec(mResolve.wb).backendC.compilerOpts) {
                 args.push_back(a.c_str());
             }
@@ -1138,8 +1150,8 @@ namespace {
 
         void emitGlobalAsm(const HIRGlobalAssembly& se) override {
             of << "__asm__ (\"";
-            if ((TargetGetCurSpec(mResolve.wb).arch.mName == "x86" || TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64") && !se.options.attSyntax) {
-                of << ".intel_syntax noprefix; ";
+            if (usesIntelCompilerAsmDialect() && se.options.attSyntax) {
+                of << ".att_syntax prefix; ";
             }
             for (const auto& l : se.lines) {
                 for (const auto& f : l.frags) {
@@ -1150,8 +1162,8 @@ namespace {
                 of << FmtGccAsm(l.trailing, false);
                 of << ";\\n ";
             }
-            if ((TargetGetCurSpec(mResolve.wb).arch.mName == "x86" || TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64") && !se.options.attSyntax) {
-                of << ".att_syntax; ";
+            if (usesIntelCompilerAsmDialect() && se.options.attSyntax) {
+                of << ".intel_syntax noprefix; ";
             }
             of << "\");\n";
         }
@@ -4309,13 +4321,13 @@ namespace {
                 }
             }
             if (asmMatchesTemplate(e, "pushfd; popl $0", {}, {"=r"})) {
-                of << indent << "__asm__ __volatile__ (\"pushfl; popl %0\" : \"=r\" (";
+                of << indent << "__asm__ __volatile__ (\".att_syntax prefix; pushfl; popl %%%0; .intel_syntax noprefix\" : \"=r\" (";
                 emitLvalue(e.outputs[0].second);
                 of << ") : : );\n";
                 return;
             }
             if (asmMatchesTemplate(e, "pushl $0; popfd", {"r"}, {})) {
-                of << indent << "__asm__ __volatile__ (\"pushl %0; popfl\" : : \"r\" (";
+                of << indent << "__asm__ __volatile__ (\".att_syntax prefix; pushl %%%0; popfl; .intel_syntax noprefix\" : : \"r\" (";
                 emitLvalue(e.inputs[0].second);
                 of << ") : );\n";
                 return;
@@ -4325,7 +4337,8 @@ namespace {
             if (isVolatile) {
                 of << "__volatile__";
             }
-            of << "(\"" << (isIntel ? ".intel_syntax noprefix; " : "");
+            const bool emitAttSyntax = usesIntelCompilerAsmDialect() && !isIntel;
+            of << "(\"" << (emitAttSyntax ? ".att_syntax prefix; " : "");
             // TODO: Use a more powerful parser that can properly handle the differences between rustc/llvm and GCC
             for (auto it = e.tpl.begin(); it != e.tpl.end(); ++it) {
                 if (*it == '\n') {
@@ -4341,14 +4354,16 @@ namespace {
                     --it;
                 } else if (*it == '%' && *(it + 1) == '%') {
                     of << "%";
+                } else if (*it == '%' && isdigit(*(it + 1)) && emitAttSyntax) {
+                    of << "%%%";
                 } else if (*it == '%' && !isdigit(*(it + 1))) {
                     of << "%%";
                 } else if (*it == '$' && isdigit(*(it + 1)) && *(it + 2) != 'x') {
-                    of << "%";
+                    of << (emitAttSyntax ? "%%%" : "%");
                 }
                 // Hack for `${0:b}` seen with `setc`, just emit as `%0`
                 else if (*it == '$' && *(it + 1) == '{') {
-                    of << "%" << *(it + 2);
+                    of << (emitAttSyntax ? "%%%" : "%") << *(it + 2);
                     while (it != e.tpl.end() && *it != '}') {
                         it++;
                     }
@@ -4356,7 +4371,7 @@ namespace {
                     of << *it;
                 }
             }
-            of << (isIntel ? ".att_syntax; " : "") << "\"";
+            of << (emitAttSyntax ? ".intel_syntax noprefix; " : "") << "\"";
             of << ": ";
             for (unsigned int i = 0; i < e.outputs.size(); i++) {
                 const auto& v = e.outputs[i];
@@ -4567,7 +4582,7 @@ namespace {
                 of << " );\n";
                 return;
             } else if (m.matchesTemplate({"btl {1:e}, ({0})", "setc {2}"}, {"in:reg", "in:reg", "out:reg_byte"})) {
-                of << indent << "__asm__(\"bt %1, (%2); setc %0\"";
+                of << indent << "__asm__(\".att_syntax prefix; bt %%%1, (%%%2); setc %%%0; .intel_syntax noprefix\"";
                 of << " : \"=r\"(";
                 emitLvalue(m.output(2));
                 of << ")";
@@ -4579,7 +4594,7 @@ namespace {
                 of << ");\n";
                 return;
             } else if (m.matchesTemplate({"btcl {1:e}, ({0})", "setc {2}"}, {"in:reg", "in:reg", "out:reg_byte"})) {
-                of << indent << "__asm__(\"btc %1, (%2); setc %0\"";
+                of << indent << "__asm__(\".att_syntax prefix; btc %%%1, (%%%2); setc %%%0; .intel_syntax noprefix\"";
                 of << " : \"=r\"(";
                 emitLvalue(m.output(2));
                 of << ")";
@@ -4591,7 +4606,7 @@ namespace {
                 of << ");\n";
                 return;
             } else if (m.matchesTemplate({"btrl {1:e}, ({0})", "setc {2}"}, {"in:reg", "in:reg", "out:reg_byte"})) {
-                of << indent << "__asm__(\"btr %1, (%2); setc %0\"";
+                of << indent << "__asm__(\".att_syntax prefix; btr %%%1, (%%%2); setc %%%0; .intel_syntax noprefix\"";
                 of << " : \"=r\"(";
                 emitLvalue(m.output(2));
                 of << ")";
@@ -4603,7 +4618,7 @@ namespace {
                 of << ");\n";
                 return;
             } else if (m.matchesTemplate({"btsl {1:e}, ({0})", "setc {2}"}, {"in:reg", "in:reg", "out:reg_byte"})) {
-                of << indent << "__asm__(\"bts %1, (%2); setc %0\"";
+                of << indent << "__asm__(\".att_syntax prefix; bts %%%1, (%%%2); setc %%%0; .intel_syntax noprefix\"";
                 of << " : \"=r\"(";
                 emitLvalue(m.output(2));
                 of << ")";
@@ -4673,13 +4688,15 @@ namespace {
                         if (pe->spec.opt_Explicit()) {
                             // Ignore, handled explicitly above
                             // An in+out explicit register is fully covered by its
-                            // "+" output constraint; emitting a matching input for
-                            // it too is rejected by clang.
+                            // read-write output constraint; emitting a matching
+                            // input for it too is rejected by clang.
                             if (pe->input && !pe->output) {
                                 inputs.push_back(&se.params[i]);
                             }
-                        } else if (pe->input && !pe->output) {
-                            argMappings[i] = outputs.size() + inputs.size();
+                        } else if (pe->input) {
+                            if (!pe->output) {
+                                argMappings[i] = outputs.size() + inputs.size();
+                            }
                             inputs.push_back(&se.params[i]);
                         }
                     }
@@ -4696,25 +4713,45 @@ namespace {
                     }
                 }
 
+                const bool emitAttSyntax = usesIntelCompilerAsmDialect() && se.options.attSyntax;
                 of << indent << "__asm__ ";
                 of << "__volatile__"; // Default everything to volatile
                 of << "(\"";
-                if ((TargetGetCurSpec(mResolve.wb).arch.mName == "x86" || TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64") && !se.options.attSyntax) {
-                    of << ".intel_syntax noprefix; ";
+                if (emitAttSyntax) {
+                    of << ".att_syntax prefix; ";
                 }
                 bool escapePercent = true || !inputs.empty() || !outputs.empty();
                 for (const auto& l : se.lines) {
                     for (const auto& f : l.frags) {
                         of << FmtGccAsm(f.before, escapePercent);
                         MIR_ASSERT(localMirRes, argMappings.at(f.index) != UINT_MAX, stmt);
+                        if (emitAttSyntax) {
+                            of << "%%";
+                        }
                         of << "%";
-                        if (argMappings.at(f.index) == UINT8_MAX - 1) {
+                        if (argMappings.at(f.index) == UINT_MAX - 1) {
                             of << se.params[f.index].as_Reg().spec.as_Explicit();
                             continue;
                         }
                         switch (f.modifier) {
-                            case '\0':
+                            case '\0': {
+                                if (const auto* reg = se.params[f.index].opt_Reg()) {
+                                    if (const auto* regClass = reg->spec.opt_Class()) {
+                                        switch (*regClass) {
+                                            case AsmRegisterClass::x86Reg:
+                                            case AsmRegisterClass::x86RegAbcd:
+                                                of << (TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64" ? 'q' : 'k');
+                                                break;
+                                            case AsmRegisterClass::x86RegByte:
+                                                of << 'b';
+                                                break;
+                                            default:
+                                                break;
+                                        }
+                                    }
+                                }
                                 break;
+                            }
                             case 'r':
                                 of << 'q'; // x86: `q` selects rax explicitly
                                 break;
@@ -4729,8 +4766,8 @@ namespace {
                     of << FmtGccAsm(l.trailing, escapePercent);
                     of << ";\\n ";
                 }
-                if ((TargetGetCurSpec(mResolve.wb).arch.mName == "x86" || TargetGetCurSpec(mResolve.wb).arch.mName == "x86_64") && !se.options.attSyntax) {
-                    of << ".att_syntax; ";
+                if (emitAttSyntax) {
+                    of << ".intel_syntax noprefix; ";
                 }
                 of << "\" :";
                 for (size_t i = 0; i < outputs.size(); i++) {
@@ -4742,8 +4779,21 @@ namespace {
                     of << "\"";
                     if (!p.output && !p.input) {
                         of << "+";
+                    } else if (p.input && p.spec.is_Explicit()) {
+                        of << (p.dir == AsmDirection::InOut ? "+&" : "+");
                     } else {
-                        of << (p.input ? "+" : "=");
+                        switch (p.dir) {
+                            case AsmDirection::Out:
+                            case AsmDirection::InOut:
+                                of << "=&";
+                                break;
+                            case AsmDirection::LateOut:
+                            case AsmDirection::InLateOut:
+                                of << "=";
+                                break;
+                            case AsmDirection::In:
+                                MIR_BUG(localMirRes, "Input-only asm parameter listed as an output - " << stmt);
+                        }
                     }
                     TU_MATCH_HDRA((p.spec), {)
                     TU_ARMA(Class, c)
@@ -4805,11 +4855,16 @@ namespace {
                     of << " ";
                     TU_MATCH_HDRA((p), {)
                     TU_ARMA(Reg, r) {
-                            of << "\"";
-                        TU_MATCH_HDRA((r.spec), {)
-                        TU_ARMA(Class, c)
-                            switch(c)
-                            {
+                        of << "\"";
+                        if (r.output && !r.spec.is_Explicit()) {
+                            const auto it = ::std::find(outputs.begin(), outputs.end(), &r);
+                            MIR_ASSERT(localMirRes, it != outputs.end(), stmt);
+                            of << (it - outputs.begin());
+                        } else {
+                            TU_MATCH_HDRA((r.spec), {)
+                            TU_ARMA(Class, c)
+                                switch(c)
+                                {
                                     // x86
                                     case AsmRegisterClass::x86Reg:
                                         of << "r";
@@ -4840,25 +4895,21 @@ namespace {
                                         of << "f";
                                         break;
                                 }
-                                TU_ARMA(Explicit, name) {
-                                    auto it = ::std::find(outputs.begin(), outputs.end(), &r);
-                                    if (it != outputs.end()) {
-                                        of << (it - outputs.begin());
-                                    } else {
-                                        of << "r";
-                                    }
+                            TU_ARMA(Explicit, name) {
+                                    of << "r";
                                 }
+                            }
                         }
                         assert(r.input);
                         of << "\" (";
                         if( const auto* regnameP = p.as_Reg().spec.opt_Explicit() ) {
-                                of << "asm_" << *regnameP;
+                            of << "asm_" << *regnameP;
                         }
                         else {
-                                emitParam(*r.input);
+                            emitParam(*r.input);
                         }
                         of << ")";
-                        }
+                    }
                         TU_ARMA(Const, c) MIR_TODO(localMirRes, "Asm2 GCC - Const: " << stmt);
                         TU_ARMA(Sym, c) MIR_TODO(localMirRes, "Asm2 GCC - Sym: " << stmt);
                     }
