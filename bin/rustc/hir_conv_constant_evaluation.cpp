@@ -3905,6 +3905,12 @@ namespace {
                 DEBUG("visit_generic_path[m_get_params] " << p);
                 switch (pc) {
                     case HIRVisitor::PathContext::VALUE: {
+                        if (p.mPath.components().size() > 1) {
+                            const auto& parent = crate.getTypeitemByPath(sp, p.mPath, /*ignore_crate_name=*/false, /*ignore_last_node=*/true);
+                            if (const auto* enm = parent.opt_Enum()) {
+                                return enm->mParams;
+                            }
+                        }
                         auto& vi = crate.getValitemByPath(sp, p.mPath);
                     TU_MATCH_HDRA( (vi), { )
                     TU_ARMA(Import, e)  BUG(sp, "Module Import");
