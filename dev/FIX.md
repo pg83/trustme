@@ -1,57 +1,140 @@
 # Full-gate failure triage and fix priorities
 
-Snapshot: 2026-08-12, commit 4bb1e6a5c, full gate `./build -j 24 -k test`
-(~14 500 tests). 999 failing cases, all verified pre-existing relative to the
-lifetime-erasure refactor (the identical gate on pre-erasure 526848ea8 fails
-the same set; the erasure itself cost 12 tests, all fixed/re-baselined).
+This file contains unfinished work only.
 
-Classification method: per-case rerun of every failing test with the failure
-signature (assert/BUG location, first error, signal) clustered by root cause.
+Snapshot: 2026-08-13, working tree on top of fa97e261d. The full gate was run
+as `./build -B .build-clang -j 78 -k test` in the clang Nix environment:
 
-## P1 — compiler crashes on valid code (~143)
+| result | tests |
+|---|---:|
+| total | 14,520 |
+| passed | 13,057 |
+| failed | 1,463 |
 
-One cluster = one bug.
+Every failed node was then run independently with the same command and its own
+log. 1,462 failures reproduce; only RustSmith seed 97 passes in isolation.
+Source locations below are stable failure signatures, not automatically root
+causes: a generic reporting location can contain several unrelated bugs.
 
-| location | tests | example |
-|---|---|---|
-| ~2 smaller clusters | ~2 | expr_cs:1909 (TAIT placeholder), mir_operations:640 |
-| unclassified aborts (miri/gccrs/rustlings/doctest categories, not re-run individually) | 81 | |
+| class | tests |
+|---|---:|
+| compiler BUG, MIR TODO/ERROR, assertion, exception, SIGSEGV/SIGILL | 408 |
+| ordinary front-end rejection of a positive test | 688 |
+| generated C++/assembly/link failure | 52 |
+| wrong runtime result or abort | 145 |
+| missing rejection/diagnostic | 73 |
+| missing native test-helper link input | 31 |
+| adapter/ordinary exit 1 | 56 |
+| stable timeout | 9 |
+| load-only flake | 1 |
 
-## P2 — missing language features (~475)
+## P0 — largest shared causes
 
-Parser gaps (237):
-- lifetime syntax: raw `'r#a`, label forms (26)
-- `..`-related syntax in new positions (14)
-- fn delegation `reuse` (11)
-- `become` tail calls (7)
-- `gen` blocks, `pattern_type!` (5), inline-asm fragments (5), specialization
-  `default` items (5), C-string literals `c".."`/`cr".."`, misc (~160 spread
-  over many single-test syntaxes)
+1. CTFE treats a reachable panic while attempting an optional runtime fold as
+   a fatal constant-evaluation error: 123 `rust_lib` tests fail at
+   `hir_conv_constant_evaluation.cpp:3617`. The other seven failures at this
+   location are separate compile-time assertions/dead-code cases and must be
+   checked after the general fallback fix.
+2. The Rust 1.90 harness does not make `librust_test_helpers.a` visible to the
+   generated C++ link: 31 ABI tests fail on the same missing `-lrust_test_helpers`.
+3. Corpus adapters pass unsupported rustc driver/codegen flags to mrustc: 55
+   tests. The main groups are `codegen-units` (12), `link-dead-code` (6),
+   `debug_assertions` (5), `no-prepopulate-passes` (4), and `lto` (4). Retain a
+   test in the fast corpus only if ignoring the flag preserves what it tests.
+4. Inline assembly emitted for clang/assembler is invalid: 19 tests. Most fail
+   with `unknown token in expression`; the remainder are unsupported register
+   constraints/names.
+5. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
+   backend/runtime family until a smaller reproducer proves otherwise.
 
-Typeck incompleteness (238):
-- "Failed to find an impl" family (25+)
-- "type annotations needed" / "Failed to infer" (23)
-- "Method X doesn't match trait" — the type-alias-impl-trait epic (17)
-- assorted type mismatches, receiver-type limitations, erased-type
-  restrictions ("Use of an erased type outside of a function return")
+## P1 — internal compiler failures
 
-## P3 — cheap wins or debatable (~80)
+The 408 failures form 116 location signatures. These are all compiler defects,
+but the generic `mir_helpers.h:108` signature must be subdivided by its message
+before fixing.
 
-- missing diagnostics (80): compile-fail tests for lints/attribute checks the
-  fork never implemented; implement or re-baseline.
+| signature | tests | note |
+|---|---:|---|
+| CTFE panic, `hir_conv_constant_evaluation.cpp:3617` | 130 | 123-test shared fallback bug described above |
+| MIR error, `mir_helpers.h:108` | 31 | mixed intrinsics, pointer operations, raw DSTs and SIMD |
+| CTFE intrinsic TODO, `hir_conv_constant_evaluation.cpp:3498` | 16 | `black_box`, `forget`, `raw_eq`, pointer offsets, SIMD and comparisons |
+| BUG, `trans_target.cpp:1896` | 14 | common codegen target failure |
+| CTFE null/invalid pointer, `hir_conv_constant_evaluation.cpp:1585` | 11 | |
+| BUG, `macro_rules_macro_rules.cpp:2189` | 10 | |
+| CTFE unresolved generic, `hir_conv_constant_evaluation.cpp:1751` | 9 | const-generic inference/unevaluated expressions |
+| BUG, `hir_hir.cpp:1653` | 8 | |
+| BUG, `parse_common.cpp:1404` | 5 | |
+| assertion, `hir_expr_ptr.cpp:130` | 5 | |
+| seven signatures with four failures each | 28 | `trans_codegen_c`, `synext_macro`, typeck, MIR, bad-char parsing, HIR path assertion |
+| 99 smaller signatures | 141 | one to three tests each |
 
-## X — environment flakes (27)
+The signal failures are included above: two SIGILLs at
+`mir_operations.cpp:1441`, two SIGSEGVs at
+`hir_conv_main_bindings.cpp:1430`, and four one-test SIGSEGV signatures.
 
-Pass when re-run in isolation; fail only under the parallel gate load
-(timeouts etc.).
+## P2 — accepted Rust 1.90 front-end features
 
-## Recommended order (by ROI)
+The 688 ordinary rejections split by compiler area:
 
-1. Classified crash clusters, largest-cluster first
-2. Unclassified aborts, clustered by root cause before fixing
-3. Parser features, largest-cluster first
-4. Typeck/TAIT epic (largest, hardest)
+| area | tests | largest signatures |
+|---|---:|---|
+| parser | 283 | 147 at `parse_parseerror.cpp:63`, 107 at line 56, 19 at line 68 |
+| type checking/name and HIR resolution | 330 | failed impl 47, mismatch 41, TAIT trait method 32, missing method 29, associated output 24 |
+| macro/attribute expansion | 69 | `expand_common.cpp:465` 24, `synext_decorator.cpp:2492` 13 |
+| MIR/CTFE rejection | 6 | |
 
-Raw data: per-case signatures and per-bucket test lists were produced by the
-triage scripts in the session scratchpad (`fail-rows2.json`,
-`priorities.json`); regenerate by re-mining a full-gate log if needed.
+The parser totals are not three bugs. The largest concrete syntax families are
+async/closure function bodies (32), return-type notation and other `..` forms
+(15), `reuse` delegation (23), lifetime-in-path forms (10), `become` (9), and
+the remaining long tail of Rust 1.90 syntax.
+
+## P3 — diagnostics, backend output and runtime semantics
+
+- 73 negative tests compile successfully: 60 Rust Reference cases and 13
+  Nomicon cases. Group these by the missing diagnostic before implementing them.
+- 30 tests produce C++ rejected by clang: incomplete generated types (7), wrong
+  `main` ABI (4), enum narrowing (3), pointer-to-small-integer casts (3), bad
+  assignments (3), undeclared generated symbols (2), and eight smaller cases.
+- Three additional tests reach the linker and fail on unresolved/intentional
+  native symbols.
+- 102 executables panic with exit 101. The common `assert_eq!` text covers many
+  unrelated semantic failures and is not a root-cause cluster.
+- 31 executables abort: 19 f128 doctests, 11 Miri cases, and one allocation
+  failure in a library test.
+- 12 output mismatches: nine async-drop tests and RustSmith seeds 15, 19, 102.
+- One remaining adapter exit is a GCCRS torture test whose expected non-zero
+  runtime status does not match the produced program.
+
+## P4 — performance and flakes
+
+Nine nodes time out in isolation:
+
+- RustSmith seeds 7 and 36 at the ten-minute node limit;
+- `consts/large-zst-array-77062.rs` and two recursive TAIT UI tests;
+- `for-loop-while/label_break_value.rs`, `deriving/issue-58319.rs`, and
+  `consts/const-eval/enum_discr.rs`;
+- Exercism `palindrome-products`.
+
+RustSmith seed 97 is the sole load-only flake: it failed the parallel gate but
+completed in an isolated rerun close to its ten-minute limit.
+
+## Work order
+
+Fix by shared impact, not by corpus order:
+
+1. CTFE runtime-fold panic fallback (123 tests).
+2. Native test-helper propagation (31 tests).
+3. Adapter flag filtering/reclassification (55 tests).
+4. Invalid inline-assembly emission and f128 runtime aborts (19 tests each).
+5. The remaining P1 clusters, largest verified root cause first.
+6. Generated-C++ families, runtime semantic families, then front-end features.
+7. Missing diagnostics and isolated long-tail failures.
+
+For every compiler change: add a minimal `tst/unit/test_*.rs` that is green on
+Rust 1.90, confirm it is red on current mrustc, fix the shared path, then run
+only the affected triggers and the unit corpus. Remove completed entries from
+this file. Do not run another full gate until the file is exhausted.
+
+Reclassification tools: `dev/gate_reclassify.py` reruns commands extracted from
+a gate log; `dev/gate_classify.py` emits per-case records and stable signature
+clusters.
