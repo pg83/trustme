@@ -89,6 +89,8 @@ public:
     const HIRTypeData* fixTraitDefaultReturn(const Span& sp, const HIRItemPath& p, const HIRTypeData* tpl, HIRTypeRef& tmp) const;
 
     void expandAssociatedTypes(const Span& sp, HIRTypeRef& input) const;
+    void revealOpaqueTypes(const Span& sp, HIRTypeRef& input) const;
+    void revealOpaqueTypesPath(const Span& sp, HIRPath& input) const;
     void expandAssociatedTypesPath(const Span& sp, HIRPath& input) const;
     void evaluateArraySize(const Span& sp, HIRArraySize& size) const;
     void evaluateConstGeneric(const Span& sp, HIRConstGeneric& value) const;

@@ -1183,7 +1183,9 @@ public:
         localTypes.reserve(state.fcn.locals.size());
         locals.reserve(state.fcn.locals.size());
         for (size_t i = 0; i < state.fcn.locals.size(); i++) {
-            localTypes.push_back(state.mResolve.monomorphExpand(state.sp, state.fcn.locals[i], this->ms));
+            auto localType = state.mResolve.monomorphExpand(state.sp, state.fcn.locals[i], this->ms);
+            state.mResolve.revealOpaqueTypes(state.sp, localType);
+            localTypes.push_back(std::move(localType));
             locals.push_back(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, localTypes.back()));
         }
 
@@ -1192,7 +1194,9 @@ public:
     }
 
     HIRTypeRef monomorphExpand(const HIRTypeData* ty) const {
-        return this->resolve.monomorphExpand(this->state.sp, ty, this->ms);
+        auto rv = this->resolve.monomorphExpand(this->state.sp, ty, this->ms);
+        this->resolve.revealOpaqueTypes(this->state.sp, rv);
+        return rv;
     }
 
     unsigned readEnumVariant(const HIRTypeData* ty, MIREvalValueRef value) const {
@@ -1396,6 +1400,7 @@ public:
     }
 
     MIREvalStaticRefPtr getStaticref(HIRPath p, HIRTypeRef* outTy = nullptr) const {
+        rootResolve.revealOpaqueTypesPath(state.sp, p);
         // If there's any mention of generics in this path, then return Literal::Defer
         if (visitPathTysWith(p, [&](const auto& ty) -> bool {
             return ty->is_Generic();
@@ -1615,7 +1620,7 @@ public:
 
     const EncodedLiteral& getConst(const HIRPath& inP, HIRTypeRef* outTy) const {
         auto p = ms.monomorphPath(state.sp, inP);
-        rootResolve.expandAssociatedTypesPath(state.sp, p);
+        rootResolve.revealOpaqueTypesPath(state.sp, p);
         // If there's any mention of generics in this path, then return Literal::Defer
         if (visitPathTysWith(p, [&](const auto& ty) -> bool {
             return ty->is_Generic();
@@ -3481,6 +3486,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
 /// @return `true` is a new stack frame was pushed
 bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<HIRPath> fcnPath, ::std::vector<MIREvalAllocationPtr> callArgs) {
     const auto& state = localState.state;
+    resolve.revealOpaqueTypesPath(state.sp, *fcnPath);
     MonomorphState fcnMs(resolve.crate.types);
     const HIRGenericParams* implParamsDef = nullptr;
 
@@ -3569,9 +3575,12 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         // Monomorphised argument types
         HIRFunction::argsT argDefs;
         for (const auto& a : fcn.mArgs) {
-            argDefs.push_back(::std::make_pair(HIRPattern(), this->resolve.monomorphExpand(this->rootSpan, a.second, fcnMs)));
+            auto argTy = this->resolve.monomorphExpand(this->rootSpan, a.second, fcnMs);
+            this->resolve.revealOpaqueTypes(this->rootSpan, argTy);
+            argDefs.push_back(::std::make_pair(HIRPattern(), std::move(argTy)));
         }
         auto retTy = this->resolve.monomorphExpand(this->rootSpan, fcn.returnType, fcnMs);
+        this->resolve.revealOpaqueTypes(this->rootSpan, retTy);
 
         pushStackEntry(
             ::FmtLambda([=](std::ostream& os) {
@@ -3655,19 +3664,9 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
     DEBUG("ms = " << ms);
     const auto* mir = this->resolve.crate.getOrGenMir(this->resolve.wb, ip, expr, exp);
 
-    // Generating MIR can define a local type-alias `impl Trait`.  CTFE
-    // operates on the revealed representation, just like rustc's
-    // reveal-all evaluation environment, so use that hidden type for the
-    // result allocation and encoding instead of asking layout for an
-    // erased type.
-    if (const auto* erased = exp->opt_ErasedType()) {
-        if (const auto* alias = erased->inner.opt_Alias()) {
-            if (alias->inner->type != HIRTypeRef()) {
-                exp = MonomorphStatePtr(resolve.crate.types, nullptr, &alias->params, nullptr).monomorphType(expr.span(), alias->inner->type);
-                resolve.expandAssociatedTypes(expr.span(), exp);
-            }
-        }
-    }
+    // rustc evaluates constants in reveal-all mode: all opaque types have
+    // their hidden representation before CTFE asks for layout or dispatch.
+    resolve.revealOpaqueTypes(expr.span(), exp);
 
     if (mir) {
         ASSERT_BUG(Span(), expr.state, "");

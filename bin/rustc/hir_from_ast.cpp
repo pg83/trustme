@@ -16,6 +16,8 @@
 #include "hir_typeck_helpers.h" // monomorph
 #include "hir_conv_main_bindings.h"
 #include "macro_rules_macro_rules.h"
+#include "parse_common.h"
+#include "parse_ttstream.h"
 
 #include <std/mem/obj_pool.h>
 
@@ -1552,6 +1554,20 @@ HIRFunction LowerHIRFunction(HIRItemPath p, const ASTAttributeList& attrs, const
     static Span sp;
 
     TRACE_FUNCTION_F(p);
+
+    if (const auto* attr = attrs.get("define_opaque")) {
+        TTStream tokens(attr->span(), ParseState(), attr->data());
+        tokens.getTokenCheck(TOK_PAREN_OPEN);
+        while (tokens.lookahead(0) != TOK_PAREN_CLOSE) {
+            auto opaquePath = ParsePath(tokens, PATH_GENERIC_NONE);
+            ASSERT_BUG(attr->span(), !opaquePath.nodes().empty(), "Empty path in #[define_opaque]");
+            gCratePtr->opaqueTypeDefiners[opaquePath.nodes().back().name()].push_back(p.getFullPath());
+            if (!tokens.getTokenIf(TOK_COMMA)) {
+                break;
+            }
+        }
+        tokens.getTokenCheck(TOK_PAREN_CLOSE);
+    }
 
     ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> args;
     for (const auto& arg : f.args()) {
