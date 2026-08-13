@@ -28,11 +28,6 @@ causes: a generic reporting location can contain several unrelated bugs.
 | stable timeout | 9 |
 | load-only flake | 1 |
 
-## P0 — largest shared causes
-
-1. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
-   backend/runtime family until a smaller reproducer proves otherwise.
-
 ## P1 — internal compiler failures
 
 After the targeted CTFE rerun, 286 of the snapshot's internal compiler failures
@@ -88,8 +83,8 @@ the remaining long tail of Rust 1.90 syntax.
 - Repairing the shared CTFE arithmetic path exposed eight former compiler
   failures as runtime mismatches: seven `core::num::dec2flt` tests and
   `core::num::int_log::ilog10_u128`.
-- 31 executables abort: 19 f128 doctests, 11 Miri cases, and one allocation
-  failure in a library test.
+- 12 executables abort: 11 Miri cases and one allocation failure in a library
+  test.
 - Two repaired native-helper link failures now abort in
   `rust_dbg_extern_empty_struct`; the generated SysV call mishandles a C empty
   struct between two register-heavy arguments.
@@ -114,10 +109,9 @@ completed in an isolated rerun close to its ten-minute limit.
 
 Fix by shared impact, not by corpus order:
 
-1. f128 runtime aborts (19 tests).
-2. The remaining P1 clusters, largest verified root cause first.
-3. Generated-C++ families, runtime semantic families, then front-end features.
-4. Missing diagnostics and isolated long-tail failures.
+1. The remaining P1 clusters, largest verified root cause first.
+2. Generated-C++ families, runtime semantic families, then front-end features.
+3. Missing diagnostics and isolated long-tail failures.
 
 For every compiler change: add a minimal `tst/unit/test_*.rs` that is green on
 Rust 1.90, confirm it is red on current mrustc, fix the shared path, then run

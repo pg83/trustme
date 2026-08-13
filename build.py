@@ -94,6 +94,29 @@ SRC = build.glob("$(S)/bin/rustc/*.cpp")
 UT_SRC = sorted(s for s in SRC if s.endswith("_ut.cpp"))
 SRC = [s for s in SRC if not s.endswith("_ut.cpp")]
 
+CODEGEN_C_PRELUDE = "$(B)/gen/codegen_c_prelude.h"
+codegen_c_prelude = command(
+    name="codegen_c_prelude",
+    inputs=[
+        "$(S)/bin/rustc/prelude.inc",
+        "$(S)/dev/embed_text.py",
+    ],
+    outputs=[CODEGEN_C_PRELUDE],
+    cmd=[
+        "python3", "$(S)/dev/embed_text.py",
+        "$(S)/bin/rustc/prelude.inc", CODEGEN_C_PRELUDE,
+        "CODEGEN_C_PRELUDE",
+    ],
+    descr="GN",
+)
+
+
+def compiler_source(source, *generated_inputs):
+    inputs = list(generated_inputs)
+    if source.endswith("/trans_codegen_c.cpp"):
+        inputs.append(CODEGEN_C_PRELUDE)
+    return {"src": source, "inputs": inputs} if inputs else source
+
 if system_rustc_mode:
     rustc = command(
         name="rustc",
@@ -109,10 +132,10 @@ if system_rustc_mode:
     )
 else:
     rustc = program(
-        srcs=SRC,
+        srcs=[compiler_source(source) for source in SRC],
         name="rustc",
         output="$(B)/bin/rustc",
-        deps=[platform_libstd],
+        deps=[platform_libstd, codegen_c_prelude],
         ldflags=["-lz"],
     )
 
@@ -135,14 +158,19 @@ rustc_ut = program(
     srcs=[
         "$(S)/tst/unit/rustc_ut_main.cpp",
         *[
-            {"src": s, "inputs": [FLOAT128_VECTORS]}
-            if s.endswith("/float128_ut.cpp") else s
+            compiler_source(
+                s,
+                *([FLOAT128_VECTORS] if s.endswith("/float128_ut.cpp") else []),
+            )
             for s in UT_SRC
         ],
-        *[s for s in SRC if not s.endswith("/main_bindings.cpp")],
+        *[
+            compiler_source(s)
+            for s in SRC if not s.endswith("/main_bindings.cpp")
+        ],
     ],
     output="$(B)/tst/unit/rustc_ut",
-    deps=[platform_libstd, float128_ut_vectors],
+    deps=[platform_libstd, float128_ut_vectors, codegen_c_prelude],
     ldflags=["-lz"],
 )
 

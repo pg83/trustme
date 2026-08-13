@@ -551,7 +551,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return true;
                 case HIRCoreType::F128:
                     outSize = 16;
-                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.f64; //f128;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u128;
                     return true;
                 case HIRCoreType::Str:
                     DEBUG("sizeof on a `str` - unsized");
