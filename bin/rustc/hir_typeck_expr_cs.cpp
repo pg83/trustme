@@ -5298,7 +5298,19 @@ namespace {
             } else if (dst->is_Function()) {
                 const auto& de = dst->as_Function();
                 if (nodePtrPtr) {
-                    auto& nodePtr = *nodePtrPtr;
+                    auto* coercedNodePtr = nodePtrPtr;
+                    while (auto* block = cast<HIRExprNodeBlock>(coercedNodePtr->get())) {
+                        ASSERT_BUG(block->span(), block->valueNode, "Closure coercion reached a non-yielding block");
+                        ASSERT_BUG(block->span(), context.ivars.typesEqual(block->resType, block->valueNode->resType),
+                            "Block and result mismatch - " << context.ivars.fmtType(block->resType)
+                            << " != " << context.ivars.fmtType(block->valueNode->resType));
+                        if (contextMut) {
+                            block->resType = dst;
+                        }
+                        coercedNodePtr = &block->valueNode;
+                    }
+
+                    auto& nodePtr = *coercedNodePtr;
                     auto span = nodePtr->span();
                     if (de.mAbi != ABI_RUST) {
                         ERROR(span, E0000, "Cannot use closure for extern function pointer");
