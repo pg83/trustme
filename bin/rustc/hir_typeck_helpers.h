@@ -139,6 +139,9 @@ public:
     bool typesEqual(const HIRTypeData* l, const HIRTypeData* r) const;
 
 private:
+    void addIvarsTraitPath(HIRTraitPath& path);
+    void expandIvarsTraitPath(HIRTraitPath& path);
+
     IVar& getPointedIvar(unsigned int slot) const;
 };
 

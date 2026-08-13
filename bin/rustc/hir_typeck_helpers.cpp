@@ -521,11 +521,10 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
         TU_ARMA(Generic, e) {
         }
         TU_ARMA(TraitObject, e) {
-            this->expandIvarsParams(e.mTrait.mPath.mParams);
+            this->expandIvarsTraitPath(e.mTrait);
             for (auto& marker : e.markers) {
                 this->expandIvarsParams(marker.mParams);
             }
-            // TODO: Associated types
         }
         TU_ARMA(ErasedType, e) {
         TU_MATCH_HDRA( (e.inner), {)
@@ -582,6 +581,22 @@ void HMTypeInferrence::expandIvarsParams(HIRPathParams& params) {
     }
 }
 
+void HMTypeInferrence::expandIvarsTraitPath(HIRTraitPath& path) {
+    expandIvarsParams(path.mPath.mParams);
+    for (auto& bound : path.typeBounds) {
+        expandIvarsParams(bound.second.sourceTrait.mParams);
+        expandIvarsParams(bound.second.atyParams);
+        expandIvars(bound.second.type);
+    }
+    for (auto& bound : path.traitBounds) {
+        expandIvarsParams(bound.second.sourceTrait.mParams);
+        expandIvarsParams(bound.second.atyParams);
+        for (auto& trait : bound.second.traits) {
+            expandIvarsTraitPath(trait);
+        }
+    }
+}
+
 void HMTypeInferrence::addIvars(HIRTypeRef& type) {
     if (type->is_Infer() && type->as_Infer().index == ~0u) {
         type = newIvarTr(type->as_Infer().tyClass);
@@ -606,10 +621,7 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
         }
         TU_ARMA(TraitObject, e) {
             // Iterate all paths
-            this->addIvarsParams(e.mTrait.mPath.mParams);
-            for (auto& aty : e.mTrait.typeBounds) {
-                this->addIvars(aty.second.type);
-            }
+            this->addIvarsTraitPath(e.mTrait);
             for (auto& marker : e.markers) {
                 this->addIvarsParams(marker.mParams);
             }
@@ -672,6 +684,43 @@ void HMTypeInferrence::addIvarsParams(HIRPathParams& params) {
     }
     for (auto& arg : params.values) {
         addIvars(arg);
+    }
+}
+
+void HMTypeInferrence::addIvarsTraitPath(HIRTraitPath& path) {
+    static Span sp;
+    auto originalParams = path.mPath.mParams.clone();
+    addIvarsParams(path.mPath.mParams);
+
+    auto populateSourceTrait = [&](HIRGenericPath& sourceTrait) {
+        if (sourceTrait.mPath == path.mPath.mPath && sourceTrait.mParams == originalParams) {
+            sourceTrait.mParams = path.mPath.mParams.clone();
+            return;
+        }
+        if (path.traitPtr) {
+            auto self = types.self();
+            for (const auto& parent : path.traitPtr->allParentTraits) {
+                auto original = MonomorphStatePtr(types, self, &originalParams, nullptr).monomorphGenericpath(sp, parent.mPath);
+                if (original == sourceTrait) {
+                    sourceTrait = MonomorphStatePtr(types, self, &path.mPath.mParams, nullptr).monomorphGenericpath(sp, parent.mPath);
+                    return;
+                }
+            }
+        }
+        addIvarsParams(sourceTrait.mParams);
+    };
+
+    for (auto& bound : path.typeBounds) {
+        populateSourceTrait(bound.second.sourceTrait);
+        addIvarsParams(bound.second.atyParams);
+        addIvars(bound.second.type);
+    }
+    for (auto& bound : path.traitBounds) {
+        populateSourceTrait(bound.second.sourceTrait);
+        addIvarsParams(bound.second.atyParams);
+        for (auto& trait : bound.second.traits) {
+            addIvarsTraitPath(trait);
+        }
     }
 }
 

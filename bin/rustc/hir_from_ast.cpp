@@ -579,7 +579,7 @@ HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHig
         static HIRGenericPath findSourceTraitHir(const Span& sp, const HIRGenericPath& path, const HIRTrait& trait, const RcString& name, const Monomorphiser& ms) {
             auto it = trait.types.find(name);
             if (it != trait.types.end()) {
-                return ms.monomorphGenericpath(sp, path, /*allow_infer=*/false);
+                return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
             }
             auto selfTy = gCratePtr->types.self();
             auto cb = MonomorphStatePtr(gCratePtr->types, selfTy, &path.mParams, nullptr);
@@ -590,8 +590,8 @@ HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHig
                 auto it = t.types.find(name);
                 if (it != t.types.end()) {
                     // Monomorphse into outer scope, then run the outer monomorph
-                    auto p = cb.monomorphGenericpath(sp, st.mPath, /*allow_infer=*/false);
-                    return ms.monomorphGenericpath(sp, p, /*allow_infer=*/false);
+                    auto p = cb.monomorphGenericpath(sp, st.mPath, /*allow_infer=*/true);
+                    return ms.monomorphGenericpath(sp, p, /*allow_infer=*/true);
                 }
             }
             return HIRGenericPath();
@@ -601,7 +601,7 @@ HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHig
             for (const auto& i : trait.items()) {
                 if (i.data.is_Type() && i.name == name) {
                     // Return current path.
-                    return ms.monomorphGenericpath(sp, path, /*allow_infer=*/false);
+                    return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
                 }
             }
 
@@ -612,7 +612,7 @@ HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHig
                 ASSERT_BUG(sp, st.ent.path->mBindings.type.binding.is_Trait(), "Not a trait: " << *st.ent.path);
                 auto rv = H::findSourceTrait(sp, b.mPath, st.ent.path->mBindings.type.binding.as_Trait(), name, cb);
                 if (rv != HIRGenericPath()) {
-                    return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/false);
+                    return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/true);
                 }
             }
             return HIRGenericPath();
@@ -651,7 +651,7 @@ HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHig
                         auto b = LowerHIRTraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
                         auto rv = H::findSourceTrait(sp, b.mPath, st.ent.path->mBindings.type.binding, name, cb);
                         if (rv != HIRGenericPath()) {
-                            return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/false);
+                            return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/true);
                         }
                     }
                     return HIRGenericPath();
