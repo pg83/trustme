@@ -415,7 +415,7 @@ namespace {
             return mutator.inTemporary( mv$(ty), MIRRValue::make_Struct({ mv$(newPath), mv$(vals) }) );
         } else if (ty->is_Borrow() || ty->is_Pointer()) {
             outInnerPtr = lv.clone();
-            return mutator.inTemporary(mutator.state.crate.types.pointer(HIRBorrowType::Shared, mutator.state.crate.types.unit()), MIRRValue::make_DstPtr({mv$(lv)}));
+            return mutator.inTemporary(mv$(ty), MIRRValue::make_DstPtr({mv$(lv)}));
         } else {
             BUG(sp, "Unexpected type coerce_unsize in receiver - " << ty);
         }
@@ -570,6 +570,17 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     gpath.mParams.types.at(0) = crate.types.unit();
                     auto ty = crate.types.path(mv$(gpath), newFcn.mArgs.front().second->as_Path().binding.clone());
                     lvPtr = getUnitPtr(sp, builder, mv$(ty), MIRLValue::newArgument(0), lvSelf);
+                } break;
+                case HIRFunction::Receiver::Custom: {
+                    ASSERT_BUG(sp, fcnDef.receiverType, "Custom receiver without a receiver type");
+                    auto thinReceiver = cloneTyWith(crate.types, sp, newFcn.mArgs.front().second, [&](const HIRTypeData* ty, HIRTypeRef& out) {
+                        if (ty == pe.type) {
+                            out = crate.types.unit();
+                            return true;
+                        }
+                        return false;
+                    });
+                    lvPtr = getUnitPtr(sp, builder, mv$(thinReceiver), MIRLValue::newArgument(0), lvSelf);
                 } break;
                 default:
                     TODO(sp, "Handle different receiver types: <dyn " << traitPath << ">::" << name << " - self: " << newFcn.mArgs.front().second);

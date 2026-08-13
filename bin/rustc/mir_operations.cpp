@@ -699,7 +699,7 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
                 return mutator.inTemporary( mv$(ty), MIRRValue::make_Struct({ mv$(newPath), mv$(vals) }) );
             } else if (ty->is_Borrow() || ty->is_Pointer()) {
                 outInnerPtr = lv.clone();
-                return mutator.inTemporary(state.crate.types.pointer(HIRBorrowType::Shared, state.crate.types.unit()), MIRRValue::make_DstPtr({mv$(lv)}));
+                return mutator.inTemporary(mv$(ty), MIRRValue::make_DstPtr({mv$(lv)}));
             } else {
                 MIR_BUG(state, "Unexpected type coerce_unsize in receiver - " << ty);
             }
