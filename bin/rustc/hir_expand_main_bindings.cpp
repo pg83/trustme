@@ -5113,6 +5113,17 @@ namespace {
                 return false;
             }
 
+            // In an ordinary crate primitive operators are compiler operations.
+            // The matching impls exported by core describe their trait surface;
+            // lowering through those impls would bake core's compilation mode
+            // (notably its overflow-check setting) into every downstream use.
+            // A no_core crate is different: it can supply its own operator lang
+            // items and observable primitive impls, so those still need normal
+            // impl selection below.
+            if (!crate.isNoCore) {
+                return true;
+            }
+
             HIRPathParams traitParams(tyR);
             const auto& traitPath = crate.getLangItemPathOpt(langitem);
             if (traitPath.components().empty()) {
@@ -5127,6 +5138,10 @@ namespace {
         bool isBuiltinOperator(const Span& sp, TypeckPrimitiveOperator op, const char* langitem, const HIRTypeData* ty) const {
             if (!primitiveOperatorHasBuiltin(op, ty)) {
                 return false;
+            }
+
+            if (!crate.isNoCore) {
+                return true;
             }
 
             const auto& traitPath = crate.getLangItemPathOpt(langitem);

@@ -514,7 +514,6 @@ closures/semistatement-in-lambda.rs
 codegen/StackColoring-not-blowup-stack-issue-40883.rs
 codegen/alias-uninit-value.rs
 codegen/assign-expr-unit-type.rs
-codegen/cfguard-run.rs
 codegen/dynamic-size-of-prefix-correctly-36278.rs
 codegen/equal-pointers-unequal/as-cast/inline1.rs
 codegen/equal-pointers-unequal/as-cast/inline2.rs
@@ -1179,7 +1178,6 @@ functions-closures/fn-lval.rs
 functions-closures/fn-type-infer.rs
 functions-closures/implied-bounds-closure-arg-outlives.rs
 functions-closures/nullable-pointer-opt-closures.rs
-functions-closures/parallel-codegen-closures.rs
 functions-closures/return-from-closure.rs
 generic-associated-types/collections.rs
 generic-associated-types/const-generics-gat-in-trait-return-type-1.rs
@@ -1733,7 +1731,6 @@ lexer/floating-point-0e10-issue-40408.rs
 lexer/lex-bare-cr-nondoc-comment.rs
 lifetimes/any-lifetime-escape-higher-rank.rs
 lifetimes/enum-lifetime-container-10228.rs
-lifetimes/issue-84604.rs
 lifetimes/matcher-trait-equality-13323.rs
 lifetimes/rvalue-cleanup-shortcircuit.rs
 lifetimes/rvalue-lifetime-drop-timing.rs
@@ -1741,7 +1738,6 @@ link-native-libs/issue-70093/link-directives.rs
 linkage-attr/link-section-placement.rs
 linkage-attr/linkage-attr-does-not-panic-llvm-issue-33992.rs
 linking/executable-no-mangle-strip.rs
-linking/export-executable-symbols.rs
 lint/dead-code/alias-in-pat.rs
 lint/dead-code/associated-type.rs
 lint/dead-code/enum-variants.rs
@@ -1773,12 +1769,6 @@ loop-match/or-patterns.rs
 loop-match/valid-patterns.rs
 loops/issue-1974.rs
 lowering/issue-96847.rs
-lto/all-crates.rs
-lto/fat-lto.rs
-lto/lto-many-codegen-units.rs
-lto/thin-lto-global-allocator.rs
-lto/thin-lto-inlines.rs
-lto/weak-works.rs
 macros/assert-eq-macro-success.rs
 macros/assert-eq-macro-unsized.rs
 macros/assert-format-lazy.rs
@@ -2435,9 +2425,6 @@ self/string-self-append.rs
 self/ufcs-explicit-self.rs
 self/uniq-self-in-mut-slot.rs
 self/where-for-self.rs
-sepcomp/sepcomp-fns-backwards.rs
-sepcomp/sepcomp-fns.rs
-sepcomp/sepcomp-statics.rs
 shadowed/use-shadows-reexport.rs
 simd/array-type.rs
 simd/intrinsic/generic-bitmask-pass.rs

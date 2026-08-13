@@ -18,6 +18,49 @@ def compiletest_split_flags(flags: str) -> list[str]:
     return result
 
 
+MRUSTC_IGNORED_RUSTC_CODEGEN_OPTIONS = {
+    "codegen-units",
+    "codegen_units",
+    "link-dead-code",
+    "llvm-args",
+    "no-prepopulate-passes",
+    "passes",
+}
+
+
+def mrustc_compile_flags(flags: list[str], *, system_rustc: bool) -> list[str]:
+    """Drop rustc backend tuning only when running the mrustc adapters.
+
+    Tests whose purpose is the omitted LLVM/CGU behaviour are excluded by the
+    corpus importers. The retained tests use these switches only to reproduce a
+    language or runtime regression, so passing them to a different backend adds
+    no coverage and makes the driver reject otherwise useful input.
+    """
+    if system_rustc:
+        return list(flags)
+
+    result = []
+    index = 0
+    while index < len(flags):
+        flag = flags[index]
+        if flag == "-C" and index + 1 < len(flags):
+            option = flags[index + 1].split("=", 1)[0]
+            if option in MRUSTC_IGNORED_RUSTC_CODEGEN_OPTIONS:
+                index += 2
+                continue
+            result.extend((flag, flags[index + 1]))
+            index += 2
+            continue
+        if flag.startswith("-C") and len(flag) > 2:
+            option = flag[2:].split("=", 1)[0]
+            if option in MRUSTC_IGNORED_RUSTC_CODEGEN_OPTIONS:
+                index += 1
+                continue
+        result.append(flag)
+        index += 1
+    return result
+
+
 def log(msg: str) -> None:
     print(msg, file=sys.stderr, flush=True)
 

@@ -6,7 +6,7 @@ Revision: tag `1.90.0` (tag object
 `d8401009a052a5efaed3f5c901c76dd733c04fbe`), commit
 `1159e78c4747b02ef996e55082b704c09b970588`.
 
-`upstream/` contains 2,933 self-contained `run-pass` tests selected by
+`upstream/` contains 2,916 self-contained `run-pass` tests selected by
 `import.py`. Feature-gated tests are preserved: a failure in an unsupported
 language feature is part of the compatibility signal, not a reason to omit
 the test. Per-test compile and runtime flags are preserved too. The files

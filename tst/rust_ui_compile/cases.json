@@ -3038,16 +3038,6 @@
     "flags": []
   },
   {
-    "path": "closures/eager-mono-with-normalizable-upvars.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "bin",
-    "flags": [
-      "-Clink-dead-code",
-      "-Csymbol-mangling-version=v0"
-    ]
-  },
-  {
     "path": "closures/issue-101696.rs",
     "mode": "check",
     "edition": "2015",
@@ -3208,26 +3198,6 @@
     "edition": "2015",
     "crate_type": "bin",
     "flags": []
-  },
-  {
-    "path": "codegen/mono-impossible-2.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "flags",
-    "flags": [
-      "--crate-type=lib",
-      "-Clink-dead-code=on"
-    ]
-  },
-  {
-    "path": "codegen/mono-impossible.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "flags",
-    "flags": [
-      "-Clink-dead-code=on",
-      "--crate-type=lib"
-    ]
   },
   {
     "path": "codegen/ref-dyn-trait-in-structs-and-enums.rs",
@@ -4507,15 +4477,6 @@
     "flags": []
   },
   {
-    "path": "const-generics/unsized_const_params/symbol_mangling_v0_str.rs",
-    "mode": "check",
-    "edition": "2015",
-    "crate_type": "bin",
-    "flags": [
-      "-Csymbol-mangling-version=v0"
-    ]
-  },
-  {
     "path": "const-generics/unused-const-param.rs",
     "mode": "check",
     "edition": "2015",
@@ -5400,17 +5361,6 @@
     "flags": []
   },
   {
-    "path": "consts/precise-drop-with-coverage.rs",
-    "mode": "check",
-    "edition": "2015",
-    "crate_type": "flags",
-    "flags": [
-      "--crate-type=lib",
-      "-Cinstrument-coverage",
-      "-Zno-profiler-runtime"
-    ]
-  },
-  {
     "path": "consts/precise-drop-with-promoted.rs",
     "mode": "check",
     "edition": "2015",
@@ -5796,18 +5746,6 @@
     ]
   },
   {
-    "path": "debuginfo/sroa-fragment-debuginfo.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "lib",
-    "flags": [
-      "-g",
-      "-Zmir-opt-level=0",
-      "-Zmir-enable-passes=+ScalarReplacementOfAggregates",
-      "-Cno-prepopulate-passes"
-    ]
-  },
-  {
     "path": "definition-reachable/private-non-types.rs",
     "mode": "check",
     "edition": "2015",
@@ -5904,24 +5842,6 @@
     "edition": "2015",
     "crate_type": "bin",
     "flags": []
-  },
-  {
-    "path": "deprecation/deprecated_ar.rs",
-    "mode": "check",
-    "edition": "2015",
-    "crate_type": "bin",
-    "flags": [
-      "-Car=foo"
-    ]
-  },
-  {
-    "path": "deprecation/deprecated_no_stack_check_opt.rs",
-    "mode": "check",
-    "edition": "2015",
-    "crate_type": "bin",
-    "flags": [
-      "-Cno-stack-check"
-    ]
   },
   {
     "path": "deprecation/deprecation-in-future.rs",
@@ -6450,26 +6370,6 @@
     "edition": "2015",
     "crate_type": "bin",
     "flags": []
-  },
-  {
-    "path": "explain/basic.rs",
-    "mode": "check",
-    "edition": "2015",
-    "crate_type": "lib",
-    "flags": [
-      "--explain",
-      "E0591"
-    ]
-  },
-  {
-    "path": "explain/no-E-prefix.rs",
-    "mode": "check",
-    "edition": "2015",
-    "crate_type": "lib",
-    "flags": [
-      "--explain",
-      "425"
-    ]
   },
   {
     "path": "explicit-tail-calls/become-macro.rs",
@@ -10046,15 +9946,6 @@
     "flags": []
   },
   {
-    "path": "issues/issue-47309.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "rlib",
-    "flags": [
-      "-Clink-dead-code"
-    ]
-  },
-  {
     "path": "issues/issue-47673.rs",
     "mode": "check",
     "edition": "2015",
@@ -10244,16 +10135,6 @@
     "edition": "2015",
     "crate_type": "bin",
     "flags": []
-  },
-  {
-    "path": "issues/issue-58375-monomorphize-default-impls.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "rlib",
-    "flags": [
-      "-C",
-      "link-dead-code"
-    ]
   },
   {
     "path": "issues/issue-5884.rs",
@@ -11505,17 +11386,6 @@
     "flags": []
   },
   {
-    "path": "lint/future-incompat-json-test.rs",
-    "mode": "check",
-    "edition": "2015",
-    "crate_type": "bin",
-    "flags": [
-      "-Zfuture-incompat-test",
-      "--json=future-incompat",
-      "--error-format=json"
-    ]
-  },
-  {
     "path": "lint/future-incompat-test.rs",
     "mode": "check",
     "edition": "2015",
@@ -12657,39 +12527,6 @@
     "edition": "2015",
     "crate_type": "bin",
     "flags": []
-  },
-  {
-    "path": "lto/debuginfo-lto-alloc.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "lib",
-    "flags": [
-      "--test",
-      "-C",
-      "debuginfo=2",
-      "-C",
-      "lto=fat"
-    ]
-  },
-  {
-    "path": "lto/lto-opt-level-s.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "rlib",
-    "flags": [
-      "-Clinker-plugin-lto",
-      "-Copt-level=s"
-    ]
-  },
-  {
-    "path": "lto/lto-opt-level-z.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "rlib",
-    "flags": [
-      "-Clinker-plugin-lto",
-      "-Copt-level=z"
-    ]
   },
   {
     "path": "lub-glb/empty-binder-future-compat.rs",
@@ -14286,18 +14123,6 @@
     "flags": []
   },
   {
-    "path": "parallel-rustc/export-symbols-deadlock-issue-118205-2.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "lib",
-    "flags": [
-      "-C",
-      "extra-filename=-1",
-      "-Z",
-      "threads=16"
-    ]
-  },
-  {
     "path": "parallel-rustc/export-symbols-deadlock-issue-118205.rs",
     "mode": "build",
     "edition": "2015",
@@ -15088,16 +14913,6 @@
     "edition": "2015",
     "crate_type": "bin",
     "flags": []
-  },
-  {
-    "path": "print-request/print-calling-conventions.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "lib",
-    "flags": [
-      "--print",
-      "calling-conventions"
-    ]
   },
   {
     "path": "print_type_sizes/anonymous.rs",
@@ -16858,28 +16673,6 @@
     "flags": []
   },
   {
-    "path": "statics/issue-91050-1.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "flags",
-    "flags": [
-      "--crate-type=rlib",
-      "--emit=llvm-ir",
-      "-Cno-prepopulate-passes"
-    ]
-  },
-  {
-    "path": "statics/issue-91050-2.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "flags",
-    "flags": [
-      "--crate-type=rlib",
-      "--emit=llvm-ir",
-      "-Cno-prepopulate-passes"
-    ]
-  },
-  {
     "path": "statics/nested-allocations-dont-inherit-codegen-attrs.rs",
     "mode": "build",
     "edition": "2015",
@@ -16972,16 +16765,6 @@
     "crate_type": "bin",
     "flags": [
       "-Zverbose-internals"
-    ]
-  },
-  {
-    "path": "target-feature/missing-plusminus.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "flags",
-    "flags": [
-      "-Ctarget-feature=banana",
-      "--crate-type=rlib"
     ]
   },
   {
@@ -18005,16 +17788,6 @@
     "edition": "2015",
     "crate_type": "bin",
     "flags": []
-  },
-  {
-    "path": "traits/negative-impls/eager-mono.rs",
-    "mode": "build",
-    "edition": "2015",
-    "crate_type": "bin",
-    "flags": [
-      "-C",
-      "link-dead-code=y"
-    ]
   },
   {
     "path": "traits/negative-impls/negated-auto-traits-validity.rs",

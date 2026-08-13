@@ -33,6 +33,10 @@ def main() -> int:
     for value in re.findall(r"^//@\s*compile-flags:\s*(.*)$", text,
                             re.MULTILINE):
         compile_flags.extend(lib.compiletest_split_flags(value))
+    system_rustc = os.environ.get("TRUSTME_SYSTEM_RUSTC") == "1"
+    compile_flags = lib.mrustc_compile_flags(
+        compile_flags, system_rustc=system_rustc
+    )
     run_flags = []
     for value in re.findall(r"^//@\s*run-flags:\s*(.*)$", text,
                             re.MULTILINE):

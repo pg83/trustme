@@ -949,6 +949,11 @@ namespace {
             argFileStart = args.getVec().size();
             args.push_back("-std=gnu++20");
             args.push_back("-fexceptions");
+            // Rust integer arithmetic wraps when overflow checks are disabled.
+            // Preserve that contract for signed C++ operations even under
+            // optimisation, where native signed overflow would otherwise be
+            // undefined behaviour.
+            args.push_back("-fwrapv");
             for (const auto& a : TargetGetCurSpec(mResolve.wb).backendC.compilerOpts) {
                 args.push_back(a.c_str());
             }

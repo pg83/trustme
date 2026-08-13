@@ -26,6 +26,27 @@ def main() -> int:
     if actual != expected:
         raise RuntimeError(f"compiletest flag split differs: {actual!r} != {expected!r}")
 
+    flags = [
+        "-O",
+        "-C", "codegen-units=8",
+        "-Cno-prepopulate-passes",
+        "-Clink-dead-code=on",
+        "-Cdebug_assertions=no",
+        "-C", "target-feature=-crt-static",
+    ]
+    expected_mrustc = [
+        "-O",
+        "-Cdebug_assertions=no",
+        "-C", "target-feature=-crt-static",
+    ]
+    actual_mrustc = lib.mrustc_compile_flags(flags, system_rustc=False)
+    if actual_mrustc != expected_mrustc:
+        raise RuntimeError(
+            f"mrustc backend flag filtering differs: {actual_mrustc!r} != {expected_mrustc!r}"
+        )
+    if lib.mrustc_compile_flags(flags, system_rustc=True) != flags:
+        raise RuntimeError("system rustc flags must remain byte-for-byte intact")
+
     stamp = os.path.abspath(sys.argv[1])
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     open(stamp, "w").close()

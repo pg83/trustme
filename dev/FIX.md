@@ -30,25 +30,21 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P0 — largest shared causes
 
-1. Corpus adapters pass unsupported rustc driver/codegen flags to mrustc: 55
-   tests. The main groups are `codegen-units` (12), `link-dead-code` (6),
-   `debug_assertions` (5), `no-prepopulate-passes` (4), and `lto` (4). Retain a
-   test in the fast corpus only if ignoring the flag preserves what it tests.
-2. Inline assembly emitted for clang/assembler is invalid: 19 tests. Most fail
+1. Inline assembly emitted for clang/assembler is invalid: 19 tests. Most fail
    with `unknown token in expression`; the remainder are unsupported register
    constraints/names.
-3. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
+2. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
    backend/runtime family until a smaller reproducer proves otherwise.
 
 ## P1 — internal compiler failures
 
-After the targeted CTFE rerun, 285 of the snapshot's internal compiler failures
+After the targeted CTFE rerun, 286 of the snapshot's internal compiler failures
 remain. The generic `mir_helpers.h:108` signature must be subdivided by its
 message before fixing.
 
 | signature | tests | note |
 |---|---:|---|
-| CTFE panic, `hir_conv_constant_evaluation.cpp:3617` | 7 | independent compile-time assertions/dead-code cases |
+| CTFE panic, `hir_conv_constant_evaluation.cpp:3617` | 8 | independent compile-time assertions/dead-code cases |
 | MIR error, `mir_helpers.h:108` | 31 | mixed intrinsics, pointer operations, raw DSTs and SIMD |
 | CTFE intrinsic TODO, `hir_conv_constant_evaluation.cpp:3498` | 16 | `black_box`, `forget`, `raw_eq`, pointer offsets, SIMD and comparisons |
 | BUG, `trans_target.cpp:1896` | 14 | common codegen target failure |
@@ -121,11 +117,10 @@ completed in an isolated rerun close to its ten-minute limit.
 
 Fix by shared impact, not by corpus order:
 
-1. Adapter flag filtering/reclassification (55 tests).
-2. Invalid inline-assembly emission and f128 runtime aborts (19 tests each).
-3. The remaining P1 clusters, largest verified root cause first.
-4. Generated-C++ families, runtime semantic families, then front-end features.
-5. Missing diagnostics and isolated long-tail failures.
+1. Invalid inline-assembly emission and f128 runtime aborts (19 tests each).
+2. The remaining P1 clusters, largest verified root cause first.
+3. Generated-C++ families, runtime semantic families, then front-end features.
+4. Missing diagnostics and isolated long-tail failures.
 
 For every compiler change: add a minimal `tst/unit/test_*.rs` that is green on
 Rust 1.90, confirm it is red on current mrustc, fix the shared path, then run

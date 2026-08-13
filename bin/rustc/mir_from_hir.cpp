@@ -17,6 +17,7 @@ static const size_t PARTIAL_ARRAY_MIN = 32;
 #include "mir_main_bindings.h"
 #include "mir_visit_crate_mir.h"
 #include "hir_conv_main_bindings.h" // For consteval
+#include "settings.h"
 
 #include <cctype> // isdigit
 #include <limits> // std::numeric_limits
@@ -1050,7 +1051,219 @@ namespace {
             builder.endBlock(MIRTerminator::make_If({mv$(decisionVal), trueBranch, falseBranch}));
         }
 
-        void generateCheckedBinop(const Span& sp, MIRLValue resSlot, MIRBinOp op, MIRParam valL, const HIRTypeData* tyL, MIRParam valR, const HIRTypeData* tyR) {
+        static bool isSignedInteger(HIRCoreType type) {
+            switch (type) {
+                case HIRCoreType::Isize:
+                case HIRCoreType::I8:
+                case HIRCoreType::I16:
+                case HIRCoreType::I32:
+                case HIRCoreType::I64:
+                case HIRCoreType::I128:
+                    return true;
+                default:
+                    return false;
+            }
+        }
+
+        static HIRCoreType unsignedIntegerType(HIRCoreType type) {
+            switch (type) {
+                case HIRCoreType::Isize: return HIRCoreType::Usize;
+                case HIRCoreType::I8: return HIRCoreType::U8;
+                case HIRCoreType::I16: return HIRCoreType::U16;
+                case HIRCoreType::I32: return HIRCoreType::U32;
+                case HIRCoreType::I64: return HIRCoreType::U64;
+                case HIRCoreType::I128: return HIRCoreType::U128;
+                default: return type;
+            }
+        }
+
+        static unsigned integerBits(HIRCoreType type) {
+            switch (type) {
+                case HIRCoreType::U8: case HIRCoreType::I8: return 8;
+                case HIRCoreType::U16: case HIRCoreType::I16: return 16;
+                case HIRCoreType::U32: case HIRCoreType::I32: return 32;
+                case HIRCoreType::U64: case HIRCoreType::I64: return 64;
+                case HIRCoreType::U128: case HIRCoreType::I128: return 128;
+                case HIRCoreType::Usize: case HIRCoreType::Isize: return TargetGetPointerBits();
+                default: return 0;
+            }
+        }
+
+        static MIRConstant integerConstant(HIRCoreType type, U128 value) {
+            if (isSignedInteger(type)) {
+                const auto bits = integerBits(type);
+                if (bits < 128 && value.bit(bits - 1)) {
+                    value |= U128::max() << bits;
+                }
+                return MIRConstant::make_Int({S128(value), type});
+            }
+            return MIRConstant::make_Uint({value, type});
+        }
+
+        static MIRRValue paramRvalue(MIRParam value) {
+            if (auto* lvalue = value.opt_LValue()) {
+                return MIRRValue(mv$(*lvalue));
+            }
+            if (auto* constant = value.opt_Constant()) {
+                return MIRRValue(mv$(*constant));
+            }
+            auto& borrow = value.as_Borrow();
+            return MIRRValue::make_Borrow({borrow.type, false, mv$(borrow.val)});
+        }
+
+        void panicIf(const Span& sp, MIRLValue condition, bool whenTrue, const char* langItem) {
+            auto panicBlock = builder.newBbUnlinked();
+            auto continueBlock = builder.newBbUnlinked();
+            builder.endBlock(MIRTerminator::make_If({
+                mv$(condition),
+                whenTrue ? panicBlock : continueBlock,
+                whenTrue ? continueBlock : panicBlock,
+            }));
+
+            builder.setCurBlock(panicBlock);
+            const auto& panicPath = builder.crate().getLangItemPathOpt(langItem);
+            if (panicPath.components().empty()) {
+                // A no_core crate can use primitive arithmetic while providing
+                // no panic runtime. Keep the failure edge explicit and fatal;
+                // safe constant expressions can eliminate it without eagerly
+                // requiring a lang item that does not exist.
+                builder.endBlock(MIRTerminator::make_UnwindTerminate({}));
+                builder.setCurBlock(continueBlock);
+                return;
+            }
+            auto panicResult = builder.newTemporary(builder.resolve().crate.types.diverge());
+            auto panicReturn = builder.newBbUnlinked();
+            auto panicUnwind = builder.newBbUnlinked();
+            builder.endBlock(MIRTerminator::make_Call({
+                panicReturn,
+                MIRUnwindAction::make_Cleanup(panicUnwind),
+                mv$(panicResult),
+                HIRPath(panicPath),
+                {},
+            }));
+
+            builder.setCurBlock(panicReturn);
+            builder.endBlock(MIRTerminator::make_Unreachable({}));
+
+            builder.setCurBlock(panicUnwind);
+            emitUnwind(sp);
+
+            builder.setCurBlock(continueBlock);
+        }
+
+        void generateOverflowingArithmetic(
+            const Span& sp,
+            MIRLValue resSlot,
+            const char* intrinsic,
+            const char* panicLangItem,
+            MIRParam valL,
+            const HIRTypeData* tyL,
+            MIRParam valR,
+            bool updateDestState
+        ) {
+            const auto tupleType = builder.resolve().crate.types.tuple({
+                tyL,
+                builder.resolve().crate.types.primitive(HIRCoreType::Bool),
+            });
+            auto checked = builder.newTemporary(tupleType);
+            auto callReturn = builder.newBbUnlinked();
+            builder.endBlock(MIRTerminator::make_Call({
+                callReturn,
+                MIRUnwindAction::make_Unreachable({}),
+                checked.clone(),
+                MIRCallTarget::make_Intrinsic({intrinsic, HIRPathParams(tyL)}),
+                makeVec2<MIRParam>(mv$(valL), mv$(valR)),
+            }));
+
+            builder.setCurBlock(callReturn);
+            builder.pushStmtAssign(
+                sp,
+                mv$(resSlot),
+                MIRRValue::make_Use({MIRLValue::newField(checked.clone(), 0)}),
+                updateDestState
+            );
+            panicIf(sp, MIRLValue::newField(mv$(checked), 1), true, panicLangItem);
+        }
+
+        void generateDivisionChecks(
+            const Span& sp,
+            MIRBinOp op,
+            const MIRParam& valL,
+            HIRCoreType type,
+            const MIRParam& valR
+        ) {
+            auto isZero = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Bool));
+            builder.pushStmtAssign(sp, isZero.clone(), MIRRValue::make_BinOp({
+                valR.clone(), MIRBinOp::EQ, MIRParam(integerConstant(type, U128(0))),
+            }));
+            panicIf(
+                sp,
+                mv$(isZero),
+                true,
+                op == MIRBinOp::DIV ? "panic_const_div_by_zero" : "panic_const_rem_by_zero"
+            );
+
+            if (!isSignedInteger(type)) {
+                return;
+            }
+            auto isMinusOne = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Bool));
+            builder.pushStmtAssign(sp, isMinusOne.clone(), MIRRValue::make_BinOp({
+                valR.clone(), MIRBinOp::EQ, MIRParam(integerConstant(type, ~U128(0))),
+            }));
+            auto isMinimum = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Bool));
+            builder.pushStmtAssign(sp, isMinimum.clone(), MIRRValue::make_BinOp({
+                valL.clone(),
+                MIRBinOp::EQ,
+                MIRParam(integerConstant(type, U128(1) << (integerBits(type) - 1))),
+            }));
+            auto overflows = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Bool));
+            builder.pushStmtAssign(sp, overflows.clone(), MIRRValue::make_BinOp({
+                MIRParam(mv$(isMinusOne)), MIRBinOp::BIT_AND, MIRParam(mv$(isMinimum)),
+            }));
+            panicIf(
+                sp,
+                mv$(overflows),
+                true,
+                op == MIRBinOp::DIV ? "panic_const_div_overflow" : "panic_const_rem_overflow"
+            );
+        }
+
+        void generateShiftCheck(const Span& sp, MIRBinOp op, const HIRTypeData* tyL, const MIRParam& valR, const HIRTypeData* tyR) {
+            const auto rhsType = tyR->as_Primitive();
+            const auto compareType = unsignedIntegerType(rhsType);
+            MIRParam compareValue = valR.clone();
+            if (compareType != rhsType) {
+                auto rhsLvalue = builder.lvalueOrTemp(sp, tyR, paramRvalue(valR.clone()));
+                auto castValue = builder.newTemporary(builder.resolve().crate.types.primitive(compareType));
+                builder.pushStmtAssign(sp, castValue.clone(), MIRRValue::make_Cast({mv$(rhsLvalue), builder.resolve().crate.types.primitive(compareType)}));
+                compareValue = MIRParam(mv$(castValue));
+            }
+            auto inRange = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Bool));
+            builder.pushStmtAssign(sp, inRange.clone(), MIRRValue::make_BinOp({
+                mv$(compareValue),
+                MIRBinOp::LT,
+                MIRParam(integerConstant(compareType, U128(integerBits(tyL->as_Primitive())))),
+            }));
+            panicIf(
+                sp,
+                mv$(inRange),
+                false,
+                op == MIRBinOp::BIT_SHL ? "panic_const_shl_overflow" : "panic_const_shr_overflow"
+            );
+        }
+
+        MIRParam maskShiftAmount(const Span& sp, const HIRTypeData* tyL, MIRParam valR, const HIRTypeData* tyR) {
+            const auto rhsType = tyR->as_Primitive();
+            auto masked = builder.newTemporary(tyR);
+            builder.pushStmtAssign(sp, masked.clone(), MIRRValue::make_BinOp({
+                mv$(valR),
+                MIRBinOp::BIT_AND,
+                MIRParam(integerConstant(rhsType, U128(integerBits(tyL->as_Primitive()) - 1))),
+            }));
+            return MIRParam(mv$(masked));
+        }
+
+        void generateCheckedBinop(const Span& sp, MIRLValue resSlot, MIRBinOp op, MIRParam valL, const HIRTypeData* tyL, MIRParam valR, const HIRTypeData* tyR, bool updateDestState = true) {
             switch (op) {
                 case MIRBinOp::EQ:
                 case MIRBinOp::NE:
@@ -1073,7 +1286,7 @@ namespace {
                             }
                         }
                 }
-                builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({ mv$(valL), op, mv$(valR) }));
+                builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({ mv$(valL), op, mv$(valR) }), updateDestState);
                 break;
             // Bitwise masking operations: Require equal integer types or bool
             case MIRBinOp::BIT_XOR:
@@ -1091,7 +1304,7 @@ namespace {
                         default:
                             break;
                 }
-                builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({ mv$(valL), op, mv$(valR) }));
+                builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({ mv$(valL), op, mv$(valR) }), updateDestState);
                 break;
             case MIRBinOp::ADD:    case MIRBinOp::ADD_OV:
             case MIRBinOp::SUB:    case MIRBinOp::SUB_OV:
@@ -1109,8 +1322,26 @@ namespace {
                         default:
                             break;
                 }
-                // TODO: Overflow checks (none for eBinOp::MOD)
-                builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({ mv$(valL), op, mv$(valR) }));
+                if (tyL->is_Primitive() && isInteger(tyL->as_Primitive())) {
+                    if (op == MIRBinOp::DIV || op == MIRBinOp::MOD) {
+                        generateDivisionChecks(sp, op, valL, tyL->as_Primitive(), valR);
+                    } else if (builder.resolve().wb.settings->overflowChecks) {
+                        switch (op) {
+                            case MIRBinOp::ADD:
+                                generateOverflowingArithmetic(sp, mv$(resSlot), "add_with_overflow", "panic_const_add_overflow", mv$(valL), tyL, mv$(valR), updateDestState);
+                                return;
+                            case MIRBinOp::SUB:
+                                generateOverflowingArithmetic(sp, mv$(resSlot), "sub_with_overflow", "panic_const_sub_overflow", mv$(valL), tyL, mv$(valR), updateDestState);
+                                return;
+                            case MIRBinOp::MUL:
+                                generateOverflowingArithmetic(sp, mv$(resSlot), "mul_with_overflow", "panic_const_mul_overflow", mv$(valL), tyL, mv$(valR), updateDestState);
+                                return;
+                            default:
+                                break;
+                        }
+                    }
+                }
+                builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({ mv$(valL), op, mv$(valR) }), updateDestState);
                 break;
             case MIRBinOp::BIT_SHL:
             case MIRBinOp::BIT_SHR:
@@ -1137,8 +1368,12 @@ namespace {
                         default:
                             break;
                 }
-                // TODO: Overflow check
-                builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({ mv$(valL), op, mv$(valR) }));
+                if (builder.resolve().wb.settings->overflowChecks) {
+                    generateShiftCheck(sp, op, tyL, valR, tyR);
+                } else {
+                    valR = maskShiftAmount(sp, tyL, mv$(valR), tyR);
+                }
+                builder.pushStmtAssign(sp, mv$(resSlot), MIRRValue::make_BinOp({ mv$(valL), op, mv$(valR) }), updateDestState);
                 break;
             }
         }
@@ -1194,7 +1429,7 @@ namespace {
                             case _(Mod):
                                 op = MIRBinOp::MOD;
                         }
-                        this->generateCheckedBinop(sp, mv$(dst), op, mv$(dstClone), tySlot, mv$(valP), tyVal);
+                        this->generateCheckedBinop(sp, mv$(dst), op, mv$(dstClone), tySlot, mv$(valP), tyVal, false);
                         break;
                     case _(Xor):
                         op = MIRBinOp::BIT_XOR;
@@ -1206,7 +1441,7 @@ namespace {
                             case _(And):
                                 op = MIRBinOp::BIT_AND;
                         }
-                        this->generateCheckedBinop(sp, mv$(dst), op, mv$(dstClone), tySlot, mv$(valP), tyVal);
+                        this->generateCheckedBinop(sp, mv$(dst), op, mv$(dstClone), tySlot, mv$(valP), tyVal, false);
                         break;
                     case _(Shl):
                         op = MIRBinOp::BIT_SHL;
@@ -1214,7 +1449,7 @@ namespace {
                             case _(Shr):
                                 op = MIRBinOp::BIT_SHR;
                         }
-                        this->generateCheckedBinop(sp, mv$(dst), op, mv$(dstClone), tySlot, mv$(valP), tyVal);
+                        this->generateCheckedBinop(sp, mv$(dst), op, mv$(dstClone), tySlot, mv$(valP), tyVal, false);
                         break;
                 }
 #undef _
@@ -1436,6 +1671,18 @@ namespace {
                         }
                     } else {
                         BUG(node.span(), "`!` operator on invalid type - " << tyVal);
+                    }
+                    if (builder.resolve().wb.settings->overflowChecks
+                        && tyVal->is_Primitive()
+                        && isSignedInteger(tyVal->as_Primitive())) {
+                        const auto type = tyVal->as_Primitive();
+                        auto overflows = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Bool));
+                        builder.pushStmtAssign(node.span(), overflows.clone(), MIRRValue::make_BinOp({
+                            MIRParam(val.clone()),
+                            MIRBinOp::EQ,
+                            MIRParam(integerConstant(type, U128(1) << (integerBits(type) - 1))),
+                        }));
+                        panicIf(node.span(), mv$(overflows), true, "panic_const_neg_overflow");
                     }
                     res = MIRRValue::make_UniOp({mv$(val), MIRUniOp::NEG});
                     break;

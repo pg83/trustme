@@ -25,6 +25,7 @@ struct CfgState;
 // here changes after the phase that owns it has run.
 struct Settings {
     TraitSolverConfig solver;
+    bool overflowChecks = false;
 
     // Crate-loading configuration: `-L` search directories, `--extern
     // name=path` overrides, and crates injected without an explicit `extern

@@ -5246,7 +5246,7 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                 // Not valid?
                                 ),
                             (Int,
-                                newValue = MIRConstant::make_Int({ -ve.v, ve.t });
+                                newValue = MIRConstant::make_Int({ H::truncateS(ve.t, -ve.v), ve.t });
                                 replace = true;
                                 ),
                             (Float,

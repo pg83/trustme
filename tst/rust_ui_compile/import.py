@@ -28,6 +28,31 @@ REJECTED_DIRECTIVES = (
     "only-",
 )
 
+RUSTC_ONLY_TESTS = {
+    "closures/eager-mono-with-normalizable-upvars.rs",
+    "codegen/mono-impossible-2.rs",
+    "codegen/mono-impossible.rs",
+    "const-generics/unsized_const_params/symbol_mangling_v0_str.rs",
+    "consts/precise-drop-with-coverage.rs",
+    "debuginfo/sroa-fragment-debuginfo.rs",
+    "deprecation/deprecated_ar.rs",
+    "deprecation/deprecated_no_stack_check_opt.rs",
+    "explain/basic.rs",
+    "explain/no-E-prefix.rs",
+    "issues/issue-47309.rs",
+    "issues/issue-58375-monomorphize-default-impls.rs",
+    "lint/future-incompat-json-test.rs",
+    "lto/debuginfo-lto-alloc.rs",
+    "lto/lto-opt-level-s.rs",
+    "lto/lto-opt-level-z.rs",
+    "parallel-rustc/export-symbols-deadlock-issue-118205-2.rs",
+    "print-request/print-calling-conventions.rs",
+    "statics/issue-91050-1.rs",
+    "statics/issue-91050-2.rs",
+    "target-feature/missing-plusminus.rs",
+    "traits/negative-impls/eager-mono.rs",
+}
+
 
 def mode(text: str) -> str | None:
     if re.search(r"^//@\s*build-pass(?:\s|$)", text, re.MULTILINE):
@@ -98,6 +123,8 @@ def main() -> int:
         if any("{{" in flag or flag.startswith("@") for flag in flags):
             continue
         relative = path.relative_to(source)
+        if relative.as_posix() in RUSTC_ONLY_TESTS:
+            continue
         destination = UPSTREAM / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, destination)

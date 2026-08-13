@@ -36,6 +36,7 @@ def main() -> int:
 
     environment = dict(os.environ)
     environment.setdefault("CC", "cc")
+    system_rustc = os.environ.get("TRUSTME_SYSTEM_RUSTC") == "1"
     with lib.workdir() as work:
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         library_path = os.path.join(libstd, "release")
@@ -50,7 +51,9 @@ def main() -> int:
                 rustc,
                 os.path.join(upstream, relative),
                 "-L", library_path,
-                *case["flags"],
+                *lib.mrustc_compile_flags(
+                    case["flags"], system_rustc=system_rustc
+                ),
                 "--edition", case["edition"],
             ]
             if case["mode"] == "check":

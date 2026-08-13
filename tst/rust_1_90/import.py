@@ -35,6 +35,22 @@ HOST_CONDITIONS = {
     "nightly",
 }
 
+RUSTC_ONLY_TESTS = {
+    "codegen/cfguard-run.rs",
+    "functions-closures/parallel-codegen-closures.rs",
+    "lifetimes/issue-84604.rs",
+    "linking/export-executable-symbols.rs",
+    "lto/all-crates.rs",
+    "lto/fat-lto.rs",
+    "lto/lto-many-codegen-units.rs",
+    "lto/thin-lto-global-allocator.rs",
+    "lto/thin-lto-inlines.rs",
+    "lto/weak-works.rs",
+    "sepcomp/sepcomp-fns-backwards.rs",
+    "sepcomp/sepcomp-fns.rs",
+    "sepcomp/sepcomp-statics.rs",
+}
+
 
 def selected_for_host(text: str) -> bool:
     """Apply compiletest's only-/ignore- rules for our native test target."""
@@ -111,6 +127,8 @@ def main() -> int:
         if not selected(text):
             continue
         relative = path.relative_to(source)
+        if relative.as_posix() in RUSTC_ONLY_TESTS:
+            continue
         destination = UPSTREAM / relative
         destination.parent.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(path, destination)

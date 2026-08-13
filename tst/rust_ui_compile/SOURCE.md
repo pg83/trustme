@@ -5,8 +5,8 @@ Source: <https://github.com/rust-lang/rust/tree/1159e78c4747b02ef996e55082b704c0
 Revision: tag `1.90.0`, commit
 `1159e78c4747b02ef996e55082b704c09b970588`.
 
-The corpus contains 2,506 self-contained `check-pass` files and 368
-`build-pass` files.  Compile flags and editions are retained in `cases.json`.
+The corpus contains 2,495 self-contained `check-pass` files and 351
+`build-pass` files. Compile flags and editions are retained in `cases.json`.
 The current compiler has no dedicated check-only frontend mode, so check-pass
 files are sent through its available compilation pipeline as libraries.  Any
 late-stage failures remain visible test failures rather than a reason to omit

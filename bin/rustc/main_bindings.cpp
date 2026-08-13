@@ -27,12 +27,13 @@
 
 #include <std/mem/obj_pool.h>
 
-#include <set>
-#include <string>
 #include <climits>
+#include <cstdlib>
 #include <cstring>
 #include <iomanip>
 #include <iostream>
+#include <set>
+#include <string>
 
 #define NEWNODE(ty, ...) ASTExprNodeP(new ASTExprNode##ty(__VA_ARGS__))
 
@@ -179,6 +180,8 @@ struct ProgramParams {
     OptimizationLevel optLevel = OptimizationLevel::None;
     bool debugAssertions = false;
     bool debugAssertionsExplicit = false;
+    bool overflowChecks = false;
+    bool overflowChecksExplicit = false;
     // rustc defaults MIR optimisation to 1 at -O0 and to 2 otherwise.
     // Keep the explicit bit separate so `-Zmir-opt-level=0` is distinguishable
     // from the implicit default.
@@ -235,6 +238,10 @@ struct ProgramParams {
 
     bool debugAssertionsEnabled() const {
         return debugAssertionsExplicit ? debugAssertions : optLevel == OptimizationLevel::None;
+    }
+
+    bool overflowChecksEnabled() const {
+        return overflowChecksExplicit ? overflowChecks : debugAssertionsEnabled();
     }
 
     void showHelp() const;
@@ -326,6 +333,7 @@ int main(int argc, char* argv[]) {
     wb.settings->cfg = CfgCreateState(*pool);
     ProgramParams params(*wb.settings, argc, argv);
     wb.settings->solver = params.traitSolver;
+    wb.settings->overflowChecks = params.overflowChecksEnabled();
     const auto mirOptLevel = params.effectiveMirOptLevel();
     const auto enableMirInlining = params.enableMirInlining();
     if (params.codegen.panicType.empty()) {
@@ -346,6 +354,9 @@ int main(int argc, char* argv[]) {
         CfgSetValue(*wb.settings, "panic", params.codegen.panicType);
         if (params.debugAssertionsEnabled()) {
             CfgSetFlag(*wb.settings, "debug_assertions");
+        }
+        if (params.overflowChecksEnabled()) {
+            CfgSetFlag(*wb.settings, "overflow_checks");
         }
         CfgSetValueCb(*wb.settings, "feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
@@ -1103,18 +1114,33 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     } else if (optname == "link-arg") {
                         getOptval();
                         this->codegen.linkerArgs.push_back(optval);
+                    } else if (optname == "link-args") {
+                        getOptval();
+                        size_t start = 0;
+                        while (start < optval.size()) {
+                            while (start < optval.size() && (optval[start] == ' ' || optval[start] == '\t')) {
+                                start += 1;
+                            }
+                            auto end = start;
+                            while (end < optval.size() && optval[end] != ' ' && optval[end] != '\t') {
+                                end += 1;
+                            }
+                            if (start != end) {
+                                this->codegen.linkerArgs.push_back(optval.substr(start, end - start));
+                            }
+                            start = end;
+                        }
                     } else if (optname == "overflow-checks" || optname == "overflow_checks") {
                         getOptval();
                         if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
-                            // The current MIR pipeline performs wrapping integer
-                            // arithmetic, which is exactly the requested mode.
+                            this->overflowChecks = false;
                         } else if (optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
-                            ::std::cerr << "-C " << optname << "=on is not implemented" << ::std::endl;
-                            exit(1);
+                            this->overflowChecks = true;
                         } else {
                             ::std::cerr << "invalid value for -C " << optname << ": '" << optval << "'" << ::std::endl;
                             exit(1);
                         }
+                        this->overflowChecksExplicit = true;
                     } else if (optname == "opt-level") {
                         getOptval();
                         if (optval == "0") {
@@ -1133,7 +1159,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             ::std::cerr << "optimization level needs to be between 0-3, s or z (instead was '" << optval << "')" << ::std::endl;
                             exit(1);
                         }
-                    } else if (optname == "debug-assertions") {
+                    } else if (optname == "debug-assertions" || optname == "debug_assertions") {
                         if (eqPos == ::std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
                             this->debugAssertions = true;
                         } else if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
@@ -1143,6 +1169,22 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             exit(1);
                         }
                         this->debugAssertionsExplicit = true;
+                    } else if (optname == "target-feature") {
+                        getOptval();
+                        size_t start = 0;
+                        while (start <= optval.size()) {
+                            const auto end = optval.find(',', start);
+                            const auto feature = optval.substr(start, end == ::std::string::npos ? ::std::string::npos : end - start);
+                            if (feature != "-crt-static") {
+                                ::std::cerr << "unsupported value for -C target-feature: '" << feature
+                                            << "' (mrustc only supports -crt-static)" << ::std::endl;
+                                exit(1);
+                            }
+                            if (end == ::std::string::npos) {
+                                break;
+                            }
+                            start = end + 1;
+                        }
                     } else if (optname == "debuginfo") {
                         getOptval();
                         if (optval == "0" || optval == "none") {
@@ -1403,6 +1445,17 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 ::std::string error;
                 if (!CfgSetCheckSpec(settings, checkCfgSpec, error)) {
                     ::std::cerr << "invalid `--check-cfg` argument: `" << checkCfgSpec << "`: " << error << ::std::endl;
+                    exit(1);
+                }
+            } else if (const char* envSpec = checkWithArg("env-set")) {
+                const char* separator = ::std::strchr(envSpec, '=');
+                if (separator == nullptr || separator == envSpec) {
+                    ::std::cerr << "--env-set takes an argument of the form NAME=VALUE" << ::std::endl;
+                    exit(1);
+                }
+                const ::std::string name(envSpec, separator);
+                if (::setenv(name.c_str(), separator + 1, 1) != 0) {
+                    ::std::cerr << "failed to set compile-time environment variable '" << name << "'" << ::std::endl;
                     exit(1);
                 }
             } else if (const char* forceWarn = checkWithArg("force-warn")) {
