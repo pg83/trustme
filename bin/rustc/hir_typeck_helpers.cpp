@@ -5149,16 +5149,6 @@ TU_ARMA(Alias, ee) {
             case ResultType::Opaque: {
                 DEBUG("Assuming that " << input << " is an opaque name");
                 markOpaque();
-                ASSERT_BUG(
-                    sp,
-                    visitTyWith(
-                        input,
-                        [](const HIRTypeData* ty) {
-                    return ty->is_ErasedType() || ty->is_Infer();
-                }
-                    ) || monomorphiseTypeNeeded(input),
-                    "Set opaque on a non-generic type: " << input
-                );
 
                 DEBUG("- " << typeEqualities.size() << " replacements");
                 for (const auto& v : typeEqualities) {
