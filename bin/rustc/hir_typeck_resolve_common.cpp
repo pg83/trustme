@@ -187,24 +187,6 @@ TraitResolveCommon::TraitResolveCommon(const WireBoard& wb)
     , mImplGenerics(nullptr)
     , mItemGenerics(nullptr)
 {
-    mLangCopy = crate.getLangItemPathOpt("copy");
-    mLangClone = crate.getLangItemPathOpt("clone");
-    mLangDrop = crate.getLangItemPathOpt("drop");
-    mLangSized = crate.getLangItemPathOpt("sized");
-    mLangUnsize = crate.getLangItemPathOpt("unsize");
-    mLangFn = crate.getLangItemPathOpt("fn");
-    mLangFnMut = crate.getLangItemPathOpt("fn_mut");
-    mLangFnOnce = crate.getLangItemPathOpt("fn_once");
-    mLangBox = crate.getLangItemPathOpt("owned_box");
-    mLangPhantomData = crate.getLangItemPathOpt("phantom_data");
-    mLangGenerator = crate.getLangItemPathOpt("coroutine");
-    mLangDiscriminantKind = crate.getLangItemPathOpt("discriminant_kind");
-    mLangPointee = crate.getLangItemPathOpt("pointee_trait");
-    mLangDynMetadata = crate.getLangItemPathOpt("dyn_metadata");
-    mLangPointeeSized = crate.getLangItemPathOpt("pointee_sized");
-    mLangMetaSized = crate.getLangItemPathOpt("meta_sized");
-    mLangDestruct = crate.getLangItemPathOpt("destruct");
-    mLangFuture = crate.getLangItemPathOpt("future_trait");
 }
 
 const HIRGenericParams& TraitResolveCommon::implGenerics() const {

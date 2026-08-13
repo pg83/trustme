@@ -8,6 +8,7 @@ struct ASTCrate;
 class HIRCrate;
 class HIRTypeInterner;
 class HIRInherentCache;
+class LangItems;
 struct Settings;
 struct TargetSpec;
 
@@ -42,6 +43,10 @@ struct WireBoard {
     // Filled by the HIR Lower phase (or by deserialisation in tools); null
     // during the AST-side phases.
     HIRCrate* crate = nullptr;
+
+    // The crate's lang-item paths, resolved once (see lang_items.h). Filled
+    // right after `crate`, since that is what defines them.
+    LangItems* langItems = nullptr;
 
     // Cross-crate index of inherent (non-trait) methods: one instance per
     // compilation. Built by the HIR conversion pipeline over the root crate

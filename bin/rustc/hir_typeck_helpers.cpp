@@ -1345,7 +1345,7 @@ TU_ARMA(Alias, ee) {
             const auto& type = this->ivars.getType(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
 
-            if (trait == mLangSized) {
+            if (trait == langSized()) {
                 auto cmp = typeIsSized(sp, type);
                 if (cmp != HIRCompare::Unequal) {
                     return callback(ImplRef(type, &nullParams, &nullAssoc), cmp);
@@ -1354,7 +1354,7 @@ TU_ARMA(Alias, ee) {
                 }
             }
 
-            if (trait == mLangCopy) {
+            if (trait == langCopy()) {
                 auto cmp = this->typeIsCopy(sp, type);
                 if (cmp != HIRCompare::Unequal) {
                     return callback(ImplRef(type, &nullParams, &nullAssoc), cmp);
@@ -1369,7 +1369,7 @@ TU_ARMA(Alias, ee) {
                 }
             }
 
-            if (trait == mLangClone && (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || TU_TEST1(*type, Path, .isClosure()))) {
+            if (trait == langClone() && (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || TU_TEST1(*type, Path, .isClosure()))) {
                 auto cmp = this->typeIsClone(sp, type);
                 if (cmp != HIRCompare::Unequal) {
                     return callback(ImplRef(type, &nullParams, &nullAssoc), cmp);
@@ -1379,7 +1379,7 @@ TU_ARMA(Alias, ee) {
             }
 
             // - `DiscriminantKind`
-            if (!mLangDiscriminantKind.components().empty() && trait == mLangDiscriminantKind) {
+            if (!langDiscriminantKind().components().empty() && trait == langDiscriminantKind()) {
                 static auto nameDiscriminant = RcString::newInterned("Discriminant");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
@@ -1402,7 +1402,7 @@ TU_ARMA(Alias, ee) {
                     return callback(ImplRef(type, {}, std::move(assocList)), HIRCompare::Equal);
                 }
             }
-            if (!mLangPointee.components().empty() && trait == mLangPointee) {
+            if (!langPointee().components().empty() && trait == langPointee()) {
                 static auto nameMetadata = RcString::newInterned("Metadata");
                 // TODO: This logic is near identical to the logic in `static.cpp` - can it be de-duplicated?
 
@@ -1491,7 +1491,7 @@ TU_ARMA(Alias, ee) {
             }
 
             // Magic Unsize impls to trait objects
-            if (trait == mLangUnsize) {
+            if (trait == langUnsize()) {
                 ASSERT_BUG(sp, params.types.size() == 1, "Unsize trait requires a single type param");
                 const auto& dstTy = this->ivars.getType(params.types[0]);
 
@@ -1537,13 +1537,13 @@ TU_ARMA(Alias, ee) {
                         }
                     }
                 }
-            } else if (trait == mLangPointeeSized) {
+            } else if (trait == langPointeeSized()) {
                 if (findTraitImplsBound(sp, trait, params, type, callback)) {
                     return true;
                 }
                 // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
                 return callback(ImplRef(type, {}, HIRTraitPath::assocListT()), HIRCompare::Equal);
-            } else if (trait == mLangMetaSized) {
+            } else if (trait == langMetaSized()) {
                 TODO(sp, "MetaSized");
                 // Next level of sizedness: There's metadata that allows getting the size
                 // - No difference to the above?
@@ -1557,7 +1557,7 @@ TU_ARMA(Alias, ee) {
                 //}
             }
 
-            if (trait == mLangDestruct) {
+            if (trait == langDestruct()) {
                 // Inidicates that something is droppable
                 // - Applies to everything?
                 if (findTraitImplsBound(sp, trait, params, type, callback)) {
@@ -1579,7 +1579,7 @@ TU_ARMA(Alias, ee) {
         // Magic impls of the Fn* traits for closure types
         TU_ARMA(Closure, nodeP) {
                     DEBUG("Closure, " << trait << " ?= Fn*");
-                    if (trait == mLangFn || trait == mLangFnMut || trait == mLangFnOnce) {
+                    if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
                         if (params.types.size() != 1) {
                             BUG(sp, "Fn* traits require a single tuple argument");
                         }
@@ -1610,7 +1610,7 @@ TU_ARMA(Alias, ee) {
                             HIRPathParams pp;
                             pp.types.push_back(crate.types.tuple(mv$(args)));
                             HIRTraitPath::assocListT types;
-                            types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, nodeP->returnType}));
+                            types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, nodeP->returnType}));
                             return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
                         } else {
                             DEBUG("Closure Fn* impl - cmp = Compare::Unequal");
@@ -1619,7 +1619,7 @@ TU_ARMA(Alias, ee) {
                     }
                 }
                 TU_ARMA(Generator, nodeP) {
-                    if (trait == mLangGenerator) {
+                    if (trait == langGenerator()) {
                         static const RcString rcstringYield = RcString::newInterned("Yield");
                         static const RcString rcstringReturn = RcString::newInterned("Return");
                         HIRTraitPath::assocListT assoc;
@@ -1631,7 +1631,7 @@ TU_ARMA(Alias, ee) {
                     }
                 }
                 TU_ARMA(Async, nodeP) {
-                    if (trait == mLangFuture) {
+                    if (trait == langFuture()) {
                         static const RcString rcstringOutput = RcString::newInterned("Output");
                         HIRTraitPath::assocListT assoc;
                         assoc.insert(::std::make_pair(rcstringOutput, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->mCode->resType}));
@@ -1642,7 +1642,7 @@ TU_ARMA(Alias, ee) {
         }
         // Magic Fn* trait impls for function pointers
         TU_ARMA(Function, e) {
-            if (trait == mLangFn || trait == mLangFnMut || trait == mLangFnOnce) {
+            if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
                 DEBUG("Fn* trait for fn pointer");
                 if (params.types.size() != 1) {
                     BUG(sp, "Fn* traits require a single tuple argument");
@@ -1673,13 +1673,13 @@ TU_ARMA(Alias, ee) {
                 HIRPathParams pp;
                 pp.types.push_back(crate.types.tuple(mv$(args)));
                 HIRTraitPath::assocListT types;
-                types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
+                types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, e.mRettype}));
                 return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
             }
         }
         // Magic Fn* trait impls for function pointers
         TU_ARMA(NamedFunction, realE) {
-            if (trait == mLangFn || trait == mLangFnMut || trait == mLangFnOnce) {
+            if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
                 if (params.types.size() != 1) {
                     BUG(sp, "Fn* traits require a single tuple argument");
                 }
@@ -1717,7 +1717,7 @@ TU_ARMA(Alias, ee) {
                 HIRPathParams pp;
                 pp.types.push_back(crate.types.tuple(mv$(args)));
                 HIRTraitPath::assocListT types;
-                types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, pp.clone()), {}, e.mRettype}));
+                types.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), pp.clone()), {}, e.mRettype}));
                 return callback(ImplRef(type, mv$(pp), mv$(types)), cmp);
             }
         }
@@ -4722,7 +4722,7 @@ TU_ARMA(Alias, ee) {
         TU_MATCH_HDRA((te), {)
         // - If it's a closure, then the only trait impls are those generated by typeck
         TU_ARMA(Closure, nodeP) {
-                    if (pe.trait.mPath == mLangFn || pe.trait.mPath == mLangFnMut || pe.trait.mPath == mLangFnOnce) {
+                    if (pe.trait.mPath == langFn() || pe.trait.mPath == langFnMut() || pe.trait.mPath == langFnOnce()) {
                         if (pe.item == "Output") {
                             input = nodeP->returnType;
                             return;
@@ -4733,7 +4733,7 @@ TU_ARMA(Alias, ee) {
                     // TODO: Fall through? Maybe there's a generic impl that could match.
                 }
                 TU_ARMA(Generator, nodeP) {
-                    if (pe.trait.mPath == this->mLangGenerator) {
+                    if (pe.trait.mPath == this->langGenerator()) {
                         if (pe.item == "Return") {
                             input = nodeP->returnType;
                             return;
@@ -4753,7 +4753,7 @@ TU_ARMA(Alias, ee) {
         }
         TU_ARMA(Function, te) {
             if (te.mAbi == ABI_RUST && !te.isUnsafe) {
-                if (pe.trait.mPath == mLangFn || pe.trait.mPath == mLangFnMut || pe.trait.mPath == mLangFnOnce) {
+                if (pe.trait.mPath == langFn() || pe.trait.mPath == langFnMut() || pe.trait.mPath == langFnOnce()) {
                     if (pe.item == "Output") {
                         input = te.mRettype;
                         return;
@@ -6287,8 +6287,8 @@ TU_ARMA(Alias, ee) {
         HIRCompare TraitResolution::typeIsSized(const Span& sp, const HIRTypeData* type) const {
             bool isFuzzy = false;
             bool hasEq = false;
-            if (!mLangSized.components().empty()) {
-                hasEq = findTraitImpls(sp, mLangSized, HIRPathParams{}, type, [&](auto, auto c) -> bool {
+            if (!langSized().components().empty()) {
+                hasEq = findTraitImpls(sp, langSized(), HIRPathParams{}, type, [&](auto, auto c) -> bool {
                     switch (c) {
                         case HIRCompare::Equal:
                             return true;
@@ -6389,7 +6389,7 @@ TU_ARMA(Alias, ee) {
     TU_MATCH_HDRA( (*type), {)
     default: {
             bool isFuzzy = false;
-            bool hasEq = findTraitImpls(sp, mLangCopy, HIRPathParams{}, ty, [&](auto, auto c) -> bool {
+            bool hasEq = findTraitImpls(sp, langCopy(), HIRPathParams{}, ty, [&](auto, auto c) -> bool {
                 switch (c) {
                     case HIRCompare::Equal:
                         return true;
@@ -6427,7 +6427,7 @@ TU_ARMA(Alias, ee) {
             return this->iterateBoundsTraits(
                        sp,
                        ty,
-                       mLangCopy,
+                       langCopy(),
                        [&](HIRCompare _cmp, const HIRTypeData* beType, const HIRGenericPath& beTrait, const CachedBound& info) -> bool {
                 return true;
             }
@@ -6484,7 +6484,7 @@ TU_ARMA(Alias, ee) {
                 return HIRCompare::Equal;
             }
             bool isFuzzy = false;
-            bool hasEq = findTraitImpls(sp, mLangClone, HIRPathParams{}, ty, [&](auto, auto c) -> bool {
+            bool hasEq = findTraitImpls(sp, langClone(), HIRPathParams{}, ty, [&](auto, auto c) -> bool {
                 switch (c) {
                     case HIRCompare::Equal:
                         return true;
@@ -6519,7 +6519,7 @@ TU_ARMA(Alias, ee) {
             return this->iterateBoundsTraits(
                        sp,
                        ty,
-                       mLangClone,
+                       langClone(),
                        [&](HIRCompare _cmp, const HIRTypeData* beType, const HIRGenericPath& beTrait, const CachedBound& info) -> bool {
                 return true;
             }
@@ -6597,7 +6597,7 @@ TU_ARMA(Alias, ee) {
             }
 
             {
-                bool foundBound = this->iterateBoundsTraits(sp, srcTy, mLangUnsize, [&](HIRCompare cmp, const HIRTypeData* beType, const HIRGenericPath& beTrait, const CachedBound& info) -> bool {
+                bool foundBound = this->iterateBoundsTraits(sp, srcTy, langUnsize(), [&](HIRCompare cmp, const HIRTypeData* beType, const HIRGenericPath& beTrait, const CachedBound& info) -> bool {
                     const auto& beDst = beTrait.mParams.types.at(0);
 
                     cmp &= dstTy->compareWithPlaceholders(sp, beDst, ivars.callbackResolveInfer());
@@ -6621,7 +6621,7 @@ TU_ARMA(Alias, ee) {
                 const auto& pe = srcTy->as_Path().path.mData.as_UfcsKnown();
                 auto monomorphCb = MonomorphStatePtr(crate.types, pe.type, &pe.trait.mParams, nullptr);
                 auto foundBound = this->iterateAtyBounds(sp, pe, [&](const HIRTraitPath& bound) {
-                    if (bound.mPath.mPath != mLangUnsize) {
+                    if (bound.mPath.mPath != langUnsize()) {
                         return false;
                     }
                     const auto& beDstTpl = bound.mPath.mParams.types.at(0);
@@ -6894,7 +6894,7 @@ TU_ARMA(Alias, ee) {
         const HIRTypeData* TraitResolution::typeIsOwnedBox(const Span& sp, const HIRTypeData* ty) const {
             if (const auto* e = ty->opt_Path()) {
                 if (const auto* pe = e->path.mData.opt_Generic()) {
-                    if (pe->mPath == mLangBox) {
+                    if (pe->mPath == langBox()) {
                         return this->ivars.getType(pe->mParams.types.at(0));
                     }
                 }

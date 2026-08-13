@@ -18,6 +18,7 @@
 #include "parse_parseerror.h"
 #include "hir_main_bindings.h"
 #include "mir_main_bindings.h"
+#include "lang_items.h"
 #include "hir_inherent_cache.h"
 #include "trans_main_bindings.h"
 #include "resolve_main_bindings.h"
@@ -645,6 +646,7 @@ int main(int argc, char* argv[]) {
             return LowerHIRFromAST(wb, pool, crate);
         });
         wb.crate = hirCrate;
+        wb.langItems = LangItems::create(*pool, *hirCrate);
         memoryDump("HIR Gen");
         if (params.debug.dumpHir) {
             CompilePhaseV("Dump HIR", [&]() {

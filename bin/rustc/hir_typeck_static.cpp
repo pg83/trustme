@@ -72,28 +72,28 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     static HIRTraitPath::assocListT nullAssoc;
 
     if (!dontHandoffToSpecialised) {
-        if (traitPath == mLangCopy) {
+        if (traitPath == langCopy()) {
             if (this->typeIsCopy(sp, type)) {
                 return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
             }
-        } else if (traitPath == mLangClone) {
+        } else if (traitPath == langClone()) {
             // NOTE: Duplicated check for enumerate
             if (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || TU_TEST1(*type, Path, .isClosure())) {
                 if (this->typeIsClone(sp, type)) {
                     return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
                 }
             }
-        } else if (traitPath == mLangSized) {
+        } else if (traitPath == langSized()) {
             if (this->typeIsSized(sp, type)) {
                 return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
             }
-        } else if (traitPath == mLangUnsize) {
+        } else if (traitPath == langUnsize()) {
             ASSERT_BUG(sp, traitParams, "TODO: Support no params for Unsize");
             const auto& dstTy = traitParams->types.at(0);
             if (this->canUnsize(sp, dstTy, type)) {
                 return foundCb(ImplRef(type, traitParams, &nullAssoc), false);
             }
-        } else if (traitPath == mLangDiscriminantKind) {
+        } else if (traitPath == langDiscriminantKind()) {
             // If the type is generic, then don't populate the ATY
             // Otherwise, populate the ATY with the correct type
             // - Unit for non-enums
@@ -105,7 +105,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     const auto& enm = **enmpp;
                     HIRTypeRef tagTy = crate.types.primitive(enm.getReprType(enm.tagRepr));
                     HIRTraitPath::assocListT assocList;
-                    assocList.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{mLangDiscriminantKind, {}, std::move(tagTy)}));
+                    assocList.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, std::move(tagTy)}));
                     return foundCb(ImplRef(type, {}, std::move(assocList)), false);
                 } else {
                 }
@@ -113,17 +113,17 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             }
             static HIRTraitPath::assocListT assocU8;
             if (assocU8.empty()) {
-                assocU8.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{mLangDiscriminantKind, {}, crate.types.primitive(HIRCoreType::U8)}));
+                assocU8.insert(std::make_pair(RcString::newInterned("Discriminant"), HIRTraitPath::AtyEqual{langDiscriminantKind(), {}, crate.types.primitive(HIRCoreType::U8)}));
             }
             return foundCb(ImplRef(type, traitParams, &assocU8), false);
-        } else if (traitPath == mLangPointee) {
+        } else if (traitPath == langPointee()) {
             static HIRTraitPath::assocListT assocUnit;
             static HIRTraitPath::assocListT assocSlice;
             static RcString nameMetadata;
             if (assocUnit.empty()) {
                 nameMetadata = RcString::newInterned("Metadata");
-                assocUnit.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{mLangPointee, {}, crate.types.unit()}));
-                assocSlice.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{mLangPointee, {}, crate.types.primitive(HIRCoreType::Usize)}));
+                assocUnit.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.unit()}));
+                assocSlice.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.primitive(HIRCoreType::Usize)}));
             }
 
             // Generics (or opaque ATYs)
@@ -139,7 +139,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             // Trait object: `Metadata=DynMetadata<T>`
             else if (type->is_TraitObject()) {
                 HIRTraitPath::assocListT assocList;
-                assocList.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{mLangPointee, {}, crate.types.path(HIRGenericPath(mLangDynMetadata, HIRPathParams(type)), &crate.getStructByPath(sp, mLangDynMetadata))}));
+                assocList.insert(std::make_pair(nameMetadata, HIRTraitPath::AtyEqual{langPointee(), {}, crate.types.path(HIRGenericPath(langDynMetadata(), HIRPathParams(type)), &crate.getStructByPath(sp, langDynMetadata()))}));
                 return foundCb(ImplRef(type, {}, std::move(assocList)), false);
             }
             // Slice and str
@@ -176,7 +176,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 }
             }
             return foundCb(ImplRef(type, traitParams, &assocUnit), false);
-        } else if (traitPath == mLangPointeeSized) {
+        } else if (traitPath == langPointeeSized()) {
             // Lowest level of sizedness: This _might_ be sized (i.e. it's not an extern type?)
             return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
             //switch( this->metadata_type(sp, type) )
@@ -187,7 +187,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             //case MetadataType::TraitObject:
             //case MetadataType::Zero:
             //}
-        } else if (traitPath == mLangMetaSized) {
+        } else if (traitPath == langMetaSized()) {
             // Next level of sizedness: There's metadata that allows getting the size
             // - No difference to the above?
             switch (this->metadataType(sp, type)) {
@@ -199,7 +199,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 case MetadataType::Zero: // TODO: Does zero apply here?
                     return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
             }
-        } else if (traitPath == mLangDestruct) {
+        } else if (traitPath == langDestruct()) {
             // is there anything indestructible? Maybe extern types
             return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
         }
@@ -252,7 +252,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             }
         }
         TU_ARMA(Function, e) {
-            if (traitPath == mLangFn || traitPath == mLangFnMut || traitPath == mLangFnOnce) {
+            if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
                 if (traitParams) {
                     const auto& desArgTys = traitParams->types.at(0)->as_Tuple();
                     if (desArgTys.size() != e.argTypes.size()) {
@@ -271,7 +271,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 HIRPathParams params;
                 params.types.push_back(crate.types.tuple(std::move(argTypes)));
                 HIRTraitPath::assocListT assoc;
-                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, params.clone()), {}, e.mRettype}));
+                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), params.clone()), {}, e.mRettype}));
                 return foundCb(ImplRef(type, mv$(params), mv$(assoc)), false);
             }
             // 1.74: Magic impls of `eq` for function pointers
@@ -280,7 +280,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             }
         }
         TU_ARMA(NamedFunction, realE) {
-            if (traitPath == mLangFn || traitPath == mLangFnMut || traitPath == mLangFnOnce) {
+            if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
                 auto e = realE.decay(crate.types, sp);
                 if (traitParams) {
                     const auto& desArgTys = traitParams->types.at(0)->as_Tuple();
@@ -300,14 +300,14 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 HIRPathParams params;
                 params.types.push_back(crate.types.tuple(std::move(argTypes)));
                 HIRTraitPath::assocListT assoc;
-                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, params.clone()), {}, e.mRettype}));
+                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), params.clone()), {}, e.mRettype}));
                 return foundCb(ImplRef(type, mv$(params), mv$(assoc)), false);
             }
         }
         TU_ARMA(NodeType, e) {
         TU_MATCH_HDRA((e), {)
         TU_ARMA(Closure, nodeP) {
-                    if (traitPath == mLangFn || traitPath == mLangFnMut || traitPath == mLangFnOnce) {
+                    if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
                         if (traitParams) {
                             const auto& desArgTys = traitParams->types.at(0)->as_Tuple();
                             if (desArgTys.size() != nodeP->mArgs.size()) {
@@ -327,23 +327,23 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                             case HIRExprNodeClosure::Class::NoCapture:
                                 break;
                             case HIRExprNodeClosure::Class::Once:
-                                if (traitPath == mLangFnMut) {
+                                if (traitPath == langFnMut()) {
                                     return false;
                                 }
                             case HIRExprNodeClosure::Class::Mut:
-                                if (traitPath == mLangFn) {
+                                if (traitPath == langFn()) {
                                     return false;
                                 }
                             case HIRExprNodeClosure::Class::Shared:
                                 break;
                         }
                         HIRTraitPath::assocListT assoc;
-                        assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(mLangFnOnce, traitParams->clone()), {}, nodeP->returnType}));
+                        assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), traitParams->clone()), {}, nodeP->returnType}));
                         return foundCb(ImplRef(type, traitParams->clone(), mv$(assoc)), false);
                     }
                 }
                 TU_ARMA(Generator, nodeP) {
-                    if (traitPath == mLangGenerator) {
+                    if (traitPath == langGenerator()) {
                         HIRTraitPath::assocListT assoc;
                         assoc.insert(::std::make_pair("Yield", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->yieldTy}));
                         assoc.insert(::std::make_pair("Return", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->returnType}));
@@ -353,7 +353,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     }
                 }
                 TU_ARMA(Async, nodeP) {
-                    if (traitPath == mLangFuture) {
+                    if (traitPath == langFuture()) {
                         HIRTraitPath::assocListT assoc;
                         assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->mCode->resType}));
                         HIRPathParams params;
@@ -1864,7 +1864,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         TU_ARMA(NodeType, te) {
         TU_MATCH_HDRA((te), {)
         TU_ARMA(Closure, nodeP) {
-                    if (e2.trait.mPath == mLangFn || e2.trait.mPath == mLangFnMut || e2.trait.mPath == mLangFnOnce) {
+                    if (e2.trait.mPath == langFn() || e2.trait.mPath == langFnMut() || e2.trait.mPath == langFnOnce()) {
                         if (e2.item == "Output") {
                             input = nodeP->returnType;
                             return true;
@@ -2219,7 +2219,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
     // bounds accepted by `trivial_bounds`, such as `where str: Copy`.
     if (traitBounds.size() != 0) {
         auto pp = HIRPathParams();
-        if (this->findImplBounds(sp, mLangCopy, &pp, ty, [](auto, bool) {
+        if (this->findImplBounds(sp, langCopy(), &pp, ty, [](auto, bool) {
                 return true;
             })) {
             copyCache.insert(::std::make_pair(ty, true));
@@ -2247,7 +2247,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             }
 
             auto pp = HIRPathParams();
-            bool rv = this->findImpl(sp, mLangCopy, &pp, ty, [&](auto, bool) {
+            bool rv = this->findImpl(sp, langCopy(), &pp, ty, [&](auto, bool) {
                 return true;
             }, true);
             copyCache.insert(::std::make_pair(ty, rv));
@@ -2313,7 +2313,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
         }
         TU_ARMA(ErasedType, e) {
             for (const auto& trait : e.traits) {
-                if (findNamedTraitInTrait(sp, mLangCopy, {}, *trait.traitPtr, trait.mPath.mPath, trait.mPath.mParams, ty, [](const auto&, auto) {
+                if (findNamedTraitInTrait(sp, langCopy(), {}, *trait.traitPtr, trait.mPath.mPath, trait.mPath.mParams, ty, [](const auto&, auto) {
                     return true;
                 })) {
                     return true;
@@ -2343,7 +2343,7 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
                 }
             }
             auto pp = HIRPathParams();
-            bool rv = this->findImplBounds(sp, mLangClone, &pp, ty, [&](auto, bool) {
+            bool rv = this->findImplBounds(sp, langClone(), &pp, ty, [&](auto, bool) {
                 return true;
             });
             cloneCache.insert(::std::make_pair(ty, rv));
@@ -2363,7 +2363,7 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
                 return rv;
             }
             auto pp = HIRPathParams();
-            bool rv = this->findImpl(sp, mLangClone, &pp, ty, [&](auto, bool) {
+            bool rv = this->findImpl(sp, langClone(), &pp, ty, [&](auto, bool) {
                 return true;
             }, true);
             cloneCache.insert(::std::make_pair(ty, rv));
@@ -2423,7 +2423,7 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
         }
         TU_ARMA(ErasedType, e) {
             for (const auto& trait : e.traits) {
-                if (findNamedTraitInTrait(sp, mLangClone, {}, *trait.traitPtr, trait.mPath.mPath, trait.mPath.mParams, ty, [](const auto&, auto) {
+                if (findNamedTraitInTrait(sp, langClone(), {}, *trait.traitPtr, trait.mPath.mPath, trait.mPath.mParams, ty, [](const auto&, auto) {
                     return true;
                 })) {
                     return true;
@@ -2569,7 +2569,7 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
         }
     }
 
-    auto ir = traitBounds.equal_range(std::make_pair(srcTy, std::ref(mLangUnsize)));
+    auto ir = traitBounds.equal_range(std::make_pair(srcTy, std::ref(langUnsize())));
     for (auto it = ir.first; it != ir.second; ++it) {
         const auto& beDst = it->first.second.mParams.types.at(0);
 
@@ -2584,7 +2584,7 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
         const auto& pe = srcTy->as_Path().path.mData.as_UfcsKnown();
         auto ms = MonomorphStatePtr(crate.types, pe.type, &pe.trait.mParams, nullptr);
         auto foundBound = this->iterateAtyBounds(sp, pe, [&](const HIRTraitPath& bound) {
-            if (bound.mPath.mPath != mLangUnsize) {
+            if (bound.mPath.mPath != langUnsize()) {
                 return false;
             }
             const auto& beDstTpl = bound.mPath.mParams.types.at(0);
@@ -2929,7 +2929,7 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
         TU_ARMA(Generic, e) {
             // Check for an explicit `Sized` bound
             auto pp = HIRPathParams();
-            bool rv = this->findImplBounds(sp, mLangSized, &pp, ty, [&](auto, bool) {
+            bool rv = this->findImplBounds(sp, langSized(), &pp, ty, [&](auto, bool) {
                 return true;
             });
             if (rv) {
@@ -3043,7 +3043,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
     // A crate without the Drop lang item cannot define a destructor.  In that
     // language mode no type can require compiler-generated drop glue, and in
     // particular the resolver must not try to look up an empty trait path.
-    if (mLangDrop.components().empty()) {
+    if (langDrop().components().empty()) {
         return false;
     }
 
@@ -3072,7 +3072,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             }
 
             auto pp = HIRPathParams();
-            bool hasDirectDrop = this->findImpl(sp, mLangDrop, &pp, ty, [&](auto, bool) {
+            bool hasDirectDrop = this->findImpl(sp, langDrop(), &pp, ty, [&](auto, bool) {
                 return true;
             }, true);
             if (hasDirectDrop) {
@@ -3200,7 +3200,7 @@ const HIRTypeData* StaticTraitResolve::isTypeOwnedBox(const HIRTypeData* ty) con
     }
     const auto& pe = te.path.mData.as_Generic();
 
-    if (pe.mPath != mLangBox) {
+    if (pe.mPath != langBox()) {
         return nullptr;
     }
     // TODO: Properly assert?
@@ -3218,7 +3218,7 @@ const HIRTypeData* StaticTraitResolve::isTypePhantomData(const HIRTypeData* ty) 
     }
     const auto& pe = te.path.mData.as_Generic();
 
-    if (pe.mPath != mLangPhantomData) {
+    if (pe.mPath != langPhantomData()) {
         return nullptr;
     }
     // TODO: Properly assert?

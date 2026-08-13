@@ -1,5 +1,8 @@
 #pragma once
 
+#include "lang_items.h"
+#include "wire_board.h"
+
 #include "hir_hir.h"
 #include "hir_path.h"
 #include "hir_type_ref.h"
@@ -18,75 +21,75 @@ struct TraitResolveCommon {
     const HIRCrate& crate;
 
     const HIRSimplePath& langCopy() const {
-        return mLangCopy;
+        return wb.langItems->copy();
     }
 
     const HIRSimplePath& langClone() const {
-        return mLangClone;
+        return wb.langItems->clone();
     }
 
     const HIRSimplePath& langDrop() const {
-        return mLangDrop;
+        return wb.langItems->drop();
     }
 
     const HIRSimplePath& langSized() const {
-        return mLangSized;
+        return wb.langItems->sized();
     }
 
     const HIRSimplePath& langUnsize() const {
-        return mLangUnsize;
+        return wb.langItems->unsize();
     }
 
     const HIRSimplePath& langFn() const {
-        return mLangFn;
+        return wb.langItems->fn();
     }
 
     const HIRSimplePath& langFnMut() const {
-        return mLangFnMut;
+        return wb.langItems->fnMut();
     }
 
     const HIRSimplePath& langFnOnce() const {
-        return mLangFnOnce;
+        return wb.langItems->fnOnce();
     }
 
     const HIRSimplePath& langBox() const {
-        return mLangBox;
+        return wb.langItems->box();
     }
 
     const HIRSimplePath& langPhantomData() const {
-        return mLangPhantomData;
+        return wb.langItems->phantomData();
     }
 
     const HIRSimplePath& langGenerator() const {
-        return mLangGenerator;
+        return wb.langItems->generator();
     }
 
     const HIRSimplePath& langDiscriminantKind() const {
-        return mLangDiscriminantKind;
+        return wb.langItems->discriminantKind();
     }
 
     const HIRSimplePath& langPointee() const {
-        return mLangPointee;
+        return wb.langItems->pointee();
     }
 
     const HIRSimplePath& langDynMetadata() const {
-        return mLangDynMetadata;
+        return wb.langItems->dynMetadata();
     }
 
     const HIRSimplePath& langPointeeSized() const {
-        return mLangPointeeSized;
+        return wb.langItems->pointeeSized();
     }
 
     const HIRSimplePath& langMetaSized() const {
-        return mLangMetaSized;
+        return wb.langItems->metaSized();
     }
 
     const HIRSimplePath& langDestruct() const {
-        return mLangDestruct;
+        return wb.langItems->destruct();
     }
 
     const HIRSimplePath& langFuture() const {
-        return mLangFuture;
+        return wb.langItems->future();
     }
 
     // Nullable views of the current generics context (the non-Ptr overloads
@@ -168,24 +171,6 @@ struct TraitResolveCommon {
     typedef RangeVecMap<std::pair<HIRTypeRef, HIRGenericPath>, CachedBound, CachedBoundCmp> cachedBoundsT;
     cachedBoundsT traitBounds;
 
-    HIRSimplePath mLangCopy;
-    HIRSimplePath mLangClone; // 1.29
-    HIRSimplePath mLangDrop;
-    HIRSimplePath mLangSized;
-    HIRSimplePath mLangUnsize;
-    HIRSimplePath mLangFn;
-    HIRSimplePath mLangFnMut;
-    HIRSimplePath mLangFnOnce;
-    HIRSimplePath mLangBox;
-    HIRSimplePath mLangPhantomData;
-    HIRSimplePath mLangGenerator;        // 1.39
-    HIRSimplePath mLangDiscriminantKind; // 1.54
-    HIRSimplePath mLangPointee;          // 1.54
-    HIRSimplePath mLangDynMetadata;      // 1.54
-    HIRSimplePath mLangPointeeSized;     // 1.90
-    HIRSimplePath mLangMetaSized;        // 1.90
-    HIRSimplePath mLangDestruct;         // 1.90
-    HIRSimplePath mLangFuture;           // 1.90 (well, added earlier)
 
     TraitResolveCommon(const WireBoard& wb);
 

@@ -725,7 +725,7 @@ namespace {
                         {bbRet,
                          MIRUnwindAction::make_Cleanup(bbPanic),
                          lvPoll.clone(),
-                         HIRPath(tyInner, builder.resolve().mLangFuture, "poll"),
+                         HIRPath(tyInner, builder.resolve().langFuture(), "poll"),
                          makeVec2(
                              MIRParam(lvPin.clone()),
                              MIRParam::make_Borrow({
