@@ -18,13 +18,12 @@ The compiler silently produces incorrect programs. Highest severity.
 | rust_lib runtime panics | 18 | std `error.rs` tests; partly blocked on missing backtrace support (borders P2 feature work) |
 | slice doctest | 1 | `core/src/slice/mod.rs` |
 
-## P1 — compiler crashes on valid code (~183)
+## P1 — compiler crashes on valid code (~178)
 
-One cluster = one bug. Fixing the top crash cluster greens 5 tests.
+One cluster = one bug.
 
 | location | tests | example |
 |---|---|---|
-| `hir_typeck_resolve_common.cpp:160` | 5 | `const-generics/generic_const_exprs/issue-82268.rs` |
 | ~12 smaller clusters (2-4 each) | ~35 | mangling:98, expr_cs:1909 (TAIT placeholder), hir_hir:482, mir_from_hir:1866/1596/7386, typeck_common:653/397, expand:5452/1997, trans_main:575, mir_operations:640 |
 | unclassified aborts (miri/gccrs/rustlings/doctest categories, not re-run individually) | 81 | |
 
@@ -58,10 +57,11 @@ Pass when re-run in isolation; fail only under the parallel gate load
 
 ## Recommended order (by ROI)
 
-1. Top crash cluster (5 tests)
-2. Quiz miscompiles (deep dives: method resolution, macro hygiene)
-3. Parser features, largest-cluster first
-4. Typeck/TAIT epic (largest, hardest)
+1. Quiz miscompiles (deep dives: method resolution, macro hygiene)
+2. Remaining classified crash clusters, largest-cluster first
+3. Unclassified aborts, clustered by root cause before fixing
+4. Parser features, largest-cluster first
+5. Typeck/TAIT epic (largest, hardest)
 
 Raw data: per-case signatures and per-bucket test lists were produced by the
 triage scripts in the session scratchpad (`fail-rows2.json`,

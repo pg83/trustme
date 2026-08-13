@@ -554,6 +554,11 @@ namespace {
             HIRVisitor::visitUnion(p, item);
         }
 
+        void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override {
+            auto _ = this->ms.setImplGenerics(item.mParams);
+            HIRVisitor::visitTypeAlias(p, item);
+        }
+
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
             fcnPtr = &item;
@@ -704,7 +709,7 @@ namespace {
             }
 
             // Set up the module state
-            {
+            if (!expr.state) {
                 expr.state = HIRExprStatePtr(crate.pool, HIRExprState(crate.types, *curModule.ptr, curModule.path->getSimplePath()));
                 expr.state->traits = ms.traits; // TODO: Only obtain the current module's set
                 expr.state->mImplGenerics = ms.mImplGenerics;
@@ -1093,6 +1098,11 @@ namespace {
         void visitUnion(HIRItemPath p, HIRUnion& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
             HIRVisitor::visitUnion(p, item);
+        }
+
+        void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override {
+            auto _ = this->ms.setImplGenerics(item.mParams);
+            HIRVisitor::visitTypeAlias(p, item);
         }
 
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
@@ -1860,7 +1870,55 @@ public:
     }
 };
 
+// Alias expansion clones unevaluated consts before the normal binding pass.
+// Attach the alias definition's identity arguments before those clones exist.
+class AliasConstGenericParamBinder: public HIRVisitor {
+    const HIRGenericParams* implParams = nullptr;
+
+    struct Guard {
+        AliasConstGenericParamBinder& binder;
+        const HIRGenericParams* old;
+
+        Guard(AliasConstGenericParamBinder& binder, const HIRGenericParams& value)
+            : binder(binder)
+            , old(binder.implParams)
+        {
+            binder.implParams = &value;
+        }
+
+        ~Guard() {
+            binder.implParams = old;
+        }
+    };
+
+public:
+    explicit AliasConstGenericParamBinder(HIRTypeInterner& types)
+        : HIRVisitor(nullptr, types)
+    {
+    }
+
+    void visitConstgeneric(HIRConstGeneric& value) override {
+        if (auto* unevaluated = value.opt_Unevaluated()) {
+            if (implParams && !(*unevaluated)->paramsImpl.hasParams()) {
+                (*unevaluated)->paramsImpl = implParams->makeNopParams(typeInterner(), 0);
+            }
+        }
+        HIRVisitor::visitConstgeneric(value);
+    }
+
+    void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override {
+        Guard guard(*this, item.mParams);
+        HIRVisitor::visitTypeAlias(p, item);
+    }
+
+    void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override {
+        Guard guard(*this, item.mParams);
+        HIRVisitor::visitTraitAlias(p, item);
+    }
+};
+
 void ConvertHIRExpandAliases(HIRCrate& crate) {
+    AliasConstGenericParamBinder(crate.types).visitCrate(crate);
     Expander exp{crate};
     exp.visitCrate(crate);
 }

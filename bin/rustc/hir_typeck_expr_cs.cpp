@@ -2477,10 +2477,18 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
         } else {
             if (r.is_Infer()) {
                 this->ivars.setIvarValTo(r.as_Infer().index, l.clone());
-            } else if (l.is_Unevaluated() && r.is_Unevaluated() && ConstExprEquate{*this, sp}.equate(*l.as_Unevaluated(), *r.as_Unevaluated())) {
             } else {
-                // TODO: What about unevaluated values due to type inference?
-                ERROR(sp, E0000, "Value mismatch between " << l << " and " << r);
+                auto normalizedL = l.clone();
+                auto normalizedR = r.clone();
+                ConvertHIRConstantEvaluateConstGeneric(sp, mResolve.wb, crate, normalizedL);
+                ConvertHIRConstantEvaluateConstGeneric(sp, mResolve.wb, crate, normalizedR);
+
+                if (normalizedL == normalizedR) {
+                } else if (normalizedL.is_Unevaluated() && normalizedR.is_Unevaluated() && ConstExprEquate{*this, sp}.equate(*normalizedL.as_Unevaluated(), *normalizedR.as_Unevaluated())) {
+                } else {
+                    // TODO: What about unevaluated values due to type inference?
+                    ERROR(sp, E0000, "Value mismatch between " << normalizedL << " and " << normalizedR);
+                }
             }
         }
     } else {
@@ -8574,7 +8582,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                     auto valRef = staticResolve.getValue(node.span(), node.methodPath, outParams, /*signature_only=*/true, nullptr);
                     const HIRFunction& fcn = *valRef.as_Function();
                     const HIRGenericParams& gpDef = fcn.mParams;
-                    ConvertHIRConstantEvaluateMethodParams(node.span(), ms.wb, ms.crate, ms.modPaths.back(), ms.mImplGenerics, ms.mItemGenerics, &gpDef, *paramsPtr);
+                    ConvertHIRConstantEvaluateMethodParams(node.span(), ms.wb, ms.crate, &gpDef, *paramsPtr);
                 }
             }
         } v(ms, staticResolve);

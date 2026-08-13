@@ -1585,7 +1585,7 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
         TU_MATCH_HDRA( (e.path.mData), { )
         TU_ARMA(Generic, e2) {
                     evaluatePathParams(sp, e2.mParams);
-                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, e.binding.getGenerics(), e2.mParams);
+                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, e.binding.getGenerics(), e2.mParams);
                     expandAssociatedTypesParams(sp, e2.mParams);
                 }
                 TU_ARMA(UfcsInherent, e2) {
@@ -1758,13 +1758,13 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
         return false;
     }
 
-    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, implParamsDef, implParams);
+    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, implParamsDef, implParams);
 
     auto itemParams = pe.params.clone();
     if (itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
         ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
     }
-    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, HIRSimplePath(crate.crateName, {}), mImplGenerics, mItemGenerics, &alias->mParams, itemParams);
+    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &alias->mParams, itemParams);
 
     input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias->mType);
     return true;

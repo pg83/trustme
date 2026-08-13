@@ -3980,15 +3980,14 @@ namespace {
             getParams = saved;
         }
 
-        void visitArraysize(HIRArraySize& as, std::string name) {
+        void visitArraysize(HIRArraySize& as) {
             if (as.is_Unevaluated() && as.as_Unevaluated().is_Unevaluated()) {
                 TRACE_FUNCTION_FR(as, as);
-                const auto& exprPtr = *as.as_Unevaluated().as_Unevaluated()->expr;
+                const auto& unevaluated = *as.as_Unevaluated().as_Unevaluated();
+                const auto& exprPtr = *unevaluated.expr;
 
-                auto nvs = NewvalState{*mMod, *modPath, name};
-                auto eval = getEval(exprPtr->span(), nvs);
                 try {
-                    auto val = eval.evaluateConstant(*modPath + name, exprPtr, crate.types.primitive(HIRCoreType::Usize), monomorphState.clone());
+                    auto val = evaluateConstgeneric(exprPtr->span(), wb, crate, crate.types.primitive(HIRCoreType::Usize), unevaluated);
                     as = val.readUsize(0);
                 } catch (const Defer&) {
                     const auto* tn = cast<const HIRExprNodeConstParam>(&*exprPtr);
@@ -4010,7 +4009,7 @@ namespace {
                 auto data = ty->cloneData();
                 auto& e = data.as_Array();
                 TRACE_FUNCTION_FR(ty, ty);
-                visitArraysize(e.size, FMT("ty_" << &e << "#"));
+                visitArraysize(e.size);
                 ty = crate.types.intern(mv$(data));
             }
 
@@ -4161,7 +4160,7 @@ namespace {
 
                 void visit(HIRExprNodeArraySized& node) override {
                     HIRExprVisitorDef::visit(node);
-                    mExp.visitArraysize(node.mSize, FMT("array_" << &node << "#"));
+                    mExp.visitArraysize(node.mSize);
                 }
             };
 
@@ -4448,16 +4447,10 @@ namespace {
     }
 }
 
-void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRSimplePath& modPath, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRGenericParams* paramsDef, HIRPathParams& params) {
+void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* paramsDef, HIRPathParams& params) {
     for (auto& v : params.values) {
         if (v.is_Unevaluated()) {
             const auto& ue = *v.as_Unevaluated();
-            const auto& e = *ue.expr;
-            auto name = FMT("param_" << &v << "#");
-            TRACE_FUNCTION_FR(name, name);
-            auto nvs = NewvalState{crate.getModByPath(Span(), modPath), modPath, name};
-            auto eval = HIREvaluator{sp, wb, nvs};
-            eval.resolve.setBothGenericsRaw(implGenerics, itemGenerics);
 
             // Need to look up the required type - to do that requires knowing the item it's for
             // - Which, might not be known at this point - might be a UfcsInherent
@@ -4473,12 +4466,7 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                 ASSERT_BUG(sp, idx < paramsDef->values.size(), "");
                 const auto& ty = paramsDef->values[idx].mType;
                 ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
-                MonomorphState ms(crate.types);
-                ms.ppImpl = &ue.paramsImpl;
-                ms.ppMethod = &ue.paramsItem;
-
-                auto val = eval.evaluateConstant(HIRItemPath(modPath, name.c_str()), e, ty, std::move(ms));
-                v = HIRConstGeneric::make_Evaluated(std::move(val));
+                v = HIRConstGeneric::make_Evaluated(evaluateConstgeneric(sp, wb, crate, ty, ue));
             } catch (const Defer&) {
                 // Deferred - no update
             }

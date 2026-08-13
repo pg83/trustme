@@ -4422,7 +4422,7 @@ TU_ARMA(Alias, ee) {
         TU_ARMA(Path, e) {
         TU_MATCH_HDRA( (e.path.mData), {)
         TU_ARMA(Generic, pe) {
-                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, mVisPath, mImplGenerics, mItemGenerics, e.binding.getGenerics(), pe.mParams);
+                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, e.binding.getGenerics(), pe.mParams);
                     H::expandAssociatedTypesParams(sp, *this, pe.mParams, stack);
                 }
                 TU_ARMA(UfcsInherent, pe) {
@@ -4593,7 +4593,7 @@ TU_ARMA(Alias, ee) {
                 return false;
             }
 
-            ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, mVisPath, mImplGenerics, mItemGenerics, implParamsDef, implParams);
+            ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, implParamsDef, implParams);
             if (inherentTypeConstraint) {
                 auto selectedType = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr).monomorphType(sp, selectedImpl->mType);
                 inherentTypeConstraint(sp, pe.type, selectedType);
@@ -4603,7 +4603,7 @@ TU_ARMA(Alias, ee) {
             if (itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
                 ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
             }
-            ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, mVisPath, mImplGenerics, mItemGenerics, &alias->mParams, itemParams);
+            ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &alias->mParams, itemParams);
 
             input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias->mType);
             return true;
