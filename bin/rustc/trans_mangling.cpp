@@ -61,17 +61,22 @@ public:
     // - "<ofs:base26> <len:int> <raw_data1> <raw_data2>" (`#` or `-` present)
     // - "<len:base26> `_` <raw_data2>" (`#` or `-` at the start)
     void fmtName(const char* const s) {
-        bool hasNonAscii = false;
+        bool needsByteEncoding = false;
         for (const auto* p = reinterpret_cast<const unsigned char*>(s); *p; ++p) {
-            hasNonAscii |= *p >= 0x80;
+            const bool canEmitRaw =
+                ('0' <= *p && *p <= '9')
+                || ('A' <= *p && *p <= 'Z')
+                || ('a' <= *p && *p <= 'z')
+                || *p == '_' || *p == '#' || *p == '-';
+            needsByteEncoding |= !canEmitRaw;
         }
 
         // The C backend needs an ASCII identifier, not the externally-visible
-        // Rust v0 symbol spelling.  `U` marks a bytewise UTF-8 encoding.  Escape
-        // ordinary ASCII names beginning with `U` as well, so the mapping stays
-        // injective (e.g. Unicode Ue588... and source identifier Ue588...).
+        // Rust v0 symbol spelling. `U` marks a bytewise encoding for names that
+        // cannot be emitted raw. Escape ordinary names beginning with `U` as
+        // well, so the mapping stays injective.
         ::std::string encoded;
-        if (hasNonAscii) {
+        if (needsByteEncoding) {
             static constexpr char HEX[] = "0123456789abcdef";
             encoded = "U";
             for (const auto* p = reinterpret_cast<const unsigned char*>(s); *p; ++p) {
