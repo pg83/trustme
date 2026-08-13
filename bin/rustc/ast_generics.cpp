@@ -8,11 +8,11 @@ ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
 {
 }
 
-ASTTypeParam::ASTTypeParam(Span sp, ASTAttributeList attrs, RcString name)
+ASTTypeParam::ASTTypeParam(stl::ObjPool& pool, Span sp, ASTAttributeList attrs, RcString name)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name))
-    , mDefaultValue(mktype(mSpan))
+    , mDefaultValue(mktype(pool, mSpan))
 {
 }
 

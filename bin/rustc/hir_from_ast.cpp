@@ -1024,7 +1024,7 @@ HIRTypeRef LowerHIRType(const ::TypeRef& ty) {
                 }
                 return gCratePtr->types.generic(l->name, slot);
             } else if (e->mBindings.type.path.crate == CRATE_BUILTINS) {
-                return LowerHIRType(mktype(ty->span(), coretypeFromstring(e->mBindings.type.path.nodes.back().c_str())));
+                return LowerHIRType(mktype(*ty->pool, ty->span(), coretypeFromstring(e->mBindings.type.path.nodes.back().c_str())));
             } else {
                 return gCratePtr->types.path(LowerHIRPath(ty->span(), *e, FromASTPathClass::Type), {});
             }
@@ -3506,7 +3506,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 }
             }
         }
-        auto ty = LowerHIRType(::mktype(v.span(), v.mPath));
+        auto ty = LowerHIRType(::mktype(*gCratePtr->pool, v.span(), v.mPath));
         if (v.mPath.mBindings.type.binding.is_EnumVar()) {
             ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.mData.is_Generic()), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();
@@ -3529,7 +3529,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         for (auto& val : v.values) {
             values.push_back(::std::make_pair(val.name, lower(val.value)));
         }
-        auto ty = LowerHIRType(::mktype(v.span(), v.mPath));
+        auto ty = LowerHIRType(::mktype(*gCratePtr->pool, v.span(), v.mPath));
         if (v.mPath.mBindings.type.binding.is_EnumVar()) {
             ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.mData.is_Generic()), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();

@@ -13,6 +13,9 @@ class ASTModule;
 class ASTCrate;
 class ASTAttributeList;
 struct WireBoard;
+namespace stl {
+    class ObjPool;
+}
 
 /// State the parser needs to pass down via a second channel.
 struct ParseState {
@@ -78,6 +81,9 @@ public:
     ParseState& parseState() {
         return mParseState;
     }
+
+    // The pool that owns AST type nodes created while parsing this stream.
+    stl::ObjPool& typePool() const;
 
     ASTEdition getEdition() const {
         return edition;

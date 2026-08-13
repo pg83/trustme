@@ -990,7 +990,7 @@ struct CExpandExpr: public ASTNodeVisitor {
 
         auto coreCrate = crate.extCratenameCore;
         auto pathTry = getPath(coreCrate, "ops", "Try");
-        auto pathTryFromOutput = ASTPath::newUfcsTrait(::mktype(node.span()), pathTry, {ASTPathNode(RcString::newInterned("from_output"))});
+        auto pathTryFromOutput = ASTPath::newUfcsTrait(::mktype(*parentExpandState.crate.pool, node.span()), pathTry, {ASTPathNode(RcString::newInterned("from_output"))});
         auto okNode = ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathTryFromOutput), ::makeVec1(mv$(node.inner))));
         auto breakNode = ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, loopName, mv$(okNode)));
         this->replacement = ASTExprNodeP(new ASTExprNodeLoop(loopName, mv$(breakNode)));
@@ -1312,7 +1312,7 @@ struct CExpandExpr: public ASTNodeVisitor {
             } else {
                 // Create a block with a `let` and individual assignments
                 auto rv = new ASTExprNodeBlock();
-                rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeLetBinding(std::move(pat), mktype(node.span()), std::move(node.mValue)))});
+                rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeLetBinding(std::move(pat), mktype(*parentExpandState.crate.pool, node.span()), std::move(node.mValue)))});
                 for (auto& slots : v.slots) {
                     rv->nodes.push_back({true, ASTExprNodeP(new ASTExprNodeAssign(ASTExprNodeAssign::NONE, std::move(slots.second), ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newLocal(std::move(slots.first))))))});
                 }
@@ -1372,11 +1372,11 @@ struct CExpandExpr: public ASTNodeVisitor {
 
         auto nextReceiver = ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newRelative(iteratorHygiene, ::makeVec1(ASTPathNode(rcstringIt)))));
         auto nextReceiverBorrow = ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, mv$(nextReceiver)));
-        auto nextCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mktype(node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(mv$(nextReceiverBorrow))));
+        auto nextCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mktype(*parentExpandState.crate.pool, node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(mv$(nextReceiverBorrow))));
         auto nextMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(nextCall), mv$(arms)));
         auto loop = ASTExprNodeP(new ASTExprNodeLoop(node.label, mv$(nextMatch)));
 
-        auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mktype(node.span()), pathIntoIterator, {ASTPathNode(rcstringIntoIter)}), ::makeVec1(mv$(node.mValue))));
+        auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mktype(*parentExpandState.crate.pool, node.span()), pathIntoIterator, {ASTPathNode(rcstringIntoIter)}), ::makeVec1(mv$(node.mValue))));
         auto outerMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(intoIterCall), ::makeVec1(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))), {}, mv$(loop)))));
 
         // rustc wraps the outer match in `DropTemps`: for always yields (), so
@@ -1636,7 +1636,7 @@ struct CExpandExpr: public ASTNodeVisitor {
             static const RcString rcstringR = RcString::newInterned("r");
             // TryV2
             {
-                auto pathTryBranch = ASTPath::newUfcsTrait(::mktype(node.span()), pathTry, {ASTPathNode(RcString::newInterned("branch"))});
+                auto pathTryBranch = ASTPath::newUfcsTrait(::mktype(*parentExpandState.crate.pool, node.span()), pathTry, {ASTPathNode(RcString::newInterned("branch"))});
                 // Not a lang item
                 auto path_ControlFlow_Continue = getPath(coreCrate, "ops", "ControlFlow", "Continue");
                 auto path_ControlFlow_Break = getPath(coreCrate, "ops", "ControlFlow", "Break");

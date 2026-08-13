@@ -395,71 +395,59 @@ PrettyPrintType::PrettyPrintType(const TypeStore* ty)
 // ------------------------------------------------------------------------
 // Type node pool + factories
 // ------------------------------------------------------------------------
-static stl::ObjPool* g_ast_type_pool = nullptr;
-
-void setAstTypePool(stl::ObjPool& pool) {
-    g_ast_type_pool = &pool;
-}
-stl::ObjPool& astTypePool() {
-    assert(g_ast_type_pool && "AST type pool not set - call setAstTypePool()");
-    return *g_ast_type_pool;
-}
-
 TypeRef mktype(stl::ObjPool& pool, Span sp, TypeData data) {
     return pool.make<TypeStore>(mv$(sp), mv$(data), &pool);
 }
 
-TypeRef mktype(Span sp) {
-    return mktype(sp, TypeData::make_Any({}));
+TypeRef mktype(stl::ObjPool& pool, Span sp) {
+    return mktype(pool, sp, TypeData::make_Any({}));
 }
-TypeRef mktype(TypeRefTags::Invalid, Span sp) {
-    return mktype(sp, TypeData::make_None({}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Invalid, Span sp) {
+    return mktype(pool, sp, TypeData::make_None({}));
 }
-TypeRef mktype(TypeRefTags::Macro, ASTMacroInvocation inv) {
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Macro, ASTMacroInvocation inv) {
     auto sp = inv.span();
-    auto& p = astTypePool();
-    return mktype(p, sp, TypeData::make_Macro({p.make<ASTMacroInvocation>(mv$(inv))}));
+    return mktype(pool, sp, TypeData::make_Macro({pool.make<ASTMacroInvocation>(mv$(inv))}));
 }
-TypeRef mktype(TypeRefTags::Unit, Span sp) {
-    return mktype(sp, TypeData::make_Unit({}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Unit, Span sp) {
+    return mktype(pool, sp, TypeData::make_Unit({}));
 }
-TypeRef mktype(TypeRefTags::Primitive, Span sp, enum eCoreType type) {
-    return mktype(sp, TypeData::make_Primitive({type}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Primitive, Span sp, enum eCoreType type) {
+    return mktype(pool, sp, TypeData::make_Primitive({type}));
 }
-TypeRef mktype(Span sp, enum eCoreType type) {
-    return mktype(sp, TypeData::make_Primitive({type}));
+TypeRef mktype(stl::ObjPool& pool, Span sp, enum eCoreType type) {
+    return mktype(pool, sp, TypeData::make_Primitive({type}));
 }
-TypeRef mktype(TypeRefTags::Tuple, Span sp, ::std::vector<TypeRef> innerTypes) {
-    return mktype(sp, TypeData::make_Tuple({mv$(innerTypes)}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Tuple, Span sp, ::std::vector<TypeRef> innerTypes) {
+    return mktype(pool, sp, TypeData::make_Tuple({mv$(innerTypes)}));
 }
-TypeRef mktype(TypeRefTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret) {
-    return mktype(sp, TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, ret, mv$(args), isVariadic)}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret) {
+    return mktype(pool, sp, TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, ret, mv$(args), isVariadic)}));
 }
-TypeRef mktype(TypeRefTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType) {
-    return mktype(sp, TypeData::make_Borrow({mv$(lft), isMut, innerType}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType) {
+    return mktype(pool, sp, TypeData::make_Borrow({mv$(lft), isMut, innerType}));
 }
-TypeRef mktype(TypeRefTags::Pointer, Span sp, bool isMut, TypeRef innerType) {
-    return mktype(sp, TypeData::make_Pointer({isMut, innerType}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Pointer, Span sp, bool isMut, TypeRef innerType) {
+    return mktype(pool, sp, TypeData::make_Pointer({isMut, innerType}));
 }
-TypeRef mktype(TypeRefTags::SizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size) {
-    return mktype(sp, TypeData::make_Array({innerType, mv$(size)}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::SizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size) {
+    return mktype(pool, sp, TypeData::make_Array({innerType, mv$(size)}));
 }
-TypeRef mktype(TypeRefTags::UnsizedArray, Span sp, TypeRef innerType) {
-    return mktype(sp, TypeData::make_Slice({innerType}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::UnsizedArray, Span sp, TypeRef innerType) {
+    return mktype(pool, sp, TypeData::make_Slice({innerType}));
 }
-TypeRef mktype(TypeRefTags::Arg, Span sp, RcString name, unsigned int binding) {
-    return mktype(sp, TypeData::make_Generic({mv$(name), binding}));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Arg, Span sp, RcString name, unsigned int binding) {
+    return mktype(pool, sp, TypeData::make_Generic({mv$(name), binding}));
 }
-TypeRef mktype(Span sp, RcString name, unsigned int binding) {
-    return mktype(TypeRefTags::Arg(), sp, mv$(name), binding);
+TypeRef mktype(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding) {
+    return mktype(pool, TypeRefTags::Arg(), sp, mv$(name), binding);
 }
-TypeRef mktype(TypeRefTags::Path, Span sp, ASTPath path) {
-    auto& p = astTypePool();
-    return mktype(p, sp, TypeData::make_Path(p.make<ASTPath>(mv$(path))));
+TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Path, Span sp, ASTPath path) {
+    return mktype(pool, sp, TypeData::make_Path(pool.make<ASTPath>(mv$(path))));
 }
-TypeRef mktype(Span sp, ASTPath path) {
-    return mktype(TypeRefTags::Path(), sp, mv$(path));
+TypeRef mktype(stl::ObjPool& pool, Span sp, ASTPath path) {
+    return mktype(pool, TypeRefTags::Path(), sp, mv$(path));
 }
-TypeRef mktype(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes) {
-    return mktype(sp, TypeData::make_TraitObject({mv$(traits), mv$(lifetimes)}));
+TypeRef mktype(stl::ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes) {
+    return mktype(pool, sp, TypeData::make_TraitObject({mv$(traits), mv$(lifetimes)}));
 }

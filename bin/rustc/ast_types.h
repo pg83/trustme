@@ -239,31 +239,27 @@ struct TypeStore {
     }
 };
 
-// Type factories - allocate a fresh node from `pool` (or the ambient pool).
-extern stl::ObjPool& astTypePool();
-extern void setAstTypePool(stl::ObjPool& pool);
-
+// Type factories - allocate a fresh node from the explicitly-passed `pool`.
+// The owning pool is threaded through the call site (parser TokenStream,
+// resolve/expand contexts, crate) rather than taken from any ambient global.
 extern TypeRef mktype(stl::ObjPool& pool, Span sp, TypeData data);
-inline TypeRef mktype(Span sp, TypeData data) {
-    return mktype(astTypePool(), sp, ::std::move(data));
-}
-extern TypeRef mktype(Span sp);  // wildcard / Any
-extern TypeRef mktype(TypeRefTags::Invalid, Span sp);
-extern TypeRef mktype(TypeRefTags::Macro, ASTMacroInvocation inv);
-extern TypeRef mktype(TypeRefTags::Unit, Span sp);
-extern TypeRef mktype(TypeRefTags::Primitive, Span sp, enum eCoreType type);
-extern TypeRef mktype(Span sp, enum eCoreType type);
-extern TypeRef mktype(TypeRefTags::Tuple, Span sp, ::std::vector<TypeRef> innerTypes);
-extern TypeRef mktype(TypeRefTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret);
-extern TypeRef mktype(TypeRefTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType);
-extern TypeRef mktype(TypeRefTags::Pointer, Span sp, bool isMut, TypeRef innerType);
-extern TypeRef mktype(TypeRefTags::SizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size);
-extern TypeRef mktype(TypeRefTags::UnsizedArray, Span sp, TypeRef innerType);
-extern TypeRef mktype(TypeRefTags::Arg, Span sp, RcString name, unsigned int binding = ~0u);
-extern TypeRef mktype(Span sp, RcString name, unsigned int binding = ~0u);
-extern TypeRef mktype(TypeRefTags::Path, Span sp, ASTPath path);
-extern TypeRef mktype(Span sp, ASTPath path);
-extern TypeRef mktype(Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes);
+extern TypeRef mktype(stl::ObjPool& pool, Span sp);  // wildcard / Any
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Invalid, Span sp);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Macro, ASTMacroInvocation inv);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Unit, Span sp);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Primitive, Span sp, enum eCoreType type);
+extern TypeRef mktype(stl::ObjPool& pool, Span sp, enum eCoreType type);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Tuple, Span sp, ::std::vector<TypeRef> innerTypes);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Pointer, Span sp, bool isMut, TypeRef innerType);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::SizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::UnsizedArray, Span sp, TypeRef innerType);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Arg, Span sp, RcString name, unsigned int binding = ~0u);
+extern TypeRef mktype(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding = ~0u);
+extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Path, Span sp, ASTPath path);
+extern TypeRef mktype(stl::ObjPool& pool, Span sp, ASTPath path);
+extern TypeRef mktype(stl::ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes);
 
 extern ::std::ostream& operator<<(::std::ostream& os, const TypeStore& tr);
 inline ::std::ostream& operator<<(::std::ostream& os, const TypeStore* tr) {

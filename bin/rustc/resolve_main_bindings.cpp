@@ -99,6 +99,11 @@ namespace {
 
         const Settings& settings;
 
+        // Pool that owns AST type nodes created during resolution.
+        stl::ObjPool& typePool() const {
+            return *crate.pool;
+        }
+
         Context(const Settings& settings, const ASTCrate& crate, const ASTModule& mod)
             : settings(settings)
             , crate(crate)
@@ -225,7 +230,7 @@ namespace {
 
         ::TypeRef getSelf() const {
             for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
-                TU_MATCH_DEF(Ent, (*it), (e), (), (ConcreteSelf, if (false && e) { return (*e)->clone(); } else { return ::mktype(Span(), rcstringSelf, GENERICSelf); }))
+                TU_MATCH_DEF(Ent, (*it), (e), (), (ConcreteSelf, if (false && e) { return (*e)->clone(); } else { return ::mktype(typePool(), Span(), rcstringSelf, GENERICSelf); }))
             }
 
             TODO(Span(), "Error when get_self called with no self");
@@ -741,7 +746,7 @@ namespace {
                     // Look up primitive types
                     auto ct = coretypeFromstring(name.c_str());
                     if (ct != CORETYPE_INVAL) {
-                        return ASTPath::newUfcsTy(mktype(Span(), ct), ::std::vector<ASTPathNode>());
+                        return ASTPath::newUfcsTy(mktype(typePool(), Span(), ct), ::std::vector<ASTPathNode>());
                     }
                 } break;
                 default:
@@ -929,7 +934,7 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
         auto innerPath = mv$(path);
         innerPath.cls.as_UFCS().nodes.push_back(mv$(nodes.front()));
         nodes.erase(nodes.begin());
-        path = ASTPath::newUfcsTy(mktype(span, mv$(innerPath)), mv$(nodes));
+        path = ASTPath::newUfcsTy(mktype(context.typePool(), span, mv$(innerPath)), mv$(nodes));
     }
 
     if (path.cls.as_UFCS().type) {
@@ -1021,13 +1026,13 @@ namespace {
         return np;
     }
 
-    ASTPath splitIntoUfcsTy(const Span& sp, const ASTPath& path, unsigned int i /*item_name_idx*/) {
+    ASTPath splitIntoUfcsTy(stl::ObjPool& pool, const Span& sp, const ASTPath& path, unsigned int i /*item_name_idx*/) {
         const auto& pathAbs = path.cls.as_Absolute();
         auto typePath = ASTPath(path);
         typePath.cls.as_Absolute().nodes.resize(i + 1);
         //Resolve_Absolute_Path(
 
-        auto newPath = ASTPath::newUfcsTy(::mktype(sp, mv$(typePath)));
+        auto newPath = ASTPath::newUfcsTy(::mktype(pool, sp, mv$(typePath)));
         for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
             newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
         }
@@ -1037,7 +1042,7 @@ namespace {
         return newPath;
     }
 
-    ASTPath splitReplaceIntoUfcsPath(const Span& sp, ASTPath path, unsigned int i, const ASTPath& tyPathTpl) {
+    ASTPath splitReplaceIntoUfcsPath(stl::ObjPool& pool, const Span& sp, ASTPath path, unsigned int i, const ASTPath& tyPathTpl) {
         auto& pathAbs = path.cls.as_Absolute();
         auto& n = pathAbs.nodes[i];
 
@@ -1045,7 +1050,7 @@ namespace {
         if (!n.args().isEmpty()) {
             typePath.nodes().back().args() = mv$(n.args());
         }
-        auto newPath = ASTPath::newUfcsTy(::mktype(sp, mv$(typePath)));
+        auto newPath = ASTPath::newUfcsTy(::mktype(pool, sp, mv$(typePath)));
         for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
             newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
         }
@@ -1263,7 +1268,7 @@ namespace {
                     } else {
                         for (const auto& typ : e.mParams.types) {
                             (void)typ;
-                            pp.entries.push_back(::mktype(sp));
+                            pp.entries.push_back(::mktype(context.typePool(), sp));
                         }
                     }
                     ASTPath traitPath(ap, std::move(pp));
@@ -1287,9 +1292,9 @@ namespace {
                     }
 
                     if (!found) {
-                        newPath = ASTPath::newUfcsTy(::mktype(sp, mv$(traitPath)));
+                        newPath = ASTPath::newUfcsTy(::mktype(context.typePool(), sp, mv$(traitPath)));
                     } else {
-                        newPath = ASTPath::newUfcsTrait(::mktype(sp), mv$(traitPath));
+                        newPath = ASTPath::newUfcsTrait(::mktype(context.typePool(), sp), mv$(traitPath));
                     }
                     for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
                         newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
@@ -1303,7 +1308,7 @@ namespace {
                 case HIRTypeItem::TAG_Struct:
                 case HIRTypeItem::TAG_Union:
                     path = splitIntoCrate(sp, mv$(path), start, crate.mName);
-                    path = splitIntoUfcsTy(sp, mv$(path), i - start);
+                    path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     TU_ARMA(Enum, e) {
                         if (i + 1 < pathAbs.nodes.size()) {
@@ -1342,7 +1347,7 @@ namespace {
                             }
                         }
                         path = splitIntoCrate(sp, mv$(path), start, crate.mName);
-                        path = splitIntoUfcsTy(sp, mv$(path), i - start);
+                        path = splitIntoUfcsTy(context.typePool(), sp, mv$(path), i - start);
                         return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     }
             }
@@ -1526,7 +1531,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
             default:
                 ERROR(sp, E0000, "Encountered non-namespace item '" << n.name() << "' ("<<nameRef.path<<") in path " << path);
                 TU_ARMA(TypeAlias, e) {
-                    path = splitReplaceIntoUfcsPath(sp, mv$(path), i, nameRef.path);
+                    path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
                 TU_ARMA(Crate, e) {
@@ -1552,7 +1557,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                                     TU_ARMA(Lifetime, e) {
                                     }
                                     TU_ARMA(Type, typ) {
-                                        traitPath.nodes().back().args().entries.push_back(::mktype(sp));
+                                        traitPath.nodes().back().args().entries.push_back(::mktype(context.typePool(), sp));
                                     }
                                     TU_ARMA(Value, val) {
                                     }
@@ -1561,7 +1566,7 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                         } else {
                             for (const auto& typ : e.hir->mParams.types) {
                                 (void)typ;
-                                traitPath.nodes().back().args().entries.push_back(::mktype(sp));
+                                traitPath.nodes().back().args().entries.push_back(::mktype(context.typePool(), sp));
                             }
                         }
                     }
@@ -1593,9 +1598,9 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                         }
                     }
                     if (!found) {
-                        newPath = ASTPath::newUfcsTy(::mktype(sp, mv$(traitPath)));
+                        newPath = ASTPath::newUfcsTy(::mktype(context.typePool(), sp, mv$(traitPath)));
                     } else {
-                        newPath = ASTPath::newUfcsTrait(::mktype(sp), mv$(traitPath));
+                        newPath = ASTPath::newUfcsTrait(::mktype(context.typePool(), sp), mv$(traitPath));
                     }
                     for (unsigned int j = i + 1; j < pathAbs.nodes.size(); j++) {
                         newPath.nodes().push_back(mv$(pathAbs.nodes[j]));
@@ -1645,16 +1650,16 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
                             }
                         }
 
-                        path = splitReplaceIntoUfcsPath(sp, mv$(path), i, nameRef.path);
+                        path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                         return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                     }
                 }
                 TU_ARMA(Struct, e) {
-                    path = splitReplaceIntoUfcsPath(sp, mv$(path), i, nameRef.path);
+                    path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
                 TU_ARMA(Union, e) {
-                    path = splitReplaceIntoUfcsPath(sp, mv$(path), i, nameRef.path);
+                    path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
                 TU_ARMA(Module, e) {
@@ -1780,7 +1785,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                         }
                         if (!found) {
                             auto ct = coretypeFromstring(e.nodes[0].name().c_str());
-                            p = ASTPath::newUfcsTy(mktype(Span(), ct), ::std::vector<ASTPathNode>());
+                            p = ASTPath::newUfcsTy(mktype(context.typePool(), Span(), ct), ::std::vector<ASTPathNode>());
                         }
 
                         DEBUG("Primitive module hack yeilded " << p);
@@ -1790,7 +1795,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                 if (e.nodes.size() > 1) {
                     // Only primitive types turn `Local` paths
                     if (p.cls.is_Local()) {
-                        p = ASTPath::newUfcsTy(mktype(sp, mv$(p)));
+                        p = ASTPath::newUfcsTy(mktype(context.typePool(), sp, mv$(p)));
                     }
                     if (!e.nodes[0].args().isEmpty()) {
                         assert(p.nodes().size() > 0);
@@ -2103,7 +2108,7 @@ void ResolveAbsoluteType(Context& context, TypeRef& type) {
             if (e->mBindings.type.binding.opt_Trait()) {
                 auto tp = TypeTraitPath();
                 tp.path = std::make_unique<ASTPath>(*e);
-                type = ::mktype(type->span(), ::makeVec1(mv$(tp)), {});
+                type = ::mktype(context.typePool(), type->span(), ::makeVec1(mv$(tp)), {});
                 return;
             }
             //else if(auto* be = e->m_bindings.type.binding.opt_TypeParameter())

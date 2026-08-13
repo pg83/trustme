@@ -682,7 +682,7 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
 ASTExprNodeP ParseStmtLet(TokenStream& lex, bool isSuper) {
     Token tok;
     ASTPattern pat = ParsePattern(lex, AllowOrPattern::Yes); // irrefutable
-    TypeRef type = mktype(lex.pointSpan());
+    TypeRef type = mktype(lex.typePool(), lex.pointSpan());
     if (lex.getTokenIf(TOK_COLON)) {
         type = ParseType(lex);
     }
@@ -1180,7 +1180,7 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync = false) {
             // Irrefutable pattern
             ASTPattern pat = ParsePattern(lex, AllowOrPattern::No);
 
-            TypeRef type = mktype(lex.pointSpan());
+            TypeRef type = mktype(lex.typePool(), lex.pointSpan());
             if (lex.getTokenIf(TOK_COLON)) {
                 type = ParseType(lex);
             }
@@ -1197,7 +1197,7 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync = false) {
         throw ParseErrorUnexpected(lex, tok, {TOK_PIPE, TOK_DOUBLE_PIPE, TOK_RWORD_MOVE, TOK_RWORD_STATIC});
     }
 
-    auto rt = mktype(lex.pointSpan());
+    auto rt = mktype(lex.typePool(), lex.pointSpan());
     if (lex.getTokenIf(TOK_THINARROW)) {
         rt = ParseType(lex);
     }
@@ -1726,7 +1726,7 @@ ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMod
                 } while (GET_TOK(tok, lex) == TOK_COMMA);
                 CHECK_TOK(tok, TOK_PAREN_CLOSE);
 
-                TypeRef retType = mktype(TypeRefTags::Unit(), lex.pointSpan());
+                TypeRef retType = mktype(lex.typePool(), TypeRefTags::Unit(), lex.pointSpan());
                 if (lex.lookahead(0) == TOK_THINARROW) {
                     GET_TOK(tok, lex);
                     retType = ParseType(lex, false);
@@ -1736,7 +1736,7 @@ ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMod
                 // Encode into path, by converting Fn(A,B)->C into Fn<(A,B),Ret=C>
                 params = ASTPathParams();
                 params.isParen = true;
-                params.entries.push_back(mktype(TypeRefTags::Tuple(), lex.endSpan(ps), mv$(args)));
+                params.entries.push_back(mktype(lex.typePool(), TypeRefTags::Tuple(), lex.endSpan(ps), mv$(args)));
                 params.entries.push_back(::std::make_pair(ASTPathNode(RcString::newInterned("Output")), mv$(retType)));
             } else {
             }
@@ -2686,11 +2686,11 @@ ASTGenericParams ParseGenericParams(TokenStream& lex) {
         GET_TOK(tok, lex);
         if (tok.type() == TOK_IDENT) {
             auto paramName = tok.ident().name;
-            auto paramDef = ASTTypeParam(lex.pointSpan(), ::std::move(attrs), paramName);
+            auto paramDef = ASTTypeParam(lex.typePool(), lex.pointSpan(), ::std::move(attrs), paramName);
 
             size_t boundStart = SIZE_MAX;
             size_t boundEnd = SIZE_MAX;
-            auto paramTy = mktype(lex.pointSpan(), paramName);
+            auto paramTy = mktype(lex.typePool(), lex.pointSpan(), paramName);
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 boundStart = ret.bounds.size();
                 ParseTypeBound(lex, ret, mv$(paramTy));
@@ -2861,7 +2861,7 @@ ASTFunction ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBePrototy
             }
             CHECK_TOK(tok, TOK_RWORD_SELF);
             auto sp = lex.endSpan(ps);
-            args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(TypeRefTags::Reference(), sp, ::std::move(lifetime), isMut, mktype(sp, rcstringSelf, 0xFFFF))));
+            args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(lex.typePool(), TypeRefTags::Reference(), sp, ::std::move(lifetime), isMut, mktype(lex.typePool(), sp, rcstringSelf, 0xFFFF))));
             //if( allow_self == false )
 
             // Prime tok for next step
@@ -2874,7 +2874,7 @@ ASTFunction ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBePrototy
             GET_TOK(tok, lex);
             //if( allow_self == false )
             auto bindingSp = lex.endSpan(ps);
-            TypeRef ty = mktype(lex.pointSpan(), rcstringSelf, 0xFFFF);
+            TypeRef ty = mktype(lex.typePool(), lex.pointSpan(), rcstringSelf, 0xFFFF);
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 // Typed mut self
                 ty = ParseType(lex);
@@ -2888,7 +2888,7 @@ ASTFunction ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBePrototy
         // By-value method
         //if( allow_self == false )
         auto bindingSp = lex.endSpan(ps);
-        TypeRef ty = mktype(lex.pointSpan(), rcstringSelf, 0xFFFF);
+        TypeRef ty = mktype(lex.typePool(), lex.pointSpan(), rcstringSelf, 0xFFFF);
         if (GET_TOK(tok, lex) == TOK_COLON) {
             // Typed mut self
             ty = ParseType(lex);
@@ -2943,7 +2943,7 @@ ASTFunction ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBePrototy
     }
 
     // Return type
-    TypeRef retType = lex.getTokenIf(TOK_THINARROW) ? ParseType(lex) : mktype(TypeRefTags::Unit(), lex.pointSpan());
+    TypeRef retType = lex.getTokenIf(TOK_THINARROW) ? ParseType(lex) : mktype(lex.typePool(), TypeRefTags::Unit(), lex.pointSpan());
 
     // Bounds
     if (lex.getTokenIf(TOK_RWORD_WHERE)) {
@@ -3179,11 +3179,11 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
             ASTGenericParams bounds;
             if (GET_TOK(tok, lex) == TOK_COLON) {
                 // Bounded associated type
-                ParseTypeBound(lex, bounds, mktype(lex.pointSpan(), RcString::newInterned("Self"), 0xFFFF));
+                ParseTypeBound(lex, bounds, mktype(lex.typePool(), lex.pointSpan(), RcString::newInterned("Self"), 0xFFFF));
                 GET_TOK(tok, lex);
             }
 
-            TypeRef defaultType = mktype(lex.pointSpan());
+            TypeRef defaultType = mktype(lex.typePool(), lex.pointSpan());
             if (tok.type() == TOK_EQUAL) {
                 defaultType = ParseType(lex);
                 GET_TOK(tok, lex);
@@ -3531,7 +3531,7 @@ ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = fal
         // Implementing a trait for another type, get the target type
         if (GET_TOK(tok, lex) == TOK_DOUBLE_DOT) {
             // Default impl
-            implType = mktype(TypeRefTags::Invalid(), lex.pointSpan());
+            implType = mktype(lex.typePool(), TypeRefTags::Invalid(), lex.pointSpan());
         } else {
             PUTBACK(tok, lex);
             implType = ParseType(lex, true);
@@ -3739,7 +3739,7 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
             auto sp = lex.endSpan(ps);
             //TODO(sp, "Extern type");
-            auto i = ASTItem(ASTTypeAlias(ASTGenericParams(), ::mktype(sp)));
+            auto i = ASTItem(ASTTypeAlias(ASTGenericParams(), ::mktype(lex.typePool(), sp)));
             return ASTNamed<ASTItem>{mv$(sp), mv$(metaItems), vis, mv$(name), mv$(i)};
             break;
         }
@@ -4678,10 +4678,10 @@ TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             return mv$(tok.fragType());
         // '!' - Only ever used as part of function prototypes, but is kinda a type... not allowed here though
         case TOK_EXCLAM:
-            return mktype(lex.subSpan(tok.getPos()), TypeData::make_Bang({}));
+            return mktype(lex.typePool(), lex.subSpan(tok.getPos()), TypeData::make_Bang({}));
         // '_' = Wildcard (type inferrence variable)
         case TOK_UNDERSCORE:
-            return mktype(lex.subSpan(tok.getPos()));
+            return mktype(lex.typePool(), lex.subSpan(tok.getPos()));
 
         // 'unsafe' - An unsafe function type
         case TOK_RWORD_UNSAFE:
@@ -4701,7 +4701,7 @@ TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList) {
         case TOK_DOUBLE_LT: {
             PUTBACK(tok, lex);
             auto path = ParsePath(lex, PATH_GENERIC_TYPE);
-            return mktype(TypeRefTags::Path(), lex.endSpan(ps), mv$(path));
+            return mktype(lex.typePool(), TypeRefTags::Path(), lex.endSpan(ps), mv$(path));
         }
         case TOK_RWORD_FOR: {
             auto hrls = ParseHRB(lex);
@@ -4763,7 +4763,7 @@ TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             } else {
                 PUTBACK(tok, lex);
             }
-            return mktype(TypeRefTags::Reference(), lex.endSpan(ps), ::std::move(lifetime), isMut, ParseType(lex, false));
+            return mktype(lex.typePool(), TypeRefTags::Reference(), lex.endSpan(ps), ::std::move(lifetime), isMut, ParseType(lex, false));
         }
         // '*' - Raw pointer
         case TOK_STAR:
@@ -4771,10 +4771,10 @@ TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             switch (GET_TOK(tok, lex)) {
                 case TOK_RWORD_MUT:
                     // Mutable pointer
-                    return mktype(TypeRefTags::Pointer(), lex.endSpan(ps), true, ParseType(lex, false));
+                    return mktype(lex.typePool(), TypeRefTags::Pointer(), lex.endSpan(ps), true, ParseType(lex, false));
                 case TOK_RWORD_CONST:
                     // Immutable pointer
-                    return mktype(TypeRefTags::Pointer(), lex.endSpan(ps), false, ParseType(lex, false));
+                    return mktype(lex.typePool(), TypeRefTags::Pointer(), lex.endSpan(ps), false, ParseType(lex, false));
                 default:
                     throw ParseErrorUnexpected(lex, tok, {TOK_RWORD_CONST, TOK_RWORD_MUT});
             }
@@ -4787,15 +4787,15 @@ TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList) {
                 // Inferred size - unspecified
                 if (lex.getTokenIf(TOK_UNDERSCORE)) {
                     GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
-                    return mktype(TypeRefTags::SizedArray(), lex.endSpan(ps), mv$(inner), nullptr);
+                    return mktype(lex.typePool(), TypeRefTags::SizedArray(), lex.endSpan(ps), mv$(inner), nullptr);
                 } else {
                     // Sized array
                     ASTExpr arraySize = ParseExpr(lex);
                     GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
-                    return mktype(TypeRefTags::SizedArray(), lex.endSpan(ps), mv$(inner), arraySize.takeNode());
+                    return mktype(lex.typePool(), TypeRefTags::SizedArray(), lex.endSpan(ps), mv$(inner), arraySize.takeNode());
                 }
             } else if (tok.type() == TOK_SQUARE_CLOSE) {
-                return mktype(TypeRefTags::UnsizedArray(), lex.endSpan(ps), mv$(inner));
+                return mktype(lex.typePool(), TypeRefTags::UnsizedArray(), lex.endSpan(ps), mv$(inner));
             } else {
                 throw ParseErrorUnexpected(lex, tok /*, "; or ]"*/);
             }
@@ -4805,7 +4805,7 @@ TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList) {
         case TOK_PAREN_OPEN: {
             DEBUG("Tuple");
             if (GET_TOK(tok, lex) == TOK_PAREN_CLOSE) {
-                return mktype(TypeRefTags::Tuple(), lex.endSpan(ps), {});
+                return mktype(lex.typePool(), TypeRefTags::Tuple(), lex.endSpan(ps), {});
             }
             PUTBACK(tok, lex);
 
@@ -4826,7 +4826,7 @@ TypeRef ParseTypeInt(TokenStream& lex, bool allowTraitList) {
                     types.push_back(ParseType(lex));
                 }
                 CHECK_TOK(tok, TOK_PAREN_CLOSE);
-                return mktype(TypeRefTags::Tuple(), lex.endSpan(ps), mv$(types));
+                return mktype(lex.typePool(), TypeRefTags::Tuple(), lex.endSpan(ps), mv$(types));
             }
         }
         default:
@@ -4888,14 +4888,14 @@ TypeRef ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
 
     // `-> RetType`
-    TypeRef retType = mktype(TypeRefTags::Unit(), lex.pointSpan());
+    TypeRef retType = mktype(lex.typePool(), TypeRefTags::Unit(), lex.pointSpan());
     if (GET_TOK(tok, lex) == TOK_THINARROW) {
         retType = ParseType(lex, false);
     } else {
         PUTBACK(tok, lex);
     }
 
-    return mktype(TypeRefTags::Function(), lex.endSpan(ps), mv$(hrbs), isUnsafe, mv$(abi), mv$(args), isVariadic, mv$(retType));
+    return mktype(lex.typePool(), TypeRefTags::Function(), lex.endSpan(ps), mv$(hrbs), isUnsafe, mv$(abi), mv$(args), isVariadic, mv$(retType));
 }
 
 TypeRef ParseTypePath(TokenStream& lex, ASTHigherRankedBounds hrbs, bool allowTraitList) {
@@ -4906,9 +4906,9 @@ TypeRef ParseTypePath(TokenStream& lex, ASTHigherRankedBounds hrbs, bool allowTr
     auto path = ParsePath(lex, PATH_GENERIC_TYPE);
     if (lex.lookahead(0) == TOK_EXCLAM) {
         GET_CHECK_TOK(tok, lex, TOK_EXCLAM);
-        return mktype(TypeRefTags::Macro(), ParseMacroInvocation(ps, path, lex));
+        return mktype(lex.typePool(), TypeRefTags::Macro(), ParseMacroInvocation(ps, path, lex));
     } else if (hrbs.empty() && !allowTraitList) {
-        return mktype(TypeRefTags::Path(), lex.endSpan(ps), mv$(path));
+        return mktype(lex.typePool(), TypeRefTags::Path(), lex.endSpan(ps), mv$(path));
     } else {
         ::std::vector<TypeTraitPath> traits;
         ::std::vector<ASTLifetimeRef> lifetimes;
@@ -4932,9 +4932,9 @@ TypeRef ParseTypePath(TokenStream& lex, ASTHigherRankedBounds hrbs, bool allowTr
             if (lifetimes.empty()) {
                 lifetimes.push_back(ASTLifetimeRef());
             }
-            return mktype(lex.endSpan(ps), mv$(traits), mv$(lifetimes));
+            return mktype(lex.typePool(), lex.endSpan(ps), mv$(traits), mv$(lifetimes));
         } else {
-            return mktype(TypeRefTags::Path(), lex.endSpan(ps), mv$(*traits.at(0).path));
+            return mktype(lex.typePool(), TypeRefTags::Path(), lex.endSpan(ps), mv$(*traits.at(0).path));
         }
     }
 }
@@ -4984,7 +4984,7 @@ TypeRef ParseTypeTraitObject(TokenStream& lex, ASTHigherRankedBounds hrbs) {
     if (lifetimes.empty()) {
         lifetimes.push_back(ASTLifetimeRef());
     }
-    return mktype(lex.endSpan(ps), mv$(traits), mv$(lifetimes));
+    return mktype(lex.typePool(), lex.endSpan(ps), mv$(traits), mv$(lifetimes));
 }
 
 TypeRef ParseTypeErasedType(TokenStream& lex, bool allowTraitList) {
@@ -5020,5 +5020,5 @@ TypeRef ParseTypeErasedType(TokenStream& lex, bool allowTraitList) {
         }
     } while (lex.getTokenIf(TOK_PLUS));
 
-    return mktype(lex.endSpan(ps), TypeData::make_ErasedType(astTypePool().make<TypeErasedType>(mv$(rvData))));
+    return mktype(lex.typePool(), lex.endSpan(ps), TypeData::make_ErasedType(lex.typePool().make<TypeErasedType>(mv$(rvData))));
 }

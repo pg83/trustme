@@ -19,7 +19,7 @@ public:
 
     explicit ASTTypeParam(const ASTTypeParam& x);
 
-    ASTTypeParam(Span sp, ASTAttributeList attrs, RcString name);
+    ASTTypeParam(stl::ObjPool& pool, Span sp, ASTAttributeList attrs, RcString name);
 
     void setDefault(TypeRef type);
 

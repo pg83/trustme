@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "ast_crate.h" // Edition lookup
+#include "wire_board.h" // typePool() reads the pool off the board
 #include "parse_parseerror.h"
 
 const bool DEBUG_PRINT_TOKENS = false;
@@ -15,6 +16,10 @@ TokenStream::TokenStream(ParseState ps)
 }
 
 TokenStream::~TokenStream() {
+}
+
+stl::ObjPool& TokenStream::typePool() const {
+    return *mParseState.wb->pool;
 }
 
 Token TokenStream::innerGetToken() {
