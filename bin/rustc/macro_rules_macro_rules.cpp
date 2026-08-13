@@ -1160,7 +1160,7 @@ namespace {
     }
 
     // Consume an expression
-    bool consumeExpr(TokenStreamRO& lex, bool noStructLit = false) {
+    bool consumeExpr(TokenStreamRO& lex, bool noStructLit = false, bool statementExpr = false) {
         TRACE_FUNCTION;
         bool cont;
 
@@ -1198,6 +1198,8 @@ namespace {
         }
 
         do {
+            bool hasPrefix = false;
+            bool exprIsComplete = false;
             bool innerCont;
             do {
                 innerCont = true;
@@ -1207,11 +1209,13 @@ namespace {
                     case TOK_EXCLAM:    // Invert
                     case TOK_RWORD_BOX: // Box
                         lex.consume();
+                        hasPrefix = true;
                         break;
                     case TOK_DOUBLE_AMP:
                     case TOK_AMP:
                         lex.consume();
                         lex.consumeIf(TOK_RWORD_MUT);
+                        hasPrefix = true;
                         break;
                     default:
                         innerCont = false;
@@ -1265,13 +1269,17 @@ namespace {
                         if (lex.consumeIf(TOK_IDENT)) {
                             // yay?
                         }
+                        exprIsComplete = !hasPrefix && lex.next() == TOK_BRACE_OPEN;
                         consumeTt(lex);
                     }
                     break;
 
                 case TOK_INTERPOLATED_EXPR:
+                    lex.consume();
+                    break;
                 case TOK_INTERPOLATED_BLOCK:
                     lex.consume();
+                    exprIsComplete = !hasPrefix;
                     break;
                 case TOK_INTEGER:
                 case TOK_FLOAT:
@@ -1300,6 +1308,7 @@ namespace {
                         return false;
                     }
                     consumeTt(lex);
+                    exprIsComplete = !hasPrefix;
                     break;
 
                 case TOK_RWORD_UNSAFE:
@@ -1307,10 +1316,16 @@ namespace {
                     if (lex.next() != TOK_BRACE_OPEN) {
                         return false;
                     }
+                    consumeTt(lex);
+                    exprIsComplete = !hasPrefix;
+                    break;
                 case TOK_PAREN_OPEN:
                 case TOK_SQUARE_OPEN:
+                    consumeTt(lex);
+                    break;
                 case TOK_BRACE_OPEN:
                     consumeTt(lex);
+                    exprIsComplete = !hasPrefix;
                     break;
 
                 // TODO: Do these count for "expr"?
@@ -1331,6 +1346,7 @@ namespace {
                     if (!consumeTt(lex)) {
                         return false;
                     }
+                    exprIsComplete = !hasPrefix;
                     break;
                 case TOK_RWORD_MATCH:
                     lex.consume();
@@ -1344,6 +1360,7 @@ namespace {
                     if (!consumeTt(lex)) {
                         return false;
                     }
+                    exprIsComplete = !hasPrefix;
                     break;
                 case TOK_RWORD_WHILE:
                     lex.consume();
@@ -1356,6 +1373,7 @@ namespace {
                     if (!consumeTt(lex)) {
                         return false;
                     }
+                    exprIsComplete = !hasPrefix;
                     break;
                 case TOK_RWORD_LOOP:
                     lex.consume();
@@ -1363,6 +1381,7 @@ namespace {
                         return false;
                     }
                     consumeTt(lex);
+                    exprIsComplete = !hasPrefix;
                     break;
                 case TOK_RWORD_IF:
                     while (1) {
@@ -1398,6 +1417,7 @@ namespace {
                             break;
                         }
                     }
+                    exprIsComplete = !hasPrefix;
                     break;
                 default:
                     return false;
@@ -1409,9 +1429,11 @@ namespace {
                 switch (lex.next()) {
                     case TOK_QMARK:
                         lex.consume();
+                        exprIsComplete = false;
                         break;
                     case TOK_DOT:
                         lex.consume();
+                        exprIsComplete = false;
                         if (lex.consumeIf(TOK_IDENT)) {
                             if (lex.consumeIf(TOK_DOUBLE_COLON)) {
                                 if (!(lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
@@ -1431,13 +1453,22 @@ namespace {
                     case TOK_SQUARE_OPEN:
                     // '(' -> tt
                     case TOK_PAREN_OPEN:
+                        if (statementExpr && exprIsComplete) {
+                            innerCont = false;
+                            break;
+                        }
                         consumeTt(lex);
+                        exprIsComplete = false;
                         break;
                     default:
                         innerCont = false;
                         break;
                 }
             } while (innerCont);
+
+            if (statementExpr && exprIsComplete) {
+                return true;
+            }
 
             if (lex.consumeIf(TOK_COLON)) {
                 consumeType(lex);
@@ -1562,7 +1593,7 @@ namespace {
             }
             return true;
         } else {
-            if (!consumeExpr(lex)) {
+            if (!consumeExpr(lex, false, true)) {
                 return false;
             }
             return true;

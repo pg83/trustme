@@ -833,34 +833,34 @@ struct CExpandExpr: public ASTNodeVisitor {
                     nodesOut->push_back({true, ::std::move(marker)});
                 }
             }
-            while (ttl->lookahead(0) != TOK_EOF) {
-                SET_MODULE((*ttl), mod);
-
-                // Reparse as expression / item
-                bool addSilenceIfEnd = false;
-                ::std::shared_ptr<ASTModule> tmpLocalMod;
-                auto& localModPtr = (this->currentBlock ? this->currentBlock->localMod : tmpLocalMod);
-                DEBUG("-- Parsing as expression line");
-                auto newexpr = ParseExprBlockLineWithItems(*ttl, localModPtr, addSilenceIfEnd);
-
-                if (tmpLocalMod) {
-                    TODO(node.span(), "Handle edge case where a macro expansion outside of a _Block creates an item");
+            if (!nodesOut) {
+                if (ttl->lookahead(0) != TOK_EOF) {
+                    SET_MODULE((*ttl), mod);
+                    DEBUG("-- Parsing as expression");
+                    rv = ParseExpr0(*ttl);
+                    if (ttl->lookahead(0) != TOK_EOF) {
+                        ERROR(node.span(), E0000, "Unused tokens at the end of macro expansion - " << ttl->getToken());
+                    }
                 }
+            } else {
+                while (ttl->lookahead(0) != TOK_EOF) {
+                    SET_MODULE((*ttl), mod);
 
-                if (newexpr) {
-                    if (nodesOut) {
+                    // Reparse as statement / item
+                    bool addSilenceIfEnd = false;
+                    ::std::shared_ptr<ASTModule> tmpLocalMod;
+                    auto& localModPtr = (this->currentBlock ? this->currentBlock->localMod : tmpLocalMod);
+                    DEBUG("-- Parsing as statement line");
+                    auto newexpr = ParseExprBlockLineWithItems(*ttl, localModPtr, addSilenceIfEnd);
+
+                    if (tmpLocalMod) {
+                        TODO(node.span(), "Handle edge case where a macro expansion outside of a _Block creates an item");
+                    }
+
+                    if (newexpr) {
                         nodesOut->push_back({addSilenceIfEnd, mv$(newexpr)});
                     } else {
-                        assert(!rv);
-                        rv = mv$(newexpr);
-                    }
-                } else {
-                    // Expansion line just added a new item
-                }
-
-                if (ttl->lookahead(0) != TOK_EOF) {
-                    if (!nodesOut) {
-                        ERROR(node.span(), E0000, "Unused tokens at the end of macro expansion - " << ttl->getToken());
+                        // Expansion line just added a new item
                     }
                 }
             }
