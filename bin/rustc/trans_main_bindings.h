@@ -32,6 +32,7 @@ struct TransOptions {
     ::std::string panicCrate;
 
     ::std::vector<::std::string> librarySearchDirs;
+    ::std::vector<::std::string> frameworkSearchDirs;
     ::std::vector<::std::string> libraries;
 };
 

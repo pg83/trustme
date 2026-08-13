@@ -1015,6 +1015,10 @@ namespace {
                     for (const auto& c : extCratesDylib) {
                         args.push_back(c);
                     }
+                    for (const auto& path : opt.frameworkSearchDirs) {
+                        args.push_back("-F");
+                        args.push_back(path.c_str());
+                    }
                     for (auto lD : librariesAndDirs) {
                         switch (lD.first) {
                             case LinkList::Ty::Directory:

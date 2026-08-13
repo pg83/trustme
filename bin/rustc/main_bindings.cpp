@@ -195,7 +195,9 @@ struct ProgramParams {
 
     TraitSolverConfig traitSolver;
 
-    ::std::vector<const char*> libSearchDirs;
+    ::std::vector<::std::string> crateSearchDirs;
+    ::std::vector<::std::string> nativeLibSearchDirs;
+    ::std::vector<::std::string> frameworkSearchDirs;
     ::std::vector<const char*> libraries;
     ::std::map<::std::string, ::std::string> crateOverrides; // --extern name=path
 
@@ -389,7 +391,7 @@ int main(int argc, char* argv[]) {
         CompilePhaseV("LoadCrates", [&]() {
             // Hacky!
             wb.settings->crateOverrides = params.crateOverrides;
-            for (const auto& ld : params.libSearchDirs) {
+            for (const auto& ld : params.crateSearchDirs) {
                 wb.settings->crateLoadDirs.push_back(ld);
             }
             crate.loadExterns(*wb.settings);
@@ -796,10 +798,8 @@ int main(int argc, char* argv[]) {
         transOpt.linkerArgs = params.codegen.linkerArgs;
         transOpt.optLevel = params.optLevel;
         transOpt.panicCrate = "panic_" + params.codegen.panicType;
-        for (const char* libdir : params.libSearchDirs) {
-            // Store these paths for use in final linking.
-            hirCrate->linkPaths.push_back(libdir);
-        }
+        transOpt.librarySearchDirs = params.nativeLibSearchDirs;
+        transOpt.frameworkSearchDirs = params.frameworkSearchDirs;
         for (const char* libname : params.libraries) {
             hirCrate->extLibs.push_back(HIRExternLibrary{libname});
         }
@@ -945,8 +945,39 @@ int main(int argc, char* argv[]) {
 }
 
 ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
+    auto addLibrarySearchDir = [this](const char* value) {
+        ::std::string spec(value);
+        auto equals = spec.find('=');
+        ::std::string kind;
+        ::std::string path;
+        if (equals == ::std::string::npos) {
+            path = std::move(spec);
+        } else {
+            kind = spec.substr(0, equals);
+            path = spec.substr(equals + 1);
+        }
+        if (path.empty()) {
+            ::std::cerr << "Option -L requires a non-empty path" << ::std::endl;
+            exit(1);
+        }
+
+        if (kind.empty() || kind == "all") {
+            this->crateSearchDirs.push_back(path);
+            this->nativeLibSearchDirs.push_back(std::move(path));
+        } else if (kind == "crate" || kind == "dependency") {
+            this->crateSearchDirs.push_back(std::move(path));
+        } else if (kind == "native") {
+            this->nativeLibSearchDirs.push_back(std::move(path));
+        } else if (kind == "framework") {
+            this->frameworkSearchDirs.push_back(std::move(path));
+        } else {
+            ::std::cerr << "Unknown -L search path kind '" << kind << "'" << ::std::endl;
+            exit(1);
+        }
+    };
+
     if (const auto* a = getenv("MRUSTC_LIBDIR")) {
-        this->libSearchDirs.push_back(a);
+        addLibrarySearchDir(a);
     }
 
     // Parse the rustc-compatible command-line subset supported by this driver.
@@ -986,9 +1017,9 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             ::std::cerr << "Option " << arg << " requires an argument" << ::std::endl;
                             exit(1);
                         }
-                        this->libSearchDirs.push_back(argv[++i]);
+                        addLibrarySearchDir(argv[++i]);
                     } else {
-                        this->libSearchDirs.push_back(arg + 1);
+                        addLibrarySearchDir(arg + 1);
                     }
                     continue;
                 case 'l':
@@ -1457,7 +1488,7 @@ void ProgramParams::showHelp() const {
     ::std::cout << "USAGE: mrustc <sourcefile>\n"
                    "\n"
                    "OPTIONS:\n"
-                   "-L <dir>           : Search for crate files (.hir) in this directory\n"
+                   "-L [kind=]<dir>    : Search for crates or native libraries in this directory\n"
                    "-o <filename>      : Write compiler output (library or executable) to this file\n"
                    "-O                 : Enable optimisation\n"
                    "-g                 : Emit debugging information\n"

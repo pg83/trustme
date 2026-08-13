@@ -790,6 +790,29 @@ unit_tests.append(command(
     descr="UT",
     color="green",
 ))
+unit_tests.append(command(
+    name="unit_native_link_search_driver",
+    inputs=[
+        "$(S)/tst/unit/test_native_link_search.py",
+        "$(S)/tst/unit/test_native_link_search.rs",
+        "$(S)/tst/unit/native_link_search.c",
+        *TESTS_LIB,
+    ],
+    outputs=["$(B)/tst/unit/native_link_search_driver.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/tst/unit/test_native_link_search.py",
+        "$(B)/bin/rustc",
+        "$(S)/tst/unit/test_native_link_search.rs",
+        "$(S)/tst/unit/native_link_search.c",
+        "$(B)/tst/libstd.tar",
+        "$(B)/tst/unit/native_link_search_driver.stamp",
+    ],
+    deps=[libstd, rustc],
+    env=TOOLCHAIN_ENV,
+    descr="UT",
+    color="green",
+))
 rust_unit_tests = []
 for _src in build.glob("$(S)/tst/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]

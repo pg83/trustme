@@ -30,16 +30,14 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P0 — largest shared causes
 
-1. The Rust 1.90 harness does not make `librust_test_helpers.a` visible to the
-   generated C++ link: 31 ABI tests fail on the same missing `-lrust_test_helpers`.
-2. Corpus adapters pass unsupported rustc driver/codegen flags to mrustc: 55
+1. Corpus adapters pass unsupported rustc driver/codegen flags to mrustc: 55
    tests. The main groups are `codegen-units` (12), `link-dead-code` (6),
    `debug_assertions` (5), `no-prepopulate-passes` (4), and `lto` (4). Retain a
    test in the fast corpus only if ignoring the flag preserves what it tests.
-3. Inline assembly emitted for clang/assembler is invalid: 19 tests. Most fail
+2. Inline assembly emitted for clang/assembler is invalid: 19 tests. Most fail
    with `unknown token in expression`; the remainder are unsupported register
    constraints/names.
-4. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
+3. All 19 `core::num::f128` doctests abort at runtime. Treat this as one f128
    backend/runtime family until a smaller reproducer proves otherwise.
 
 ## P1 — internal compiler failures
@@ -99,6 +97,9 @@ the remaining long tail of Rust 1.90 syntax.
   `core::num::int_log::ilog10_u128`.
 - 31 executables abort: 19 f128 doctests, 11 Miri cases, and one allocation
   failure in a library test.
+- Two repaired native-helper link failures now abort in
+  `rust_dbg_extern_empty_struct`; the generated SysV call mishandles a C empty
+  struct between two register-heavy arguments.
 - 12 output mismatches: nine async-drop tests and RustSmith seeds 15, 19, 102.
 - One remaining adapter exit is a GCCRS torture test whose expected non-zero
   runtime status does not match the produced program.
@@ -120,12 +121,11 @@ completed in an isolated rerun close to its ten-minute limit.
 
 Fix by shared impact, not by corpus order:
 
-1. Native test-helper propagation (31 tests).
-2. Adapter flag filtering/reclassification (55 tests).
-3. Invalid inline-assembly emission and f128 runtime aborts (19 tests each).
-4. The remaining P1 clusters, largest verified root cause first.
-5. Generated-C++ families, runtime semantic families, then front-end features.
-6. Missing diagnostics and isolated long-tail failures.
+1. Adapter flag filtering/reclassification (55 tests).
+2. Invalid inline-assembly emission and f128 runtime aborts (19 tests each).
+3. The remaining P1 clusters, largest verified root cause first.
+4. Generated-C++ families, runtime semantic families, then front-end features.
+5. Missing diagnostics and isolated long-tail failures.
 
 For every compiler change: add a minimal `tst/unit/test_*.rs` that is green on
 Rust 1.90, confirm it is red on current mrustc, fix the shared path, then run
