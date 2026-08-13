@@ -498,12 +498,12 @@ namespace {
                 // TODO: Define this function in MIR?
                 of << "}\n";
                 of << "int main(int argc, const char* argv[]) {\n";
-                auto cStartPath = mResolve.crate.getLangItemPathOpt("mrustc-start");
+                auto cStartPath = mResolve.hirCrate().getLangItemPathOpt("mrustc-start");
                 if (cStartPath == HIRSimplePath()) {
                     auto mainPath = crate.getLangItemPath(Span(), "mrustc-main");
                     const auto& mainFcn = crate.getFunctionByPath(sp, mainPath);
 
-                    const auto& startPath = mResolve.crate.getLangItemPathOpt("start");
+                    const auto& startPath = mResolve.hirCrate().getLangItemPathOpt("start");
                     if (crate.isNoCore && startPath == HIRSimplePath()) {
                         // A no_core binary has no standard entrypoint protocol.
                         // Call its ordinary main directly instead of inventing a
@@ -511,7 +511,7 @@ namespace {
                         of << "\t" << TransMangle(HIRGenericPath(mainPath)) << "();\n";
                         of << "\treturn 0;\n";
                     } else {
-                        auto startGpath = HIRGenericPath(mResolve.crate.getLangItemPath(Span(), "start"));
+                        auto startGpath = HIRGenericPath(mResolve.hirCrate().getLangItemPath(Span(), "start"));
                         startGpath.mParams.types.push_back(mainFcn.returnType);
                         of << "\treturn " << TransMangle(startGpath) << "(" << TransMangle(HIRGenericPath(mainPath)) << ", argc, (uint8_t**)argv";
                         of << ", 0"; // `sigpipe` setting
@@ -4166,7 +4166,7 @@ namespace {
                             }
                             TU_ARMA(UfcsInherent, pe) {
                                 // Check if the return type is !
-                                omitAssign |= mResolve.crate.findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
+                                omitAssign |= mResolve.hirCrate().findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
                                     // Associated functions
                                     {
                                         auto it = impl.methods.find(pe.item);
@@ -4180,7 +4180,7 @@ namespace {
                             }
                             TU_ARMA(UfcsKnown, pe) {
                                 // Check if the return type is !
-                                const auto& tr = mResolve.crate.getTraitByPath(sp, pe.trait.mPath);
+                                const auto& tr = mResolve.hirCrate().getTraitByPath(sp, pe.trait.mPath);
                                 const auto& fcn = tr.values.find(pe.item)->second.as_Function();
                                 const auto& rvTpl = fcn.returnType;
                                 if (rvTpl->is_Diverge() || rvTpl == crate.types.unit()) {

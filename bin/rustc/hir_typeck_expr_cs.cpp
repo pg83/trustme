@@ -2458,8 +2458,8 @@ void Context::equateValues(const Span& sp, const HIRConstGeneric& rl, const HIRC
             } else {
                 auto normalizedL = l.clone();
                 auto normalizedR = r.clone();
-                ConvertHIRConstantEvaluateConstGeneric(sp, mResolve.wb, crate, normalizedL);
-                ConvertHIRConstantEvaluateConstGeneric(sp, mResolve.wb, crate, normalizedR);
+                ConvertHIRConstantEvaluateConstGeneric(sp, mResolve.board(), crate, normalizedL);
+                ConvertHIRConstantEvaluateConstGeneric(sp, mResolve.board(), crate, normalizedR);
 
                 if (normalizedL == normalizedR) {
                 } else if (normalizedL.is_Unevaluated() && normalizedR.is_Unevaluated() && ConstExprEquate{*this, sp}.equate(*normalizedL.as_Unevaluated(), *normalizedR.as_Unevaluated())) {
@@ -5797,7 +5797,7 @@ namespace {
                     // Re-exporting them into the legacy constraint loop
                     // evaluates the same proof a second time and turns a
                     // coinductive fixed point into an endless new rule.
-                    if (!context.mResolve.wb.settings->solver.globally) {
+                    if (!context.mResolve.board().settings->solver.globally) {
                         addImplBounds(context, sp, impl);
                     }
                     return true;
@@ -5883,7 +5883,7 @@ namespace {
                     return false;
                 }
             };
-            const bool found = context.mResolve.wb.settings->solver.globally ? context.mResolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.mResolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
+            const bool found = context.mResolve.board().settings->solver.globally ? context.mResolve.findTraitImplsNext(sp, v.trait, v.params, v.implTy, candidateCallback, v.name.c_str(), v.name == "" ? nullptr : v.leftTy, v.name == "" ? nullptr : &v.atyPp) : context.mResolve.findTraitImpls(sp, v.trait, v.params, v.implTy, candidateCallback);
             if (found) {
                 // Fully-known impl
                 DEBUG("Fully-known impl located");
@@ -8838,7 +8838,7 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         assert( fcnPtr );
         cache.fcn = fcnPtr;
         const auto& fcn = *fcnPtr;
-        cache.monomorph->setConstevalState(context.mResolve.wb, HIRItemPath(path));
+        cache.monomorph->setConstevalState(context.mResolve.board(), HIRItemPath(path));
         const auto& monomorph = *cache.monomorph;
 
         // --- Monomorphise the argument/return types (into current context)
@@ -10143,7 +10143,7 @@ public:
         }
         if (context.mResolve.currentTraitPath()) {
             const HIRSimplePath& tp = context.mResolve.currentTraitPath()->mPath;
-            const HIRTrait& tr = context.mResolve.crate.getTraitByPath(node.span(), tp);
+            const HIRTrait& tr = context.mResolve.hirCrate().getTraitByPath(node.span(), tp);
             visitTrait(tp, tr);
         }
         //  > Store the possible set of traits for later

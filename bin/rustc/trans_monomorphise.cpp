@@ -14,7 +14,7 @@ namespace {
 
     public:
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransParams& params)
-            : MIRCloner(sp, resolve.crate.types)
+            : MIRCloner(sp, resolve.hirCrate().types)
             , mResolve(resolve)
             , params(params)
         {

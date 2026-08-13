@@ -590,7 +590,7 @@ namespace {
             // TODO: Check that the type+trait is valid
             // - And fix bad elided liftimes (match annotations if they were elided)
             {
-                const auto& trait = mResolve.crate.getTraitByPath(sp, traitPath);
+                const auto& trait = mResolve.hirCrate().getTraitByPath(sp, traitPath);
                 for (auto& e : impl.methods) {
                     auto _ = mResolve.setItemGenerics(e.second.data.mParams);
 
@@ -817,7 +817,7 @@ namespace {
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
             TRACE_FUNCTION_F(p);
 
-            if (mResolve.crate.getLangItemPathOpt("sized").components().empty()) {
+            if (mResolve.hirCrate().getLangItemPathOpt("sized").components().empty()) {
                 ERROR(Span(), E0000, "requires `sized` lang_item");
             }
 

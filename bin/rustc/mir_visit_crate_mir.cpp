@@ -16,10 +16,10 @@ void MIROuterVisitor::visitType(HIRTypeRef& ty) {
         DEBUG("Array size " << ty);
         if (auto* se1 = e->size.opt_Unevaluated()) {
             if (auto* se = se1->opt_Unevaluated()) {
-                cb(mResolve, HIRItemPath(""), *(*se)->expr, {}, mResolve.crate.types.primitive(HIRCoreType::Usize));
+                cb(mResolve, HIRItemPath(""), *(*se)->expr, {}, mResolve.hirCrate().types.primitive(HIRCoreType::Usize));
             }
         }
-        ty = mResolve.crate.types.intern(mv$(data));
+        ty = mResolve.hirCrate().types.intern(mv$(data));
     } else {
         HIRVisitor::visitType(ty);
     }
@@ -74,7 +74,7 @@ void MIROuterVisitor::visitEnum(HIRItemPath p, HIREnum& item) {
     auto _ = this->mResolve.setImplGenerics(MetadataType::None, item.mParams);
 
     if (auto* e = item.mData.opt_Value()) {
-        auto enumType = mResolve.crate.types.primitive(HIREnum::getReprType(item.tagRepr));
+        auto enumType = mResolve.hirCrate().types.primitive(HIREnum::getReprType(item.tagRepr));
 
         for (auto& var : e->variants) {
             if (var.expr) {

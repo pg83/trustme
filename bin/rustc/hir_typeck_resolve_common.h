@@ -10,8 +10,21 @@
 #include <memory>
 
 struct TraitResolveCommon {
+    // NOTE: `wb`/`crate` are on their way out as data: a component may expose
+    // only methods, and `crate` is just `*wb.crate`. Read them through
+    // `board()`/`hirCrate()`; the fields become implementation-private when
+    // StaticTraitResolve is flipped to an opaque interface.
     const WireBoard& wb;
     const HIRCrate& crate;
+
+    const WireBoard& board() const {
+        return wb;
+    }
+
+    const HIRCrate& hirCrate() const {
+        return crate;
+    }
+
 
     const HIRGenericParams* mImplGenerics;
     const HIRGenericParams* mItemGenerics;

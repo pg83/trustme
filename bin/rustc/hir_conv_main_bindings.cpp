@@ -3000,7 +3000,7 @@ public:
         if (auto* pe = p.mData.opt_UfcsKnown()) {
             // If the trait has missing type argumenst, replace them with the defaults
             auto& tp = pe->trait;
-            const auto& trait = mResolve.crate.getTraitByPath(sp, tp.mPath);
+            const auto& trait = mResolve.hirCrate().getTraitByPath(sp, tp.mPath);
 
             if (tp.mParams.types.size() < trait.mParams.types.size()) {
                 //TODO(sp, "Defaults in UfcsKnown - " << p << " - " << tp.m_params << " vs " << trait.m_params.fmt_args());

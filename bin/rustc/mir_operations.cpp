@@ -31,7 +31,7 @@ namespace {
             } else {
                 const auto& trait = *tep->mTrait.traitPtr;
 
-                auto vtableTy = trait.getVtableType(state.sp, state.mResolve.crate, *tep);
+                auto vtableTy = trait.getVtableType(state.sp, state.mResolve.hirCrate(), *tep);
 
                 return types.borrow(HIRBorrowType::Shared, vtableTy);
             }
@@ -156,7 +156,7 @@ void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValu
 
 namespace {
     HIRTypeRef getVtableType(const Span& sp, const ::StaticTraitResolve& resolve, const HIRTypeData::Data_TraitObject& te) {
-        return te.mTrait.traitPtr->getVtableType(sp, resolve.crate, te);
+        return te.mTrait.traitPtr->getVtableType(sp, resolve.hirCrate(), te);
     }
 }
 
@@ -2028,7 +2028,7 @@ namespace {
     };
 
     const MIRFunction* getCalledMir(const MIRTypeResolve& state, const TransList* list, const HIRPath& path, ParamsSet& params) {
-        MonomorphState outParams(state.mResolve.crate.types);
+        MonomorphState outParams(state.mResolve.hirCrate().types);
         auto e = state.mResolve.getValue(state.sp, path, outParams, /*sig_only*/ false, &params.implParamsDef);
         DEBUG(e.tagStr() << " " << outParams);
         params.fcnParams = outParams.getMethodParams();
@@ -2563,10 +2563,10 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
         MIRLValue retval;
 
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, MIRTerminator::Data_Call& te)
-            : MIRCloner(sp, resolve.crate.types)
+            : MIRCloner(sp, resolve.hirCrate().types)
             , mResolve(resolve)
             , te(te)
-            , params(resolve.crate.types)
+            , params(resolve.hirCrate().types)
             , copyArgs(te.args.size(), ~0u)
         {
         }
@@ -4492,7 +4492,7 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                 DEBUG("Read of a static - " << lv.root.as_Static());
                 // Look up this static, and see if it's not mutable, and a primitive
                 // - If the static is an immutable primitive: read and save
-                MonomorphState ms(state.mResolve.crate.types);
+                MonomorphState ms(state.mResolve.hirCrate().types);
                 auto v = state.mResolve.getValue(state.sp, lv.root.as_Static(), ms);
                 if (v.is_Static()) {
                     const auto& stat = *v.as_Static();

@@ -69,7 +69,7 @@ namespace {
         if (state.resolve.typeIsCopy(sp, subty)) {
             return ::std::move(fldLvalue);
         } else {
-            const auto& langClone = state.resolve.crate.getLangItemPath(sp, "clone");
+            const auto& langClone = state.resolve.hirCrate().getLangItemPath(sp, "clone");
             // Allocate to locals (one for the `&T`, the other for the cloned `T`)
             auto borrowLv = MIRLValue::newLocal(mirFcn.locals.size());
             mirFcn.locals.push_back(state.crate.types.borrow(HIRBorrowType::Shared, subty));
@@ -146,7 +146,7 @@ void TransAutoImplClone(State& state, HIRTypeRef ty) {
             TU_ARMA(Path, te) {
                 if (te.isClosure()) {
                     const auto& gp = te.path.mData.as_Generic();
-                    const auto& str = state.resolve.crate.getStructByPath(sp, gp.mPath);
+                    const auto& str = state.resolve.hirCrate().getStructByPath(sp, gp.mPath);
                     auto p = TransParams::newImpl(state.crate.types, sp, ty, gp.mParams.clone());
                     CloneCleanupState cleanup;
                     ::std::vector<MIRParam> values;
@@ -872,7 +872,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     auto itemPath = HIRPath(type, mv$(traitGpath), m.first);
 
                     auto srcTraitMs = MonomorphStatePtr(crate.types, type, &itemPath.mData.as_UfcsKnown().trait.mParams, nullptr);
-                    const auto& srcTrait = state.resolve.crate.getTraitByPath(sp, m.second.second.mPath);
+                    const auto& srcTrait = state.resolve.hirCrate().getTraitByPath(sp, m.second.second.mPath);
                     const auto& item = srcTrait.values.at(m.first);
                     // If the entry is a by-value function, then emit a reference to a shim
                     if (item.is_Function()) {
@@ -1704,7 +1704,7 @@ namespace {
             //   - Could flag leaked private types in a previous pass?
 
             // Emit each method/static (in the trait itself)
-            const auto& trait = resolve.crate.getTraitByPath(sp, traitPath);
+            const auto& trait = resolve.hirCrate().getTraitByPath(sp, traitPath);
             for (const auto& vi : trait.values) {
                 TRACE_FUNCTION_F("Item " << vi.first << " : " << vi.second.tagStr());
                 // Constant, no codegen
@@ -1997,7 +1997,7 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
                 newList.functions.insert(std::make_pair(std::move(itemPath), nullptr));
 
                 // If the entry is a by-value function, then emit a reference to a shim
-                const auto& srcTrait = state.resolve.crate.getTraitByPath(sp, m.second.second.mPath);
+                const auto& srcTrait = state.resolve.hirCrate().getTraitByPath(sp, m.second.second.mPath);
                 const auto& item = srcTrait.values.at(m.first);
                 if (item.is_Function() && item.as_Function().receiver == HIRFunction::Receiver::Value) {
                     traitGpath = monomorphCbTrait.monomorphGenericpath(sp, m.second.second, false);
@@ -2395,7 +2395,7 @@ namespace {
                                 TU_MATCHA( (path.mData), (pe),
                                 (Generic,
                                     MIR_ASSERT(localMirRes, pe.mParams.types.empty(), "Path params on static - " << path);
-                                    const auto& s = tv.mResolve.crate.getStaticByPath(localMirRes.sp, pe.mPath);
+                                    const auto& s = tv.mResolve.hirCrate().getStaticByPath(localMirRes.sp, pe.mPath);
                                     ty = s.mType;
                                     ),
                                 (UfcsKnown,
@@ -2441,8 +2441,8 @@ namespace {
             if (block.terminator.is_Call() && block.terminator.as_Call().fcn.is_Intrinsic()) {
                 const auto& e2 = block.terminator.as_Call().fcn.as_Intrinsic();
                 if (e2.name == "caller_location") {
-                    const auto& p = localMirRes.mResolve.crate.getLangItemPath(sp, "panic_location");
-                    const auto& s = localMirRes.mResolve.crate.getStructByPath(sp, p);
+                    const auto& p = localMirRes.mResolve.hirCrate().getLangItemPath(sp, "panic_location");
+                    const auto& s = localMirRes.mResolve.hirCrate().getStructByPath(sp, p);
                     tv.visitType(tv.crate.types.path(HIRPath(p), &s));
                 }
                 // In 1.74+ the `offset` intrinsic takes a pointer as its generic
@@ -2474,7 +2474,7 @@ namespace {
 void TransEnumerateTypes(EnumState& state) {
     TRACE_FUNCTION;
     static Span sp;
-    TypeVisitor tv{state.resolve.wb, state.rv, state.origList};
+    TypeVisitor tv{state.resolve.board(), state.rv, state.origList};
 
     unsigned int typesCount = 0;
     bool constructorsAdded;
@@ -2804,11 +2804,11 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
 
     // Get the item type
     // - Valid types are Function and Static
-    auto itemRef = getEntFullpath(sp, state.resolve.wb, state.crate, pathMono, subPp);
+    auto itemRef = getEntFullpath(sp, state.resolve.board(), state.crate, pathMono, subPp);
     DEBUG("item_ref.tag_str() = " << itemRef.tagStr());
     DEBUG("sub_pp.pp_method = " << subPp.ppMethod);
     DEBUG("sub_pp.pp_impl = " << subPp.ppImpl);
-    evaluateTranslationImplAndTraitParams(sp, state.resolve.wb, state.crate, pathMono, subPp);
+    evaluateTranslationImplAndTraitParams(sp, state.resolve.board(), state.crate, pathMono, subPp);
     TU_MATCH_HDRA( (itemRef), {)
     TU_ARMA(NotFound, e) {
             BUG(sp, "Item not found for " << pathMono);
@@ -2859,7 +2859,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                 ASSERT_BUG(sp, pe.item == "clone" || pe.item == "clone_from", "Unexpected Clone method called, " << pathMono);
                 const auto& innerTy = pe.type;
                 // If this is !Copy, then we need to ensure that the inner type's clone impls are also available
-                ::StaticTraitResolve resolve{state.resolve.wb};
+                ::StaticTraitResolve resolve{state.resolve.board()};
                 if (!resolve.typeIsCopy(sp, innerTy)) {
                     auto enumImpl = [&](const HIRTypeData* ity) {
                         if (!resolve.typeIsCopy(sp, ity)) {
@@ -2893,7 +2893,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             }
         }
         TU_ARMA(Function, e) {
-            evaluateTranslationItemParams(sp, state.resolve.wb, state.crate, e->mParams, pathMono, subPp);
+            evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->mParams, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
                 return;
@@ -2902,7 +2902,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             state.enumFcn(mv$(pathMono), *e, mv$(subPp));
         }
         TU_ARMA(Static, e) {
-            evaluateTranslationItemParams(sp, state.resolve.wb, state.crate, e->mParams, pathMono, subPp);
+            evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->mParams, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
                 return;
@@ -2912,7 +2912,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             }
         }
         TU_ARMA(Constant, e) {
-            evaluateTranslationItemParams(sp, state.resolve.wb, state.crate, e->mParams, pathMono, subPp);
+            evaluateTranslationItemParams(sp, state.resolve.board(), state.crate, e->mParams, pathMono, subPp);
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
                 return;

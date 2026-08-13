@@ -251,7 +251,7 @@ public:
     }
 
     const HIRCrate& crate() const {
-        return mResolve.crate;
+        return mResolve.hirCrate();
     }
 
     const StaticTraitResolve& resolve() const {

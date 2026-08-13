@@ -3054,12 +3054,12 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
             // ------------
 
             // 1. Generate the state machine switch (and enumerate saved variables)
-            std::set<unsigned> saved = ev.generatorFinalise(genNode->span(), const_cast<HIREnum&>(resolve.crate.getEnumByPath(sp, genNode->stateIdxEnum)));
+            std::set<unsigned> saved = ev.generatorFinalise(genNode->span(), const_cast<HIREnum&>(resolve.hirCrate().getEnumByPath(sp, genNode->stateIdxEnum)));
             // 2. Populate state structure
             auto& stateTy = const_cast<HIRStruct&>(*genNode->stateDataType->as_Path().binding.as_Struct());
             unsigned valueVarIdx;
             {
-                const auto& unmMaybeUninit = resolve.crate.getUnionByPath(sp, resolve.crate.getLangItemPath(genNode->span(), "maybe_uninit"));
+                const auto& unmMaybeUninit = resolve.hirCrate().getUnionByPath(sp, resolve.hirCrate().getLangItemPath(genNode->span(), "maybe_uninit"));
                 valueVarIdx = std::find_if(unmMaybeUninit.mVariants.begin(), unmMaybeUninit.mVariants.end(), [&](const auto& e) {
                     return e.name == "value";
                 }) - unmMaybeUninit.mVariants.begin();
@@ -3098,7 +3098,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
             }
             // Add drop flags to the end
             auto dropFlagsFieldIdx = fields.size();
-            fields.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), resolve.crate.types.array(resolve.crate.types.primitive(HIRCoreType::U8), (dropFlagMapping.size() + 7) / 8)});
+            fields.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), resolve.hirCrate().types.array(resolve.hirCrate().types.primitive(HIRCoreType::U8), (dropFlagMapping.size() + 7) / 8)});
 
             // 3. Rewrite usage of saved values
             // - Note: Need to allocate new temporaries if indexing by an updated lvalue
@@ -3239,7 +3239,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
             auto dropImplBody = MIRFunctionPointer(new MIRFunction());
             {
                 TRACE_FUNCTION_F("Generating drop impl");
-                MirBuilder dropBuilder(sp, resolve, resolve.crate.types.unit(), genNode->dropFcnPtr->mArgs, *dropImplBody);
+                MirBuilder dropBuilder(sp, resolve, resolve.hirCrate().types.unit(), genNode->dropFcnPtr->mArgs, *dropImplBody);
                 ev.generatorMakeDrop(sp, dropBuilder, genNode->captureUsages.size(), mappings, dropFlagsFieldIdx, dropFlagMapping);
                 dropBuilder.finalCleanup();
             }
@@ -3460,8 +3460,8 @@ struct PatternRulesetBuilder {
         , subsetStart(0)
         , subsetEnd(1)
     {
-        if (resolve.crate.mLangItems.count("owned_box") > 0) {
-            mLangBox = &resolve.crate.mLangItems.at("owned_box");
+        if (resolve.hirCrate().mLangItems.count("owned_box") > 0) {
+            mLangBox = &resolve.hirCrate().mLangItems.at("owned_box");
         }
     }
 
@@ -4597,7 +4597,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                         const auto& varTy = enmRepr->fields[varIdx].ty;
                         auto varLit = lit.slice(enmRepr->fields[varIdx].offset);
                         // NOTE: The tag is only present if it's an auto-generated struct (i.e. not `()`)
-                        if (subHasTag && varTy != mResolve.crate.types.unit()) {
+                        if (subHasTag && varTy != mResolve.hirCrate().types.unit()) {
                             // This inner type should be a struct
                             DEBUG("Enum variant type w/ tag field: " << varTy);
                             auto* innerRepr = TargetGetTypeRepr(sp, mResolve, varTy);
@@ -4684,7 +4684,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                 valueOffset = ptr - EncodedLiteral::PTR_BASE;
 
                 if (relocation->p) {
-                    MonomorphState valueParams(mResolve.crate.types);
+                    MonomorphState valueParams(mResolve.hirCrate().types);
                     auto resolved = mResolve.getValue(sp, *relocation->p, valueParams);
                     ASSERT_BUG(sp, resolved.is_Static(), "Reference pattern points to non-static " << *relocation->p << " - " << resolved.tagStr());
                     const auto& s = *resolved.as_Static();
@@ -4900,10 +4900,10 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             if (pve->binding) {
                 // Request consteval
                 if (pve->binding->valueState == HIRConstant::ValueState::Unknown) {
-                    MonomorphState unusedMs(mResolve.crate.types);
+                    MonomorphState unusedMs(mResolve.hirCrate().types);
                     const HIRGenericParams* implDef = nullptr;
                     auto v = mResolve.getValue(sp, pve->path, unusedMs, false, &implDef);
-                    ConvertHIRConstantEvaluateConstant(mResolve.wb, mResolve.crate, implDef, pve->path, const_cast<HIRConstant&>(*pve->binding));
+                    ConvertHIRConstantEvaluateConstant(mResolve.board(), mResolve.hirCrate(), implDef, pve->path, const_cast<HIRConstant&>(*pve->binding));
                 }
                 ASSERT_BUG(sp, pve->binding->valueState == HIRConstant::ValueState::Known, "Match with an unresolved constant - " << pve->path);
                 this->appendFromLit(sp, pve->binding->valueRes, ty);
@@ -5046,7 +5046,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
             HIRTypeRef tmp;
             auto maybeMonomorph = [&](const HIRTypeData* ty) -> const HIRTypeData* {
                 if (monomorphiseTypeNeeded(ty)) {
-                    tmp = MonomorphStatePtr(mResolve.crate.types, nullptr, &e.path.mData.as_Generic().mParams, nullptr).monomorphType(sp, ty);
+                    tmp = MonomorphStatePtr(mResolve.hirCrate().types, nullptr, &e.path.mData.as_Generic().mParams, nullptr).monomorphType(sp, ty);
                     this->mResolve.expandAssociatedTypes(sp, tmp);
                     return tmp;
                 } else {
@@ -5240,7 +5240,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                             // Empty variants can be matched with `Var { [..] }` even if they're not struct-like
                             if (be.ptr->isValue()) {
                                 assert(pe.subPatterns.empty());
-                            } else if (be.ptr->mData.as_Data().at(be.varIdx).type == mResolve.crate.types.unit()) {
+                            } else if (be.ptr->mData.as_Data().at(be.varIdx).type == mResolve.hirCrate().types.unit()) {
                                 assert(pe.subPatterns.empty());
                             } else if (!be.ptr->mData.as_Data().at(be.varIdx).isStruct) {
                                 assert(pe.subPatterns.empty());
@@ -5809,7 +5809,7 @@ namespace {
                     }
                     auto monomorphToPtr = [&](const HIRTypeData* ty) -> const HIRTypeData* {
                         if (monomorphiseTypeNeeded(ty)) {
-                            auto rv = MonomorphStatePtr(resolve.crate.types, nullptr, &e.path.mData.as_Generic().mParams, nullptr).monomorphType(sp, ty);
+                            auto rv = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &e.path.mData.as_Generic().mParams, nullptr).monomorphType(sp, ty);
                             resolve.expandAssociatedTypes(sp, rv);
                             tmpTy = mv$(rv);
                             return tmpTy;
@@ -7351,8 +7351,8 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
     , resultValid(false)
     , mFcnScope(*this, 0)
 {
-    if (resolve.crate.mLangItems.count("owned_box") > 0) {
-        mLangBox = &resolve.crate.mLangItems.at("owned_box");
+    if (resolve.hirCrate().mLangItems.count("owned_box") > 0) {
+        mLangBox = &resolve.hirCrate().mLangItems.at("owned_box");
     }
 
     setCurBlock(newBbUnlinked());
@@ -7370,7 +7370,7 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
     firstTempIdx = output.locals.size();
     DEBUG("First temporary will be " << firstTempIdx);
 
-    ifCondLval = this->newTemporary(mResolve.crate.types.primitive(HIRCoreType::Bool));
+    ifCondLval = this->newTemporary(mResolve.hirCrate().types.primitive(HIRCoreType::Bool));
 
     // Determine which variables can be replaced by arguents
     for (size_t i = 0; i < args.size(); i++) {
@@ -8102,7 +8102,7 @@ void MirBuilder::insertCloned(const Span& sp, const SavedCode& c, CloneMapper& m
                 }
                 return mapper.updateBbRef(idx);
             }
-        } cloner{sp, mapper, mResolve.crate.types};
+        } cloner{sp, mapper, mResolve.hirCrate().types};
 
         // Allocate new block IDs for all referenced blocks
         for (auto bbIdx : c.blocks) {
@@ -9200,7 +9200,7 @@ void MirBuilder::completeScope(ScopeDef& sd) {
 void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::function<void(const HIRTypeData*)> cb, const MIRLValue::Wrapper* stopWrapper /*=nullptr*/) const {
     HIRTypeRef tmp;
     const HIRTypeData* ty = nullptr;
-    TU_MATCHA((val.root), (e), (Return, ty = retTy;), (Argument, ty = mArgs.at(e).second;), (Local, ty = output.locals.at(e);), (Static, TU_MATCHA((e.mData), (pe), (Generic, ASSERT_BUG(sp, pe.mParams.types.empty(), "Path params on static"); const auto& s = mResolve.crate.getStaticByPath(sp, pe.mPath); ty = s.mType;), (UfcsKnown, TODO(sp, "Static - UfcsKnown - " << e);), (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown in Static - " << e);), (UfcsInherent, TODO(sp, "Static - UfcsInherent - " << e);))))
+    TU_MATCHA((val.root), (e), (Return, ty = retTy;), (Argument, ty = mArgs.at(e).second;), (Local, ty = output.locals.at(e);), (Static, TU_MATCHA((e.mData), (pe), (Generic, ASSERT_BUG(sp, pe.mParams.types.empty(), "Path params on static"); const auto& s = mResolve.hirCrate().getStaticByPath(sp, pe.mPath); ty = s.mType;), (UfcsKnown, TODO(sp, "Static - UfcsKnown - " << e);), (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown in Static - " << e);), (UfcsInherent, TODO(sp, "Static - UfcsInherent - " << e);))))
     assert(ty);
     for (const auto& w : val.wrappers) {
         if (&w == stopWrapper) {
@@ -9211,7 +9211,7 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
         ty = nullptr;
         auto maybeMonomorph = [&](const HIRGenericParams& paramsDef, const HIRPath& p, const HIRTypeData* t) -> const HIRTypeData* {
             if (monomorphiseTypeNeeded(t)) {
-                tmp = MonomorphStatePtr(mResolve.crate.types, nullptr, &p.mData.as_Generic().mParams, nullptr).monomorphType(sp, t);
+                tmp = MonomorphStatePtr(mResolve.hirCrate().types, nullptr, &p.mData.as_Generic().mParams, nullptr).monomorphType(sp, t);
                 mResolve.expandAssociatedTypes(sp, tmp);
                 return tmp;
             } else {
@@ -9578,8 +9578,8 @@ void MirBuilder::emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv
     if (start >= end) {
         return;
     }
-    const auto* usizeTy = mResolve.crate.types.primitive(HIRCoreType::Usize);
-    const auto* boolTy = mResolve.crate.types.primitive(HIRCoreType::Bool);
+    const auto* usizeTy = mResolve.hirCrate().types.primitive(HIRCoreType::Usize);
+    const auto* boolTy = mResolve.hirCrate().types.primitive(HIRCoreType::Bool);
     // Unscoped locals: primitives that outlive scope teardown and need no drops.
     const auto newUnscopedLocal = [&](const HIRTypeData* ty) -> unsigned {
         const auto rv = static_cast<unsigned>(output.locals.size());

@@ -1509,7 +1509,7 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const HIRTypeData* retType, const argsT& args, const MIRFunction& fcn)
     : sp(sp)
     , mResolve(resolve)
-    , crate(resolve.crate)
+    , crate(resolve.hirCrate())
     , mPath(path)
     , retType(retType)
     , mArgs(args)

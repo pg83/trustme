@@ -281,10 +281,10 @@ namespace {
             if (outTy == CodegenOutput::Executable) {
                 if (!crate.noMain) {
                     of << "fn main#(isize, *const *const i8): isize {\n";
-                    auto cStartPath = mResolve.crate.getLangItemPathOpt("mrustc-start");
+                    auto cStartPath = mResolve.hirCrate().getLangItemPathOpt("mrustc-start");
                     if (cStartPath == HIRSimplePath()) {
-                        auto mainPath = mResolve.crate.getLangItemPath(Span(), "mrustc-main");
-                        const auto& startPath = mResolve.crate.getLangItemPathOpt("start");
+                        auto mainPath = mResolve.hirCrate().getLangItemPath(Span(), "mrustc-main");
+                        const auto& startPath = mResolve.hirCrate().getLangItemPathOpt("start");
                         if (crate.isNoCore && startPath == HIRSimplePath()) {
                             const auto& mainFcn = crate.getFunctionByPath(Span(), mainPath);
                             of << "\tlet direct_main_result: " << fmt(mainFcn.returnType) << ";\n";
@@ -294,7 +294,7 @@ namespace {
                             of << "\tlet m: fn();\n";
                             of << "\t0: {\n";
                             of << "\t\tASSIGN m = ADDROF " << fmt(HIRGenericPath(mainPath)) << ";\n";
-                            of << "\t\tCALL RETURN = " << fmt(HIRGenericPath(mResolve.crate.getLangItemPath(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
+                            of << "\t\tCALL RETURN = " << fmt(HIRGenericPath(mResolve.hirCrate().getLangItemPath(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
                         }
                     } else {
                         of << "\t0: {\n";
@@ -430,17 +430,17 @@ namespace {
                     ASSERT_BUG(sp, r.fields.size() > 0, "");
                     auto& t = r.fields.back().ty;
                     if (t->is_Primitive() && t->as_Primitive() == HIRCoreType::Str) {
-                        return resolve.crate.types.primitive(HIRCoreType::Usize);
+                        return resolve.hirCrate().types.primitive(HIRCoreType::Usize);
                     } else if (t->is_Slice()) {
-                        return resolve.crate.types.primitive(HIRCoreType::Usize);
+                        return resolve.hirCrate().types.primitive(HIRCoreType::Usize);
                     } else if (t->is_TraitObject()) {
                         const auto& te = t->as_TraitObject();
 
-                        const auto& trait = resolve.crate.getTraitByPath(sp, te.mTrait.mPath.mPath);
-                        auto vtableTy = trait.getVtableType(sp, resolve.crate, te);
-                        return resolve.crate.types.pointer(HIRBorrowType::Shared, vtableTy);
+                        const auto& trait = resolve.hirCrate().getTraitByPath(sp, te.mTrait.mPath.mPath);
+                        auto vtableTy = trait.getVtableType(sp, resolve.hirCrate(), te);
+                        return resolve.hirCrate().types.pointer(HIRBorrowType::Shared, vtableTy);
                     } else if (t->is_Path() && t->as_Path().binding.is_ExternType()) {
-                        return resolve.crate.types.unit();
+                        return resolve.hirCrate().types.unit();
                     } else if (t->is_Path()) {
                         auto* repr = TargetGetTypeRepr(sp, resolve, t);
                         ASSERT_BUG(sp, repr, "No repr for " << t);

@@ -978,7 +978,7 @@ namespace {
     EntPtr getEntFullpath(const Span& sp, const ::StaticTraitResolve& resolve, const HIRPath& path, EntNS ns, MonomorphState& outMs, const HIRGenericParams** outImplParamsDef = nullptr) {
         if (const auto* gp = path.mData.opt_Generic()) {
             const auto& name = gp->mPath.components().back();
-            const auto* mod = (gp->mPath.components().size() > 1) ? resolve.crate.getTypeitemByPath(sp, gp->mPath, false, /*ignore_last*/ true).opt_Module() : &resolve.crate.getModByPath(sp, gp->mPath, true);
+            const auto* mod = (gp->mPath.components().size() > 1) ? resolve.hirCrate().getTypeitemByPath(sp, gp->mPath, false, /*ignore_last*/ true).opt_Module() : &resolve.hirCrate().getModByPath(sp, gp->mPath, true);
             if (mod) {
                 // TODO: This pointer will be invalidated...
                 for (const auto& is : mod->inlineStatics) {
@@ -1162,7 +1162,7 @@ public:
         , argDefs(std::move(argDefs))
         , retType(std::move(expTy))
         , rootResolve(resolve)
-        , resolve(resolve.wb)
+        , resolve(resolve.board())
         , state{rootSpan, this->resolve, std::move(pathStr), this->retType, this->argDefs, fcn}
         , ms(std::move(ms))
         , retval(MIREvalAllocationPtr::allocate(valuePool, rootResolve, state, retType))
@@ -1422,7 +1422,7 @@ public:
                 static ::std::set<HIRStatic*> sNonRecurse;
                 if (sNonRecurse.count(&item) == 0) {
                     sNonRecurse.insert(&item);
-                    ConvertHIRConstantEvaluateStatic(resolve.wb, resolve.crate, implParamsDef, p, item);
+                    ConvertHIRConstantEvaluateStatic(resolve.board(), resolve.hirCrate(), implParamsDef, p, item);
                     sNonRecurse.erase(sNonRecurse.find(&item));
                 } else {
                     DEBUG("Recursion detected");
@@ -3010,8 +3010,8 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     dst.writeUint(state, 8, resolve.typeNeedsDropGlue(state.sp, ty) ? 1 : 0);
                 } else if (te->name == "caller_location") {
-                    auto tyPath = resolve.crate.getLangItemPath(state.sp, "panic_location");
-                    auto ty = resolve.crate.types.path(tyPath, &resolve.crate.getStructByPath(state.sp, tyPath));
+                    auto tyPath = resolve.hirCrate().getLangItemPath(state.sp, "panic_location");
+                    auto ty = resolve.hirCrate().types.path(tyPath, &resolve.hirCrate().getStructByPath(state.sp, tyPath));
                     auto* repr = TargetGetTypeRepr(state.sp, resolve, ty);
                     MIR_ASSERT(state, repr, "No repr for panic::Location?");
                     MIR_ASSERT(state, repr->fields.size() == 4, "Unexpected item count in panic::Location");
@@ -3538,7 +3538,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
 bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<HIRPath> fcnPath, ::std::vector<MIREvalAllocationPtr> callArgs) {
     const auto& state = localState.state;
     resolve.revealOpaqueTypesPath(state.sp, *fcnPath);
-    MonomorphState fcnMs(resolve.crate.types);
+    MonomorphState fcnMs(resolve.hirCrate().types);
     const HIRGenericParams* implParamsDef = nullptr;
 
     const auto* pathP = fcnPath.get();
@@ -3572,7 +3572,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
 
     if (requireConstCalls) {
         if (const auto* e = path.mData.opt_UfcsKnown()) {
-            const auto& trait = resolve.crate.getTraitByPath(state.sp, e->trait.mPath);
+            const auto& trait = resolve.hirCrate().getTraitByPath(state.sp, e->trait.mPath);
             if (trait.isConst) {
                 ImplRef bestImpl;
                 bool hasConstBound = false;
@@ -3584,7 +3584,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
                         hasConstBound |= impl.boundConstness() != HIRBoundConstness::Never;
                         return false;
                     }
-                    if (!bestImpl.isValid() || impl.moreSpecificThan(resolve.crate.types, bestImpl)) {
+                    if (!bestImpl.isValid() || impl.moreSpecificThan(resolve.hirCrate().types, bestImpl)) {
                         bestImpl = mv$(impl);
                     }
                     return false;
@@ -3603,7 +3603,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
             auto prev = ep.state->stage;
             ep.state->stage = HIRExprState::Stage::ConstEvalRequest;
             // Run consteval on the arguments and return type
-            ConvertHIRConstantEvaluateFcnSig(resolve.wb, resolve.crate, implParamsDef, path, const_cast<HIRFunction&>(fcn));
+            ConvertHIRConstantEvaluateFcnSig(resolve.board(), resolve.hirCrate(), implParamsDef, path, const_cast<HIRFunction&>(fcn));
             ep.state->stage = prev;
         }
 
@@ -3620,7 +3620,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         }
 
         // Call by invoking evaluate_constant on the function
-        const auto* mir = this->resolve.crate.getOrGenMir(this->resolve.wb, HIRItemPath(*fcnPath), fcn);
+        const auto* mir = this->resolve.hirCrate().getOrGenMir(this->resolve.board(), HIRItemPath(*fcnPath), fcn);
         MIR_ASSERT(state, mir, "No MIR for function " << *fcnPath);
 
         // Monomorphised argument types
@@ -3682,7 +3682,7 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
             if (innerAlloc->isWritable()) {
                 auto innerVal = allocationToEncoded(innerAlloc->getType(), *innerAlloc);
 
-                auto itemPath = nvs.newStatic(MonomorphiserNop(resolve.crate.types).monomorphType(Span(), innerAlloc->getType()), mv$(innerVal));
+                auto itemPath = nvs.newStatic(MonomorphiserNop(resolve.hirCrate().types).monomorphType(Span(), innerAlloc->getType()), mv$(innerVal));
 
                 rv.relocations.push_back(Reloc::newNamed(r.offset, TargetGetPointerBits() / 8, mv$(itemPath)));
             } else {
@@ -3707,13 +3707,13 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
 }
 
 EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, HIRTypeRef exp) {
-    return evaluateConstant(ip, expr, exp, MonomorphState(resolve.crate.types));
+    return evaluateConstant(ip, expr, exp, MonomorphState(resolve.hirCrate().types));
 }
 
 EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIRExprPtr& expr, HIRTypeRef exp, MonomorphState ms) {
     TRACE_FUNCTION_F(ip);
     DEBUG("ms = " << ms);
-    const auto* mir = this->resolve.crate.getOrGenMir(this->resolve.wb, ip, expr, exp);
+    const auto* mir = this->resolve.hirCrate().getOrGenMir(this->resolve.board(), ip, expr, exp);
 
     // rustc evaluates constants in reveal-all mode: all opaque types have
     // their hidden representation before CTFE asks for layout or dispatch.
@@ -3732,10 +3732,10 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
     HIRPathParams nopParamsMethod;
     if (!ms.ppImpl && !ms.ppMethod) {
         if (resolve.mItemGenerics) {
-            ms.ppMethod = &(nopParamsMethod = resolve.mItemGenerics->makeNopParams(resolve.crate.types, 1));
+            ms.ppMethod = &(nopParamsMethod = resolve.mItemGenerics->makeNopParams(resolve.hirCrate().types, 1));
         }
         if (resolve.mImplGenerics) {
-            ms.ppImpl = &(nopParamsImpl = resolve.mImplGenerics->makeNopParams(resolve.crate.types, 0));
+            ms.ppImpl = &(nopParamsImpl = resolve.mImplGenerics->makeNopParams(resolve.hirCrate().types, 0));
         }
         DEBUG("(was empty) ms = " << ms);
     }
@@ -3745,7 +3745,7 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         // HACK: Generate a roughly-correct one
         const auto& topIp = ip.getTopIp();
         if (topIp.trait && !topIp.ty) {
-            ms.selfTy = resolve.crate.types.self();
+            ms.selfTy = resolve.hirCrate().types.self();
         }
 
         assert(this->callStack.empty());

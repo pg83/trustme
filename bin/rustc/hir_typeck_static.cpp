@@ -35,13 +35,13 @@ public:
 
         HIRPathParams inferredParams;
         if (!params) {
-            const auto& traitDef = mResolve.crate.getTraitByPath(sp, trait);
+            const auto& traitDef = mResolve.hirCrate().getTraitByPath(sp, trait);
             // This resolver owns m_ivars, so its inference indexes must not
             // escape into HIR and be mistaken for indexes in expression typeck.
             const auto placeholderName = RcString::newInterned(FMT("static_find_impl_" << &inferredParams));
             inferredParams.types.reserve(traitDef.mParams.types.size());
             for (size_t i = 0; i < traitDef.mParams.types.size(); i++) {
-                inferredParams.types.push_back(mResolve.crate.types.generic(placeholderName, GENERICPlaceholder * 256 + i));
+                inferredParams.types.push_back(mResolve.hirCrate().types.generic(placeholderName, GENERICPlaceholder * 256 + i));
             }
             inferredParams.values.reserve(traitDef.mParams.values.size());
             for (size_t i = 0; i < traitDef.mParams.values.size(); i++) {
@@ -1361,17 +1361,17 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
 
             TU_MATCH_HDRA((erased.inner), {)
             TU_ARMA(Fcn, e) {
-                MonomorphState monomorph(resolve.crate.types);
+                MonomorphState monomorph(resolve.hirCrate().types);
                 auto value = resolve.getValue(sp, e.origin, monomorph);
                 if (value.is_NotYetKnown() && e.origin.mData.is_UfcsKnown()) {
                     const auto& path = e.origin.mData.as_UfcsKnown();
                     auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << path.item << "_" << e.index));
-                    revealed = resolve.crate.types.path(HIRPath(path.type, path.trait.clone(), name, path.params.clone()), {});
+                    revealed = resolve.hirCrate().types.path(HIRPath(path.type, path.trait.clone(), name, path.params.clone()), {});
                 } else {
                     ASSERT_BUG(sp, value.is_Function(), "ErasedType with Fcn type doesn't point at a function: " << e.origin << ": " << value.tagStr());
                     const auto& function = *value.as_Function();
                     if (e.index >= function.mCode.erasedTypes.size()) {
-                        resolve.crate.getOrGenMir(resolve.wb, HIRItemPath(e.origin), function);
+                        resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(e.origin), function);
                     }
                     ASSERT_BUG(sp, e.index < function.mCode.erasedTypes.size(), "Erased type index out of range for " << e.origin << " - " << e.index << " >= " << function.mCode.erasedTypes.size());
                     revealed = monomorph.monomorphType(sp, function.mCode.erasedTypes[e.index]);
@@ -1381,13 +1381,13 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
             TU_ARMA(Alias, e) {
                 if (e.inner->type == HIRTypeRef()) {
                     const auto& name = e.inner->path.components().back();
-                    auto definers = resolve.crate.opaqueTypeDefiners.find(name);
-                    if (definers != resolve.crate.opaqueTypeDefiners.end()) {
+                    auto definers = resolve.hirCrate().opaqueTypeDefiners.find(name);
+                    if (definers != resolve.hirCrate().opaqueTypeDefiners.end()) {
                         for (const auto& path : definers->second) {
-                            MonomorphState monomorph(resolve.crate.types);
+                            MonomorphState monomorph(resolve.hirCrate().types);
                             auto value = resolve.getValue(sp, path, monomorph);
                             if (const auto* function = value.opt_Function()) {
-                                resolve.crate.getOrGenMir(resolve.wb, HIRItemPath(path), **function);
+                                resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(path), **function);
                             }
                             if (e.inner->type != HIRTypeRef()) {
                                 break;
@@ -1398,7 +1398,7 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
                         ERROR(sp, E0000, "Erased type alias " << e.inner->path << " never set");
                     }
                 }
-                revealed = MonomorphStatePtr(resolve.crate.types, nullptr, &e.params, nullptr).monomorphType(sp, e.inner->type);
+                revealed = MonomorphStatePtr(resolve.hirCrate().types, nullptr, &e.params, nullptr).monomorphType(sp, e.inner->type);
                 resolve.expandAssociatedTypes(sp, revealed);
             }
             TU_ARMA(Known, e) {
@@ -1412,7 +1412,7 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
 
     public:
         Visitor(const Span& sp, const StaticTraitResolve& resolve)
-            : HIRVisitor(nullptr, resolve.crate.types)
+            : HIRVisitor(nullptr, resolve.hirCrate().types)
             , sp(sp)
             , resolve(resolve)
         {
@@ -1430,7 +1430,7 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
                 if (clearOpaque && ty->is_Path() && ty->as_Path().binding.is_Opaque()) {
                     auto data = ty->cloneData();
                     data.as_Path().binding = HIRTypePathBinding::make_Unbound({});
-                    ty = resolve.crate.types.intern(std::move(data));
+                    ty = resolve.hirCrate().types.intern(std::move(data));
                 }
             }
             clearOpaque |= savedClearOpaque;

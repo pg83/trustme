@@ -509,33 +509,33 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                 case HIRCoreType::U16:
                 case HIRCoreType::I16:
                     outSize = 2;
-                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u16;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u16;
                     return true;
                 case HIRCoreType::U32:
                 case HIRCoreType::I32:
                 case HIRCoreType::Char:
                     outSize = 4;
-                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u32;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u32;
                     return true;
                 case HIRCoreType::U64:
                 case HIRCoreType::I64:
                     outSize = 8;
-                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u64;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u64;
                     return true;
                 case HIRCoreType::U128:
                 case HIRCoreType::I128:
                     outSize = 16;
                     // TODO: If i128 is emulated, this can be 8 (as it is on x86, where it's actually 4 due to the above comment)
-                    if (TargetGetCurSpec(resolve.wb).backendC.emulatedI128) {
-                        outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u64;
+                    if (TargetGetCurSpec(resolve.board()).backendC.emulatedI128) {
+                        outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u64;
                     } else {
-                        outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.u128;
+                        outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.u128;
                     }
                     return true;
                 case HIRCoreType::Usize:
                 case HIRCoreType::Isize:
-                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
-                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.ptr;
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.ptr;
                     return true;
                 case HIRCoreType::F16:
                     outSize = 2;
@@ -543,15 +543,15 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return true;
                 case HIRCoreType::F32:
                     outSize = 4;
-                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.f32;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.f32;
                     return true;
                 case HIRCoreType::F64:
                     outSize = 8;
-                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.f64;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.f64;
                     return true;
                 case HIRCoreType::F128:
                     outSize = 16;
-                    outAlign = TargetGetCurSpec(resolve.wb).arch.alignments.f64; //f128;
+                    outAlign = TargetGetCurSpec(resolve.board()).arch.alignments.f64; //f128;
                     return true;
                 case HIRCoreType::Str:
                     DEBUG("sizeof on a `str` - unsized");
@@ -638,7 +638,7 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         TU_ARMA(Borrow, te) {
             // - Alignment is machine native
-            outAlign = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
+            outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
             // TODO: Handle different types of Unsized (ones with different pointer sizes)
             switch (resolve.metadataType(sp, te.inner)) {
@@ -646,29 +646,29 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
                     return false;
                 case MetadataType::None:
                 case MetadataType::Zero:
-                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
                     break;
                 case MetadataType::Slice:
                 case MetadataType::TraitObject:
-                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8 * 2;
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8 * 2;
                     break;
             }
             return true;
         }
         TU_ARMA(Pointer, te) {
             // - Alignment is machine native
-            outAlign = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
+            outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             // - Size depends on Sized-nes of the parameter
             switch (resolve.metadataType(sp, te.inner)) {
                 case MetadataType::Unknown:
                     return false;
                 case MetadataType::None:
                 case MetadataType::Zero:
-                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
                     break;
                 case MetadataType::Slice:
                 case MetadataType::TraitObject:
-                    outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8 * 2;
+                    outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8 * 2;
                     break;
             }
             return true;
@@ -681,8 +681,8 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         }
         TU_ARMA(Function, te) {
             // Pointer size
-            outSize = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
-            outAlign = TargetGetCurSpec(resolve.wb).arch.pointerBits / 8;
+            outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
+            outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             return true;
         }
         TU_ARMA(NodeType, te) {
@@ -743,7 +743,7 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         // TODO: Wipe lifetimes?
-        auto monomorphCb = MonomorphStatePtr(resolve.crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.mData.as_Generic().mParams, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };
@@ -1251,13 +1251,13 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
 
-        auto monomorphCb = MonomorphStatePtr(resolve.crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.mData.as_Generic().mParams, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };
 
         if (!enm.discriminantsEvaluated) {
-            ConvertHIRConstantEvaluateEnum(resolve.wb, resolve.crate, te.path.mData.as_Generic().mPath, enm);
+            ConvertHIRConstantEvaluateEnum(resolve.board(), resolve.hirCrate(), te.path.mData.as_Generic().mPath, enm);
             assert(enm.discriminantsEvaluated);
         }
 
@@ -1290,7 +1290,7 @@ namespace {
                         DEBUG("max_size = " << maxSize << ", max_align = " << maxAlign);
 
                         auto tagTy = enm.tagRepr == HIREnum::Repr::Auto ? HIRCoreType::U32 : enm.getReprType(enm.tagRepr);
-                        rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tagTy)});
+                        rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(tagTy)});
                         size_t tagSize, tagAlign;
                         TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, tagSize, tagAlign);
                         size_t dataOfs = tagSize;
@@ -1348,7 +1348,7 @@ namespace {
                             auto forcedAlignment = variantType->is_Path() && variantType->as_Path().binding.is_Struct() ? variantType->as_Path().binding.as_Struct()->forcedAlignment : 0;
                             variants.push_back({mv$(variantType), {}, forcedAlignment});
                             TRACE_FUNCTION_F("Variant #" << (&var - e.data()));
-                            if (var.type == resolve.crate.types.unit()) {
+                            if (var.type == resolve.hirCrate().types.unit()) {
                                 continue;
                             }
                             if (!structEnumerateFields(sp, resolve, variants.back().type, variants.back().ents)) {
@@ -1551,16 +1551,16 @@ namespace {
                                     HIRTypeRef nicheTy;
                                     switch (nichePath.size) {
                                         case 1:
-                                            nicheTy = resolve.crate.types.primitive(HIRCoreType::U8);
+                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
                                             break;
                                         case 2:
-                                            nicheTy = resolve.crate.types.primitive(HIRCoreType::U16);
+                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U16);
                                             break;
                                         case 4:
-                                            nicheTy = resolve.crate.types.primitive(HIRCoreType::U32);
+                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U32);
                                             break;
                                         case 8:
-                                            nicheTy = resolve.crate.types.primitive(HIRCoreType::U64);
+                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U64);
                                             break;
                                         default:
                                             BUG(sp, "Unknown niche size: " << nichePath);
@@ -1572,7 +1572,7 @@ namespace {
                                     size_t finalSize = 0;
                                     size_t finalAlign = 1;
                                     for (size_t i = 0; i < reprs.size(); i++) {
-                                        if (e[i].type != resolve.crate.types.unit()) {
+                                        if (e[i].type != resolve.hirCrate().types.unit()) {
                                             // If the tag is leading, then add to all other variants and update reprs
                                             if (i == biggestVar) {
                                             } else if (nicheBeforeData) {
@@ -1680,20 +1680,20 @@ namespace {
                             HIRTypeRef tagTy;
                             // If the tag size is specified, then force that
                             if (enm.tagRepr != HIREnum::Repr::Auto) {
-                                tagTy = resolve.crate.types.primitive(enm.getReprType(enm.tagRepr));
+                                tagTy = resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr));
                             } else {
                                 ASSERT_BUG(sp, !hasExplcitValue, "Explicit tag without a repr");
                                 if (e.size() <= 1) {
                                     // Unreachable
                                     BUG(sp, "Reached auto tag type logic with zero/one-sized enum");
                                 } else if (e.size() <= 255) {
-                                    tagTy = resolve.crate.types.primitive(HIRCoreType::U8);
+                                    tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U8);
                                     DEBUG("u8 data tag");
                                 } else if (e.size() <= UINT16_MAX) {
-                                    tagTy = resolve.crate.types.primitive(HIRCoreType::U16);
+                                    tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U16);
                                 } else {
                                     ASSERT_BUG(sp, e.size() <= UINT32_MAX, "");
-                                    tagTy = resolve.crate.types.primitive(HIRCoreType::U32);
+                                    tagTy = resolve.hirCrate().types.primitive(HIRCoreType::U32);
                                 }
                             }
 
@@ -1708,7 +1708,7 @@ namespace {
                             for (size_t varI = 0; varI < variants.size(); varI++) {
                                 auto& ents = variants[varI].ents;
                                 auto& varTy = variants[varI].type;
-                                if (e[varI].type != resolve.crate.types.unit()) {
+                                if (e[varI].type != resolve.hirCrate().types.unit()) {
                                     if (enm.tagRepr == HIREnum::Repr::Auto) {
                                         ::std::sort(ents.begin(), ents.end(), sortfnEnumVariantFields);
                                     }
@@ -1758,7 +1758,7 @@ namespace {
                         case HIREnum::Repr::Auto:
                             if (enm.isCRepr) {
                                 // No auto-sizing, just i32?
-                                rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(HIRCoreType::U32)});
+                                rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(HIRCoreType::U32)});
                             } else if (!e.variants.empty()) {
                                 int64_t minValue = INT64_MAX;
                                 int64_t maxValue = INT64_MIN;
@@ -1789,11 +1789,11 @@ namespace {
                                 } else {
                                     tagType = HIRCoreType::I64;
                                 }
-                                rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(tagType)});
+                                rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(tagType)});
                             }
                             break;
                         default:
-                            rv.fields.push_back(TypeRepr::Field{0, resolve.crate.types.primitive(enm.getReprType(enm.tagRepr))});
+                            rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(enm.getReprType(enm.tagRepr))});
                             break;
                     }
                     if (rv.fields.size() > 0) {
@@ -1840,7 +1840,7 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
-        auto monomorphCb = MonomorphStatePtr(resolve.crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.mData.as_Generic().mParams, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };
