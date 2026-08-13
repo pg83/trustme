@@ -217,7 +217,10 @@ namespace {
             return RootBlockScope(*this, ~0u);
         }
 
-        void pushSelf(ASTType* tr) {
+        void pushSelf(ASTType*& tr) {
+            // Store the address of the caller's (stable) self-type slot, NOT a
+            // by-value parameter copy — the ConcreteSelf entry must stay valid
+            // (and see in-place resolution of the self type) until popSelf.
             nameContext.push_back(Ent::make_ConcreteSelf(&tr));
         }
 
