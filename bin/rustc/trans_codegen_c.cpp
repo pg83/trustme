@@ -7092,6 +7092,36 @@ namespace {
                 } else if (nameStrip == "simd_shl") {
                     simdArith("<<");
                 }
+                // Ordered reductions preserve their left-to-right operation
+                // order and include the explicit accumulator argument.
+                else if (nameStrip == "simd_reduce_add_ordered" || nameStrip == "simd_reduce_mul_ordered") {
+                    auto info = SimdInfo::forTy(*this, params.types.at(0));
+                    MIR_ASSERT(localMirRes, e.args.size() == 2, name << " requires a vector and accumulator");
+                    emitLvalue(e.retVal);
+                    of << " = ";
+                    emitParam(e.args.at(1));
+                    of << "; ";
+                    of << "for(int i = 0; i < " << info.count << "; i++) ";
+                    if (info.ty == SimdInfo::Float) {
+                        emitLvalue(e.retVal);
+                        of << (nameStrip == "simd_reduce_add_ordered" ? " += " : " *= ");
+                        of << "((";
+                        info.emitValTy(*this);
+                        of << "*)&";
+                        emitParam(e.args.at(0));
+                        of << ")[i]";
+                    } else {
+                        of << (nameStrip == "simd_reduce_add_ordered" ? "__builtin_add_overflow(" : "__builtin_mul_overflow(");
+                        emitLvalue(e.retVal);
+                        of << ", ((";
+                        info.emitValTy(*this);
+                        of << "*)&";
+                        emitParam(e.args.at(0));
+                        of << ")[i], &";
+                        emitLvalue(e.retVal);
+                        of << ")";
+                    }
+                }
                 // platform:simd_reduce_and
                 // platform:simd_reduce_max
                 // platform:simd_reduce_min
