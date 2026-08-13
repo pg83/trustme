@@ -2691,8 +2691,11 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         return context.crate.types.borrow(HIRBorrowType::Shared, context.crate.types.primitive(HIRCoreType::Str));
                     }
                     TU_ARM(pv, ByteString, ve) {
-                        // TODO: ByteString patterns can match either &[u8] or &[u8; N]
-                        return ::std::nullopt;
+                        // This is the default literal type. A known &[u8]
+                        // scrutinee is still accepted by the pattern handler.
+                        return context.crate.types.borrow(
+                            HIRBorrowType::Shared,
+                            context.crate.types.array(context.crate.types.primitive(HIRCoreType::U8), ve.v.size()));
                     }
                     TU_ARM(pv, Named, ve) {
                         DEBUG("TODO: Look up the path and get the type: " << ve.path);
