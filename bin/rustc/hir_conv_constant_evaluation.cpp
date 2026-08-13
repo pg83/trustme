@@ -2665,9 +2665,17 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                         // TODO: What can cast TO a borrow? - Non-converted dyn unsizes .. but they require vtables,
                         // which aren't available yet!
                         if (const auto* tep = (*dynamicTypeD)->opt_TraitObject()) {
-                            static const RcString rcstringVtable = RcString::newInterned("vtable#");
-                            auto vtablePath = HIRPath(*dynamicTypeS, tep->mTrait.mPath.clone(), rcstringVtable);
-                            dst.slice(TargetGetPointerBits() / 8).writePtr(state, EncodedLiteral::PTR_BASE, localState.getStaticref(std::move(vtablePath)));
+                            if (tep->mTrait.mPath == HIRSimplePath() && (*dynamicTypeS)->is_TraitObject()) {
+                                // Dropping a principal trait keeps the source
+                                // vtable: auto-trait-only objects still need
+                                // its drop, size, and alignment entries.
+                                localState.writeParam(dst, e.ptrVal);
+                            } else {
+                                static const RcString rcstringVtable = RcString::newInterned("vtable#");
+                                auto vtablePath = HIRPath(*dynamicTypeS, tep->mTrait.mPath.clone(), rcstringVtable);
+                                auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
+                                dst.slice(TargetGetPointerBits() / 8).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
+                            }
                         } else if (/*const auto* tep =*/(*dynamicTypeD)->opt_Slice()) {
                             auto size = (*dynamicTypeS)->as_Array().size.as_Known();
                             dst.slice(TargetGetPointerBits() / 8).writeUint(state, TargetGetPointerBits(), size);
@@ -2912,6 +2920,31 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             const auto& ms = localState.ms;
             if (const auto* te = e.fcn.opt_Intrinsic()) {
                 auto dst = localState.getLval(e.retVal);
+                auto readTraitObjectVtableUsize = [&](size_t field) -> uint64_t {
+                    MIR_ASSERT(state, field == 1 || field == 2, "Invalid vtable header field " << field);
+                    const size_t ptrSize = TargetGetPointerBits() / 8;
+                    auto arg = localState.getLval(e.args.at(0).as_LValue());
+                    auto vtablePtr = arg.slice(ptrSize).readPtr(state);
+                    MIR_ASSERT(state, vtablePtr.first >= EncodedLiteral::PTR_BASE, "Invalid trait object vtable pointer");
+                    MIR_ASSERT(state, vtablePtr.second, "Trait object has no vtable relocation");
+                    if (auto* staticRef = vtablePtr.second.asStaticref()) {
+                        if (const auto* path = staticRef->path().mData.opt_UfcsKnown(); path && path->item == "vtable#") {
+                            // Vtables are generated after CTFE.  Their symbolic
+                            // path still identifies the concrete source type,
+                            // which determines both header values.
+                            size_t size;
+                            size_t align;
+                            MIR_ASSERT(state, TargetGetSizeAndAlignOf(state.sp, this->resolve, path->type, size, align), "Invalid vtable source type " << path->type);
+                            MIR_ASSERT(state, size != SIZE_MAX, "Unsized vtable source type " << path->type);
+                            return field == 1 ? size : align;
+                        }
+                        if (!staticRef->hasValue()) {
+                            vtablePtr.second = MIREvalRelocPtr(localState.getStaticref(staticRef->path().clone()));
+                        }
+                    }
+                    auto vtable = MIREvalValueRef(vtablePtr.second, vtablePtr.first - EncodedLiteral::PTR_BASE);
+                    return vtable.slice(field * ptrSize, ptrSize).readUsize(state);
+                };
                 if (te->name == "size_of") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t sizeVal;
@@ -2924,7 +2957,9 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t sizeVal;
                     size_t alignVal;
-                    if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal)) {
+                    if (ty->is_TraitObject()) {
+                        sizeVal = readTraitObjectVtableUsize(1);
+                    } else if (!TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal)) {
                         throw Defer();
                     }
                     if (sizeVal == SIZE_MAX) {
@@ -2956,7 +2991,10 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t sizeVal;
                     size_t alignVal;
-                    if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal) && alignVal > 0) {
+                    if (ty->is_TraitObject()) {
+                        alignVal = readTraitObjectVtableUsize(2);
+                        dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
+                    } else if (TargetGetSizeAndAlignOf(state.sp, this->resolve, ty, sizeVal, alignVal) && alignVal > 0) {
                         dst.writeUint(state, TargetGetPointerBits(), U128(alignVal));
                     } else {
                         throw Defer();
