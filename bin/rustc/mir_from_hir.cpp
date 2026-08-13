@@ -683,6 +683,9 @@ namespace {
             const auto& tyInner = node.mValue->resType;
 
             this->visitNodePtr(node.mValue);
+            if (!builder.blockActive()) {
+                return;
+            }
             auto lvRes = builder.getResultInLvalue(sp, tyInner);
 
             auto stateValue = static_cast<unsigned>(generatorState.states.size());
@@ -1388,6 +1391,9 @@ namespace {
 
             const auto& tyVal = node.mValue->resType;
             this->visitNodePtr(node.mValue);
+            if (!builder.blockActive()) {
+                return;
+            }
             auto val = builder.getResultInLvalue(node.mValue->span(), tyVal);
 
             MIRRValue res;
@@ -1444,6 +1450,9 @@ namespace {
 
             const auto& tyVal = node.mValue->resType;
             this->visitNodePtr(node.mValue);
+            if (!builder.blockActive()) {
+                return;
+            }
             auto val = builder.getResultInLvalue(node.mValue->span(), tyVal);
 
             if (borrowRaiseTarget) {
@@ -1461,6 +1470,9 @@ namespace {
 
             const auto& tyVal = node.mValue->resType;
             this->visitNodePtr(node.mValue);
+            if (!builder.blockActive()) {
+                return;
+            }
             auto val = builder.getResultInLvalue(node.mValue->span(), tyVal);
 
             if (borrowRaiseTarget) {
@@ -1474,6 +1486,9 @@ namespace {
         void visit(HIRExprNodeCast& node) override {
             TRACE_FUNCTION_F("_Cast " << node.resType);
             this->visitNodePtr(node.mValue);
+            if (!builder.blockActive()) {
+                return;
+            }
 
             const auto& tyOut = node.resType;
             const auto& tyIn = node.mValue->resType;
@@ -1486,6 +1501,9 @@ namespace {
 
             auto val = builder.getResultInLvalue(node.mValue->span(), node.mValue->resType);
 
+            // `!` coerces to every destination, including through explicit
+            // cast syntax.  Other source types still need validation here.
+            if (!tyIn->is_Diverge()) {
             TU_MATCH_HDRA( (*tyOut), {)
             default:
                 BUG(node.span(), "Invalid cast to " << tyOut << " from " << tyIn);
@@ -1588,16 +1606,16 @@ namespace {
                             // NOTE: Valid for all integer types
                             else if (tyIn->is_Pointer()) {
                                 // TODO: Only valid for T: Sized?
-                            } else if (de == HIRCoreType::Usize && tyIn->is_Function()) {
-                                // TODO: Always valid?
-                            } else if (de == HIRCoreType::Usize && tyIn->is_NamedFunction()) {
-                                // TODO: Always valid?
+                            } else if (tyIn->is_Function() || tyIn->is_NamedFunction()) {
+                                // Function pointers and function items can be
+                                // cast to any integer type.
                             } else {
                                 BUG(node.span(), "Cannot cast to " << tyOut << " from " << tyIn);
                             }
                             break;
                     }
                 }
+            }
             }
             auto res = builder.newTemporary(node.resType);
             builder.pushStmtAssign(node.span(), res.clone(), MIRRValue::make_Cast({ mv$(val), node.resType }));
@@ -1745,10 +1763,16 @@ namespace {
             // NOTE: Calculate the index first (so if it borrows from the source, it's over by the time that's needed)
             const auto& tyIdx = node.index->resType;
             this->visitNodePtr(node.index);
+            if (!builder.blockActive()) {
+                return;
+            }
             auto index = builder.getResultInLvalue(node.index->span(), tyIdx);
 
             const auto& tyVal = node.mValue->resType;
             this->visitNodePtr(node.mValue);
+            if (!builder.blockActive()) {
+                return;
+            }
             auto value = builder.getResultInLvalue(node.mValue->span(), tyVal);
 
             if (tyIdx != HIRCoreType::Usize) {
@@ -2248,6 +2272,9 @@ namespace {
         void visit(HIRExprNodeField& node) override {
             TRACE_FUNCTION_F("_Field \"" << node.field << "\"");
             this->visitNodePtr(node.mValue);
+            if (!builder.blockActive()) {
+                return;
+            }
             auto val = builder.getResultInLvalue(node.mValue->span(), node.mValue->resType);
 
             const auto& valTy = node.mValue->resType;

@@ -8,13 +8,13 @@ the same set; the erasure itself cost 12 tests, all fixed/re-baselined).
 Classification method: per-case rerun of every failing test with the failure
 signature (assert/BUG location, first error, signal) clustered by root cause.
 
-## P1 — compiler crashes on valid code (~169)
+## P1 — compiler crashes on valid code (~162)
 
 One cluster = one bug.
 
 | location | tests | example |
 |---|---|---|
-| ~10 smaller clusters (2-4 each) | ~26 | mangling:98, expr_cs:1909 (TAIT placeholder), hir_hir:482, mir_from_hir:1596/7386, typeck_common:653/397, expand:1997, trans_main:575, mir_operations:640 |
+| ~8 smaller clusters (2-4 each) | ~19 | mangling:98, expr_cs:1909 (TAIT placeholder), hir_hir:482, typeck_common:653/397, expand:1997, trans_main:575, mir_operations:640 |
 | unclassified aborts (miri/gccrs/rustlings/doctest categories, not re-run individually) | 81 | |
 
 ## P2 — missing language features (~475)
