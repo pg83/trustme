@@ -8,13 +8,12 @@ the same set; the erasure itself cost 12 tests, all fixed/re-baselined).
 Classification method: per-case rerun of every failing test with the failure
 signature (assert/BUG location, first error, signal) clustered by root cause.
 
-## P0 — miscompiles: accepted code runs WRONG (~23)
+## P0 — miscompiles: accepted code runs WRONG (~22)
 
 The compiler silently produces incorrect programs. Highest severity.
 
 | cluster | tests | notes |
 |---|---|---|
-| rust-quiz stdout | 1 | wrong semantics: #020 break-with-value in condition |
 | rust_lib runtime panics | 18 | std `error.rs` tests; partly blocked on missing backtrace support (borders P2 feature work) |
 | slice doctest | 1 | `core/src/slice/mod.rs` |
 
@@ -57,7 +56,7 @@ Pass when re-run in isolation; fail only under the parallel gate load
 
 ## Recommended order (by ROI)
 
-1. Quiz miscompiles (deep dive: control-flow lowering)
+1. Runtime miscompiles, largest-cluster first
 2. Remaining classified crash clusters, largest-cluster first
 3. Unclassified aborts, clustered by root cause before fixing
 4. Parser features, largest-cluster first

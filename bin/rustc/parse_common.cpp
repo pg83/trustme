@@ -612,6 +612,11 @@ ASTExprNodeP ParseFlowControl(TokenStream& lex, ASTExprNodeFlow::Type type) {
     // Return value
     // TODO: Should this prevent `continue value;`?
     ASTExprNodeP val;
+    if (type == ASTExprNodeFlow::BREAK
+        && LOOK_AHEAD(lex) == TOK_BRACE_OPEN
+        && CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
+        return NEWNODE(ASTExprNodeFlow, type, std::move(lifetime), std::move(val));
+    }
     switch (LOOK_AHEAD(lex)) {
         case TOK_EOF:
         case TOK_SEMICOLON:
