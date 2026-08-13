@@ -4374,52 +4374,84 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
         }
         TU_ARMA(Borrow, e) {
             fieldPath.push_back(FIELD_DEREF);
+            const auto ptrSize = TargetGetPointerBits() / 8;
+            auto ptr = lit.readUint(ptrSize).truncateU64();
+            auto valueSize = uint64_t { 0 };
+            auto sliceLen = uint64_t { 0 };
+            const HIRTypeData* sliceInner = nullptr;
+
             if (e.inner == HIRCoreType::Str) {
-                auto ptrSize = TargetGetPointerBits() / 8;
-                auto ptr = lit.readUint(ptrSize).truncateU64();
-                auto len = lit.slice(ptrSize, ptrSize).readUint(ptrSize).truncateU64();
-                auto* r = lit.getReloc();
-                ASSERT_BUG(sp, r, "Null relocation for string in pattern generation");
-                ASSERT_BUG(sp, ptr >= EncodedLiteral::PTR_BASE, "");
-                ptr -= EncodedLiteral::PTR_BASE;
-
-                ASSERT_BUG(sp, !r->p, "TODO: Handle &str match constant with non-string relocation - " << *r->p);
-                ASSERT_BUG(sp, ptr <= r->bytes.size(), "");
-                ASSERT_BUG(sp, len <= r->bytes.size(), "");
-                ASSERT_BUG(sp, ptr + len <= r->bytes.size(), "");
-
-                this->pushRule(PatternRule::make_Value(std::string(r->bytes.data() + ptr, r->bytes.data() + ptr + len)));
-            } else if (e.inner->is_Slice() && e.inner->as_Slice().inner == HIRCoreType::U8) {
-                auto ptrSize = TargetGetPointerBits() / 8;
-                auto ptr = lit.readUint(ptrSize).truncateU64();
-                auto len = lit.slice(ptrSize, ptrSize).readUint(ptrSize).truncateU64();
-                auto* r = lit.getReloc();
-                ASSERT_BUG(sp, r, "Null relocation for byte-string in pattern generation");
-                ASSERT_BUG(sp, ptr >= EncodedLiteral::PTR_BASE, "");
-                ptr -= EncodedLiteral::PTR_BASE;
-
-                if (r->p) {
-                    ASSERT_BUG(sp, ptr == 0, "TODO: Non-zero offset with reference");
-                    MonomorphState valParams(mResolve.crate.types);
-                    auto v = mResolve.getValue(sp, *r->p, valParams);
-                    ASSERT_BUG(sp, v.is_Static(), "&[u8] match with borrow of non-static (" << *r->p << ") - " << v.tagStr());
-                    const HIRStatic& s = *v.as_Static();
-                    ASSERT_BUG(sp, s.valueGenerated, "&[u8] match with borrow of non-resolved static (" << *r->p << ")");
-                    const EncodedLiteral& val = s.valueRes;
-                    ASSERT_BUG(sp, ptr <= val.bytes.size(), "");
-                    ASSERT_BUG(sp, len <= val.bytes.size(), "");
-                    ASSERT_BUG(sp, ptr + len <= val.bytes.size(), "");
-
-                    this->pushRule(PatternRule::make_Value(std::vector<uint8_t>(val.bytes.data() + ptr, val.bytes.data() + ptr + len)));
-                } else {
-                    ASSERT_BUG(sp, ptr <= r->bytes.size(), "");
-                    ASSERT_BUG(sp, len <= r->bytes.size(), "");
-                    ASSERT_BUG(sp, ptr + len <= r->bytes.size(), "");
-
-                    this->pushRule(PatternRule::make_Value(std::vector<uint8_t>(r->bytes.data() + ptr, r->bytes.data() + ptr + len)));
-                }
+                sliceLen = lit.slice(ptrSize, ptrSize).readUint(ptrSize).truncateU64();
+                valueSize = sliceLen;
+            } else if (const auto* slice = e.inner->opt_Slice()) {
+                sliceInner = slice->inner;
+                sliceLen = lit.slice(ptrSize, ptrSize).readUint(ptrSize).truncateU64();
+                size_t elementSize = 0;
+                ASSERT_BUG(sp, TargetGetSizeOf(sp, mResolve, sliceInner, elementSize), "Matching a slice with generic element size - " << e.inner);
+                ASSERT_BUG(sp, elementSize == 0 || sliceLen <= UINT64_MAX / elementSize, "Slice pattern size overflow");
+                valueSize = sliceLen * elementSize;
             } else {
-                TODO(sp, "Match literal Borrow: ty=" << ty << " lit=" << lit);
+                size_t sizedValueSize = 0;
+                ASSERT_BUG(sp, TargetGetSizeOf(sp, mResolve, e.inner, sizedValueSize), "Matching a reference to an unsized literal - " << e.inner);
+                valueSize = sizedValueSize;
+            }
+
+            EncodedLiteral inlineValue;
+            const EncodedLiteral* value = nullptr;
+            auto* relocation = lit.getReloc();
+            auto valueOffset = uint64_t { 0 };
+            if (valueSize == 0 && !relocation) {
+                // A reference to a zero-sized value carries no allocation to
+                // decode. Its address is deliberately irrelevant to a pattern.
+                value = &inlineValue;
+            } else {
+                ASSERT_BUG(sp, relocation, "Reference pattern has no relocation - " << lit);
+                ASSERT_BUG(sp, ptr >= EncodedLiteral::PTR_BASE, "Invalid encoded reference in pattern - " << lit);
+                valueOffset = ptr - EncodedLiteral::PTR_BASE;
+
+                if (relocation->p) {
+                    MonomorphState valueParams(mResolve.crate.types);
+                    auto resolved = mResolve.getValue(sp, *relocation->p, valueParams);
+                    ASSERT_BUG(sp, resolved.is_Static(), "Reference pattern points to non-static " << *relocation->p << " - " << resolved.tagStr());
+                    const auto& s = *resolved.as_Static();
+                    ASSERT_BUG(sp, s.valueGenerated, "Reference pattern points to unresolved static " << *relocation->p);
+                    value = &s.valueRes;
+                } else {
+                    inlineValue.bytes.assign(relocation->bytes.begin(), relocation->bytes.end());
+                    value = &inlineValue;
+                }
+            }
+
+            ASSERT_BUG(sp, valueOffset <= value->bytes.size(), "Reference pattern offset is out of bounds");
+            ASSERT_BUG(sp, valueSize <= value->bytes.size() - valueOffset, "Reference pattern value is out of bounds");
+            auto valueLit = EncodedLiteralSlice(*value).slice(valueOffset, valueSize);
+
+            if (e.inner == HIRCoreType::Str) {
+                this->pushRule(PatternRule::make_Value(std::string(
+                    value->bytes.begin() + valueOffset,
+                    value->bytes.begin() + valueOffset + sliceLen
+                )));
+            } else if (sliceInner == HIRCoreType::U8) {
+                this->pushRule(PatternRule::make_Value(std::vector<uint8_t>(
+                    value->bytes.begin() + valueOffset,
+                    value->bytes.begin() + valueOffset + sliceLen
+                )));
+            } else if (sliceInner) {
+                ASSERT_BUG(sp, sliceLen < FIELD_INDEX_MAX, "Too many elements in constant slice pattern");
+                size_t elementSize = 0;
+                ASSERT_BUG(sp, TargetGetSizeOf(sp, mResolve, sliceInner, elementSize), "Matching a slice with generic element size - " << e.inner);
+
+                PatternRulesetBuilder subBuilder{mResolve};
+                subBuilder.fieldPath = fieldPath;
+                subBuilder.fieldPath.push_back(0);
+                for (unsigned int i = 0; i < sliceLen; i++) {
+                    subBuilder.appendFromLit(sp, valueLit.slice(i * elementSize, elementSize), sliceInner);
+                    subBuilder.fieldPath.back()++;
+                }
+                ASSERT_BUG(sp, subBuilder.rulesets.size() == 1, "Multiple rulesets generated from a slice literal");
+                this->pushRule(PatternRule::make_Slice({static_cast<unsigned int>(sliceLen), mv$(subBuilder.rulesets[0].rules)}));
+            } else {
+                this->appendFromLit(sp, valueLit, e.inner);
             }
             fieldPath.pop_back();
         }
