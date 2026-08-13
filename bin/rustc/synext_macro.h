@@ -5,8 +5,7 @@
 #include <memory>
 #include "span.h"
 
-struct TypeStore;
-typedef TypeStore* TypeRef;
+struct ASTType;
 
 class ASTCrate;
 class ASTModule;

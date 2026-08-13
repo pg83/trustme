@@ -783,8 +783,8 @@ namespace {
 
     const RcString rcstringAssertReceiverIsTotalEq = RcString::newInterned("assert_receiver_is_total_eq");
 
-    TypeRef mktypeSelf(stl::ObjPool& pool, const Span& sp) {
-        return mktype(pool, sp, rcstringSelf, 0xFFFF);
+    ASTType* mktypeSelf(stl::ObjPool& pool, const Span& sp) {
+        return mkType(pool, sp, rcstringSelf, 0xFFFF);
     }
 }
 
@@ -908,10 +908,10 @@ struct DeriveOpts {
 struct Deriver {
     virtual ~Deriver() = default;
     virtual const char* traitName() const = 0;
-    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const = 0;
-    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const = 0;
+    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const = 0;
+    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const = 0;
 
-    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTUnion& unn) const {
+    virtual ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const {
         ERROR(sp, E0000, "Cannot derive(" << traitName() << ") on union");
     }
 
@@ -933,7 +933,7 @@ struct Deriver {
         }
     }
 
-    ASTGenericParams getParamsWithBounds(stl::ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, ::std::vector<TypeRef> additionalBoundedTypes) const {
+    ASTGenericParams getParamsWithBounds(stl::ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, ::std::vector<ASTType*> additionalBoundedTypes) const {
         ASTGenericParams params = p.clone();
 
         // TODO: Get bounds based on generic (or similar) types used within the type.
@@ -943,7 +943,7 @@ struct Deriver {
         unsigned int i = 0;
         for (const auto& arg : params.mParams) {
             if (const auto* e = arg.opt_Type()) {
-                params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mktype(pool, sp, e->name(), i), {}, traitPath}));
+                params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(pool, sp, e->name(), i), {}, traitPath}));
                 i++;
             }
         }
@@ -957,14 +957,14 @@ struct Deriver {
         return params;
     }
 
-    ::std::vector<TypeRef> getFieldBounds(const ASTStruct& str) const {
-        ::std::vector<TypeRef> ret;
+    ::std::vector<ASTType*> getFieldBounds(const ASTStruct& str) const {
+        ::std::vector<ASTType*> ret;
         TU_MATCH(ASTStructData, (str.mData), (e), (Unit, ), (Struct, for (const auto& fld : e.ents) { addFieldBoundFromTy(str.params(), ret, fld.mType); }), (Tuple, for (const auto& ent : e.ents) { addFieldBoundFromTy(str.params(), ret, ent.mType); }))
         return ret;
     }
 
-    ::std::vector<TypeRef> getFieldBounds(const ASTEnum& enm) const {
-        ::std::vector<TypeRef> ret;
+    ::std::vector<ASTType*> getFieldBounds(const ASTEnum& enm) const {
+        ::std::vector<ASTType*> ret;
 
         for (const auto& v : enm.variants()) {
             TU_MATCH(ASTEnumVariantData, (v.mData), (e), (Unit, ), (Tuple, for (const auto& ent : e.mItems) { addFieldBoundFromTy(enm.params(), ret, ent.mType); }), (Struct, for (const auto& fld : e.fields) { addFieldBoundFromTy(enm.params(), ret, fld.mType); }))
@@ -973,17 +973,17 @@ struct Deriver {
         return ret;
     }
 
-    ::std::vector<TypeRef> getFieldBounds(const ASTUnion& unn) const {
-        ::std::vector<TypeRef> ret;
+    ::std::vector<ASTType*> getFieldBounds(const ASTUnion& unn) const {
+        ::std::vector<ASTType*> ret;
         for (const auto& fld : unn.mVariants) {
             addFieldBoundFromTy(unn.params(), ret, fld.mType);
         }
         return ret;
     }
 
-    void addFieldBoundFromTy(const ASTGenericParams& params, ::std::vector<TypeRef>& outList, const TypeRef& ty) const {
+    void addFieldBoundFromTy(const ASTGenericParams& params, ::std::vector<ASTType*>& outList, ASTType* ty) const {
         struct H {
-            static void visitNodes(const Deriver& self, const ASTGenericParams& params, ::std::vector<TypeRef>& outList, const ::std::vector<ASTPathNode>& nodes) {
+            static void visitNodes(const Deriver& self, const ASTGenericParams& params, ::std::vector<ASTType*>& outList, const ::std::vector<ASTPathNode>& nodes) {
                 for (const auto& node : nodes) {
                     for (const auto& e : node.args().entries) {
                         TU_MATCH_HDRA( (e), {)
@@ -1079,7 +1079,7 @@ struct Deriver {
         }
     }
 
-    void addFieldBound(::std::vector<TypeRef>& outList, const TypeRef& type) const {
+    void addFieldBound(::std::vector<ASTType*>& outList, ASTType* type) const {
         for (const auto& ty : outList) {
             if (ty == type) {
                 return;
@@ -1092,10 +1092,10 @@ struct Deriver {
 
 /// 'Debug' derive handler
 class DeriverDebug: public Deriver {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
         const ASTPath debugTrait = getPath(coreName, "fmt", "Debug");
 
-        ASTFunction fcn(sp, mktype(*type->pool, sp, getPath(coreName, "fmt", "Result")), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringF), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), true, mktype(*type->pool, sp, getPath(coreName, "fmt", "Formatter"))))));
+        ASTFunction fcn(sp, mkType(*type->pool, sp, getPath(coreName, "fmt", "Result")), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringF), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, getPath(coreName, "fmt", "Formatter"))))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, debugTrait, mv$(typesToBound));
@@ -1110,7 +1110,7 @@ public:
         return "Debug";
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         ::std::string name = type->path().nodes().back().name().c_str();
 
         // Generate code for Debug
@@ -1123,7 +1123,7 @@ public:
             TU_ARMA(Struct, e) {
                 node = NEWNODE(NamedValue, ASTPath(rcstringF));
                 std::vector<ASTExprNodeBlock::Line> nodes;
-                nodes.push_back({true, NEWNODE(LetBinding, ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mktype(*type->pool, sp), NEWNODE(CallMethod, mv$(node), ASTPathNode(RcString::newInterned("debug_struct"), {}), vec$(NEWNODE(String, name))))});
+                nodes.push_back({true, NEWNODE(LetBinding, ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mkType(*type->pool, sp), NEWNODE(CallMethod, mv$(node), ASTPathNode(RcString::newInterned("debug_struct"), {}), vec$(NEWNODE(String, name))))});
                 for (const auto& fld : e.ents) {
                     nodes.push_back({true, NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringS)), ASTPathNode(rcstringField, {}), vec$(NEWNODE(String, fld.mName.c_str()), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)), fld.mName)))))});
                 }
@@ -1143,7 +1143,7 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         ASTPath basePath = *type->mData.as_Path();
         basePath.nodes().back() = basePath.nodes().back().name();
 
@@ -1162,7 +1162,7 @@ public:
                 TU_ARMA(Tuple, e) {
                     ::std::vector<ASTPattern> patsA;
                     auto block = newBlock(sp);
-                    block->pushStmt(NEWNODE(LetBinding, ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mktype(*type->pool, sp), NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringF)), ASTPathNode(RcString::newInterned("debug_tuple"), {}), vec$(NEWNODE(String, v.mName.c_str())))));
+                    block->pushStmt(NEWNODE(LetBinding, ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mkType(*type->pool, sp), NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringF)), ASTPathNode(RcString::newInterned("debug_tuple"), {}), vec$(NEWNODE(String, v.mName.c_str())))));
 
                     auto sEnt = NEWNODE(NamedValue, ASTPath(rcstringS));
                     makeRefpatA(sp, *block, patsA, e.mItems, [&](size_t idx, auto a) {
@@ -1175,7 +1175,7 @@ public:
                 TU_ARMA(Struct, e) {
                     ::std::vector<ASTStructPatternEntry> patsA;
                     auto block = newBlock(sp);
-                    block->pushStmt(NEWNODE(LetBinding, ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mktype(*type->pool, sp), NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringF)), ASTPathNode(RcString::newInterned("debug_struct"), {}), vec$(NEWNODE(String, v.mName.c_str())))));
+                    block->pushStmt(NEWNODE(LetBinding, ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mkType(*type->pool, sp), NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringF)), ASTPathNode(RcString::newInterned("debug_struct"), {}), vec$(NEWNODE(String, v.mName.c_str())))));
 
                     auto sEnt = NEWNODE(NamedValue, ASTPath(rcstringS));
                     makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
@@ -1208,7 +1208,7 @@ public:
 class DeriverInnerCompare: public Deriver {
 protected:
     /// Create a final output impl block
-    virtual ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const = 0;
+    virtual ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const = 0;
     /// Compare two values, early returning if no more comparisons should happen
     virtual ASTExprNodeP compareAndRet(Span sp, const RcString& coreName, ASTExprNodeP v1, ASTExprNodeP v2) const = 0;
     /// Get the return value for if `compare_and_ret` didn't return early
@@ -1218,7 +1218,7 @@ protected:
 
 public:
     // Struct
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         auto block = newBlock(sp);
 
         this->iterateStructFields(str, [&](RcString fldName) {
@@ -1230,7 +1230,7 @@ public:
     }
 
     // Enum
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         ASTPath basePath = *type->mData.as_Path();
         basePath.nodes().back().args() = ASTPathParams();
         ::std::vector<ASTExprNodeMatchArm> arms;
@@ -1305,10 +1305,10 @@ public:
 };
 
 class DeriverPartialEq: public DeriverInnerCompare {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const override {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override {
         const ASTPath traitPath = getPath(coreName, "cmp", "PartialEq");
 
-        ASTFunction fcn(sp, mktype(*type->pool, sp, CORETYPE_BOOL), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringV), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+        ASTFunction fcn(sp, mkType(*type->pool, sp, CORETYPE_BOOL), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringV), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -1339,14 +1339,14 @@ public:
 } gDerivePartialeq;
 
 class DeriverPartialOrd: public DeriverInnerCompare {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const override {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override {
         const ASTPath traitPath = getPath(coreName, "cmp", "PartialOrd");
         const ASTPath pathOrdering = getPath(coreName, "cmp", "Ordering");
 
         ASTPath pathOptionOrdering = getPath(coreName, "option", "Option");
-        pathOptionOrdering.nodes().back().args().entries.push_back(mktype(*type->pool, sp, pathOrdering));
+        pathOptionOrdering.nodes().back().args().entries.push_back(mkType(*type->pool, sp, pathOrdering));
 
-        ASTFunction fcn(sp, mktype(*type->pool, sp, pathOptionOrdering), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringV), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+        ASTFunction fcn(sp, mkType(*type->pool, sp, pathOptionOrdering), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringV), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -1379,10 +1379,10 @@ class DeriverEq: public Deriver {
         return getPath(coreName, "cmp", "Eq");
     }
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
         const ASTPath traitPath = this->getTraitPath(coreName);
 
-        ASTFunction fcn(sp, mktype(*type->pool, TypeRefTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+        ASTFunction fcn(sp, mkType(*type->pool, ASTTypeTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -1409,7 +1409,7 @@ public:
         return "Eq";
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + rcstringAssertReceiverIsTotalEq;
 
         auto block = newBlock(sp);
@@ -1420,7 +1420,7 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mkExprnodep(block.release()));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + rcstringAssertReceiverIsTotalEq;
 
         ASTPath basePath = *type->mData.as_Path();
@@ -1472,7 +1472,7 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)), mv$(arms)));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTUnion& unn) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override {
         // Eq is just a marker, so it's valid to derive for union
         const ASTPath assertMethodPath = this->getTraitPath(opts.coreName) + rcstringAssertReceiverIsTotalEq;
         auto block = newBlock(sp);
@@ -1486,11 +1486,11 @@ public:
 } gDeriveEq;
 
 class DeriverOrd: public DeriverInnerCompare {
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const override {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const override {
         const ASTPath traitPath = getPath(coreName, "cmp", "Ord");
         const ASTPath pathOrdering = getPath(coreName, "cmp", "Ordering");
 
-        ASTFunction fcn(sp, mktype(*type->pool, sp, pathOrdering), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringV), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+        ASTFunction fcn(sp, mkType(*type->pool, sp, pathOrdering), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringV), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -1536,10 +1536,10 @@ class DeriverClone: public Deriver {
         return getTraitPath(coreName) + rcstringCloneLower;
     }
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
         const ASTPath traitPath = this->getTraitPath(coreName);
 
-        ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
+        ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp)))));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -1571,7 +1571,7 @@ public:
         return "Clone";
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         const ASTPath& tyPath = *type->mData.as_Path();
 
         ASTExprNodeP node;
@@ -1598,7 +1598,7 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, mv$(node)));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         ASTPath basePath = *type->mData.as_Path();
         basePath.nodes().back().args() = ASTPathParams();
         ::std::vector<ASTExprNodeMatchArm> arms;
@@ -1653,12 +1653,12 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Match, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)), mv$(arms)));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTUnion& unn) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override {
         return makeCopyClone(sp, opts, p, type, this->getFieldBounds(unn));
     }
 
 private:
-    ASTImpl makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> fieldBounds) const {
+    ASTImpl makeCopyClone(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> fieldBounds) const {
         // Clone on a union can only be a bitwise copy.
         // - This requires a Copy impl. That's up to the user
         auto ret = this->makeRet(sp, opts.coreName, p, type, ::std::move(fieldBounds), NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(rcstringSelfLower))));
@@ -1680,7 +1680,7 @@ class DeriverCopy: public Deriver {
         return getPath(coreName, "marker", "Copy");
     }
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
         const ASTPath traitPath = this->getTraitPath(coreName);
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -1694,15 +1694,15 @@ public:
         return "Copy";
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), nullptr);
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), nullptr);
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTUnion& unn) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTUnion& unn) const override {
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(unn), nullptr);
     }
 } gDeriveCopy;
@@ -1713,10 +1713,10 @@ class DeriverDefault: public Deriver {
     }
 
     ASTPath getMethodPath(stl::ObjPool& pool, const RcString& coreName) const {
-        return ASTPath::newUfcsTrait(::mktype(pool, Span()), getTraitPath(coreName), {ASTPathNode(RcString::newInterned("default"), {})});
+        return ASTPath::newUfcsTrait(::mkType(pool, Span()), getTraitPath(coreName), {ASTPathNode(RcString::newInterned("default"), {})});
     }
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
         const ASTPath traitPath = this->getTraitPath(coreName);
 
         ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), {});
@@ -1738,7 +1738,7 @@ public:
         return "Default";
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         const ASTPath& tyPath = *type->mData.as_Path();
         ASTExprNodeP node;
 
@@ -1774,7 +1774,7 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, mv$(node)));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         // 1.74: #[default]
         const ASTEnumVariant* defaultVar = nullptr;
         for (const auto& v : enm.variants()) {
@@ -1791,7 +1791,7 @@ public:
 
         ASTPath varPath = *type->mData.as_Path() + ASTPathNode(defaultVar->mName);
 
-        ::std::vector<TypeRef> boundTys;
+        ::std::vector<ASTType*> boundTys;
         ASTExprNodeP node;
         TU_MATCH_HDRA( (defaultVar->mData), { )
         TU_ARMA(Unit, e) {
@@ -1834,12 +1834,12 @@ class DeriverHash: public Deriver {
         return getTraitPath(coreName) + RcString::newInterned("hash");
     }
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
         const ASTPath traitPath = this->getTraitPath(coreName);
 
-        ASTFunction fcn(sp, mktype(*type->pool, TypeRefTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringState), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), true, mktype(*type->pool, sp, rcstringH, 0x100 | 0)))));
+        ASTFunction fcn(sp, mkType(*type->pool, ASTTypeTags::Unit(), sp), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringState), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, rcstringH, 0x100 | 0)))));
         fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, rcstringH));
-        fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mktype(*type->pool, sp, rcstringH, 0x100 | 0), {}, this->getTraitPathHasher(coreName)}));
+        fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, rcstringH, 0x100 | 0), {}, this->getTraitPathHasher(coreName)}));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -1870,7 +1870,7 @@ public:
         return "Hash";
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         auto block = newBlock(sp);
 
         TU_MATCH_HDRA( (str.mData), {)
@@ -1891,7 +1891,7 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mkExprnodep(block.release()));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         ASTPath basePath = *type->mData.as_Path();
         basePath.nodes().back().args() = ASTPathParams();
         ::std::vector<ASTExprNodeMatchArm> arms;
@@ -1953,16 +1953,16 @@ class DeriverRustcEncodable: public Deriver {
         return getTraitPath() + "encode";
     }
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
         const ASTPath traitPath = this->getTraitPath();
 
         ASTPath resultPath = getPath(coreName, "result", "Result");
-        resultPath.nodes()[1].args().entries.push_back(mktype(*type->pool, TypeRefTags::Unit(), sp));
-        resultPath.nodes()[1].args().entries.push_back(mktype(*type->pool, sp, ASTPath::newUfcsTrait(mktype(*type->pool, sp, "S", 0x100 | 0), this->getTraitPathEncoder(), {ASTPathNode("Error", {})})));
+        resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, ASTTypeTags::Unit(), sp));
+        resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, sp, ASTPath::newUfcsTrait(mkType(*type->pool, sp, "S", 0x100 | 0), this->getTraitPathEncoder(), {ASTPathNode("Error", {})})));
 
-        ASTFunction fcn(sp, mktype(*type->pool, sp, mv$(resultPath)), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), true, mktype(*type->pool, sp, RcString::newInterned("S"), 0x100 | 0)))));
+        ASTFunction fcn(sp, mkType(*type->pool, sp, mv$(resultPath)), vec$(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), false, mktypeSelf(*type->pool, sp))), ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, RcString::newInterned("S"), 0x100 | 0)))));
         fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, "S"));
-        fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mktype(*type->pool, sp, "S", 0x100 | 0), {}, this->getTraitPathEncoder()}));
+        fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, "S", 0x100 | 0), {}, this->getTraitPathEncoder()}));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -1989,7 +1989,7 @@ class DeriverRustcEncodable: public Deriver {
     }
 
     ASTExprNodeP encClosure(stl::ObjPool& pool, Span sp, ASTExprNodeP code) const {
-        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, rcstringS), ::mktype(pool, sp))), ::mktype(pool, sp), mv$(code), false, false);
+        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, rcstringS), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false);
     }
 
     ASTExprNodeP getValOk(const RcString& coreName) const {
@@ -2001,7 +2001,7 @@ public:
         return "RustcEncodable";
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         ::std::string structName = type->mData.as_Path()->nodes().back().name().c_str();
 
         auto block = newBlock(sp);
@@ -2041,7 +2041,7 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         ASTPath basePath = *type->mData.as_Path();
         basePath.nodes().back().args() = ASTPathParams();
         ::std::vector<ASTExprNodeMatchArm> arms;
@@ -2115,23 +2115,23 @@ class DeriverRustcDecodable: public Deriver {
         return getTraitPath() + "decode";
     }
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound, ASTExprNodeP node) const {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
         const ASTPath traitPath = this->getTraitPath();
 
         ASTPath resultPath = getPath(coreName, "result", "Result");
         resultPath.nodes()[1].args().entries.push_back(mktypeSelf(*type->pool, sp));
-        resultPath.nodes()[1].args().entries.push_back(mktype(*type->pool, sp, ASTPath::newUfcsTrait(mktype(*type->pool, sp, "D", 0x100 | 0), this->getTraitPathDecoder(), {ASTPathNode("Error", {})})));
+        resultPath.nodes()[1].args().entries.push_back(mkType(*type->pool, sp, ASTPath::newUfcsTrait(mkType(*type->pool, sp, "D", 0x100 | 0), this->getTraitPathDecoder(), {ASTPathNode("Error", {})})));
 
         ASTFunction fcn(
             sp,
-            mktype(*type->pool, sp, resultPath),
+            mkType(*type->pool, sp, resultPath),
             vec$(
-                //AST::Function::Arg( AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), mktype(*type->pool, TypeRefTags::Reference(), sp, false, AST::LifetimeRef(), mktype_Self(sp)) ),
-                ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, "d"), mktype(*type->pool, TypeRefTags::Reference(), sp, ASTLifetimeRef(), true, mktype(*type->pool, sp, "D", 0x100 | 0)))
+                //AST::Function::Arg( AST::Pattern(AST::Pattern::TagBind(), sp, rcstring_self), mkType(*type->pool, ASTTypeTags::Reference(), sp, false, AST::LifetimeRef(), mktype_Self(sp)) ),
+                ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, "d"), mkType(*type->pool, ASTTypeTags::Reference(), sp, ASTLifetimeRef(), true, mkType(*type->pool, sp, "D", 0x100 | 0)))
             )
         );
         fcn.params().addTyParam(ASTTypeParam(*type->pool, sp, {}, "D"));
-        fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mktype(*type->pool, sp, "D", 0x100 | 0), {}, this->getTraitPathDecoder()}));
+        fcn.params().addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, "D", 0x100 | 0), {}, this->getTraitPathDecoder()}));
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
@@ -2150,7 +2150,7 @@ class DeriverRustcDecodable: public Deriver {
     }
 
     ASTExprNodeP decClosure(stl::ObjPool& pool, Span sp, ASTExprNodeP code) const {
-        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mktype(pool, sp))), ::mktype(pool, sp), mv$(code), false, false);
+        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false);
     }
 
     ASTExprNodeP getValErrStr(const RcString& coreName, ::std::string errStr) const {
@@ -2170,7 +2170,7 @@ public:
         return "RustcDecodable";
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         ASTPath basePath = *type->mData.as_Path();
         ::std::string structName = basePath.nodes().back().name().c_str();
 
@@ -2220,7 +2220,7 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mv$(node));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         ASTPath basePath = *type->mData.as_Path();
         basePath.nodes().back().args() = ASTPathParams();
         ::std::vector<ASTExprNodeMatchArm> arms;
@@ -2275,7 +2275,7 @@ public:
         }
 
         auto nodeMatch = NEWNODE(Match, NEWNODE(NamedValue, ASTPath("idx")), mv$(arms));
-        auto nodeVarClosure = NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mktype(*type->pool, sp)), ::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "idx"), ::mktype(*type->pool, sp))), ::mktype(*type->pool, sp), mv$(nodeMatch), false, false);
+        auto nodeVarClosure = NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(*type->pool, sp)), ::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "idx"), ::mkType(*type->pool, sp))), ::mkType(*type->pool, sp), mv$(nodeMatch), false, false);
         ::std::string enumName = type->mData.as_Path()->nodes().back().name().c_str();
 
         auto nodeRev = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Array, mv$(varNameStrs))), mv$(nodeVarClosure)));
@@ -2287,7 +2287,7 @@ public:
 } gDeriveRustcDecodable;
 
 class DeriverConstParamTy: public Deriver {
-    ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, ::std::vector<TypeRef> typesToBound) const {
+    ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound) const {
         const ASTPath traitPath = getPath(opts.coreName, "marker", "StructuralPartialEq");
         ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
         ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
@@ -2299,11 +2299,11 @@ public:
         return "ConstParamTy";
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTStruct& str) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         return handleGeneric(sp, opts, p, type, this->getFieldBounds(str));
     }
 
-    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, const TypeRef& type, const ASTEnum& enm) const override {
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         return handleGeneric(sp, opts, p, type, this->getFieldBounds(enm));
     }
 } gDeriveConstParamTy;
@@ -2368,12 +2368,12 @@ namespace {
         return rv;
     }
 
-    TypeRef makeType(stl::ObjPool& pool, const Span& sp, const ASTAbsolutePath& path, const ASTGenericParams& params) {
-        TypeRef type = mktype(pool, sp, path);
+    ASTType* makeType(stl::ObjPool& pool, const Span& sp, const ASTAbsolutePath& path, const ASTGenericParams& params) {
+        ASTType* type = mkType(pool, sp, path);
         auto& typesArgs = type->path().nodes().back().args();
         for (const auto& param : params.mParams) {
             if (const auto* pe = param.opt_Type()) {
-                typesArgs.entries.push_back(mktype(pool, TypeRefTags::Arg(), sp, pe->name()));
+                typesArgs.entries.push_back(mkType(pool, ASTTypeTags::Arg(), sp, pe->name()));
             }
             if (const auto* pe = param.opt_Value()) {
                 auto p = ASTPath(pe->name().name);

@@ -1165,7 +1165,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
     for (size_t i = 0; i < implParamsDef.types.size(); i++) {
         if (implParamsDef.types.at(i).isSized) {
             // An unresolved parameter has no known sizedness yet.  It used to be
-            // represented by a default-constructed TypeRef; the interned type
+            // represented by a default-constructed ASTType*; the interned type
             // model represents that state explicitly as Infer.
             if (!implParams.types[i]->is_Infer()) {
                 if (!typeIsSized(sp, implParams.types[i])) {
@@ -2705,7 +2705,7 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
                     // relation used for trait-object coercions.  In
                     // particular, closure output inference can retain an
                     // omitted region while the HRTB destination has already
-                    // rebound it.  TypeRef equality is deliberately pointer
+                    // rebound it.  ASTType* equality is deliberately pointer
                     // identity, so use the explicit region-erasing relation
                     // here.
                     if (aty.second.type != atyv && !aty.second.type->equalsIgnoringRegions(atyv)) {

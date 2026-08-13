@@ -12,11 +12,11 @@ ASTTypeParam::ASTTypeParam(stl::ObjPool& pool, Span sp, ASTAttributeList attrs, 
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name))
-    , mDefaultValue(mktype(pool, mSpan))
+    , mDefaultValue(mkType(pool, mSpan))
 {
 }
 
-void ASTTypeParam::setDefault(TypeRef type) {
+void ASTTypeParam::setDefault(ASTType* type) {
     assert(mDefaultValue->isWildcard());
     mDefaultValue = ::std::move(type);
 }
@@ -28,7 +28,7 @@ ASTLifetimeParam::ASTLifetimeParam(Span sp, ASTAttributeList attrs, Ident name)
 {
 }
 
-ASTValueParam::ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, TypeRef type, ASTExpr val)
+ASTValueParam::ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* type, ASTExpr val)
     : mAttrs(::std::move(attrs))
     , mSpan(::std::move(sp))
     , mName(::std::move(name))

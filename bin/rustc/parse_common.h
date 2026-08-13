@@ -42,7 +42,7 @@ extern ASTAttributeList ParseItemAttrs(TokenStream& lex);
 extern void ParseParentAttrs(TokenStream& lex, ASTAttributeList& out);
 extern ASTAttribute ParseMetaItem(TokenStream& lex);
 extern ASTMacroInvocation ParseMacroInvocation(ProtoSpan ps, ASTPath path, TokenStream& lex);
-extern TypeRef ParseType(TokenStream& lex, bool allowTraitList = true);
+extern ASTType* ParseType(TokenStream& lex, bool allowTraitList = true);
 enum class AllowOrPattern {
     No,
     Yes,

@@ -290,7 +290,7 @@ TAGGED_UNION_EX(
             HIRTypeData cloneData() const;
             void fmt(::std::ostream& os) const;
 
-            // Deliberately semantic relations. Plain TypeRef equality is pointer identity.
+            // Deliberately semantic relations. Plain ASTType* equality is pointer identity.
             bool equalsIgnoringRegions(HIRTypeRef x) const;
             Ordering ordIgnoringRegions(HIRTypeRef x) const;
             bool matchTestGenerics(const Span& sp, HIRTypeRef x, tCbResolveType resolvePlaceholder, HIRMatchGenerics& callback) const;

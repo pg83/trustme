@@ -66,7 +66,7 @@ struct AST2HIR {
     HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
     HIRTraitPath LowerHIRTraitPath(const Span& sp, const ASTPath& path, const ASTHigherRankedBounds& hrbs, bool ignoreBounds = false, ASTBoundConstness constness = ASTBoundConstness::Never);
     HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc);
-    HIRTypeRef LowerHIRType(const ::TypeRef& ty);
+    HIRTypeRef LowerHIRType(::ASTType* ty);
     HIRTypeAlias LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta);
     tStructFields LowerHIRStructFields(HIRItemPath path, const HIRGenericParams& params, const ::std::vector<ASTStructItem>& inFields, HIRModule& outMod);
     HIRStruct LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStruct& ent, const ASTAttributeList& attrs, HIRModule& outMod);
@@ -933,7 +933,7 @@ namespace {
     };
 }
 
-HIRTypeRef AST2HIR::LowerHIRType(const ::TypeRef& ty) {
+HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
     TU_MATCH_HDRA( (ty->mData), {)
     TU_ARMA(None, e) {
             BUG(ty->span(), "TypeData::None");
@@ -1054,7 +1054,7 @@ HIRTypeRef AST2HIR::LowerHIRType(const ::TypeRef& ty) {
                 }
                 return mCrate->types.generic(l->name, slot);
             } else if (e->mBindings.type.path.crate == CRATE_BUILTINS) {
-                return LowerHIRType(mktype(*ty->pool, ty->span(), coretypeFromstring(e->mBindings.type.path.nodes.back().c_str())));
+                return LowerHIRType(mkType(*ty->pool, ty->span(), coretypeFromstring(e->mBindings.type.path.nodes.back().c_str())));
             } else {
                 return mCrate->types.path(LowerHIRPath(ty->span(), *e, FromASTPathClass::Type), {});
             }
@@ -2585,7 +2585,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
                                 emitFromString(ss.str());
                             }
 
-                            void emitType(::TypeRef& ty) {
+                            void emitType(::ASTType*& ty) {
                                 TU_MATCH_HDRA( (ty->mData), { )
                                 default:
                                     TODO(Span(), "Convert interpolated macro fragment: " << ty);
@@ -3549,7 +3549,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 }
             }
         }
-        auto ty = mCtx.LowerHIRType(::mktype(*mCtx.mCrate->pool, v.span(), v.mPath));
+        auto ty = mCtx.LowerHIRType(::mkType(*mCtx.mCrate->pool, v.span(), v.mPath));
         if (v.mPath.mBindings.type.binding.is_EnumVar()) {
             ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.mData.is_Generic()), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();
@@ -3572,7 +3572,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         for (auto& val : v.values) {
             values.push_back(::std::make_pair(val.name, lower(val.value)));
         }
-        auto ty = mCtx.LowerHIRType(::mktype(*mCtx.mCrate->pool, v.span(), v.mPath));
+        auto ty = mCtx.LowerHIRType(::mkType(*mCtx.mCrate->pool, v.span(), v.mPath));
         if (v.mPath.mBindings.type.binding.is_EnumVar()) {
             ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.mData.is_Generic()), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();

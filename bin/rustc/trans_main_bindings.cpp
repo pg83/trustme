@@ -1257,7 +1257,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
 namespace {
     // Translation paths are assembled after inference and monomorphisation.
     // A nominal type can therefore arrive through an older, structurally
-    // equivalent TypeRef whose path binding is still Unbound.  rustc's Ty
+    // equivalent ASTType* whose path binding is still Unbound.  rustc's Ty
     // carries the ADT DefId as part of the nominal type and cannot represent
     // that state.  Restore the equivalent invariant at the translation
     // boundary instead of teaching codegen to accept missing metadata.
@@ -2594,7 +2594,7 @@ void TransEnumerateTypes(EnumState& state) {
             }
 
             if (const auto* ity = tv.mResolve.isTypeOwnedBox(ty)) {
-                // NOTE: Save the params before visiting, as the TypeRef might move as types are added, but the inner data won't move
+                // NOTE: Save the params before visiting, as the ASTType* might move as types are added, but the inner data won't move
                 const auto& p = ty->as_Path().path.mData.as_Generic().mParams;
                 tv.visitType(ity);
             }

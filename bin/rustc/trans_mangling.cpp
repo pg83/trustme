@@ -153,7 +153,7 @@ public:
         }
     }
 
-    // PathParams : <ntys> 'g' [<TypeRef> ...]
+    // PathParams : <ntys> 'g' [<ASTType*> ...]
     void fmtPathParams(const HIRPathParams& pp) {
         // Type Parameter count
         os << pp.types.size();
@@ -218,15 +218,15 @@ public:
     }
 
     // Type
-    // - Tuple: 'T' <nelem> [<TypeRef> ...]
-    // - Slice: 'S' <TypeRef>
-    // - Array: 'A' <size> <TypeRef>
+    // - Tuple: 'T' <nelem> [<ASTType*> ...]
+    // - Slice: 'S' <ASTType*>
+    // - Array: 'A' <size> <ASTType*>
     // - Path: 'N' <Path>
-    // - TraitObject: 'D' <data:GenericPath> <nmarker> [markers: <GenericPath> ...] <naty> [<TypeRef> ...]    TODO: Does this need to include the ATY name?
-    // - Borrow: 'B' ('s'|'u'|'o') <TypeRef>
-    // - RawPointer: 'P' ('s'|'u'|'o') <TypeRef>
+    // - TraitObject: 'D' <data:GenericPath> <nmarker> [markers: <GenericPath> ...] <naty> [<ASTType*> ...]    TODO: Does this need to include the ATY name?
+    // - Borrow: 'B' ('s'|'u'|'o') <ASTType*>
+    // - RawPointer: 'P' ('s'|'u'|'o') <ASTType*>
     // - Named Function: 'f' <Path>
-    // - Function: 'F' (|'u') (| 'e' <abi:RcString>) <nargs> [args: <TypeRef> ...] <ret:TypeRef>
+    // - Function: 'F' (|'u') (| 'e' <abi:RcString>) <nargs> [args: <ASTType*> ...] <ret:ASTType*>
     // - Primitives::
     //   - u8  : 'C' 'a'
     //   - i8  : 'C' 'b'
@@ -273,7 +273,7 @@ public:
                 this->fmtPath(e.path);
             }
             TU_ARMA(TraitObject, e) {
-                // - TraitObject: 'D' <data:GenericPath> <naty> [<TypeRef> ...] <nmarker> [markers: <GenericPath> ...]
+                // - TraitObject: 'D' <data:GenericPath> <naty> [<ASTType*> ...] <nmarker> [markers: <GenericPath> ...]
                 os << "D";
                 this->fmtGenericPath(e.mTrait.mPath);
                 os << e.mTrait.typeBounds.size();
@@ -292,7 +292,7 @@ public:
                 this->fmtPath(e.path);
             }
             TU_ARMA(Function, e) {
-                // - Function: 'F' <abi:RcString> <nargs> [args: <TypeRef> ...] <ret:TypeRef>
+                // - Function: 'F' <abi:RcString> <nargs> [args: <ASTType*> ...] <ret:ASTType*>
                 os << "F";
                 os << (e.isUnsafe ? "u" : ""); // Optional allowed, next is a number
                 if (e.mAbi != ABI_RUST) {

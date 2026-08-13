@@ -254,7 +254,7 @@ ASTStatic ASTStatic::clone() const {
     return ASTStatic(cls, mType->clone(), mValue.isValid() ? ASTExpr(mValue.node().clone()) : ASTExpr());
 }
 
-ASTFunction::ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, TypeRef retType, Arglist args, bool isVariadic)
+ASTFunction::ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic)
     : mSpan(sp)
     , mParams(mv$(params))
     , mRettype(mv$(retType))
@@ -278,7 +278,7 @@ ASTFunction ASTFunction::clone() const {
     return rv;
 }
 
-void ASTTrait::addType(Span sp, RcString name, ASTAttributeList attrs, TypeRef type) {
+void ASTTrait::addType(Span sp, RcString name, ASTAttributeList attrs, ASTType* type) {
     mItems.push_back(ASTNamed<ASTItem>(sp, mv$(attrs), ASTVisibility::makeGlobal(), mv$(name), ASTItem::make_Type({ASTTypeAlias(ASTGenericParams(), mv$(type))})));
 }
 
@@ -348,7 +348,7 @@ void ASTImpl::addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bo
     mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(ASTItem::make_Function(mv$(fcn)))});
 }
 
-void ASTImpl::addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, TypeRef type) {
+void ASTImpl::addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, ASTType* type) {
     mItems.push_back(ImplItem{sp, mv$(attrs), mv$(vis), isSpecialisable, mv$(name), box$(ASTItem::make_Type(ASTTypeAlias(mv$(params), mv$(type))))});
 }
 
@@ -605,7 +605,7 @@ ASTAttributeList::ASTAttributeList(const ASTAttributeList&) = default;
 
 //StructItem() {}
 
-ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, TypeRef ty, ASTExpr defaultValue)
+ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue)
     : mAttrs(mv$(attrs))
     , vis(mv$(vis))
     , mName(mv$(name))
@@ -616,7 +616,7 @@ ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString
 
 //TupleItem() {}
 
-ASTTupleItem::ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, TypeRef ty)
+ASTTupleItem::ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, ASTType* ty)
     : mAttrs(mv$(attrs))
     , vis(mv$(vis))
     , mType(mv$(ty))
@@ -624,13 +624,13 @@ ASTTupleItem::ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, TypeRef ty
 }
 
 //TypeAlias() {}
-ASTTypeAlias::ASTTypeAlias(ASTGenericParams params, TypeRef type)
+ASTTypeAlias::ASTTypeAlias(ASTGenericParams params, ASTType* type)
     : mParams(std::move(params))
     , mType(std::move(type))
 {
 }
 
-ASTTypeAlias ASTTypeAlias::newAssociatedType(ASTGenericParams params, ASTGenericParams typeBounds, TypeRef defaultType) {
+ASTTypeAlias ASTTypeAlias::newAssociatedType(ASTGenericParams params, ASTGenericParams typeBounds, ASTType* defaultType) {
     ASTTypeAlias rv{std::move(params), std::move(defaultType)};
     rv.selfBounds = std::move(typeBounds);
     return rv;
@@ -644,14 +644,14 @@ ASTTraitAlias ASTTraitAlias::clone() const {
     return rv;
 }
 
-ASTStatic::ASTStatic(Class sClass, TypeRef type, ASTExpr value)
+ASTStatic::ASTStatic(Class sClass, ASTType* type, ASTExpr value)
     : cls(sClass)
     , mType(std::move(type))
     , mValue(std::move(value))
 {
 }
 
-ASTFunction::Arg::Arg(ASTPattern pat, TypeRef ty, ASTAttributeList attrs)
+ASTFunction::Arg::Arg(ASTPattern pat, ASTType* ty, ASTAttributeList attrs)
     : attrs(mv$(attrs))
     , pat(mv$(pat))
     , ty(mv$(ty))
@@ -684,7 +684,7 @@ ASTFunction::Flags ASTFunction::Flags::setAsync() const {
 }
 
 // Helper for derive, defines an ABI_RUST function with no generics
-ASTFunction::ASTFunction(Span sp, TypeRef retType, Arglist args)
+ASTFunction::ASTFunction(Span sp, ASTType* retType, Arglist args)
     : ASTFunction(sp, ABI_RUST, Flags(), ASTGenericParams(), std::move(retType), std::move(args), false)
 {
 }
@@ -752,7 +752,7 @@ ASTUnion::ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields)
 {
 }
 
-ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, TypeRef implType)
+ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTType* implType)
     : mIsUnsafe(false)
     , mIsConst(false)
     , mParams(mv$(params))

@@ -18,7 +18,7 @@ InterpolatedFragment::~InterpolatedFragment() {
                 delete reinterpret_cast<ASTPath*>(ptr);
                 break;
             case InterpolatedFragment::TYPE:
-                delete reinterpret_cast<TypeRef*>(ptr);
+                delete reinterpret_cast<ASTType**>(ptr);
                 break;
             case InterpolatedFragment::EXPR:
             case InterpolatedFragment::STMT:
@@ -94,9 +94,9 @@ InterpolatedFragment::InterpolatedFragment(ASTPattern v)
 {
 }
 
-InterpolatedFragment::InterpolatedFragment(TypeRef v)
+InterpolatedFragment::InterpolatedFragment(ASTType* v)
     : mType(InterpolatedFragment::TYPE)
-    , ptr(new TypeRef(mv$(v)))
+    , ptr(new ASTType*(mv$(v)))
 {
 }
 
@@ -118,7 +118,7 @@ InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
             os << "path[" << *reinterpret_cast<ASTPath*>(x.ptr) << "]";
             break;
         case InterpolatedFragment::TYPE:
-            os << "type[" << *reinterpret_cast<TypeRef*>(x.ptr) << "]";
+            os << "type[" << *reinterpret_cast<ASTType**>(x.ptr) << "]";
             break;
 
         case InterpolatedFragment::EXPR:

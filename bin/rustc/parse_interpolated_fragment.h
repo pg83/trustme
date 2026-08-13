@@ -3,8 +3,7 @@
 #include <iosfwd>
 #include <cassert>
 
-struct TypeStore;
-typedef TypeStore* TypeRef;
+struct ASTType;
 class TokenTree;
 struct Ident;
 
@@ -44,7 +43,7 @@ public:
     InterpolatedFragment(TokenTree);
     InterpolatedFragment(ASTPattern);
     InterpolatedFragment(ASTPath);
-    InterpolatedFragment(::TypeRef);
+    InterpolatedFragment(::ASTType*);
     InterpolatedFragment(ASTAttribute);
     InterpolatedFragment(ASTNamed<ASTItem>);
     InterpolatedFragment(Type, ASTNamed<ASTItem>);

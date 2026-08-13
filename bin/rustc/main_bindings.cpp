@@ -53,7 +53,7 @@ void ExpandTestHarness(ASTCrate& crate) {
     // ```
 
     // ---- main function ----
-    auto mainFn = ASTFunction{Span(), mktype(*crate.pool, TypeRefTags::Unit(), Span()), {}};
+    auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
     {
         auto callNode = NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("test_main_static")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("test#"), ASTPathNode("TESTS")})))));
         mainFn.setCode(mv$(callNode));
@@ -108,7 +108,7 @@ void ExpandTestHarness(ASTCrate& crate) {
         {
             // Convert `fn()` into `fn()->Result<(),String>`
             // Use `|| ::test::assert_test_result( fcn() )`
-            testFcnNode = NEWNODE(Closure, {}, mktype(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false);
+            testFcnNode = NEWNODE(Closure, {}, mkType(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false);
         }
         auto testTypeVarName = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
         descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});
@@ -122,12 +122,12 @@ void ExpandTestHarness(ASTCrate& crate) {
     auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
 
     size_t testCount = testsArray->values.size();
-    auto listItemTy = mktype(*crate.pool, Span(), ASTPath(cTest, {ASTPathNode("TestDescAndFn")}));
+    auto listItemTy = mkType(*crate.pool, Span(), ASTPath(cTest, {ASTPathNode("TestDescAndFn")}));
     // NOTE: 1.39+ needs &TestDescAndFn here
     {
-        listItemTy = mktype(*crate.pool, TypeRefTags::Reference(), Span(), ASTLifetimeRef::newStatic(), false, mv$(listItemTy));
+        listItemTy = mkType(*crate.pool, ASTTypeTags::Reference(), Span(), ASTLifetimeRef::newStatic(), false, mv$(listItemTy));
     }
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mktype(*crate.pool, TypeRefTags::SizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mv$(listItemTy), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
 
     // ---- module ----
     auto newmod = ASTModule{ASTAbsolutePath("", {"test#"})};

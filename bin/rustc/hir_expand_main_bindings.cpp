@@ -3053,7 +3053,7 @@ namespace {
                 this->visitType(e.inner);
                 DEBUG("Array size " << ty);
                 if (e.size.is_Unevaluated()) {
-                    //::std::vector< ::HIR::TypeRef>  tmp;
+                    //::std::vector< ::HIR::ASTType*>  tmp;
                 }
                 ty = mResolve.crate.types.intern(std::move(data));
             } else {
@@ -3106,7 +3106,7 @@ namespace {
 
         void visitConstant(HIRItemPath p, HIRConstant& item) override {
             if (item.mValue) {
-                //::std::vector< ::HIR::TypeRef>  tmp;
+                //::std::vector< ::HIR::ASTType*>  tmp;
             }
         }
 

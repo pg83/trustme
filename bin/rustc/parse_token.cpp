@@ -10,7 +10,7 @@
 Token::~Token() {
     switch (mType) {
         case TOK_INTERPOLATED_TYPE:
-            delete reinterpret_cast<TypeRef*>(mData.as_Fragment());
+            delete reinterpret_cast<ASTType**>(mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATTERN:
             delete reinterpret_cast<ASTPattern*>(mData.as_Fragment());
@@ -97,7 +97,7 @@ Token::Token(const InterpolatedFragment& frag) {
             break;
         case InterpolatedFragment::TYPE:
             mType = TOK_INTERPOLATED_TYPE;
-            mData = new TypeRef((*reinterpret_cast<const TypeRef*>(frag.ptr))->clone());
+            mData = new ASTType*((*reinterpret_cast<ASTType* const*>(frag.ptr))->clone());
             break;
         case InterpolatedFragment::PAT:
             mType = TOK_INTERPOLATED_PATTERN;
@@ -225,7 +225,7 @@ Token Token::clone() const {
     assert(mData.tag() != Data::TAGDEAD);
     TU_MATCH(Data, (mData), (e), (None, ), (Ident, rv.mData = Data::make_Ident(e);), (String, rv.mData = Data::make_String(e);), (Integer, rv.mData = Data::make_Integer(e);), (Float, rv.mData = Data::make_Float(e);), (Fragment, assert(e); switch (mType) {
                  case TOK_INTERPOLATED_TYPE:
-                     rv.mData = new TypeRef((*reinterpret_cast<TypeRef*>(e))->clone());
+                     rv.mData = new ASTType*((*reinterpret_cast<ASTType**>(e))->clone());
                      break;
                  case TOK_INTERPOLATED_PATTERN:
                      rv.mData = new ASTPattern(reinterpret_cast<ASTPattern*>(e)->clone());
@@ -370,7 +370,7 @@ struct EscapedString {
         case TOK_COMMENT:
             return "/*" + mData.as_String() + "*/";
         case TOK_INTERPOLATED_TYPE:
-            (*reinterpret_cast<const ::TypeRef*>(mData.as_Fragment()))->print(ss, false);
+            (*reinterpret_cast<const ::ASTType**>(mData.as_Fragment()))->print(ss, false);
             return ss.str();
         case TOK_INTERPOLATED_PATH:
             reinterpret_cast<const ASTPath*>(mData.as_Fragment())->printPretty(ss, true);
@@ -703,7 +703,7 @@ struct EscapedString {
             }
             break;
         case TOK_INTERPOLATED_TYPE:
-            os << ":" << *reinterpret_cast<TypeRef*>(tok.mData.as_Fragment());
+            os << ":" << *reinterpret_cast<ASTType**>(tok.mData.as_Fragment());
             break;
         case TOK_INTERPOLATED_PATTERN:
             os << ":" << *reinterpret_cast<ASTPattern*>(tok.mData.as_Fragment());
@@ -798,9 +798,9 @@ Token& Token::operator=(const Token& t) {
 }
 
 // TODO: Replace these with a way of getting a InterpolatedFragment&
-TypeRef& Token::fragType() {
+ASTType*& Token::fragType() {
     assert(mType == TOK_INTERPOLATED_TYPE);
-    return *reinterpret_cast<TypeRef*>(mData.as_Fragment());
+    return *reinterpret_cast<ASTType**>(mData.as_Fragment());
 }
 
 ASTPath& Token::fragPath() {

@@ -1148,7 +1148,7 @@ ASTExprNodeFlow::ASTExprNodeFlow(Type type, Ident target, ASTExprNodeP value)
 {
 }
 
-ASTExprNodeLetBinding::ASTExprNodeLetBinding(ASTPattern pat, TypeRef type, ASTExprNodeP value, ASTExprNodeP elseArm, bool isSuper)
+ASTExprNodeLetBinding::ASTExprNodeLetBinding(ASTPattern pat, ASTType* type, ASTExprNodeP value, ASTExprNodeP elseArm, bool isSuper)
     : pat(::std::move(pat))
     , mType(::std::move(type))
     , mValue(::std::move(value))
@@ -1320,13 +1320,13 @@ ASTExprNodeDeref::ASTExprNodeDeref(ASTExprNodeP value)
 {
 }
 
-ASTExprNodeCast::ASTExprNodeCast(ASTExprNodeP value, TypeRef&& dstType)
+ASTExprNodeCast::ASTExprNodeCast(ASTExprNodeP value, ASTType*&& dstType)
     : mValue(::std::move(value))
     , mType(::std::move(dstType))
 {
 }
 
-ASTExprNodeTypeAnnotation::ASTExprNodeTypeAnnotation(ASTExprNodeP value, TypeRef&& dstType)
+ASTExprNodeTypeAnnotation::ASTExprNodeTypeAnnotation(ASTExprNodeP value, ASTType*&& dstType)
     : mValue(::std::move(value))
     , mType(::std::move(dstType))
 {

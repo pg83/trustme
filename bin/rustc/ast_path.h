@@ -321,7 +321,7 @@ public:
              ::std::vector<ASTPathNode> nodes;
          }),
         (UFCS, struct {                       // Type-relative
-            TypeRef type;  // always non-null
+            ASTType* type;  // always non-null
             ::std::unique_ptr<ASTPath> trait; // nullptr = inherent, Invalid = unknown trait
             ::std::vector<ASTPathNode> nodes;
         })
@@ -380,8 +380,8 @@ public:
     }
 
     // UFCS
-    static ASTPath newUfcsTy(TypeRef type, ::std::vector<ASTPathNode> nodes = {});
-    static ASTPath newUfcsTrait(TypeRef type, ASTPath trait, ::std::vector<ASTPathNode> nodes = {});
+    static ASTPath newUfcsTy(ASTType* type, ::std::vector<ASTPathNode> nodes = {});
+    static ASTPath newUfcsTrait(ASTType* type, ASTPath trait, ::std::vector<ASTPathNode> nodes = {});
 
     // VARIABLE
     static ASTPath newLocal(RcString name) {
@@ -463,7 +463,7 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTPath& path);
 
 private:
-    static void resolveArgsNl(::std::vector<ASTPathNode>& nodes, ::std::function<TypeRef(const char*)> fcn);
+    static void resolveArgsNl(::std::vector<ASTPathNode>& nodes, ::std::function<ASTType*(const char*)> fcn);
 
     void checkParamCounts(const ASTGenericParams& params, bool expectParams, ASTPathNode& node);
 
@@ -471,4 +471,4 @@ public:
     //}
 };
 
-TAGGED_UNION_EX(ASTPathParamEnt, (), Null, ((Null, struct {}), (Lifetime, ASTLifetimeRef), (Type, TypeRef), (Value, ASTExprNodeP), (AssociatedTyEqual, ::std::pair<ASTPathNode, TypeRef>), (AssociatedTyBound, ::std::pair<ASTPathNode, std::vector<ASTPath>>)), (), (), (public : ASTPathParamEnt clone() const; Ordering ord(const ASTPathParamEnt& x) const; void fmt(::std::ostream& os) const;));
+TAGGED_UNION_EX(ASTPathParamEnt, (), Null, ((Null, struct {}), (Lifetime, ASTLifetimeRef), (Type, ASTType*), (Value, ASTExprNodeP), (AssociatedTyEqual, ::std::pair<ASTPathNode, ASTType*>), (AssociatedTyBound, ::std::pair<ASTPathNode, std::vector<ASTPath>>)), (), (), (public : ASTPathParamEnt clone() const; Ordering ord(const ASTPathParamEnt& x) const; void fmt(::std::ostream& os) const;));

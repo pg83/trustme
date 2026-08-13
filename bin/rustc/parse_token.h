@@ -32,8 +32,7 @@ public:
 
 extern ::std::ostream& operator<<(::std::ostream& os, const Position& p);
 
-struct TypeStore;
-typedef TypeStore* TypeRef;
+struct ASTType;
 class TokenTree;
 
 class ASTVisibility;
@@ -140,7 +139,7 @@ public:
     }
 
     // TODO: Replace these with a way of getting a InterpolatedFragment&
-    TypeRef& fragType();
+    ASTType*& fragType();
 
     ASTPath& fragPath();
 

@@ -228,11 +228,11 @@ typename ::std::vector<ASTNamed<T>>::const_iterator findNamed(const ::std::vecto
 ASTPath::~ASTPath() {
 }
 
-ASTPath ASTPath::newUfcsTy(TypeRef type, ::std::vector<ASTPathNode> nodes) {
+ASTPath ASTPath::newUfcsTy(ASTType* type, ::std::vector<ASTPathNode> nodes) {
     return ASTPath(ASTPath::Class::make_UFCS({type, nullptr, nodes}));
 }
 
-ASTPath ASTPath::newUfcsTrait(TypeRef type, ASTPath trait, ::std::vector<ASTPathNode> nodes) {
+ASTPath ASTPath::newUfcsTrait(ASTType* type, ASTPath trait, ::std::vector<ASTPathNode> nodes) {
     return ASTPath(ASTPath::Class::make_UFCS({type, box$(trait), nodes}));
 }
 

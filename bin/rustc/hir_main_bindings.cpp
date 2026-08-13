@@ -1043,7 +1043,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
             _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>()})
 #undef _
         default:
-            BUG(Span(), "Bad tag for HIR::TypeRef - " << tag);
+            BUG(Span(), "Bad tag for HIR::ASTType* - " << tag);
     }
     types.push_back(rv);
     return rv;

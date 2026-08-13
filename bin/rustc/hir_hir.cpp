@@ -220,7 +220,7 @@ Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) co
         }
 
         // HACK: If the inner is a const param on both, sort based on that.
-        // - Very similar to the ordering of TypeRef::Generic
+        // - Very similar to the ordering of ASTType*::Generic
         const auto* tn = cast<const HIRExprNodeConstParam>(&**this->expr);
         const auto* xn = cast<const HIRExprNodeConstParam>(&**x.expr);
         if (tn && xn) {

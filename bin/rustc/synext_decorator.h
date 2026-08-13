@@ -8,8 +8,7 @@
 #include <memory>
 #include <string>
 
-struct TypeStore;
-typedef TypeStore* TypeRef;
+struct ASTType;
 
 class ASTCrate;
 struct WireBoard;

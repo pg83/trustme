@@ -28,7 +28,7 @@ public:
 
     virtual void emitTypeId(const HIRTypeData*);
 
-    // Called when a TypeRef::Path is encountered (after visiting inner types)
+    // Called when a ASTType*::Path is encountered (after visiting inner types)
     virtual void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) = 0;
     virtual void emitUnion(const Span& sp, const HIRGenericPath& p, const HIRUnion& item) = 0;
     virtual void emitEnum(const Span& sp, const HIRGenericPath& p, const HIREnum& item) = 0;

@@ -23,8 +23,7 @@ class ASTLifetimeParam;
 class ASTPath;
 struct ASTPathParams;
 class ASTMacroInvocation;
-struct TypeStore;
-typedef TypeStore* TypeRef;
+struct ASTType;
 
 enum class ASTBoundConstness : uint8_t {
     Never,
@@ -51,10 +50,10 @@ public:
 };
 
 class PrettyPrintType {
-    const TypeStore* mType;
+    const ASTType* mType;
 
 public:
-    PrettyPrintType(const TypeStore* ty);
+    PrettyPrintType(const ASTType* ty);
 
     void print(::std::ostream& os) const;
 
@@ -65,12 +64,12 @@ struct TypeFunction {
     ASTHigherRankedBounds hrbs;
     bool isUnsafe;
     ::std::string mAbi;
-    TypeRef mRettype;
-    ::std::vector<TypeRef> argTypes;
+    ASTType* mRettype;
+    ::std::vector<ASTType*> argTypes;
     bool isVariadic;
 
     TypeFunction();
-    TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, TypeRef ret, ::std::vector<TypeRef> args, bool isVariadic);
+    TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ASTType* ret, ::std::vector<ASTType*> args, bool isVariadic);
     ~TypeFunction();
     TypeFunction(TypeFunction&& other);
     TypeFunction(const TypeFunction& other);
@@ -102,8 +101,8 @@ struct TypeErasedType {
 };
 
 // The sum-type payload of a type. Now an ordinary inline tagged union: it holds
-// only pointers to `TypeStore`, so it no longer needs the out-of-line macro
-// stack. Node metadata (span, owning pool) lives on `TypeStore`.
+// only pointers to `ASTType`, so it no longer needs the out-of-line macro
+// stack. Node metadata (span, owning pool) lives on `ASTType`.
 TAGGED_UNION(
     TypeData,
     None,
@@ -114,25 +113,25 @@ TAGGED_UNION(
     (Macro, struct { ASTMacroInvocation* inv; }),
     (Primitive, struct { enum eCoreType coreType; }),
     (Function, struct { TypeFunction info; }),
-    (Tuple, struct { ::std::vector<TypeRef> innerTypes; }),
+    (Tuple, struct { ::std::vector<ASTType*> innerTypes; }),
     (Borrow,
      struct {
          ASTLifetimeRef lifetime;
          bool isMut;
-         TypeRef inner;
+         ASTType* inner;
      }),
     (Pointer,
      struct {
          bool isMut;
-         TypeRef inner;
+         ASTType* inner;
      }),
     (Array,
      struct {
-         TypeRef inner;
+         ASTType* inner;
          // If `nullptr` - this is an inferred size
          ::std::shared_ptr<ASTExprNode> size;
      }),
-    (Slice, struct { TypeRef inner; }),
+    (Slice, struct { ASTType* inner; }),
     (Generic,
      struct {
          RcString name;
@@ -146,8 +145,8 @@ TAGGED_UNION(
      }),
     (ErasedType, TypeErasedType*));
 
-// Tag markers for the type factories (mirror the old TypeRef constructors).
-namespace TypeRefTags {
+// Tag markers for the type factories (mirror the old ASTType* constructors).
+namespace ASTTypeTags {
     struct Invalid {};
     struct Macro {};
     struct Unit {};
@@ -160,16 +159,16 @@ namespace TypeRefTags {
     struct UnsizedArray {};
     struct Arg {};
     struct Path {};
-}  // namespace TypeRefTags
+}  // namespace ASTTypeTags
 
-/// A pool-allocated type node. `TypeRef` is a pointer to one of these; the node
+/// A pool-allocated type node. `ASTType*` is a pointer to one of these; the node
 /// records the pool it lives in so `clone()` is cheap and self-sufficient.
-struct TypeStore {
+struct ASTType {
     Span mSpan;
     TypeData mData;
     stl::ObjPool* pool = nullptr;
 
-    TypeStore(Span sp, TypeData data, stl::ObjPool* pool)
+    ASTType(Span sp, TypeData data, stl::ObjPool* pool)
         : mSpan(::std::move(sp))
         , mData(::std::move(data))
         , pool(pool) {
@@ -219,17 +218,17 @@ struct TypeStore {
         return mData.is_Tuple();
     }
 
-    TypeRef clone() const;
+    ASTType* clone() const;
 
-    TypeRef innerType() const {
+    ASTType* innerType() const {
         TU_MATCH_DEF(TypeData, (mData), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return e.inner;), (Pointer, return e.inner;), (Array, return e.inner;))
     }
 
-    Ordering ord(const TypeStore& x) const;
-    bool operator==(const TypeStore& x) const {
+    Ordering ord(const ASTType& x) const;
+    bool operator==(const ASTType& x) const {
         return ord(x) == OrdEqual;
     }
-    bool operator!=(const TypeStore& x) const {
+    bool operator!=(const ASTType& x) const {
         return ord(x) != OrdEqual;
     }
 
@@ -242,28 +241,28 @@ struct TypeStore {
 // Type factories - allocate a fresh node from the explicitly-passed `pool`.
 // The owning pool is threaded through the call site (parser TokenStream,
 // resolve/expand contexts, crate) rather than taken from any ambient global.
-extern TypeRef mktype(stl::ObjPool& pool, Span sp, TypeData data);
-extern TypeRef mktype(stl::ObjPool& pool, Span sp);  // wildcard / Any
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Invalid, Span sp);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Macro, ASTMacroInvocation inv);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Unit, Span sp);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Primitive, Span sp, enum eCoreType type);
-extern TypeRef mktype(stl::ObjPool& pool, Span sp, enum eCoreType type);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Tuple, Span sp, ::std::vector<TypeRef> innerTypes);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Pointer, Span sp, bool isMut, TypeRef innerType);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::SizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::UnsizedArray, Span sp, TypeRef innerType);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Arg, Span sp, RcString name, unsigned int binding = ~0u);
-extern TypeRef mktype(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding = ~0u);
-extern TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Path, Span sp, ASTPath path);
-extern TypeRef mktype(stl::ObjPool& pool, Span sp, ASTPath path);
-extern TypeRef mktype(stl::ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes);
+extern ASTType* mkType(stl::ObjPool& pool, Span sp, TypeData data);
+extern ASTType* mkType(stl::ObjPool& pool, Span sp);  // wildcard / Any
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Invalid, Span sp);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type);
+extern ASTType* mkType(stl::ObjPool& pool, Span sp, enum eCoreType type);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, ::std::vector<ASTType*> innerTypes);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<ASTType*> args, bool isVariadic, ASTType* ret);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ::std::shared_ptr<ASTExprNode> size);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Arg, Span sp, RcString name, unsigned int binding = ~0u);
+extern ASTType* mkType(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding = ~0u);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path);
+extern ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path);
+extern ASTType* mkType(stl::ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes);
 
-extern ::std::ostream& operator<<(::std::ostream& os, const TypeStore& tr);
-inline ::std::ostream& operator<<(::std::ostream& os, const TypeStore* tr) {
+extern ::std::ostream& operator<<(::std::ostream& os, const ASTType& tr);
+inline ::std::ostream& operator<<(::std::ostream& os, const ASTType* tr) {
     return tr ? (os << *tr) : (os << "(null-type)");
 }
-extern Ordering ord(const TypeRef& a, const TypeRef& b);
+extern Ordering ord(ASTType* a, ASTType* b);
 

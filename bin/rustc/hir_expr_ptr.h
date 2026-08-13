@@ -96,7 +96,7 @@ class HIRExprPtr {
     HIRExprNodeP node;
 
 public:
-    //::std::vector< ::HIR::TypeRef>  m_type_table;
+    //::std::vector< ::HIR::ASTType*>  m_type_table;
     ::std::vector<HIRTypeRef> mBindings;
     ::std::vector<HIRTypeRef> erasedTypes;
 

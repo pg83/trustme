@@ -882,7 +882,7 @@ private:
     void printBounds(const ASTGenericParams& params);
     void printPatternTuple(const ASTPattern::TuplePat& v, bool isRefutable);
     void printPattern(const ASTPattern& p, bool isRefutable);
-    void printType(const TypeRef& t);
+    void printType(ASTType* t);
 
     void incIndent();
     RepeatLitStr indent();
@@ -1319,7 +1319,7 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
     )
 }
 
-void RustPrinter::printType(const TypeRef& t) {
+void RustPrinter::printType(ASTType* t) {
     os << t;
 }
 

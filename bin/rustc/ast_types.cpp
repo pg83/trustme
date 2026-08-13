@@ -50,7 +50,7 @@ bool ASTHigherRankedBounds::empty() const {
 
 TypeFunction::TypeFunction() = default;
 
-TypeFunction::TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, TypeRef ret, ::std::vector<TypeRef> args, bool isVariadic)
+TypeFunction::TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ASTType* ret, ::std::vector<ASTType*> args, bool isVariadic)
     : hrbs(mv$(hrbs))
     , isUnsafe(isUnsafe)
     , mAbi(mv$(abi))
@@ -151,10 +151,10 @@ Ordering TypeFunction::ord(const TypeFunction& x) const {
     return mRettype->ord(*x.mRettype);
 }
 
-TypeRef TypeStore::clone() const {
+ASTType* ASTType::clone() const {
     struct H {
-        static ::std::vector<::TypeRef> cloneTyVec(const ::std::vector<TypeRef>& x) {
-            ::std::vector<TypeRef> rv;
+        static ::std::vector<::ASTType*> cloneTyVec(const ::std::vector<ASTType*>& x) {
+            ::std::vector<ASTType*> rv;
             rv.reserve(x.size());
             for (const auto& t : x) {
                 rv.push_back(t->clone());
@@ -169,12 +169,12 @@ TypeRef TypeStore::clone() const {
             assert(!"Copying a destructed type");
 #define _COPY(VAR)                                                        \
     case TypeData::TAG_##VAR:                                             \
-        return mktype(p, mSpan, TypeData::make_##VAR(mData.as_##VAR())); \
+        return mkType(p, mSpan, TypeData::make_##VAR(mData.as_##VAR())); \
         break;
 #define _CLONE(VAR, ...)                                       \
     case TypeData::TAG_##VAR: {                                \
         auto& old = mData.as_##VAR();                          \
-        return mktype(p, mSpan, TypeData::make_##VAR(__VA_ARGS__)); \
+        return mkType(p, mSpan, TypeData::make_##VAR(__VA_ARGS__)); \
     } break;
             _COPY(None)
             _COPY(Any)
@@ -232,7 +232,7 @@ Ordering TypeTraitPath::ord(const TypeTraitPath& x) const {
     return rv;
 }
 
-Ordering TypeStore::ord(const TypeStore& x) const {
+Ordering ASTType::ord(const ASTType& x) const {
     Ordering rv;
 
     rv = ::ord((unsigned)mData.tag(), (unsigned)x.mData.tag());
@@ -240,19 +240,19 @@ Ordering TypeStore::ord(const TypeStore& x) const {
         return rv;
     }
 
-    TU_MATCH(TypeData, (mData, x.mData), (ent, xEnt), (None, return OrdEqual;), (Macro, throw CompileErrorBugCheck("TypeRef::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);), (Function, return ent.info.ord(xEnt.info);), (Tuple, return ::ord(ent.innerTypes, xEnt.innerTypes);), (Borrow, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Pointer, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Array, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return ent.inner->ord(*xEnt.inner);), (Generic, return ::ord(ent.name, xEnt.name);), (Path, return ent->ord(*xEnt);), (TraitObject, return ::ord(ent.traits, xEnt.traits);), (ErasedType, ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;))
-    throw ::std::runtime_error(FMT("BUGCHECK - Unhandled TypeRef class '" << mData.tag() << "'"));
+    TU_MATCH(TypeData, (mData, x.mData), (ent, xEnt), (None, return OrdEqual;), (Macro, throw CompileErrorBugCheck("ASTType*::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);), (Function, return ent.info.ord(xEnt.info);), (Tuple, return ::ord(ent.innerTypes, xEnt.innerTypes);), (Borrow, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Pointer, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Array, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return ent.inner->ord(*xEnt.inner);), (Generic, return ::ord(ent.name, xEnt.name);), (Path, return ent->ord(*xEnt);), (TraitObject, return ::ord(ent.traits, xEnt.traits);), (ErasedType, ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;))
+    throw ::std::runtime_error(FMT("BUGCHECK - Unhandled ASTType* class '" << mData.tag() << "'"));
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const eCoreType ct) {
     return os << coretypeName(ct);
 }
 
-Ordering ord(const TypeRef& a, const TypeRef& b) {
+Ordering ord(ASTType* a, ASTType* b) {
     return a->ord(*b);
 }
 
-void TypeStore::print(::std::ostream& os, bool isDebug /*=false*/) const {
+void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
 #define _(VAR, ...)                               \
     case TypeData::TAG_##VAR: {                   \
         const auto& ent = this->mData.as_##VAR(); \
@@ -361,7 +361,7 @@ void TypeStore::print(::std::ostream& os, bool isDebug /*=false*/) const {
 #undef _2
 }
 
-::std::ostream& operator<<(::std::ostream& os, const TypeStore& tr) {
+::std::ostream& operator<<(::std::ostream& os, const ASTType& tr) {
     tr.print(os, true);
     return os;
 }
@@ -387,7 +387,7 @@ void TypeStore::print(::std::ostream& os, bool isDebug /*=false*/) const {
     return os;
 }
 
-PrettyPrintType::PrettyPrintType(const TypeStore* ty)
+PrettyPrintType::PrettyPrintType(const ASTType* ty)
     : mType(ty)
 {
 }
@@ -395,59 +395,59 @@ PrettyPrintType::PrettyPrintType(const TypeStore* ty)
 // ------------------------------------------------------------------------
 // Type node pool + factories
 // ------------------------------------------------------------------------
-TypeRef mktype(stl::ObjPool& pool, Span sp, TypeData data) {
-    return pool.make<TypeStore>(mv$(sp), mv$(data), &pool);
+ASTType* mkType(stl::ObjPool& pool, Span sp, TypeData data) {
+    return pool.make<ASTType>(mv$(sp), mv$(data), &pool);
 }
 
-TypeRef mktype(stl::ObjPool& pool, Span sp) {
-    return mktype(pool, sp, TypeData::make_Any({}));
+ASTType* mkType(stl::ObjPool& pool, Span sp) {
+    return mkType(pool, sp, TypeData::make_Any({}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Invalid, Span sp) {
-    return mktype(pool, sp, TypeData::make_None({}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Invalid, Span sp) {
+    return mkType(pool, sp, TypeData::make_None({}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Macro, ASTMacroInvocation inv) {
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Macro, ASTMacroInvocation inv) {
     auto sp = inv.span();
-    return mktype(pool, sp, TypeData::make_Macro({pool.make<ASTMacroInvocation>(mv$(inv))}));
+    return mkType(pool, sp, TypeData::make_Macro({pool.make<ASTMacroInvocation>(mv$(inv))}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Unit, Span sp) {
-    return mktype(pool, sp, TypeData::make_Unit({}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Unit, Span sp) {
+    return mkType(pool, sp, TypeData::make_Unit({}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Primitive, Span sp, enum eCoreType type) {
-    return mktype(pool, sp, TypeData::make_Primitive({type}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum eCoreType type) {
+    return mkType(pool, sp, TypeData::make_Primitive({type}));
 }
-TypeRef mktype(stl::ObjPool& pool, Span sp, enum eCoreType type) {
-    return mktype(pool, sp, TypeData::make_Primitive({type}));
+ASTType* mkType(stl::ObjPool& pool, Span sp, enum eCoreType type) {
+    return mkType(pool, sp, TypeData::make_Primitive({type}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Tuple, Span sp, ::std::vector<TypeRef> innerTypes) {
-    return mktype(pool, sp, TypeData::make_Tuple({mv$(innerTypes)}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, ::std::vector<ASTType*> innerTypes) {
+    return mkType(pool, sp, TypeData::make_Tuple({mv$(innerTypes)}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<TypeRef> args, bool isVariadic, TypeRef ret) {
-    return mktype(pool, sp, TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, ret, mv$(args), isVariadic)}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<ASTType*> args, bool isVariadic, ASTType* ret) {
+    return mkType(pool, sp, TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, ret, mv$(args), isVariadic)}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, TypeRef innerType) {
-    return mktype(pool, sp, TypeData::make_Borrow({mv$(lft), isMut, innerType}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType) {
+    return mkType(pool, sp, TypeData::make_Borrow({mv$(lft), isMut, innerType}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Pointer, Span sp, bool isMut, TypeRef innerType) {
-    return mktype(pool, sp, TypeData::make_Pointer({isMut, innerType}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType) {
+    return mkType(pool, sp, TypeData::make_Pointer({isMut, innerType}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::SizedArray, Span sp, TypeRef innerType, ::std::shared_ptr<ASTExprNode> size) {
-    return mktype(pool, sp, TypeData::make_Array({innerType, mv$(size)}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ::std::shared_ptr<ASTExprNode> size) {
+    return mkType(pool, sp, TypeData::make_Array({innerType, mv$(size)}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::UnsizedArray, Span sp, TypeRef innerType) {
-    return mktype(pool, sp, TypeData::make_Slice({innerType}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType) {
+    return mkType(pool, sp, TypeData::make_Slice({innerType}));
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Arg, Span sp, RcString name, unsigned int binding) {
-    return mktype(pool, sp, TypeData::make_Generic({mv$(name), binding}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Arg, Span sp, RcString name, unsigned int binding) {
+    return mkType(pool, sp, TypeData::make_Generic({mv$(name), binding}));
 }
-TypeRef mktype(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding) {
-    return mktype(pool, TypeRefTags::Arg(), sp, mv$(name), binding);
+ASTType* mkType(stl::ObjPool& pool, Span sp, RcString name, unsigned int binding) {
+    return mkType(pool, ASTTypeTags::Arg(), sp, mv$(name), binding);
 }
-TypeRef mktype(stl::ObjPool& pool, TypeRefTags::Path, Span sp, ASTPath path) {
-    return mktype(pool, sp, TypeData::make_Path(pool.make<ASTPath>(mv$(path))));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Path, Span sp, ASTPath path) {
+    return mkType(pool, sp, TypeData::make_Path(pool.make<ASTPath>(mv$(path))));
 }
-TypeRef mktype(stl::ObjPool& pool, Span sp, ASTPath path) {
-    return mktype(pool, TypeRefTags::Path(), sp, mv$(path));
+ASTType* mkType(stl::ObjPool& pool, Span sp, ASTPath path) {
+    return mkType(pool, ASTTypeTags::Path(), sp, mv$(path));
 }
-TypeRef mktype(stl::ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes) {
-    return mktype(pool, sp, TypeData::make_TraitObject({mv$(traits), mv$(lifetimes)}));
+ASTType* mkType(stl::ObjPool& pool, Span sp, ::std::vector<TypeTraitPath> traits, ::std::vector<ASTLifetimeRef> lifetimes) {
+    return mkType(pool, sp, TypeData::make_TraitObject({mv$(traits), mv$(lifetimes)}));
 }

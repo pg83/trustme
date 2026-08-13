@@ -34,13 +34,13 @@ struct ASTStructItem {
     ASTAttributeList mAttrs;
     ASTVisibility vis;
     RcString mName;
-    TypeRef mType;
+    ASTType* mType;
     // RFC3681
     ASTExpr defaultValue;
 
     //StructItem() {}
 
-    ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, TypeRef ty, ASTExpr defaultValue);
+    ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTStructItem& x) {
         return os << x.vis << x.mName << ": " << x.mType;
@@ -52,11 +52,11 @@ struct ASTStructItem {
 struct ASTTupleItem {
     ASTAttributeList mAttrs;
     ASTVisibility vis;
-    TypeRef mType;
+    ASTType* mType;
 
     //TupleItem() {}
 
-    ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, TypeRef ty);
+    ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, ASTType* ty);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTTupleItem& x) {
         return os << x.vis << x.mType;
@@ -71,12 +71,12 @@ public:
     ASTGenericParams mParams;
     /// Holds bounds on this type, all bounds encoded as `Self: ...`
     ASTGenericParams selfBounds;
-    TypeRef mType;
+    ASTType* mType;
 
     //TypeAlias() {}
-    ASTTypeAlias(ASTGenericParams params, TypeRef type);
+    ASTTypeAlias(ASTGenericParams params, ASTType* type);
 
-    static ASTTypeAlias newAssociatedType(ASTGenericParams params, ASTGenericParams typeBounds, TypeRef defaultType);
+    static ASTTypeAlias newAssociatedType(ASTGenericParams params, ASTGenericParams typeBounds, ASTType* defaultType);
 
     const ASTGenericParams& params() const {
         return mParams;
@@ -86,11 +86,11 @@ public:
         return mParams;
     }
 
-    const TypeRef& type() const {
+    ASTType* type() const {
         return mType;
     }
 
-    TypeRef& type() {
+    ASTType*& type() {
         return mType;
     }
 
@@ -125,7 +125,7 @@ public:
 
 private:
     Class cls;
-    TypeRef mType;
+    ASTType* mType;
     ASTExpr mValue;
 
 public:
@@ -135,13 +135,13 @@ public:
         ASTLinkage linkage = ASTLinkage::Default;
     } markings;
 
-    ASTStatic(Class sClass, TypeRef type, ASTExpr value);
+    ASTStatic(Class sClass, ASTType* type, ASTExpr value);
 
     const Class& sClass() const {
         return cls;
     }
 
-    const TypeRef& type() const {
+    ASTType* type() const {
         return mType;
     }
 
@@ -149,7 +149,7 @@ public:
         return mValue;
     }
 
-    TypeRef& type() {
+    ASTType*& type() {
         return mType;
     }
 
@@ -165,9 +165,9 @@ public:
     struct Arg {
         ASTAttributeList attrs;
         ASTPattern pat;
-        TypeRef ty;
+        ASTType* ty;
 
-        Arg(ASTPattern pat, TypeRef ty, ASTAttributeList attrs = {});
+        Arg(ASTPattern pat, ASTType* ty, ASTAttributeList attrs = {});
     };
 
     typedef ::std::vector<Arg> Arglist;
@@ -194,7 +194,7 @@ private:
     Span mSpan;
     ASTGenericParams mParams;
     ASTExpr mCode;
-    TypeRef mRettype;
+    ASTType* mRettype;
     Arglist mArgs;
     bool mIsVariadic; // extern only
 
@@ -224,10 +224,10 @@ public:
     ASTFunction(ASTFunction&&) = default;
     ASTFunction& operator=(ASTFunction&&) = default;
 
-    ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, TypeRef retType, Arglist args, bool isVariadic);
+    ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic);
 
     // Helper for derive, defines an ABI_RUST function with no generics
-    ASTFunction(Span sp, TypeRef retType, Arglist args);
+    ASTFunction(Span sp, ASTType* retType, Arglist args);
 
     void setCode(ASTExpr code) {
         mCode = ::std::move(code);
@@ -273,11 +273,11 @@ public:
         return mCode;
     }
 
-    const TypeRef& rettype() const {
+    ASTType* rettype() const {
         return mRettype;
     }
 
-    TypeRef& rettype() {
+    ASTType*& rettype() {
         return mRettype;
     }
 
@@ -344,7 +344,7 @@ public:
         return mItems;
     }
 
-    void addType(Span sp, RcString name, ASTAttributeList attrs, TypeRef type);
+    void addType(Span sp, RcString name, ASTAttributeList attrs, ASTType* type);
     void addFunction(Span sp, RcString name, ASTAttributeList attrs, ASTFunction fcn);
     void addStatic(Span sp, RcString name, ASTAttributeList attrs, ASTStatic v);
 
@@ -510,10 +510,10 @@ class ASTImplDef {
     bool mIsConst;
     ASTGenericParams mParams;
     Spanned<ASTPath> mTrait;
-    TypeRef mType;
+    ASTType* mType;
 
 public:
-    ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, TypeRef implType);
+    ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTType* implType);
 
     ASTImplDef(ASTImplDef&&) /*noexcept*/ = default;
     ASTImplDef& operator=(ASTImplDef&&) = default;
@@ -550,11 +550,11 @@ public:
         return mTrait;
     }
 
-    const TypeRef& type() const {
+    ASTType* type() const {
         return mType;
     }
 
-    TypeRef& type() {
+    ASTType*& type() {
         return mType;
     }
 
@@ -577,7 +577,7 @@ private:
     ASTImplDef mDef;
 
     ::std::vector<ImplItem> mItems;
-    //NamedList<TypeRef>   m_types;
+    //NamedList<ASTType*>   m_types;
     //NamedList<Function>  m_functions;
     //NamedList<Static>    m_statics;
 
@@ -588,7 +588,7 @@ public:
     ASTImpl& operator=(ASTImpl&&);
 
     void addFunction(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTFunction fcn);
-    void addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, TypeRef type);
+    void addType(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTGenericParams params, ASTType* type);
     void addStatic(Span sp, ASTAttributeList attrs, ASTVisibility vis, bool isSpecialisable, RcString name, ASTStatic v);
     void addMacroInvocation(ASTMacroInvocation inv);
 

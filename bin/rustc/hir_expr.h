@@ -633,7 +633,7 @@ struct HIRExprNodeStructLiteral: public HIRExprNode {
     HIRExprNodeP baseValue;
     tValues values;
 
-    /// Actual path extracted from the TypeRef (populated after inner UFCS expansion)
+    /// Actual path extracted from the ASTType* (populated after inner UFCS expansion)
     HIRGenericPath realPath;
     /// Monomorphised types of each field.
     ::std::vector<HIRTypeRef> valueTypes;

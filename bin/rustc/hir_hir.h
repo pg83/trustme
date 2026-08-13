@@ -659,7 +659,7 @@ public:
     struct ImplGroup {
         typedef ::std::vector<T> listT;
         ::std::map<HIRSimplePath, listT> named;
-        listT nonNamed; // TODO: use a map of HIR::TypeRef::Data::Tag
+        listT nonNamed; // TODO: use a map of HIR::ASTType*::Data::Tag
         listT generic;
 
         const listT* getListForType(const HIRTypeData* ty) const {

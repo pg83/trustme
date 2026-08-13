@@ -215,14 +215,14 @@ struct ASTExprNodeFlow: public ASTExprNode {
 
 struct ASTExprNodeLetBinding: public ASTExprNode {
     ASTPattern pat;
-    TypeRef mType;
+    ASTType* mType;
     ASTExprNodeP mValue;
     ASTExprNodeP elseNode;
     bool isSuper;
     /// Allocated binding slots/indexes for the pattern in `let-else`
     ::std::pair<unsigned, unsigned> letelseSlots;
 
-    ASTExprNodeLetBinding(ASTPattern pat, TypeRef type, ASTExprNodeP value, ASTExprNodeP elseArm = {}, bool isSuper = false);
+    ASTExprNodeLetBinding(ASTPattern pat, ASTType* type, ASTExprNodeP value, ASTExprNodeP elseArm = {}, bool isSuper = false);
 
     static constexpr unsigned int kind = 9;
     unsigned int nodeKind() const override;
@@ -486,15 +486,15 @@ struct ASTExprNodeCString: public ASTExprNode {
 
 // Closure / Lambda
 struct ASTExprNodeClosure: public ASTExprNode {
-    typedef ::std::vector<::std::pair<ASTPattern, TypeRef>> argsT;
+    typedef ::std::vector<::std::pair<ASTPattern, ASTType*>> argsT;
 
     argsT mArgs;
-    TypeRef returnType;
+    ASTType* returnType;
     ASTExprNodeP mCode;
     bool isMove;   //< The closure takes ownership of all values
     bool isPinned; //< The closure cannot be moved (this is for generators)
 
-    ASTExprNodeClosure(argsT args, TypeRef rv, ASTExprNodeP code, bool isMove, bool isPinned)
+    ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNodeP code, bool isMove, bool isPinned)
         : mArgs(::std::move(args))
         , returnType(::std::move(rv))
         , mCode(::std::move(code))
@@ -633,9 +633,9 @@ struct ASTExprNodeDeref: public ASTExprNode {
 // Type cast ('as')
 struct ASTExprNodeCast: public ASTExprNode {
     ASTExprNodeP mValue;
-    TypeRef mType;
+    ASTType* mType;
 
-    ASTExprNodeCast(ASTExprNodeP value, TypeRef&& dstType);
+    ASTExprNodeCast(ASTExprNodeP value, ASTType*&& dstType);
 
     static constexpr unsigned int kind = 35;
     unsigned int nodeKind() const override;
@@ -647,9 +647,9 @@ struct ASTExprNodeCast: public ASTExprNode {
 // Type annotation (': _')
 struct ASTExprNodeTypeAnnotation: public ASTExprNode {
     ASTExprNodeP mValue;
-    TypeRef mType;
+    ASTType* mType;
 
-    ASTExprNodeTypeAnnotation(ASTExprNodeP value, TypeRef&& dstType);
+    ASTExprNodeTypeAnnotation(ASTExprNodeP value, ASTType*&& dstType);
 
     static constexpr unsigned int kind = 36;
     unsigned int nodeKind() const override;

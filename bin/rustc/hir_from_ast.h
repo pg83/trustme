@@ -3,8 +3,7 @@
 #include "hir_expr_ptr.h"
 
 class RcString;
-struct TypeStore;
-typedef TypeStore* TypeRef;
+struct ASTType;
 struct Span;
 
 class ASTExprNode;
@@ -31,5 +30,5 @@ extern HIRPath LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClas
 extern HIRGenericPath LowerHIRGenericPath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowAssoc = false);
 extern HIRSimplePath LowerHIRSimplePath(const Span& sp, const ASTPath& path, FromASTPathClass pc, bool allowFinalGeneric = false);
 extern HIRPathParams LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc);
-extern HIRTypeRef LowerHIRType(const ::TypeRef& ty);
+extern HIRTypeRef LowerHIRType(::ASTType* ty);
 extern HIRPattern LowerHIRPattern(const ASTPattern& pat);

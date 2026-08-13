@@ -771,7 +771,7 @@ void HMTypeInferrence::ivarValUnify(unsigned int leftSlot, unsigned int rightSlo
     }
 }
 
-//::HIR::TypeRef& HMTypeInferrence::get_type(::HIR::TypeRef& type)
+//::HIR::ASTType*& HMTypeInferrence::get_type(::HIR::ASTType*& type)
 //{
 //    }
 //    }
@@ -3689,7 +3689,7 @@ TU_ARMA(Alias, ee) {
                     if (lhs == HIRTypeRef() || rhs == HIRTypeRef()) {
                         return lhs == rhs;
                     }
-                    // TypeRef identity is structural equality after interning.
+                    // ASTType* identity is structural equality after interning.
                     // Avoid recursively normalising and re-interning the common
                     // case where both canonical responses already share a type.
                     if (lhs == rhs) {
@@ -6036,7 +6036,7 @@ TU_ARMA(Alias, ee) {
 
             Matcher matcher{crate.types, sp, outImplParams, placeholderName, placeholders};
 
-            //::std::vector<::HIR::TypeRef> saved_ph;
+            //::std::vector<::HIR::ASTType*> saved_ph;
 
             // Keep looping while placeholders are updated
             int loops = 0;

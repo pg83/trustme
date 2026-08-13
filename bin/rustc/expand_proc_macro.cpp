@@ -125,7 +125,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     // ```
 
     // ---- main function ----
-    auto mainFn = ASTFunction{Span(), mktype(*crate.pool, TypeRefTags::Unit(), Span()), {}};
+    auto mainFn = ASTFunction{Span(), mkType(*crate.pool, ASTTypeTags::Unit(), Span()), {}};
     {
         auto callNode = NEWNODE(CallPath, ASTPath(crate.extCratenameProcmacro, {ASTPathNode("main")}), ::makeVec1(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(NamedValue, ASTPath("", {ASTPathNode("proc_macro#"), ASTPathNode("MACROS")})))));
         mainFn.setCode(mv$(callNode));
@@ -154,7 +154,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     auto* testsArray = new ASTExprNodeArray(mv$(testNodes));
 
     size_t testCount = testsArray->values.size();
-    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mktype(*crate.pool, TypeRefTags::SizedArray(), Span(), mktype(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
+    auto testsList = ASTStatic{ASTStatic::Class::STATIC, mkType(*crate.pool, ASTTypeTags::SizedArray(), Span(), mkType(*crate.pool, Span(), ASTPath(crate.extCratenameProcmacro, {ASTPathNode("MacroDesc")})), ::std::shared_ptr<ASTExprNode>(new ASTExprNodeInteger(U128(testCount), CORETYPE_UINT))), ASTExpr(mv$(testsArray))};
 
     // ---- module ----
     auto newmod = ASTModule{ASTAbsolutePath("", {"proc_macro#"})};
@@ -989,7 +989,7 @@ namespace {
             }
         }
 
-        void visitType(const ::TypeRef& ty) {
+        void visitType(::ASTType* ty) {
             // TODO: Correct handling of visit_type
             TU_MATCHA(
                 (ty->mData),

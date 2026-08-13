@@ -120,7 +120,7 @@ public:
     void setValIvarTo(unsigned int slot, HIRConstGeneric val);
 
     // Lookup
-    //::HIR::TypeRef& get_type(::HIR::TypeRef& type);
+    //::HIR::ASTType*& get_type(::HIR::ASTType*& type);
     const HIRTypeData* getType(const HIRTypeData* type) const;
     HIRTypeRef& getType(unsigned idx);
     const HIRTypeData* getType(unsigned idx) const;

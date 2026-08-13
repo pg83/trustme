@@ -11,7 +11,7 @@ class ASTTypeParam {
     Span mSpan;
     // TODO: use an Ident?
     RcString mName;
-    ::TypeRef mDefaultValue;
+    ::ASTType* mDefaultValue;
 
 public:
     ASTTypeParam(ASTTypeParam&& x) = default;
@@ -21,7 +21,7 @@ public:
 
     ASTTypeParam(stl::ObjPool& pool, Span sp, ASTAttributeList attrs, RcString name);
 
-    void setDefault(TypeRef type);
+    void setDefault(ASTType* type);
 
     const ASTAttributeList& attrs() const {
         return mAttrs;
@@ -35,11 +35,11 @@ public:
         return mName;
     }
 
-    const TypeRef& getDefault() const {
+    ASTType* getDefault() const {
         return mDefaultValue;
     }
 
-    TypeRef& getDefault() {
+    ASTType*& getDefault() {
         return mDefaultValue;
     }
 
@@ -77,11 +77,11 @@ class ASTValueParam {
     ASTAttributeList mAttrs;
     Span mSpan;
     Ident mName;
-    TypeRef mType;
+    ASTType* mType;
     ASTExpr mDefaultValue;
 
 public:
-    ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, TypeRef type, ASTExpr val);
+    ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* type, ASTExpr val);
 
     ASTValueParam(ASTValueParam&&) = default;
     ASTValueParam& operator=(ASTValueParam&&) = default;
@@ -100,11 +100,11 @@ public:
         return mName;
     }
 
-    const TypeRef& type() const {
+    ASTType* type() const {
         return mType;
     }
 
-    TypeRef& type() {
+    ASTType*& type() {
         return mType;
     }
 
@@ -147,7 +147,7 @@ TAGGED_UNION_EX(
      // Type lifetime bound
      (TypeLifetime,
       struct {
-          TypeRef type;
+          ASTType* type;
           ASTLifetimeRef bound;
       }),
      // Standard trait bound: "Type: [for<'a>] Trait"
@@ -155,7 +155,7 @@ TAGGED_UNION_EX(
       struct {
           Span span;
           ASTHigherRankedBounds outerHrbs;
-          TypeRef type;
+          ASTType* type;
           ASTHigherRankedBounds innerHrbs;
           ASTPath trait;
           ASTBoundConstness constness = ASTBoundConstness::Never;
@@ -163,20 +163,20 @@ TAGGED_UNION_EX(
      // Removed trait bound: "Type: ?Trait"
      (MaybeTrait,
       struct {
-          TypeRef type;
+          ASTType* type;
           ASTPath trait;
       }),
      // Negative trait bound: "Type: !Trait"
      (NotTrait,
       struct {
-          TypeRef type;
+          ASTType* type;
           ASTPath trait;
       }),
      // Type equality: "Type = Replacement"
      (Equality,
       struct {
-          TypeRef type;
-          TypeRef replacement;
+          ASTType* type;
+          ASTType* replacement;
       })),
 
     (, span(x.span)),
@@ -201,7 +201,7 @@ public:
     // These impose no constraint, but must still be expanded/resolved so that
     // any side effects they carry (e.g. anon-const blocks with nested items)
     // are processed consistently with how lowering later visits them.
-    ::std::vector<TypeRef> mBareBoundTypes;
+    ::std::vector<ASTType*> mBareBoundTypes;
 
     ASTGenericParams();
 
@@ -229,7 +229,7 @@ public:
         addParam(::std::move(param), boundsStart, boundsEnd);
     }
 
-    void addValueParam(Span sp, ASTAttributeList attrs, Ident name, TypeRef ty, ASTExpr val) {
+    void addValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* ty, ASTExpr val) {
         mParams.push_back(ASTValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), mv$(val)));
     }
 
