@@ -3512,52 +3512,91 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
             });
         }
 
-        struct VisitState {
-            const MIRFunction& fcn;
-            std::vector<bool> visited;
-            std::vector<unsigned> stack;
-
-            VisitState(const MIRFunction& fcn)
-                : fcn(fcn)
+        if (acyclicBlocks.size() != fcn.blocks.size()) {
+            // A block "loops" iff it is reachable from itself, i.e. it sits in a
+            // strongly-connected component with more than one block, or has an
+            // edge to itself. Compute that for every block in one pass
+            // (iterative Tarjan) instead of running a whole-CFG search per
+            // candidate block, which made this O(candidates * CFG).
+            std::vector<bool> loops(fcn.blocks.size(), false);
             {
-            }
+                const size_t nBlocks = fcn.blocks.size();
+                std::vector<unsigned> index(nBlocks, ~0u);
+                std::vector<unsigned> lowlink(nBlocks, 0);
+                std::vector<bool> onStack(nBlocks, false);
+                std::vector<unsigned> sccStack;
+                unsigned nextIndex = 0;
 
-            bool doesBlockLoop(unsigned rootIdx) {
-                stack.clear();
-                visited.clear();
-                visited.resize(fcn.blocks.size());
-                visited[rootIdx] = true;
-                stack.push_back(rootIdx);
-                while (!stack.empty()) {
-                    auto bbIdx = stack.back();
-                    stack.pop_back();
-                    auto& bb = fcn.blocks[bbIdx];
-                    bool isLoop = false;
-                    visitTerminatorTarget(bb.terminator, [&](const MIRBasicBlockId& idx) {
-                        if (idx == rootIdx) {
-                            isLoop = true;
-                        }
-                        if (!visited[idx]) {
-                            visited[idx] = true;
-                            stack.push_back(idx);
+                // Successor lists, so the walk below can resume mid-block.
+                std::vector<std::vector<unsigned>> succs(nBlocks);
+                for (const auto& block : fcn.blocks) {
+                    unsigned bbIdx = &block - fcn.blocks.data();
+                    visitTerminatorTarget(block.terminator, [&](const auto& target) {
+                        if (target < nBlocks) {
+                            succs[bbIdx].push_back(target);
+                            if (target == bbIdx) {
+                                loops[bbIdx] = true; // self-edge
+                            }
                         }
                     });
-                    if (isLoop) {
-                        return true;
+                }
+
+                struct Frame {
+                    unsigned bb;
+                    size_t next;
+                };
+                std::vector<Frame> callStack;
+                for (unsigned root = 0; root < nBlocks; root++) {
+                    if (index[root] != ~0u) {
+                        continue;
+                    }
+                    callStack.push_back({root, 0});
+                    index[root] = lowlink[root] = nextIndex++;
+                    sccStack.push_back(root);
+                    onStack[root] = true;
+                    while (!callStack.empty()) {
+                        auto& fr = callStack.back();
+                        if (fr.next < succs[fr.bb].size()) {
+                            unsigned w = succs[fr.bb][fr.next++];
+                            if (index[w] == ~0u) {
+                                index[w] = lowlink[w] = nextIndex++;
+                                sccStack.push_back(w);
+                                onStack[w] = true;
+                                callStack.push_back({w, 0});
+                            } else if (onStack[w]) {
+                                lowlink[fr.bb] = std::min(lowlink[fr.bb], index[w]);
+                            }
+                        } else {
+                            unsigned v = fr.bb;
+                            callStack.pop_back();
+                            if (!callStack.empty()) {
+                                auto& parent = callStack.back();
+                                lowlink[parent.bb] = std::min(lowlink[parent.bb], lowlink[v]);
+                            }
+                            if (lowlink[v] == index[v]) {
+                                // Pop one SCC (v and everything above it on the
+                                // stack); sizes > 1 mean every member loops.
+                                size_t vPos = sccStack.size();
+                                while (vPos > 0 && sccStack[vPos - 1] != v) {
+                                    vPos--;
+                                }
+                                assert(vPos > 0);
+                                vPos--; // index of `v` itself
+                                bool multi = (sccStack.size() - vPos) > 1;
+                                for (size_t i = vPos; i < sccStack.size(); i++) {
+                                    unsigned m = sccStack[i];
+                                    onStack[m] = false;
+                                    if (multi) {
+                                        loops[m] = true;
+                                    }
+                                }
+                                sccStack.resize(vPos);
+                            }
+                        }
                     }
                 }
-                return false;
             }
-        } vs{fcn};
-
-        if (acyclicBlocks.size() != fcn.blocks.size()) {
-            std::vector<bool> visited(fcn.blocks.size());
-            std::vector<bool> loops(fcn.blocks.size());
             for (auto& poss : possible) {
-                if (!visited[poss.pos.bbIdx]) {
-                    visited[poss.pos.bbIdx] = true;
-                    loops[poss.pos.bbIdx] = vs.doesBlockLoop(poss.pos.bbIdx);
-                }
                 poss.used |= loops[poss.pos.bbIdx];
             }
         }
@@ -6446,6 +6485,53 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
     // > Terminator must be: GOTO, or CALL <lv> = ... (with the non-panic arm)
     // 3. If more than half the source blocks assign the source, then move up
     // - Any IF/SWITCH/... terminator blocks the optimisation
+
+    // Precompute per-local read/borrow counts in a single pass over the whole
+    // function. The eligibility check below needs the read count of one local
+    // per candidate block; scanning every lvalue afresh for each candidate made
+    // this pass O(n^2) in function size (dominant cost on large functions).
+    // Applying the optimisation never changes another candidate's source count
+    // (an eligible source is read exactly once, so no two candidates share one),
+    // so a single snapshot stays valid for the whole block loop.
+    // Likewise, map each block to its predecessors once instead of rescanning
+    // every terminator per candidate. Edges are recorded with the multiplicity
+    // `visitTerminatorTarget` reports them, matching the per-candidate scan this
+    // replaces. The rewrite below only retargets assignment destinations and
+    // call return values, never terminator targets, so this stays valid.
+    ::std::vector<::std::vector<unsigned>> blockPreds(fcn.blocks.size());
+    for (const auto& srcBb : fcn.blocks) {
+        unsigned srcIdx = &srcBb - fcn.blocks.data();
+        visitTerminatorTarget(srcBb.terminator, [&](const auto& tgt) {
+            if (tgt < blockPreds.size()) {
+                blockPreds[tgt].push_back(srcIdx);
+            }
+        });
+    }
+
+    ::std::vector<unsigned> localReads(fcn.locals.size(), 0);
+    ::std::vector<unsigned> localBorrows(fcn.locals.size(), 0);
+    optVisitMirLvalues(state, fcn, [&](const auto& lv, auto vu) {
+        if (lv.root.is_Local()) {
+            switch (vu) {
+                case MIRValUsage::Read:
+                case MIRValUsage::Move:
+                    localReads[lv.root.as_Local()]++;
+                    break;
+                case MIRValUsage::Borrow:
+                    localBorrows[lv.root.as_Local()]++;
+                    break;
+                case MIRValUsage::Write:
+                    break;
+            }
+        }
+        for (const auto& w : lv.wrappers) {
+            if (w.is_Index()) {
+                localReads[w.as_Index()]++;
+            }
+        }
+        return true;
+    });
+
     for (auto& dstBb : fcn.blocks) {
         if (dstBb.statements.empty()) {
             continue;
@@ -6468,53 +6554,30 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
         if (!src.is_Local()) {
             continue;
         }
-        // Source must be a single-read local (so this assignment can be deleted)
-        unsigned nRead = 0;
-        unsigned nBorrow = 0;
-        optVisitMirLvalues(state, fcn, [&](const auto& lv, auto vu) {
-            if (lv.root == src.root) {
-                switch (vu) {
-                    case MIRValUsage::Read:
-                    case MIRValUsage::Move:
-                        nRead++;
-                        break;
-                    case MIRValUsage::Borrow:
-                        nBorrow++;
-                        break;
-                    case MIRValUsage::Write:
-                        // Don't care
-                        break;
-                }
-            }
-            for (const auto& w : lv.wrappers) {
-                if (w.is_Index()) {
-                    if (MIRLValue::newLocal(w.as_Index()) == src) {
-                        nRead++;
-                    }
-                }
-            }
-            return true;
-        });
-        state.setCurStmt(bbIdx, 0);
+        // Source must be a single-read local (so this assignment can be
+        // deleted). Counts come from the whole-function snapshot above.
+        unsigned nRead = localReads[src.as_Local()];
+        unsigned nBorrow = localBorrows[src.as_Local()];
         if (nRead > 1 || nBorrow > 0) {
             DEBUG(state << "Source " << src << " is read " << nRead << " times and borrowed " << nBorrow);
             continue;
         }
         DEBUG(state << "Eligible assignment (" << stmt << ")");
 
-        // Find source blocks, check terminators/last
+        // Find source blocks, check terminators/last (predecessors precomputed)
         std::vector<unsigned> sources;
         unsigned numUsed = 0;
-        for (const auto& srcBb : fcn.blocks) {
-            unsigned bbIdx = &srcBb - fcn.blocks.data();
-            bool used = false;
-            visitTerminatorTarget(srcBb.terminator, [&](const auto& tgt) {
-                if (tgt == state.getCurBlock()) {
-                    used = true;
-                    sources.push_back(bbIdx);
-                }
-            });
-            if (used) {
+        const auto& preds = blockPreds[state.getCurBlock()];
+        for (size_t predI = 0; predI < preds.size(); predI++) {
+            unsigned bbIdx = preds[predI];
+            const auto& srcBb = fcn.blocks[bbIdx];
+            // One entry per edge, as the previous per-terminator scan produced.
+            sources.push_back(bbIdx);
+            // ... but only inspect each source block once.
+            if (predI > 0 && preds[predI - 1] == bbIdx) {
+                continue;
+            }
+            {
                 TU_MATCH_HDRA( (srcBb.terminator), { )
                 TU_ARMA(Goto, e) {
                         if (srcBb.statements.empty()) {
