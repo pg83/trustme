@@ -3544,7 +3544,7 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
     const auto* pathP = fcnPath.get();
     if (const auto* e = pathP->mData.opt_UfcsKnown()) {
         if (e->type->is_Function() || e->type->is_NamedFunction()) {
-            if (e->trait.mPath == resolve.mLangFn || e->trait.mPath == resolve.mLangFnMut || e->trait.mPath == resolve.mLangFnOnce) {
+            if (e->trait.mPath == resolve.langFn() || e->trait.mPath == resolve.langFnMut() || e->trait.mPath == resolve.langFnOnce()) {
                 if (const auto* nf = e->type->opt_NamedFunction()) {
                     pathP = &nf->path;
                 } else {
@@ -3721,7 +3721,7 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
 
     if (mir) {
         ASSERT_BUG(Span(), expr.state, "");
-        if (!resolve.mItemGenerics && !resolve.mImplGenerics) {
+        if (!resolve.itemGenericsPtr() && !resolve.implGenericsPtr()) {
             resolve.setBothGenericsRaw(expr.state->mImplGenerics, expr.state->mItemGenerics);
         }
     }
@@ -3731,11 +3731,11 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
     HIRPathParams nopParamsImpl;
     HIRPathParams nopParamsMethod;
     if (!ms.ppImpl && !ms.ppMethod) {
-        if (resolve.mItemGenerics) {
-            ms.ppMethod = &(nopParamsMethod = resolve.mItemGenerics->makeNopParams(resolve.hirCrate().types, 1));
+        if (resolve.itemGenericsPtr()) {
+            ms.ppMethod = &(nopParamsMethod = resolve.itemGenericsPtr()->makeNopParams(resolve.hirCrate().types, 1));
         }
-        if (resolve.mImplGenerics) {
-            ms.ppImpl = &(nopParamsImpl = resolve.mImplGenerics->makeNopParams(resolve.hirCrate().types, 0));
+        if (resolve.implGenericsPtr()) {
+            ms.ppImpl = &(nopParamsImpl = resolve.implGenericsPtr()->makeNopParams(resolve.hirCrate().types, 0));
         }
         DEBUG("(was empty) ms = " << ms);
     }
@@ -3751,7 +3751,7 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         assert(this->callStack.empty());
         this->numFrames = 0;
         // Note: Since this is the entrypoint, `this->resolve` has the correct GenericParams
-        this->pushStackEntry(FMT_CB(os, os << ip), *mir, std::move(ms), std::move(exp), {}, {}, resolve.mItemGenerics, resolve.mImplGenerics);
+        this->pushStackEntry(FMT_CB(os, os << ip), *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenericsPtr(), resolve.implGenericsPtr());
         auto rvRaw = this->runUntilStackEmpty();
 
         ASSERT_BUG(this->rootSpan, rvRaw, "evaluate_constant_mir returned null allocation");

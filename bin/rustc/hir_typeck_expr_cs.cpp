@@ -381,13 +381,13 @@ namespace {
                                     node.mValue = NEWNODE(ty, sp, Cast, mv$(node.mValue), ty);
                                     this->completed = true;
                                 } else {
-                                    bool found = !this->context.mResolve.mLangUnsize.components().empty() && this->context.mResolve.findTraitImpls(sp, this->context.mResolve.mLangUnsize, HIRPathParams(e.inner), sE.inner, [](auto, auto) {
+                                    bool found = !this->context.mResolve.langUnsize().components().empty() && this->context.mResolve.findTraitImpls(sp, this->context.mResolve.langUnsize(), HIRPathParams(e.inner), sE.inner, [](auto, auto) {
                                         return true;
                                     });
                                     if (found) {
                                         auto ty = context.crate.types.borrow(e.type, e.inner);
                                         node.mValue = NEWNODE(ty, sp, Unsize, mv$(node.mValue), ty);
-                                        this->context.addTraitBound(sp, sE.inner, this->context.mResolve.mLangUnsize, HIRPathParams(e.inner));
+                                        this->context.addTraitBound(sp, sE.inner, this->context.mResolve.langUnsize(), HIRPathParams(e.inner));
                                     } else {
                                         this->context.equateTypes(sp, e.inner, sE.inner);
                                     }
@@ -735,7 +735,7 @@ namespace {
                 return;
             }
 
-            const auto& langFnOnce = this->context.mResolve.mLangFnOnce;
+            const auto& langFnOnce = this->context.mResolve.langFnOnce();
 
             // 1. Create a param set with a single tuple (of all argument types)
             HIRPathParams traitPp;
@@ -1467,12 +1467,12 @@ namespace {
 
                     // 3. Locate the most permissive implemented Fn* trait (Fn first, then FnMut, then assume just FnOnce)
                     // NOTE: Borrowing is added by the expansion to CallPath
-                    if (!this->context.mResolve.mLangFn.components().empty() && this->context.mResolve.findTraitImpls(node.span(), this->context.mResolve.mLangFn, traitPp, ty, [&](auto impl, auto cmp) {
+                    if (!this->context.mResolve.langFn().components().empty() && this->context.mResolve.findTraitImpls(node.span(), this->context.mResolve.langFn(), traitPp, ty, [&](auto impl, auto cmp) {
                         return true;
                     })) {
                         DEBUG("-- Using Fn");
                         node.traitUsed = HIRExprNodeCallValue::TraitUsed::Fn;
-                    } else if (!this->context.mResolve.mLangFnMut.components().empty() && this->context.mResolve.findTraitImpls(node.span(), this->context.mResolve.mLangFnMut, traitPp, ty, [&](auto impl, auto cmp) {
+                    } else if (!this->context.mResolve.langFnMut().components().empty() && this->context.mResolve.findTraitImpls(node.span(), this->context.mResolve.langFnMut(), traitPp, ty, [&](auto impl, auto cmp) {
                         return true;
                     })) {
                         DEBUG("-- Using FnMut");
@@ -4643,7 +4643,7 @@ namespace {
             unsigned int count = 0;
 
             HIRPathParams pp{dst};
-            bool found = context.mResolve.findTraitImpls(sp, context.mResolve.mLangUnsize, pp, src, [&bestImpl, &count, &context, &sp](auto impl, auto cmp) {
+            bool found = context.mResolve.findTraitImpls(sp, context.mResolve.langUnsize(), pp, src, [&bestImpl, &count, &context, &sp](auto impl, auto cmp) {
                 DEBUG("[check_unsize_tys] Found impl " << impl << (cmp == HIRCompare::Fuzzy ? " (fuzzy)" : ""));
                 if (!context.mResolve.implsOverlap(sp, impl, bestImpl)) {
                     // No overlap, count it as a new possibility
@@ -5248,7 +5248,7 @@ namespace {
 
                 HIRPathParams expectedParams;
                 HIRTypeRef expectedOutput;
-                const bool foundExpectation = context.mResolve.findTraitImpls(sp, context.mResolve.mLangFnOnce, desiredParams, dst, [&](ImplRef impl, HIRCompare) {
+                const bool foundExpectation = context.mResolve.findTraitImpls(sp, context.mResolve.langFnOnce(), desiredParams, dst, [&](ImplRef impl, HIRCompare) {
                     auto params = impl.getTraitParams(context.crate.types);
                     if (params.types.size() != 1 || !params.types.front()->is_Tuple()) {
                         return false;
@@ -5921,7 +5921,7 @@ namespace {
                 if (!isKnown) {
                     // There's still an ivar (or an unbound UFCS), keep trying
                     return AssociatedCheckResult::Stalled;
-                } else if (v.trait == context.mResolve.mLangUnsize) {
+                } else if (v.trait == context.mResolve.langUnsize()) {
                     // TODO: Detect if this was a compiler-generated bound, or was actually in the code.
 
                     ASSERT_BUG(sp, v.params.types.size() == 1, "Incorrect number of parameters for Unsize");
@@ -9262,7 +9262,7 @@ public:
         this->context.addIvars(node.mValue->resType);
         node.mValue->visit(*this);
         // Require that `return = <[node.value] as `future_trait`>::Output`
-        this->context.equateTypesAssoc(node.span(), node.resType, context.mResolve.mLangFuture, {}, node.mValue->resType, "Output", {});
+        this->context.equateTypesAssoc(node.span(), node.resType, context.mResolve.langFuture(), {}, node.mValue->resType, "Output", {});
     }
 
     void visit(HIRExprNodeLoop& node) override {

@@ -61,7 +61,7 @@ namespace {
             }
             return HIRTypeRef();
         } else if (unsizedTy->is_Generic()) {
-            HIRPath p{unsizedTy, state.mResolve.mLangPointee, "Metadata"};
+            HIRPath p{unsizedTy, state.mResolve.langPointee(), "Metadata"};
             auto rv = types.path(std::move(p), {});
             state.mResolve.expandAssociatedTypes(sp, rv);
             return rv;
@@ -1367,7 +1367,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 if (path.mData.is_UfcsKnown() && path.mData.as_UfcsKnown().type->is_Function()) {
                     const auto& pe = path.mData.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_Function();
-                    if (pe.trait.mPath == resolve.mLangFn || pe.trait.mPath == resolve.mLangFnMut || pe.trait.mPath == resolve.mLangFnOnce) {
+                    if (pe.trait.mPath == resolve.langFn() || pe.trait.mPath == resolve.langFnMut() || pe.trait.mPath == resolve.langFnOnce()) {
                         MIR_ASSERT(state, e.args.size() == 2, "Fn* call requires two arguments");
                         auto fcnLvalue = mv$(e.args[0].as_LValue());
                         auto argsLvalue = mv$(e.args[1].as_LValue());
@@ -1380,7 +1380,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
                         }
                         // If the trait is Fn/FnMut, dereference the input value.
-                        if (pe.trait.mPath == resolve.mLangFnOnce) {
+                        if (pe.trait.mPath == resolve.langFnOnce()) {
                             e.fcn = mv$(fcnLvalue);
                         } else {
                             e.fcn = MIRLValue::newDeref(mv$(fcnLvalue));
@@ -1390,7 +1390,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 if (path.mData.is_UfcsKnown() && path.mData.as_UfcsKnown().type->is_NamedFunction()) {
                     const auto& pe = path.mData.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_NamedFunction();
-                    if (pe.trait.mPath == resolve.mLangFn || pe.trait.mPath == resolve.mLangFnMut || pe.trait.mPath == resolve.mLangFnOnce) {
+                    if (pe.trait.mPath == resolve.langFn() || pe.trait.mPath == resolve.langFnMut() || pe.trait.mPath == resolve.langFnOnce()) {
                         auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.size();
                         MIR_ASSERT(state, e.args.size() == 2, "Fn* call requires two arguments");
                         auto fcnLvalue = mv$(e.args[0].as_LValue());

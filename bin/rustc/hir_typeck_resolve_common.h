@@ -17,6 +17,95 @@ struct TraitResolveCommon {
     const WireBoard& wb;
     const HIRCrate& crate;
 
+    const HIRSimplePath& langCopy() const {
+        return mLangCopy;
+    }
+
+    const HIRSimplePath& langClone() const {
+        return mLangClone;
+    }
+
+    const HIRSimplePath& langDrop() const {
+        return mLangDrop;
+    }
+
+    const HIRSimplePath& langSized() const {
+        return mLangSized;
+    }
+
+    const HIRSimplePath& langUnsize() const {
+        return mLangUnsize;
+    }
+
+    const HIRSimplePath& langFn() const {
+        return mLangFn;
+    }
+
+    const HIRSimplePath& langFnMut() const {
+        return mLangFnMut;
+    }
+
+    const HIRSimplePath& langFnOnce() const {
+        return mLangFnOnce;
+    }
+
+    const HIRSimplePath& langBox() const {
+        return mLangBox;
+    }
+
+    const HIRSimplePath& langPhantomData() const {
+        return mLangPhantomData;
+    }
+
+    const HIRSimplePath& langGenerator() const {
+        return mLangGenerator;
+    }
+
+    const HIRSimplePath& langDiscriminantKind() const {
+        return mLangDiscriminantKind;
+    }
+
+    const HIRSimplePath& langPointee() const {
+        return mLangPointee;
+    }
+
+    const HIRSimplePath& langDynMetadata() const {
+        return mLangDynMetadata;
+    }
+
+    const HIRSimplePath& langPointeeSized() const {
+        return mLangPointeeSized;
+    }
+
+    const HIRSimplePath& langMetaSized() const {
+        return mLangMetaSized;
+    }
+
+    const HIRSimplePath& langDestruct() const {
+        return mLangDestruct;
+    }
+
+    const HIRSimplePath& langFuture() const {
+        return mLangFuture;
+    }
+
+    // Nullable views of the current generics context (the non-Ptr overloads
+    // below assert they are set).
+    const HIRGenericParams* implGenericsPtr() const {
+        return mImplGenerics;
+    }
+
+    const HIRGenericParams* itemGenericsPtr() const {
+        return mItemGenerics;
+    }
+
+    // Visit each cached type-equality target; the cache itself stays internal.
+    void forEachTypeEquality(::std::function<void(HIRTypeRef&)> cb) {
+        for (auto& e : typeEqualities) {
+            cb(e.second.ty);
+        }
+    }
+
     const WireBoard& board() const {
         return wb;
     }

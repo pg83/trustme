@@ -360,7 +360,7 @@ namespace {
                     retBlock,
                     MIRUnwindAction::make_Continue({}),
                     MIRLValue::newReturn(),
-                    HIRPath(ty, state.resolve.mLangDrop, rcstringDrop),
+                    HIRPath(ty, state.resolve.langDrop(), rcstringDrop),
                     makeVec1<MIRParam>(mv$(borrowLv)),
                 })
             );
@@ -631,14 +631,14 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 const char* fcnName;
                 const HIRSimplePath* traitPath;
                 HIRBorrowType bt;
-            } const entries[3] = {{"call", &state.resolve.mLangFn, HIRBorrowType::Shared}, {"call_mut", &state.resolve.mLangFnMut, HIRBorrowType::Unique}, {"call_once", &state.resolve.mLangFnOnce, HIRBorrowType::Owned}};
+            } const entries[3] = {{"call", &state.resolve.langFn(), HIRBorrowType::Shared}, {"call_mut", &state.resolve.langFnMut(), HIRBorrowType::Unique}, {"call_once", &state.resolve.langFnOnce(), HIRBorrowType::Owned}};
 
             size_t offset;
-            if (traitPath.mPath == state.resolve.mLangFn) {
+            if (traitPath.mPath == state.resolve.langFn()) {
                 offset = 0;
-            } else if (traitPath.mPath == state.resolve.mLangFnMut) {
+            } else if (traitPath.mPath == state.resolve.langFnMut()) {
                 offset = 1;
-            } else if (traitPath.mPath == state.resolve.mLangFnOnce) {
+            } else if (traitPath.mPath == state.resolve.langFnOnce()) {
                 offset = 2;
             } else {
                 offset = 3; // Wait, is this reachable?
@@ -1180,9 +1180,9 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                             }
                     }
                     if( hasDrop ) {
-                            if (auto* e = transList.addFunction(crate.types, HIRPath(ty, state.resolve.mLangDrop, rcstringDrop))) {
+                            if (auto* e = transList.addFunction(crate.types, HIRPath(ty, state.resolve.langDrop(), rcstringDrop))) {
                                 MonomorphState params(crate.types);
-                                auto p = HIRPath(ty, state.resolve.mLangDrop, rcstringDrop);
+                                auto p = HIRPath(ty, state.resolve.langDrop(), rcstringDrop);
                                 auto fcnE = state.resolve.getValue(sp, p, /*out*/ params, /*signature_only=*/false);
                                 ASSERT_BUG(sp, fcnE.is_Function(), "Drop didn't point to a function! " << fcnE.tagStr() << " " << p);
                                 ASSERT_BUG(sp, !params.hasTypes(), "Generic drop impl encountered during auto_impls (should have been populated during enum)");
@@ -1226,7 +1226,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     afterCleanupCall,
                     MIRUnwindAction::make_Terminate({}),
                     MIRLValue::newReturn(),
-                    HIRPath(ty, state.resolve.mLangDrop, rcstringDrop),
+                    HIRPath(ty, state.resolve.langDrop(), rcstringDrop),
                     makeVec1<MIRParam>(mv$(cleanupBorrow)),
                 });
                 builder.mir.blocks.push_back(mv$(cleanupCallBlock));
@@ -2028,7 +2028,7 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         newList.functions.insert(std::make_pair(std::move(dropGlueFn), nullptr));
 
         if (ty.first->is_Path() && ty.first->as_Path().binding.getTraitMarkings()->hasDropImpl) {
-            auto fcnPath = HIRPath(ty.first, state.resolve.mLangDrop, enumerateRcstringDrop);
+            auto fcnPath = HIRPath(ty.first, state.resolve.langDrop(), enumerateRcstringDrop);
             DEBUG("++ " << fcnPath);
             newList.functions.insert(std::make_pair(std::move(fcnPath), nullptr));
         }
@@ -2561,7 +2561,7 @@ void TransEnumerateTypes(EnumState& state) {
                 }
             }
 
-            if (gpath.mPath == state.resolve.mLangFn || gpath.mPath == state.resolve.mLangFnMut || gpath.mPath == state.resolve.mLangFnOnce) {
+            if (gpath.mPath == state.resolve.langFn() || gpath.mPath == state.resolve.langFnMut() || gpath.mPath == state.resolve.langFnOnce()) {
                 tv.visitType(gpath.mParams.types[0]);
             }
         }

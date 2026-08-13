@@ -351,10 +351,10 @@ namespace {
             this->visitPathParams(e.params);
 
             // Search for matching impls in current generic blocks
-            if (mResolve.mItemGenerics != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.mItemGenerics, p.mData)) {
+            if (mResolve.itemGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.itemGenericsPtr(), p.mData)) {
                 return;
             }
-            if (mResolve.mImplGenerics != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.mImplGenerics, p.mData)) {
+            if (mResolve.implGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.implGenericsPtr(), p.mData)) {
                 return;
             }
 

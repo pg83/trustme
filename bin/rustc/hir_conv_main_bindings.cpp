@@ -2471,9 +2471,9 @@ public:
         // TODO: Handle resolution of all items in m_resolve.m_type_equalities
         // - params might reference each other, so `set_item_generics` has to have been called
         // - But `m_type_equalities` can end up with non-resolved UFCS paths
-        for (auto& e : mResolve.typeEqualities) {
-            visitType(e.second.ty);
-        }
+        mResolve.forEachTypeEquality([&](HIRTypeRef& ty) {
+            visitType(ty);
+        });
 
         // The implemented trait is always in scope
         HIRVisitor::visitTraitImpl(traitPath, impl);
@@ -3055,12 +3055,12 @@ public:
             }
 
             // Search for matching impls in current generic blocks
-            if (mResolve.mItemGenerics != nullptr && locateTraitItemInBounds(pc, e.type, *mResolve.mItemGenerics, p.mData)) {
+            if (mResolve.itemGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *mResolve.itemGenericsPtr(), p.mData)) {
                 DEBUG("Found in item params, p = " << p);
                 assert(!p.mData.is_UfcsUnknown());
                 return;
             }
-            if (mResolve.mImplGenerics != nullptr && locateTraitItemInBounds(pc, e.type, *mResolve.mImplGenerics, p.mData)) {
+            if (mResolve.implGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *mResolve.implGenericsPtr(), p.mData)) {
                 DEBUG("Found in impl params, p = " << p);
                 assert(!p.mData.is_UfcsUnknown());
                 return;

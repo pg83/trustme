@@ -7794,7 +7794,7 @@ namespace {
             const auto& ty = localMirRes.getParamType(tmp, param);
             emitParam(param);
             if (const auto* te = ty->opt_Path()) {
-                if (te->path.mData.is_Generic() && te->path.mData.as_Generic().mPath == mResolve.mLangDynMetadata) {
+                if (te->path.mData.is_Generic() && te->path.mData.as_Generic().mPath == mResolve.langDynMetadata()) {
                     of << "._0._0";
                 }
             }
