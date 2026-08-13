@@ -18,13 +18,12 @@ The compiler silently produces incorrect programs. Highest severity.
 | rust_lib runtime panics | 18 | std `error.rs` tests; partly blocked on missing backtrace support (borders P2 feature work) |
 | slice doctest | 1 | `core/src/slice/mod.rs` |
 
-## P1 — compiler crashes on valid code (~243)
+## P1 — compiler crashes on valid code (~229)
 
-One cluster = one bug. Fixing the top 8 clusters greens ~50 tests.
+One cluster = one bug. Fixing the top 7 clusters greens ~36 tests.
 
 | location | tests | example |
 |---|---|---|
-| SEGV: unbounded `findImpl` bound recursion | 14 | `associated-types/normalize-cycle-in-eval.rs` (rustc #74868); needs a cycle guard |
 | `macro_rules_macro_rules.cpp:2116` "No arm matched" | 13 | `attributes/dont-dup-expr-attrs.rs` |
 | `trans_target.cpp:584` "sizeof on an erased type" | 7 | `impl-trait/in-ctfe/array-len.rs` |
 | `mir_from_hir.cpp:4422` | 6 | `consts/const-expr-addr-operator.rs` |
@@ -66,11 +65,10 @@ Pass when re-run in isolation; fail only under the parallel gate load
 
 ## Recommended order (by ROI)
 
-1. findImpl recursion guard for normalization cycles (14 tests)
-2. Top-5 crash clusters (~36 tests)
-3. Quiz miscompiles (deep dives: method resolution, macro hygiene)
-4. Parser features, largest-cluster first
-5. Typeck/TAIT epic (largest, hardest)
+1. Top-5 crash clusters (~36 tests)
+2. Quiz miscompiles (deep dives: method resolution, macro hygiene)
+3. Parser features, largest-cluster first
+4. Typeck/TAIT epic (largest, hardest)
 
 Raw data: per-case signatures and per-bucket test lists were produced by the
 triage scripts in the session scratchpad (`fail-rows2.json`,

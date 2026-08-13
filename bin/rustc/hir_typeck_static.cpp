@@ -602,9 +602,44 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         // --- /UfcsKnown ---
     }
 
+    const bool isMarker = crate.getTraitByPath(sp, traitPath).mIsMarker;
+    bool pushedNonMarkerGoal = false;
+    if (!isMarker) {
+        for (const auto& ent : findImplStack) {
+            if (*::std::get<0>(ent) != traitPath) {
+                continue;
+            }
+            if ((::std::get<1>(ent) == nullptr) != (traitParams == nullptr)) {
+                continue;
+            }
+            if (traitParams && *::std::get<1>(ent) != *traitParams) {
+                continue;
+            }
+            if (::std::get<2>(ent) != type) {
+                continue;
+            }
+
+            // Ordinary trait goals are inductive: seeing the same fully
+            // interned goal while checking one of its candidates means that
+            // candidate cannot prove itself.
+            return false;
+        }
+        findImplStack.push_back(::std::make_tuple(&traitPath, traitParams, type));
+        pushedNonMarkerGoal = true;
+    }
+    struct NonMarkerFindImplStackGuard {
+        decltype(findImplStack)& stack;
+        bool active;
+        ~NonMarkerFindImplStackGuard() {
+            if (active) {
+                stack.pop_back();
+            }
+        }
+    } nonMarkerStackGuard{findImplStack, pushedNonMarkerGoal};
+
     bool ret;
 
-    if( crate.getTraitByPath(sp, traitPath).mIsMarker )
+    if( isMarker )
     {
         struct H {
             static bool findImplAutoTraitCheck(const StaticTraitResolve& self, const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, tCbFindImpl foundCb, const HIRMarkerImpl& impl, bool& outRv) {
