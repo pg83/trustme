@@ -27,6 +27,8 @@ struct TransOptions {
     OptimizationLevel optLevel = OptimizationLevel::None;
     DebugInfoLevel debugInfo = DebugInfoLevel::None;
     ::std::string buildCommandFile;
+    // Emit the generated C++ source and stop, without invoking the C compiler.
+    bool emitCppOnly = false;
     ::std::vector<::std::string> linkerArgs;
 
     ::std::string panicCrate;

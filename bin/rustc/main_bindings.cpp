@@ -215,6 +215,9 @@ struct ProgramParams {
     struct {
         ::std::string codegenType;
         ::std::string emitBuildCommand;
+        // Emit the generated C++ source and stop, without invoking the C
+        // compiler (for profiling the mrustc front/middle-end in isolation).
+        bool emitCppOnly = false;
         ::std::string panicType;
         ::std::vector<::std::string> linkerArgs;
     } codegen;
@@ -795,6 +798,7 @@ int main(int argc, char* argv[]) {
         TransOptions transOpt;
         transOpt.mode = params.codegen.codegenType == "" ? "c" : params.codegen.codegenType;
         transOpt.buildCommandFile = params.codegen.emitBuildCommand;
+        transOpt.emitCppOnly = params.codegen.emitCppOnly;
         transOpt.linkerArgs = params.codegen.linkerArgs;
         transOpt.optLevel = params.optLevel;
         transOpt.panicCrate = "panic_" + params.codegen.panicType;
@@ -1082,7 +1086,9 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     //        ::std::cerr << "Flag -C " << optname << " doesn't take an argument" << ::std::endl;
                     //    }
 
-                    if (optname == "emit-build-command") {
+                    if (optname == "emit-cpp-only") {
+                        this->codegen.emitCppOnly = true;
+                    } else if (optname == "emit-build-command") {
                         getOptval();
                         this->codegen.emitBuildCommand = optval;
                     } else if (optname == "codegen-type") {

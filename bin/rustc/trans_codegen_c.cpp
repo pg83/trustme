@@ -707,6 +707,12 @@ namespace {
             of.close();
             ASSERT_BUG(Span(), !of.bad(), "Error set on output stream for: " << outfilePathC);
 
+            // Stop after emitting the C++ source, without invoking the C
+            // compiler (used to profile the mrustc front/middle-end alone).
+            if (opt.emitCppOnly) {
+                return;
+            }
+
             class LinkList: private StringList {
             public:
                 enum class Ty {
