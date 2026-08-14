@@ -181,6 +181,18 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
             }
             ParseModItem(lex, *localMod, mv$(itemAttrs));
             return ASTExprNodeP();
+        case TOK_RWORD_ASYNC:
+            if (lex.lookahead(0) == TOK_RWORD_FN || (lex.lookahead(0) == TOK_RWORD_UNSAFE && lex.lookahead(1) == TOK_RWORD_FN)) {
+                PUTBACK(tok, lex);
+                if (!localMod) {
+                    localMod = lex.parseState().getCurrentMod().addAnon();
+                    DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
+                    lex.parseState().module = localMod.get();
+                }
+                ParseModItem(lex, *localMod, mv$(itemAttrs));
+                return ASTExprNodeP();
+            }
+            break;
         // 'const' - Check if the next token isn't a `{`, if so it's an item. Otherwise, fall through
         case TOK_RWORD_CONST:
             if (LOOK_AHEAD(lex) != TOK_BRACE_OPEN) {
@@ -3088,6 +3100,47 @@ ASTStruct ParseStruct(TokenStream& lex, const ASTAttributeList& metaItems) {
     }
 }
 
+static void ParseFunctionQualifiers(TokenStream& lex, Token& tok, ASTFunction::Flags& flags, ::std::string& abi) {
+    if (tok.type() == TOK_RWORD_CONST) {
+        switch (lex.lookahead(0)) {
+            case TOK_RWORD_ASYNC:
+            case TOK_RWORD_UNSAFE:
+            case TOK_RWORD_EXTERN:
+            case TOK_RWORD_FN:
+                break;
+            default:
+                return;
+        }
+    }
+
+    for (;;) {
+        switch (tok.type()) {
+            case TOK_RWORD_CONST:
+                flags.isConst = true;
+                GET_TOK(tok, lex);
+                break;
+            case TOK_RWORD_ASYNC:
+                flags.isAsync = true;
+                GET_TOK(tok, lex);
+                break;
+            case TOK_RWORD_UNSAFE:
+                flags.isUnsafe = true;
+                GET_TOK(tok, lex);
+                break;
+            case TOK_RWORD_EXTERN:
+                if (GET_TOK(tok, lex) == TOK_STRING) {
+                    abi = tok.str();
+                    GET_TOK(tok, lex);
+                } else {
+                    abi = "C";
+                }
+                break;
+            default:
+                return;
+        }
+    }
+}
+
 ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
     Token tok;
 
@@ -3138,23 +3191,7 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
 
     std::string abi = ABI_RUST;
     ASTFunction::Flags fnFlags;
-
-    if (tok.type() == TOK_RWORD_UNSAFE) {
-        fnFlags.isUnsafe = true;
-        GET_TOK(tok, lex);
-    }
-    if (tok.type() == TOK_RWORD_ASYNC) {
-        fnFlags.isAsync = true;
-        GET_TOK(tok, lex);
-    }
-    if (tok.type() == TOK_RWORD_EXTERN) {
-        if (GET_TOK(tok, lex) == TOK_STRING) {
-            abi = tok.str();
-            GET_TOK(tok, lex);
-        } else {
-            abi = "C";
-        }
-    }
+    ParseFunctionQualifiers(lex, tok, fnFlags, abi);
 
     RcString name;
     ASTItem rv;
@@ -3651,45 +3688,20 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
         return;
     }
 
-    if (tok.type() == TOK_RWORD_UNSAFE) {
-        fnFlags.isUnsafe = true;
-        GET_TOK(tok, lex);
-    }
+    ParseFunctionQualifiers(lex, tok, fnFlags, abi);
     if (tok.type() == TOK_RWORD_CONST) {
         GET_TOK(tok, lex);
-        if (tok.type() != TOK_RWORD_FN && tok.type() != TOK_RWORD_UNSAFE && !fnFlags.isUnsafe) {
-            CHECK_TOK(tok, TOK_IDENT);
-            auto name = tok.ident().name;
-            GET_CHECK_TOK(tok, lex, TOK_COLON);
-            auto ty = ParseType(lex);
-            GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-            auto val = ParseExpr(lex);
-            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+        CHECK_TOK(tok, TOK_IDENT);
+        auto name = tok.ident().name;
+        GET_CHECK_TOK(tok, lex, TOK_COLON);
+        auto ty = ParseType(lex);
+        GET_CHECK_TOK(tok, lex, TOK_EQUAL);
+        auto val = ParseExpr(lex);
+        GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
 
-            auto i = ASTStatic(ASTStatic::CONST, mv$(ty), mv$(val));
-            impl.addStatic(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(i));
-            return;
-        }
-        if (tok.type() == TOK_RWORD_UNSAFE) {
-            fnFlags.isUnsafe = true;
-            GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
-        }
-        fnFlags.isConst = true;
-    }
-    if (tok.type() == TOK_RWORD_EXTERN) {
-        if (GET_TOK(tok, lex) == TOK_STRING) {
-            abi = tok.str();
-            GET_TOK(tok, lex);
-        } else {
-            abi = "C";
-        }
-    }
-    if (tok.type() == TOK_RWORD_ASYNC) {
-        fnFlags.isAsync = true;
-        if (lex.getTokenIf(TOK_RWORD_UNSAFE)) {
-            fnFlags.isUnsafe = true;
-        }
-        GET_TOK(tok, lex);
+        auto i = ASTStatic(ASTStatic::CONST, mv$(ty), mv$(val));
+        impl.addStatic(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(i));
+        return;
     }
     CHECK_TOK(tok, TOK_RWORD_FN);
     GET_CHECK_TOK(tok, lex, TOK_IDENT);
@@ -4193,27 +4205,29 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     break;
                 }
                 case TOK_RWORD_UNSAFE: {
-                    struct H {
-                        static std::string optExtern(Token& tok, TokenStream& lex) {
-                            if (lex.lookahead(0) == TOK_RWORD_EXTERN) {
-                                GET_TOK(tok, lex);
-                                if (lex.lookahead(0) == TOK_STRING) {
-                                    GET_TOK(tok, lex);
-                                    return tok.str();
-                                } else {
-                                    return "C";
-                                }
-                            } else {
-                                return ABI_RUST;
-                            }
-                        }
-                    };
-
-                    auto abi = H::optExtern(tok, lex);
+                    auto abi = ::std::string(ABI_RUST);
+                    if (lex.getTokenIf(TOK_RWORD_EXTERN)) {
+                        abi = lex.lookahead(0) == TOK_STRING ? lex.getToken().str() : "C";
+                    }
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().name;
                     itemData = ASTItem(ParseFunctionDefWithCode(lex, /*allow_self=*/false, abi, ASTFunction::Flags().setConst().setUnsafe()));
+                    break;
+                }
+                case TOK_RWORD_ASYNC: {
+                    auto flags = ASTFunction::Flags().setConst().setAsync();
+                    if (lex.getTokenIf(TOK_RWORD_UNSAFE)) {
+                        flags = flags.setUnsafe();
+                    }
+                    auto abi = ::std::string(ABI_RUST);
+                    if (lex.getTokenIf(TOK_RWORD_EXTERN)) {
+                        abi = lex.lookahead(0) == TOK_STRING ? lex.getToken().str() : "C";
+                    }
+                    GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
+                    GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                    itemName = tok.ident().name;
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, /*allow_self=*/false, abi, flags));
                     break;
                 }
                 case TOK_RWORD_EXTERN: {

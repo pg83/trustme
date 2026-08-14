@@ -43,16 +43,15 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Repeated parser feature families: 32 async/closure-adjacent function forms,
-   23 `reuse` delegation forms, 12 return-type-notation `(..)` forms, 10
-   associated-type lifetime-bound forms, 9 explicit tail calls using `become`,
-   9 frontmatter forms, and 7 ergonomic-clone `use` forms. The three other
-   `TOK_DOUBLE_DOT` failures are range/expression syntax, not return-type
-   notation.
-2. Trait lookup, normalization, and inference: 29 missing-method failures, 26
+1. Repeated parser feature families: 23 `reuse` delegation forms, 12
+   return-type-notation `(..)` forms, 10 associated-type lifetime-bound forms,
+   9 explicit tail calls using `become`, 9 frontmatter forms, and 7
+   ergonomic-clone `use` forms. The three other `TOK_DOUBLE_DOT` failures are
+   range/expression syntax, not return-type notation.
+2. Trait lookup, normalization, and inference: 29 missing-method failures, 28
    missing-impl failures, 14 unresolved inference variables, 10 inferred trait
    obligations left ambiguous, and 9 const-value relation failures. Total
-   adjacent impact: 88 tests, but the 26 missing impls include a large
+   adjacent impact: 90 tests, but the 28 missing impls include a large
    `TransmuteFrom` subgroup and must not be treated as one solver bug without
    comparing their goals.
 3. Macro and attribute expansion: 24 unresolved macro invocations and 13
@@ -82,7 +81,7 @@ of a shared root cause; split a row whenever minimal reproducers diverge.
 
 ## Internal compiler failures
 
-There are 140 unfinished compiler-internal failures in 90 stable signatures.
+There are 141 unfinished compiler-internal failures in 91 stable signatures.
 
 | signature or root cause | tests | note |
 |---|---:|---|
@@ -90,22 +89,22 @@ There are 140 unfinished compiler-internal failures in 90 stable signatures.
 | inline-assembly token assertion, `parse_token.h:71` | 5 | five Rust Reference asm fragments |
 | intrinsic/unsized translation errors, `mir_helpers.h:108` | 5 | two `vtable_align`; one each `fmuladdf32`, `fadd_fast`, and extern-type alignment |
 | `sizeof` on infer type, `trans_target.cpp:496` | 4 | const-generic/type-relation cases |
-| 86 smaller stable signatures | 115 | one to three tests each |
+| 87 smaller stable signatures | 116 | one to three tests each |
 
 The eight signal failures are two SIGILLs at `mir_operations.cpp:1473`, two
 SIGSEGVs at `hir_conv_main_bindings.cpp:1430`, the recursive pattern-lowering
 SIGSEGV at `mir_from_hir.cpp:4760`, and three other one-test SIGSEGV signatures.
-Four uncaught exceptions and five explicit MIR TODOs are included in the 140.
+Four uncaught exceptions and five explicit MIR TODOs are included in the 141.
 
 ## Accepted Rust rejected by the front end
 
-The 614 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 584 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
-| parser | 275 | 144 at `parse_parseerror.cpp:63`, 109 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
-| type checking, HIR lowering, and resolution | 264 | result relation 42 (22 opaque-bearing, 20 other), missing method 29, missing impl 26 |
+| parser | 243 | 112 at `parse_parseerror.cpp:63`, 109 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
+| type checking, HIR lowering, and resolution | 266 | result relation 42 (22 opaque-bearing, 20 other), missing method 29, missing impl 28 |
 | macro and attribute expansion | 69 | unknown macro 24, missing derive 13 |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |
@@ -140,7 +139,8 @@ intentional native symbols, and one exercises native-link directives.
 - 106 executables panic with exit 101. The panic exit itself is not a root
   cause; the repeated semantic families are listed in the impact order above.
 - Eleven outputs differ: nine async-drop tests and RustSmith seeds 19 and 102.
-- Ten executables abort: nine Miri x86-intrinsic cases and one library test.
+- Eleven executables abort: nine Miri x86-intrinsic cases, one async Miri
+  double-free, and one library test.
 - Five generated executables hit assertions: two SysV empty-struct ABI cases,
   three SIMD/library intrinsic cases (`reduce_add`, `round`, and `neg`).
 
