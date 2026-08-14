@@ -2065,7 +2065,12 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
         }
         TU_ARMA(Values, ve) {
             auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
-            auto it = std::find(ve.values.begin(), ve.values.end(), v);
+            const U128 mask = ve.field.size >= 16
+                ? U128::max()
+                : (U128(1) << static_cast<unsigned>(ve.field.size * 8)) - U128(1);
+            auto it = std::find_if(ve.values.begin(), ve.values.end(), [&](const U128& candidate) {
+                return (candidate & mask) == v;
+            });
             ASSERT_BUG(sp, it != ve.values.end(), "Invalid enum tag: " << v);
             varIdx = it - ve.values.begin();
             DEBUG("VariantMode::Values - #" << varIdx);

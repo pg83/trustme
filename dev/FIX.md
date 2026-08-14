@@ -30,7 +30,7 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P1 — internal compiler failures
 
-After the targeted CTFE rerun, 243 of the snapshot's internal compiler failures
+After the targeted CTFE rerun, 227 of the snapshot's internal compiler failures
 remain. The former generic `mir_helpers.h:108` cluster is subdivided below by
 its actual MIR error.
 
@@ -47,7 +47,6 @@ its actual MIR error.
 | MIR error, `mir_helpers.h:108`: `fmuladd` | 1 | |
 | MIR error, `mir_helpers.h:108`: `fadd_fast` | 1 | |
 | MIR error, `mir_helpers.h:108`: extern-type alignment | 1 | |
-| CTFE intrinsic TODO, `hir_conv_constant_evaluation.cpp:3498` | 16 | `black_box`, `forget`, `raw_eq`, pointer offsets, SIMD and comparisons |
 | BUG, `macro_rules_macro_rules.cpp:2189` | 10 | |
 | BUG, `hir_hir.cpp:1653` | 8 | |
 | BUG, `parse_common.cpp:1404` | 5 | |
@@ -84,7 +83,7 @@ the remaining long tail of Rust 1.90 syntax.
   assignments (3), undeclared generated symbols (2), and eight smaller cases.
 - Three additional tests reach the linker and fail on unresolved/intentional
   native symbols.
-- 102 executables panic with exit 101. The common `assert_eq!` text covers many
+- 103 executables panic with exit 101. The common `assert_eq!` text covers many
   unrelated semantic failures and is not a root-cause cluster.
 - Repairing the shared CTFE arithmetic path exposed eight former compiler
   failures as runtime mismatches: seven `core::num::dec2flt` tests and

@@ -249,6 +249,7 @@ public:
 class MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
 public:
     static MIREvalAllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
+    static MIREvalAllocationPtr allocateScratch(stl::ObjPool* pool, size_t size);
     static MIREvalAllocationPtr allocateHeap(stl::ObjPool* pool, size_t size, size_t alignment);
     static MIREvalAllocationPtr allocateRo(stl::ObjPool* pool, const void* data, size_t len);
 };
@@ -825,7 +826,7 @@ public:
         }
     }
 
-    MIREvalValueRef slice(size_t ofs, size_t len) {
+    MIREvalValueRef slice(size_t ofs, size_t len) const {
         ASSERT_BUG(Span(), ofs <= this->len && ofs + len <= this->len, "ValueRef::slice: " << ofs << "+" << len << " out of range (" << this->len << ")");
 
         MIREvalValueRef rv;
@@ -835,7 +836,7 @@ public:
         return rv;
     }
 
-    MIREvalValueRef slice(size_t ofs) {
+    MIREvalValueRef slice(size_t ofs) const {
         ASSERT_BUG(Span(), ofs <= this->len, "ValueRef::slice: " << ofs << " out of range (" << this->len << ")");
         return slice(ofs, this->len - ofs);
     }
@@ -880,6 +881,27 @@ public:
                 storage.asValue().setReloc(this->ofs + i, std::move(r));
             }
         }
+    }
+
+    void copyFromOverlapping(const MIRTypeResolve& state, const MIREvalValueRef& other, stl::ObjPool* pool) {
+        ensureLive(state);
+        other.ensureLive(state);
+        const size_t copyLen = std::min(this->len, other.len);
+        if (copyLen == 0 || (this->storage == other.storage && this->ofs == other.ofs)) {
+            return;
+        }
+        if (this->storage != other.storage || this->ofs + copyLen <= other.ofs || other.ofs + copyLen <= this->ofs) {
+            copyFrom(state, other);
+            return;
+        }
+
+        // `copy` has memmove semantics.  A scratch allocation is needed instead
+        // of a byte buffer because CTFE values also carry initialisation bits and
+        // pointer relocations, all of which are part of the copied representation.
+        auto scratch = MIREvalAllocationPtr::allocateScratch(pool, copyLen);
+        MIREvalValueRef temporary(scratch);
+        temporary.copyFrom(state, other.slice(0, copyLen));
+        this->slice(0, copyLen).copyFrom(state, temporary);
     }
 
     void writeBytes(const MIRTypeResolve& state, const void* data, size_t len) {
@@ -1062,6 +1084,13 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const St
     MIREvalAllocationPtr rv;
     // TODO: Include the current location from `state` in the allocation header
     rv.ptr = pool->make<MIREvalAllocation>(data, len, ty);
+    return rv;
+}
+
+MIREvalAllocationPtr MIREvalAllocationPtr::allocateScratch(stl::ObjPool* pool, size_t size) {
+    auto* data = static_cast<uint8_t*>(pool->allocate(size + ((size + 7) / 8)));
+    MIREvalAllocationPtr rv;
+    rv.ptr = pool->make<MIREvalAllocation>(data, size, HIRTypeRef());
     return rv;
 }
 
@@ -2135,7 +2164,13 @@ public:
                 return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readPtr(state);
             }
             TU_ARMA(Borrow, e) {
-                MIR_TODO(state, "read_param_ptr - " << p);
+                MIREvalValueRef meta;
+                uint64_t rawAddress = 0;
+                auto value = const_cast<MIREvalCallStackEntry*>(this)->getLval(e.val, &meta, &rawAddress);
+                if (rawAddress) {
+                    return ::std::make_pair(rawAddress, MIREvalRelocPtr());
+                }
+                return ::std::make_pair(EncodedLiteral::PTR_BASE + value.getOfs(), value.getStorage());
             }
             TU_ARMA(Constant, e) {
                 if (!e.is_ItemAddr()) {
@@ -2159,6 +2194,40 @@ public:
 };
 
 namespace {
+    void resolveStaticPointer(
+        MIREvalCallStackEntry& localState,
+        ::std::pair<uint64_t, MIREvalRelocPtr>& value
+    ) {
+        if (const auto* staticRef = value.second.asStaticref()) {
+            value.second = MIREvalRelocPtr(localState.getStaticref(staticRef->path().clone()));
+        }
+    }
+
+    bool samePointerProvenance(const MIREvalRelocPtr& left, const MIREvalRelocPtr& right) {
+        if (left == right) {
+            return true;
+        }
+        const auto* leftStatic = left.asStaticref();
+        const auto* rightStatic = right.asStaticref();
+        return leftStatic && rightStatic && leftStatic->path() == rightStatic->path();
+    }
+
+    MIREvalValueRef pointerBytes(
+        MIREvalCallStackEntry& localState,
+        ::std::pair<uint64_t, MIREvalRelocPtr> pointer,
+        size_t length,
+        const char* intrinsic
+    ) {
+        const auto& state = localState.state;
+        resolveStaticPointer(localState, pointer);
+        MIR_ASSERT(state, pointer.second, "`" << intrinsic << "` cannot access an absolute pointer");
+        MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid pointer passed to `" << intrinsic << "`");
+        const uint64_t offset = pointer.first - EncodedLiteral::PTR_BASE;
+        MIR_ASSERT(state, offset <= pointer.second.asValue().size(), "Pointer passed to `" << intrinsic << "` is out of bounds");
+        MIR_ASSERT(state, length <= pointer.second.asValue().size() - offset, "Memory range passed to `" << intrinsic << "` is out of bounds");
+        return MIREvalValueRef(pointer.second, offset).slice(0, length);
+    }
+
     uint8_t pointerGuaranteedCmp(
         const ::std::pair<uint64_t, MIREvalRelocPtr>& left,
         const ::std::pair<uint64_t, MIREvalRelocPtr>& right
@@ -3634,23 +3703,102 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     }
                 }
                 // ---
-                else if (te->name == "copy_nonoverlapping") {
+                else if (te->name == "copy_nonoverlapping" || te->name == "copy") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t elementSize;
                     if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
                         throw Defer();
                     }
-                    auto ptrSrc = localState.getLval(e.args.at(0).as_LValue()).readPtr(state);
-                    auto ptrDst = localState.getLval(e.args.at(1).as_LValue()).readPtr(state);
+                    auto ptrSrc = localState.readParamPtr(e.args.at(0));
+                    auto ptrDst = localState.readParamPtr(e.args.at(1));
                     U128 count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
                     MIR_ASSERT(state, count.isU64(), "Excessive count in `" << te->name << "`");
                     MIR_ASSERT(state, count * elementSize < U128(SIZE_MAX), "Excessive size in `" << te->name << "`");
                     size_t nbytes = elementSize * count.truncateU64();
-                    MIR_ASSERT(state, ptrSrc.first >= EncodedLiteral::PTR_BASE, "");
-                    MIR_ASSERT(state, ptrDst.first >= EncodedLiteral::PTR_BASE, "");
-                    auto vrSrc = MIREvalValueRef(ptrSrc.second, ptrSrc.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
-                    auto vrDst = MIREvalValueRef(ptrDst.second, ptrDst.first - EncodedLiteral::PTR_BASE).slice(0, nbytes);
-                    vrDst.copyFrom(state, vrSrc);
+                    if (nbytes != 0) {
+                        auto vrSrc = pointerBytes(localState, ptrSrc, nbytes, te->name.c_str());
+                        auto vrDst = pointerBytes(localState, ptrDst, nbytes, te->name.c_str());
+                        if (te->name == "copy") {
+                            vrDst.copyFromOverlapping(state, vrSrc, localState.valuePool);
+                        } else {
+                            vrDst.copyFrom(state, vrSrc);
+                        }
+                    }
+                } else if (te->name == "compare_bytes") {
+                    auto leftPtr = localState.readParamPtr(e.args.at(0));
+                    auto rightPtr = localState.readParamPtr(e.args.at(1));
+                    auto count = localState.readParamUint(TargetGetPointerBits(), e.args.at(2));
+                    MIR_ASSERT(state, count.isU64() && count <= U128(SIZE_MAX), "Excessive count in `compare_bytes`");
+                    const size_t nbytes = count.truncateU64();
+                    int result = 0;
+                    if (nbytes != 0) {
+                        auto left = pointerBytes(localState, leftPtr, nbytes, "compare_bytes");
+                        auto right = pointerBytes(localState, rightPtr, nbytes, "compare_bytes");
+                        const int raw = memcmp(left.extReadBytes(state, nbytes), right.extReadBytes(state, nbytes), nbytes);
+                        result = (raw > 0) - (raw < 0);
+                    }
+                    dst.writeSint(state, 32, S128(result));
+                } else if (te->name == "raw_eq") {
+                    auto ty = localState.monomorphExpand(te->params.types.at(0));
+                    size_t size;
+                    size_t alignment;
+                    if (!TargetGetSizeAndAlignOf(state.sp, resolve, ty, size, alignment)) {
+                        throw Defer();
+                    }
+                    auto leftPtr = localState.readParamPtr(e.args.at(0));
+                    auto rightPtr = localState.readParamPtr(e.args.at(1));
+                    auto isAligned = [&](const ::std::pair<uint64_t, MIREvalRelocPtr>& pointer) {
+                        if (pointer.second && pointer.first < EncodedLiteral::PTR_BASE) {
+                            return false;
+                        }
+                        const uint64_t address = pointer.second
+                            ? pointer.first - EncodedLiteral::PTR_BASE
+                            : pointer.first;
+                        return alignment == 0 || address % alignment == 0;
+                    };
+                    MIR_ASSERT(state, isAligned(leftPtr) && isAligned(rightPtr), "Unaligned pointer passed to `raw_eq`");
+                    bool equal = true;
+                    if (size != 0) {
+                        auto left = pointerBytes(localState, leftPtr, size, "raw_eq");
+                        auto right = pointerBytes(localState, rightPtr, size, "raw_eq");
+                        equal = memcmp(left.extReadBytes(state, size), right.extReadBytes(state, size), size) == 0;
+                    }
+                    dst.writeUint(state, 8, U128(equal ? 1 : 0));
+                } else if (te->name == "black_box") {
+                    localState.writeParam(dst, e.args.at(0));
+                } else if (te->name == "forget") {
+                    // `forget` consumes its argument and returns unit.  The MIR
+                    // call itself therefore has no value or memory effect.
+                } else if (te->name == "simd_extract" || te->name == "simd_extract_dyn") {
+                    auto vectorTy = localState.monomorphExpand(te->params.types.at(0));
+                    auto elementTy = localState.monomorphExpand(te->params.types.at(1));
+                    size_t vectorSize;
+                    size_t elementSize;
+                    if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize)
+                        || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
+                        throw Defer();
+                    }
+                    MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, "Invalid SIMD layout for `" << te->name << "`");
+                    auto index = localState.readParamUint(32, e.args.at(1));
+                    MIR_ASSERT(state, index.isU64() && index < U128(vectorSize / elementSize), "SIMD index out of bounds in `" << te->name << "`");
+                    auto inputStorage = MIREvalAllocationPtr::allocateScratch(localState.valuePool, vectorSize);
+                    MIREvalValueRef input(inputStorage);
+                    localState.writeParam(input, e.args.at(0));
+                    dst.copyFrom(state, input.slice(index.truncateU64() * elementSize, elementSize));
+                } else if (te->name == "simd_insert" || te->name == "simd_insert_dyn") {
+                    auto vectorTy = localState.monomorphExpand(te->params.types.at(0));
+                    auto elementTy = localState.monomorphExpand(te->params.types.at(1));
+                    size_t vectorSize;
+                    size_t elementSize;
+                    if (!TargetGetSizeOf(state.sp, resolve, vectorTy, vectorSize)
+                        || !TargetGetSizeOf(state.sp, resolve, elementTy, elementSize)) {
+                        throw Defer();
+                    }
+                    MIR_ASSERT(state, elementSize != 0 && vectorSize % elementSize == 0, "Invalid SIMD layout for `" << te->name << "`");
+                    auto index = localState.readParamUint(32, e.args.at(1));
+                    MIR_ASSERT(state, index.isU64() && index < U128(vectorSize / elementSize), "SIMD index out of bounds in `" << te->name << "`");
+                    localState.writeParam(dst, e.args.at(0));
+                    localState.writeParam(dst.slice(index.truncateU64() * elementSize, elementSize), e.args.at(2));
                 } else if (te->name == "offset") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0)->as_Pointer().inner);
                     size_t elementSize;
@@ -3671,6 +3819,51 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ptrPair = localState.readParamPtr(e.args.at(0));
                     auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
                     dst.writePtr(state, ptrPair.first + ofs.truncateU64() * elementSize, ptrPair.second);
+                }
+                else if (te->name == "ptr_offset_from" || te->name == "ptr_offset_from_unsigned") {
+                    auto ty = localState.monomorphExpand(te->params.types.at(0));
+                    size_t elementSize;
+                    if (!TargetGetSizeOf(state.sp, resolve, ty, elementSize)) {
+                        throw Defer();
+                    }
+                    MIR_ASSERT(state, elementSize != 0, "`" << te->name << "` called for a zero-sized type");
+                    MIR_ASSERT(state, elementSize <= static_cast<size_t>(INT64_MAX), "Element size overflows isize in `" << te->name << "`");
+                    auto pointer = localState.readParamPtr(e.args.at(0));
+                    auto base = localState.readParamPtr(e.args.at(1));
+                    resolveStaticPointer(localState, pointer);
+                    resolveStaticPointer(localState, base);
+                    MIR_ASSERT(state, samePointerProvenance(pointer.second, base.second), "`" << te->name << "` called on pointers into different allocations");
+
+                    if (pointer.second) {
+                        MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE && base.first >= EncodedLiteral::PTR_BASE,
+                            "Invalid pointer passed to `" << te->name << "`");
+                        const auto allocationSize = pointer.second.asValue().size();
+                        MIR_ASSERT(state, pointer.first - EncodedLiteral::PTR_BASE <= allocationSize
+                            && base.first - EncodedLiteral::PTR_BASE <= allocationSize,
+                            "Out-of-bounds pointer passed to `" << te->name << "`");
+                    }
+
+                    int64_t byteDistance;
+                    if (pointer.first >= base.first) {
+                        const uint64_t magnitude = pointer.first - base.first;
+                        MIR_ASSERT(state, magnitude <= static_cast<uint64_t>(INT64_MAX), "Pointer distance overflows isize in `" << te->name << "`");
+                        byteDistance = static_cast<int64_t>(magnitude);
+                    } else {
+                        const uint64_t magnitude = base.first - pointer.first;
+                        MIR_ASSERT(state, te->name != "ptr_offset_from_unsigned", "Negative pointer distance in `ptr_offset_from_unsigned`");
+                        MIR_ASSERT(state, magnitude <= static_cast<uint64_t>(INT64_MAX), "Pointer distance underflows isize in `" << te->name << "`");
+                        byteDistance = -static_cast<int64_t>(magnitude);
+                    }
+                    MIR_ASSERT(state, pointer.second || byteDistance == 0,
+                        "`" << te->name << "` called on distinct absolute pointers");
+                    MIR_ASSERT(state, byteDistance % static_cast<int64_t>(elementSize) == 0,
+                        "Pointer distance is not a multiple of the element size in `" << te->name << "`");
+                    const int64_t elementDistance = byteDistance / static_cast<int64_t>(elementSize);
+                    if (te->name == "ptr_offset_from_unsigned") {
+                        dst.writeUint(state, TargetGetPointerBits(), U128(static_cast<uint64_t>(elementDistance)));
+                    } else {
+                        dst.writeSint(state, TargetGetPointerBits(), S128(elementDistance));
+                    }
                 }
                 // Returns 1/0/2 (equal / not equal / unknown).
                 else if (te->name == "ptr_guaranteed_cmp") {
