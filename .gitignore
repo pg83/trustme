@@ -17,5 +17,6 @@
 /resvg_vendor
 /rust_lib_*
 /unit_*
+/*_test
 /result
 __pycache__/
