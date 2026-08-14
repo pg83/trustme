@@ -55,6 +55,8 @@ class Lexer: public TokenStream {
     bool lastCharValid;
     Codepoint lastChar;
     bool initialShebangChecked;
+    bool initialFrontmatterAllowed;
+    bool initialFrontmatterPrecededByWhitespace;
     ::std::vector<Codepoint> replayChars;
     size_t replayCharOffset;
     ::std::vector<Token> nextTokens;
@@ -75,6 +77,7 @@ public:
 
 private:
     void checkInitialShebang();
+    bool trySkipInitialFrontmatter();
     Token getTokenInt();
 
     signed int getSymbol();

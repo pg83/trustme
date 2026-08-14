@@ -25,6 +25,8 @@ Lexer::Lexer(stl::ObjPool& pool, const ::std::string& filename, ASTEdition editi
     , istream(filename != "-" ? *istreamFp : std::cin)
     , lastCharValid(false)
     , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
     , replayCharOffset(0)
     , edition(edition)
     , mHygiene(Ident::Hygiene::newScope(pool))
@@ -57,6 +59,8 @@ Lexer::Lexer(stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, P
     , istream(ss)
     , lastCharValid(false)
     , initialShebangChecked(false)
+    , initialFrontmatterAllowed(true)
+    , initialFrontmatterPrecededByWhitespace(false)
     , replayCharOffset(0)
     , edition(edition)
     , mHygiene(Ident::Hygiene::newScope(pool))
@@ -511,6 +515,147 @@ void Lexer::checkInitialShebang() {
     restore(replayStart);
 }
 
+bool Lexer::trySkipInitialFrontmatter() {
+    if (!initialFrontmatterAllowed) {
+        return false;
+    }
+
+    const auto initialLine = line;
+    const auto initialLineOfs = lineOfs;
+    ::std::vector<Codepoint> consumed;
+    bool eof = false;
+    auto read = [&]() {
+        try {
+            auto ch = this->getc();
+            consumed.push_back(ch);
+            return ch;
+        } catch (const Lexer::EndOfFile&) {
+            eof = true;
+            return Codepoint();
+        }
+    };
+    auto restore = [&]() {
+        line = initialLine;
+        lineOfs = initialLineOfs;
+        lastCharValid = false;
+        replayChars = ::std::move(consumed);
+        replayCharOffset = 0;
+    };
+
+    auto ch = read();
+    if (eof) {
+        initialFrontmatterAllowed = false;
+        return false;
+    }
+    if (ch.isspace()) {
+        if (ch == '\n') {
+            initialFrontmatterPrecededByWhitespace = false;
+        } else {
+            initialFrontmatterPrecededByWhitespace = true;
+        }
+        this->ungetc();
+        return false;
+    }
+    if (ch != '-' || initialFrontmatterPrecededByWhitespace) {
+        initialFrontmatterAllowed = false;
+        this->ungetc();
+        return false;
+    }
+
+    size_t openingLength = 1;
+    while (!eof) {
+        ch = read();
+        if (!eof && ch == '-') {
+            openingLength += 1;
+        } else {
+            break;
+        }
+    }
+    if (openingLength < 3) {
+        initialFrontmatterAllowed = false;
+        restore();
+        return false;
+    }
+
+    while (!eof && ch != '\n' && ch.isspace()) {
+        ch = read();
+    }
+    if (!eof && ch != '\n') {
+        const bool validIdentifierStart = ch == '_' || (ch.v < 128 && ::std::isalpha(ch.v)) || ch.v >= 128;
+        if (!validIdentifierStart) {
+            initialFrontmatterAllowed = false;
+            restore();
+            return false;
+        }
+        do {
+            ch = read();
+        } while (!eof && (issym(ch) || ch == '.'));
+        while (!eof && ch != '\n' && ch.isspace()) {
+            ch = read();
+        }
+        if (!eof && ch != '\n') {
+            initialFrontmatterAllowed = false;
+            restore();
+            return false;
+        }
+    }
+
+    bool linePrefixIsWhitespace = true;
+    bool linePrefixHasWhitespace = false;
+    while (!eof) {
+        ch = read();
+        if (eof) {
+            break;
+        }
+        if (ch == '\n') {
+            linePrefixIsWhitespace = true;
+            linePrefixHasWhitespace = false;
+            continue;
+        }
+        if (ch.isspace()) {
+            linePrefixHasWhitespace = true;
+            continue;
+        }
+        if (ch != '-' || !linePrefixIsWhitespace) {
+            linePrefixIsWhitespace = false;
+            continue;
+        }
+
+        size_t closingLength = 1;
+        while (!eof) {
+            ch = read();
+            if (!eof && ch == '-') {
+                closingLength += 1;
+            } else {
+                break;
+            }
+        }
+        if (closingLength >= openingLength) {
+            bool validClosing = closingLength == openingLength && !linePrefixHasWhitespace;
+            while (!eof && ch != '\n') {
+                validClosing &= ch.isspace();
+                ch = read();
+            }
+            if (!validClosing) {
+                initialFrontmatterAllowed = false;
+                restore();
+                return false;
+            }
+            initialFrontmatterAllowed = false;
+            return true;
+        }
+        linePrefixIsWhitespace = false;
+        if (!eof && ch == '\n') {
+            linePrefixIsWhitespace = true;
+            linePrefixHasWhitespace = false;
+        }
+    }
+
+    initialFrontmatterAllowed = false;
+    restore();
+    return false;
+}
+
 Token Lexer::getTokenInt() {
     if (!this->nextTokens.empty()) {
         auto rv = ::std::move(this->nextTokens.back());
@@ -519,6 +664,9 @@ Token Lexer::getTokenInt() {
     }
     if (!initialShebangChecked) {
         this->checkInitialShebang();
+    }
+    if (this->trySkipInitialFrontmatter()) {
+        return this->getTokenInt();
     }
     try {
         Codepoint ch = this->getc();
