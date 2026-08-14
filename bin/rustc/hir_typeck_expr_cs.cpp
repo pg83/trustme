@@ -10938,7 +10938,9 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
     };
 
     // If the result type contans an erased type, replace that with a new ivar and emit trait bounds for it.
-    HIRTypeRef newResTy = M(context, expr).monomorphType(sp, resultType);
+    HIRTypeRef newResTy = resultType
+        ? M(context, expr).monomorphType(sp, resultType)
+        : context.ivars.newIvarTr();
     // - Final check to ensure that all erased type indexes are visited
     for (size_t i = 0; i < expr.erasedTypes.size(); i++) {
         ASSERT_BUG(sp, expr.erasedTypes[i] != HIRTypeRef(), "Non-visited erased type #" << i);

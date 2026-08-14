@@ -1392,6 +1392,51 @@ void TransEnumerateFillFromVTable(EnumState& state, HIRPath vtablePath, const Tr
 void TransEnumerateFillFromLiteral(EnumState& state, const EncodedLiteral& lit, const TransParams& pp);
 void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code);
 
+namespace {
+    class GlobalAsmOperandEvaluator: public HIRVisitor {
+        const WireBoard& wb;
+        const HIRCrate& crate;
+        const Span* span = nullptr;
+
+    public:
+        explicit GlobalAsmOperandEvaluator(const WireBoard& wb)
+            : HIRVisitor(nullptr, wb.crate->types)
+            , wb(wb)
+            , crate(*wb.crate)
+        {
+        }
+
+        void evaluate(HIRGlobalAssembly& item) {
+            span = &item.span;
+            visitGlobalAssembly(item);
+            span = nullptr;
+        }
+
+        void visitConstgeneric(HIRConstGeneric& value) override {
+            ConvertHIRConstantEvaluateConstGeneric(*span, wb, crate, value);
+            ASSERT_BUG(*span, value.is_Evaluated(), "global_asm operand remained unevaluated at translation");
+        }
+    };
+
+    void TransEnumerateGlobalAsm(EnumState& state, HIRModule& mod) {
+        GlobalAsmOperandEvaluator evaluator{state.resolve.board()};
+        for (auto& item : mod.globalAsm) {
+            evaluator.evaluate(item);
+            for (const auto& operand : item.operands) {
+                if (const auto* path = operand.opt_Sym()) {
+                    state.rv.roots.push_back(path->clone());
+                    TransEnumerateFillFromPathMono(state, path->clone());
+                }
+            }
+        }
+        for (auto& named : mod.modItems) {
+            if (auto* child = named.second->ent.opt_Module()) {
+                TransEnumerateGlobalAsm(state, *child);
+            }
+        }
+    }
+}
+
 void TransEnumerateGlobalAllocator(EnumState& state) {
     const auto allocatorIt = state.crate.mLangItems.find(GLOBAL_ALLOCATOR_LANG_ITEM);
     if (allocatorIt == state.crate.mLangItems.end()) {
@@ -1460,7 +1505,7 @@ MIREnumCachePtr::~MIREnumCachePtr() {
 }
 
 /// Enumerate trans items starting from `::main` (binary crate)
-TransList TransEnumerateMain(const WireBoard& wb, const HIRCrate& crate) {
+TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
     static Span sp;
 
     EnumState state{wb};
@@ -1501,6 +1546,7 @@ TransList TransEnumerateMain(const WireBoard& wb, const HIRCrate& crate) {
 
     TransEnumerateExplicitLinkage(state, crate.mRootModule, HIRSimplePath(crate.crateName, {}));
     TransEnumerateGlobalAllocator(state);
+    TransEnumerateGlobalAsm(state, crate.mRootModule);
 
     return TransEnumerateCommonPost(state);
 }
@@ -1905,6 +1951,8 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
             TransEnumerateFillFromPathMono(state, std::move(p));
         }
     }
+
+    TransEnumerateGlobalAsm(state, crate.mRootModule);
 
     auto rv = TransEnumerateCommonPost(state);
 

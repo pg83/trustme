@@ -885,6 +885,57 @@ namespace {
             }
         }
 
+        std::string asmSymbol(const Span& span, const HIRPath& path) const {
+            MonomorphState params(crate.types);
+            auto item = mResolve.getValue(span, path, params, false);
+            const HIRLinkage* linkage = nullptr;
+            if (const auto* function = item.opt_Function()) {
+                linkage = &(*function)->linkage;
+            } else if (const auto* stat = item.opt_Static()) {
+                linkage = &(*stat)->linkage;
+            } else {
+                BUG(span, "asm sym operand does not name a function or static: " << path);
+            }
+
+            std::string symbol = linkage->name.empty() ? FMT(TransMangle(path)) : linkage->name;
+            if (!symbol.empty() && symbol[0] == '\1') {
+                symbol.erase(symbol.begin());
+            }
+            if (TargetGetCurSpec(mWb).osName == "macos") {
+                symbol.insert(symbol.begin(), '_');
+            }
+            return symbol;
+        }
+
+        std::string inlineAsmConstant(const MIRConstant& operand) const {
+            if (const auto* value = operand.opt_Int()) {
+                return FMT(value->v);
+            }
+            if (const auto* value = operand.opt_Uint()) {
+                return FMT(value->v);
+            }
+            BUG(Span(), "asm const operand is not an integer: " << operand);
+        }
+
+        std::string globalAsmConstant(const HIRGlobalAssembly& assembly, const HIRGlobalAsmOperand::Data_Const& operand) const {
+            ASSERT_BUG(assembly.span, operand.value.is_Evaluated(), "Unevaluated global_asm const operand");
+            ASSERT_BUG(assembly.span, operand.type->is_Primitive() && isInteger(operand.type->as_Primitive()), "Non-integer global_asm const operand: " << operand.type);
+            const auto& value = **operand.value.opt_Evaluated();
+            ASSERT_BUG(assembly.span, value.relocations.empty(), "Relocated global_asm const operand");
+
+            switch (operand.type->as_Primitive()) {
+                case HIRCoreType::Isize:
+                case HIRCoreType::I8:
+                case HIRCoreType::I16:
+                case HIRCoreType::I32:
+                case HIRCoreType::I64:
+                case HIRCoreType::I128:
+                    return FMT(EncodedLiteralSlice(value).readSint());
+                default:
+                    return FMT(EncodedLiteralSlice(value).readUint());
+            }
+        }
+
         void emitGlobalAsm(const HIRGlobalAssembly& se) override {
             of << "__asm__ (\"";
             if (usesIntelCompilerAsmDialect() && se.options.attSyntax) {
@@ -893,8 +944,18 @@ namespace {
             for (const auto& l : se.lines) {
                 for (const auto& f : l.frags) {
                     of << FmtGccAsm(f.before, false);
-                    ASSERT_BUG(Span(), f.index < se.symbols.size(), "Invalid argument reference in global assembly");
-                    TODO(Span(), "Handle interpolation in global_asm! - " << se.symbols[f.index]);
+                    ASSERT_BUG(se.span, f.index < se.operands.size(), "Invalid argument reference in global assembly");
+                    const auto& operand = se.operands[f.index];
+                    TU_MATCH_HDRA((operand), {)
+                    TU_ARMA(Const, value) {
+                            auto text = globalAsmConstant(se, value);
+                            of << FmtGccAsm(text, false);
+                        }
+                        TU_ARMA(Sym, path) {
+                            auto text = asmSymbol(se.span, path);
+                            of << FmtGccAsm(text, false);
+                        }
+                    }
                 }
                 of << FmtGccAsm(l.trailing, false);
                 of << ";\\n ";
@@ -907,6 +968,16 @@ namespace {
 
         void emitTypeId(const HIRTypeData* ty) override {
             of << "tTYPEID __typeid_" << TransMangle(ty) << " __attribute__((weak));\n";
+        }
+
+        static const char* compilerAbiAttribute(const RcString& abi) {
+            if (abi == "win64") {
+                return "__attribute__((ms_abi)) ";
+            }
+            if (abi == "sysv64") {
+                return "__attribute__((sysv_abi)) ";
+            }
+            return "";
         }
 
         void emitTypeProto(const HIRTypeData* ty) override {
@@ -974,14 +1045,13 @@ namespace {
 
             const auto& te = ty->as_Function();
             of << "typedef ";
-            // TODO: ABI marker, need an ABI enum?
             if (te.mRettype == crate.types.unit()) {
                 of << "void";
             } else {
                 // TODO: Better emit_ctype call for return type?
                 emitCtype(te.mRettype);
             }
-            of << " (";
+            of << " (" << compilerAbiAttribute(te.mAbi);
             of << "*";
             emitCtype(ty);
             of << ")(";
@@ -2116,6 +2186,35 @@ namespace {
             emitFunctionHeader(p, item, params);
             of << "\n";
             of << "{\n";
+
+            if (item.markings.isNaked) {
+                MIR_ASSERT(localMirRes, code->locals.empty(), "Naked function has MIR locals");
+                MIR_ASSERT(localMirRes, code->dropFlags.empty(), "Naked function has drop flags");
+                MIR_ASSERT(localMirRes, code->blocks.size() == 1, "Naked function does not have exactly one basic block");
+                const auto& block = code->blocks.front();
+                const MIRStatement* nakedAsm = nullptr;
+                unsigned nakedAsmIndex = 0;
+                for (unsigned i = 0; i < block.statements.size(); i++) {
+                    const auto& statement = block.statements[i];
+                    if (const auto* assembly = statement.opt_Asm2()) {
+                        MIR_ASSERT(localMirRes, assembly->options.naked && nakedAsm == nullptr, "Naked function body is not a single naked_asm statement");
+                        nakedAsm = &statement;
+                        nakedAsmIndex = i;
+                    } else if (const auto* assignment = statement.opt_Assign()) {
+                        MIR_ASSERT(localMirRes, assignment->dst.root.is_Return() && assignment->dst.wrappers.empty() && assignment->src.is_Tuple() && assignment->src.as_Tuple().vals.empty(), "Naked function contains a non-unit assignment");
+                    } else {
+                        MIR_BUG(localMirRes, "Naked function contains a non-assembly statement: " << statement);
+                    }
+                }
+                MIR_ASSERT(localMirRes, nakedAsm != nullptr, "Naked function body does not contain naked_asm");
+                MIR_ASSERT(localMirRes, block.terminator.is_Return() || block.terminator.is_Unreachable(), "Naked function has a non-trivial MIR terminator");
+                localMirRes.setCurStmt(0, nakedAsmIndex);
+                emitStatement(localMirRes, *nakedAsm, 1);
+                of << "}\n";
+                of.flush();
+                mirRes = nullptr;
+                return;
+            }
 
             for (unsigned int i = 0; i < argTypes.size(); i++) {
                 emitUnsizedArgumentLocal(argTypes[i].second, i);
@@ -4471,6 +4570,19 @@ namespace {
                 for (const auto& l : se.lines) {
                     for (const auto& f : l.frags) {
                         of << FmtGccAsm(f.before, escapePercent);
+                        const auto& param = se.params.at(f.index);
+                        if (const auto* constant = param.opt_Const()) {
+                            MIR_ASSERT(localMirRes, f.modifier == '\0', "Modifier on asm const operand - " << stmt);
+                            auto text = inlineAsmConstant(*constant);
+                            of << FmtGccAsm(text, escapePercent);
+                            continue;
+                        }
+                        if (const auto* path = param.opt_Sym()) {
+                            MIR_ASSERT(localMirRes, f.modifier == '\0', "Modifier on asm sym operand - " << stmt);
+                            auto text = asmSymbol(localMirRes.sp, *path);
+                            of << FmtGccAsm(text, escapePercent);
+                            continue;
+                        }
                         MIR_ASSERT(localMirRes, argMappings.at(f.index) != UINT_MAX, stmt);
                         if (emitAttSyntax) {
                             of << "%%";
@@ -4516,7 +4628,13 @@ namespace {
                 if (emitAttSyntax) {
                     of << ".intel_syntax noprefix; ";
                 }
-                of << "\" :";
+                of << "\"";
+                if (se.options.naked) {
+                    MIR_ASSERT(localMirRes, outputs.empty() && inputs.empty() && clobbers.empty() && !blockOpen, "naked_asm contains register operands");
+                    of << ");\n";
+                    return;
+                }
+                of << " :";
                 for (size_t i = 0; i < outputs.size(); i++) {
                     const auto& p = *outputs[i];
                     if (i != 0) {
@@ -4728,8 +4846,7 @@ namespace {
             }
             auto cb = FMT_CB(
                 ss,
-                // TODO: Cleaner ABI handling
-                ss << " " << TransMangle(p) << "(";
+                ss << " " << compilerAbiAttribute(item.mAbi) << TransMangle(p) << "(";
                 if (item.mArgs.size() == 0) { ss << "void)"; } else {
                     for (unsigned int i = 0; i < item.mArgs.size(); i++) {
                         ss << "\n\t\t";

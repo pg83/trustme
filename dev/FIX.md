@@ -30,7 +30,7 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P1 — internal compiler failures
 
-After the targeted const-generic, CTFE, and TAIT reruns, 169 of the snapshot's internal compiler failures
+After the targeted const-generic, CTFE, TAIT, and global-assembly reruns, 165 of the snapshot's internal compiler failures
 remain. The former generic `mir_helpers.h:108` cluster is subdivided below by
 its actual MIR error.
 
@@ -45,7 +45,7 @@ its actual MIR error.
 | MIR error, `mir_helpers.h:108`: `fmuladd` | 1 | |
 | MIR error, `mir_helpers.h:108`: `fadd_fast` | 1 | |
 | MIR error, `mir_helpers.h:108`: extern-type alignment | 1 | |
-| three signatures with four failures each | 12 | `trans_codegen_c`, `synext_macro`, bad-char parsing |
+| two signatures with four failures each | 8 | `trans_codegen_c`, bad-char parsing |
 | 99 smaller signatures | 141 | one to three tests each |
 
 The signal failures are included above: two SIGILLs at

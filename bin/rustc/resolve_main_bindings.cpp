@@ -2314,6 +2314,15 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
             ResolveAbsolutePath(this->context, node.span(), Context::LookupMode::Variable, node.mPath);
         }
 
+        void visit(ASTExprNodeAsm2& node) override {
+            for (auto& operand : node.mParams) {
+                if (auto* path = operand.opt_Sym()) {
+                    ResolveAbsolutePath(this->context, node.span(), Context::LookupMode::Variable, *path);
+                }
+            }
+            ASTNodeVisitorDef::visit(node);
+        }
+
         void visit(ASTExprNodeCast& node) override {
             DEBUG("ExprNode_Cast");
             ResolveAbsoluteType(this->context, node.mType);
@@ -2690,6 +2699,17 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
             TU_ARMA(Macro, e) {
             }
             TU_ARMA(GlobalAsm, e) {
+                for (auto& operand : e.operands) {
+                    TU_MATCH_HDRA((operand), {)
+                    TU_ARMA(Const, expr) {
+                            auto rootBlock = itemContext.enterRootblock();
+                            ResolveAbsoluteExprNode(itemContext, *expr);
+                        }
+                        TU_ARMA(Sym, path) {
+                            ResolveAbsolutePath(itemContext, i->span, Context::LookupMode::Variable, path);
+                        }
+                    }
+                }
             }
             TU_ARMA(ExternBlock, e) {
                 for (auto& i2 : e.items()) {

@@ -2058,7 +2058,16 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                 // Skip: nothing
             }
             TU_ARMA(GlobalAsm, e) {
-                // Skip: Nothing to expand
+                for (auto& operand : e.operands) {
+                    TU_MATCH_HDRA((operand), {)
+                    TU_ARMA(Const, expr) {
+                            ExpandExpr(es, expr);
+                        }
+                        TU_ARMA(Sym, sym) {
+                            ExpandPath(es, mod, sym);
+                        }
+                    }
+                }
             }
             TU_ARMA(MacroInv, e) {
                 // Move out of the module to avoid invalidation if a new macro invocation is added

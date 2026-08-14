@@ -156,9 +156,17 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
     }
     list.functions.clear();
 
-    for (const auto& a : cratePtr->globalAsm) {
-        codegen->emitGlobalAsm(a);
-    }
+    auto emitGlobalAsm = [&](auto&& self, const HIRModule& mod) -> void {
+        for (const auto& item : mod.globalAsm) {
+            codegen->emitGlobalAsm(item);
+        }
+        for (const auto& named : mod.modItems) {
+            if (const auto* child = named.second->ent.opt_Module()) {
+                self(self, *child);
+            }
+        }
+    };
+    emitGlobalAsm(emitGlobalAsm, cratePtr->mRootModule);
 
     // NOTE: Completely reinitialise the `TransList` to free all monomorphised memory before calling the backend compilation tool
     // - This can save several GB of working set

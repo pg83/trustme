@@ -26,6 +26,7 @@ public:
     virtual void visitCrate(HIRCrate& crate);
 
     virtual void visitModule(HIRItemPath p, HIRModule& mod);
+    virtual void visitGlobalAssembly(HIRGlobalAssembly& item);
 
     virtual void visitTypeImpl(HIRTypeImpl& impl);
     virtual void visitInherentType(HIRItemPath p, HIRTypeAlias& item);

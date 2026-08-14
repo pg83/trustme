@@ -605,7 +605,7 @@ class CHandlerUnsafe: public ExpandDecorator {
         return AttrStage::Post;
     }
 
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+    void handleItem(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, const RcString& name, ASTItem& i) const {
         TTStream lex(mi.span(), ParseState(), mi.data());
         lex.parseState().wb = &wb;
         lex.getTokenCheck(TOK_PAREN_OPEN);
@@ -613,11 +613,11 @@ class CHandlerUnsafe: public ExpandDecorator {
             auto ident = lex.getTokenCheck(TOK_IDENT).ident().name;
 
             if (ident == "no_mangle") {
-                DEBUG("#[unsafe(no_mangle)] " << path << " = " << path.nodes.back().c_str());
+                DEBUG("#[unsafe(no_mangle)] " << name);
                 if (auto* e = i.opt_Function()) {
-                    e->markings.linkName = path.nodes.back().c_str();
+                    e->markings.linkName = name.c_str();
                 } else if (auto* e = i.opt_Static()) {
-                    e->markings.linkName = path.nodes.back().c_str();
+                    e->markings.linkName = name.c_str();
                 } else {
                     ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
                 }
@@ -625,7 +625,7 @@ class CHandlerUnsafe: public ExpandDecorator {
                 lex.getTokenCheck(TOK_EQUAL);
                 auto s = lex.getTokenCheck(TOK_STRING).str();
 
-                DEBUG("#[unsafe(link_section)] " << path << " in `" << s);
+                DEBUG("#[unsafe(link_section)] " << name << " in `" << s);
                 if (auto* e = i.opt_Function()) {
                     e->markings.linkSection = s;
                 } else if (auto* e = i.opt_Static()) {
@@ -657,6 +657,18 @@ class CHandlerUnsafe: public ExpandDecorator {
             lex.getTokenCheck(TOK_COMMA);
         }
         lex.getTokenCheck(TOK_PAREN_CLOSE);
+    }
+
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override {
+        handleItem(sp, mi, wb, path.nodes.back(), i);
+    }
+
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, ASTImpl&, const RcString& name, slice<const ASTAttribute>, const ASTVisibility&, ASTItem& i) const override {
+        handleItem(sp, mi, wb, name, i);
+    }
+
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate&, const ASTAbsolutePath& path, ASTTrait&, slice<const ASTAttribute>, ASTItem& i) const override {
+        handleItem(sp, mi, wb, path.nodes.back(), i);
     }
 };
 

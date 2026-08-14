@@ -1999,13 +1999,24 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
             }
             TU_ARMA(GlobalAsm, e) {
                 HIRGlobalAssembly item;
+                item.span = sp;
                 item.lines = std::move(e.lines);
-                item.symbols.reserve(e.symbols.size());
-                for (const ASTPath& s : e.symbols) {
-                    item.symbols.push_back(LowerHIRPath(Span(), s, FromASTPathClass::Value));
+                item.operands.reserve(e.operands.size());
+                for (auto& operand : e.operands) {
+                    TU_MATCH_HDRA((operand), {)
+                    TU_ARMA(Const, expr) {
+                            auto value = LowerHIRConstGeneric(*expr);
+                            ASSERT_BUG(sp, value.is_Unevaluated(), "global_asm const operand lowered without an expression");
+                            const auto* type = (*value.as_Unevaluated()->expr)->resType;
+                            item.operands.push_back(HIRGlobalAsmOperand::make_Const({std::move(value), type}));
+                        }
+                        TU_ARMA(Sym, sym) {
+                            item.operands.push_back(HIRGlobalAsmOperand::make_Sym(LowerHIRPath(sp, sym, FromASTPathClass::Value)));
+                        }
+                    }
                 }
                 item.options = e.options;
-                mCrate->globalAsm.push_back(std::move(item));
+                mod.globalAsm.push_back(std::move(item));
             }
             TU_ARMA(ExternBlock, e) {
                 if (e.items().size() > 0) {

@@ -484,6 +484,31 @@ public:
     ::std::vector<::std::string> attributes;
 };
 
+TAGGED_UNION(
+    HIRGlobalAsmOperand,
+    Const,
+    (Const,
+     struct {
+         HIRConstGeneric value;
+         HIRTypeRef type;
+     }),
+    (Sym, HIRPath)
+);
+
+class HIRGlobalAssembly {
+public:
+    Span span;
+    ::std::vector<AsmLine> lines;
+    ::std::vector<HIRGlobalAsmOperand> operands;
+    AsmOptions options;
+
+    HIRGlobalAssembly() = default;
+    HIRGlobalAssembly(const HIRGlobalAssembly&) = delete;
+    HIRGlobalAssembly(HIRGlobalAssembly&&) noexcept = default;
+    HIRGlobalAssembly& operator=(const HIRGlobalAssembly&) = delete;
+    HIRGlobalAssembly& operator=(HIRGlobalAssembly&&) noexcept = default;
+};
+
 class HIRModule {
 public:
     // List of in-scope traits in this module
@@ -495,6 +520,9 @@ public:
     ::std::unordered_map<RcString, HIRVisEnt<HIRTypeItem>*> modItems;
     // Macros!
     ::std::unordered_map<RcString, HIRVisEnt<HIRMacroItem>*> macroItems;
+
+    // Global assembly is module-scoped: its operands resolve in this module.
+    ::std::vector<HIRGlobalAssembly> globalAsm;
 
     ::std::vector<::std::pair<RcString, std::unique_ptr<HIRStatic>>> inlineStatics;
 
@@ -619,13 +647,6 @@ public:
     }
 };
 
-class HIRGlobalAssembly {
-public:
-    ::std::vector<AsmLine> lines;
-    ::std::vector<HIRPath> symbols;
-    AsmOptions options;
-};
-
 class HIRExternCrate {
 public:
     HIRCrate* mData = nullptr;
@@ -708,9 +729,6 @@ public:
     /// Impl blocks
     ::std::map<HIRSimplePath, ImplGroup<::std::unique_ptr<HIRTraitImpl>>> traitImpls;
     ::std::map<HIRSimplePath, ImplGroup<::std::unique_ptr<HIRMarkerImpl>>> markerImpls;
-
-    /// Global assembly items
-    ::std::vector<HIRGlobalAssembly> globalAsm;
 
     /// Merged index versions of the above
     ImplGroup<const HIRTypeImpl*> allTypeImpls;

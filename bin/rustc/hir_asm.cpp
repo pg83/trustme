@@ -14,6 +14,7 @@ AsmOptions::AsmOptions()
     , noreturn(0)
     , nostack(0)
     , attSyntax(0)
+    , naked(0)
 {
 }
 

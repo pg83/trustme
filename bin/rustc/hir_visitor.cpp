@@ -109,6 +109,22 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
             }
         }
     }
+    for (auto& item : mod.globalAsm) {
+        this->visitGlobalAssembly(item);
+    }
+}
+
+void HIRVisitor::visitGlobalAssembly(HIRGlobalAssembly& item) {
+    for (auto& operand : item.operands) {
+        TU_MATCH_HDRA((operand), {)
+        TU_ARMA(Const, value) {
+                this->visitConstgeneric(value.value);
+            }
+            TU_ARMA(Sym, path) {
+                this->visitPath(path, PathContext::VALUE);
+            }
+        }
+    }
 }
 
 void HIRVisitor::visitTypeImpl(HIRTypeImpl& impl) {

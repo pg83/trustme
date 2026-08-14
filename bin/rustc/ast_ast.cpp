@@ -407,6 +407,22 @@ ASTExternBlock ASTExternBlock::clone() const {
     TODO(Span(), "Clone an extern block");
 }
 
+ASTGlobalAsm ASTGlobalAsm::clone() const {
+    std::vector<Operand> clonedOperands;
+    clonedOperands.reserve(operands.size());
+    for (const auto& operand : operands) {
+        TU_MATCH_HDRA((operand), {)
+        TU_ARMA(Const, expr) {
+                clonedOperands.push_back(Operand::make_Const(expr->clone()));
+            }
+            TU_ARMA(Sym, path) {
+                clonedOperands.push_back(Operand::make_Sym(path));
+            }
+        }
+    }
+    return ASTGlobalAsm{lines, std::move(clonedOperands), options};
+}
+
 ASTModule::ASTModule() = default;
 
 ASTModule::ASTModule(ASTAbsolutePath path)
@@ -472,7 +488,7 @@ ASTItem ASTItem::clone() const {
         (Macro, TODO(Span(), "Clone on Item::Macro");),
         (Use, return ASTItem(e.clone());),
         (ExternBlock, TODO(Span(), "Clone on Item::" << this->tagStr());),
-        (GlobalAsm, TODO(Span(), "Clone on Item::" << this->tagStr());),
+        (GlobalAsm, return ASTItem(e.clone());),
         (Impl, TODO(Span(), "Clone on Item::" << this->tagStr());),
         (NegImpl, TODO(Span(), "Clone on Item::" << this->tagStr());),
         (Module, TODO(Span(), "Clone on Item::" << this->tagStr());),

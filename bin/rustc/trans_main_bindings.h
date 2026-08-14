@@ -45,7 +45,7 @@ enum class CodegenOutput {
     Executable,     // no suffix, includes main stub (TODO: Can't that just be added earlier?)
 };
 
-extern TransList TransEnumerateMain(const WireBoard& wb, const HIRCrate& crate);
+extern TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate);
 // NOTE: This also sets the saveout flags
 extern TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate);
 

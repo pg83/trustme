@@ -666,9 +666,18 @@ public:
 
 class ASTGlobalAsm {
 public:
+    TAGGED_UNION(
+        Operand,
+        Const,
+        (Const, ASTExprNodeP),
+        (Sym, ASTPath)
+    );
+
     ::std::vector<AsmLine> lines;
-    ::std::vector<ASTPath> symbols;
+    ::std::vector<Operand> operands;
     AsmOptions options;
+
+    ASTGlobalAsm clone() const;
 };
 
 /// Representation of a parsed (and being converted) function

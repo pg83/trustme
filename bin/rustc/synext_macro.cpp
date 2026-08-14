@@ -531,11 +531,21 @@ public:
         auto& nodeA = *nodeAp;
 
         auto globalAsm = ASTGlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
+        globalAsm.operands.reserve(nodeA.mParams.size());
         for (auto& param : nodeA.mParams) {
-            if (!(param.is_Sym() || param.is_Const())) {
-                ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
-            } else {
-                TODO(sp, "sym/const");
+            TU_MATCH_HDRA((param), {)
+            TU_ARMA(Const, expr) {
+                    globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Const(std::move(expr)));
+                }
+                TU_ARMA(Sym, path) {
+                    globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Sym(std::move(path)));
+                }
+                TU_ARMA(RegSingle, _param) {
+                    ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
+                }
+                TU_ARMA(Reg, _param) {
+                    ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
+                }
             }
         }
         auto namedItem = ASTNamed<ASTItem>(sp, {}, ASTVisibility::makeBarePrivate(), "", ASTItem(std::move(globalAsm)));
