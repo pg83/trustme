@@ -6807,6 +6807,9 @@ namespace {
                             case HIRCoreType::I64:
                                 rv.ty = Signed;
                                 break;
+                            case HIRCoreType::Isize:
+                                rv.ty = Signed;
+                                break;
                             case HIRCoreType::U8:
                                 rv.ty = Unsigned;
                                 break;
@@ -6817,6 +6820,9 @@ namespace {
                                 rv.ty = Unsigned;
                                 break;
                             case HIRCoreType::U64:
+                                rv.ty = Unsigned;
+                                break;
+                            case HIRCoreType::Usize:
                                 rv.ty = Unsigned;
                                 break;
                             case HIRCoreType::F16:
@@ -6962,11 +6968,9 @@ namespace {
                     emitLvalue(e.retVal);
                     of << "); memset(out, 0, " << sizeOut << "); ";
                     for (size_t i = 0; i < srcInfo.count; i++) {
-                        of << "out[" << (i / 8) << "] |= ((";
-                        srcInfo.emitValTy(*this);
-                        of << "*)&";
+                        of << "out[" << (i / 8) << "] |= ((((const uint8_t*)&";
                         emitParam(e.args.at(0));
-                        of << ")[" << i << "] == 0 ? 0 : (1 << " << (i % 8) << "); ";
+                        of << ")[" << (i * srcInfo.itemSize + srcInfo.itemSize - 1) << "] >> 7) & 1) << " << (i % 8) << "; ";
                     }
                     of << "}";
                 } else if (nameStrip == "simd_shuffle128" || nameStrip == "simd_shuffle64" || nameStrip == "simd_shuffle32" || nameStrip == "simd_shuffle16" || nameStrip == "simd_shuffle8" || nameStrip == "simd_shuffle4" || nameStrip == "simd_shuffle2") {
