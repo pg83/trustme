@@ -188,6 +188,7 @@ ident_ordering_test = program(
         "$(S)/bin/rustc/rc_string.cpp",
     ],
     output="$(B)/tst/unit/ident_ordering_test",
+    deps=[platform_libstd],
 )
 
 # cargo: Cargo-compatible package resolver and mrustc build driver, written in

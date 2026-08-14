@@ -1,11 +1,14 @@
 #include "ident.h"
 
+#include <std/mem/obj_pool.h>
+
 #include <cassert>
 #include <set>
 
 int main() {
-    auto definitionContext = Ident::Hygiene::newScope();
-    auto expansionContext = Ident::Hygiene::newScopeChained(definitionContext);
+    auto pool = stl::ObjPool::fromMemory();
+    auto definitionContext = Ident::Hygiene::newScope(*pool);
+    auto expansionContext = Ident::Hygiene::newScopeChained(*pool, definitionContext);
 
     Ident definition(definitionContext, RcString::newInterned("name"));
     Ident expansion(expansionContext, RcString::newInterned("name"));

@@ -2575,6 +2575,12 @@ public:
     }
 
     template <typename T>
+    void serialise(const HIRVisEnt<T>* e) {
+        assert(e);
+        serialise(*e);
+    }
+
+    template <typename T>
     void serialise(const ::std::unique_ptr<T>& e) {
         serialise(*e);
     }
