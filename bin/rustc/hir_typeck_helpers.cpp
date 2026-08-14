@@ -7799,12 +7799,10 @@ TU_ARMA(Alias, ee) {
 
                     // TODO: Re-monomorphise the trait path!
 
-                    bool magicFound = false;
-                    bool crateImplFound = false;
-
-                    crateImplFound = findTraitImplsMagic(sp, *traitRef.first, traitParams, selfTy, [&](auto impl, auto cmp) {
+                    auto acceptImpl = [&](auto impl, auto cmp) {
                         return true;
-                    });
+                    };
+                    bool implFound = findTraitImplsLegacy(sp, *traitRef.first, traitParams, selfTy, acceptImpl, true, false, true);
 
                     // NOTE: This just detects the presence of a trait impl, not the specifics
                     try {
@@ -7813,16 +7811,14 @@ TU_ARMA(Alias, ee) {
                         // inference variables (matching rustc's probe/confirm split).
                         findTraitImplsCrate(sp, *traitRef.first, nullptr, selfTy, [&](auto impl, auto cmp) {
                             DEBUG("[find_method] " << impl << ", cmp = " << cmp);
-                            magicFound = true;
-                            crateImplFound = true;
+                            implFound = true;
                             return true;
                         });
                     } catch (const TraitResolution::RecursionDetected&) {
                         DEBUG("Recursion detected, assuming good");
-                        magicFound = true;
-                        crateImplFound = true;
+                        implFound = true;
                     }
-                    if (crateImplFound) {
+                    if (implFound) {
                         DEBUG("Found trait impl " << *traitRef.first << traitParams << " for " << selfTy << " (" << this->ivars.fmtType(selfTy) << ")");
                         possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, HIRGenericPath(*traitRef.first, mv$(traitParams)), methodName, {})));
                         DEBUG("++ " << possibilities.back());
