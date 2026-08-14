@@ -664,9 +664,11 @@ ASTTypeAlias ASTTypeAlias::newAssociatedType(ASTGenericParams params, ASTGeneric
 
 ASTTraitAlias ASTTraitAlias::clone() const {
     ASTTraitAlias rv;
+    rv.params = params.clone();
     for (const auto& p : this->traits) {
         rv.traits.push_back(p);
     }
+    rv.lifetimes = lifetimes;
     return rv;
 }
 

@@ -1139,7 +1139,9 @@ namespace {
                                 if (&p != a.second.data()) {
                                     pmi.sendSymbol("+");
                                 }
-                                this->visitPath(p);
+                                this->visitHrbs(p.hrbs);
+                                this->visitBoundConstness(p.constness);
+                                this->visitPath(*p.path);
                             }
                             pmi.sendSymbol(",");
                         }

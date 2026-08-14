@@ -668,7 +668,7 @@ void ExpandPathParams(const ExpandState& es, ASTModule& mod, ASTPathParams& para
             TU_ARMA(AssociatedTyBound, aty) {
                 ExpandPathParams(es, mod, aty.first.args());
                 for (auto& p : aty.second) {
-                    ExpandPath(es, mod, p);
+                    ExpandPath(es, mod, *p.path);
                 }
             }
         }

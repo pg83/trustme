@@ -183,7 +183,13 @@ void ASTPathParamEnt::fmt(::std::ostream& os) const {
             os << v.first << "=" << v.second;
         }
         TU_ARMA(AssociatedTyBound, v) {
-            os << v.first << ": " << v.second;
+            os << v.first << ": ";
+            for (const auto& trait : v.second) {
+                if (&trait != v.second.data()) {
+                    os << " + ";
+                }
+                os << trait.hrbs << *trait.path;
+            }
         }
     }
 }

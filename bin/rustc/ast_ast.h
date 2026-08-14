@@ -101,6 +101,7 @@ class ASTTraitAlias {
 public:
     ASTGenericParams params;
     std::vector<Spanned<TypeTraitPath>> traits;
+    std::vector<Spanned<ASTLifetimeRef>> lifetimes;
 
     ASTTraitAlias clone() const;
 };

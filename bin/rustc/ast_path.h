@@ -472,4 +472,4 @@ public:
     //}
 };
 
-TAGGED_UNION_EX(ASTPathParamEnt, (), Null, ((Null, struct {}), (Lifetime, ASTLifetimeRef), (Type, ASTType*), (Value, ASTExprNodeP), (AssociatedTyEqual, ::std::pair<ASTPathNode, ASTType*>), (AssociatedTyBound, ::std::pair<ASTPathNode, std::vector<ASTPath>>)), (), (), (public : ASTPathParamEnt clone() const; Ordering ord(const ASTPathParamEnt& x) const; void fmt(::std::ostream& os) const;));
+TAGGED_UNION_EX(ASTPathParamEnt, (), Null, ((Null, struct {}), (Lifetime, ASTLifetimeRef), (Type, ASTType*), (Value, ASTExprNodeP), (AssociatedTyEqual, ::std::pair<ASTPathNode, ASTType*>), (AssociatedTyBound, ::std::pair<ASTPathNode, std::vector<TypeTraitPath>>)), (), (), (public : ASTPathParamEnt clone() const; Ordering ord(const ASTPathParamEnt& x) const; void fmt(::std::ostream& os) const;));

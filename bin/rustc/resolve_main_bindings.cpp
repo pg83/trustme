@@ -925,7 +925,9 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPa
             TU_ARMA(AssociatedTyBound, a) {
                 ResolveAbsolutePathParams(context, sp, a.first.args());
                 for (auto& p : a.second) {
-                    ResolveAbsolutePath(context, sp, Context::LookupMode::Type, p);
+                    context.push(p.hrbs);
+                    ResolveAbsolutePath(context, sp, Context::LookupMode::Type, *p.path);
+                    context.pop(p.hrbs);
                 }
             }
         }
@@ -2726,6 +2728,7 @@ void AppendGenericParams(ASTGenericParams& destination, const ASTGenericParams& 
 }
 
 void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName);
+void ReplaceDelegatedSelf(ASTPath& path, const RcString& replacementName);
 
 void ReplaceDelegatedSelf(ASTPathParams& params, const RcString& replacementName) {
     for (auto& param : params.entries) {
@@ -2740,6 +2743,9 @@ void ReplaceDelegatedSelf(ASTPathParams& params, const RcString& replacementName
         }
         TU_ARMA(AssociatedTyBound, e) {
             ReplaceDelegatedSelf(e.first.args(), replacementName);
+            for (auto& trait : e.second) {
+                ReplaceDelegatedSelf(*trait.path, replacementName);
+            }
         }
         }
     }
@@ -3343,6 +3349,9 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
                 itemContext.push(e.params, GenericSlot::Level::Top, true);
                 ResolveAbsoluteGeneric(itemContext, e.params);
 
+                for (auto& lft : e.lifetimes) {
+                    ResolveAbsoluteLifetime(itemContext, lft.sp, lft.ent);
+                }
                 for (auto& st : e.traits) {
                     itemContext.push(st.ent.hrbs);
                     ResolveAbsolutePath(itemContext, st.sp, Context::LookupMode::Type, *st.ent.path);

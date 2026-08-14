@@ -1616,6 +1616,7 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode);
 ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMode);
 ::std::vector<ASTPathNode> ParsePathNodes(TokenStream& lex, eParsePathGenericMode genericMode);
 ASTPathParams ParsePathGenericList(TokenStream& lex);
+ASTHigherRankedBounds ParseHRBOpt(TokenStream& lex);
 
 ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
     TRACE_FUNCTION_F("generic_mode=" << genericMode);
@@ -1876,7 +1877,7 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
                     if (lex.getTokenIf(TOK_EQUAL)) {
                         rv.entries.push_back(::std::make_pair(mv$(n), ParseType(lex, false)));
                     } else if (lex.getTokenIf(TOK_COLON)) {
-                        std::vector<ASTPath> traits;
+                        std::vector<TypeTraitPath> traits;
                         // TODO: Trait list instead of duplicating the name
                         for (;;) {
                             // Region bounds are checked by the borrow checker and are
@@ -1884,7 +1885,8 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
                             if (lex.lookahead(0) == TOK_LIFETIME) {
                                 GET_TOK(tok, lex);
                             } else {
-                                traits.push_back(ParsePath(lex, PATH_GENERIC_TYPE));
+                                auto hrbs = ParseHRBOpt(lex);
+                                traits.push_back(TypeTraitPath(mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)));
                             }
                             if (lex.lookahead(0) != TOK_PLUS) {
                                 break;
@@ -4569,13 +4571,26 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
 
                 ASTTraitAlias rv;
                 rv.params = std::move(params);
-                do {
-                    lex.getToken();
-
-                    auto ps = lex.startSpan();
-                    auto hrbs = ParseHRBOpt(lex);
-                    rv.traits.push_back(GET_SPANNED(TypeTraitPath, lex, (TypeTraitPath(mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)))));
-                } while (lex.lookahead(0) == TOK_PLUS);
+                lex.getToken();
+                if (lex.lookahead(0) != TOK_RWORD_WHERE) {
+                    for (;;) {
+                        if (lex.lookahead(0) == TOK_LIFETIME) {
+                            auto ps = lex.startSpan();
+                            GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
+                            rv.lifetimes.push_back(Spanned<ASTLifetimeRef>{lex.endSpan(ps), ASTLifetimeRef(tok.ident())});
+                        } else {
+                            auto ps = lex.startSpan();
+                            auto hrbs = ParseHRBOpt(lex);
+                            rv.traits.push_back(GET_SPANNED(TypeTraitPath, lex, (TypeTraitPath(mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE)))));
+                        }
+                        if (!lex.getTokenIf(TOK_PLUS)) {
+                            break;
+                        }
+                    }
+                }
+                if (lex.getTokenIf(TOK_RWORD_WHERE)) {
+                    ParseWhereClause(lex, rv.params);
+                }
 
                 GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
 

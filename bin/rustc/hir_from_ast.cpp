@@ -769,7 +769,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     //if(src_trait == ::HIR::GenericPath())
                     auto it = rv.traitBounds.insert(std::make_pair(nameArgs.first, HIRTraitPath::AtyBound{std::move(srcTrait), std::move(nameArgs.second), {}}));
                     for (const auto& trait : assoc.second) {
-                        it.first->second.traits.push_back(LowerHIRTraitPath(sp, trait, {}, /*ignore_bounds*/ false));
+                        it.first->second.traits.push_back(LowerHIRTraitPath(sp, *trait.path, trait.hrbs, /*ignore_bounds*/ true, trait.constness));
                     }
                 }
             }
@@ -1598,14 +1598,42 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
                 ::std::vector<HIRTraitPath> traitBounds;
                 auto gps = LowerHIRGenericParams(i.params(), &isSized);
 
-                auto selfBounds = LowerHIRGenericParams(i.selfBounds, &isSized);
-                for (auto& b : selfBounds.bounds) {
-                TU_MATCH_HDRA( (b), {)
-                TU_ARMA(TraitBound, be) {
-                            ASSERT_BUG(item.span, be.type->as_Generic().binding == GENERICSelf, be.type);
-                            traitBounds.push_back(mv$(be.trait));
+                // Bounds after an associated type declaration apply to that
+                // associated type. Keep nested associated-type constraints on
+                // the trait path instead of flattening them into predicates on
+                // `Self`, as ordinary where-clause lowering does.
+                for (const auto& bound : i.selfBounds.bounds) {
+                TU_MATCH_HDRA( (bound), {)
+                TU_ARMA(None, _) {
                         }
-                        TU_ARMA(TypeEquality, be) {
+                        TU_ARMA(Lifetime, _) {
+                        }
+                        TU_ARMA(TypeLifetime, _) {
+                        }
+                        TU_ARMA(IsTrait, be) {
+                            auto type = LowerHIRType(be.type);
+                            ASSERT_BUG(item.span, type == mCrate->types.self(), "Associated type bound has non-Self subject " << type);
+                            ASSERT_BUG(item.span, be.outerHrbs.empty() || be.innerHrbs.empty(), "Two layers of higher-ranked binders in associated type bound");
+                            auto trait = LowerHIRTraitPath(be.span, be.trait, be.innerHrbs, /*allow_bounds=*/true, be.constness);
+                            if (trait.mPath.mPath == pathPointeeSized || trait.mPath.mPath == pathMetadataSized) {
+                                isSized = false;
+                            }
+                            traitBounds.push_back(mv$(trait));
+                        }
+                        TU_ARMA(MaybeTrait, be) {
+                            auto type = LowerHIRType(be.type);
+                            ASSERT_BUG(item.span, type == mCrate->types.self(), "Associated type maybe-bound has non-Self subject " << type);
+                            auto trait = LowerHIRGenericPath(item.span, be.trait, FromASTPathClass::Type);
+                            if (trait.mPath == pathSized) {
+                                isSized = false;
+                            } else {
+                                ERROR(item.span, E0000, "MaybeTrait on unknown trait " << trait.mPath);
+                            }
+                        }
+                        TU_ARMA(NotTrait, _) {
+                            TODO(item.span, "Negative associated type bound");
+                        }
+                        TU_ARMA(Equality, _) {
                             BUG(item.span, "Unexpected type equality bound on associated type");
                         }
                 }
