@@ -638,7 +638,7 @@ class CExpanderAssert: public ExpandProcMacro {
 
         toks.push_back(Token(TOK_BRACE_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
     }
 };
 
@@ -1682,7 +1682,7 @@ namespace {
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
         toks.push_back(TokenTree(TOK_BRACE_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(lex.getEdition(), Ident::Hygiene::newScope(*crate.pool), mv$(toks))));
     }
 }
 
@@ -1789,7 +1789,7 @@ class CIncludeExpander: public ExpandProcMacro {
             ParseState ps;
             ps.module = &mod;
             DEBUG("Edition = " << crate.edition);
-            return box$(Lexer(filePath, crate.edition, ps));
+            return box$(Lexer(*crate.pool, filePath, crate.edition, ps));
         } catch (::std::runtime_error& e) {
             ERROR(sp, E0000, e.what());
         }
@@ -1817,7 +1817,7 @@ class CIncludeBytesExpander: public ExpandProcMacro {
 
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_BYTESTRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
     }
 };
 
@@ -1842,7 +1842,7 @@ class CIncludeStrExpander: public ExpandProcMacro {
 
         ::std::vector<TokenTree> toks;
         toks.push_back(Token(TOK_STRING, mv$(ss.str()), {}));
-        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(ASTEdition::Rust2015, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
     }
 };
 
@@ -1883,7 +1883,7 @@ class CExpanderPanic: public ExpandProcMacro {
         }
         toks.push_back(Token(TOK_PAREN_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
     }
 };
 
@@ -1918,7 +1918,7 @@ class CExpanderUnreachable: public ExpandProcMacro {
         }
         toks.push_back(Token(TOK_PAREN_CLOSE));
 
-        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(), mv$(toks))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(edition, Ident::Hygiene::newScope(*wb.pool), mv$(toks))));
     }
 };
 

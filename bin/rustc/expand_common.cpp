@@ -1349,7 +1349,7 @@ struct CExpandExpr: public ASTNodeVisitor {
         static const RcString rcstringIntoIter = RcString::newInterned("into_iter");
         static const RcString rcstringNext = RcString::newInterned("next");
         static const RcString rcstringIt = RcString::newInterned("it");
-        const auto iteratorHygiene = Ident::Hygiene::newScope();
+        const auto iteratorHygiene = Ident::Hygiene::newScope(*parentExpandState.crate.pool);
         auto coreCrate = crate.extCratenameCore;
         auto pathSome = getPath(coreCrate, "option", "Option", "Some");
         auto pathNone = getPath(coreCrate, "option", "Option", "None");

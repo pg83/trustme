@@ -45,6 +45,7 @@ struct ImplTraitSource {
 // All HIR-lowering state, threaded via `this` instead of file-scope globals.
 // Every `LowerHIR*` is a method; helper structs hold an `AST2HIR&` back-ref.
 struct AST2HIR {
+    const WireBoard* mWb = nullptr;
     HIRSimplePath pathSized;
     HIRSimplePath pathPointeeSized;
     HIRSimplePath pathMetadataSized;
@@ -2379,6 +2380,7 @@ HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& cra
     return self.lowerCrate(wb, pool, crate);
 }
 HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate) {
+    mWb = &wb;
     auto& rv = *pool->make<HIRCrate>(pool, crate.types);
 
     if (crate.crateType != ASTCrate::Type::Executable) {
@@ -2555,11 +2557,12 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
                     if (auto* tok = it->opt_Token()) {
                         //TODO: Can this share with `proc_macro`? Maybe a function on AST types to generate a token tree from the AST again.
                         struct NewToks {
+                            const WireBoard& wb;
                             std::vector<MacroExpansionEnt> out;
 
                             void emitFromString(const std::string& s) {
                                 ::std::istringstream iss{s};
-                                Lexer l{iss, ASTEdition::Rust2021, {}};
+                                Lexer l{*wb.pool, iss, ASTEdition::Rust2021, {}};
                                 for (;;) {
                                     auto t = l.getToken();
                                     if (t == TOK_EOF) {
@@ -2645,7 +2648,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
                             }
                         };
 
-                        NewToks newToks;
+                        NewToks newToks{*mCtx.mWb};
                         switch (tok->type()) {
                             case TOK_INTERPOLATED_PATH:
                             case TOK_INTERPOLATED_TYPE:
@@ -2773,7 +2776,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         for (auto it = loopLabels.rbegin(); it != loopLabels.rend(); ++it) {
             while (definitionDepth > it->macroDefinitionDepth) {
                 const auto& definition = macroDefinitions[--definitionDepth];
-                targetHygiene.leaveMacroDefinition(definition.definitionId, definition.tokenHygiene, definition.definitionHygiene);
+                targetHygiene.leaveMacroDefinition(*mCtx.mCrate->pool, definition.definitionId, definition.tokenHygiene, definition.definitionHygiene);
             }
             if (it->source.name == target.name && it->source.hygiene.isVisible(targetHygiene)) {
                 return it->lowered;

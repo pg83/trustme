@@ -1,4 +1,5 @@
 #include "synext.h"
+#include "wire_board.h"
 #include "synext.h"
 
 #include "ast_ast.h"
@@ -245,7 +246,7 @@ class CMacroExportHandler: public ExpandDecorator {
                 // Empty node list, will search the crate root
                 // TODO: Strictly speaking, this shouldn't apply to non-macro paths
                 DEBUG("#[macro_export(local_inner_macros)] mp=" << mp);
-                e.data->mHygiene.setModPath(mv$(mp));
+                e.data->mHygiene.setModPath(*wb.pool, mv$(mp));
             }
 
             e.data->exported = true;

@@ -475,6 +475,7 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCr
 
 namespace {
     struct Visitor {
+        const WireBoard& mWb;
         const Span& sp;
         const Settings& settings;
         ProcMacroInv& pmi;
@@ -483,8 +484,9 @@ namespace {
         // strips them before invoking a derive macro).
         bool skipDeriveAttrs = false;
 
-        Visitor(const Span& sp, const Settings& settings, ProcMacroInv& pmi)
-            : sp(sp)
+        Visitor(const WireBoard& wb, const Span& sp, const Settings& settings, ProcMacroInv& pmi)
+            : mWb(wb)
+            , sp(sp)
             , settings(settings)
             , pmi(pmi)
             //,emit_all_attrs(false)
@@ -1382,7 +1384,7 @@ namespace {
 
         void parseString(const ::std::string& s) {
             ::std::istringstream iss{s};
-            Lexer l{iss, ASTEdition::Rust2021, {}};
+            Lexer l{*mWb.pool, iss, ASTEdition::Rust2021, {}};
             for (;;) {
                 auto t = l.getToken();
                 if (t == TOK_EOF) {
@@ -1810,7 +1812,7 @@ namespace {
             // If the input is non-empty, then it must be a parenthesised token tree
             ASSERT_BUG(sp, attrInput->size() >= 2, "");
             ASSERT_BUG(sp, (*attrInput)[0].tok() == TOK_PAREN_OPEN || (*attrInput)[0].tok() == TOK_SQUARE_OPEN, "");
-            Visitor v(sp, *wb.settings, pmi);
+            Visitor v(wb, sp, *wb.settings, pmi);
             // - Strip the parens when sending
             for (size_t i = 1; i < attrInput->size() - 1; i++) {
                 v.visitTokentree((*attrInput)[i]);
@@ -1819,7 +1821,7 @@ namespace {
         pmi.sendDone();
     }
     // 2. Feed item as a token stream.
-    Visitor v(sp, *wb.settings, pmi);
+    Visitor v(wb, sp, *wb.settings, pmi);
     cb(v);
     pmi.sendDone();
     // 3. Return boxed invocation instance

@@ -1,5 +1,9 @@
 #pragma once
 
+namespace stl {
+    class ObjPool;
+}
+
 #include "parse_tokenstream.h"
 
 #include <string>
@@ -56,8 +60,8 @@ class Lexer: public TokenStream {
     Ident::Hygiene mHygiene;
 
 public:
-    Lexer(::std::istringstream& ss, ASTEdition edition, ParseState ps);
-    Lexer(const ::std::string& filename, ASTEdition edition, ParseState ps);
+    Lexer(stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps);
+    Lexer(stl::ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps);
 
     Position getPosition() const override;
     Ident::Hygiene realGetHygiene() const override;

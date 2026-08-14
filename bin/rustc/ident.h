@@ -5,6 +5,10 @@
 #include <memory>
 #include "rc_string.h"
 
+namespace stl {
+    class ObjPool;
+}
+
 struct Ident {
     // TODO: Use AST::AbsolutePath instead
     struct ModPath {
@@ -18,6 +22,11 @@ struct Ident {
     class Hygiene {
         static unsigned gNextScope;
 
+    public:
+        // Immutable once built: every mutating operation clones the node into
+        // the pool and re-points, so a Hygiene value is just a pointer and
+        // copies are free. A null pointer is the empty hygiene, which is by
+        // far the most common case and costs no allocation at all.
         struct Inner {
             ::std::vector<unsigned int> contexts;
             // Zero for lexical scopes, otherwise the macro definition whose
@@ -26,52 +35,44 @@ struct Ident {
             ::std::shared_ptr<ModPath> searchModule;
         };
 
-        // NOTE: Use a unique pointer to reduce the size to 1 pointer (instead of 5)
-        // - Used quite a bit, and parse sometimes runs out of stack.
-        ::std::unique_ptr<Inner> inner;
+    private:
+        const Inner* inner = nullptr;
 
-        Hygiene(unsigned int index);
-
-        Inner* operator->() {
-            return &*inner;
+        explicit Hygiene(const Inner* inner)
+            : inner(inner)
+        {
         }
 
-        const Inner* operator->() const {
-            return &*inner;
-        }
+        // Read-only view that works for the empty (null) hygiene too.
+        const Inner& get() const;
+        // Copy of the current contents, for a mutation to modify and re-intern.
+        Inner clone() const;
+        static const Inner* store(stl::ObjPool& pool, Inner v);
 
     public:
-        Hygiene();
+        Hygiene() = default;
+        Hygiene(const Hygiene& x) = default;
+        Hygiene& operator=(const Hygiene& x) = default;
+        Hygiene(Hygiene&& x) = default;
+        Hygiene& operator=(Hygiene&& x) = default;
 
-        Hygiene(const Hygiene& x);
+        static Hygiene newScope(stl::ObjPool& pool);
 
-        Hygiene& operator=(const Hygiene& x);
+        static Hygiene newScopeChained(stl::ObjPool& pool, const Hygiene& parent, unsigned int macroDefinition = 0);
 
-        Hygiene(Hygiene&& x);
+        Hygiene withTailScope(stl::ObjPool& pool, const Hygiene& scope, bool inheritModPath = false) const;
 
-        Hygiene& operator=(Hygiene&& x);
+        Hygiene getParent(stl::ObjPool& pool) const;
 
-        static Hygiene newScope() {
-            return Hygiene(++gNextScope);
-        }
-
-        static Hygiene newScopeChained(const Hygiene& parent, unsigned int macroDefinition = 0);
-
-        Hygiene withTailScope(const Hygiene& scope, bool inheritModPath = false) const;
-
-        Hygiene getParent() const;
-
-        bool leaveMacroDefinition(unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext);
+        bool leaveMacroDefinition(stl::ObjPool& pool, unsigned int definition, const Hygiene& tokenContext, const Hygiene& definitionContext);
 
         bool hasModPath() const {
-            return inner->searchModule != 0;
+            return inner && inner->searchModule;
         }
 
         const ModPath& modPath() const;
 
-        void setModPath(ModPath p) {
-            inner->searchModule.reset(new ModPath(::std::move(p)));
-        }
+        void setModPath(stl::ObjPool& pool, ModPath p);
 
         // Returns true if an ident with hygine `source` can see an ident with this hygine
         bool isVisible(const Hygiene& source) const;

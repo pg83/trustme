@@ -700,7 +700,7 @@ namespace {
                     }
                     TU_ARMA(MacroDefinition, e) {
                         if (mode == LookupMode::Variable) {
-                            lookupContext.leaveMacroDefinition(e.definitionId, e.tokenHygiene, e.definitionHygiene);
+                            lookupContext.leaveMacroDefinition(typePool(), e.definitionId, e.tokenHygiene, e.definitionHygiene);
                         }
                     }
                     TU_ARMA(Generic, e) {

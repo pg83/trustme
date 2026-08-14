@@ -46,8 +46,11 @@ class HirDeserialiser {
     HIRTypeInterner& typeInterner;
 
 public:
-    HirDeserialiser(HIRSerialiseReader& in, HIRTypeInterner& typeInterner)
-        : in(in)
+    stl::ObjPool& mPool;
+
+    HirDeserialiser(stl::ObjPool& pool, HIRSerialiseReader& in, HIRTypeInterner& typeInterner)
+        : mPool(pool)
+        , in(in)
         , typeInterner(typeInterner)
     {
     }
@@ -358,7 +361,7 @@ public:
                 assert(crateName != "");
                 mp.crate = crateName;
             }
-            rv.setModPath(mv$(mp));
+            rv.setModPath(mPool, mv$(mp));
         }
         return rv;
     }
@@ -1556,7 +1559,7 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
 HIRCrate* HIRDeserialise(stl::ObjPool* pool, HIRTypeInterner& types, const ::std::string& filename) {
     try {
         HIRSerialiseReader in{filename + ".hir"}; // Callers pass the metadata basename, without its suffix.
-        HirDeserialiser s{in, types};
+        HirDeserialiser s{*pool, in, types};
 
         auto* rv = pool->make<HIRCrate>(pool, types);
         s.deserialiseCrate(*rv);

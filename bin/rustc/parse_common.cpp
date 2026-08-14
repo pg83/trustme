@@ -4416,7 +4416,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 Ident::ModPath mp;
                 mp.crate = "";
                 mp.ents = modPath.nodes;
-                mrp->mHygiene.setModPath(::std::move(mp));
+                mrp->mHygiene.setModPath(lex.typePool(), ::std::move(mp));
                 mrp->isMacroItem = true;
             }
 
@@ -4539,7 +4539,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             ERROR(lex.pointSpan(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
                         }
                         DEBUG("- path = " << submod.fileInfo.path);
-                        Lexer subLex(submod.fileInfo.path, lex.getEdition(), lex.parseState());
+                        Lexer subLex(lex.typePool(), submod.fileInfo.path, lex.getEdition(), lex.parseState());
                         ParseModRoot(subLex, submod, metaItems);
                         GET_CHECK_TOK(tok, subLex, TOK_EOF);
                     } else {
@@ -4566,7 +4566,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             ERROR(lex.pointSpan(), E0000, "Can't find file for '" << name << "' in '" << modFileinfo.path << "'");
                         }
                         DEBUG("- path = " << submod.fileInfo.path);
-                        Lexer subLex(submod.fileInfo.path, lex.getEdition(), lex.parseState());
+                        Lexer subLex(lex.typePool(), submod.fileInfo.path, lex.getEdition(), lex.parseState());
                         ParseModRoot(subLex, submod, metaItems);
                         GET_CHECK_TOK(tok, subLex, TOK_EOF);
                     }
@@ -4632,7 +4632,7 @@ void ParseModRoot(TokenStream& lex, ASTModule& mod, ASTAttributeList& modAttrs) 
 ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, ::std::string mainfile, ASTEdition edition) {
     Token tok;
 
-    Lexer lex(mainfile, edition, ParseState());
+    Lexer lex(*wb.pool, mainfile, edition, ParseState());
 
     size_t p = mainfile.find_last_of('/');
     p = (p == ::std::string::npos ? mainfile.find_last_of('\\') : p);

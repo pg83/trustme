@@ -1,4 +1,5 @@
 #include "parse_lex.h"
+#include "wire_board.h"
 
 #include "common.h"
 #include "parse_tokentree.h"
@@ -15,7 +16,7 @@
 //#define TRACE_CHARS
 //#define TRACE_RAW_TOKENS
 
-Lexer::Lexer(const ::std::string& filename, ASTEdition edition, ParseState ps)
+Lexer::Lexer(stl::ObjPool& pool, const ::std::string& filename, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
     , mPath(filename.c_str())
     , line(1)
@@ -24,7 +25,7 @@ Lexer::Lexer(const ::std::string& filename, ASTEdition edition, ParseState ps)
     , istream(filename != "-" ? *istreamFp : std::cin)
     , lastCharValid(false)
     , edition(edition)
-    , mHygiene(Ident::Hygiene::newScope())
+    , mHygiene(Ident::Hygiene::newScope(pool))
 {
     if (istreamFp) {
         if (!istreamFp->is_open()) {
@@ -45,7 +46,7 @@ Lexer::Lexer(const ::std::string& filename, ASTEdition edition, ParseState ps)
     }
 }
 
-Lexer::Lexer(::std::istringstream& ss, ASTEdition edition, ParseState ps)
+Lexer::Lexer(stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, ParseState ps)
     : TokenStream(ps)
     , mPath("-")
     , line(1)
@@ -54,7 +55,7 @@ Lexer::Lexer(::std::istringstream& ss, ASTEdition edition, ParseState ps)
     , istream(ss)
     , lastCharValid(false)
     , edition(edition)
-    , mHygiene(Ident::Hygiene::newScope())
+    , mHygiene(Ident::Hygiene::newScope(pool))
 {
 }
 
@@ -1422,13 +1423,13 @@ Codepoint::Codepoint(uint32_t v)
 }
 
 void Lexer::pushHygine() {
-    mHygiene = Ident::Hygiene::newScopeChained(mHygiene);
+    mHygiene = Ident::Hygiene::newScopeChained(typePool(), mHygiene);
     DEBUG(">> " << mHygiene);
 }
 
 void Lexer::popHygine() {
-    DEBUG("<< " << mHygiene << " -> " << mHygiene.getParent());
-    mHygiene = mHygiene.getParent();
+    DEBUG("<< " << mHygiene << " -> " << mHygiene.getParent(typePool()));
+    mHygiene = mHygiene.getParent(typePool());
 }
 
 ASTEdition Lexer::realGetEdition() const {

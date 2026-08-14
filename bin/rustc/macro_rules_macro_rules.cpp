@@ -463,10 +463,13 @@ class MacroExpander: public TokenStream {
     Ident::Hygiene lastHygiene;
 
 public:
+    stl::ObjPool& mPool;
+
     MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
+    MacroExpander(stl::ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
         : TokenStream(ParseState())
+        , mPool(pool)
         , logIndex(sNextLogIndex++)
         , thisSpan(sp, crateName, macroName)
         , crateName(mv$(crateName))
@@ -476,7 +479,7 @@ public:
         , state(contents, mMappings)
         , sourceEdition(sourceEdition)
         , isMacroItem(isMacroItem)
-        , mHygiene(Ident::Hygiene::newScopeChained(parentHygiene, definitionId))
+        , mHygiene(Ident::Hygiene::newScopeChained(pool, parentHygiene, definitionId))
         , lastHygiene(mHygiene)
     {
     }
@@ -617,7 +620,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     // Run through the expansion counting the number of times each fragment is used
     MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
 
-    TokenStream* retPtr = new MacroExpander(name, sp, crate.edition, rules.isMacroItem, rules.definitionId, rules.mHygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
+    TokenStream* retPtr = new MacroExpander(*crate.pool, name, sp, crate.edition, rules.isMacroItem, rules.definitionId, rules.mHygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
 
     return ::std::unique_ptr<TokenStream>(retPtr);
 }
@@ -2347,7 +2350,7 @@ Token MacroExpander::realGetToken() {
                     case TOK_IDENT:
                     case TOK_LIFETIME: {
                         auto ident = e.ident();
-                        ident.hygiene = ident.hygiene.withTailScope(mHygiene, isMacroItem);
+                        ident.hygiene = ident.hygiene.withTailScope(mPool, mHygiene, isMacroItem);
                         lastHygiene = ident.hygiene;
                         auto rv = Token(e.type(), std::move(ident));
                         DEBUG("[" << logIndex << "] Updated hygine: " << rv);
@@ -2357,7 +2360,7 @@ Token MacroExpander::realGetToken() {
                     case TOK_BYTESTRING:
                     case TOK_STRING: {
                         auto h = e.strHygiene();
-                        h = h.withTailScope(mHygiene, isMacroItem);
+                        h = h.withTailScope(mPool, mHygiene, isMacroItem);
                         lastHygiene = h;
                         auto rv = Token(e.type(), e.str(), std::move(h));
                         DEBUG("[" << logIndex << "] Updated hygine: " << rv);
