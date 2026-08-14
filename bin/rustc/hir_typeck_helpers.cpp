@@ -4,6 +4,7 @@
 #include "wire_board.h"
 #include "hir_inherent_cache.h"
 #include "hir_conv_main_bindings.h"
+#include "trans_target.h"
 
 #include <std/mem/obj_list.h>
 #include <std/mem/obj_pool.h>
@@ -1341,6 +1342,7 @@ TU_ARMA(Alias, ee) {
             const auto langCoerceUnsized = this->crate.getLangItemPathOpt("coerce_unsized");
             const auto langFnPtr = this->crate.getLangItemPathOpt("fn_ptr_trait");
             const auto langTuple = this->crate.getLangItemPathOpt("tuple_trait");
+            const auto langTransmute = this->crate.getLangItemPathOpt("transmute_trait");
 
             const auto& type = this->ivars.getType(ty);
             TRACE_FUNCTION_F("trait = " << trait << params << ", type = " << type);
@@ -1361,6 +1363,35 @@ TU_ARMA(Alias, ee) {
                 } else {
                     return false;
                 }
+            }
+
+            if (!langTransmute.components().empty() && trait == langTransmute) {
+                if (params.types.size() != 1 || params.values.size() != 1) {
+                    return false;
+                }
+                const auto* sourceType = this->ivars.getType(params.types[0]);
+                const auto& assumeValue = this->ivars.getValue(params.values[0]);
+                if (type->needsMonomorphisation() || sourceType->needsMonomorphisation() || !assumeValue.is_Evaluated()) {
+                    return false;
+                }
+
+                const auto& assume = *assumeValue.as_Evaluated();
+                if (!assume.relocations.empty() || assume.bytes.size() != 4) {
+                    return false;
+                }
+                StaticTraitResolve targetResolve(this->board());
+                if (TargetTypesAreTransmutable(
+                        sp,
+                        targetResolve,
+                        sourceType,
+                        type,
+                        assume.bytes[0] != 0,
+                        assume.bytes[1] != 0,
+                        assume.bytes[2] != 0,
+                        assume.bytes[3] != 0)) {
+                    return callback(ImplRef(type, params.clone(), {}), HIRCompare::Equal);
+                }
+                return false;
             }
 
             if (!langFnPtr.components().empty() && trait == langFnPtr) {

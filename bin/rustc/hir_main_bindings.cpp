@@ -858,6 +858,7 @@ public:
         BIT(1, m.isNonzero)
         BIT(2, m.boundedMax)
         BIT(3, m.isFundamental)
+        BIT(4, m.isNoNiche)
 #undef BIT
         m.dstType = static_cast<HIRStructMarkings::DstType>(in.readTag());
         m.coerceUnsized = static_cast<HIRStructMarkings::Coerce>(in.readTag());
@@ -3576,6 +3577,7 @@ public:
         BIT(1, m.isNonzero)
         BIT(2, m.boundedMax)
         BIT(3, m.isFundamental)
+        BIT(4, m.isNoNiche)
 #undef BIT
         out.writeU8(bitflag1);
 

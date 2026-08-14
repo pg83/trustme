@@ -1225,6 +1225,8 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
         // the layout information instead.
     }
     rv.structMarkings.isFundamental = attrs.has("fundamental");
+    const auto& simplePath = path.getSimplePath();
+    rv.structMarkings.isNoNiche = simplePath == mCrate->getLangItemPathOpt("unsafe_cell") || simplePath == mCrate->getLangItemPathOpt("unsafe_pinned");
     if(ent.markings.scalarValidStartSet)
     {
         if (ent.markings.scalarValidStart == U128(1)) {

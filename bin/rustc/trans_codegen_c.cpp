@@ -3241,7 +3241,7 @@ namespace {
                                                 emitCtype(slotTy);
                                                 of << ")(uintptr_t)";
                                             }
-                                            of << (re.offset + ve.index);
+                                            of << re.tagValue(ve.index);
                                         } else {
                                             auto vr = TargetGetTypeRepr(sp, mResolve, repr->fields[ve.index].ty);
                                             emitLvalue(e.dst);
@@ -3252,7 +3252,7 @@ namespace {
                                                 emitCtype(slotTy);
                                                 of << ")(uintptr_t)";
                                             }
-                                            of << (re.offset + ve.index);
+                                            of << re.tagValue(ve.index);
                                         }
                                         emitNewline = true;
                                     } else {
@@ -3581,9 +3581,10 @@ namespace {
                         of << indent << "if( ";
                         emitVariant();
                         if (e.isNiche(oddArm)) {
-                            of << " < " << e.offset;
+                            MIR_ASSERT(localMirRes, nArms == 2, "Niche odd-arm switch without two arms");
+                            of << " != " << e.tagValue(oddArm == 0 ? 1 : 0);
                         } else {
-                            of << " == " << (e.offset + oddArm);
+                            of << " == " << e.tagValue(oddArm);
                         }
                         of << ") {";
                         cb(oddArm);
@@ -3599,7 +3600,7 @@ namespace {
                                 continue;
                             }
                             // Handle signed values
-                            of << indent << "case " << (e.offset + j) << ": ";
+                            of << indent << "case " << e.tagValue(j) << ": ";
                             cb(j);
                             of << "break;\n";
                         }
@@ -5475,11 +5476,14 @@ namespace {
                                 if (ve.usesNiche()) {
                                     of << "( ";
                                     emitTag();
-                                    of << " < " << ve.offset;
-                                    of << " ? " << ve.field.index;
-                                    of << " : ";
+                                    of << " >= " << ve.offset << " && ";
+                                    emitTag();
+                                    of << " < " << (ve.offset + ve.nicheVariantCount());
+                                    of << " ? " << ve.nicheVariantStart() << " + ";
                                     emitTag();
                                     of << " - " << ve.offset;
+                                    of << " : ";
+                                    of << ve.field.index;
                                     of << " )";
                                 } else {
                                     emitTag();

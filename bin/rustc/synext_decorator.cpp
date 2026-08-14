@@ -2684,6 +2684,7 @@ void handleLangItem(const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path
 
         H::add("non_zero", Handler(ITEM_STRUCT, handleSave));
         H::add("phantom_data", Handler(ITEM_STRUCT, handleSave));
+        H::add("unsafe_cell", Handler(ITEM_STRUCT, handleSave));
 
         {
             H::add("RangeFull", Handler(ITEM_STRUCT, [](const auto& sp, auto& crate, const auto&, const auto& p) {
@@ -2832,8 +2833,7 @@ void handleLangItem(const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path
     }
 
     // Structs
-    else if (name == "unsafe_cell") {
-    } else if (name == "alloc_layout") {
+    else if (name == "alloc_layout") {
     } else if (name == "panic_info") {
     } // Struct
     else if (name == "panic_location") {

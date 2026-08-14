@@ -30,13 +30,12 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P1 — internal compiler failures
 
-After the targeted const-generic bound-comparison rerun, 193 of the snapshot's internal compiler failures
+After the targeted const-generic and CTFE reruns, 185 of the snapshot's internal compiler failures
 remain. The former generic `mir_helpers.h:108` cluster is subdivided below by
 its actual MIR error.
 
 | signature | tests | note |
 |---|---:|---|
-| CTFE panic, `hir_conv_constant_evaluation.cpp:3617` | 8 | independent compile-time assertions/dead-code cases |
 | MIR error, `mir_helpers.h:108`: `ptr_mask` | 3 | |
 | MIR error, `mir_helpers.h:108`: `volatile_copy_memory` | 2 | |
 | MIR error, `mir_helpers.h:108`: SIMD `usize`/`isize` | 2 | |

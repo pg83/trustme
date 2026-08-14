@@ -619,7 +619,7 @@ namespace {
                             if (e.isNiche(i)) {
                                 of << "*";
                             } else {
-                                emitValue(e.field, U128(e.offset + i));
+                                emitValue(e.field, U128(e.tagValue(i)));
                             }
                             // - Data field number (optional)
                             if (!item.isValue()) {

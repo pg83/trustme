@@ -1408,7 +1408,7 @@ public:
             }
             TU_ARMA(Linear, ve) {
                 auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size);
-                variant = tag < U128(ve.offset) ? ve.field.index : (tag - U128(ve.offset)).truncateU64();
+                variant = ve.decodeTag(tag);
             }
             TU_ARMA(Values, ve) {
                 auto tag = value.slice(repr->getOffset(state.sp, rootResolve, ve.field), ve.field.size).readUint(state, 8 * ve.field.size).truncateU64();
@@ -3159,7 +3159,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                     } else {
                         auto ofs = getOffset(state.sp, resolve, enmRepr, ve.field);
                         MIR_ASSERT(state, ve.field.size <= 64 / 8, "");
-                        dst.slice(ofs, ve.field.size).writeUint(state, ve.field.size * 8, ve.offset + e.index);
+                        dst.slice(ofs, ve.field.size).writeUint(state, ve.field.size * 8, ve.tagValue(e.index));
                     }
                 }
                 TU_ARMA(Values, ve) {
@@ -3917,7 +3917,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                             TU_ARMA(Linear, ve) {
                                 const auto ofs = repr->getOffset(state.sp, resolve, ve.field);
                                 auto tag = value.slice(ofs, ve.field.size).readUint(state, ve.field.size * 8);
-                                const auto variant = tag < U128(ve.offset) ? ve.field.index : (tag - U128(ve.offset)).truncateU64();
+                                const auto variant = ve.decodeTag(tag);
                                 dst.writeUint(state, dst.getLen() * 8, U128(variant));
                             }
                             TU_ARMA(Values, ve) {

@@ -1384,6 +1384,9 @@ namespace {
             auto _ = disableBorrowExtension(); // A bit of a hack
 
             this->visitNodePtr(node.mValue);
+            if (!builder.blockActive() || !builder.hasResult()) {
+                return;
+            }
             MIRRValue val = builder.getResult(sp);
 
             this->visitNodePtr(node.slot);

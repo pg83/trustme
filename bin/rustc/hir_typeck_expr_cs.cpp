@@ -5248,6 +5248,30 @@ namespace {
                 }
                 throw "";
             } else if (const auto* dep = dst->opt_Borrow()) {
+                // The expected pointee type reaches through a borrow
+                // expression. This is observably different from coercing an
+                // already-created `&!`: only `&panic!()` is itself
+                // unreachable and may therefore have result type `&T`.
+                if (dep->type == se.type && se.inner->is_Diverge() && contextMut && nodePtrPtr && *nodePtrPtr) {
+                    HIRExprNodeP* borrowNodePtr = nodePtrPtr;
+                    ::std::vector<HIRExprNodeBlock*> blocks;
+                    while (auto* block = cast<HIRExprNodeBlock>(borrowNodePtr->get())) {
+                        if (!block->valueNode) {
+                            break;
+                        }
+                        blocks.push_back(block);
+                        borrowNodePtr = &block->valueNode;
+                    }
+                    if (auto* borrow = cast<HIRExprNodeBorrow>(borrowNodePtr->get()); borrow && borrow->mType == dep->type) {
+                        contextMut->equateTypesCoerce(sp, dep->inner, borrow->mValue);
+                        for (auto* block : blocks) {
+                            block->resType = dst;
+                        }
+                        (*borrowNodePtr)->resType = dst;
+                        return CoerceResult::Custom;
+                    }
+                }
+
                 // Check strength reduction
                 if (dep->type < se.type) {
                     if (nodePtrPtr) {
@@ -9812,7 +9836,6 @@ public:
         TRACE_FUNCTION_F(&node << " &_ ...");
         this->context.addIvars(node.mValue->resType);
 
-        // TODO: Can Ref/RefMut trigger coercions?
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.borrow(node.mType, node.mValue->resType));
 
         node.mValue->visit(*this);

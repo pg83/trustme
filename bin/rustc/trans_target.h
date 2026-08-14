@@ -89,6 +89,11 @@ struct TypeRepr {
              bool isTag(unsigned varIdx) const {
                  return !usesNiche() && varIdx == field.index;
              }
+
+             size_t nicheVariantStart() const;
+             size_t nicheVariantCount() const;
+             size_t tagValue(unsigned varIdx) const;
+             unsigned decodeTag(U128 tag) const;
          }),
         // Tag is a fixed set of values in a field.
         // TODO: Encode niche in here too?
@@ -167,5 +172,16 @@ extern bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve&
 /// This function is for the MIR Optimisation tool, which has to be able to read and use existing layouts
 extern void TargetForceTypeRepr(const Span& sp, const HIRTypeData* ty, TypeRepr repr);
 extern const TypeRepr* TargetGetTypeRepr(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty);
+
+extern bool TargetTypesAreTransmutable(
+    const Span& sp,
+    const StaticTraitResolve& resolve,
+    const HIRTypeData* src,
+    const HIRTypeData* dst,
+    bool assumeAlignment,
+    bool assumeLifetimes,
+    bool assumeSafety,
+    bool assumeValidity
+);
 
 extern const HIRTypeData* TargetGetInnerType(const Span& sp, const StaticTraitResolve& resolve, const TypeRepr& repr, size_t idx, const ::std::vector<size_t>& subFields = {}, size_t ofs = 0);

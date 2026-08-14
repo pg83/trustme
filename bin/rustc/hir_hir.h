@@ -286,6 +286,9 @@ struct HIRStructMarkings {
     // #[rustc_nonnull_optimization_guaranteed]
     bool isNonzero = false;
 
+    // UnsafeCell and UnsafePinned suppress all niches inherited from their fields.
+    bool isNoNiche = false;
+
     // #[rustc_layout_scalar_valid_range_end]
     bool boundedMax = false;
     U128 boundedMaxValue;

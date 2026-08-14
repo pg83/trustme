@@ -12,6 +12,8 @@
 #include "hir_conv_main_bindings.h" // ConvertHIR_ConstantEvaluate_Enum
 
 #include <map>
+#include <array>
+#include <bitset>
 #include <climits> // UINT_MAX
 #include <fstream>
 #include <algorithm>
@@ -1017,6 +1019,9 @@ namespace {
                     if (!r) {
                         return false;
                     }
+                    if (str->structMarkings.isNoNiche) {
+                        return false;
+                    }
                     // Preserve the full invalid range for the general niche
                     // layout instead of collapsing it to the zero value.
                     if (str->structMarkings.boundedMax && (r->fields.size() != 1 || !boundedMaxIsFullRange(r->fields[0].ty, str->structMarkings.boundedMaxValue))) {
@@ -1033,6 +1038,11 @@ namespace {
                         DEBUG(ty << " tagged NonZero");
                         outPath.subFields.push_back(0);
                         outPath.size = r->size;
+                        if ((r->fields[0].ty->is_Pointer() || r->fields[0].ty->is_Borrow()) && outPath.size > TargetGetPointerBits() / 8) {
+                            // A wide pointer's validity niche is only its data
+                            // address; metadata occupies the following word.
+                            outPath.size = TargetGetPointerBits() / 8;
+                        }
                         return true;
                     }
 
@@ -1102,14 +1112,15 @@ namespace {
     /// <param name="resolve"></param>
     /// <param name="ty"></param>
     /// <param name="out_path">Path to the variant field</param>
-    /// <returns>zero for no niche found, or the number of entries already used in the niche</returns>
-    unsigned getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t minOffset, size_t maxOffset, TypeRepr::FieldPath& outPath) {
-        TRACE_FUNCTION_F(ty << " min_offset=" << minOffset << " max_offset=" << maxOffset);
+    /// <param name="requiredCount">Number of discriminants that must fit in the niche</param>
+    /// <param name="nicheStart">First scalar value reserved for the outer enum</param>
+    bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart) {
+        TRACE_FUNCTION_F(ty << " min_offset=" << minOffset << " max_offset=" << maxOffset << " required_count=" << requiredCount);
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
                 const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                 if (!r) {
-                    return 0;
+                    return false;
                 }
 
                 for (size_t i = 0; i < r->fields.size(); i++) {
@@ -1119,11 +1130,17 @@ namespace {
                     if (f.offset >= maxOffset) {
                         continue;
                     } else if (f.offset + size > minOffset) {
-                        if (auto rv = getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, outPath)) {
+                        if (getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, requiredCount, outPath, nicheStart)) {
                             outPath.subFields.push_back(i);
-                            return rv;
+                            return true;
                         }
                     }
+                }
+            }
+            TU_ARM(*ty, Array, te) {
+                if (te.size.is_Known() && te.size.as_Known() > 0 && getVariantNichePath(sp, resolve, te.inner, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
+                    outPath.subFields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
+                    return true;
                 }
             }
             TU_ARM(*ty, Path, te) {
@@ -1131,27 +1148,43 @@ namespace {
                     const auto* str = te.binding.as_Struct();
                     const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                     if (!r) {
-                        return 0;
+                        return false;
+                    }
+                    if (str->structMarkings.isNoNiche) {
+                        return false;
                     }
 
-                    // Handle bounded
-                    if (str->structMarkings.boundedMax) {
-                        if (str->structMarkings.boundedMaxValue >= UINT_MAX) {
-                            return 0;
-                        }
-                        if (minOffset != 0) {
-                            return 0;
-                        }
-                        DEBUG("Max bounded");
+                    if (minOffset == 0 && requiredCount == 1 && str->structMarkings.isNonzero) {
                         assert(r->fields.size() >= 1);
                         assert(r->fields[0].offset == 0);
                         auto size = getSizeOrZero(sp, resolve, r->fields[0].ty);
-                        if (size > maxOffset) {
-                            return 0;
+                        if ((r->fields[0].ty->is_Pointer() || r->fields[0].ty->is_Borrow()) && size > TargetGetPointerBits() / 8) {
+                            // A wide pointer's null niche is in the data word,
+                            // not in the data+metadata pair as a whole.
+                            size = TargetGetPointerBits() / 8;
                         }
-                        outPath.subFields.push_back(0);
-                        outPath.size = size;
-                        return str->structMarkings.boundedMaxValue.truncateU64() + 1;
+                        if (size <= maxOffset) {
+                            outPath.subFields.push_back(0);
+                            outPath.size = size;
+                            nicheStart = 0;
+                            return true;
+                        }
+                    }
+
+                    if (minOffset == 0 && str->structMarkings.boundedMax) {
+                        assert(r->fields.size() >= 1);
+                        assert(r->fields[0].offset == 0);
+                        auto size = getSizeOrZero(sp, resolve, r->fields[0].ty);
+                        if (size <= maxOffset && size <= sizeof(size_t)) {
+                            const size_t scalarMax = size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (size * 8)) - 1;
+                            const auto boundedMax = str->structMarkings.boundedMaxValue.truncateU64();
+                            if (boundedMax < scalarMax && requiredCount <= scalarMax - boundedMax) {
+                                outPath.subFields.push_back(0);
+                                outPath.size = size;
+                                nicheStart = boundedMax + 1;
+                                return true;
+                            }
+                        }
                     }
 
                     for (size_t i = 0; i < r->fields.size(); i++) {
@@ -1161,61 +1194,144 @@ namespace {
                         if (f.offset >= maxOffset) {
                             continue;
                         } else if (f.offset + size > minOffset) {
-                            if (auto rv = getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, outPath)) {
+                            if (getVariantNichePath(sp, resolve, f.ty, (f.offset < minOffset ? minOffset - f.offset : 0), maxOffset - f.offset, requiredCount, outPath, nicheStart)) {
                                 outPath.subFields.push_back(i);
-                                return rv;
+                                return true;
                             }
                         }
                     }
                 } else if (te.binding.is_Enum()) {
                     const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                     if (!r) {
-                        return 0;
+                        return false;
                     }
 
                 TU_MATCH_HDRA( (r->variants), { )
                 TU_ARMA(None, ve) {
                             // If there is no discriminator, recurse into the only field
                             if (r->fields.empty()) {
-                                return 0;
+                                return false;
                             } else {
-                                auto rv = getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, outPath);
-                                if (rv) {
+                                if (getVariantNichePath(sp, resolve, r->fields[0].ty, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
                                     outPath.subFields.push_back(0);
+                                    return true;
                                 }
-                                return rv;
+                                return false;
                             }
                         }
                         TU_ARMA(Linear, ve) {
+                            if (ve.usesNiche()) {
+                                // The inner enum made its niche values valid,
+                                // but the scalar carrying the tag can still
+                                // have another invalid range.  Search the
+                                // populated variant again while reserving the
+                                // values consumed by this enum.  For example,
+                                // Option<Scalar<1..=100>> consumes zero and
+                                // Option<Option<Scalar<1..=100>>> uses 101.
+                                const auto& field = r->fields.at(ve.field.index);
+                                const size_t fieldSize = getSizeOrZero(sp, resolve, field.ty);
+                                if (field.offset < maxOffset && field.offset + fieldSize > minOffset) {
+                                    const size_t occupiedCount = ve.nicheVariantCount();
+                                    if (requiredCount <= SIZE_MAX - occupiedCount) {
+                                        TypeRepr::FieldPath candidate;
+                                        size_t candidateStart = 0;
+                                        if (getVariantNichePath(
+                                                sp,
+                                                resolve,
+                                                field.ty,
+                                                field.offset < minOffset ? minOffset - field.offset : 0,
+                                                maxOffset - field.offset,
+                                                requiredCount + occupiedCount,
+                                                candidate,
+                                                candidateStart)) {
+                                            auto candidateSubFields = candidate.subFields;
+                                            ::std::reverse(candidateSubFields.begin(), candidateSubFields.end());
+                                            const bool sameScalar = candidate.size == ve.field.size && candidateSubFields == ve.field.subFields;
+                                            if (sameScalar) {
+                                                const size_t candidateEnd = candidateStart + requiredCount + occupiedCount - 1;
+                                                const size_t occupiedStart = ve.offset;
+                                                const size_t occupiedEnd = occupiedStart + occupiedCount - 1;
+                                                if (!(candidateEnd < occupiedStart || occupiedEnd < candidateStart)) {
+                                                    const size_t beforeCount = occupiedStart > candidateStart ? occupiedStart - candidateStart : 0;
+                                                    const size_t afterStart = occupiedEnd == SIZE_MAX ? SIZE_MAX : ::std::max(candidateStart, occupiedEnd + 1);
+                                                    const size_t afterCount = occupiedEnd == SIZE_MAX || candidateEnd < afterStart ? 0 : candidateEnd - afterStart + 1;
+                                                    if (requiredCount <= beforeCount) {
+                                                        // The requested values fit before the
+                                                        // range used by the inner enum.
+                                                    } else if (requiredCount <= afterCount) {
+                                                        candidateStart = afterStart;
+                                                    } else {
+                                                        return false;
+                                                    }
+                                                }
+                                            }
+                                            candidate.subFields.push_back(ve.field.index);
+                                            outPath = ::std::move(candidate);
+                                            nicheStart = candidateStart;
+                                            return true;
+                                        }
+                                    }
+                                }
+                                return false;
+                            }
                             // Check that the offset of this tag field is >= min_offset
                             auto ofs = getOffset(sp, resolve, r, ve.field);
                             DEBUG("Linear - Tag offset: " << ofs);
-                            if (minOffset <= ofs && ofs + ve.field.size <= maxOffset) {
+                            if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t)) {
+                                const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
+                                const size_t validEnd = ve.offset + ve.numVariants - 1;
+                                if (validEnd >= scalarMax || requiredCount > scalarMax - validEnd) {
+                                    return false;
+                                }
                                 outPath.size = ve.field.size;
                                 outPath.subFields.clear();
                                 outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
                                 outPath.subFields.push_back(ve.field.index);
-                                return ve.offset + ve.numVariants; // NOTE: The niche variant leaves hole in the values.
+                                nicheStart = validEnd + 1;
+                                return true;
                             }
                         }
                         TU_ARMA(Values, ve) {
                             auto ofs = getOffset(sp, resolve, r, ve.field);
                             DEBUG("Values - Tag offset: " << ofs);
-                            if (minOffset <= ofs && ofs + ve.field.size <= maxOffset) {
-                                auto lastValue = *std::max_element(ve.values.begin(), ve.values.end());
-                                if (lastValue < UINT_MAX) {
+                            if (minOffset <= ofs && ofs + ve.field.size <= maxOffset && ve.field.size <= sizeof(size_t) && !ve.values.empty()) {
+                                const size_t scalarMax = ve.field.size == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (ve.field.size * 8)) - 1;
+                                std::vector<size_t> values;
+                                values.reserve(ve.values.size());
+                                for (const auto& value : ve.values) {
+                                    values.push_back(value.truncateU64() & scalarMax);
+                                }
+                                std::sort(values.begin(), values.end());
+                                values.erase(std::unique(values.begin(), values.end()), values.end());
+
+                                size_t bestStart = 0;
+                                size_t bestCount = values.front();
+                                for (size_t i = 1; i < values.size(); i++) {
+                                    const size_t count = values[i] - values[i - 1] - 1;
+                                    if (count > bestCount) {
+                                        bestStart = values[i - 1] + 1;
+                                        bestCount = count;
+                                    }
+                                }
+                                const size_t trailingCount = scalarMax - values.back();
+                                if (trailingCount > bestCount) {
+                                    bestStart = values.back() + 1;
+                                    bestCount = trailingCount;
+                                }
+                                if (requiredCount <= bestCount) {
                                     outPath.size = ve.field.size;
                                     outPath.subFields.clear();
                                     outPath.subFields.insert(outPath.subFields.begin(), ve.field.subFields.rbegin(), ve.field.subFields.rend());
                                     outPath.subFields.push_back(ve.field.index);
-                                    return lastValue.truncateU64() + 1;
+                                    nicheStart = bestStart;
+                                    return true;
                                 }
                             }
-                            return 0;
+                            return false;
                         }
                         TU_ARMA(NonZero, _ve) {
                             DEBUG("Non-zero enum, can't niche");
-                            return 0;
+                            return false;
                         }
                 }
                 }
@@ -1225,25 +1341,43 @@ namespace {
                 switch (te) {
                     case HIRCoreType::Char:
                         // Only valid if the min offset is zero
-                        if (minOffset == 0 && maxOffset >= 4) {
+                        if (minOffset == 0 && maxOffset >= 4 && requiredCount <= UINT32_MAX - 0x10FFFF) {
                             outPath.size = 4;
-                            return 0x10FFFF + 1;
+                            nicheStart = 0x10FFFF + 1;
+                            return true;
                         }
                         break;
                     case HIRCoreType::Bool:
-                        if (minOffset == 0 && maxOffset >= 1) {
+                        if (minOffset == 0 && maxOffset >= 1 && requiredCount <= UINT8_MAX - 1) {
                             outPath.size = 1;
-                            return 2;
+                            nicheStart = 2;
+                            return true;
                         }
                         break;
                     default:
                         break;
                 }
             }
+            TU_ARM(*ty, Borrow, te) {
+                (void)te;
+                if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
+                    outPath.size = TargetGetPointerBits() / 8;
+                    nicheStart = 0;
+                    return true;
+                }
+            }
+            TU_ARM(*ty, Function, te) {
+                (void)te;
+                if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
+                    outPath.size = TargetGetPointerBits() / 8;
+                    nicheStart = 0;
+                    return true;
+                }
+            }
             default:
                 break;
         }
-        return 0;
+        return false;
     }
 
     ::std::unique_ptr<TypeRepr> makeTypeReprEnum(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
@@ -1440,51 +1574,30 @@ namespace {
                                 DEBUG("Niche optimisation: max_var_size=" << maxVarSize << " n_match=" << nMatch << " biggest_var=" << biggestVar << " min_offset=" << minOffset);
 
                                 if (nMatch == 1) {
+                                    const size_t nicheVariantStart = biggestVar == 0 ? 1 : 0;
+                                    const size_t nicheVariantEnd = biggestVar + 1 == variants.size() ? biggestVar - 1 : variants.size() - 1;
+                                    const size_t requiredNicheCount = nicheVariantEnd - nicheVariantStart + 1;
                                     for (size_t i = 0; i < reprs[biggestVar]->fields.size(); i++) {
                                         const auto& fld = reprs[biggestVar]->fields[i];
 
                                         // 1. Look for a tag at the end
                                         // - Prefer the end-of-struct version, as it avoids adding fields to the other variants
                                         TypeRepr::FieldPath nzPath;
-                                        if (auto offset = getVariantNichePath(sp, resolve, fld.ty, (minOffset > fld.offset ? minOffset - fld.offset : 0), maxVarSize, nzPath)) {
-                                            size_t maxVar = 0;
-                                            switch (nzPath.size) {
-                                                case 1:
-                                                    maxVar = 0xFF;
-                                                    break;
-                                                case 2:
-                                                    maxVar = 0xFFFF;
-                                                    break;
-                                                case 4:
-                                                    maxVar = 0xFFFFFFFF;
-                                                    break;
-                                                case 8:
-                                                    maxVar = 0xFFFFFFFF;
-                                                    break; // Just assume 2^32 here
-                                            }
+                                        size_t nicheStart = 0;
+                                        if (getVariantNichePath(sp, resolve, fld.ty, (minOffset > fld.offset ? minOffset - fld.offset : 0), maxVarSize - fld.offset, requiredNicheCount, nzPath, nicheStart)) {
+                                            nzPath.index = i;
+                                            ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
+                                            ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
-                                            if (offset <= maxVar && offset + e.size() <= maxVar) {
-                                                // TODO: Get the niche offset, store so structure updating can add it...
-                                                nzPath.index = i;
-                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-                                                nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
-                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            nzPath.subFields.push_back(i);
+                                            nzPath.index = biggestVar;
+                                            ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                            DEBUG("Niche optimisation (trailing): value offset=" << nicheStart << " path=" << nzPath << " (@" << nicheOffset << ")");
 
-                                                nzPath.subFields.push_back(i);
-                                                nzPath.index = biggestVar;
-                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-                                                DEBUG("Niche optimisation (trailing): value offset=" << offset << " path=" << nzPath << " (@" << nicheOffset << ")");
-
-                                                assert(rv.variants.is_None());
-                                                rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), offset, e.size()});
-                                                break;
-                                            } else {
-                                                if (debugEnabled()) {
-                                                    nzPath.subFields.push_back(i);
-                                                    nzPath.index = biggestVar;
-                                                }
-                                                DEBUG("Out of space in this niche: " << (offset + e.size()) << " > " << maxVar << " (path=" << nzPath << ")");
-                                            }
+                                            assert(rv.variants.is_None());
+                                            rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
+                                            break;
                                         }
 
                                         // Note: rustc doesn't do this.
@@ -1492,48 +1605,28 @@ namespace {
                                         // - Prepending the tag might change the next-largest variant too much?
                                         if (fld.offset == 0) {
                                             TypeRepr::FieldPath nzPath;
-                                            if (auto offset = getVariantNichePath(sp, resolve, fld.ty, 0, maxVarSize - minOffset, nzPath)) {
-                                                size_t maxVar = 0;
-                                                switch (nzPath.size) {
-                                                    case 1:
-                                                        maxVar = 0xFF;
-                                                        break;
-                                                    case 2:
-                                                        maxVar = 0xFFFF;
-                                                        break;
-                                                    case 4:
-                                                        maxVar = 0xFFFFFFFF;
-                                                        break;
-                                                    case 8:
-                                                        maxVar = 0xFFFFFFFF;
-                                                        break; // Just assume 2^32 here
+                                            size_t nicheStart = 0;
+                                            if (getVariantNichePath(sp, resolve, fld.ty, 0, maxVarSize - minOffset, requiredNicheCount, nzPath, nicheStart)) {
+                                                nzPath.index = i;
+                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                                nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
+                                                if (nicheOffset != 0) {
+                                                    // - For now, only accept zero offsets
+                                                    DEBUG("Ignore niche not at the start of the struture");
+                                                    continue;
                                                 }
+                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
 
-                                                if (offset <= maxVar && offset + e.size() <= maxVar) {
-                                                    // TODO: Get the niche offset, store so structure updating can add it...
-                                                    nzPath.index = i;
-                                                    ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-                                                    nicheOffset = getOffset(sp, resolve, &*reprs[biggestVar], nzPath);
-                                                    if (nicheOffset != 0) {
-                                                        // - For now, only accept zero offsets
-                                                        DEBUG("Ignore niche not at the start of the struture");
-                                                        continue;
-                                                    }
-                                                    ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                                nzPath.subFields.push_back(i);
+                                                nzPath.index = biggestVar;
+                                                ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
+                                                DEBUG("Niche optimisation (leading): linear offset=" << nicheStart << " path=" << nzPath << " @byte " << nicheOffset);
 
-                                                    nzPath.subFields.push_back(i);
-                                                    nzPath.index = biggestVar;
-                                                    ::std::reverse(nzPath.subFields.begin(), nzPath.subFields.end());
-                                                    DEBUG("Niche optimisation (leading): linear offset=" << offset << " path=" << nzPath << " @byte " << nicheOffset);
-
-                                                    nicheBeforeData = true;
-                                                    nonNicheOffset = nzPath.size;
-                                                    assert(rv.variants.is_None());
-                                                    rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), offset, e.size()});
-                                                    break;
-                                                } else {
-                                                    DEBUG("Out of space in this niche: " << (offset + e.size()) << " > " << maxVar);
-                                                }
+                                                nicheBeforeData = true;
+                                                nonNicheOffset = nzPath.size;
+                                                assert(rv.variants.is_None());
+                                                rv.variants = TypeRepr::VariantMode::make_Linear({std::move(nzPath), nicheStart, e.size()});
+                                                break;
                                             }
                                         }
                                     }
@@ -1561,6 +1654,9 @@ namespace {
                                             break;
                                         case 8:
                                             nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U64);
+                                            break;
+                                        case 16:
+                                            nicheTy = resolve.hirCrate().types.primitive(HIRCoreType::U128);
                                             break;
                                         default:
                                             BUG(sp, "Unknown niche size: " << nichePath);
@@ -2045,6 +2141,40 @@ size_t TypeRepr::getOffset(const Span& sp, const StaticTraitResolve& resolve, co
     return ofs;
 }
 
+size_t TypeRepr::VariantMode::Data_Linear::nicheVariantStart() const {
+    assert(this->usesNiche());
+    return this->field.index == 0 ? 1 : 0;
+}
+
+size_t TypeRepr::VariantMode::Data_Linear::nicheVariantCount() const {
+    assert(this->usesNiche());
+    const size_t start = this->nicheVariantStart();
+    const size_t end = this->field.index + 1 == this->numVariants ? this->field.index - 1 : this->numVariants - 1;
+    return end - start + 1;
+}
+
+size_t TypeRepr::VariantMode::Data_Linear::tagValue(unsigned varIdx) const {
+    if (!this->usesNiche()) {
+        return this->offset + varIdx;
+    }
+    assert(varIdx < this->numVariants);
+    assert(varIdx != this->field.index);
+    const size_t start = this->nicheVariantStart();
+    return this->offset + varIdx - start;
+}
+
+unsigned TypeRepr::VariantMode::Data_Linear::decodeTag(U128 tag) const {
+    if (!this->usesNiche()) {
+        return (tag - U128(this->offset)).truncateU64();
+    }
+    const auto start = U128(this->offset);
+    const auto end = start + U128(this->nicheVariantCount());
+    if (start <= tag && tag < end) {
+        return static_cast<unsigned>(this->nicheVariantStart() + (tag - start).truncateU64());
+    }
+    return this->field.index;
+}
+
 std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticTraitResolve& resolve, const EncodedLiteralSlice& lit) const {
     unsigned varIdx = 0;
     bool subHasTag = false;
@@ -2053,12 +2183,11 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
         }
         TU_ARMA(Linear, ve) {
             auto v = lit.slice(this->getOffset(sp, resolve, ve.field), ve.field.size).readUint(ve.field.size);
-            if (v < ve.offset) {
-                varIdx = ve.field.index;
-                subHasTag = false; // TODO: is this correct?
+            varIdx = ve.decodeTag(v);
+            if (ve.isNiche(varIdx)) {
+                subHasTag = false;
                 DEBUG("VariantMode::Linear - Niche #" << varIdx);
             } else {
-                varIdx = v.truncateU64() - ve.offset;
                 subHasTag = true;
                 DEBUG("VariantMode::Linear - Other #" << varIdx);
             }
@@ -2090,6 +2219,556 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
         }
     }
     return std::make_pair(varIdx, subHasTag);
+}
+
+namespace {
+    constexpr size_t TRANSMUTE_BYTE_VALUES = 257;
+    constexpr size_t TRANSMUTE_UNINITIALISED = 256;
+
+    using TransmuteByteSet = ::std::bitset<TRANSMUTE_BYTE_VALUES>;
+
+    struct TransmuteNfa {
+        struct ByteEdge {
+            TransmuteByteSet values;
+            unsigned destination;
+        };
+        struct State {
+            ::std::vector<unsigned> epsilon;
+            ::std::vector<ByteEdge> bytes;
+        };
+        struct Fragment {
+            unsigned start;
+            unsigned accept;
+        };
+
+        ::std::vector<State> states;
+
+        unsigned addState() {
+            states.push_back({});
+            return states.size() - 1;
+        }
+
+        Fragment empty() {
+            auto state = addState();
+            return {state, state};
+        }
+
+        Fragment uninhabited() {
+            return {addState(), addState()};
+        }
+
+        Fragment byte(const TransmuteByteSet& values) {
+            auto start = addState();
+            auto accept = addState();
+            states[start].bytes.push_back({values, accept});
+            return {start, accept};
+        }
+
+        Fragment then(Fragment left, Fragment right) {
+            states[left.accept].epsilon.push_back(right.start);
+            return {left.start, right.accept};
+        }
+
+        Fragment alternative(::std::vector<Fragment> alternatives) {
+            if (alternatives.empty()) {
+                return uninhabited();
+            }
+            if (alternatives.size() == 1) {
+                return alternatives.front();
+            }
+            auto start = addState();
+            auto accept = addState();
+            for (const auto& alternative : alternatives) {
+                states[start].epsilon.push_back(alternative.start);
+                states[alternative.accept].epsilon.push_back(accept);
+            }
+            return {start, accept};
+        }
+    };
+
+    struct TransmuteDfa {
+        using Transitions = ::std::array<int, TRANSMUTE_BYTE_VALUES>;
+
+        ::std::vector<Transitions> transitions;
+        ::std::vector<bool> accepting;
+
+        bool inhabited() const {
+            return ::std::find(accepting.begin(), accepting.end(), true) != accepting.end();
+        }
+    };
+
+    class TransmuteLayoutBuilder {
+        struct Built {
+            TransmuteNfa::Fragment fragment;
+            size_t size;
+        };
+        struct Segment {
+            size_t offset;
+            Built value;
+        };
+
+        const Span& sp;
+        const StaticTraitResolve& resolve;
+        bool destination;
+        bool assumeSafety;
+        bool supported = true;
+
+        static TransmuteByteSet byteRange(unsigned first, unsigned last) {
+            TransmuteByteSet rv;
+            for (unsigned value = first; value <= last; value++) {
+                rv.set(value);
+            }
+            return rv;
+        }
+
+        Built bytes(size_t count, const TransmuteByteSet& values) {
+            auto rv = nfa.empty();
+            for (size_t i = 0; i < count; i++) {
+                rv = nfa.then(rv, nfa.byte(values));
+            }
+            return {rv, count};
+        }
+
+        Built padding(size_t count) {
+            TransmuteByteSet values;
+            values.set();
+            return bytes(count, values);
+        }
+
+        Built number(size_t count) {
+            return bytes(count, byteRange(0, 255));
+        }
+
+        Built exact(U128 value, size_t count) {
+            if (count > 16) {
+                supported = false;
+                return {nfa.uninhabited(), count};
+            }
+            uint8_t raw[16] = {};
+            value.toLeBytes(raw, count);
+            auto rv = nfa.empty();
+            for (size_t i = 0; i < count; i++) {
+                TransmuteByteSet values;
+                values.set(raw[i]);
+                rv = nfa.then(rv, nfa.byte(values));
+            }
+            return {rv, count};
+        }
+
+        Built character() {
+            const auto any = byteRange(0, 255);
+            const auto zero = byteRange(0, 0);
+            auto make = [&](const ::std::array<TransmuteByteSet, 4>& values) {
+                auto rv = nfa.empty();
+                for (const auto& value : values) {
+                    rv = nfa.then(rv, nfa.byte(value));
+                }
+                return rv;
+            };
+            ::std::vector<TransmuteNfa::Fragment> alternatives;
+            alternatives.push_back(make({any, byteRange(0x00, 0xD7), zero, zero}));
+            alternatives.push_back(make({any, byteRange(0xE0, 0xFF), zero, zero}));
+            alternatives.push_back(make({any, any, byteRange(0x01, 0x10), zero}));
+            return {nfa.alternative(::std::move(alternatives)), 4};
+        }
+
+        Built combine(::std::vector<Segment> segments, size_t totalSize) {
+            ::std::stable_sort(segments.begin(), segments.end(), [](const Segment& left, const Segment& right) {
+                return left.offset < right.offset;
+            });
+
+            auto rv = nfa.empty();
+            size_t offset = 0;
+            for (const auto& segment : segments) {
+                if (segment.offset < offset || segment.offset > totalSize || segment.value.size > totalSize - segment.offset) {
+                    supported = false;
+                    return {nfa.uninhabited(), totalSize};
+                }
+                rv = nfa.then(rv, padding(segment.offset - offset).fragment);
+                rv = nfa.then(rv, segment.value.fragment);
+                offset = segment.offset + segment.value.size;
+            }
+            rv = nfa.then(rv, padding(totalSize - offset).fragment);
+            return {rv, totalSize};
+        }
+
+        Built aggregate(const TypeRepr& repr, int skipField = -1) {
+            ::std::vector<Segment> fields;
+            for (size_t i = 0; i < repr.fields.size(); i++) {
+                if (static_cast<int>(i) == skipField) {
+                    continue;
+                }
+                auto field = build(repr.fields[i].ty);
+                fields.push_back({repr.fields[i].offset, field});
+            }
+            return combine(::std::move(fields), repr.size);
+        }
+
+        void addVariantPayload(
+            ::std::vector<Segment>& segments,
+            const TypeRepr& outerRepr,
+            unsigned variant,
+            bool skipSyntheticTag,
+            size_t tagOffset,
+            size_t tagSize
+        ) {
+            ASSERT_BUG(sp, variant < outerRepr.fields.size(), "Enum variant field is missing");
+            const auto& outerField = outerRepr.fields[variant];
+            const auto* payloadRepr = TargetGetTypeRepr(sp, resolve, outerField.ty);
+            if (!payloadRepr) {
+                supported = false;
+                return;
+            }
+
+            int skipField = -1;
+            if (skipSyntheticTag && !payloadRepr->fields.empty()) {
+                const auto& candidate = payloadRepr->fields.back();
+                size_t candidateSize = 0;
+                if (!TargetGetSizeOf(sp, resolve, candidate.ty, candidateSize)) {
+                    supported = false;
+                    return;
+                }
+                if (outerField.offset + candidate.offset == tagOffset && candidateSize == tagSize) {
+                    skipField = payloadRepr->fields.size() - 1;
+                }
+            }
+
+            if (skipField < 0) {
+                segments.push_back({outerField.offset, build(outerField.ty)});
+                return;
+            }
+
+            for (size_t i = 0; i < payloadRepr->fields.size(); i++) {
+                if (static_cast<int>(i) == skipField) {
+                    continue;
+                }
+                const auto& field = payloadRepr->fields[i];
+                segments.push_back({outerField.offset + field.offset, build(field.ty)});
+            }
+        }
+
+        Built taggedVariant(
+            const TypeRepr& repr,
+            unsigned variant,
+            size_t tagOffset,
+            size_t tagSize,
+            U128 tag,
+            bool skipSyntheticTag
+        ) {
+            ::std::vector<Segment> segments;
+            addVariantPayload(segments, repr, variant, skipSyntheticTag, tagOffset, tagSize);
+            segments.push_back({tagOffset, exact(tag, tagSize)});
+            return combine(::std::move(segments), repr.size);
+        }
+
+        Built enumLayout(const HIRTypeData* ty, const TypeRepr& repr, const HIREnum& enm) {
+            if (enm.numVariants() == 0) {
+                return {nfa.uninhabited(), repr.size};
+            }
+
+            if (repr.variants.is_None()) {
+                if (repr.fields.empty()) {
+                    return padding(repr.size);
+                }
+                return combine({Segment{repr.fields[0].offset, build(repr.fields[0].ty)}}, repr.size);
+            }
+
+            ::std::vector<TransmuteNfa::Fragment> alternatives;
+            if (const auto* linear = repr.variants.opt_Linear()) {
+                const auto tagOffset = repr.getOffset(sp, resolve, linear->field);
+                for (unsigned variant = 0; variant < linear->numVariants; variant++) {
+                    Built value;
+                    if (linear->usesNiche() && variant == linear->field.index) {
+                        const auto& field = repr.fields.at(variant);
+                        value = combine({Segment{field.offset, build(field.ty)}}, repr.size);
+                    } else {
+                        value = taggedVariant(repr, variant, tagOffset, linear->field.size, U128(linear->tagValue(variant)), true);
+                    }
+                    alternatives.push_back(value.fragment);
+                }
+            } else if (const auto* values = repr.variants.opt_Values()) {
+                const auto tagOffset = repr.getOffset(sp, resolve, values->field);
+                for (unsigned variant = 0; variant < values->values.size(); variant++) {
+                    auto value = enm.mData.is_Value()
+                        ? combine({Segment{tagOffset, exact(values->values[variant], values->field.size)}}, repr.size)
+                        : taggedVariant(repr, variant, tagOffset, values->field.size, values->values[variant], true);
+                    alternatives.push_back(value.fragment);
+                }
+            } else if (const auto* nonzero = repr.variants.opt_NonZero()) {
+                const auto tagOffset = repr.getOffset(sp, resolve, nonzero->field);
+                const auto nonzeroVariant = 1 - nonzero->zeroVariant;
+                for (unsigned variant = 0; variant < 2; variant++) {
+                    Built value;
+                    if (variant == nonzeroVariant) {
+                        const auto& field = repr.fields.at(variant);
+                        value = combine({Segment{field.offset, build(field.ty)}}, repr.size);
+                    } else {
+                        value = combine({Segment{tagOffset, exact(U128(0), nonzero->field.size)}}, repr.size);
+                    }
+                    alternatives.push_back(value.fragment);
+                }
+            } else {
+                BUG(sp, "Unhandled enum representation for " << ty);
+            }
+            return {nfa.alternative(::std::move(alternatives)), repr.size};
+        }
+
+        Built build(const HIRTypeData* ty) {
+            if (ty->is_Diverge()) {
+                return {nfa.uninhabited(), 0};
+            }
+            if (const auto* primitive = ty->opt_Primitive()) {
+                size_t size = 0;
+                if (!TargetGetSizeOf(sp, resolve, ty, size)) {
+                    supported = false;
+                    return {nfa.uninhabited(), 0};
+                }
+                if (*primitive == HIRCoreType::Bool) {
+                    return bytes(1, byteRange(0, 1));
+                }
+                if (*primitive == HIRCoreType::Char) {
+                    return character();
+                }
+                if (*primitive == HIRCoreType::Str) {
+                    supported = false;
+                    return {nfa.uninhabited(), size};
+                }
+                return number(size);
+            }
+            if (const auto* tuple = ty->opt_Tuple()) {
+                (void)tuple;
+                const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
+                if (!repr) {
+                    supported = false;
+                    return {nfa.uninhabited(), 0};
+                }
+                return aggregate(*repr);
+            }
+            if (const auto* array = ty->opt_Array()) {
+                if (!array->size.is_Known()) {
+                    supported = false;
+                    return {nfa.uninhabited(), 0};
+                }
+                auto rv = nfa.empty();
+                size_t size = 0;
+                for (uint64_t i = 0; i < array->size.as_Known(); i++) {
+                    auto element = build(array->inner);
+                    if (element.size > SIZE_MAX - size) {
+                        supported = false;
+                        return {nfa.uninhabited(), 0};
+                    }
+                    size += element.size;
+                    rv = nfa.then(rv, element.fragment);
+                }
+                return {rv, size};
+            }
+            if (const auto* path = ty->opt_Path()) {
+                if (destination && !assumeSafety) {
+                    supported = false;
+                    return {nfa.uninhabited(), 0};
+                }
+                const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
+                if (!repr) {
+                    supported = false;
+                    return {nfa.uninhabited(), 0};
+                }
+                if (path->binding.is_Struct()) {
+                    const auto& str = *path->binding.as_Struct();
+                    // rustc 1.90's transmutability layout does not yet model
+                    // scalar valid ranges (including the NonZero wrappers).
+                    if (str.structMarkings.isNonzero || str.structMarkings.boundedMax) {
+                        supported = false;
+                        return {nfa.uninhabited(), repr->size};
+                    }
+                    return aggregate(*repr);
+                }
+                if (path->binding.is_Union()) {
+                    ::std::vector<TransmuteNfa::Fragment> alternatives;
+                    for (const auto& field : repr->fields) {
+                        alternatives.push_back(combine({Segment{0, build(field.ty)}}, repr->size).fragment);
+                    }
+                    return {nfa.alternative(::std::move(alternatives)), repr->size};
+                }
+                if (path->binding.is_Enum()) {
+                    return enumLayout(ty, *repr, *path->binding.as_Enum());
+                }
+                supported = false;
+                return {nfa.uninhabited(), repr->size};
+            }
+
+            // References require region, mutability and referent obligations;
+            // unsupported types must not manufacture a builtin impl.
+            supported = false;
+            return {nfa.uninhabited(), 0};
+        }
+
+        ::std::vector<unsigned> epsilonClosure(::std::vector<unsigned> states) const {
+            ::std::vector<bool> seen(nfa.states.size(), false);
+            for (auto state : states) {
+                seen.at(state) = true;
+            }
+            for (size_t i = 0; i < states.size(); i++) {
+                for (auto next : nfa.states[states[i]].epsilon) {
+                    if (!seen[next]) {
+                        seen[next] = true;
+                        states.push_back(next);
+                    }
+                }
+            }
+            ::std::sort(states.begin(), states.end());
+            return states;
+        }
+
+    public:
+        TransmuteNfa nfa;
+
+        TransmuteLayoutBuilder(const Span& sp, const StaticTraitResolve& resolve, bool destination, bool assumeSafety)
+            : sp(sp)
+            , resolve(resolve)
+            , destination(destination)
+            , assumeSafety(assumeSafety)
+        {
+        }
+
+        bool makeDfa(const HIRTypeData* ty, TransmuteDfa& out) {
+            auto root = build(ty);
+            if (!supported) {
+                return false;
+            }
+
+            ::std::map<::std::vector<unsigned>, unsigned> indexes;
+            ::std::vector<::std::vector<unsigned>> states;
+            auto intern = [&](::std::vector<unsigned> state) {
+                auto result = indexes.emplace(state, indexes.size());
+                if (result.second) {
+                    states.push_back(::std::move(state));
+                    TransmuteDfa::Transitions transitions;
+                    transitions.fill(-1);
+                    out.transitions.push_back(transitions);
+                    out.accepting.push_back(false);
+                }
+                return result.first->second;
+            };
+
+            intern(epsilonClosure({root.fragment.start}));
+            for (size_t stateIndex = 0; stateIndex < states.size(); stateIndex++) {
+                const auto state = states[stateIndex];
+                out.accepting[stateIndex] = ::std::binary_search(state.begin(), state.end(), root.fragment.accept);
+
+                ::std::array<::std::vector<unsigned>, TRANSMUTE_BYTE_VALUES> destinations;
+                for (auto nfaState : state) {
+                    for (const auto& edge : nfa.states[nfaState].bytes) {
+                        for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
+                            if (edge.values[value]) {
+                                destinations[value].push_back(edge.destination);
+                            }
+                        }
+                    }
+                }
+                for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
+                    auto& destination = destinations[value];
+                    if (destination.empty()) {
+                        continue;
+                    }
+                    ::std::sort(destination.begin(), destination.end());
+                    destination.erase(::std::unique(destination.begin(), destination.end()), destination.end());
+                    out.transitions[stateIndex][value] = intern(epsilonClosure(::std::move(destination)));
+                }
+            }
+            return true;
+        }
+    };
+
+    class TransmuteRelation {
+        const TransmuteDfa& source;
+        const TransmuteDfa& destination;
+        bool assumeValidity;
+        ::std::map<::std::pair<unsigned, unsigned>, int> cache;
+
+        bool check(unsigned sourceState, unsigned destinationState) {
+            const auto key = ::std::make_pair(sourceState, destinationState);
+            auto existing = cache.find(key);
+            if (existing != cache.end()) {
+                return existing->second > 0;
+            }
+            cache.insert({key, 0});
+
+            bool result;
+            if (destination.accepting[destinationState]) {
+                result = true;
+            } else if (source.accepting[sourceState]) {
+                const auto next = destination.transitions[destinationState][TRANSMUTE_UNINITIALISED];
+                result = next >= 0 && check(sourceState, static_cast<unsigned>(next));
+            } else if (assumeValidity) {
+                result = false;
+                for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES && !result; value++) {
+                    const auto sourceNext = source.transitions[sourceState][value];
+                    const auto destinationNext = destination.transitions[destinationState][value];
+                    if (sourceNext >= 0 && destinationNext >= 0) {
+                        result = check(static_cast<unsigned>(sourceNext), static_cast<unsigned>(destinationNext));
+                    }
+                }
+            } else {
+                result = true;
+                for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES && result; value++) {
+                    const auto sourceNext = source.transitions[sourceState][value];
+                    if (sourceNext < 0) {
+                        continue;
+                    }
+                    const auto destinationNext = destination.transitions[destinationState][value];
+                    result = destinationNext >= 0 && check(static_cast<unsigned>(sourceNext), static_cast<unsigned>(destinationNext));
+                }
+            }
+            cache[key] = result ? 1 : -1;
+            return result;
+        }
+
+    public:
+        TransmuteRelation(const TransmuteDfa& source, const TransmuteDfa& destination, bool assumeValidity)
+            : source(source)
+            , destination(destination)
+            , assumeValidity(assumeValidity)
+        {
+        }
+
+        bool check() {
+            if (!source.inhabited()) {
+                return true;
+            }
+            if (!destination.inhabited()) {
+                return false;
+            }
+            return check(0, 0);
+        }
+    };
+}
+
+bool TargetTypesAreTransmutable(
+    const Span& sp,
+    const StaticTraitResolve& resolve,
+    const HIRTypeData* src,
+    const HIRTypeData* dst,
+    bool assumeAlignment,
+    bool assumeLifetimes,
+    bool assumeSafety,
+    bool assumeValidity
+) {
+    (void)assumeAlignment;
+    (void)assumeLifetimes;
+
+    TransmuteDfa source;
+    TransmuteLayoutBuilder sourceBuilder(sp, resolve, false, assumeSafety);
+    if (!sourceBuilder.makeDfa(src, source)) {
+        return false;
+    }
+
+    TransmuteDfa destination;
+    TransmuteLayoutBuilder destinationBuilder(sp, resolve, true, assumeSafety);
+    if (!destinationBuilder.makeDfa(dst, destination)) {
+        return false;
+    }
+
+    return TransmuteRelation(source, destination, assumeValidity).check();
 }
 
 TargetArch::Atomics::Atomics(bool u8, bool u16, bool u32, bool u64, bool ptr)
