@@ -5162,7 +5162,7 @@ namespace {
                 // TODO: Detect uninhabited (empty enum or `!` - potentially via nested types)
             } else if (name == "assert_zero_valid") {
                 // TODO: Detect nonzero within
-            } else if (name == "assert_uninit_valid") {
+            } else if (name == "assert_mem_uninitialized_valid") {
                 // TODO: Detect nonzero or enum within
             } else if (name == "const_eval_select") {
                 const auto& argTyTuple = params.types.at(0)->as_Tuple();

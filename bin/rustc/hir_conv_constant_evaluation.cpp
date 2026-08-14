@@ -3953,6 +3953,10 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, !ty->is_Borrow(), "`assert_zero_valid`: Borrow cannot be zero");
                     // TODO: Other cases?
+                } else if (te->name == "assert_mem_uninitialized_valid") {
+                    auto ty = localState.monomorphExpand(te->params.types.at(0));
+                    (void)ty;
+                    // TODO: Detect types which reject the mitigated 0x01 fill.
                 } else if (te->name == "is_val_statically_known") {
                     dst.writeUint(state, 8, e.args.at(0).is_Constant() || e.args.at(0).is_Borrow());
                 } else {

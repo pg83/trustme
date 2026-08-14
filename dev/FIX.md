@@ -31,13 +31,12 @@ causes: a generic reporting location can contain several unrelated bugs.
 ## P1 — internal compiler failures
 
 After the targeted const-generic, CTFE, TAIT, global-assembly, DST, shebang,
-pointer-mask, volatile-memory, and SIMD-bitmask reruns, 150 of the snapshot's
-internal compiler failures remain. The former generic `mir_helpers.h:108`
-cluster is subdivided below by its actual MIR error.
+pointer-mask, volatile-memory, SIMD-bitmask, and validity-intrinsic reruns, 148
+of the snapshot's internal compiler failures remain. The former generic
+`mir_helpers.h:108` cluster is subdivided below by its actual MIR error.
 
 | signature | tests | note |
 |---|---:|---|
-| MIR error, `mir_helpers.h:108`: `assert_mem_uninitialized_valid` | 2 | |
 | MIR error, `mir_helpers.h:108`: CTFE function-pointer call terminator | 2 | |
 | MIR error, `mir_helpers.h:108`: `vtable_align` | 2 | |
 | MIR error, `mir_helpers.h:108`: `fmuladd` | 1 | |
