@@ -31,6 +31,42 @@ static inline size_t ALIGN_TO(size_t s, size_t a) { return (s + a - 1) / a * a; 
 
 #define ALIGNOF(t) __alignof__(t)
 
+static inline void __mrustc_volatile_memcpy(void* dst, const void* src, size_t size) {
+    volatile uint8_t* dst_bytes = (volatile uint8_t*)dst;
+    const volatile uint8_t* src_bytes = (const volatile uint8_t*)src;
+    for (size_t i = 0; i < size; i++) dst_bytes[i] = src_bytes[i];
+}
+
+static inline void __mrustc_volatile_memmove(void* dst, const void* src, size_t size) {
+    volatile uint8_t* dst_bytes = (volatile uint8_t*)dst;
+    const volatile uint8_t* src_bytes = (const volatile uint8_t*)src;
+    if ((uintptr_t)dst <= (uintptr_t)src) {
+        for (size_t i = 0; i < size; i++) dst_bytes[i] = src_bytes[i];
+    } else {
+        while (size > 0) {
+            size--;
+            dst_bytes[size] = src_bytes[size];
+        }
+    }
+}
+
+static inline void __mrustc_volatile_memset(void* dst, uint8_t value, size_t size) {
+    volatile uint8_t* dst_bytes = (volatile uint8_t*)dst;
+    for (size_t i = 0; i < size; i++) dst_bytes[i] = value;
+}
+
+static inline void __mrustc_unaligned_volatile_load(void* dst, const void* src, size_t size) {
+    uint8_t* dst_bytes = (uint8_t*)dst;
+    const volatile uint8_t* src_bytes = (const volatile uint8_t*)src;
+    for (size_t i = 0; i < size; i++) dst_bytes[i] = src_bytes[i];
+}
+
+static inline void __mrustc_unaligned_volatile_store(void* dst, const void* src, size_t size) {
+    volatile uint8_t* dst_bytes = (volatile uint8_t*)dst;
+    const uint8_t* src_bytes = (const uint8_t*)src;
+    for (size_t i = 0; i < size; i++) dst_bytes[i] = src_bytes[i];
+}
+
 static inline uint64_t __builtin_clz64(uint64_t v) {
     return (v >> 32) != 0 ? __builtin_clz(v >> 32) : 32 + __builtin_clz(v);
 }

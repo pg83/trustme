@@ -6531,6 +6531,18 @@ namespace {
                     of << "*)";
                     emitParam(e.args.at(0));
                 }
+            } else if (name == "unaligned_volatile_load") {
+                size_t valueSize = 0;
+                MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, mResolve, params.types.at(0), valueSize), "Can't get size of " << params.types.at(0));
+                if (valueSize == 0) {
+                    of << "/* zst */";
+                    return;
+                }
+                of << "__mrustc_unaligned_volatile_load((void*)&";
+                emitLvalue(e.retVal);
+                of << ", (const void*)";
+                emitParam(e.args.at(0));
+                of << ", " << valueSize << ")";
             } else if (name == "volatile_store") {
                 if (!this->typeIsBadZst(params.types.at(0))) {
                     of << "*(volatile ";
@@ -6540,6 +6552,49 @@ namespace {
                     of << " = ";
                     emitParam(e.args.at(1));
                 }
+            } else if (name == "unaligned_volatile_store") {
+                size_t valueSize = 0;
+                MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, mResolve, params.types.at(0), valueSize), "Can't get size of " << params.types.at(0));
+                if (valueSize == 0) {
+                    of << "/* zst */";
+                    return;
+                }
+                of << "{ ";
+                emitCtype(params.types.at(0));
+                of << " mrustc_value = ";
+                emitParam(e.args.at(1));
+                of << "; __mrustc_unaligned_volatile_store((void*)";
+                emitParam(e.args.at(0));
+                of << ", (const void*)&mrustc_value, " << valueSize << "); }";
+            } else if (name == "volatile_copy_memory" || name == "volatile_copy_nonoverlapping_memory") {
+                size_t elementSize = 0;
+                MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, mResolve, params.types.at(0), elementSize), "Can't get size of " << params.types.at(0));
+                if (elementSize == 0) {
+                    of << "/* zst */";
+                    return;
+                }
+                of << (name == "volatile_copy_memory" ? "__mrustc_volatile_memmove" : "__mrustc_volatile_memcpy");
+                of << "((void*)";
+                emitParam(e.args.at(0));
+                of << ", (const void*)";
+                emitParam(e.args.at(1));
+                of << ", (size_t)";
+                emitParam(e.args.at(2));
+                of << " * " << elementSize << ")";
+            } else if (name == "volatile_set_memory") {
+                size_t elementSize = 0;
+                MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, mResolve, params.types.at(0), elementSize), "Can't get size of " << params.types.at(0));
+                if (elementSize == 0) {
+                    of << "/* zst */";
+                    return;
+                }
+                of << "__mrustc_volatile_memset((void*)";
+                emitParam(e.args.at(0));
+                of << ", (uint8_t)";
+                emitParam(e.args.at(1));
+                of << ", (size_t)";
+                emitParam(e.args.at(2));
+                of << " * " << elementSize << ")";
             } else if (name == "nontemporal_store") {
                 // TODO: Actually do a non-temporal store
                 // GCC: _mm_stream_* (depending on input type, which must be `repr(simd)`)
