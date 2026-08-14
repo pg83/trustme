@@ -1194,7 +1194,7 @@ TU_ARMA(Alias, ee) {
         }
 
         TU_ARMA(Alias, l, r) {
-            if (l.inner.get() != r.inner.get()) { // Pointer comparison
+            if (l.inner->path != r.inner->path) {
                 return false;
             }
             return pathparamsEqual(l.params, r.params);

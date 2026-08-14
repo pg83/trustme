@@ -200,7 +200,7 @@ namespace {
             auto _ = this->ms.setItemGenerics(item.mParams);
             if (item.mCode) {
                 DEBUG("Function code " << p);
-                TypecheckCode(ms, item.mArgs, item.returnType, item.mCode);
+                TypecheckCode(ms, item.mArgs, item.traitReturnType.value_or(item.returnType), item.mCode);
             } else {
                 DEBUG("Function code " << p << " (none)");
             }

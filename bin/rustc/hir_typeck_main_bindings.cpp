@@ -658,8 +658,17 @@ namespace {
                     // > The difference tends to be in lifetimes, so match the two types and update lifetimes?
                     struct MCB: public HIRMatchGenerics {
                         ::std::map<RcString, const HIRTypeData*> mapping;
+                        ::std::map<unsigned int, const HIRTypeData*> rpitMapping;
 
                         HIRCompare cmpType(const Span& sp, const HIRTypeData* tyL, const HIRTypeData* tyR, tCbResolveType resolveCb) override {
+                            if (const auto* erased = tyL->opt_ErasedType(); erased && erased->inner.is_Fcn()) {
+                                const auto index = erased->inner.as_Fcn().index;
+                                const auto inserted = rpitMapping.insert(std::make_pair(index, tyR));
+                                if (!inserted.second) {
+                                    return HIRMatchGenerics::cmpType(sp, inserted.first->second, tyR, resolveCb);
+                                }
+                                return HIRCompare::Equal;
+                            }
                             // If the LHS is an ATY that starts with `erased#` then just accept it?
                             // - Also record the mapping
                             if (const auto* tyP = tyL->opt_Path()) {
@@ -691,7 +700,14 @@ namespace {
                         );
                     }
                     HIRTypeRef expRetTyReal;
-                    const auto& expRetTy = matchCb.mapping.empty() ? expRetTy1 : (expRetTyReal = cloneTyWith(crate.types, sp, expRetTy1, [&](const HIRTypeData* ref, HIRTypeRef& out) -> bool {
+                    const auto& expRetTy = matchCb.mapping.empty() && matchCb.rpitMapping.empty() ? expRetTy1 : (expRetTyReal = cloneTyWith(crate.types, sp, expRetTy1, [&](const HIRTypeData* ref, HIRTypeRef& out) -> bool {
+                        if (const auto* erased = ref->opt_ErasedType(); erased && erased->inner.is_Fcn()) {
+                            const auto it = matchCb.rpitMapping.find(erased->inner.as_Fcn().index);
+                            if (it != matchCb.rpitMapping.end()) {
+                                out = it->second;
+                                return true;
+                            }
+                        }
                         if (const auto* tyP = ref->opt_Path()) {
                             if (const auto* pathP = tyP->path.mData.opt_UfcsKnown()) {
                                 auto it = matchCb.mapping.find(pathP->item);
@@ -749,6 +765,9 @@ namespace {
                     // Update AFTER the checks
                     // HACK: Clone the expected type, so the lifetimes match.
                     DEBUG("Updating < " << impl.mType << " as " << traitPath << impl.traitArgs << " >::" << e.first);
+                    if (!matchCb.rpitMapping.empty()) {
+                        implFcn.traitReturnType = expRetTy1;
+                    }
                     implFcn.returnType = expRetTy;
                     for (size_t i = 0; i < std::min(implFcn.mArgs.size(), traitFcn.mArgs.size()); i++) {
                         DEBUG("ARG" << i << "> " << traitFcn.mArgs[i].second);

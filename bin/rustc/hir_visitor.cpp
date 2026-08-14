@@ -360,6 +360,9 @@ void HIRVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
         this->visitType(arg.second);
     }
     this->visitType(item.returnType);
+    if (item.traitReturnType) {
+        this->visitType(*item.traitReturnType);
+    }
     this->visitExpr(item.mCode);
     if (mResolve) {
         mResolve->clearItemGenerics();

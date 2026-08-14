@@ -175,6 +175,9 @@ public:
     argsT mArgs;
     bool variadic = false;
     HIRTypeRef returnType;
+    // The trait-declared return used to typecheck a refining RPITIT impl.
+    // `returnType` remains the impl's public, possibly concrete signature.
+    ::std::optional<HIRTypeRef> traitReturnType;
 
     SourceLocation source;
     HIRExprPtr mCode;

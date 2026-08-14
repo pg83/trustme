@@ -571,7 +571,7 @@ namespace {
         TU_MATCH_HDRA((a, b), {)
         TU_ARMA(Fcn, ae, be) return ae.index == be.index && exactPathEqual(ae.origin, be.origin);
             TU_ARMA(Known, ae, be) return ae == be;
-            TU_ARMA(Alias, ae, be) return ae.inner.get() == be.inner.get() && exactPathParamsEqual(ae.params, be.params);
+            TU_ARMA(Alias, ae, be) return ae.inner->path == be.inner->path && exactPathParamsEqual(ae.params, be.params);
         }
         throw "";
     }
@@ -919,6 +919,17 @@ namespace {
             TU_ARMA(ErasedType, e) {
                 h = hashMix(h, static_cast<size_t>(e.inner.tag()));
                 h = hashMix(h, e.traits.size());
+            TU_MATCH_HDRA((e.inner), {)
+            TU_ARMA(Fcn, inner) {
+                        h = hashMix(h, hashPath(inner.origin));
+                        h = hashMix(h, inner.index);
+                    }
+                    TU_ARMA(Known, inner) h = hashMix(h, hashTypeRef(inner));
+                    TU_ARMA(Alias, inner) {
+                        h = hashMix(h, hashSimplePath(inner.inner->path));
+                        h = hashMix(h, hashPathParams(inner.params));
+                    }
+            }
             }
             TU_ARMA(Array, e) {
                 h = hashMix(h, hashTypeRef(e.inner));
@@ -1179,13 +1190,7 @@ Ordering ord(const TypeDataErasedTypeInner& l, const TypeDataErasedTypeInner& r)
             return le->ordIgnoringRegions(re);
         }
         TU_ARMA(Alias, le, re) {
-            if (le.inner.get() != re.inner.get()) {
-                if (reinterpret_cast<uintptr_t>(le.inner.get()) < reinterpret_cast<uintptr_t>(re.inner.get())) {
-                    return OrdLess;
-                } else {
-                    return OrdGreater;
-                }
-            }
+            ORD(le.inner->path, re.inner->path);
             ORD(le.params, re.params);
         }
         TU_ARMA(Fcn, le, re) {
@@ -1434,12 +1439,19 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         }
     }
 
-    const auto unresolvedErasedAlias = [](const HIRTypeData* ty) {
+    const auto erasedAlias = [](const HIRTypeData* ty) {
         const auto* erased = ty->opt_ErasedType();
-        const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
-        return alias && !alias->inner->type;
+        return erased ? erased->inner.opt_Alias() : nullptr;
     };
-    if (unresolvedErasedAlias(v) || unresolvedErasedAlias(x)) {
+    const auto* vAlias = erasedAlias(v);
+    const auto* xAlias = erasedAlias(x);
+    if (vAlias && xAlias) {
+        if (vAlias->inner->path != xAlias->inner->path) {
+            return HIRCompare::Unequal;
+        }
+        return vAlias->params.matchTestGenericsFuzz(sp, xAlias->params, resolvePlaceholder, *this);
+    }
+    if ((vAlias && !vAlias->inner->type) || (xAlias && !xAlias->inner->type)) {
         DEBUG("- Fuzzy match due to unresolved opaque alias - " << v << " = " << x);
         return HIRCompare::Fuzzy;
     }
@@ -1549,7 +1561,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             TU_MATCH_HDRA((te.inner, xe.inner), {)
             TU_ARMA(Known, l, r) return l->matchTestGenericsFuzz(sp, r, resolvePlaceholder, *this);
                 TU_ARMA(Alias, l, r) {
-                    return l.inner == r.inner ? l.params.matchTestGenericsFuzz(sp, r.params, resolvePlaceholder, *this) : HIRCompare::Unequal;
+                    return l.inner->path == r.inner->path ? l.params.matchTestGenericsFuzz(sp, r.params, resolvePlaceholder, *this) : HIRCompare::Unequal;
                 }
                 TU_ARMA(Fcn, l, r) {
                     return l.index == r.index ? this->cmpPath(sp, l.origin, r.origin, resolvePlaceholder) : HIRCompare::Unequal;
@@ -1992,7 +2004,7 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
                     return l->compareWithPlaceholders(sp, r, resolvePlaceholder);
                 }
                 TU_ARMA(Alias, l, r) {
-                    if (l.inner != r.inner) {
+                    if (l.inner->path != r.inner->path) {
                         return HIRCompare::Unequal;
                     }
                     return l.params.compareWithPlaceholders(sp, r.params, resolvePlaceholder);

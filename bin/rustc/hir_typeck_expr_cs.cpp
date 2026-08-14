@@ -8946,7 +8946,8 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
     struct Monomorph: public Monomorphiser {
         Context& context;
         const HIRTypeData* selfTy;
-        const HIRPathParams* implParams;
+        HIRPathParams implParams;
+        bool hasImplParams;
         const HIRPathParams& fcnParams;
         const HIRPathParams hrlParams;
 
@@ -8954,7 +8955,8 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
             : Monomorphiser(context.crate.types)
             , context(context)
             , selfTy(selfTy)
-            , implParams(implParams)
+            , implParams(implParams ? implParams->clone() : HIRPathParams())
+            , hasImplParams(implParams != nullptr)
             , fcnParams(fcnParams)
             , hrlParams(std::move(hrlParams))
         {
@@ -8968,10 +8970,10 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                     TODO(sp, "Handle 'Self' when monomorphising");
                 }
             } else if (e.binding < 256) {
-                if (implParams) {
+                if (hasImplParams) {
                     auto idx = e.idx();
-                    ASSERT_BUG(sp, idx < implParams->types.size(), "Generic param (impl) out of input range - " << e << " >= " << implParams->types.size());
-                    return context.getType(implParams->types[idx]);
+                    ASSERT_BUG(sp, idx < implParams.types.size(), "Generic param (impl) out of input range - " << e << " >= " << implParams.types.size());
+                    return context.getType(implParams.types[idx]);
                 } else {
                     BUG(sp, "Impl-level parameter on free function (" << e << ")");
                 }
@@ -8986,10 +8988,10 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
 
         HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& e) const override {
             if (e.binding < 256) {
-                ASSERT_BUG(sp, implParams, "Impl-level value parameter on free function (" << e << ")");
+                ASSERT_BUG(sp, hasImplParams, "Impl-level value parameter on free function (" << e << ")");
                 auto idx = e.idx();
-                ASSERT_BUG(sp, idx < implParams->values.size(), "Generic value (impl) out of input range - " << e << " >= " << implParams->values.size());
-                return context.ivars.getValue(implParams->values[idx]).clone();
+                ASSERT_BUG(sp, idx < implParams.values.size(), "Generic value (impl) out of input range - " << e << " >= " << implParams.values.size());
+                return context.ivars.getValue(implParams.values[idx]).clone();
             } else if (e.binding < 512) {
                 auto idx = e.idx();
                 ASSERT_BUG(sp, idx < fcnParams.values.size(), "Generic value out of input range - " << e << " >= " << fcnParams.values.size());
@@ -9026,8 +9028,55 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
             context.addTraitBound(sp, e.type, e.trait.mPath, e.trait.mParams.clone());
 
             fcnPtr = &fcn;
+            const HIRPathParams* implParams = &e.trait.mParams;
+            HIRPathParams selectedImplParams;
 
-            cache.monomorph.reset(new Monomorph(context, e.type, &e.trait.mParams, e.params, {}));
+            if (!monomorphiseTypeNeeded(e.type) && !monomorphisePathparamsNeeded(e.trait.mParams) && !context.mResolve.typeContainsIvars(e.type) && !context.mResolve.paramsContainIvars(e.trait.mParams)) {
+                std::vector<ImplRef> impls;
+                context.mResolve.findTraitImpls(sp, e.trait.mPath, e.trait.mParams, e.type, [&](ImplRef impl, HIRCompare cmp) {
+                    if (cmp == HIRCompare::Equal && !impl.isAmbiguousIdentity() && impl.mData.is_TraitImpl()) {
+                        const auto* traitImpl = impl.mData.as_TraitImpl().impl;
+                        if (traitImpl->methods.find(e.item) == traitImpl->methods.end()) {
+                            return false;
+                        }
+                        const bool seen = std::any_of(impls.begin(), impls.end(), [&](const ImplRef& other) {
+                            return other.mData.as_TraitImpl().impl == traitImpl;
+                        });
+                        if (!seen) {
+                            impls.push_back(std::move(impl));
+                        }
+                    }
+                    return false;
+                });
+
+                ImplRef* selected = nullptr;
+                for (auto& candidate : impls) {
+                    const bool dominated = std::any_of(impls.begin(), impls.end(), [&](const ImplRef& other) {
+                        return &candidate != &other && other.moreSpecificThan(context.crate.types, candidate);
+                    });
+                    if (!dominated) {
+                        if (selected) {
+                            selected = nullptr;
+                            break;
+                        }
+                        selected = &candidate;
+                    }
+                }
+
+                if (selected) {
+                    auto& implData = selected->mData.as_TraitImpl();
+                    auto method = implData.impl->methods.find(e.item);
+                    if (method != implData.impl->methods.end() && method->second.data.traitReturnType) {
+                        fcnPtr = &method->second.data;
+                        cache.fcnParams = &fcnPtr->mParams;
+                        cache.topParams = &implData.impl->mParams;
+                        selectedImplParams = implData.implParams.clone();
+                        implParams = &selectedImplParams;
+                    }
+                }
+            }
+
+            cache.monomorph.reset(new Monomorph(context, e.type, implParams, e.params, {}));
         }
         TU_ARMA(UfcsUnknown, e) {
             // TODO: Eventually, the HIR `Resolve UFCS` pass will be removed, leaving this code responsible for locating the item.

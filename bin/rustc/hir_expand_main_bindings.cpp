@@ -5753,7 +5753,12 @@ namespace {
             methodParams = &fcn.mParams;
             varIndex = 0;
             DEBUG("-> " << fcn.returnType);
-            visitType(fcn.returnType);
+            if (fcn.traitReturnType) {
+                visitType(*fcn.traitReturnType);
+                fcn.traitReturnType.reset();
+            } else {
+                visitType(fcn.returnType);
+            }
             DEBUG("-> " << fcn.returnType);
 
             if (targetTrait && varIndex > 0 && fcn.mCode) {

@@ -3444,6 +3444,7 @@ public:
     // - Value items
     void serialise(const HIRFunction& fcn) {
         TRACE_FUNCTION_F("_function:");
+        assert(!fcn.traitReturnType);
         auto _ = out.openObject("HIR::Function");
 
         serialise(fcn.linkage);
