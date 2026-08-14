@@ -30,13 +30,12 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P1 — internal compiler failures
 
-After the targeted const-generic, CTFE, TAIT, global-assembly, DST, and shebang reruns, 157 of the snapshot's internal compiler failures
+After the targeted const-generic, CTFE, TAIT, global-assembly, DST, shebang, and pointer-mask reruns, 154 of the snapshot's internal compiler failures
 remain. The former generic `mir_helpers.h:108` cluster is subdivided below by
 its actual MIR error.
 
 | signature | tests | note |
 |---|---:|---|
-| MIR error, `mir_helpers.h:108`: `ptr_mask` | 3 | |
 | MIR error, `mir_helpers.h:108`: `volatile_copy_memory` | 2 | |
 | MIR error, `mir_helpers.h:108`: SIMD `usize`/`isize` | 2 | |
 | MIR error, `mir_helpers.h:108`: `assert_mem_uninitialized_valid` | 2 | |

@@ -5454,6 +5454,18 @@ namespace {
                 emitParam(e.args.at(0));
                 of << " + ";
                 emitParam(e.args.at(1));
+            } else if (name == "ptr_mask") {
+                HIRTypeRef tmp;
+                const auto& returnType = localMirRes.getLvalueType(tmp, e.retVal);
+                MIR_ASSERT(localMirRes, returnType->is_Pointer(), "ptr_mask returned " << returnType);
+                emitLvalue(e.retVal);
+                of << " = (";
+                emitCtype(returnType);
+                of << ")((uintptr_t)";
+                emitParam(e.args.at(0));
+                of << " & (uintptr_t)";
+                emitParam(e.args.at(1));
+                of << ")";
             } else if (name == "ptr_offset_from") { // effectively subtraction
                 emitLvalue(e.retVal);
                 of << " = ";
