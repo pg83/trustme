@@ -241,6 +241,40 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         return foundCb(ImplRef(type, traitParams, &nullAssoc), false);
     }
 
+    const bool isAsyncCallableTrait = traitPath == langAsyncFn() || traitPath == langAsyncFnMut() || traitPath == langAsyncFnOnce();
+    auto findAsyncCallable = [&](const ::std::vector<HIRTypeRef>& inputTypes, const HIRTypeData* futureType, bool supportsShared, bool supportsMutable) {
+        if (!isAsyncCallableTrait || (traitPath == langAsyncFn() && !supportsShared) || (traitPath == langAsyncFnMut() && !supportsMutable)) {
+            return false;
+        }
+
+        HIRPathParams actualParams;
+        actualParams.types.push_back(crate.types.tuple(inputTypes));
+        if (!H::checkParams(sp, actualParams, traitParams)) {
+            return false;
+        }
+
+        HIRTypeRef outputType = HIRTypeRef();
+        bool futureUnknown = false;
+        this->findImpl(sp, langFuture(), nullptr, futureType, [&](ImplRef impl, bool unknown) {
+            auto candidateOutput = impl.getType(crate.types, "Output", {});
+            if (candidateOutput == HIRTypeRef()) {
+                return false;
+            }
+            outputType = mv$(candidateOutput);
+            futureUnknown = unknown;
+            return true;
+        });
+        if (outputType == HIRTypeRef()) {
+            return false;
+        }
+
+        HIRGenericPath oncePath(langAsyncFnOnce(), actualParams.clone());
+        HIRTraitPath::assocListT assoc;
+        assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{oncePath.clone(), {}, outputType}));
+        assoc.insert(::std::make_pair("CallOnceFuture", HIRTraitPath::AtyEqual{mv$(oncePath), {}, futureType}));
+        return foundCb(ImplRef(type, mv$(actualParams), mv$(assoc)), futureUnknown);
+    };
+
     // --- MAGIC IMPLS ---
     // TODO: There should be quite a few more here, but laziness
     TU_MATCH_HDRA( (*type), {)
@@ -252,6 +286,12 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             }
         }
         TU_ARMA(Function, e) {
+            if (isAsyncCallableTrait) {
+                if (e.mAbi != ABI_RUST || e.isUnsafe) {
+                    return false;
+                }
+                return findAsyncCallable(e.argTypes, e.mRettype, true, true);
+            }
             if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
                 if (traitParams) {
                     const auto& desArgTys = traitParams->types.at(0)->as_Tuple();
@@ -280,6 +320,13 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             }
         }
         TU_ARMA(NamedFunction, realE) {
+            if (isAsyncCallableTrait) {
+                auto e = realE.decay(crate.types, sp);
+                if (e.mAbi != ABI_RUST || e.isUnsafe) {
+                    return false;
+                }
+                return findAsyncCallable(e.argTypes, e.mRettype, true, true);
+            }
             if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
                 auto e = realE.decay(crate.types, sp);
                 if (traitParams) {
@@ -307,6 +354,22 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         TU_ARMA(NodeType, e) {
         TU_MATCH_HDRA((e), {)
         TU_ARMA(Closure, nodeP) {
+                    if (isAsyncCallableTrait) {
+                        bool supportsShared = true;
+                        bool supportsMutable = true;
+                        if (nodeP->cls == HIRExprNodeClosure::Class::Once) {
+                            supportsShared = false;
+                            supportsMutable = false;
+                        } else if (nodeP->cls == HIRExprNodeClosure::Class::Mut) {
+                            supportsShared = false;
+                        }
+                        ::std::vector<HIRTypeRef> inputs;
+                        inputs.reserve(nodeP->mArgs.size());
+                        for (const auto& arg : nodeP->mArgs) {
+                            inputs.push_back(arg.second);
+                        }
+                        return findAsyncCallable(inputs, nodeP->returnType, supportsShared, supportsMutable);
+                    }
                     if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
                         if (traitParams) {
                             const auto& desArgTys = traitParams->types.at(0)->as_Tuple();
@@ -1852,6 +1915,28 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         }
     }
 
+    auto expandAsyncCallableAssociated = [&](const HIRTypeData* futureType) {
+        if (e2.item == "CallOnceFuture" || e2.item == "CallRefFuture") {
+            input = futureType;
+            return true;
+        }
+        if (e2.item != "Output") {
+            ERROR(sp, E0000, "No associated type " << e2.item << " for trait " << e2.trait);
+        }
+
+        bool found = false;
+        this->findImpl(sp, langFuture(), nullptr, futureType, [&](ImplRef impl, bool) {
+            auto output = impl.getType(crate.types, "Output", {});
+            if (output == HIRTypeRef()) {
+                return false;
+            }
+            input = mv$(output);
+            found = true;
+            return true;
+        });
+        return found;
+    };
+
     TU_MATCH_HDRA( (*e2.type), {)
     default:
         // Nothing special
@@ -1864,6 +1949,11 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         TU_ARMA(NodeType, te) {
         TU_MATCH_HDRA((te), {)
         TU_ARMA(Closure, nodeP) {
+                    if (e2.trait.mPath == langAsyncFn() || e2.trait.mPath == langAsyncFnMut() || e2.trait.mPath == langAsyncFnOnce()) {
+                        if (expandAsyncCallableAssociated(nodeP->returnType)) {
+                            return true;
+                        }
+                    }
                     if (e2.trait.mPath == langFn() || e2.trait.mPath == langFnMut() || e2.trait.mPath == langFnOnce()) {
                         if (e2.item == "Output") {
                             input = nodeP->returnType;

@@ -14,6 +14,9 @@ namespace {
         HIRSimplePath mFn;
         HIRSimplePath mFnMut;
         HIRSimplePath mFnOnce;
+        HIRSimplePath mAsyncFn;
+        HIRSimplePath mAsyncFnMut;
+        HIRSimplePath mAsyncFnOnce;
         HIRSimplePath mBox;
         HIRSimplePath mPhantomData;
         HIRSimplePath mGenerator;
@@ -35,6 +38,9 @@ namespace {
             , mFn(crate.getLangItemPathOpt("fn"))
             , mFnMut(crate.getLangItemPathOpt("fn_mut"))
             , mFnOnce(crate.getLangItemPathOpt("fn_once"))
+            , mAsyncFn(crate.getLangItemPathOpt("async_fn"))
+            , mAsyncFnMut(crate.getLangItemPathOpt("async_fn_mut"))
+            , mAsyncFnOnce(crate.getLangItemPathOpt("async_fn_once"))
             , mBox(crate.getLangItemPathOpt("owned_box"))
             , mPhantomData(crate.getLangItemPathOpt("phantom_data"))
             , mGenerator(crate.getLangItemPathOpt("coroutine"))
@@ -78,6 +84,18 @@ namespace {
 
         const HIRSimplePath& fnOnce() const override {
             return mFnOnce;
+        }
+
+        const HIRSimplePath& asyncFn() const override {
+            return mAsyncFn;
+        }
+
+        const HIRSimplePath& asyncFnMut() const override {
+            return mAsyncFnMut;
+        }
+
+        const HIRSimplePath& asyncFnOnce() const override {
+            return mAsyncFnOnce;
         }
 
         const HIRSimplePath& box() const override {

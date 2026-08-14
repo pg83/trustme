@@ -1602,6 +1602,54 @@ TU_ARMA(Alias, ee) {
         }
 
         bool TraitResolution::findTraitImplsTypes(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback) const {
+    type = this->ivars.getType(type);
+    const bool isAsyncCallableTrait = trait == langAsyncFn() || trait == langAsyncFnMut() || trait == langAsyncFnOnce();
+    auto findAsyncCallable = [&](const ::std::vector<HIRTypeRef>& inputTypes, const HIRTypeData* futureType, bool supportsShared, bool supportsMutable) {
+        if (!isAsyncCallableTrait || (trait == langAsyncFn() && !supportsShared) || (trait == langAsyncFnMut() && !supportsMutable)) {
+            return false;
+        }
+        if (params.types.size() != 1 || !params.types.front()->is_Tuple()) {
+            BUG(sp, "AsyncFn* traits require a single tuple argument");
+        }
+
+        const auto& desiredInputs = params.types.front()->as_Tuple();
+        if (desiredInputs.size() != inputTypes.size()) {
+            return false;
+        }
+
+        HIRCompare cmp = HIRCompare::Equal;
+        for (size_t i = 0; i < inputTypes.size(); i++) {
+            cmp &= inputTypes[i]->compareWithPlaceholders(sp, desiredInputs[i], this->ivars.callbackResolveInfer());
+        }
+        if (cmp == HIRCompare::Unequal) {
+            return false;
+        }
+
+        HIRTypeRef outputType = HIRTypeRef();
+        HIRCompare futureCmp = HIRCompare::Unequal;
+        this->findTraitImpls(sp, langFuture(), {}, futureType, [&](ImplRef impl, HIRCompare candidateCmp) {
+            auto candidateOutput = impl.getType(crate.types, "Output", {});
+            if (candidateOutput == HIRTypeRef()) {
+                return false;
+            }
+            outputType = mv$(candidateOutput);
+            futureCmp = candidateCmp;
+            return candidateCmp == HIRCompare::Equal;
+        });
+        if (outputType == HIRTypeRef()) {
+            return false;
+        }
+        cmp &= futureCmp;
+
+        HIRPathParams actualParams;
+        actualParams.types.push_back(crate.types.tuple(inputTypes));
+        HIRGenericPath oncePath(langAsyncFnOnce(), actualParams.clone());
+        HIRTraitPath::assocListT assoc;
+        assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{oncePath.clone(), {}, outputType}));
+        assoc.insert(::std::make_pair("CallOnceFuture", HIRTraitPath::AtyEqual{mv$(oncePath), {}, futureType}));
+        return callback(ImplRef(type, mv$(actualParams), mv$(assoc)), cmp);
+    };
+
     TU_MATCH_HDRA( (*type), {)
     default:
         break;
@@ -1609,6 +1657,22 @@ TU_ARMA(Alias, ee) {
         TU_MATCH_HDRA((e), {)
         // Magic impls of the Fn* traits for closure types
         TU_ARMA(Closure, nodeP) {
+                    if (isAsyncCallableTrait) {
+                        bool supportsShared = true;
+                        bool supportsMutable = true;
+                        if (nodeP->cls == HIRExprNodeClosure::Class::Once) {
+                            supportsShared = false;
+                            supportsMutable = false;
+                        } else if (nodeP->cls == HIRExprNodeClosure::Class::Mut) {
+                            supportsShared = false;
+                        }
+                        ::std::vector<HIRTypeRef> inputs;
+                        inputs.reserve(nodeP->mArgs.size());
+                        for (const auto& arg : nodeP->mArgs) {
+                            inputs.push_back(arg.second);
+                        }
+                        return findAsyncCallable(inputs, nodeP->returnType, supportsShared, supportsMutable);
+                    }
                     DEBUG("Closure, " << trait << " ?= Fn*");
                     if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
                         if (params.types.size() != 1) {
@@ -1673,6 +1737,12 @@ TU_ARMA(Alias, ee) {
         }
         // Magic Fn* trait impls for function pointers
         TU_ARMA(Function, e) {
+            if (isAsyncCallableTrait) {
+                if (e.mAbi != ABI_RUST || e.isUnsafe) {
+                    return false;
+                }
+                return findAsyncCallable(e.argTypes, e.mRettype, true, true);
+            }
             if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
                 DEBUG("Fn* trait for fn pointer");
                 if (params.types.size() != 1) {
@@ -1710,6 +1780,13 @@ TU_ARMA(Alias, ee) {
         }
         // Magic Fn* trait impls for function pointers
         TU_ARMA(NamedFunction, realE) {
+            if (isAsyncCallableTrait) {
+                auto e = realE.decay(crate.types, sp);
+                if (e.mAbi != ABI_RUST || e.isUnsafe) {
+                    return false;
+                }
+                return findAsyncCallable(e.argTypes, e.mRettype, true, true);
+            }
             if (trait == langFn() || trait == langFnMut() || trait == langFnOnce()) {
                 if (params.types.size() != 1) {
                     BUG(sp, "Fn* traits require a single tuple argument");
@@ -4745,6 +4822,28 @@ TU_ARMA(Alias, ee) {
                 BUG(sp, "Cannot find associated type " << pe.item << " anywhere in trait " << pe.trait);
             }
 
+            auto expandAsyncCallableAssociated = [&](const HIRTypeData* futureType) {
+                if (pe.item == "CallOnceFuture" || pe.item == "CallRefFuture") {
+                    input = futureType;
+                    return true;
+                }
+                if (pe.item != "Output") {
+                    ERROR(sp, E0000, "No associated type " << pe.item << " for trait " << pe.trait);
+                }
+
+                bool found = false;
+                this->findTraitImpls(sp, langFuture(), {}, futureType, [&](ImplRef impl, HIRCompare) {
+                    auto output = impl.getType(crate.types, "Output", {});
+                    if (output == HIRTypeRef()) {
+                        return false;
+                    }
+                    input = mv$(output);
+                    found = true;
+                    return true;
+                });
+                return found;
+            };
+
             // Special type-specific rules
     TU_MATCH_HDRA( (*pe.type), {)
     default:
@@ -4753,6 +4852,11 @@ TU_ARMA(Alias, ee) {
         TU_MATCH_HDRA((te), {)
         // - If it's a closure, then the only trait impls are those generated by typeck
         TU_ARMA(Closure, nodeP) {
+                    if (pe.trait.mPath == langAsyncFn() || pe.trait.mPath == langAsyncFnMut() || pe.trait.mPath == langAsyncFnOnce()) {
+                        if (expandAsyncCallableAssociated(nodeP->returnType)) {
+                            return;
+                        }
+                    }
                     if (pe.trait.mPath == langFn() || pe.trait.mPath == langFnMut() || pe.trait.mPath == langFnOnce()) {
                         if (pe.item == "Output") {
                             input = nodeP->returnType;
@@ -4784,6 +4888,11 @@ TU_ARMA(Alias, ee) {
         }
         TU_ARMA(Function, te) {
             if (te.mAbi == ABI_RUST && !te.isUnsafe) {
+                if (pe.trait.mPath == langAsyncFn() || pe.trait.mPath == langAsyncFnMut() || pe.trait.mPath == langAsyncFnOnce()) {
+                    if (expandAsyncCallableAssociated(te.mRettype)) {
+                        return;
+                    }
+                }
                 if (pe.trait.mPath == langFn() || pe.trait.mPath == langFnMut() || pe.trait.mPath == langFnOnce()) {
                     if (pe.item == "Output") {
                         input = te.mRettype;

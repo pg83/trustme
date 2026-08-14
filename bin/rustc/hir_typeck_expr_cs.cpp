@@ -5386,7 +5386,7 @@ namespace {
                 }
                 HIRPathParams desiredParams{context.crate.types.tuple(mv$(closureArgs))};
 
-                HIRPathParams expectedParams;
+                ::std::vector<HIRTypeRef> expectedArgs;
                 HIRTypeRef expectedOutput;
                 const bool foundExpectation = context.mResolve.findTraitImpls(sp, context.mResolve.langFnOnce(), desiredParams, dst, [&](ImplRef impl, HIRCompare) {
                     auto params = impl.getTraitParams(context.crate.types);
@@ -5401,16 +5401,45 @@ namespace {
                     if (output == HIRTypeRef()) {
                         return false;
                     }
-                    expectedParams = mv$(params);
+
+                    // A fuzzy impl candidate can retain placeholders for its
+                    // own generic parameters.  Those parameters belong to the
+                    // candidate matcher, not to this inference context, so use
+                    // only the signature components that the opaque bounds
+                    // actually determined.
+                    bool hasExpectation = false;
+                    ::std::vector<HIRTypeRef> concreteArgs;
+                    concreteArgs.reserve(args.size());
+                    for (const auto& arg : args) {
+                        if (typeContainsImplPlaceholder(context.crate.types, arg)) {
+                            concreteArgs.push_back(HIRTypeRef());
+                        } else {
+                            concreteArgs.push_back(arg);
+                            hasExpectation = true;
+                        }
+                    }
+                    if (typeContainsImplPlaceholder(context.crate.types, output)) {
+                        output = HIRTypeRef();
+                    } else {
+                        hasExpectation = true;
+                    }
+                    if (!hasExpectation) {
+                        return false;
+                    }
+
+                    expectedArgs = mv$(concreteArgs);
                     expectedOutput = mv$(output);
                     return true;
                 });
                 if (foundExpectation && contextMut) {
-                    const auto& expectedArgs = expectedParams.types.front()->as_Tuple();
                     for (size_t i = 0; i < expectedArgs.size(); i++) {
-                        contextMut->equateTypes(sp, nodeP->mArgs[i].second, expectedArgs[i]);
+                        if (expectedArgs[i] != HIRTypeRef()) {
+                            contextMut->equateTypes(sp, nodeP->mArgs[i].second, expectedArgs[i]);
+                        }
                     }
-                    contextMut->equateTypes(sp, nodeP->returnType, expectedOutput);
+                    if (expectedOutput != HIRTypeRef()) {
+                        contextMut->equateTypes(sp, nodeP->returnType, expectedOutput);
+                    }
                 }
                 return CoerceResult::Equality;
             } else if (dst->is_Function()) {

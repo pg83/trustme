@@ -23,6 +23,9 @@ public:
     virtual const HIRSimplePath& fn() const = 0;
     virtual const HIRSimplePath& fnMut() const = 0;
     virtual const HIRSimplePath& fnOnce() const = 0;
+    virtual const HIRSimplePath& asyncFn() const = 0;
+    virtual const HIRSimplePath& asyncFnMut() const = 0;
+    virtual const HIRSimplePath& asyncFnOnce() const = 0;
     virtual const HIRSimplePath& box() const = 0;
     virtual const HIRSimplePath& phantomData() const = 0;
     virtual const HIRSimplePath& generator() const = 0;

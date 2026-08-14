@@ -52,6 +52,18 @@ struct TraitResolveCommon {
         return wb.langItems->fnOnce();
     }
 
+    const HIRSimplePath& langAsyncFn() const {
+        return wb.langItems->asyncFn();
+    }
+
+    const HIRSimplePath& langAsyncFnMut() const {
+        return wb.langItems->asyncFnMut();
+    }
+
+    const HIRSimplePath& langAsyncFnOnce() const {
+        return wb.langItems->asyncFnOnce();
+    }
+
     const HIRSimplePath& langBox() const {
         return wb.langItems->box();
     }
