@@ -24,6 +24,8 @@ Lexer::Lexer(stl::ObjPool& pool, const ::std::string& filename, ASTEdition editi
     , istreamFp(filename != "-" ? new std::ifstream(filename.c_str()) : nullptr)
     , istream(filename != "-" ? *istreamFp : std::cin)
     , lastCharValid(false)
+    , initialShebangChecked(false)
+    , replayCharOffset(0)
     , edition(edition)
     , mHygiene(Ident::Hygiene::newScope(pool))
 {
@@ -54,6 +56,8 @@ Lexer::Lexer(stl::ObjPool& pool, ::std::istringstream& ss, ASTEdition edition, P
     , istreamFp(nullptr)
     , istream(ss)
     , lastCharValid(false)
+    , initialShebangChecked(false)
+    , replayCharOffset(0)
     , edition(edition)
     , mHygiene(Ident::Hygiene::newScope(pool))
 {
@@ -357,40 +361,167 @@ Token Lexer::realGetToken() {
     }
 }
 
+void Lexer::checkInitialShebang() {
+    initialShebangChecked = true;
+
+    const auto initialLine = line;
+    const auto initialLineOfs = lineOfs;
+    ::std::vector<Codepoint> consumed;
+    bool eof = false;
+    auto read = [&]() {
+        try {
+            auto ch = this->getc();
+            consumed.push_back(ch);
+            return ch;
+        } catch (const Lexer::EndOfFile&) {
+            eof = true;
+            return Codepoint();
+        }
+    };
+    auto restore = [&](size_t start) {
+        line = initialLine;
+        lineOfs = initialLineOfs;
+        lastCharValid = false;
+        replayChars = ::std::move(consumed);
+        replayCharOffset = start;
+    };
+
+    Codepoint first;
+    try {
+        first = this->getc();
+    } catch (const Lexer::EndOfFile&) {
+        return;
+    }
+    if (first != '#') {
+        this->ungetc();
+        return;
+    }
+    consumed.push_back(first);
+    if (read() != '!' || eof) {
+        restore(0);
+        return;
+    }
+
+    enum class Classification {
+        InnerAttribute,
+        Shebang,
+    };
+    auto classification = Classification::Shebang;
+    while (!eof) {
+        auto ch = read();
+        if (eof) {
+            break;
+        }
+        if (ch.isspace()) {
+            continue;
+        }
+        if (ch == '[') {
+            classification = Classification::InnerAttribute;
+            break;
+        }
+        if (ch != '/') {
+            break;
+        }
+
+        const auto commentStart = consumed.size() - 1;
+        ch = read();
+        if (eof || (ch != '/' && ch != '*')) {
+            break;
+        }
+        const bool lineComment = ch == '/';
+
+        auto third = read();
+        bool docComment = false;
+        if (!eof) {
+            if (lineComment) {
+                if (third == '!') {
+                    docComment = true;
+                } else if (third == '/') {
+                    auto fourth = read();
+                    docComment = eof || fourth != '/';
+                }
+            } else if (third == '!') {
+                docComment = true;
+            } else if (third == '*') {
+                auto fourth = read();
+                docComment = eof || (fourth != '*' && fourth != '/');
+            }
+        }
+        if (docComment) {
+            break;
+        }
+
+        if (lineComment) {
+            while (!eof && consumed.back() != '\n' && consumed.back() != '\r') {
+                read();
+            }
+            continue;
+        }
+
+        unsigned depth = 1;
+        Codepoint previous;
+        size_t index = commentStart + 2;
+        while (depth > 0 && !eof) {
+            Codepoint current;
+            if (index < consumed.size()) {
+                current = consumed[index++];
+            } else {
+                current = read();
+                index = consumed.size();
+            }
+            if (eof) {
+                break;
+            }
+            if (previous == '/' && current == '*') {
+                depth += 1;
+                previous = Codepoint();
+            } else if (previous == '*' && current == '/') {
+                depth -= 1;
+                previous = Codepoint();
+            } else {
+                previous = current;
+            }
+        }
+    }
+
+    if (classification == Classification::InnerAttribute) {
+        restore(0);
+        return;
+    }
+
+    auto replayStart = consumed.size();
+    bool foundNewline = false;
+    for (size_t i = 0; i < consumed.size(); i += 1) {
+        if (consumed[i] == '\n' || consumed[i] == '\r') {
+            replayStart = i;
+            foundNewline = true;
+            break;
+        }
+    }
+    while (!foundNewline && !eof) {
+        auto ch = read();
+        if (!eof && (ch == '\n' || ch == '\r')) {
+            replayStart = consumed.size() - 1;
+            foundNewline = true;
+        }
+    }
+    if (!foundNewline) {
+        replayStart = consumed.size();
+    }
+    restore(replayStart);
+}
+
 Token Lexer::getTokenInt() {
     if (!this->nextTokens.empty()) {
         auto rv = ::std::move(this->nextTokens.back());
         nextTokens.pop_back();
         return rv;
     }
+    if (!initialShebangChecked) {
+        this->checkInitialShebang();
+    }
     try {
         Codepoint ch = this->getc();
-
-        if (line == 1 && lineOfs == 1 && ch == '#') {
-            switch ((ch = this->getc()).v) {
-                case '!':
-                    switch ((ch = this->getc()).v) {
-                        case '/':
-                            // SHEBANG!
-                            while (ch != '\n') {
-                                ch = this->getc();
-                            }
-                            return Token(TOK_NEWLINE);
-                        case '[':
-                            this->ungetc();
-                            this->nextTokens.push_back(TOK_EXCLAM);
-                            return Token(TOK_HASH);
-                        default:
-                            throw ParseErrorBadChar(*this, ch.v);
-                    }
-                case '[':
-                    this->ungetc();
-                    return Token(TOK_HASH);
-                default:
-                    this->ungetc();
-                    throw ParseErrorBadChar(*this, ch.v);
-            }
-        }
 
         if (ch == '\n') {
             return Token(TOK_NEWLINE);
@@ -1244,7 +1375,19 @@ Codepoint Lexer::getc() {
 #ifdef TRACE_CHARS
         ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << " (cached)" << ::std::endl;
 #endif
+    } else if (replayCharOffset < replayChars.size()) {
+        lastChar = replayChars[replayCharOffset++];
+        if (lastChar == '\n') {
+            line += 1;
+            lineOfs = 0;
+        }
+        lineOfs += 1;
+#ifdef TRACE_CHARS
+        ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << " (replayed)" << ::std::endl;
+#endif
     } else {
+        replayChars.clear();
+        replayCharOffset = 0;
         lastChar = this->getcCp();
         lineOfs += 1;
 #ifdef TRACE_CHARS

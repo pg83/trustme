@@ -54,6 +54,9 @@ class Lexer: public TokenStream {
     ::std::istream& istream;
     bool lastCharValid;
     Codepoint lastChar;
+    bool initialShebangChecked;
+    ::std::vector<Codepoint> replayChars;
+    size_t replayCharOffset;
     ::std::vector<Token> nextTokens;
 
     ASTEdition edition;
@@ -71,6 +74,7 @@ public:
     Token realGetToken() override;
 
 private:
+    void checkInitialShebang();
     Token getTokenInt();
 
     signed int getSymbol();
