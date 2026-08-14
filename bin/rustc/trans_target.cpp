@@ -2227,14 +2227,26 @@ namespace {
 
     using TransmuteByteSet = ::std::bitset<TRANSMUTE_BYTE_VALUES>;
 
+    struct TransmuteReference {
+        bool isMutable;
+        const HIRTypeData* referent;
+        size_t referentSize;
+        size_t referentAlign;
+    };
+
     struct TransmuteNfa {
         struct ByteEdge {
             TransmuteByteSet values;
             unsigned destination;
         };
+        struct ReferenceEdge {
+            TransmuteReference reference;
+            unsigned destination;
+        };
         struct State {
             ::std::vector<unsigned> epsilon;
             ::std::vector<ByteEdge> bytes;
+            ::std::vector<ReferenceEdge> references;
         };
         struct Fragment {
             unsigned start;
@@ -2264,6 +2276,13 @@ namespace {
             return {start, accept};
         }
 
+        Fragment reference(TransmuteReference reference) {
+            auto start = addState();
+            auto accept = addState();
+            states[start].references.push_back({reference, accept});
+            return {start, accept};
+        }
+
         Fragment then(Fragment left, Fragment right) {
             states[left.accept].epsilon.push_back(right.start);
             return {left.start, right.accept};
@@ -2290,6 +2309,7 @@ namespace {
         using Transitions = ::std::array<int, TRANSMUTE_BYTE_VALUES>;
 
         ::std::vector<Transitions> transitions;
+        ::std::vector<::std::vector<::std::pair<TransmuteReference, unsigned>>> references;
         ::std::vector<bool> accepting;
 
         bool inhabited() const {
@@ -2562,6 +2582,25 @@ namespace {
                 }
                 return {rv, size};
             }
+            if (const auto* borrow = ty->opt_Borrow()) {
+                if (borrow->type == HIRBorrowType::Owned) {
+                    supported = false;
+                    return {nfa.uninhabited(), 0};
+                }
+
+                size_t referentSize = 0;
+                size_t referentAlign = 0;
+                size_t referenceSize = 0;
+                if (!TargetGetSizeAndAlignOf(sp, resolve, borrow->inner, referentSize, referentAlign)
+                    || !TargetGetSizeOf(sp, resolve, ty, referenceSize)) {
+                    supported = false;
+                    return {nfa.uninhabited(), 0};
+                }
+                return {
+                    nfa.reference({borrow->type == HIRBorrowType::Unique, borrow->inner, referentSize, referentAlign}),
+                    referenceSize
+                };
+            }
             if (const auto* path = ty->opt_Path()) {
                 if (destination && !assumeSafety) {
                     supported = false;
@@ -2595,9 +2634,6 @@ namespace {
                 supported = false;
                 return {nfa.uninhabited(), repr->size};
             }
-
-            // References require region, mutability and referent obligations;
-            // unsupported types must not manufacture a builtin impl.
             supported = false;
             return {nfa.uninhabited(), 0};
         }
@@ -2645,6 +2681,7 @@ namespace {
                     TransmuteDfa::Transitions transitions;
                     transitions.fill(-1);
                     out.transitions.push_back(transitions);
+                    out.references.push_back({});
                     out.accepting.push_back(false);
                 }
                 return result.first->second;
@@ -2674,14 +2711,67 @@ namespace {
                     destination.erase(::std::unique(destination.begin(), destination.end()), destination.end());
                     out.transitions[stateIndex][value] = intern(epsilonClosure(::std::move(destination)));
                 }
+                for (auto nfaState : state) {
+                    for (const auto& edge : nfa.states[nfaState].references) {
+                        auto destination = intern(epsilonClosure({edge.destination}));
+                        out.references[stateIndex].push_back({edge.reference, destination});
+                    }
+                }
             }
             return true;
+        }
+    };
+
+    class TransmuteRelation;
+
+    class TransmuteTypeChecker {
+        const Span& sp;
+        const StaticTraitResolve& resolve;
+        bool assumeAlignment;
+        bool assumeSafety;
+        bool assumeValidity;
+        ::std::map<::std::pair<const HIRTypeData*, const HIRTypeData*>, int> cache;
+
+    public:
+        TransmuteTypeChecker(const Span& sp, const StaticTraitResolve& resolve, bool assumeAlignment, bool assumeSafety, bool assumeValidity)
+            : sp(sp)
+            , resolve(resolve)
+            , assumeAlignment(assumeAlignment)
+            , assumeSafety(assumeSafety)
+            , assumeValidity(assumeValidity)
+        {
+        }
+
+        bool check(const HIRTypeData* sourceType, const HIRTypeData* destinationType);
+
+        bool referencesCompatible(const TransmuteReference& source, const TransmuteReference& destination) {
+            if (!source.isMutable && destination.isMutable) {
+                return false;
+            }
+            if (!assumeAlignment && source.referentAlign < destination.referentAlign) {
+                return false;
+            }
+            if (destination.referentSize > source.referentSize) {
+                return false;
+            }
+            if (!check(source.referent, destination.referent)) {
+                return false;
+            }
+            if (destination.isMutable) {
+                return check(destination.referent, source.referent);
+            }
+            return resolve.typeIsInteriorMutable(sp, destination.referent) == HIRCompare::Unequal;
+        }
+
+        bool validityIsAssumed() const {
+            return assumeValidity;
         }
     };
 
     class TransmuteRelation {
         const TransmuteDfa& source;
         const TransmuteDfa& destination;
+        TransmuteTypeChecker& typeChecker;
         bool assumeValidity;
         ::std::map<::std::pair<unsigned, unsigned>, int> cache;
 
@@ -2699,35 +2789,63 @@ namespace {
             } else if (source.accepting[sourceState]) {
                 const auto next = destination.transitions[destinationState][TRANSMUTE_UNINITIALISED];
                 result = next >= 0 && check(sourceState, static_cast<unsigned>(next));
-            } else if (assumeValidity) {
-                result = false;
-                for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES && !result; value++) {
-                    const auto sourceNext = source.transitions[sourceState][value];
-                    const auto destinationNext = destination.transitions[destinationState][value];
-                    if (sourceNext >= 0 && destinationNext >= 0) {
-                        result = check(static_cast<unsigned>(sourceNext), static_cast<unsigned>(destinationNext));
-                    }
-                }
             } else {
-                result = true;
-                for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES && result; value++) {
+                bool bytesResult = !assumeValidity;
+                for (size_t value = 0; value < TRANSMUTE_BYTE_VALUES; value++) {
                     const auto sourceNext = source.transitions[sourceState][value];
                     if (sourceNext < 0) {
                         continue;
                     }
                     const auto destinationNext = destination.transitions[destinationState][value];
-                    result = destinationNext >= 0 && check(static_cast<unsigned>(sourceNext), static_cast<unsigned>(destinationNext));
+                    const bool edgeResult = destinationNext >= 0
+                        && check(static_cast<unsigned>(sourceNext), static_cast<unsigned>(destinationNext));
+                    if (assumeValidity) {
+                        bytesResult |= edgeResult;
+                        if (bytesResult) {
+                            break;
+                        }
+                    } else {
+                        bytesResult &= edgeResult;
+                        if (!bytesResult) {
+                            break;
+                        }
+                    }
                 }
+
+                bool referencesResult = !assumeValidity;
+                for (const auto& sourceEdge : source.references[sourceState]) {
+                    bool edgeResult = false;
+                    for (const auto& destinationEdge : destination.references[destinationState]) {
+                        if (typeChecker.referencesCompatible(sourceEdge.first, destinationEdge.first)
+                            && check(sourceEdge.second, destinationEdge.second)) {
+                            edgeResult = true;
+                            break;
+                        }
+                    }
+                    if (assumeValidity) {
+                        referencesResult |= edgeResult;
+                        if (referencesResult) {
+                            break;
+                        }
+                    } else {
+                        referencesResult &= edgeResult;
+                        if (!referencesResult) {
+                            break;
+                        }
+                    }
+                }
+                result = assumeValidity ? bytesResult || referencesResult : bytesResult && referencesResult;
             }
             cache[key] = result ? 1 : -1;
             return result;
         }
 
     public:
-        TransmuteRelation(const TransmuteDfa& source, const TransmuteDfa& destination, bool assumeValidity)
+        TransmuteRelation(const TransmuteDfa& source, const TransmuteDfa& destination, TransmuteTypeChecker& typeChecker)
             : source(source)
             , destination(destination)
-            , assumeValidity(assumeValidity)
+            , typeChecker(typeChecker)
+            , assumeValidity(typeChecker.validityIsAssumed())
         {
         }
 
@@ -2741,6 +2859,33 @@ namespace {
             return check(0, 0);
         }
     };
+
+    bool TransmuteTypeChecker::check(const HIRTypeData* sourceType, const HIRTypeData* destinationType) {
+        const auto key = ::std::make_pair(sourceType, destinationType);
+        auto existing = cache.find(key);
+        if (existing != cache.end()) {
+            return existing->second >= 0;
+        }
+        auto inserted = cache.insert({key, 0}).first;
+
+        TransmuteDfa source;
+        TransmuteLayoutBuilder sourceBuilder(sp, resolve, false, assumeSafety);
+        if (!sourceBuilder.makeDfa(sourceType, source)) {
+            inserted->second = -1;
+            return false;
+        }
+
+        TransmuteDfa destination;
+        TransmuteLayoutBuilder destinationBuilder(sp, resolve, true, assumeSafety);
+        if (!destinationBuilder.makeDfa(destinationType, destination)) {
+            inserted->second = -1;
+            return false;
+        }
+
+        const bool result = TransmuteRelation(source, destination, *this).check();
+        inserted->second = result ? 1 : -1;
+        return result;
+    }
 }
 
 bool TargetTypesAreTransmutable(
@@ -2753,22 +2898,8 @@ bool TargetTypesAreTransmutable(
     bool assumeSafety,
     bool assumeValidity
 ) {
-    (void)assumeAlignment;
     (void)assumeLifetimes;
-
-    TransmuteDfa source;
-    TransmuteLayoutBuilder sourceBuilder(sp, resolve, false, assumeSafety);
-    if (!sourceBuilder.makeDfa(src, source)) {
-        return false;
-    }
-
-    TransmuteDfa destination;
-    TransmuteLayoutBuilder destinationBuilder(sp, resolve, true, assumeSafety);
-    if (!destinationBuilder.makeDfa(dst, destination)) {
-        return false;
-    }
-
-    return TransmuteRelation(source, destination, assumeValidity).check();
+    return TransmuteTypeChecker(sp, resolve, assumeAlignment, assumeSafety, assumeValidity).check(src, dst);
 }
 
 TargetArch::Atomics::Atomics(bool u8, bool u16, bool u32, bool u64, bool ptr)

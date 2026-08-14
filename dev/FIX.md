@@ -43,12 +43,10 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Trait lookup, normalization, and inference: 27 missing-impl failures, 14
+1. Trait lookup, normalization, and inference: 15 missing-impl failures, 14
    unresolved inference variables, 10 inferred trait obligations left
-   ambiguous, and 9 const-value relation failures. Total adjacent impact: 60
-   tests, but the 27 missing impls include a large
-   `TransmuteFrom` subgroup and must not be treated as one solver bug without
-   comparing their goals.
+   ambiguous, and 9 const-value relation failures. Total adjacent impact: 48
+   tests.
 2. Macro and attribute expansion: 24 unresolved macro invocations and 13
    unsupported derive applications. The largest concrete macro families are
    `pattern_type` (6), `deref` (5), `iter` (5), and `concat_bytes` (3); the
@@ -93,13 +91,13 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 141.
 
 ## Accepted Rust rejected by the front end
 
-The 479 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 467 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
 | parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
-| type checking, HIR lowering, and resolution | 236 | result relation 42 (22 opaque-bearing, 20 other), missing impl 27 |
+| type checking, HIR lowering, and resolution | 224 | result relation 42 (22 opaque-bearing, 20 other), missing impl 15 |
 | macro and attribute expansion | 69 | unknown macro 24, missing derive 13 |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |
