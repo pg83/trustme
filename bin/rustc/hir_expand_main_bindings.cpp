@@ -2687,6 +2687,14 @@ namespace {
             HIRPathParams constructorPathParams;
             auto monomorphCb = createParams(sp, mResolve, params, constructorPathParams);
 
+            // Capture every generic used by the coroutine ABI before its
+            // generated type parameters are frozen.  These types are already
+            // expressed in the generated impl's parameter space afterwards
+            // and must not be monomorphised through this mapping a second time.
+            auto resumeTy = monomorphCb.monomorphType(sp, node.resumeTy);
+            auto yieldTy = monomorphCb.monomorphType(sp, node.yieldTy);
+            auto returnTy = monomorphCb.monomorphType(sp, node.returnType);
+
             // Generate the structure,
             auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb);
 
@@ -2740,7 +2748,7 @@ namespace {
             selfArgTy = mResolve.hirCrate().types.borrow(HIRBorrowType::Unique, selfArgTy);
             ::std::vector<HIRTypeRef> resumeArgs;
             resumeArgs.push_back(selfArgTy);
-            resumeArgs.push_back(node.resumeTy);
+            resumeArgs.push_back(resumeTy);
             // `Pin<&mut Self>`
             selfArgTy = mResolve.hirCrate().types.path(HIRGenericPath(langPin, HIRPathParams(selfArgTy)), &mResolve.hirCrate().getStructByPath(sp, langPin));
             resumeArgs[0] = selfArgTy;
@@ -2777,16 +2785,16 @@ namespace {
             HIRFunction fcnResume;
             // - `self: Pin<&mut {Self}>`
             fcnResume.mArgs.push_back(std::make_pair(HIRPattern(), selfArgTy));
-            fcnResume.mArgs.push_back(std::make_pair(HIRPattern(), monomorphCb.monomorphType(sp, node.resumeTy)));
+            fcnResume.mArgs.push_back(std::make_pair(HIRPattern(), resumeTy));
             // - `-> GeneratorState<{Yield},{Return}>`
             HIRPathParams retParams;
-            retParams.types.push_back(monomorphCb.monomorphType(sp, node.yieldTy));
-            retParams.types.push_back(monomorphCb.monomorphType(sp, node.returnType));
+            retParams.types.push_back(yieldTy);
+            retParams.types.push_back(returnTy);
             fcnResume.returnType = mResolve.hirCrate().types.path(HIRGenericPath(langGeneratorState, std::move(retParams)), &mResolve.hirCrate().getEnumByPath(sp, langGeneratorState));
             // - ` { ... }`
             // Emit as a top-level generator
             // - It has a populated body, non-zero `m_obj_ptr`, and unset `m_obj_path`
-            auto* v = pool->make<HIRExprNodeGeneratorWrapper>(sp, monomorphCb.monomorphType(sp, node.returnType), monomorphCb.monomorphType(sp, node.yieldTy), mv$(bodyNode), false);
+            auto* v = pool->make<HIRExprNodeGeneratorWrapper>(sp, returnTy, yieldTy, mv$(bodyNode), false);
             v->captureUsages = std::move(crVars.captureUsages);
             v->resType = fcnResume.returnType;
             v->objPtr = node.objPtr;
@@ -2800,10 +2808,10 @@ namespace {
 
             // -- Create impl
             HIRTraitImpl impl;
-            impl.traitArgs.types.push_back(monomorphCb.monomorphType(sp, node.resumeTy));
+            impl.traitArgs.types.push_back(resumeTy);
             impl.mType = mResolve.hirCrate().types.path(HIRGenericPath(genStructPath, params.makeNopParams(mResolve.hirCrate().types, 0)), &genStructRef);
-            impl.types.insert(std::make_pair(RcString::newInterned("Yield"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, monomorphCb.monomorphType(sp, node.yieldTy)}));
-            impl.types.insert(std::make_pair(RcString::newInterned("Return"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, monomorphCb.monomorphType(sp, node.returnType)}));
+            impl.types.insert(std::make_pair(RcString::newInterned("Yield"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, yieldTy}));
+            impl.types.insert(std::make_pair(RcString::newInterned("Return"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, returnTy}));
             impl.methods.insert(std::make_pair(RcString::newInterned("resume"), HIRTraitImpl::ImplEnt<HIRFunction>{false, std::move(fcnResume)}));
             impl.mParams = std::move(params);
             out.traitImpls.push_back(std::make_pair("coroutine", std::move(impl)));
@@ -2821,6 +2829,10 @@ namespace {
             HIRGenericParams params;
             HIRPathParams constructorPathParams;
             auto monomorphCb = createParams(sp, mResolve, params, constructorPathParams);
+
+            // The root result type belongs to the surrounding item.  Map it
+            // once, before the generated future's impl parameters are frozen.
+            auto returnTy = monomorphCb.monomorphType(sp, node.returnType);
 
             auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb);
 
@@ -2883,7 +2895,6 @@ namespace {
             auto contextArgTy = mResolve.hirCrate().types.borrow(HIRBorrowType::Unique, mResolve.hirCrate().types.path(HIRGenericPath(langContext, HIRPathParams()), &mResolve.hirCrate().getStructByPath(sp, langContext)));
             crVars.setArguments(sp, {selfArgTy, contextArgTy});
 
-            auto returnTy = node.mCode->resType;
             auto bodyNode = std::move(node.mCode);
             {
                 DEBUG("-- Fixing types in body code");
@@ -2919,13 +2930,13 @@ namespace {
             fcnResume.mArgs.push_back(std::make_pair(HIRPattern(), contextArgTy));
             // - `-> Poll<{Return}>`
             HIRPathParams retParams;
-            retParams.types.push_back(monomorphCb.monomorphType(sp, returnTy));
+            retParams.types.push_back(returnTy);
             auto langPoll = mResolve.hirCrate().getLangItemPath(sp, "Poll");
             fcnResume.returnType = mResolve.hirCrate().types.path(HIRGenericPath(langPoll, std::move(retParams)), &mResolve.hirCrate().getEnumByPath(sp, langPoll));
             // - ` { ... }`
             // Emit as a top-level generator
             // - It has a populated body, non-zero `m_obj_ptr`, and unset `m_obj_path`
-            auto* v = pool->make<HIRExprNodeGeneratorWrapper>(sp, monomorphCb.monomorphType(sp, returnTy), mResolve.hirCrate().types.unit(), std::move(bodyNode), true);
+            auto* v = pool->make<HIRExprNodeGeneratorWrapper>(sp, returnTy, mResolve.hirCrate().types.unit(), std::move(bodyNode), true);
             v->captureUsages = std::move(crVars.captureUsages);
             v->resType = fcnResume.returnType;
             v->objPtr = node.objPtr;
@@ -2939,7 +2950,7 @@ namespace {
             // -- Create impl
             HIRTraitImpl impl;
             impl.mType = mResolve.hirCrate().types.path(HIRGenericPath(genStructPath, params.makeNopParams(mResolve.hirCrate().types, 0)), &genStructRef);
-            impl.types.insert(std::make_pair(RcString::newInterned("Output"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, monomorphCb.monomorphType(sp, returnTy)}));
+            impl.types.insert(std::make_pair(RcString::newInterned("Output"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, returnTy}));
             impl.methods.insert(std::make_pair(RcString::newInterned("poll"), HIRTraitImpl::ImplEnt<HIRFunction>{false, std::move(fcnResume)}));
             impl.mParams = std::move(params);
             out.traitImpls.push_back(std::make_pair("future_trait", std::move(impl)));
@@ -4324,7 +4335,7 @@ public:
         return monomorphCb;
     }
 
-    HIRExprPtr extractNode(HIRExprNodeP& node, StaticTraitResolve& resolve, HIRGenericParams& paramsDef, HIRPathParams& constrParams) {
+    HIRExprPtr extractNode(HIRExprNodeP& node, StaticTraitResolve& resolve, HIRGenericParams& paramsDef, HIRPathParams& constrParams, bool preserveGenericContext = false) {
         auto monomorph = this->createParams(node->span(), paramsDef, constrParams);
         resolve.setItemGenericsRaw(paramsDef);
 
@@ -4416,7 +4427,7 @@ public:
 
         node->visit(v);
         v.visitType(node->resType);
-        if (!v.isGeneric) {
+        if (!v.isGeneric && !preserveGenericContext) {
             paramsDef = HIRGenericParams();
             constrParams = HIRPathParams();
             DEBUG("Concrete static");
@@ -4517,7 +4528,7 @@ public:
             StaticTraitResolve resolve{mResolve.board()};
             HIRGenericParams paramsDef;
             HIRPathParams constrParams;
-            auto valExpr = extractNode(node.inner, resolve, paramsDef, constrParams);
+            auto valExpr = extractNode(node.inner, resolve, paramsDef, constrParams, true);
 
             auto sp = valExpr->span();
 

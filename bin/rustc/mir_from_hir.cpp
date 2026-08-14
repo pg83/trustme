@@ -1909,7 +1909,12 @@ namespace {
                         TU_ARMA(Unevaluated, se) {
                             TU_MATCH_HDRA( (se), {)
                             default:
-                                BUG(node.span(), "Unsize Array with unknown size " << tyIn);
+                                // Preserve array-to-slice unsizing until the const
+                                // expression is evaluated during monomorphisation.
+                                // MIR cleanup recognises an empty ItemAddr as the
+                                // unsize pseudo-op and supplies the concrete length.
+                                sizeVal = MIRConstant::make_ItemAddr({});
+                                break;
                                         TU_ARMA(Generic, cge)
                                         sizeVal = cge;
                             }
@@ -2036,12 +2041,15 @@ namespace {
                 return;
                 TU_ARMA(Array, e) {
                 TU_MATCH_HDRA( (e.size), {)
-                TU_ARMA(Unevaluated, se) {
+                        TU_ARMA(Unevaluated, se) {
                             if (se.is_Generic()) {
                                 limitVal = MIRConstant::make_Generic(se.as_Generic());
                                 break;
                             }
-                            BUG(node.span(), "Indexing with unknown size - " << e.size);
+                            // The concrete length of a generic array is known after
+                            // monomorphisation. DstMeta represents that length in MIR
+                            // without forcing an unevaluated const expression here.
+                            limitVal = MIRRValue::make_DstMeta({value.clone()});
                         }
                         TU_ARMA(Known, se) {
                             limitVal = MIRConstant::make_Uint({U128(se), HIRCoreType::Usize});

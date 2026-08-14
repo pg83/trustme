@@ -481,6 +481,7 @@ DEF_VISIT_H(HIRExprNodeGeneratorWrapper, node) {
 
 DEF_VISIT_H(HIRExprNodeAsyncBlock, node) {
     TRACE_FUNCTION_F("_AsyncBlock");
+    visitType(node.returnType);
     if (node.mCode) {
         visitNodePtr(node.mCode);
     } else {
@@ -1041,8 +1042,9 @@ TU_ARMA(Alias, ee) {
         {
         }
 
-        HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, HIRExprNodeP code, bool isMove)
+        HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, HIRTypeRef returnType, HIRExprNodeP code, bool isMove)
             : HIRExprNode(mv$(sp))
+            , returnType(returnType)
             , mCode(std::move(code))
             , isMove(isMove)
         {

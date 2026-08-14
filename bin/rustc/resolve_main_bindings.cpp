@@ -1816,7 +1816,13 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                 auto p = context.lookup(sp, e.nodes[0].name(), e.hygiene, mode);
                 if (p.isAbsolute()) {
                     assert(!p.nodes().empty());
-                    p.nodes().back().args() = mv$(e.nodes.back().args());
+                    // A value-level `Self` lookup returns the concrete impl type,
+                    // including its impl generic arguments.  Replacing those with
+                    // the syntactically empty arguments on `Self` loses the link to
+                    // the current impl and creates fresh inference variables later.
+                    if (e.nodes[0].name() != rcstringSelf) {
+                        p.nodes().back().args() = mv$(e.nodes.back().args());
+                    }
                 }
                 path = mv$(p);
             }

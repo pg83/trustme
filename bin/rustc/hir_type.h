@@ -281,7 +281,7 @@ TAGGED_UNION_EX(
 
             bool hasTypeInfer() const { return flags & HAS_TYPE_INFER; }
             bool needsMonomorphisation() const {
-                return flags & (HAS_TYPE_PARAM | HAS_UNEVALUATED_CONST);
+                return flags & (HAS_TYPE_PARAM | HAS_UNEVALUATED_CONST | HAS_DEFERRED_CONST);
             }
             bool mayHaveAssociatedType() const {
                 return flags & (HAS_ASSOCIATED_TYPE | HAS_TYPE_INFER);

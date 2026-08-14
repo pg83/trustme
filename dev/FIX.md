@@ -30,7 +30,7 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P1 — internal compiler failures
 
-After the targeted CTFE rerun, 252 of the snapshot's internal compiler failures
+After the targeted CTFE rerun, 243 of the snapshot's internal compiler failures
 remain. The former generic `mir_helpers.h:108` cluster is subdivided below by
 its actual MIR error.
 
@@ -49,7 +49,6 @@ its actual MIR error.
 | MIR error, `mir_helpers.h:108`: extern-type alignment | 1 | |
 | CTFE intrinsic TODO, `hir_conv_constant_evaluation.cpp:3498` | 16 | `black_box`, `forget`, `raw_eq`, pointer offsets, SIMD and comparisons |
 | BUG, `macro_rules_macro_rules.cpp:2189` | 10 | |
-| CTFE unresolved generic, `hir_conv_constant_evaluation.cpp:1751` | 9 | const-generic inference/unevaluated expressions |
 | BUG, `hir_hir.cpp:1653` | 8 | |
 | BUG, `parse_common.cpp:1404` | 5 | |
 | assertion, `hir_expr_ptr.cpp:130` | 5 | |

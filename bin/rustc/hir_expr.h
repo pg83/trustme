@@ -785,6 +785,7 @@ struct HIRExprNodeGeneratorWrapper: public HIRExprNode {
 };
 
 struct HIRExprNodeAsyncBlock: public HIRExprNode {
+    HIRTypeRef returnType;
     HIRExprNodeP mCode;
     bool isMove;
 
@@ -798,7 +799,7 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
     // State data type (needed for initialising)
     HIRTypeRef stateDataType;
 
-    HIRExprNodeAsyncBlock(Span sp, HIRExprNodeP code, bool isMove);
+    HIRExprNodeAsyncBlock(Span sp, HIRTypeRef returnType, HIRExprNodeP code, bool isMove);
 
     static constexpr unsigned int kind = 39;
     unsigned int nodeKind() const override;

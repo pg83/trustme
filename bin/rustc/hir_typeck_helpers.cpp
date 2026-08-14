@@ -1634,7 +1634,7 @@ TU_ARMA(Alias, ee) {
                     if (trait == langFuture()) {
                         static const RcString rcstringOutput = RcString::newInterned("Output");
                         HIRTraitPath::assocListT assoc;
-                        assoc.insert(::std::make_pair(rcstringOutput, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->mCode->resType}));
+                        assoc.insert(::std::make_pair(rcstringOutput, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->returnType}));
                         return callback(ImplRef(type, {}, mv$(assoc)), HIRCompare::Equal);
                     }
                 }
@@ -5832,7 +5832,22 @@ TU_ARMA(Alias, ee) {
                         if (sz.is_Infer()) {
                             return HIRCompare::Fuzzy;
                         }
-                        TODO(Span(), "PtrImplMatcher::match_val " << g << "(" << outImplParams.values[g.binding] << ") with " << sz);
+                        // An unevaluated expression can still contain inference
+                        // variables supplied by the caller.  A concrete occurrence
+                        // of the same impl parameter is the stronger constraint;
+                        // retain it while marking the candidate as fuzzy until the
+                        // expression itself is normalized.
+                        if (outImplParams.values[g.binding].is_Unevaluated()) {
+                            if (sz.is_Evaluated()) {
+                                DEBUG("[ftic_check_params] Value param " << g.binding << " fuzzy, use concrete " << sz);
+                                outImplParams.values[g.binding] = sz.clone();
+                            }
+                            return HIRCompare::Fuzzy;
+                        }
+                        if (sz.is_Unevaluated()) {
+                            return HIRCompare::Fuzzy;
+                        }
+                        return HIRCompare::Unequal;
                     }
                 }
             };

@@ -25,6 +25,110 @@ namespace {
 
     struct Defer {};
 
+    bool constGenericIsConcrete(const HIRConstGeneric& value);
+
+    struct MonomorphAvailability: HIRVisitor {
+        const MonomorphState& ms;
+        bool available = true;
+
+        explicit MonomorphAvailability(const MonomorphState& ms)
+            : HIRVisitor(nullptr, ms.typeInterner())
+            , ms(ms)
+        {
+        }
+
+        const HIRPathParams* paramsFor(const HIRGenericRef& generic) const {
+            switch (generic.group()) {
+                case GENERICImpl:
+                    return ms.getImplParams();
+                case GENERICItem:
+                    return ms.getMethodParams();
+                default:
+                    return nullptr;
+            }
+        }
+
+        void visitType(HIRTypeRef& type) override {
+            if (!available) {
+                return;
+            }
+            if (type->is_Infer()) {
+                available = false;
+                return;
+            }
+            if (const auto* generic = type->opt_Generic()) {
+                if (generic->isSelf()) {
+                    available = ms.getSelfType() != nullptr;
+                } else if (const auto* params = paramsFor(*generic)) {
+                    available = generic->idx() < params->types.size();
+                } else {
+                    available = false;
+                }
+                return;
+            }
+            HIRVisitor::visitType(type);
+        }
+
+        void visitConstgeneric(HIRConstGeneric& value) override {
+            if (!available) {
+                return;
+            }
+            if (value.is_Infer()) {
+                available = false;
+                return;
+            }
+            if (const auto* generic = value.opt_Generic()) {
+                if (const auto* params = paramsFor(*generic)) {
+                    available = generic->idx() < params->values.size();
+                } else {
+                    available = false;
+                }
+                return;
+            }
+            if (auto* unevaluated = value.opt_Unevaluated()) {
+                // The expression refers through these captured parameter lists.
+                // Its own HIR bindings are not parameters of the current state.
+                visitPathParams((*unevaluated)->paramsImpl);
+                visitPathParams((*unevaluated)->paramsItem);
+            }
+        }
+    };
+
+    bool pathParamsCanMonomorph(const HIRPathParams& params, const MonomorphState& ms) {
+        auto copy = params.clone();
+        MonomorphAvailability visitor(ms);
+        visitor.visitPathParams(copy);
+        return visitor.available;
+    }
+
+    bool pathParamsAreConcrete(const HIRPathParams& params) {
+        for (const auto& type : params.types) {
+            if (monomorphiseTypeNeeded(type)
+                || visitTyWith(type, [](const HIRTypeData* inner) {
+                    return inner->is_Infer();
+                })) {
+                return false;
+            }
+        }
+        for (const auto& value : params.values) {
+            if (!constGenericIsConcrete(value)) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    bool constGenericIsConcrete(const HIRConstGeneric& value) {
+        if (value.is_Evaluated()) {
+            return true;
+        }
+        if (const auto* unevaluated = value.opt_Unevaluated()) {
+            return pathParamsAreConcrete((*unevaluated)->paramsImpl)
+                && pathParamsAreConcrete((*unevaluated)->paramsItem);
+        }
+        return false;
+    }
+
     struct NewvalStateNop: public HIREvaluator::Newval {
         const Span& sp;
 
@@ -1824,17 +1928,10 @@ public:
             }
             TU_ARM(c, Generic, e2) {
                 auto v = ms.getValue(state.sp, e2);
-                TU_MATCH_HDRA( (v), { )
-                default:
-                    MIR_TODO(state, "Handle expanded generic: " << v);
-                    TU_ARMA(Generic, _) {
-                        throw Defer();
-                    }
-                    TU_ARMA(Evaluated, ve) {
-                        DEBUG(e2 << " = " << *ve);
-                        writeEncoded(dst, *ve);
-                    }
-                }
+                EncodedLiteral tmp;
+                const auto& encoded = getConst(v, tmp);
+                DEBUG(e2 << " = " << encoded);
+                writeEncoded(dst, encoded);
             }
             TU_ARM(c, Function, e2) {
             }
@@ -1876,13 +1973,21 @@ public:
     const EncodedLiteral& getConst(const HIRConstGeneric& v, EncodedLiteral& tmp) const {
             TU_MATCH_HDRA( (v), {)
             TU_ARMA(Infer, ve) {
-                MIR_BUG(state, "Encountered Infer value in constant?");
+                throw Defer{};
             }
             TU_ARMA(Generic, ve) {
                 throw Defer{};
             }
             TU_ARMA(Unevaluated, ve) {
+                if (!pathParamsCanMonomorph(ve->paramsImpl, ms)
+                    || !pathParamsCanMonomorph(ve->paramsItem, ms)) {
+                    throw Defer{};
+                }
                 auto value = ve->monomorph(state.sp, ms, false);
+                if (!pathParamsAreConcrete(value.paramsImpl)
+                    || !pathParamsAreConcrete(value.paramsItem)) {
+                    throw Defer{};
+                }
                 const auto& expr = *value.expr;
                 MonomorphState valueMs(rootResolve.crate.types);
                 valueMs.ppImpl = &value.paramsImpl;
@@ -3804,6 +3909,14 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         }
     }
     const auto& path = *pathP;
+
+    // A const call with unresolved type or const arguments is not evaluatable
+    // until monomorphisation.  Resolving the item is still possible, but
+    // executing its MIR here would incorrectly validate (or reject) just one
+    // generic definition rather than each concrete instance.
+    if (monomorphisePathNeeded(path)) {
+        throw Defer();
+    }
 
     if (requireConstCalls) {
         if (const auto* e = path.mData.opt_UfcsKnown()) {
