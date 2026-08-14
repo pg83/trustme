@@ -993,7 +993,7 @@ namespace {
                         of << ",";
                     }
                     of << " ";
-                    this->emitCtype(te.argTypes[i]);
+                    this->emitFunctionArgument(te.argTypes[i], FMT_CB(ss, ss << "arg" << i;));
                 }
                 if (te.isVariadic) {
                     of << ", ...";
@@ -2117,6 +2117,10 @@ namespace {
             of << "\n";
             of << "{\n";
 
+            for (unsigned int i = 0; i < argTypes.size(); i++) {
+                emitUnsizedArgumentLocal(argTypes[i].second, i);
+            }
+
             // Variables
             of << "\t";
             emitCtype(retType, FMT_CB(ss, ss << "rv";));
@@ -2377,72 +2381,17 @@ namespace {
             }
 
             bool special = false;
-            // If the inner value was a deref, just copy the pointer verbatim
-            if (val.is_Deref()) {
-                emitLvalue(MIRLValue::CRef(val).innerRef());
+            // A by-value DST argument is represented by the same data/metadata pair
+            // as a wide pointer. Borrowing it reuses that indirect place, just as a
+            // dereference of an ordinary wide pointer does.
+            if (this->isDst(ty)) {
+                emitDstLvaluePointer(MIRLValue::CRef(val));
                 special = true;
             }
-            // Magic for taking a &-ptr to unsized field of a struct.
-            // - Needs to get metadata from bottom-level pointer.
-            else if (val.is_Field()) {
-                auto metaTy = metadataType(ty);
-                if (metaTy != MetadataType::None) {
-                    auto baseVal = MIRLValue::CRef(val).innerRef();
-                    while (baseVal.is_Field()) {
-                        baseVal.tryUnwrap();
-                    }
-                    MIR_ASSERT(localMirRes, baseVal.is_Deref(), "DST access must be via a deref");
-                    const auto basePtr = baseVal.innerRef();
-
-                    // Construct the new DST
-                    switch (metaTy) {
-                        case MetadataType::None:
-                            throw "";
-                        case MetadataType::Unknown:
-                            MIR_BUG(localMirRes, "");
-                        case MetadataType::Zero:
-                            MIR_BUG(localMirRes, "");
-                        case MetadataType::Slice:
-                            of << "make_sliceptr(";
-                            break;
-                        case MetadataType::TraitObject:
-                            of << "make_traitobjptr(";
-                            break;
-                    }
-                    if (metaTy == MetadataType::TraitObject) {
-                        HIRTypeRef baseTmp;
-                        const auto& baseTy = localMirRes.getLvalueType(baseTmp, baseVal.clone());
-                        const auto baseParam = MIRParam::make_LValue(basePtr.clone());
-                        if (getInnerUnsizedType(baseTy)->is_TraitObject()) {
-                            const auto* curTy = &baseTy;
-                            of << "(uint8_t*)";
-                            emitLvalue(basePtr);
-                            of << ".PTR + ";
-                            for (size_t i = baseVal.wrapperCount(); i < val.wrappers.size(); i++) {
-                                const auto& wrapper = val.wrappers[i];
-                                MIR_ASSERT(localMirRes, wrapper.is_Field(), "Unexpected DST lvalue wrapper - " << val);
-                                if (i != baseVal.wrapperCount()) {
-                                    of << " + ";
-                                }
-                                emitTraitObjectDstFieldOffset(*curTy, wrapper.as_Field(), baseParam);
-                                const auto* repr = TargetGetTypeRepr(sp, mResolve, *curTy);
-                                MIR_ASSERT(localMirRes, repr && wrapper.as_Field() < repr->fields.size(), "Invalid DST field - " << val);
-                                curTy = &repr->fields[wrapper.as_Field()].ty;
-                            }
-                        } else {
-                            of << "&";
-                            emitLvalue(val);
-                        }
-                    } else {
-                        of << "&";
-                        emitLvalue(val);
-                    }
-                    of << ", ";
-                    emitLvalue(basePtr);
-                    of << ".META)";
-                    special = true;
-                }
-            } else {
+            // If the inner value was a deref, just copy the pointer verbatim
+            else if (val.is_Deref()) {
+                emitLvalue(MIRLValue::CRef(val).innerRef());
+                special = true;
             }
 
             // NOTE: If disallow_empty_structs is set, structs don't include ZST fields
@@ -4003,16 +3952,25 @@ namespace {
                 }
             }
             of << "(";
+            bool firstCallArgument = true;
             for(unsigned int j = 0; j < e.args.size(); j ++) {
-                if (j != 0) {
+                if (!firstCallArgument) {
                     of << ",";
                 }
+                firstCallArgument = false;
                 of << " ";
                 HIRTypeRef tmp;
                 const auto& ty = mirRes->getParamType(tmp, e.args[j]);
 
                 if (this->typeIsBadZst(ty)) {
                     of << "zarg" << j;
+                    continue;
+                }
+                if (this->isDst(ty)) {
+                    emitDstParamPointer(e.args[j]);
+                    of << ".PTR, ";
+                    emitDstParamPointer(e.args[j]);
+                    of << ".META";
                     continue;
                 }
                 emitParam(e.args[j]);
@@ -4775,7 +4733,7 @@ namespace {
                     for (unsigned int i = 0; i < item.mArgs.size(); i++) {
                         ss << "\n\t\t";
                         auto ty = params.monomorph(mResolve, item.mArgs[i].second);
-                        this->emitCtype(ty, FMT_CB(os, os << "arg" << i;));
+                        this->emitFunctionArgument(ty, FMT_CB(os, os << "arg" << i;));
                         if (item.variadic || i + 1 < item.mArgs.size()) {
                             of << ",";
                         }
@@ -7173,7 +7131,6 @@ namespace {
                     // Call drop glue
                     // - TODO: If the destructor is known to do nothing, don't call it.
                     auto p = HIRPath(ty, "#drop_glue");
-                    const char* makeFcn = nullptr;
                     switch (metadataType(ty)) {
                         case MetadataType::Unknown:
                             MIR_BUG(*mirRes, ty << " unknown metadata");
@@ -7216,28 +7173,10 @@ namespace {
                             }
                             break;
                         case MetadataType::Slice:
-                            makeFcn = "make_sliceptr";
-                            if (0) {
-                                case MetadataType::TraitObject:
-                                    makeFcn = "make_traitobjptr";
-                            }
-                            of << indent << TransMangle(p) << "( " << makeFcn << "(";
-                            if (slot.is_Deref()) {
-                                emitLvalue(MIRLValue::CRef(slot).innerRef());
-                                of << ".PTR";
-                            } else {
-                                of << "&";
-                                emitLvalue(slot);
-                            }
-                            of << ", ";
-                            auto lvr = MIRLValue::CRef(slot);
-                            while (lvr.is_Field()) {
-                                lvr.tryUnwrap();
-                            }
-                            MIR_ASSERT(*mirRes, lvr.is_Deref(), "Access to unized type without a deref - " << lvr << " (part of " << slot << ")");
-                            emitLvalue(lvr.innerRef());
-                            of << ".META";
-                            of << ") );\n";
+                        case MetadataType::TraitObject:
+                            of << indent << TransMangle(p) << "( ";
+                            emitDstLvaluePointer(MIRLValue::CRef(slot));
+                            of << " );\n";
                             break;
                     }
                 }
@@ -7255,35 +7194,20 @@ namespace {
                 TU_ARMA(TraitObject, te) {
                     MIR_ASSERT(*mirRes, unsizedValid, "Dropping TraitObject without an owned pointer");
                     // Call destructor in vtable
-                    auto lvr = MIRLValue::CRef(slot);
-                    while (lvr.is_Field()) {
-                        lvr.tryUnwrap();
-                    }
-                    MIR_ASSERT(*mirRes, lvr.is_Deref(), "Access to unized type without a deref - " << lvr << " (part of " << slot << ")");
                     of << indent << "((VTABLE_HDR*)";
-                    emitLvalue(lvr.innerRef());
+                    emitDstLvaluePointer(MIRLValue::CRef(slot));
                     of << ".META)->drop(";
-                    if (slot.is_Deref()) {
-                        emitLvalue(MIRLValue::CRef(slot).innerRef());
-                        of << ".PTR";
-                    } else {
-                        of << "&";
-                        emitLvalue(slot);
-                    }
+                    emitDstLvaluePointer(MIRLValue::CRef(slot));
+                    of << ".PTR";
                     of << ");";
                 }
                 TU_ARMA(Slice, te) {
                     MIR_ASSERT(*mirRes, unsizedValid, "Dropping Slice without an owned pointer");
-                    auto lvr = MIRLValue::CRef(slot);
-                    while (lvr.is_Field()) {
-                        lvr.tryUnwrap();
-                    }
-                    MIR_ASSERT(*mirRes, lvr.is_Deref(), "Access to unized type without a deref - " << lvr << " (part of " << slot << ")");
                     // If one element destructor unwinds, Rust still drops the
                     // unvisited tail.  A second exception during that cleanup
                     // is a double panic and must terminate.
                     emitDestructorLoop(slot, te.inner, [&] {
-                        emitLvalue(lvr.innerRef());
+                        emitDstLvaluePointer(MIRLValue::CRef(slot));
                         of << ".META";
                     }, indentLevel);
                 }
@@ -7372,11 +7296,15 @@ namespace {
                     auto inner = val.innerRef();
                     const auto& ty = mirRes->getLvalueType(tmp, inner);
                     if (ty->is_Slice()) {
-                        if (inner.is_Deref()) {
+                        if (inner.is_Deref() || isIndirectDstLvalue(inner)) {
                             of << "((";
                             emitCtype(ty->as_Slice().inner);
                             of << "*)";
-                            emitLvalue(inner.innerRef());
+                            if (inner.is_Deref()) {
+                                emitLvalue(inner.innerRef());
+                            } else {
+                                emitDstLvaluePointer(inner);
+                            }
                             of << ".PTR)";
                         } else {
                             emitLvalue(inner);
@@ -7385,13 +7313,17 @@ namespace {
                     } else if (ty->is_Array()) {
                         emitLvalue(inner);
                         of << ".DATA[" << fieldIndex << "]";
-                    } else if (inner.is_Deref()) {
+                    } else if (inner.is_Deref() || isIndirectDstLvalue(inner)) {
                         auto dstType = metadataType(ty);
                         if (dstType != MetadataType::None) {
                             of << "((";
                             emitCtype(ty);
                             of << "*)";
-                            emitLvalue(inner.innerRef());
+                            if (inner.is_Deref()) {
+                                emitLvalue(inner.innerRef());
+                            } else {
+                                emitDstLvaluePointer(inner);
+                            }
                             of << ".PTR)->_" << fieldIndex;
                         } else {
                             emitLvalue(inner.innerRef());
@@ -7426,11 +7358,15 @@ namespace {
                     const auto& ty = mirRes->getLvalueType(tmp, inner);
                     of << "(";
                     if (ty->is_Slice()) {
-                        if (inner.is_Deref()) {
+                        if (inner.is_Deref() || isIndirectDstLvalue(inner)) {
                             of << "(";
                             emitCtype(ty->as_Slice().inner);
                             of << "*)";
-                            emitLvalue(inner.innerRef());
+                            if (inner.is_Deref()) {
+                                emitLvalue(inner.innerRef());
+                            } else {
+                                emitDstLvaluePointer(inner);
+                            }
                             of << ".PTR";
                         } else {
                             emitLvalue(inner);
@@ -7904,6 +7840,113 @@ namespace {
 
         MetadataType metadataType(const HIRTypeData* ty) const {
             return mResolve.metadataType(mirRes ? mirRes->sp : sp, ty);
+        }
+
+        void emitFunctionArgument(const HIRTypeData* ty, const ::FmtLambda& inner) {
+            switch (this->metadataType(ty)) {
+                case MetadataType::Unknown:
+                    MIR_BUG(*mirRes, ty << " has unknown function-argument metadata");
+                case MetadataType::None:
+                case MetadataType::Zero:
+                    emitCtype(ty, inner);
+                    break;
+                case MetadataType::Slice:
+                    of << "void* " << inner << "_ptr, uintptr_t " << inner << "_meta";
+                    break;
+                case MetadataType::TraitObject:
+                    of << "void* " << inner << "_ptr, void* " << inner << "_meta";
+                    break;
+            }
+        }
+
+        void emitUnsizedArgumentLocal(const HIRTypeData* ty, unsigned index) {
+            switch (this->metadataType(ty)) {
+                case MetadataType::Unknown:
+                    MIR_BUG(*mirRes, ty << " has unknown function-argument metadata");
+                case MetadataType::None:
+                case MetadataType::Zero:
+                    return;
+                case MetadataType::Slice:
+                    of << "\tSLICE_PTR arg" << index << " = make_sliceptr(arg" << index << "_ptr, arg" << index << "_meta);\n";
+                    return;
+                case MetadataType::TraitObject:
+                    of << "\tTRAITOBJ_PTR arg" << index << " = make_traitobjptr(arg" << index << "_ptr, arg" << index << "_meta);\n";
+                    return;
+            }
+        }
+
+        bool isIndirectDstLvalue(const MIRLValue::CRef& value) {
+            HIRTypeRef tmp;
+            if (!this->isDst(mirRes->getLvalueType(tmp, value))) {
+                return false;
+            }
+            auto base = value;
+            while (base.is_Field()) {
+                base.tryUnwrap();
+            }
+            return base.is_Deref() || base.is_Argument();
+        }
+
+        void emitDstLvaluePointer(const MIRLValue::CRef& value) {
+            HIRTypeRef valueTmp;
+            const auto& valueTy = mirRes->getLvalueType(valueTmp, value);
+            const auto valueMeta = this->metadataType(valueTy);
+            MIR_ASSERT(*mirRes, valueMeta == MetadataType::Slice || valueMeta == MetadataType::TraitObject, "Expected an indirect DST lvalue - " << value);
+
+            auto base = value;
+            while (base.is_Field()) {
+                base.tryUnwrap();
+            }
+
+            MIRLValue::CRef basePointer = base;
+            if (base.is_Deref()) {
+                basePointer = base.innerRef();
+            } else {
+                HIRTypeRef baseTmp;
+                const auto& baseTy = mirRes->getLvalueType(baseTmp, base);
+                MIR_ASSERT(*mirRes, base.is_Argument() && this->isDst(baseTy), "DST access must be through a pointer or an unsized argument - " << value);
+            }
+
+            if (base.wrapperCount() == value.wrapperCount()) {
+                emitLvalue(basePointer);
+                return;
+            }
+
+            of << (valueMeta == MetadataType::Slice ? "make_sliceptr(" : "make_traitobjptr(");
+            of << "(uint8_t*)";
+            emitLvalue(basePointer);
+            of << ".PTR";
+
+            const auto baseParam = MIRParam::make_LValue(basePointer.clone());
+            for (size_t i = base.wrapperCount(); i < value.wrapperCount(); i++) {
+                const auto& wrapper = value.lv().wrappers[i];
+                MIR_ASSERT(*mirRes, wrapper.is_Field(), "Unexpected DST projection in " << value);
+
+                HIRTypeRef parentTmp;
+                const auto& parentTy = mirRes->getLvalueType(parentTmp, MIRLValue::CRef(value.lv(), i));
+                const auto* repr = TargetGetTypeRepr(sp, mResolve, parentTy);
+                MIR_ASSERT(*mirRes, repr && wrapper.as_Field() < repr->fields.size(), "Invalid DST field " << wrapper.as_Field() << " on " << parentTy);
+                const auto& field = repr->fields[wrapper.as_Field()];
+
+                of << " + ";
+                if (this->metadataType(field.ty) == MetadataType::TraitObject) {
+                    emitTraitObjectDstFieldOffset(parentTy, wrapper.as_Field(), baseParam);
+                } else {
+                    of << field.offset;
+                }
+            }
+
+            of << ", ";
+            emitLvalue(basePointer);
+            of << ".META)";
+        }
+
+        void emitDstParamPointer(const MIRParam& param) {
+            if (const auto* value = param.opt_LValue()) {
+                emitDstLvaluePointer(MIRLValue::CRef(*value));
+                return;
+            }
+            MIR_BUG(*mirRes, "Unsized function argument isn't an lvalue - " << param);
         }
 
         void emitCtypePtr(const HIRTypeData* innerTy, ::FmtLambda inner) {

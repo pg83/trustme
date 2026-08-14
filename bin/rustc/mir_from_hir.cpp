@@ -9785,6 +9785,13 @@ MIRLValue MirBuilder::getPtrToDst(const Span& sp, const MIRLValue& lv) const {
 
     // TODO: Enum variants?
 
+    if (count == lv.wrappers.size() && lv.root.is_Argument()) {
+        const auto argument = lv.root.as_Argument();
+        ASSERT_BUG(sp, argument < mArgs.size(), "Invalid unsized argument - " << lv);
+        ASSERT_BUG(sp, !mResolve.typeIsSized(sp, mArgs[argument].second), "Access of a sized argument as an unsized value - " << lv);
+        return count == 0 ? lv.clone() : lv.cloneUnwrapped(count);
+    }
+
     ASSERT_BUG(sp, count < lv.wrappers.size() && lv.wrappers[lv.wrappers.size() - 1 - count].is_Deref(), "Access of an unsized field without a dereference - " << lv);
 
     return lv.cloneUnwrapped(count + 1);

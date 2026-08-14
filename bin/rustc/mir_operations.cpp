@@ -1191,6 +1191,14 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                                 break;
                             }
 
+                            // Unsized function arguments are already indirect places carrying
+                            // their metadata. Unlike Box and pointer values, there is no hidden
+                            // dereference to expose to the Box elaboration pass.
+                            if (!state.mResolve.typeIsSized(state.sp, ty)) {
+                                MIRCleanupLValue(state, mutator, re.val);
+                                break;
+                            }
+
                             // DstMeta consumes the pointer represented by a Box, so expose
                             // its dereference to the Box elaboration pass before splitting it.
                             re.val.wrappers.push_back(MIRLValue::Wrapper::newDeref());
@@ -1215,14 +1223,19 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             }
                         }
                         TU_ARMA(DstPtr, re) {
+                            HIRTypeRef tmp;
+                            const auto& ty = state.getLvalueType(tmp, re.val);
+                            if (!state.mResolve.typeIsSized(state.sp, ty)) {
+                                MIRCleanupLValue(state, mutator, re.val);
+                                break;
+                            }
+
                             // DstPtr consumes the pointer represented by a Box, so expose
                             // its dereference to the Box elaboration pass before splitting it.
                             re.val.wrappers.push_back(MIRLValue::Wrapper::newDeref());
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();
 
-                            HIRTypeRef tmp;
-                            const auto& ty = state.getLvalueType(tmp, re.val);
                             const HIRTypeData* ityP;
                             if (const auto* te = ty->opt_Borrow()) {
                                 ityP = te->inner;
