@@ -43,35 +43,33 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Repeated parser feature family: three `TOK_DOUBLE_DOT` range/expression
-   syntax failures.
-2. Trait lookup, normalization, and inference: 29 missing-method failures, 28
+1. Trait lookup, normalization, and inference: 29 missing-method failures, 28
    missing-impl failures, 14 unresolved inference variables, 10 inferred trait
    obligations left ambiguous, and 9 const-value relation failures. Total
    adjacent impact: 90 tests, but the 28 missing impls include a large
    `TransmuteFrom` subgroup and must not be treated as one solver bug without
    comparing their goals.
-3. Macro and attribute expansion: 24 unresolved macro invocations and 13
+2. Macro and attribute expansion: 24 unresolved macro invocations and 13
    unsupported derive applications. The largest concrete macro families are
    `pattern_type` (6), `deref` (5), `iter` (5), and `concat_bytes` (3); the
    derive failures contain 10 `CoercePointee` and 2 `UnsizedConstParamTy`
    cases.
-4. Opaque types (`TAIT`, `RPIT`, `RPITIT`, and async return types): 22
+3. Opaque types (`TAIT`, `RPIT`, `RPITIT`, and async return types): 22
    opaque-bearing result-type relation failures at
    `hir_typeck_expr_cs.cpp:2196` and 13 erased types rejected outside return
    position at `hir_conv_main_bindings.cpp:455`. Total adjacent impact: 35
    tests. All 22 relation failures were rerun after the opaque identity and
    refined-RPITIT fixes and still reproduce, so this row contains a different
    root cause.
-5. Result typing and coercion outside opaque types: 20 heterogeneous failures
+4. Result typing and coercion outside opaque types: 20 heterogeneous failures
    share the final diagnostic at `hir_typeck_expr_cs.cpp:2196`. They include
    block/loop results, match ergonomics, function-item coercions, patterns,
    async types, and ordinary generic inference; the common error line is not a
    common implementation root.
-6. Unresolved types reaching translation: 11 infer/async/closure types rejected
+5. Unresolved types reaching translation: 11 infer/async/closure types rejected
    by mangling at `trans_mangling.cpp:257`, plus 4 `sizeof` operations on infer
    types at `trans_target.cpp:496`.
-7. Shared backend/runtime families: 12 pointer equality/provenance tests, 9
+6. Shared backend/runtime families: 12 pointer equality/provenance tests, 9
    `core::num::dec2flt` library tests, 9 Miri x86-intrinsic aborts, 9 async-drop
    output mismatches, and 5 remaining `track_caller` cases spanning a trait
    object, closure, FFI, indexing, and macro declaration.
@@ -95,12 +93,12 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 141.
 
 ## Accepted Rust rejected by the front end
 
-The 514 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 509 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
-| parser | 173 | 89 at `parse_parseerror.cpp:63`, 62 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
+| parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
 | type checking, HIR lowering, and resolution | 266 | result relation 42 (22 opaque-bearing, 20 other), missing method 29, missing impl 28 |
 | macro and attribute expansion | 69 | unknown macro 24, missing derive 13 |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |

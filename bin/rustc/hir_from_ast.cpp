@@ -3374,10 +3374,33 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 //    TODO(v.span(), "CallPath -> TupleVariant TypeAlias");
                 //    }
                 TU_ARMA(EnumVar, e) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeTupleVariant>(v.span(), mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Value), false, mv$(args)));
+                    ASSERT_BUG(v.span(), e.enum_ || e.hir, "Call path bound to an enum variant without its enum");
+                    bool isUnit = false;
+                    if (e.enum_) {
+                        isUnit = e.enum_->variants().at(e.idx).mData.is_Unit();
+                    } else if (e.hir->mData.is_Value()) {
+                        isUnit = true;
+                    } else {
+                        isUnit = e.hir->mData.as_Data().at(e.idx).type == mCtx.mCrate->types.unit();
+                    }
+                    auto path = mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Value);
+                    if (isUnit) {
+                        auto value = HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeUnitVariant>(v.span(), mv$(path), false));
+                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallValue>(v.span(), mv$(value), mv$(args)));
+                    } else {
+                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeTupleVariant>(v.span(), mv$(path), false, mv$(args)));
+                    }
                 }
                 TU_ARMA(Struct, e) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeTupleVariant>(v.span(), mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Value), true, mv$(args)));
+                    ASSERT_BUG(v.span(), e.struct_ || e.hir, "Call path bound to a struct without its definition");
+                    const bool isUnit = e.struct_ ? e.struct_->mData.is_Unit() : e.hir->mData.is_Unit();
+                    auto path = mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Value);
+                    if (isUnit) {
+                        auto value = HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeUnitVariant>(v.span(), mv$(path), true));
+                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallValue>(v.span(), mv$(value), mv$(args)));
+                    } else {
+                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeTupleVariant>(v.span(), mv$(path), true, mv$(args)));
+                    }
                 }
             }
         }
@@ -3587,7 +3610,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             if (!args.empty()) {
                 ERROR(v.span(), E0000, "Generator closures don't take arguments.");
             }
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), mCtx.mCrate->types.infer(), mCtx.mCrate->types.infer(), mv$(inner), v.isMove, v.isPinned));
+            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), mCtx.mCrate->types.unit(), mCtx.mCrate->types.infer(), mv$(inner), v.isMove, v.isPinned));
         } else {
             if (v.isPinned) {
                 ERROR(v.span(), E0000, "Invalid use of `static` on non-yielding closure");

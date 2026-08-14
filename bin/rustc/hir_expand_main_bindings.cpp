@@ -5577,6 +5577,9 @@ namespace {
             assert(langitem);
             assert(method);
 
+            if (tyVal->is_Diverge()) {
+                return;
+            }
             if (isBuiltinOperator(sp, operatorKind, langitem, tyVal)) {
                 return;
             }

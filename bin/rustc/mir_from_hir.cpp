@@ -6698,15 +6698,14 @@ void MatchGenGrouped::genForSlice(tRulesSubset armRules, size_t ofs, MIRBasicBlo
                     // - Maybe clone the blocks used for the condition?
 
                 } else {
-                    ASSERT_BUG(sp, idx + 1 == armRules.size(), "Ended arm with other arms present");
+                    // A completed row is irrefutable.  As the matrix retains
+                    // source priority, every following row is unreachable.
+                    return;
                 }
             } else {
                 auto bb = armRules.bbIdx(idx);
                 builder.endBlock(MIRTerminator::make_Goto(bb));
-                while (idx + 1 < armRules.size() && bb == armRules.bbIdx(idx) && armRules[idx].size() == ofs) {
-                    idx++;
-                }
-                ASSERT_BUG(sp, idx + 1 == armRules.size(), "Ended arm (inner) with other arms present");
+                return;
             }
             idx++;
         }

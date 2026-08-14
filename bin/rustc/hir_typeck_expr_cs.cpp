@@ -189,7 +189,19 @@ namespace {
         }
 
         void visit(HIRExprNodeLet& node) override {
-            noRevisit(node);
+            if (!node.mValue) {
+                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
+                this->completed = true;
+                return;
+            }
+            const auto* valueType = this->context.getType(node.mValue->resType);
+            if (const auto* infer = valueType->opt_Infer(); infer && infer->tyClass == HIRInferClass::None) {
+                this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
+                return;
+            }
+            this->context.equateTypes(node.span(), node.resType,
+                valueType->is_Diverge() ? this->context.crate.types.diverge() : this->context.crate.types.unit());
+            this->completed = true;
         }
 
         void visit(HIRExprNodeLoop& node) override {
@@ -5687,6 +5699,19 @@ namespace {
                 }
                 throw "unreachable";
             }
+
+            static bool unaryCanUseExpected(TypeckPrimitiveOperator op, const HIRTypeData* type) {
+                if (primitiveOperatorHasBuiltin(op, type)) {
+                    return true;
+                }
+                const auto* infer = type->opt_Infer();
+                if (!infer) {
+                    return false;
+                }
+                return (op == TypeckPrimitiveOperator::Not && infer->tyClass == HIRInferClass::Integer)
+                    || (op == TypeckPrimitiveOperator::Neg
+                        && (infer->tyClass == HIRInferClass::Integer || infer->tyClass == HIRInferClass::Float));
+            }
         };
 
         // A trait implementation only suppresses the language primitive
@@ -5863,6 +5888,11 @@ namespace {
         // - This generates an exact equation.
         if (v.name != "") {
             context.possibleEquateTypeUnknown(sp, v.leftTy, Context::IvarUnknownType::Bound);
+        }
+
+        if (v.isOperator && v.params.types.empty() && context.getType(v.implTy)->is_Diverge()
+            && H::unaryCanUseExpected(v.operatorKind, context.getType(v.leftTy))) {
+            return AssociatedCheckResult::Complete;
         }
 
         // If the impl type is an unbounded ivar, and there's no trait args - don't bother searching
@@ -9622,6 +9652,8 @@ public:
         this->context.addIvars(node.mType);
         this->context.handlePattern(node.span(), node.pattern, node.mType, true);
 
+        bool deferResultType = false;
+        bool diverges = false;
         if (node.mValue) {
             this->context.addIvars(node.mValue->resType);
             // If the type was omitted or was just `_`, equate
@@ -9638,8 +9670,20 @@ public:
             node.mValue->visit(*this);
             // No need for `Sized` bound, as it could end up being a `ref` binding
             this->popInnerCoerce();
+
+            const auto* valueType = this->context.getType(node.mValue->resType);
+            if (const auto* infer = valueType->opt_Infer(); infer && infer->tyClass == HIRInferClass::None) {
+                deferResultType = true;
+            } else {
+                diverges = valueType->is_Diverge();
+            }
         }
-        this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
+        if (deferResultType) {
+            this->context.addRevisit(node);
+        } else {
+            this->context.equateTypes(node.span(), node.resType,
+                diverges ? this->context.crate.types.diverge() : this->context.crate.types.unit());
+        }
     }
 
     void visit(HIRExprNodeMatch& node) override {
@@ -9666,12 +9710,13 @@ public:
             for (auto& c : arm.guards) {
                 auto _ = this->pushInnerCoerceScoped(false);
                 this->context.addIvars(c.val->resType);
-                c.val->visit(*this);
 
                 // Shortcut `if` to avoid the pattern matching complexity
                 if (c.isIf) {
-                    this->context.equateTypes(c.val->span(), this->context.crate.types.primitive(HIRCoreType::Bool), c.val->resType);
+                    this->context.equateTypesCoerce(c.val->span(), this->context.crate.types.primitive(HIRCoreType::Bool), c.val);
+                    c.val->visit(*this);
                 } else {
+                    c.val->visit(*this);
                     this->context.handlePattern(node.span(), c.pat, c.val->resType);
                 }
             }
@@ -9780,6 +9825,22 @@ public:
         const auto& rightTy = rightTyInner; //node.m_right->m_res_type;
         this->context.equateTypesCoerce(node.span(), rightTyInner, node.right);
 
+        node.left->visit(*this);
+        {
+            auto _2 = this->pushInnerCoerceScoped(true);
+            node.right->visit(*this);
+        }
+
+        const bool leftDiverges = this->context.getType(node.left->resType)->is_Diverge();
+        const bool rightDiverges = this->context.getType(node.right->resType)->is_Diverge();
+        const bool diverges = leftDiverges
+            || (rightDiverges && node.op != HIRExprNodeBinOp::Op::BoolAnd && node.op != HIRExprNodeBinOp::Op::BoolOr);
+        const HIRTypeData* operatorResultType = node.resType;
+        if (diverges) {
+            operatorResultType = this->context.ivars.newIvarTr();
+            this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+        }
+
         switch (node.op) {
             case HIRExprNodeBinOp::Op::CmpEqu:
             case HIRExprNodeBinOp::Op::CmpNEqu:
@@ -9787,7 +9848,7 @@ public:
             case HIRExprNodeBinOp::Op::CmpLtE:
             case HIRExprNodeBinOp::Op::CmpGt:
             case HIRExprNodeBinOp::Op::CmpGtE: {
-                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.primitive(HIRCoreType::Bool));
+                this->context.equateTypes(node.span(), operatorResultType, this->context.crate.types.primitive(HIRCoreType::Bool));
 
                 const char* itemName = nullptr;
                 switch (node.op) {
@@ -9826,7 +9887,7 @@ public:
 
             case HIRExprNodeBinOp::Op::BoolAnd:
             case HIRExprNodeBinOp::Op::BoolOr:
-                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.primitive(HIRCoreType::Bool));
+                this->context.equateTypes(node.span(), operatorResultType, this->context.crate.types.primitive(HIRCoreType::Bool));
                 this->context.equateTypes(node.span(), leftTy, this->context.crate.types.primitive(HIRCoreType::Bool));
                 this->context.equateTypes(node.span(), rightTy, this->context.crate.types.primitive(HIRCoreType::Bool));
                 break;
@@ -9899,9 +9960,9 @@ public:
 
                 // NOTE: `true` marks the association as coming from a binary operation, which changes integer handling
                 if (!opTrait.components().empty()) {
-                    this->context.equateTypesAssoc(node.span(), node.resType, opTrait, HIRPathParams(rightTy), leftTy, "Output", {}, true, operatorKind);
+                    this->context.equateTypesAssoc(node.span(), operatorResultType, opTrait, HIRPathParams(rightTy), leftTy, "Output", {}, true, operatorKind);
                 } else {
-                    this->context.equateTypes(node.span(), node.resType, leftTy);
+                    this->context.equateTypes(node.span(), operatorResultType, leftTy);
                     if (operatorKind != TypeckPrimitiveOperator::Shl && operatorKind != TypeckPrimitiveOperator::Shr) {
                         this->context.equateTypes(node.span(), leftTy, rightTy);
                     }
@@ -9909,9 +9970,6 @@ public:
                 break;
             }
         }
-        node.left->visit(*this);
-        auto _2 = this->pushInnerCoerceScoped(true);
-        node.right->visit(*this);
     }
 
     void visit(HIRExprNodeUniOp& node) override {
@@ -9919,6 +9977,8 @@ public:
 
         TRACE_FUNCTION_F(&node << " " << HIRExprNodeUniOp::opname(node.op) << "...");
         this->context.addIvars(node.mValue->resType);
+        node.mValue->visit(*this);
+
         const char* itemName = nullptr;
         auto operatorKind = TypeckPrimitiveOperator::None;
         switch (node.op) {
@@ -9932,13 +9992,23 @@ public:
                 break;
         }
         assert(itemName);
+        const HIRTypeData* inputType = node.mValue->resType;
+        if (this->context.getType(inputType)->is_Diverge()) {
+            const HIRTypeData* expectedType = this->context.coercionHint(node);
+            if (!expectedType) {
+                expectedType = node.resType;
+            }
+            expectedType = this->context.getType(expectedType);
+            if ((!expectedType->is_Infer() || expectedType->as_Infer().isLit()) && !expectedType->is_Diverge()) {
+                inputType = expectedType;
+            }
+        }
         const auto& opTrait = this->context.crate.getLangItemPathOpt(itemName);
         if (!opTrait.components().empty()) {
-            this->context.equateTypesAssoc(node.span(), node.resType, opTrait, HIRPathParams{}, node.mValue->resType, "Output", {}, true, operatorKind);
+            this->context.equateTypesAssoc(node.span(), node.resType, opTrait, HIRPathParams{}, inputType, "Output", {}, true, operatorKind);
         } else {
-            this->context.equateTypes(node.span(), node.resType, node.mValue->resType);
+            this->context.equateTypes(node.span(), node.resType, inputType);
         }
-        node.mValue->visit(*this);
     }
 
     void visit(HIRExprNodeBorrow& node) override {

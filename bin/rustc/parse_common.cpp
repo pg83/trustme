@@ -185,6 +185,11 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
         case TOK_RWORD_TYPE:
         case TOK_RWORD_EXTERN:
         case TOK_RWORD_STATIC:
+            if (lex.lookahead(0) == TOK_PIPE || lex.lookahead(0) == TOK_DOUBLE_PIPE
+                || ((lex.lookahead(0) == TOK_RWORD_MOVE || lex.lookahead(0) == TOK_RWORD_USE)
+                    && (lex.lookahead(1) == TOK_PIPE || lex.lookahead(1) == TOK_DOUBLE_PIPE))) {
+                break;
+            }
         case TOK_RWORD_STRUCT:
         case TOK_RWORD_MACRO:
         case TOK_RWORD_ENUM:
@@ -821,6 +826,9 @@ ASTExprNodeP ParseExpr0(TokenStream& lex) {
     ASTExprNodeP cur(TokenStream& lex) {             \
         ASTExprNodeP (*next)(TokenStream&) = _next;  \
         ASTExprNodeP rv = next(lex);                 \
+        auto parseNext = [&lex, next]() {            \
+            return ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex); \
+        };                                           \
         while (true) {                               \
             Token tok;                               \
             switch ((tok = lex.getToken()).type()) { \
@@ -833,8 +841,15 @@ ASTExprNodeP ParseExpr0(TokenStream& lex) {
         }                                            \
     }
 
+bool ParseIsRangeSeparator(eTokenType tokType) {
+    return tokType == TOK_DOUBLE_DOT || tokType == TOK_DOUBLE_DOT_EQUAL || tokType == TOK_TRIPLE_DOT;
+}
+
 bool ParseIsTokValue(eTokenType tokType) {
     switch (tokType) {
+        case TOK_DOUBLE_DOT:
+        case TOK_DOUBLE_DOT_EQUAL:
+        case TOK_TRIPLE_DOT:
         case TOK_DOUBLE_COLON:
         case TOK_DOUBLE_LT:
         case TOK_LT:
@@ -898,7 +913,7 @@ ASTExprNodeP ParseExpr1a(TokenStream& lex) {
 
     // Inclusive range to a value
     if (GET_TOK(tok, lex) == TOK_TRIPLE_DOT || tok.type() == TOK_DOUBLE_DOT_EQUAL) {
-        right = next(lex);
+        right = ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex);
         return NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, nullptr, mv$(right));
     } else {
         PUTBACK(tok, lex);
@@ -917,34 +932,34 @@ ASTExprNodeP ParseExpr1a(TokenStream& lex) {
     assert(tok.type() == TOK_DOUBLE_DOT);
     // If the next token is part of a value, parse that value
     if (ParseIsTokValue(LOOK_AHEAD(lex))) {
-        right = next(lex);
+        right = ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex);
     } else {
         // Otherwise, leave `right` as nullptr
     }
 
     return NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE, ::std::move(left), ::std::move(right));
 }
-LEFTASSOC(ParseExpr1b, ParseExpr1e, case TOK_TRIPLE_DOT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, mv$(rv), next(lex)); break; case TOK_DOUBLE_DOT_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, mv$(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr1b, ParseExpr1e, case TOK_TRIPLE_DOT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, mv$(rv), parseNext()); break; case TOK_DOUBLE_DOT_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::RANGE_INC, mv$(rv), parseNext()); break;)
 // 1: Bool OR
-LEFTASSOC(ParseExpr1e, ParseExpr2, case TOK_DOUBLE_PIPE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLOR, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr1e, ParseExpr2, case TOK_DOUBLE_PIPE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLOR, ::std::move(rv), parseNext()); break;)
 // 2: Bool AND
-LEFTASSOC(ParseExpr2, ParseExpr3, case TOK_DOUBLE_AMP : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLAND, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr2, ParseExpr3, case TOK_DOUBLE_AMP : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLAND, ::std::move(rv), parseNext()); break;)
 // 3: (In)Equality
-LEFTASSOC(ParseExpr3, ParseExpr4, case TOK_DOUBLE_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPEQU, ::std::move(rv), next(lex)); break; case TOK_EXCLAM_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPNEQU, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr3, ParseExpr4, case TOK_DOUBLE_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPEQU, ::std::move(rv), parseNext()); break; case TOK_EXCLAM_EQUAL : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPNEQU, ::std::move(rv), parseNext()); break;)
 // 4: Comparisons
-LEFTASSOC(ParseExpr4, ParseExpr5, case TOK_LT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPLT, ::std::move(rv), next(lex)); break; case TOK_GT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPGT, ::std::move(rv), next(lex)); break; case TOK_LTE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPLTE, ::std::move(rv), next(lex)); break; case TOK_GTE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPGTE, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr4, ParseExpr5, case TOK_LT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPLT, ::std::move(rv), parseNext()); break; case TOK_GT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPGT, ::std::move(rv), parseNext()); break; case TOK_LTE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPLTE, ::std::move(rv), parseNext()); break; case TOK_GTE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::CMPGTE, ::std::move(rv), parseNext()); break;)
 // 5: Bit OR
-LEFTASSOC(ParseExpr5, ParseExpr6, case TOK_PIPE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITOR, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr5, ParseExpr6, case TOK_PIPE : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITOR, ::std::move(rv), parseNext()); break;)
 // 6: Bit XOR
-LEFTASSOC(ParseExpr6, ParseExpr7, case TOK_CARET : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITXOR, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr6, ParseExpr7, case TOK_CARET : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITXOR, ::std::move(rv), parseNext()); break;)
 // 7: Bit AND
-LEFTASSOC(ParseExpr7, ParseExpr8, case TOK_AMP : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITAND, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr7, ParseExpr8, case TOK_AMP : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BITAND, ::std::move(rv), parseNext()); break;)
 // 8: Bit Shifts
-LEFTASSOC(ParseExpr8, ParseExpr9, case TOK_DOUBLE_LT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SHL, ::std::move(rv), next(lex)); break; case TOK_DOUBLE_GT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SHR, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr8, ParseExpr9, case TOK_DOUBLE_LT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SHL, ::std::move(rv), parseNext()); break; case TOK_DOUBLE_GT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SHR, ::std::move(rv), parseNext()); break;)
 // 9: Add / Subtract
-LEFTASSOC(ParseExpr9, ParseExpr10, case TOK_PLUS : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::ADD, ::std::move(rv), next(lex)); break; case TOK_DASH : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SUB, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr9, ParseExpr10, case TOK_PLUS : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::ADD, ::std::move(rv), parseNext()); break; case TOK_DASH : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::SUB, ::std::move(rv), parseNext()); break;)
 // 10: Times / Divide / Modulo
-LEFTASSOC(ParseExpr10, ParseExpr11, case TOK_STAR : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MULTIPLY, ::std::move(rv), next(lex)); break; case TOK_SLASH : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::DIVIDE, ::std::move(rv), next(lex)); break; case TOK_PERCENT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MODULO, ::std::move(rv), next(lex)); break;)
+LEFTASSOC(ParseExpr10, ParseExpr11, case TOK_STAR : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MULTIPLY, ::std::move(rv), parseNext()); break; case TOK_SLASH : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::DIVIDE, ::std::move(rv), parseNext()); break; case TOK_PERCENT : rv = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::MODULO, ::std::move(rv), parseNext()); break;)
 // 11: Cast
 LEFTASSOC(ParseExpr11, ParseExpr12, case TOK_RWORD_AS : rv = NEWNODE(ASTExprNodeCast, ::std::move(rv), ParseType(lex, false)); break;)
 // 12: Type Ascription
@@ -959,18 +974,22 @@ ASTExprNodeP ParseExpr12(TokenStream& lex) {
     return rv;
 }
 
+ASTExprNodeP ParseExprUnaryOperand(TokenStream& lex) {
+    return ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : ParseExpr12(lex);
+}
+
 // 13: Unaries
 ASTExprNodeP ParseExpr13(TokenStream& lex) {
     Token tok;
     switch (GET_TOK(tok, lex)) {
         case TOK_DASH:
-            return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::NEGATE, ParseExpr12(lex));
+            return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::NEGATE, ParseExprUnaryOperand(lex));
         case TOK_EXCLAM:
-            return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::INVERT, ParseExpr12(lex));
+            return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::INVERT, ParseExprUnaryOperand(lex));
         case TOK_STAR:
-            return NEWNODE(ASTExprNodeDeref, ParseExpr12(lex));
+            return NEWNODE(ASTExprNodeDeref, ParseExprUnaryOperand(lex));
         case TOK_RWORD_BOX:
-            return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::BOX, ParseExpr12(lex));
+            return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::BOX, ParseExprUnaryOperand(lex));
         case TOK_RWORD_IN: {
             ASTExprNodeP dest;
             {
@@ -989,19 +1008,19 @@ ASTExprNodeP ParseExpr13(TokenStream& lex) {
                 if (tok.ident() == "raw") {
                     if (lex.lookahead(0) == TOK_RWORD_MUT) {
                         GET_TOK(tok, lex);
-                        return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::RawBorrowMut, ParseExpr12(lex));
+                        return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::RawBorrowMut, ParseExprUnaryOperand(lex));
                     } else if (lex.lookahead(0) == TOK_RWORD_CONST) {
                         GET_TOK(tok, lex);
-                        return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::RawBorrow, ParseExpr12(lex));
+                        return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::RawBorrow, ParseExprUnaryOperand(lex));
                     } else {
                     }
                 }
                 PUTBACK(tok, lex);
             }
             if (lex.getTokenIf(TOK_RWORD_MUT)) {
-                return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::REFMUT, ParseExpr12(lex));
+                return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::REFMUT, ParseExprUnaryOperand(lex));
             } else {
-                return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::REF, ParseExpr12(lex));
+                return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::REF, ParseExprUnaryOperand(lex));
             }
         default:
             PUTBACK(tok, lex);
@@ -3887,7 +3906,7 @@ RcString getOptionalIdent(TokenStream& lex) {
 }
 
 /// Parse multiple items from a use "statement"
-void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, ASTPath& path) {
+void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, ASTPath& path, bool explicitAbsolute = false) {
     TRACE_FUNCTION_FR(path, entries);
     Token tok;
 
@@ -3908,7 +3927,12 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
     do {
         switch (GET_TOK(tok, lex)) {
             case TOK_IDENT:
-                path.append(ASTPathNode(tok.ident().name, {}));
+                if (explicitAbsolute && lex.editionAfter(ASTEdition::Rust2018) && path.cls.is_Absolute()
+                    && path.cls.as_Absolute().crate == "" && path.cls.as_Absolute().nodes.empty()) {
+                    path = ASTPath(RcString(std::string("=") + tok.ident().name.c_str()), {});
+                } else {
+                    path.append(ASTPathNode(tok.ident().name, {}));
+                }
                 break;
             case TOK_RWORD_SELF: {
                 ASSERT_BUG(lex.pointSpan(), !path.nodes().empty(), "`self` with no path");
@@ -3920,9 +3944,9 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
                 return;
             }
             case TOK_BRACE_OPEN:
-                // Can't be an empty list
                 if (LOOK_AHEAD(lex) == TOK_BRACE_CLOSE) {
-                    throw ParseErrorUnexpected(lex, tok);
+                    GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
+                    return;
                 }
                 // Keep looping until a comma
                 do {
@@ -3945,13 +3969,18 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
                     } else {
                         auto savedPath = ASTPath(path);
 
-                        ParseUseInner(lex, entries, path);
+                        ParseUseInner(lex, entries, path, explicitAbsolute);
 
                         path = std::move(savedPath);
                     }
                 } while (GET_TOK(tok, lex) == TOK_COMMA);
                 CHECK_TOK(tok, TOK_BRACE_CLOSE);
                 return;
+            case TOK_DOUBLE_COLON: {
+                auto absolutePath = ASTPath("", {});
+                ParseUseInner(lex, entries, absolutePath, true);
+                return;
+            }
             case TOK_STAR:
                 entries.push_back({lex.pointSpan(), ASTPath(path), ""});
                 return;
@@ -3977,6 +4006,7 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
 
 void ParseUseRoot(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries) {
     ASTPath path = ASTPath("", {});
+    bool explicitAbsolute = false;
     Token tok;
     switch (GET_TOK(tok, lex)) {
         case TOK_RWORD_SELF:
@@ -4007,14 +4037,17 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries) {
             // Leading :: is allowed and ignored for the $crate feature
         case TOK_DOUBLE_COLON:
             // Absolute path
+            explicitAbsolute = true;
             // Internal `$crate` path encoding emitted by mrustc is `::"crate-name"`.
             if (LOOK_AHEAD(lex) == TOK_STRING) {
                 GET_CHECK_TOK(tok, lex, TOK_STRING);
                 path = ASTPath(RcString::newInterned(tok.str()), {});
-            } else if (lex.editionAfter(ASTEdition::Rust2018)) {
+                explicitAbsolute = false;
+            } else if (lex.editionAfter(ASTEdition::Rust2018) && LOOK_AHEAD(lex) == TOK_IDENT) {
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
                 // Internal AST encoding: `=crate` denotes a Rust 2018 extern-prelude absolute path.
                 path = ASTPath(RcString(std::string("=") + tok.ident().name.c_str()), {});
+                explicitAbsolute = false;
                 // TODO: Is `use ::foo as bar` valid?
                 if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
                     RcString name;
@@ -4057,7 +4090,7 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries) {
             break;
     }
 
-    ParseUseInner(lex, entries, path);
+    ParseUseInner(lex, entries, path, explicitAbsolute);
 }
 
 ASTUseItem ParseUse(TokenStream& lex) {
