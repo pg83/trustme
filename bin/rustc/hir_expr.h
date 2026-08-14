@@ -687,6 +687,7 @@ struct HIRExprNodeClosure: public HIRExprNode {
     HIRTypeRef returnType;
     HIRExprNodeP mCode;
     bool isMove = false;
+    bool isUse = false;
 
     enum class Class {
         Unknown,
@@ -718,7 +719,7 @@ struct HIRExprNodeClosure: public HIRExprNode {
     HIRGenericPath objPath;
     ::std::vector<HIRExprNodeP> captures;
 
-    HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove);
+    HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove, bool isUse);
 
     static constexpr unsigned int kind = 36;
     unsigned int nodeKind() const override;

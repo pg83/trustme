@@ -3589,7 +3589,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             if (v.isPinned) {
                 ERROR(v.span(), E0000, "Invalid use of `static` on non-yielding closure");
             }
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeClosure>(v.span(), std::move(args), mCtx.LowerHIRType(v.returnType), std::move(inner), v.isMove));
+            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeClosure>(v.span(), std::move(args), mCtx.LowerHIRType(v.returnType), std::move(inner), v.isMove, v.isUse));
         }
     }
 

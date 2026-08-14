@@ -653,6 +653,9 @@ NODE(
         if (isMove) {
             os << "move ";
         }
+        if (isUse) {
+            os << "use ";
+        }
         os << "|";
         for (const auto& a : mArgs) {
             os << a.first << ": " << a.second << ",";
@@ -666,7 +669,7 @@ NODE(
         for (const auto& a : mArgs) {
             args.push_back(::std::make_pair(a.first.clone(), a.second->clone()));
         }
-        return NEWNODE(ASTExprNodeClosure, mv$(args), returnType->clone(), mCode->clone(), isMove, isPinned);
+        return NEWNODE(ASTExprNodeClosure, mv$(args), returnType->clone(), mCode->clone(), isMove, isUse, isPinned);
     }
 );
 

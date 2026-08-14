@@ -2357,6 +2357,9 @@ namespace {
                 if (node.isMove) {
                     os << " move";
                 }
+                if (node.isUse) {
+                    os << " use";
+                }
                 os << "|";
                 for (const auto& arg : node.mArgs) {
                     os << arg.first << ": " << arg.second << ", ";

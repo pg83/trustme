@@ -2001,7 +2001,7 @@ class DeriverRustcEncodable: public Deriver {
     }
 
     ASTExprNodeP encClosure(stl::ObjPool& pool, Span sp, ASTExprNodeP code) const {
-        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, rcstringS), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false);
+        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, rcstringS), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
     }
 
     ASTExprNodeP getValOk(const RcString& coreName) const {
@@ -2162,7 +2162,7 @@ class DeriverRustcDecodable: public Deriver {
     }
 
     ASTExprNodeP decClosure(stl::ObjPool& pool, Span sp, ASTExprNodeP code) const {
-        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false);
+        return NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(pool, sp))), ::mkType(pool, sp), mv$(code), false, false, false);
     }
 
     ASTExprNodeP getValErrStr(const RcString& coreName, ::std::string errStr) const {
@@ -2287,7 +2287,7 @@ public:
         }
 
         auto nodeMatch = NEWNODE(Match, NEWNODE(NamedValue, ASTPath("idx")), mv$(arms));
-        auto nodeVarClosure = NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(*type->pool, sp)), ::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "idx"), ::mkType(*type->pool, sp))), ::mkType(*type->pool, sp), mv$(nodeMatch), false, false);
+        auto nodeVarClosure = NEWNODE(Closure, vec$(::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "d"), ::mkType(*type->pool, sp)), ::std::make_pair(ASTPattern(ASTPattern::TagBind(), sp, "idx"), ::mkType(*type->pool, sp))), ::mkType(*type->pool, sp), mv$(nodeMatch), false, false, false);
         ::std::string enumName = type->mData.as_Path()->nodes().back().name().c_str();
 
         auto nodeRev = NEWNODE(CallPath, this->getTraitPathDecoder() + "read_enum_variant", vec$(NEWNODE(NamedValue, ASTPath("d")), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Array, mv$(varNameStrs))), mv$(nodeVarClosure)));

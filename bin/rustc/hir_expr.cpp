@@ -1014,12 +1014,13 @@ TU_ARMA(Alias, ee) {
         {
         }
 
-        HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove)
+        HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove, bool isUse)
             : HIRExprNode(mv$(sp))
             , mArgs(::std::move(args))
             , returnType(::std::move(rv))
             , mCode(::std::move(code))
             , isMove(isMove)
+            , isUse(isUse)
         {
         }
 

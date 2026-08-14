@@ -493,13 +493,15 @@ struct ASTExprNodeClosure: public ASTExprNode {
     ASTType* returnType;
     ASTExprNodeP mCode;
     bool isMove;   //< The closure takes ownership of all values
+    bool isUse;    //< The closure copies, clones, or moves each captured value
     bool isPinned; //< The closure cannot be moved (this is for generators)
 
-    ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNodeP code, bool isMove, bool isPinned)
+    ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNodeP code, bool isMove, bool isUse, bool isPinned)
         : mArgs(::std::move(args))
         , returnType(::std::move(rv))
         , mCode(::std::move(code))
         , isMove(isMove)
+        , isUse(isUse)
         , isPinned(isPinned)
     {
     }

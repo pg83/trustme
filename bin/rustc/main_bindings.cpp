@@ -110,7 +110,7 @@ void ExpandTestHarness(ASTCrate& crate) {
         {
             // Convert `fn()` into `fn()->Result<(),String>`
             // Use `|| ::test::assert_test_result( fcn() )`
-            testFcnNode = NEWNODE(Closure, {}, mkType(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false);
+            testFcnNode = NEWNODE(Closure, {}, mkType(*crate.pool, Span()), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode("assert_test_result")}), ::makeVec1(NEWNODE(CallPath, ASTPath(test.path), {}))), false, false, false);
         }
         auto testTypeVarName = test.isBenchmark ? "StaticBenchFn" : "StaticTestFn";
         descandfnVals.push_back({{}, RcString::newInterned("testfn"), NEWNODE(CallPath, ASTPath(cTest, {ASTPathNode(testTypeVarName)}), ::makeVec1(std::move(testFcnNode)))});

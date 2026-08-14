@@ -178,8 +178,11 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
         case TOK_INTERPOLATED_ITEM:
         case TOK_RWORD_PUB:
             // NOTE: Allowed, but doesn't do much
-        case TOK_RWORD_TYPE:
         case TOK_RWORD_USE:
+            if (lex.lookahead(0) == TOK_PIPE || lex.lookahead(0) == TOK_DOUBLE_PIPE) {
+                break;
+            }
+        case TOK_RWORD_TYPE:
         case TOK_RWORD_EXTERN:
         case TOK_RWORD_STATIC:
         case TOK_RWORD_STRUCT:
@@ -1195,11 +1198,15 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync = false) {
         isImmovable = true;
     }
 
-    // [`move`]
+    // [`move` | `use`]
     bool isMove = false;
+    bool isUse = false;
     if (tok == TOK_RWORD_MOVE) {
         GET_TOK(tok, lex);
         isMove = true;
+    } else if (tok == TOK_RWORD_USE) {
+        GET_TOK(tok, lex);
+        isUse = true;
     }
 
     ::std::vector<::std::pair<ASTPattern, ASTType*>> args;
@@ -1225,7 +1232,7 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync = false) {
         }
         CHECK_TOK(tok, TOK_PIPE);
     } else {
-        throw ParseErrorUnexpected(lex, tok, {TOK_PIPE, TOK_DOUBLE_PIPE, TOK_RWORD_MOVE, TOK_RWORD_STATIC});
+        throw ParseErrorUnexpected(lex, tok, {TOK_PIPE, TOK_DOUBLE_PIPE, TOK_RWORD_MOVE, TOK_RWORD_USE, TOK_RWORD_STATIC});
     }
 
     auto rt = mkType(lex.typePool(), lex.pointSpan());
@@ -1238,7 +1245,7 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync = false) {
         code = NEWNODE(ASTExprNodeAsyncBlock, ::std::move(code), isMove);
     }
 
-    return NEWNODE(ASTExprNodeClosure, ::std::move(args), ::std::move(rt), ::std::move(code), isMove, isImmovable);
+    return NEWNODE(ASTExprNodeClosure, ::std::move(args), ::std::move(rt), ::std::move(code), isMove, isUse, isImmovable);
 }
 
 ASTExprNodeP ParseExprValInner(TokenStream& lex) {
@@ -1452,6 +1459,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
         // Closures
         case TOK_RWORD_STATIC:
         case TOK_RWORD_MOVE:
+        case TOK_RWORD_USE:
         case TOK_PIPE:
         case TOK_DOUBLE_PIPE:
             PUTBACK(tok, lex);

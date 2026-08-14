@@ -762,8 +762,8 @@ namespace {
                 DEBUG("= Class is " << static_cast<int>(node.cls));
             }
 
-            if (node.isMove) {
-                DEBUG("> Tagged with `move` - upgrading all usage to `Move`");
+            if (node.isMove || node.isUse) {
+                DEBUG("> Tagged with `" << (node.isUse ? "use" : "move") << "` - upgrading all usage to `Move`");
                 for (auto& cap : scope.capturedVars) {
                     if (cap.fields.size() > 0 && cap.fields[0] == "") {
                         // Derefs stay as-is?
@@ -1429,6 +1429,7 @@ namespace {
     const RcString rcstringCallOnce = RcString::newInterned("call_once");
     const RcString rcstringCallMut = RcString::newInterned("call_mut");
     const RcString rcstringCall = RcString::newInterned("call");
+    const RcString rcstringClone = RcString::newInterned("clone");
 }
 
 #define NEWNODE(TY, CLASS, ...) closureMkExprnodep(pool->make<HIRExprNode##CLASS>(__VA_ARGS__), TY)
@@ -2295,6 +2296,22 @@ namespace {
                 HIRBorrowType bt;
                 const auto& capTy = *capTyP;
                 auto tyMono = monomorphCb.monomorphType(sp, *capTyP);
+
+                if (node.isUse && bindingType == HIRValueUsage::Move && !mResolve.typeIsCopy(sp, capTy)) {
+                    const auto& langUseCloned = mResolve.hirCrate().getLangItemPathOpt("use_cloned");
+                    const bool isUseCloned = !langUseCloned.components().empty()
+                        && mResolve.findImpl(sp, langUseCloned, HIRPathParams{}, capTy, [](auto, bool isFuzzed) {
+                            return !isFuzzed;
+                        });
+                    if (isUseCloned) {
+                        const auto& langClone = mResolve.hirCrate().getLangItemPath(sp, "clone");
+                        auto borrowTy = mResolve.hirCrate().types.borrow(HIRBorrowType::Shared, capTy);
+                        auto borrowNode = NEWNODE(borrowTy, Borrow, sp, HIRBorrowType::Shared, mv$(valNode));
+                        auto* cloneCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(capTy, HIRGenericPath(langClone), rcstringClone), makeVec1(mv$(borrowNode)));
+                        valNode = closureMkExprnodep(cloneCall, capTy);
+                        cloneCall->cache.argTypes = makeVec2(mv$(borrowTy), capTy);
+                    }
+                }
 
                 DEBUG("Binding _#" << binding.rootSlot << FMT_CB(ss, for (const auto& n : binding.fields) ss << "." << n) << " : " << bindingType);
                 DEBUG(capTy << " -> " << tyMono);

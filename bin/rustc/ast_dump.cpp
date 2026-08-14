@@ -504,6 +504,9 @@ public:
         if (n.isMove) {
             os << "move ";
         }
+        if (n.isUse) {
+            os << "use ";
+        }
         os << "|";
         bool isFirst = true;
         for (const auto& arg : n.mArgs) {
