@@ -1887,15 +1887,15 @@ namespace {
                                 return types.path(mv$(path), HIRTypePathBinding::make_Struct(&str));
                             }
                             TU_ARMA(Generator, nodeP) {
-                                DEBUG("Generator: " << nodeP->objPath);
-                                auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPath, false);
+                                DEBUG("Generator: " << nodeP->objPathBase);
+                                auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPathBase, false);
                                 const auto& str = *nodeP->objPtr;
                                 DEBUG(ty << " -> " << path);
                                 return types.path(mv$(path), HIRTypePathBinding::make_Struct(&str));
                             }
                             TU_ARMA(Async, nodeP) {
-                                DEBUG("Async: " << nodeP->objPath);
-                                auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPath, false);
+                                DEBUG("Async: " << nodeP->objPathBase);
+                                auto path = monomorphiser.monomorphGenericpath(sp, nodeP->objPathBase, false);
                                 const auto& str = *nodeP->objPtr;
                                 DEBUG(ty << " -> " << path);
                                 return types.path(mv$(path), HIRTypePathBinding::make_Struct(&str));
@@ -2674,8 +2674,9 @@ namespace {
                 rv.newLocals.push_back(monomorphCb.monomorphType(sp, variableTypes.at(cap.first)));
 
                 rv.captureUsages.push_back(cap.second);
-                auto capTy = monomorphCb.monomorphType(sp, variableTypes.at(cap.first));
-                rv.structEnts.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), capTy});
+                auto sourceCapTy = variableTypes.at(cap.first);
+                auto storedCapTy = monomorphCb.monomorphType(sp, sourceCapTy);
+                rv.structEnts.push_back(HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), storedCapTy});
                 rv.captureNodes.push_back(HIRExprNodeP(pool->make<HIRExprNodeVariable>(sp, "", cap.first)));
                 switch (cap.second) {
                     case HIRValueUsage::Unknown:
@@ -2684,19 +2685,19 @@ namespace {
                         // No wrapping needed (drop handled by custom drop glue)
                     } break;
                     case HIRValueUsage::Borrow:
-                        rv.captureNodes.back()->resType = capTy;
-                        capTy = mResolve.hirCrate().types.borrow(HIRBorrowType::Shared, capTy);
+                        rv.captureNodes.back()->resType = sourceCapTy;
+                        sourceCapTy = mResolve.hirCrate().types.borrow(HIRBorrowType::Shared, sourceCapTy);
                         rv.structEnts.back().ent = mResolve.hirCrate().types.borrow(HIRBorrowType::Shared, rv.structEnts.back().ent);
                         rv.captureNodes.back() = HIRExprNodeP(pool->make<HIRExprNodeBorrow>(sp, HIRBorrowType::Shared, std::move(rv.captureNodes.back())));
                         break;
                     case HIRValueUsage::Mutate:
-                        rv.captureNodes.back()->resType = capTy;
-                        capTy = mResolve.hirCrate().types.borrow(HIRBorrowType::Unique, capTy);
+                        rv.captureNodes.back()->resType = sourceCapTy;
+                        sourceCapTy = mResolve.hirCrate().types.borrow(HIRBorrowType::Unique, sourceCapTy);
                         rv.structEnts.back().ent = mResolve.hirCrate().types.borrow(HIRBorrowType::Unique, rv.structEnts.back().ent);
                         rv.captureNodes.back() = HIRExprNodeP(pool->make<HIRExprNodeBorrow>(sp, HIRBorrowType::Unique, std::move(rv.captureNodes.back())));
                         break;
                 }
-                rv.captureNodes.back()->resType = mv$(capTy);
+                rv.captureNodes.back()->resType = mv$(sourceCapTy);
             }
             for (const auto& slot : avuCache.localVars) {
                 unsigned index = nArgs + rv.newLocals.size();
@@ -2776,6 +2777,7 @@ namespace {
             // Mark the object pathname in the closure.
             node.objPtr = &genStructRef;
             node.objPath = HIRGenericPath(genStructPath, monomorphCb.freeze());
+            node.objPathBase = node.objPath.clone();
             node.captures = std::move(crVars.captureNodes);
             node.stateDataType = mResolve.hirCrate().types.path(HIRGenericPath(stateStructPath, node.objPath.mParams.clone()), &stateStructPtr->as_Struct());
 
@@ -2919,6 +2921,7 @@ namespace {
             // Mark the object pathname
             node.objPtr = &genStructRef;
             node.objPath = HIRGenericPath(genStructPath, monomorphCb.freeze());
+            node.objPathBase = node.objPath.clone();
             node.captures = std::move(crVars.captureNodes);
             node.stateDataType = mResolve.hirCrate().types.path(HIRGenericPath(stateStructPath, node.objPath.mParams.clone()), &stateStructPtr->as_Struct());
 

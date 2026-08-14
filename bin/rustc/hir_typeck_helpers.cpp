@@ -4377,6 +4377,23 @@ TU_ARMA(Alias, ee) {
         }
 
         bool TraitResolution::findTraitImpls(const Span& sp, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, tCbTraitImplR callback, bool magicTraitImpls) const {
+            if (const auto* path = type->opt_Path()) {
+                if (const auto* projection = path->path.mData.opt_UfcsKnown()) {
+                    if (projection->item.compare(0, strlen(ATY_PREFIX_ERASED), ATY_PREFIX_ERASED) == 0) {
+                        auto normalized = this->expandAssociatedTypes(sp, type);
+                        if (normalized != type) {
+                            if (normalized->is_ErasedType()) {
+                                StaticTraitResolve staticResolve(wb);
+                                staticResolve.setBothGenericsRaw(mImplGenerics, mItemGenerics);
+                                staticResolve.revealOpaqueTypes(sp, normalized);
+                            }
+                            if (normalized != type) {
+                                return findTraitImpls(sp, trait, params, normalized, std::move(callback), magicTraitImpls);
+                            }
+                        }
+                    }
+                }
+            }
             if (this->wb.settings->solver.globally && magicTraitImpls) {
                 return findTraitImplsNext(sp, trait, params, type, ::std::move(callback));
             }

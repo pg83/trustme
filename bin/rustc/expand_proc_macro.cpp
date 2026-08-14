@@ -1089,6 +1089,12 @@ namespace {
         void visitPathNode(const ASTPathNode& e, bool isExpr) {
             pmi.sendIdent(e.name().c_str());
             if (!e.args().isEmpty()) {
+                if (e.args().isRtn) {
+                    pmi.sendSymbol("(");
+                    pmi.sendSymbol("..");
+                    pmi.sendSymbol(")");
+                    return;
+                }
                 if (e.args().isParen) {
                     auto& t = e.args().entries.at(0).as_Type();
                     this->visitType(t); // Should be a tuple

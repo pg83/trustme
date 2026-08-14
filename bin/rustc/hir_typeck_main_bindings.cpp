@@ -767,6 +767,10 @@ namespace {
                     DEBUG("Updating < " << impl.mType << " as " << traitPath << impl.traitArgs << " >::" << e.first);
                     if (!matchCb.rpitMapping.empty()) {
                         implFcn.traitReturnType = expRetTy1;
+                        for (const auto& mapping : matchCb.rpitMapping) {
+                            const auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << e.first << "_" << mapping.first));
+                            impl.types.insert(std::make_pair(name, HIRTraitImpl::ImplEnt<HIRTypeRef>{e.second.isSpecialisable, mapping.second}));
+                        }
                     }
                     implFcn.returnType = expRetTy;
                     for (size_t i = 0; i < std::min(implFcn.mArgs.size(), traitFcn.mArgs.size()); i++) {

@@ -1762,31 +1762,38 @@ ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMod
             // Parenthesized arguments encode the `Fn(A, B) -> C` trait-path syntax.
             else if (lex.lookahead(0) == TOK_PAREN_OPEN) {
                 auto ps = lex.startSpan();
-                DEBUG("Fn() parenthesized arguments");
-                ::std::vector<ASTType*> args;
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-                do {
-                    // Trailing comma or empty list support
-                    if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
+                if (lex.lookahead(0) == TOK_DOUBLE_DOT) {
+                    GET_CHECK_TOK(tok, lex, TOK_DOUBLE_DOT);
+                    GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+                    params.isRtn = true;
+                    DEBUG("return-type notation (..)");
+                } else {
+                    DEBUG("Fn() parenthesized arguments");
+                    ::std::vector<ASTType*> args;
+                    do {
+                        // Trailing comma or empty list support
+                        if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
+                            GET_TOK(tok, lex);
+                            break;
+                        }
+                        args.push_back(ParseType(lex));
+                    } while (GET_TOK(tok, lex) == TOK_COMMA);
+                    CHECK_TOK(tok, TOK_PAREN_CLOSE);
+
+                    ASTType* retType = mkType(lex.typePool(), ASTTypeTags::Unit(), lex.pointSpan());
+                    if (lex.lookahead(0) == TOK_THINARROW) {
                         GET_TOK(tok, lex);
-                        break;
+                        retType = ParseType(lex, false);
                     }
-                    args.push_back(ParseType(lex));
-                } while (GET_TOK(tok, lex) == TOK_COMMA);
-                CHECK_TOK(tok, TOK_PAREN_CLOSE);
+                    DEBUG("- Fn(" << args << ")->" << retType << "");
 
-                ASTType* retType = mkType(lex.typePool(), ASTTypeTags::Unit(), lex.pointSpan());
-                if (lex.lookahead(0) == TOK_THINARROW) {
-                    GET_TOK(tok, lex);
-                    retType = ParseType(lex, false);
+                    // Encode into path, by converting Fn(A,B)->C into Fn<(A,B),Ret=C>
+                    params = ASTPathParams();
+                    params.isParen = true;
+                    params.entries.push_back(mkType(lex.typePool(), ASTTypeTags::Tuple(), lex.endSpan(ps), mv$(args)));
+                    params.entries.push_back(::std::make_pair(ASTPathNode(RcString::newInterned("Output")), mv$(retType)));
                 }
-                DEBUG("- Fn(" << args << ")->" << retType << "");
-
-                // Encode into path, by converting Fn(A,B)->C into Fn<(A,B),Ret=C>
-                params = ASTPathParams();
-                params.isParen = true;
-                params.entries.push_back(mkType(lex.typePool(), ASTTypeTags::Tuple(), lex.endSpan(ps), mv$(args)));
-                params.entries.push_back(::std::make_pair(ASTPathNode(RcString::newInterned("Output")), mv$(retType)));
             } else {
             }
         }
@@ -1872,7 +1879,13 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
                         std::vector<ASTPath> traits;
                         // TODO: Trait list instead of duplicating the name
                         for (;;) {
-                            traits.push_back(ParsePath(lex, PATH_GENERIC_TYPE));
+                            // Region bounds are checked by the borrow checker and are
+                            // otherwise erased from the HIR.
+                            if (lex.lookahead(0) == TOK_LIFETIME) {
+                                GET_TOK(tok, lex);
+                            } else {
+                                traits.push_back(ParsePath(lex, PATH_GENERIC_TYPE));
+                            }
                             if (lex.lookahead(0) != TOK_PLUS) {
                                 break;
                             }

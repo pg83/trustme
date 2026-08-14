@@ -743,6 +743,7 @@ struct HIRExprNodeGenerator: public HIRExprNode {
 
     // Generated type information
     const HIRStruct* objPtr = nullptr;
+    HIRGenericPath objPathBase;
     HIRGenericPath objPath;
     // Captured variables (used for emitting the constructor)
     ::std::vector<HIRExprNodeP> captures;
@@ -793,6 +794,7 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
 
     // Generated type information
     const HIRStruct* objPtr = nullptr;
+    HIRGenericPath objPathBase;
     HIRGenericPath objPath;
     // Captured variables (used for emitting the constructor)
     ::std::vector<HIRExprNodeP> captures;

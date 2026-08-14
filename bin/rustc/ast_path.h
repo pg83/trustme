@@ -224,6 +224,7 @@ class ASTPathParamEnt;
 struct ASTPathParams {
     ::std::vector<ASTPathParamEnt> entries;
     bool isParen = false;
+    bool isRtn = false;
 
     ASTPathParams(ASTPathParams&& x);
     ASTPathParams(const ASTPathParams& x);
@@ -234,7 +235,7 @@ struct ASTPathParams {
     ASTPathParams& operator=(const ASTPathParams& x) = delete;
 
     bool isEmpty() const {
-        return entries.empty();
+        return entries.empty() && !isRtn;
     }
 
     Ordering ord(const ASTPathParams& x) const;

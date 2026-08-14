@@ -622,11 +622,30 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
     HIRTraitPath rv{LowerHIRGenericPath(sp, path, FromASTPathClass::Type, /*allow_assoc=*/true), {}, {}, nullptr, LowerHIRBoundConstness(constness)};
 
     struct H {
+        enum class Namespace {
+            Type,
+            Function,
+        };
+
         AST2HIR& mCtx;
         explicit H(AST2HIR& ctx) : mCtx(ctx) {}
-        HIRGenericPath findSourceTraitHir(const Span& sp, const HIRGenericPath& path, const HIRTrait& trait, const RcString& name, const Monomorphiser& ms) {
-            auto it = trait.types.find(name);
-            if (it != trait.types.end()) {
+        bool hasItem(const HIRTrait& trait, const RcString& name, Namespace ns) const {
+            if (ns == Namespace::Type) {
+                return trait.types.find(name) != trait.types.end();
+            }
+            auto it = trait.values.find(name);
+            return it != trait.values.end() && it->second.is_Function();
+        }
+        bool hasItem(const ASTTrait& trait, const RcString& name, Namespace ns) const {
+            for (const auto& item : trait.items()) {
+                if (item.name == name && (ns == Namespace::Type ? item.data.is_Type() : item.data.is_Function())) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        HIRGenericPath findSourceTraitHir(const Span& sp, const HIRGenericPath& path, const HIRTrait& trait, const RcString& name, Namespace ns, const Monomorphiser& ms) {
+            if (hasItem(trait, name, ns)) {
                 return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
             }
             auto selfTy = mCtx.mCrate->types.self();
@@ -635,8 +654,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                 // NOTE: st.m_trait_ptr isn't populated yet
                 const auto& t = mCtx.mCrate->getTraitByPath(sp, st.mPath.mPath);
 
-                auto it = t.types.find(name);
-                if (it != t.types.end()) {
+                if (hasItem(t, name, ns)) {
                     // Monomorphse into outer scope, then run the outer monomorph
                     auto p = cb.monomorphGenericpath(sp, st.mPath, /*allow_infer=*/true);
                     return ms.monomorphGenericpath(sp, p, /*allow_infer=*/true);
@@ -645,12 +663,9 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             return HIRGenericPath();
         }
 
-        HIRGenericPath findSourceTraitAst(const Span& sp, const HIRGenericPath& path, const ASTTrait& trait, const RcString& name, const Monomorphiser& ms) {
-            for (const auto& i : trait.items()) {
-                if (i.data.is_Type() && i.name == name) {
-                    // Return current path.
-                    return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
-                }
+        HIRGenericPath findSourceTraitAst(const Span& sp, const HIRGenericPath& path, const ASTTrait& trait, const RcString& name, Namespace ns, const Monomorphiser& ms) {
+            if (hasItem(trait, name, ns)) {
+                return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
             }
 
             auto selfTy = mCtx.mCrate->types.self();
@@ -658,7 +673,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             for (const auto& st : trait.supertraits()) {
                 auto b = mCtx.LowerHIRTraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
                 ASSERT_BUG(sp, st.ent.path->mBindings.type.binding.is_Trait(), "Not a trait: " << *st.ent.path);
-                auto rv = findSourceTrait(sp, b.mPath, st.ent.path->mBindings.type.binding.as_Trait(), name, cb);
+                auto rv = findSourceTrait(sp, b.mPath, st.ent.path->mBindings.type.binding.as_Trait(), name, ns, cb);
                 if (rv != HIRGenericPath()) {
                     return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/true);
                 }
@@ -666,16 +681,16 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             return HIRGenericPath();
         }
 
-        HIRGenericPath findSourceTrait(const Span& sp, const HIRGenericPath& path, const ASTPathBindingType& pb, const RcString& name, const Monomorphiser& ms) {
+        HIRGenericPath findSourceTrait(const Span& sp, const HIRGenericPath& path, const ASTPathBindingType& pb, const RcString& name, Namespace ns, const Monomorphiser& ms) {
             TRACE_FUNCTION_F(path);
             if (pb.is_Trait()) {
                 const auto& pbe = pb.as_Trait();
                 if (pbe.hir) {
                     assert(pbe.hir);
-                    return findSourceTraitHir(sp, path, *pbe.hir, name, ms);
+                    return findSourceTraitHir(sp, path, *pbe.hir, name, ns, ms);
                 } else if (pbe.trait_) {
                     assert(pbe.trait_);
-                    return findSourceTraitAst(sp, path, *pbe.trait_, name, ms);
+                    return findSourceTraitAst(sp, path, *pbe.trait_, name, ns, ms);
                 } else {
                     BUG(sp, "Unbound path");
                 }
@@ -686,7 +701,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                         auto p = ms.monomorphGenericpath(sp, subTrait.mPath);
                         const auto& t = mCtx.mCrate->getTraitByPath(sp, p.mPath);
                         auto selfTy = mCtx.mCrate->types.self();
-                        auto rv = findSourceTraitHir(sp, p, t, name, MonomorphStatePtr(mCtx.mCrate->types, selfTy, &p.mParams, nullptr));
+                        auto rv = findSourceTraitHir(sp, p, t, name, ns, MonomorphStatePtr(mCtx.mCrate->types, selfTy, &p.mParams, nullptr));
                         if (rv != HIRGenericPath()) {
                             return rv;
                         }
@@ -697,7 +712,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     auto cb = MonomorphStatePtr(mCtx.mCrate->types, selfTy, &path.mParams, nullptr);
                     for (const auto& st : pbe.trait_->traits) {
                         auto b = mCtx.LowerHIRTraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
-                        auto rv = findSourceTrait(sp, b.mPath, st.ent.path->mBindings.type.binding, name, cb);
+                        auto rv = findSourceTrait(sp, b.mPath, st.ent.path->mBindings.type.binding, name, ns, cb);
                         if (rv != HIRGenericPath()) {
                             return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/true);
                         }
@@ -731,8 +746,11 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             TU_ARMA(Value, _) {
             }
             TU_ARMA(AssociatedTyEqual, assoc) {
+                if (assoc.first.args().isRtn) {
+                    ERROR(sp, E0000, "Return-type notation does not support equality constraints");
+                }
                 auto nameArgs = H(*this).getAtyNode(sp, assoc.first);
-                auto srcTrait = H(*this).findSourceTrait(sp, rv.mPath, path.mBindings.type.binding, nameArgs.first, MonomorphiserNop(mCrate->types));
+                auto srcTrait = H(*this).findSourceTrait(sp, rv.mPath, path.mBindings.type.binding, nameArgs.first, H::Namespace::Type, MonomorphiserNop(mCrate->types));
                 DEBUG("src_trait = " << srcTrait << " for " << assoc.first);
                 rv.typeBounds.insert(::std::make_pair(nameArgs.first, HIRTraitPath::AtyEqual{std::move(srcTrait), std::move(nameArgs.second), LowerHIRType(assoc.second)}));
             }
@@ -741,7 +759,12 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     ERROR(sp, E0000, "Associated type trait bounds not allowed here - " << path);
                 } else {
                     auto nameArgs = H(*this).getAtyNode(sp, assoc.first);
-                    auto srcTrait = H(*this).findSourceTrait(sp, rv.mPath, path.mBindings.type.binding, nameArgs.first, MonomorphiserNop(mCrate->types));
+                    const auto sourceName = nameArgs.first;
+                    const auto ns = assoc.first.args().isRtn ? H::Namespace::Function : H::Namespace::Type;
+                    auto srcTrait = H(*this).findSourceTrait(sp, rv.mPath, path.mBindings.type.binding, sourceName, ns, MonomorphiserNop(mCrate->types));
+                    if (assoc.first.args().isRtn) {
+                        nameArgs.first = RcString::newInterned(FMT(ATY_PREFIX_ERASED << sourceName << "_0"));
+                    }
                     DEBUG("src_trait = " << srcTrait << " for " << assoc.first);
                     //if(src_trait == ::HIR::GenericPath())
                     auto it = rv.traitBounds.insert(std::make_pair(nameArgs.first, HIRTraitPath::AtyBound{std::move(srcTrait), std::move(nameArgs.second), {}}));
@@ -790,11 +813,15 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
             }
             // - No associated type bounds allowed in UFCS paths
             auto params = LowerHIRPathParams(sp, e.nodes.front().args(), /*allow_assoc*/ false);
+            auto itemName = e.nodes[0].name();
+            if (e.nodes.front().args().isRtn) {
+                itemName = RcString::newInterned(FMT(ATY_PREFIX_ERASED << itemName << "_0"));
+            }
 
             if (!e.trait || !e.trait->isValid()) {
-                return HIRPath(HIRPath::Data::make_UfcsUnknown({LowerHIRType(e.type), e.nodes[0].name(), mv$(params)}));
+                return HIRPath(HIRPath::Data::make_UfcsUnknown({LowerHIRType(e.type), mv$(itemName), mv$(params)}));
             } else {
-                return HIRPath(HIRPath::Data::make_UfcsKnown({LowerHIRType(e.type), LowerHIRGenericPath(sp, *e.trait, FromASTPathClass::Type), e.nodes[0].name(), mv$(params)}));
+                return HIRPath(HIRPath::Data::make_UfcsKnown({LowerHIRType(e.type), LowerHIRGenericPath(sp, *e.trait, FromASTPathClass::Type), mv$(itemName), mv$(params)}));
             }
         }
     }
@@ -1491,6 +1518,28 @@ HIRUnion AST2HIR::LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAt
     return HIRUnion{LowerHIRGenericParams(f.mParams, nullptr), repr, mv$(variants)};
 }
 
+namespace {
+    class RpititTypeCollector: public HIRVisitor {
+        ::std::function<void(unsigned, HIRTypeRef)> callback;
+        unsigned index = 0;
+
+    public:
+        RpititTypeCollector(HIRTypeInterner& types, ::std::function<void(unsigned, HIRTypeRef)> callback)
+            : HIRVisitor(nullptr, types)
+            , callback(std::move(callback))
+        {
+        }
+
+        void visitType(HIRTypeRef& ty) override {
+            HIRVisitor::visitType(ty);
+            const auto* erased = ty->opt_ErasedType();
+            if (erased && erased->inner.is_Fcn()) {
+                callback(index++, ty);
+            }
+        }
+    };
+}
+
 HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttributeList& attrs) {
     TRACE_FUNCTION_F(traitPath);
     traitPath.updateCrateName(mCrateName);
@@ -1565,6 +1614,16 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
             }
             TU_ARMA(Function, i) {
                 auto fcn = LowerHIRFunction(itemPath, item.attrs, i, mCrate->types.self());
+                RpititTypeCollector(mCrate->types, [&](unsigned index, HIRTypeRef type) {
+                    const auto& erased = type->as_ErasedType();
+                    auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << item.name << "_" << index));
+                    ::std::vector<HIRTraitPath> bounds;
+                    for (const auto& bound : erased.traits) {
+                        bounds.push_back(bound.clone());
+                    }
+                    auto inserted = rv.types.insert(std::make_pair(name, HIRAssociatedType{fcn.mParams.clone(), erased.isSized, std::move(bounds), mCrate->types.infer()}));
+                    ASSERT_BUG(item.span, inserted.second, "Synthetic RPITIT associated type collides with " << name);
+                }).visitType(fcn.returnType);
                 if (rv.isConst) {
                     fcn.isConst = true;
                 }

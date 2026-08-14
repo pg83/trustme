@@ -58,6 +58,10 @@ ASTPathBindingMacro ASTPathBindingMacro::clone() const {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathParams& x) {
+    if (x.isRtn) {
+        os << "(..)";
+        return os;
+    }
     if (x.isParen) {
         auto& t = x.entries.at(0).as_Type();
         os << t; // Should be a tuple
@@ -90,6 +94,7 @@ ASTPathParams& ASTPathParams::operator=(ASTPathParams&&) = default;
 
 ASTPathParams::ASTPathParams(const ASTPathParams& x)
     : isParen(x.isParen)
+    , isRtn(x.isRtn)
 {
     entries.reserve(x.entries.size());
     for (const auto& e : x.entries) {
@@ -98,6 +103,8 @@ ASTPathParams::ASTPathParams(const ASTPathParams& x)
 }
 
 Ordering ASTPathParams::ord(const ASTPathParams& x) const {
+    ORD(isParen, x.isParen);
+    ORD(isRtn, x.isRtn);
     return ::ord(entries, x.entries);
 }
 

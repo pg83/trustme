@@ -9103,7 +9103,19 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
         }
         {
         TRACE_FUNCTION_FR("RET " << path << " - " << fcn.returnType, "Ret " << cache.argTypes.back());
-        cache.argTypes.push_back(monomorph.monomorphType(sp, fcn.returnType, false));
+        auto returnType = monomorph.monomorphType(sp, fcn.returnType, false);
+        if (const auto* traitCall = path.mData.opt_UfcsKnown()) {
+            if (const auto* erased = returnType->opt_ErasedType()) {
+                if (const auto* origin = erased->inner.opt_Fcn()) {
+                    auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << traitCall->item << "_" << origin->index));
+                    const auto& trait = context.crate.getTraitByPath(sp, traitCall->trait.mPath);
+                    if (trait.types.find(name) != trait.types.end()) {
+                        returnType = context.crate.types.path(HIRPath(traitCall->type, traitCall->trait.clone(), name, traitCall->params.clone()), {});
+                    }
+                }
+            }
+        }
+        cache.argTypes.push_back(std::move(returnType));
         }
 
         // --- Apply bounds by adding them to the associated type ruleset
