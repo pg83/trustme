@@ -868,7 +868,18 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
 void ResolveAbsoluteMod(const Settings& settings, const ASTCrate& crate, ASTModule& mod);
 void ResolveAbsoluteMod(Context itemContext, ASTModule& mod);
 
-void ResolveAbsoluteFunction(Context& itemContext, ASTFunction& fcn);
+struct DelegationSignatureSource {
+    const ASTFunction* ast = nullptr;
+    const HIRFunction* hir = nullptr;
+};
+
+void ResolveAbsoluteFunction(
+    Context& itemContext,
+    ASTFunction& fcn,
+    DelegationSignatureSource signatureSource = {},
+    bool hasParentSelf = false,
+    bool isTraitImpl = false
+);
 
 void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPathParams& args) {
     for (auto& ent : args.entries) {
@@ -2531,7 +2542,7 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTNamedList<ASTItem>& items
             }
             TU_ARMA(Function, e) {
                 DEBUG("Function - " << i.name);
-                ResolveAbsoluteFunction(itemContext, e);
+                ResolveAbsoluteFunction(itemContext, e, {}, true, false);
             }
             TU_ARMA(Static, e) {
                 DEBUG("Static - " << i.name);
@@ -2543,10 +2554,113 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTNamedList<ASTItem>& items
     }
 }
 
+const ASTFunction* FindTraitFunction(const ASTTrait& trait, const RcString& name) {
+    for (const auto& item : trait.items()) {
+        if (item.name == name && item.data.is_Function()) {
+            return &item.data.as_Function();
+        }
+    }
+    return nullptr;
+}
+
+void ExpandDelegationGlobs(Context& itemContext, ASTImpl& impl) {
+    ::std::set<RcString> explicitNames;
+    const auto originalSize = impl.items().size();
+    for (size_t i = 0; i < originalSize; i++) {
+        if (impl.items()[i].name != "") {
+            explicitNames.insert(impl.items()[i].name);
+        }
+    }
+
+    for (size_t i = 0; i < originalSize; i++) {
+        auto& item = impl.items()[i];
+        if (!item.data->is_Function()) {
+            continue;
+        }
+        auto& fcn = item.data->as_Function();
+        if (!fcn.delegation() || fcn.delegation()->targets.size() != 1
+            || fcn.delegation()->targets.front().name != "") {
+            continue;
+        }
+
+        auto& targetPath = fcn.delegation()->targets.front().path;
+        const ASTTrait* astTrait = nullptr;
+        const HIRTrait* hirTrait = nullptr;
+        if (targetPath.cls.is_UFCS()) {
+            auto& ufcs = targetPath.cls.as_UFCS();
+            ResolveAbsoluteType(itemContext, ufcs.type);
+            if (!ufcs.trait || !ufcs.trait->isValid()) {
+                ERROR(item.sp, E0000, "Qualified path without a trait in glob delegation");
+            }
+            ResolveAbsolutePath(itemContext, item.sp, Context::LookupMode::Type, *ufcs.trait);
+            const auto* binding = ufcs.trait->mBindings.type.binding.opt_Trait();
+            if (!binding) {
+                ERROR(item.sp, E0000, "Delegation glob target is not a trait: " << *ufcs.trait);
+            }
+            astTrait = binding->trait_;
+            hirTrait = binding->hir;
+        } else {
+            ResolveAbsolutePath(itemContext, item.sp, Context::LookupMode::Type, targetPath);
+            const auto* binding = targetPath.mBindings.type.binding.opt_Trait();
+            if (!binding) {
+                ERROR(item.sp, E0000, "Delegation glob target is not a trait: " << targetPath);
+            }
+            astTrait = binding->trait_;
+            hirTrait = binding->hir;
+        }
+
+        ::std::vector<RcString> names;
+        if (astTrait) {
+            for (const auto& traitItem : astTrait->items()) {
+                if (traitItem.data.is_Function()) {
+                    names.push_back(traitItem.name);
+                }
+            }
+        } else {
+            ASSERT_BUG(item.sp, hirTrait, "Trait binding without AST or HIR data");
+            for (const auto& traitItem : hirTrait->values) {
+                if (traitItem.second.is_Function()) {
+                    names.push_back(traitItem.first);
+                }
+            }
+            ::std::sort(names.begin(), names.end());
+        }
+        if (names.empty()) {
+            ERROR(item.sp, E0000, "Empty glob delegation is not supported");
+        }
+
+        const auto span = item.sp;
+        const auto attrs = item.attrs.clone();
+        const auto vis = item.vis;
+        const auto isSpecialisable = item.isSpecialisable;
+        const auto templateFcn = fcn.clone();
+        *item.data = ASTItem::make_None({});
+        for (const auto& name : names) {
+            if (explicitNames.count(name) != 0) {
+                continue;
+            }
+            auto expanded = templateFcn.clone();
+            auto delegation = expanded.takeDelegation();
+            delegation->targets.front().path.append(ASTPathNode(name, {}));
+            delegation->targets.front().name = name;
+            expanded.setDelegation(mv$(*delegation));
+            impl.addFunction(span, attrs.clone(), vis, isSpecialisable, name, mv$(expanded));
+        }
+    }
+}
+
 // - For impl blocks
-void ResolveAbsoluteImplItems(Context& itemContext, ::std::vector<ASTImpl::ImplItem>& items) {
+void ResolveAbsoluteImplItems(Context& itemContext, ASTImpl& impl) {
     TRACE_FUNCTION_F("");
-    for (auto& i : items) {
+    const ASTTrait* implementedTrait = nullptr;
+    const HIRTrait* implementedHirTrait = nullptr;
+    if (impl.def().trait().ent.isValid()) {
+        if (const auto* binding = impl.def().trait().ent.mBindings.type.binding.opt_Trait()) {
+            implementedTrait = binding->trait_;
+            implementedHirTrait = binding->hir;
+        }
+    }
+    for (auto& i : impl.items()) {
         TU_MATCH(
             ASTItem,
             (*i.data),
@@ -2575,14 +2689,444 @@ void ResolveAbsoluteImplItems(Context& itemContext, ::std::vector<ASTImpl::ImplI
              ResolveAbsoluteType(itemContext, e.type());
 
              itemContext.pop(e.params(), true);),
-            (Function, DEBUG("Function - " << i.name); ResolveAbsoluteFunction(itemContext, e);),
+            (Function,
+                DEBUG("Function - " << i.name);
+                DelegationSignatureSource signatureSource;
+                if (implementedTrait) {
+                    signatureSource.ast = FindTraitFunction(*implementedTrait, i.name);
+                } else if (implementedHirTrait) {
+                    auto it = implementedHirTrait->values.find(i.name);
+                    if (it != implementedHirTrait->values.end()) {
+                        signatureSource.hir = it->second.opt_Function();
+                    }
+                }
+                ResolveAbsoluteFunction(itemContext, e, signatureSource, true, impl.def().trait().ent.isValid());
+            ),
             (Static, DEBUG("Static - " << i.name); ResolveAbsoluteType(itemContext, e.type()); auto _h = itemContext.enterRootblock(); ResolveAbsoluteExpr(itemContext, e.value());)
         )
     }
 }
 
-void ResolveAbsoluteFunction(Context& itemContext, ASTFunction& fcn) {
+void AppendGenericParams(ASTGenericParams& destination, const ASTGenericParams& source) {
+    auto cloned = source.clone();
+    const auto boundOffset = destination.bounds.size();
+    for (auto& param : cloned.mParams) {
+        if (param.boundsStart != SIZE_MAX) {
+            param.boundsStart += boundOffset;
+            param.boundsEnd += boundOffset;
+        }
+        destination.mParams.push_back(mv$(param));
+    }
+    for (auto& bound : cloned.bounds) {
+        destination.bounds.push_back(mv$(bound));
+    }
+    for (auto*& type : cloned.mBareBoundTypes) {
+        destination.mBareBoundTypes.push_back(mv$(type));
+    }
+}
+
+void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName);
+
+void ReplaceDelegatedSelf(ASTPathParams& params, const RcString& replacementName) {
+    for (auto& param : params.entries) {
+        TU_MATCH_HDRA((param), {)
+        TU_ARMA(Null, e) {}
+        TU_ARMA(Lifetime, e) {}
+        TU_ARMA(Type, e) { ReplaceDelegatedSelf(e, replacementName); }
+        TU_ARMA(Value, e) {}
+        TU_ARMA(AssociatedTyEqual, e) {
+            ReplaceDelegatedSelf(e.first.args(), replacementName);
+            ReplaceDelegatedSelf(e.second, replacementName);
+        }
+        TU_ARMA(AssociatedTyBound, e) {
+            ReplaceDelegatedSelf(e.first.args(), replacementName);
+        }
+        }
+    }
+}
+
+void ReplaceDelegatedSelf(ASTPath& path, const RcString& replacementName) {
+    if (!path.cls.is_Local() && !path.cls.is_Invalid()) {
+        for (auto& node : path.nodes()) {
+            ReplaceDelegatedSelf(node.args(), replacementName);
+        }
+    }
+    if (auto* ufcs = path.cls.opt_UFCS()) {
+        ReplaceDelegatedSelf(ufcs->type, replacementName);
+        if (ufcs->trait) {
+            ReplaceDelegatedSelf(*ufcs->trait, replacementName);
+        }
+    }
+}
+
+void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName) {
+    TU_MATCH_HDRA((type->mData), {)
+    TU_ARMA(None, e) {}
+    TU_ARMA(Any, e) {}
+    TU_ARMA(Bang, e) {}
+    TU_ARMA(Unit, e) {}
+    TU_ARMA(Macro, e) {}
+    TU_ARMA(Primitive, e) {}
+    TU_ARMA(Function, e) {
+        ReplaceDelegatedSelf(e.info.mRettype, replacementName);
+        for (auto*& arg : e.info.argTypes) { ReplaceDelegatedSelf(arg, replacementName); }
+    }
+    TU_ARMA(Tuple, e) { for (auto*& inner : e.innerTypes) { ReplaceDelegatedSelf(inner, replacementName); } }
+    TU_ARMA(Borrow, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
+    TU_ARMA(Pointer, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
+    TU_ARMA(Array, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
+    TU_ARMA(Slice, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
+    TU_ARMA(Generic, e) { if (e.name == rcstringSelf) { e.name = replacementName; } }
+    TU_ARMA(Path, e) { ReplaceDelegatedSelf(*e, replacementName); }
+    TU_ARMA(TraitObject, e) { for (auto& trait : e.traits) { ReplaceDelegatedSelf(*trait.path, replacementName); } }
+    TU_ARMA(ErasedType, e) {
+        for (auto& trait : e->traits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
+        for (auto& trait : e->maybeTraits) { ReplaceDelegatedSelf(*trait.path, replacementName); }
+        if (e->use) { ReplaceDelegatedSelf(*e->use, replacementName); }
+    }
+    }
+}
+
+void ReplaceDelegatedSelf(ASTFunction& function, const RcString& replacementName) {
+    ReplaceDelegatedSelf(function.rettype(), replacementName);
+    for (auto& arg : function.args()) {
+        ReplaceDelegatedSelf(arg.ty, replacementName);
+    }
+    for (auto& param : function.params().mParams) {
+        TU_MATCH_HDRA((param), {)
+        TU_ARMA(None, e) {}
+        TU_ARMA(Lifetime, e) {}
+        TU_ARMA(Type, e) { ReplaceDelegatedSelf(e.getDefault(), replacementName); }
+        TU_ARMA(Value, e) { ReplaceDelegatedSelf(e.type(), replacementName); }
+        }
+    }
+    for (auto& bound : function.params().bounds) {
+        TU_MATCH_HDRA((bound), {)
+        TU_ARMA(None, e) {}
+        TU_ARMA(Lifetime, e) {}
+        TU_ARMA(TypeLifetime, e) { ReplaceDelegatedSelf(e.type, replacementName); }
+        TU_ARMA(IsTrait, e) { ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName); }
+        TU_ARMA(MaybeTrait, e) { ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName); }
+        TU_ARMA(NotTrait, e) { ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.trait, replacementName); }
+        TU_ARMA(Equality, e) { ReplaceDelegatedSelf(e.type, replacementName); ReplaceDelegatedSelf(e.replacement, replacementName); }
+        }
+    }
+}
+
+eCoreType HIRCoreTypeToAST(HIRCoreType type) {
+    switch (type) {
+        case HIRCoreType::Usize: return CORETYPE_UINT;
+        case HIRCoreType::Isize: return CORETYPE_INT;
+        case HIRCoreType::U8: return CORETYPE_U8;
+        case HIRCoreType::I8: return CORETYPE_I8;
+        case HIRCoreType::U16: return CORETYPE_U16;
+        case HIRCoreType::I16: return CORETYPE_I16;
+        case HIRCoreType::U32: return CORETYPE_U32;
+        case HIRCoreType::I32: return CORETYPE_I32;
+        case HIRCoreType::U64: return CORETYPE_U64;
+        case HIRCoreType::I64: return CORETYPE_I64;
+        case HIRCoreType::U128: return CORETYPE_U128;
+        case HIRCoreType::I128: return CORETYPE_I128;
+        case HIRCoreType::F16: return CORETYPE_F16;
+        case HIRCoreType::F32: return CORETYPE_F32;
+        case HIRCoreType::F64: return CORETYPE_F64;
+        case HIRCoreType::F128: return CORETYPE_F128;
+        case HIRCoreType::Bool: return CORETYPE_BOOL;
+        case HIRCoreType::Char: return CORETYPE_CHAR;
+        case HIRCoreType::Str: return CORETYPE_STR;
+    }
+    throw "";
+}
+
+ASTBoundConstness HIRConstnessToAST(HIRBoundConstness constness) {
+    switch (constness) {
+        case HIRBoundConstness::Never: return ASTBoundConstness::Never;
+        case HIRBoundConstness::Always: return ASTBoundConstness::Always;
+        case HIRBoundConstness::Maybe: return ASTBoundConstness::Maybe;
+    }
+    throw "";
+}
+
+ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type);
+
+ASTPathParams HIRPathParamsToAST(Context& context, const Span& span, const HIRPathParams& params) {
+    ASTPathParams rv;
+    for (const auto& type : params.types) {
+        rv.entries.push_back(HIRTypeToAST(context, span, type));
+    }
+    ASSERT_BUG(span, params.values.empty(), "Const generics in an external delegation signature");
+    return rv;
+}
+
+ASTPath HIRGenericPathToAST(Context& context, const Span& span, const HIRGenericPath& path) {
+    return ASTPath(spToAp(path.mPath), HIRPathParamsToAST(context, span, path.mParams));
+}
+
+ASTPath HIRTraitPathToAST(Context& context, const Span& span, const HIRTraitPath& trait) {
+    auto rv = HIRGenericPathToAST(context, span, trait.mPath);
+    for (const auto& assoc : trait.typeBounds) {
+        rv.nodes().back().args().entries.push_back(ASTPathParamEnt::make_AssociatedTyEqual({
+            ASTPathNode(assoc.first, HIRPathParamsToAST(context, span, assoc.second.atyParams)),
+            HIRTypeToAST(context, span, assoc.second.type)
+        }));
+    }
+    return rv;
+}
+
+ASTPath HIRPathToAST(Context& context, const Span& span, const HIRPath& path) {
+    TU_MATCH_HDRA((path.mData), {)
+    TU_ARMA(Generic, e) { return HIRGenericPathToAST(context, span, e); }
+    TU_ARMA(UfcsInherent, e) {
+        return ASTPath::newUfcsTy(
+            HIRTypeToAST(context, span, e.type),
+            {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
+        );
+    }
+    TU_ARMA(UfcsKnown, e) {
+        return ASTPath::newUfcsTrait(
+            HIRTypeToAST(context, span, e.type),
+            HIRGenericPathToAST(context, span, e.trait),
+            {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
+        );
+    }
+    TU_ARMA(UfcsUnknown, e) {
+        return ASTPath::newUfcsTy(
+            HIRTypeToAST(context, span, e.type),
+            {ASTPathNode(e.item, HIRPathParamsToAST(context, span, e.params))}
+        );
+    }
+    }
+    throw "";
+}
+
+ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
+    auto& pool = context.typePool();
+    TU_MATCH_HDRA((*type), {)
+    TU_ARMA(Infer, e) { return mkType(pool, span); }
+    TU_ARMA(Diverge, e) { return mkType(pool, span, TypeData::make_Bang({})); }
+    TU_ARMA(Primitive, e) { return mkType(pool, span, HIRCoreTypeToAST(e)); }
+    TU_ARMA(Path, e) { return mkType(pool, span, HIRPathToAST(context, span, e.path)); }
+    TU_ARMA(Generic, e) {
+        const auto name = e.binding != GENERICSelf && e.group() == GENERICItem
+            ? RcString::newInterned(FMT("#hir-item-" << e.idx()))
+            : e.name;
+        return mkType(pool, span, name, e.binding);
+    }
+    TU_ARMA(TraitObject, e) {
+        ::std::vector<TypeTraitPath> traits;
+        traits.push_back(TypeTraitPath({}, HIRTraitPathToAST(context, span, e.mTrait), HIRConstnessToAST(e.mTrait.constness)));
+        for (const auto& marker : e.markers) {
+            traits.push_back(TypeTraitPath({}, HIRGenericPathToAST(context, span, marker)));
+        }
+        return mkType(pool, span, mv$(traits), {});
+    }
+    TU_ARMA(ErasedType, e) { BUG(span, "Erased type in an external delegation signature"); }
+    TU_ARMA(Array, e) { BUG(span, "Array in an external delegation signature"); }
+    TU_ARMA(Slice, e) { return mkType(pool, ASTTypeTags::UnsizedArray(), span, HIRTypeToAST(context, span, e.inner)); }
+    TU_ARMA(Tuple, e) {
+        ::std::vector<ASTType*> types;
+        for (const auto& inner : e) { types.push_back(HIRTypeToAST(context, span, inner)); }
+        return mkType(pool, ASTTypeTags::Tuple(), span, mv$(types));
+    }
+    TU_ARMA(Borrow, e) {
+        return mkType(pool, ASTTypeTags::Reference(), span, ASTLifetimeRef(), e.type == HIRBorrowType::Unique, HIRTypeToAST(context, span, e.inner));
+    }
+    TU_ARMA(Pointer, e) {
+        return mkType(pool, ASTTypeTags::Pointer(), span, e.type == HIRBorrowType::Unique, HIRTypeToAST(context, span, e.inner));
+    }
+    TU_ARMA(NamedFunction, e) { BUG(span, "Named function type in an external delegation signature"); }
+    TU_ARMA(Function, e) {
+        ::std::vector<ASTType*> args;
+        for (const auto& arg : e.argTypes) { args.push_back(HIRTypeToAST(context, span, arg)); }
+        return mkType(pool, ASTTypeTags::Function(), span, {}, e.isUnsafe, e.mAbi.c_str(), mv$(args), e.isVariadic, HIRTypeToAST(context, span, e.mRettype));
+    }
+    TU_ARMA(NodeType, e) { BUG(span, "Node type in an external delegation signature"); }
+    }
+    throw "";
+}
+
+ASTGenericParams HIRGenericParamsToAST(Context& context, const Span& span, const HIRGenericParams& params) {
+    ASTGenericParams rv;
+    for (size_t i = 0; i < params.types.size(); i++) {
+        rv.addTyParam(ASTTypeParam(context.typePool(), span, {}, RcString::newInterned(FMT("#hir-item-" << i))));
+    }
+    for (const auto& value : params.values) {
+        rv.addValueParam(span, {}, Ident(value.mName), HIRTypeToAST(context, span, value.mType), {});
+    }
+    for (const auto& bound : params.bounds) {
+        TU_MATCH_HDRA((bound), {)
+        TU_ARMA(TraitBound, e) {
+            rv.addBound(ASTGenericBound::make_IsTrait({
+                span,
+                {},
+                HIRTypeToAST(context, span, e.type),
+                {},
+                HIRTraitPathToAST(context, span, e.trait),
+                HIRConstnessToAST(e.constness)
+            }));
+        }
+        TU_ARMA(TypeEquality, e) {
+            rv.addBound(ASTGenericBound::make_Equality({
+                HIRTypeToAST(context, span, e.type),
+                HIRTypeToAST(context, span, e.otherType)
+            }));
+        }
+        }
+    }
+    return rv;
+}
+
+ASTFunction HIRFunctionToAST(Context& context, const Span& span, const HIRFunction& function) {
+    ASTFunction::Arglist args;
+    for (size_t i = 0; i < function.mArgs.size(); i++) {
+        const bool receiver = i == 0 && function.receiver != HIRFunction::Receiver::Free;
+        const auto name = receiver ? RcString::newInterned("self") : RcString::newInterned(FMT("arg" << i));
+        args.push_back(ASTFunction::Arg(
+            ASTPattern(ASTPattern::TagBind(), span, name),
+            HIRTypeToAST(context, span, function.mArgs[i].second)
+        ));
+    }
+    auto flags = ASTFunction::Flags();
+    if (function.unsafe) { flags = flags.setUnsafe(); }
+    if (function.isConst) { flags = flags.setConst(); }
+    return ASTFunction(
+        span,
+        function.mAbi.c_str(),
+        flags,
+        HIRGenericParamsToAST(context, span, function.mParams),
+        HIRTypeToAST(context, span, function.returnType),
+        mv$(args),
+        function.variadic
+    );
+}
+
+const HIRFunction* FindHIRTraitFunction(const HIRTrait& trait, const RcString& name) {
+    auto it = trait.values.find(name);
+    return it == trait.values.end() ? nullptr : it->second.opt_Function();
+}
+
+void ResolveAbsoluteFunction(
+    Context& itemContext,
+    ASTFunction& fcn,
+    DelegationSignatureSource signatureSource,
+    bool hasParentSelf,
+    bool isTraitImpl
+) {
     TRACE_FUNCTION_F("");
+    if (auto delegation = fcn.takeDelegation()) {
+        ASSERT_BUG(fcn.sp(), delegation->targets.size() == 1, "TODO: Expand delegation lists before name resolution");
+        auto target = mv$(delegation->targets.front().path);
+        ResolveAbsolutePath(itemContext, fcn.sp(), Context::LookupMode::Variable, target);
+        const auto* binding = target.mBindings.value.binding.opt_Function();
+        const auto* targetFunction = binding ? binding->func_ : nullptr;
+        const HIRFunction* targetHirFunction = nullptr;
+        if (target.cls.is_UFCS()) {
+            const auto& ufcs = target.cls.as_UFCS();
+            if (ufcs.trait && ufcs.trait->isValid() && !ufcs.nodes.empty()) {
+                if (const auto* traitBinding = ufcs.trait->mBindings.type.binding.opt_Trait(); traitBinding && traitBinding->hir) {
+                    targetHirFunction = FindHIRTraitFunction(*traitBinding->hir, ufcs.nodes.back().name());
+                }
+            }
+        }
+        ASSERT_BUG(fcn.sp(), targetFunction || targetHirFunction, "Delegation target is not a function: " << target);
+
+        auto replacement = signatureSource.ast
+            ? signatureSource.ast->clone()
+            : signatureSource.hir
+                ? HIRFunctionToAST(itemContext, fcn.sp(), *signatureSource.hir)
+                : targetFunction
+                    ? targetFunction->clone()
+                    : HIRFunctionToAST(itemContext, fcn.sp(), *targetHirFunction);
+        const ASTTrait* targetTrait = nullptr;
+        if (target.cls.is_UFCS()) {
+            const auto& ufcs = target.cls.as_UFCS();
+            if (ufcs.trait && ufcs.trait->isValid()) {
+                if (const auto* traitBinding = ufcs.trait->mBindings.type.binding.opt_Trait()) {
+                    targetTrait = traitBinding->trait_;
+                }
+            }
+        }
+        if (targetTrait && !isTraitImpl) {
+            ASTGenericParams merged;
+            if (!hasParentSelf) {
+                const auto delegatedSelf = RcString::newInterned("#delegation-Self");
+                merged.addTyParam(ASTTypeParam(itemContext.typePool(), fcn.sp(), {}, delegatedSelf));
+                ReplaceDelegatedSelf(replacement, delegatedSelf);
+
+                const auto& ufcs = target.cls.as_UFCS();
+                auto traitBound = ASTPath(*ufcs.trait);
+                auto& traitArgs = traitBound.nodes().back().args().entries;
+                traitArgs.clear();
+                for (const auto& param : targetTrait->params().mParams) {
+                    TU_MATCH_HDRA((param), {)
+                    TU_ARMA(None, e) {}
+                    TU_ARMA(Lifetime, e) { traitArgs.push_back(ASTLifetimeRef(e.name())); }
+                    TU_ARMA(Type, e) { traitArgs.push_back(mkType(itemContext.typePool(), fcn.sp(), e.name())); }
+                    TU_ARMA(Value, e) { traitArgs.push_back(ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath(e.name().name)))); }
+                    }
+                }
+                merged.addBound(ASTGenericBound::make_IsTrait({
+                    fcn.sp(),
+                    {},
+                    mkType(itemContext.typePool(), fcn.sp(), delegatedSelf),
+                    {},
+                    mv$(traitBound)
+                }));
+            }
+            AppendGenericParams(merged, targetTrait->params());
+            AppendGenericParams(merged, replacement.params());
+            ::std::stable_sort(merged.mParams.begin(), merged.mParams.end(), [](const auto& left, const auto& right) {
+                return left.is_Lifetime() && !right.is_Lifetime();
+            });
+            replacement.params() = mv$(merged);
+        }
+        const bool isMethod = hasParentSelf && !replacement.args().empty()
+            && replacement.args().front().pat.bindings().size() == 1
+            && replacement.args().front().pat.bindings().front().mName.name == "self";
+        ::std::vector<ASTExprNodeP> args;
+        for (size_t i = 0; i < replacement.args().size(); i++) {
+            auto name = isMethod && i == 0 ? RcString::newInterned("self") : RcString::newInterned(FMT("arg" << i));
+            replacement.args()[i].pat = ASTPattern(ASTPattern::TagBind(), fcn.sp(), name);
+            ASTExprNodeP arg(new ASTExprNodeNamedValue(ASTPath(name)));
+            if (i == 0 && delegation->body.isValid()) {
+                arg = delegation->body.node().clone();
+                if (auto* block = cast<ASTExprNodeBlock>(arg.get()); block && !block->localMod
+                    && block->nodes.size() == 1 && !block->nodes.front().hasSemicolon) {
+                    auto unwrapped = mv$(block->nodes.front().node);
+                    arg = mv$(unwrapped);
+                }
+                struct ReplaceDelegationSelf: ASTNodeVisitorDef {
+                    RcString replacement;
+                    ReplaceDelegationSelf(RcString replacement): replacement(mv$(replacement)) {}
+                    void visit(ASTExprNodeNamedValue& node) override {
+                        if (node.mPath.cls.is_Local() && node.mPath.cls.as_Local().name == "#delegation-self") {
+                            node.mPath = ASTPath(replacement);
+                        }
+                    }
+                } visitor(name);
+                arg->visit(visitor);
+
+                const auto targetBorrow = targetFunction && !targetFunction->args().empty() && targetFunction->args().front().ty->mData.is_Borrow();
+                const auto targetHirBorrow = targetHirFunction && (
+                    targetHirFunction->receiver == HIRFunction::Receiver::BorrowOwned
+                    || targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique
+                    || targetHirFunction->receiver == HIRFunction::Receiver::BorrowShared
+                );
+                if (targetBorrow || targetHirBorrow) {
+                    const bool isMut = targetBorrow
+                        ? targetFunction->args().front().ty->mData.as_Borrow().isMut
+                        : targetHirFunction->receiver == HIRFunction::Receiver::BorrowUnique;
+                    arg = ASTExprNodeP(new ASTExprNodeUniOp(
+                        isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF,
+                        mv$(arg)
+                    ));
+                }
+            }
+            args.push_back(mv$(arg));
+        }
+        replacement.setCode(ASTExpr(new ASTExprNodeCallPath(mv$(target), mv$(args))));
+        fcn = mv$(replacement);
+    }
     itemContext.push(fcn.params(), GenericSlot::Level::Method);
     itemContext.iblTargetGenerics = &fcn.params();
     DEBUG("- Generics");
@@ -2751,7 +3295,8 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
 
                     ResolveAbsoluteGeneric(itemContext, def.params());
 
-                    ResolveAbsoluteImplItems(itemContext, e.items());
+                    ExpandDelegationGlobs(itemContext, e);
+                    ResolveAbsoluteImplItems(itemContext, e);
 
                     itemContext.pop(def.params());
                     itemContext.popSelf(def.type());
@@ -4013,7 +4558,10 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
             }
             TU_ARMA(Impl, e) {
                 for (auto& i : e.items()) {
-                    TU_MATCH_DEF(ASTItem, (*i.data), (e), (), (Function, if (e.code().isValid()) { e.code().node().visit(exprIter); }), (Static, if (e.value().isValid()) { e.value().node().visit(exprIter); }))
+                    TU_MATCH_DEF(ASTItem, (*i.data), (e), (), (Function,
+                        if (e.delegation() && e.delegation()->body.isValid()) { e.delegation()->body.node().visit(exprIter); }
+                        if (e.code().isValid()) { e.code().node().visit(exprIter); }
+                    ), (Static, if (e.value().isValid()) { e.value().node().visit(exprIter); }))
                 }
             }
             TU_ARMA(Trait, e) {
@@ -4032,12 +4580,18 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
                             // TODO: Should this already be deleted?
                         ),
                         (Type, ),
-                        (Function, if (e.code().isValid()) { e.code().node().visit(exprIter); }),
+                        (Function,
+                            if (e.delegation() && e.delegation()->body.isValid()) { e.delegation()->body.node().visit(exprIter); }
+                            if (e.code().isValid()) { e.code().node().visit(exprIter); }
+                        ),
                         (Static, if (e.value().isValid()) { e.value().node().visit(exprIter); })
                     )
                 }
             }
             TU_ARMA(Function, e) {
+                if (e.delegation() && e.delegation()->body.isValid()) {
+                    e.delegation()->body.node().visit(exprIter);
+                }
                 if (e.code().isValid()) {
                     e.code().node().visit(exprIter);
                 }

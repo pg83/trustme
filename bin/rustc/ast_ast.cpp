@@ -275,6 +275,16 @@ ASTFunction ASTFunction::clone() const {
     if (mCode.isValid()) {
         rv.mCode = ASTExpr(mCode.node().clone());
     }
+    if (mDelegation) {
+        Delegation delegation;
+        for (const auto& target : mDelegation->targets) {
+            delegation.targets.push_back({ASTPath(target.path), target.name});
+        }
+        if (mDelegation->body.isValid()) {
+            delegation.body = ASTExpr(mDelegation->body.node().clone());
+        }
+        rv.setDelegation(mv$(delegation));
+    }
     return rv;
 }
 

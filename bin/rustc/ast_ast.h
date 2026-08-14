@@ -172,6 +172,16 @@ public:
 
     typedef ::std::vector<Arg> Arglist;
 
+    struct Delegation {
+        struct Target {
+            ASTPath path;
+            RcString name;
+        };
+
+        ::std::vector<Target> targets;
+        ASTExpr body;
+    };
+
     struct Flags {
         bool isConst;
         bool isUnsafe;
@@ -200,6 +210,7 @@ private:
 
     ::std::string mAbi;
     Flags flags;
+    ::std::unique_ptr<Delegation> mDelegation;
 
 public:
     struct Markings {
@@ -291,6 +302,22 @@ public:
 
     bool isVariadic() const {
         return mIsVariadic;
+    }
+
+    const Delegation* delegation() const {
+        return mDelegation.get();
+    }
+
+    Delegation* delegation() {
+        return mDelegation.get();
+    }
+
+    void setDelegation(Delegation delegation) {
+        mDelegation = ::std::make_unique<Delegation>(::std::move(delegation));
+    }
+
+    ::std::unique_ptr<Delegation> takeDelegation() {
+        return ::std::move(mDelegation);
     }
 
     ASTFunction clone() const;

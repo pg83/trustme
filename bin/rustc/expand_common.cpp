@@ -1738,6 +1738,12 @@ ASTExprNodeP ExpandParseAndExpandExprVal(const ASTCrate& crate, const ASTModule&
 }
 
 void ExpandFunction(const ExpandState& es, ASTModule& mod, ASTFunction& e) {
+    if (auto* delegation = e.delegation()) {
+        for (auto& target : delegation->targets) {
+            ExpandPath(es, mod, target.path);
+        }
+        ExpandExpr(es, delegation->body);
+    }
     for (size_t i = 0; i < e.args().size(); i++) {
         auto& arg = e.args()[i];
         if (!ExpandAttrsCfgOnly(es, arg.attrs)) {

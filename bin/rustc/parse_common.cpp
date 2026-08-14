@@ -44,6 +44,8 @@ ASTExprNodeP ParseExprMatch(TokenStream& lex);
 ASTExprNodeP ParseExpr1(TokenStream& lex);
 ASTExprNodeP ParseExprFC(TokenStream& lex);
 ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath tok);
+ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName);
+::std::vector<::std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn);
 
 ASTExpr ParseExpr(TokenStream& lex) {
     return ASTExpr(ParseExpr0(lex));
@@ -132,6 +134,20 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
 
     // `union Ident` - contextual keyword
     if (tok.type() == TOK_IDENT && tok.ident().name == "union" && lex.lookahead(0) == TOK_IDENT) {
+        PUTBACK(tok, lex);
+        if (!localMod) {
+            localMod = lex.parseState().getCurrentMod().addAnon();
+            DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
+            lex.parseState().module = localMod.get();
+        }
+        ParseModItem(lex, *localMod, mv$(itemAttrs));
+        return ASTExprNodeP();
+    }
+
+    if (tok.type() == TOK_IDENT && tok.ident().name == "reuse"
+        && (lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_RWORD_SELF
+            || lex.lookahead(0) == TOK_RWORD_SUPER || lex.lookahead(0) == TOK_RWORD_CRATE
+            || lex.lookahead(0) == TOK_LT)) {
         PUTBACK(tok, lex);
         if (!localMod) {
             localMod = lex.parseState().getCurrentMod().addAnon();
@@ -3275,6 +3291,13 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
             rv = ::std::move(fcn);
             break;
         }
+        case TOK_IDENT:
+            if (tok.ident().name == "reuse") {
+                auto fcn = ParseDelegationFunction(lex, name);
+                rv = mv$(fcn);
+                break;
+            }
+            throw ParseErrorUnexpected(lex, tok);
         default:
             throw ParseErrorUnexpected(lex, tok);
     }
@@ -3324,7 +3347,15 @@ ASTTrait ParseTraitDef(TokenStream& lex, const ASTAttributeList& metaItems, ASTG
     while (GET_TOK(tok, lex) != TOK_BRACE_CLOSE) {
         PUTBACK(tok, lex);
 
-        trait.items().push_back(ParseTraitItem(lex));
+        auto item = ParseTraitItem(lex);
+        if (item.data.is_Function() && item.data.as_Function().delegation()
+            && item.data.as_Function().delegation()->targets.size() > 1) {
+            for (auto& split : SplitDelegationFunction(item.data.as_Function())) {
+                trait.items().push_back(ASTNamed<ASTItem>{item.span, item.attrs.clone(), item.vis, mv$(split.first), ASTItem(mv$(split.second))});
+            }
+        } else {
+            trait.items().push_back(mv$(item));
+        }
     }
 
     return trait;
@@ -3672,6 +3703,20 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
         GET_TOK(tok, lex);
     }
 
+    if (tok.type() == TOK_IDENT && tok.ident().name == "reuse") {
+        RcString name;
+        auto fcn = ParseDelegationFunction(lex, name);
+        auto span = lex.endSpan(ps);
+        if (fcn.delegation()->targets.size() > 1) {
+            for (auto& split : SplitDelegationFunction(fcn)) {
+                impl.addFunction(span, itemAttrs.clone(), vis, isSpecialisable, mv$(split.first), mv$(split.second));
+            }
+        } else {
+            impl.addFunction(span, mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(fcn));
+        }
+        return;
+    }
+
     ::std::string abi = ABI_RUST;
     ASTFunction::Flags fnFlags;
     if (tok.type() == TOK_RWORD_TYPE) {
@@ -3835,6 +3880,15 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
             case TOK_IDENT:
                 path.append(ASTPathNode(tok.ident().name, {}));
                 break;
+            case TOK_RWORD_SELF: {
+                ASSERT_BUG(lex.pointSpan(), !path.nodes().empty(), "`self` with no path");
+                auto name = path.nodes().back().name();
+                if (lex.getTokenIf(TOK_RWORD_AS)) {
+                    name = getOptionalIdent(lex);
+                }
+                entries.push_back({lex.pointSpan(), ASTPath(path), mv$(name)});
+                return;
+            }
             case TOK_BRACE_OPEN:
                 // Can't be an empty list
                 if (LOOK_AHEAD(lex) == TOK_BRACE_CLOSE) {
@@ -3999,6 +4053,91 @@ ASTUseItem ParseUse(TokenStream& lex) {
     }
 
     return ASTUseItem{lex.endSpan(spanStart), mv$(entries)};
+}
+
+ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName) {
+    Token tok;
+    auto ps = lex.startSpan();
+    ::std::vector<ASTUseItem::Ent> entries;
+
+    if (lex.lookahead(0) == TOK_LT) {
+        GET_TOK(tok, lex);
+        auto type = ParseType(lex, true);
+        ::std::unique_ptr<ASTPath> trait;
+        if (lex.getTokenIf(TOK_RWORD_AS)) {
+            trait = ::std::make_unique<ASTPath>(ParsePath(lex, PATH_GENERIC_TYPE));
+        }
+        GET_CHECK_TOK(tok, lex, TOK_GT);
+        GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
+        auto path = trait
+            ? ASTPath::newUfcsTrait(mv$(type), mv$(*trait), {})
+            : ASTPath::newUfcsTy(mv$(type), {});
+        ParseUseInner(lex, entries, path);
+    } else {
+        Ident::Hygiene relativeHygiene;
+        const bool relativeRoot = lex.lookahead(0) == TOK_IDENT;
+        if (relativeRoot) {
+            GET_CHECK_TOK(tok, lex, TOK_IDENT);
+            relativeHygiene = tok.ident().hygiene;
+            PUTBACK(tok, lex);
+        }
+        ParseUseRoot(lex, entries);
+        if (relativeRoot) {
+            for (auto& entry : entries) {
+                if (entry.path.cls.is_Absolute() && entry.path.cls.as_Absolute().crate == "") {
+                    auto nodes = mv$(entry.path.cls.as_Absolute().nodes);
+                    entry.path = ASTPath::newRelative(relativeHygiene, mv$(nodes));
+                }
+            }
+        }
+    }
+
+    ASTExpr body;
+    if (lex.lookahead(0) == TOK_BRACE_OPEN) {
+        body = ParseExprBlock(lex);
+        struct MarkDelegationSelf: ASTNodeVisitorDef {
+            void visit(ASTExprNodeMacro&) override {
+                // Macro output is not the delegation body's magic `self`.
+            }
+            void visit(ASTExprNodeNamedValue& node) override {
+                if (node.mPath.cls.is_Local() && node.mPath.cls.as_Local().name == "self") {
+                    node.mPath = ASTPath(RcString::newInterned("#delegation-self"));
+                }
+            }
+        } visitor;
+        body.node().visit(visitor);
+    } else {
+        GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+    }
+
+    ASSERT_BUG(lex.endSpan(ps), !entries.empty(), "Empty delegation");
+    ASTFunction::Delegation delegation;
+    for (auto& entry : entries) {
+        delegation.targets.push_back({mv$(entry.path), entry.name});
+    }
+    delegation.body = mv$(body);
+    itemName = delegation.targets.size() == 1 ? delegation.targets.front().name : RcString();
+
+    auto span = lex.endSpan(ps);
+    auto fcn = ASTFunction(span, ABI_RUST, ASTFunction::Flags(), {}, mkType(lex.typePool(), span), {}, false);
+    fcn.setDelegation(mv$(delegation));
+    return fcn;
+}
+
+::std::vector<::std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn) {
+    ASSERT_BUG(fcn.sp(), fcn.delegation(), "Splitting a non-delegation function");
+    ::std::vector<::std::pair<RcString, ASTFunction>> rv;
+    for (size_t i = 0; i < fcn.delegation()->targets.size(); i++) {
+        auto split = fcn.clone();
+        auto delegation = split.takeDelegation();
+        auto target = mv$(delegation->targets[i]);
+        delegation->targets.clear();
+        delegation->targets.push_back(mv$(target));
+        auto name = delegation->targets.front().name;
+        split.setDelegation(mv$(*delegation));
+        rv.push_back(::std::make_pair(mv$(name), mv$(split)));
+    }
+    return rv;
 }
 
 ASTMacroInvocation ParseMacroInvocation(ProtoSpan spanStart, ASTPath name, TokenStream& lex) {
@@ -4395,6 +4534,8 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 auto tr = ParseTraitDef(lex, metaItems, ParseGenericParamsOpt(lex));
                 tr.setIsMarker();
                 itemData = ASTItem(::std::move(tr));
+            } else if (tok.ident().name == "reuse") {
+                itemData = ASTItem(ParseDelegationFunction(lex, itemName));
             } else {
                 throw ParseErrorUnexpected(lex, tok);
             }
@@ -4626,7 +4767,15 @@ void ParseModItem(TokenStream& lex, ASTModule& mod, ASTAttributeList metaItems) 
     lex.parseState().module = &mod;
     lex.parseState().parentAttrs = &metaItems;
 
-    mod.addItem(ParseModItemS(lex, mod.fileInfo, mod.path(), mv$(metaItems)));
+    auto item = ParseModItemS(lex, mod.fileInfo, mod.path(), mv$(metaItems));
+    if (item.data.is_Function() && item.data.as_Function().delegation()
+        && item.data.as_Function().delegation()->targets.size() > 1) {
+        for (auto& split : SplitDelegationFunction(item.data.as_Function())) {
+            mod.addItem(item.span, item.vis, mv$(split.first), ASTItem(mv$(split.second)), item.attrs.clone());
+        }
+    } else {
+        mod.addItem(mv$(item));
+    }
 }
 
 void ParseModRootItems(TokenStream& lex, ASTModule& mod) {
