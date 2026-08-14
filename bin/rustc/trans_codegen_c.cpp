@@ -2511,9 +2511,8 @@ namespace {
                 MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, mResolve, elementTy, elementSize), "Unknown array element size for " << parentTy);
                 MIR_ASSERT(localMirRes, elementSize == 0, "Non-ZST element in ZST borrow path: " << elementTy);
                 if (parentTy->is_Slice()) {
-                    MIR_ASSERT(localMirRes, inner.is_Deref(), "Raw slice lvalue in ZST borrow path");
                     of << "(void*)";
-                    emitLvalue(inner.innerRef());
+                    emitDstLvaluePointer(inner);
                     of << ".PTR";
                 } else {
                     of << "(void*)& ";
@@ -2546,9 +2545,8 @@ namespace {
                     HIRTypeRef tmp;
                     const auto& parentTy = localMirRes.getLvalueType(tmp, fieldInner);
                     if (parentTy->is_Slice()) {
-                        MIR_ASSERT(localMirRes, fieldInner.is_Deref(), "Raw slice lvalue in ZST borrow path");
                         of << "(void*)";
-                        emitLvalue(fieldInner.innerRef());
+                        emitDstLvaluePointer(fieldInner);
                         of << ".PTR";
                     } else {
                         of << "(void*)& ";
@@ -2570,8 +2568,7 @@ namespace {
                         MIR_ASSERT(localMirRes, elementSize == 0, "Non-ZST element in ZST borrow path: " << elementTy);
                         of << "(void*)( (uint8_t*)";
                         if (parentTy->is_Slice()) {
-                            MIR_ASSERT(localMirRes, fieldInner.is_Deref(), "Raw slice lvalue in ZST borrow path");
-                            emitLvalue(fieldInner.innerRef());
+                            emitDstLvaluePointer(fieldInner);
                             of << ".PTR";
                         } else {
                             of << "& ";

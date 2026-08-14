@@ -1205,21 +1205,23 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();
 
+                            HIRTypeRef cleanedTmp;
+                            const auto* cleanedTy = state.getLvalueType(cleanedTmp, re.val);
                             const HIRTypeData* ityP;
-                            if (const auto* te = ty->opt_Borrow()) {
+                            if (const auto* te = cleanedTy->opt_Borrow()) {
                                 ityP = te->inner;
-                            } else if (const auto* te = ty->opt_Pointer()) {
+                            } else if (const auto* te = cleanedTy->opt_Pointer()) {
                                 ityP = te->inner;
                             }
                             // NOTE: This can happen with calling a by-value method on a trait object, e.g. `<dyn Foo as FnOnce>::call_once`
                             // - That is handled with magic in trans, so needs magic here (for inlining)
-                            else if (ty->is_TraitObject()) {
-                                ityP = ty;
+                            else if (cleanedTy->is_TraitObject()) {
+                                ityP = cleanedTy;
                                 // Remove the deref so downstream doesn't need to care
                                 MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), "DstMeta on bare trait object with no deref: " << re.val);
                                 re.val.wrappers.pop_back();
                             } else {
-                                BUG(Span(), "Unexpected input type for DstMeta - " << ty);
+                                BUG(Span(), "Unexpected input type for DstMeta - " << cleanedTy);
                             }
                         }
                         TU_ARMA(DstPtr, re) {
@@ -1236,21 +1238,23 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             MIRCleanupLValue(state, mutator, re.val);
                             re.val.wrappers.pop_back();
 
+                            HIRTypeRef cleanedTmp;
+                            const auto* cleanedTy = state.getLvalueType(cleanedTmp, re.val);
                             const HIRTypeData* ityP;
-                            if (const auto* te = ty->opt_Borrow()) {
+                            if (const auto* te = cleanedTy->opt_Borrow()) {
                                 ityP = te->inner;
-                            } else if (const auto* te = ty->opt_Pointer()) {
+                            } else if (const auto* te = cleanedTy->opt_Pointer()) {
                                 ityP = te->inner;
                             }
                             // NOTE: This can happen with calling a by-value method on a trait object, e.g. `<dyn Foo as FnOnce>::call_once`
                             // - That is handled with magic in trans, so needs magic here (for inlining)
-                            else if (ty->is_TraitObject()) {
-                                ityP = ty;
+                            else if (cleanedTy->is_TraitObject()) {
+                                ityP = cleanedTy;
                                 // Remove the deref so downstream doesn't need to care
                                 MIR_ASSERT(state, !re.val.wrappers.empty() && re.val.wrappers.back().is_Deref(), "DstPtr on bare trait object with no deref: " << re.val);
                                 re.val.wrappers.pop_back();
                             } else {
-                                BUG(Span(), "Unexpected input type for DstMeta - " << ty);
+                                BUG(Span(), "Unexpected input type for DstMeta - " << cleanedTy);
                             }
                             (void)ityP; // TODO: What is this needed for?
                         }
