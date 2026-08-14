@@ -2405,6 +2405,14 @@ namespace {
             throw "";
         }
 
+        bool equatePath(const HIRConstGenericUnevaluated& leftValue, const HIRPath& left, const HIRConstGenericUnevaluated& rightValue, const HIRPath& right) const {
+            MonomorphStatePtr leftMonomorph(context.crate.types, nullptr, &leftValue.paramsImpl, &leftValue.paramsItem);
+            MonomorphStatePtr rightMonomorph(context.crate.types, nullptr, &rightValue.paramsImpl, &rightValue.paramsItem);
+            const auto leftPath = leftMonomorph.monomorphPath(sp, left);
+            const auto rightPath = rightMonomorph.monomorphPath(sp, right);
+            return leftPath == rightPath || leftPath.equalsIgnoringRegions(rightPath);
+        }
+
         bool equateNode(const HIRConstGenericUnevaluated& leftValue, const HIRExprNode& left, const HIRConstGenericUnevaluated& rightValue, const HIRExprNode& right) const {
             if (const auto* block = cast<const HIRExprNodeBlock>(&left)) {
                 if (block->nodes.empty() && block->valueNode) {
@@ -2453,6 +2461,10 @@ namespace {
                 const auto* r = cast<const HIRExprNodeLiteral>(&right);
                 return r && equateLiteral(*l, *r);
             }
+            if (const auto* l = cast<const HIRExprNodePathValue>(&left)) {
+                const auto* r = cast<const HIRExprNodePathValue>(&right);
+                return r && l->target == r->target && equatePath(leftValue, l->mPath, rightValue, r->mPath);
+            }
             if (const auto* l = cast<const HIRExprNodeBinOp>(&left)) {
                 const auto* r = cast<const HIRExprNodeBinOp>(&right);
                 return r && l->op == r->op && equateNode(leftValue, *l->left, rightValue, *r->left) && equateNode(leftValue, *l->right, rightValue, *r->right);
@@ -2475,7 +2487,7 @@ namespace {
             }
             if (const auto* l = cast<const HIRExprNodeCallPath>(&left)) {
                 const auto* r = cast<const HIRExprNodeCallPath>(&right);
-                if (!r || l->mPath != r->mPath || l->mArgs.size() != r->mArgs.size()) {
+                if (!r || !equatePath(leftValue, l->mPath, rightValue, r->mPath) || l->mArgs.size() != r->mArgs.size()) {
                     return false;
                 }
                 for (unsigned int i = 0; i < l->mArgs.size(); i++) {
@@ -8314,7 +8326,11 @@ namespace {
 void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData* resultType, HIRExprPtr& expr) {
     TRACE_FUNCTION;
 
-    auto rootPtr = expr.takeNode();
+    // HIR nodes live in the crate pool, so the temporary wrapper does not own
+    // the root. Keep the root reachable through `expr` while its typechecking
+    // context indexes bounds: those bounds can contain this same unevaluated
+    // const expression and compare it recursively.
+    HIRExprNodeP rootPtr(expr.get());
     assert(!ms.modPaths.empty());
     Context context{ms.wb, ms.mImplGenerics, ms.mItemGenerics, ms.modPaths.back(), ms.currentTrait, ms.currentTraitImpl};
 
@@ -8649,7 +8665,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
     }
     DEBUG("root_ptr = " << rootPtr->typeName() << " " << rootPtr->resType);
 
-    // - Recreate the pointer
+    // - Synchronize a replacement of the root back into the expression.
     expr.reset(rootPtr.release());
     //  > Steal the binding types
     expr.mBindings.reserve(context.mBindings.size());

@@ -3326,12 +3326,29 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             } else {
                 bool bestIsSpec = false;
                 bool hasBoundedImpl = false;
+                bool hasFuzzyImpl = false;
                 ImplRef bestImpl;
                 ValuePtr rv;
+                auto typeNeedsResolution = [](const HIRTypeData* type) {
+                    return type->hasTypeInfer() || type->needsMonomorphisation() || type->mayHaveAssociatedType();
+                };
+                bool lookupNeedsResolution = typeNeedsResolution(pe.type) || monomorphisePathparamsNeeded(pe.trait.mParams);
+                for (const auto& type : pe.trait.mParams.types) {
+                    lookupNeedsResolution |= typeNeedsResolution(type);
+                }
+                for (const auto& value : pe.trait.mParams.values) {
+                    lookupNeedsResolution |= value.is_Infer();
+                }
                 this->findImpl(sp, pe.trait.mPath, &pe.trait.mParams, pe.type, [&](auto impl, bool isFuzz) -> bool {
                     DEBUG(impl);
                     if (!impl.mData.is_TraitImpl()) {
                         hasBoundedImpl = true;
+                        return false;
+                    }
+                    if (isFuzz && lookupNeedsResolution) {
+                        // A body or associated constant from a merely possible
+                        // impl cannot be selected until the receiver is known.
+                        hasFuzzyImpl = true;
                         return false;
                     }
                     const HIRTraitImpl& ti = *impl.mData.as_TraitImpl().impl;
@@ -3380,8 +3397,8 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     }
                 });
                 if (!bestImpl.isValid()) {
-                    if (hasBoundedImpl) {
-                        DEBUG("Trait item is provided by an in-scope bound");
+                    if (hasBoundedImpl || hasFuzzyImpl) {
+                        DEBUG("Trait item depends on an in-scope bound or fuzzy impl");
                         return ValuePtr::make_NotYetKnown({});
                     }
                     // If the type and impl are fully known, then look for trait provided values/bodies
