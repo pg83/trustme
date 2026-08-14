@@ -125,6 +125,20 @@ public:
         return rv;
     }
 
+    // Pool-allocated variant: module item tables are the single biggest heap
+    // consumer when loading extern crates, and they live for the whole
+    // compilation, so they belong in the arena rather than in unique_ptrs.
+    template <typename T>
+    ::std::unordered_map<RcString, T*> deserialiseIstrumapPooled() {
+        size_t n = in.readCount();
+        ::std::unordered_map<RcString, T*> rv;
+        for (size_t i = 0; i < n; i++) {
+            auto s = in.readIstring();
+            rv.insert(::std::make_pair(mv$(s), mPool.make<T>(D<T>::des(*this))));
+        }
+        return rv;
+    }
+
     template <typename V>
     ::std::unordered_map<RcString, V> deserialiseIstrumap() {
         TRACE_FUNCTION_F("<" << typeid(V).name() << ">");
@@ -1511,9 +1525,9 @@ HIRModule HirDeserialiser::deserialiseModule() {
     HIRModule rv;
 
     // m_traits doesn't need to be serialised
-    rv.valueItems = deserialiseIstrumap<::std::unique_ptr<HIRVisEnt<HIRValueItem>>>();
-    rv.modItems = deserialiseIstrumap<::std::unique_ptr<HIRVisEnt<HIRTypeItem>>>();
-    rv.macroItems = deserialiseIstrumap<::std::unique_ptr<HIRVisEnt<HIRMacroItem>>>();
+    rv.valueItems = deserialiseIstrumapPooled<HIRVisEnt<HIRValueItem>>();
+    rv.modItems = deserialiseIstrumapPooled<HIRVisEnt<HIRTypeItem>>();
+    rv.macroItems = deserialiseIstrumapPooled<HIRVisEnt<HIRMacroItem>>();
 
     return rv;
 }

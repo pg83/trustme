@@ -480,11 +480,11 @@ public:
     ::std::vector<HIRSimplePath> traits;
 
     // Contains all values and functions (including type constructors)
-    ::std::unordered_map<RcString, ::std::unique_ptr<HIRVisEnt<HIRValueItem>>> valueItems;
+    ::std::unordered_map<RcString, HIRVisEnt<HIRValueItem>*> valueItems;
     // Contains types, traits, and modules
-    ::std::unordered_map<RcString, ::std::unique_ptr<HIRVisEnt<HIRTypeItem>>> modItems;
+    ::std::unordered_map<RcString, HIRVisEnt<HIRTypeItem>*> modItems;
     // Macros!
-    ::std::unordered_map<RcString, ::std::unique_ptr<HIRVisEnt<HIRMacroItem>>> macroItems;
+    ::std::unordered_map<RcString, HIRVisEnt<HIRMacroItem>*> macroItems;
 
     ::std::vector<::std::pair<RcString, std::unique_ptr<HIRStatic>>> inlineStatics;
 
@@ -648,8 +648,8 @@ public:
     HIRModule mRootModule;
 
     // Placeholder for types created during constant evaluation
-    mutable std::vector<std::pair<RcString, std::unique_ptr<HIRVisEnt<HIRTypeItem>>>> newTypes;
-    mutable std::vector<std::pair<RcString, std::unique_ptr<HIRVisEnt<HIRValueItem>>>> newValues;
+    mutable std::vector<std::pair<RcString, HIRVisEnt<HIRTypeItem>*>> newTypes;
+    mutable std::vector<std::pair<RcString, HIRVisEnt<HIRValueItem>*>> newValues;
 
     // Current-crate functions carrying #[define_opaque(...)].  The map is a
     // query index for lazy type checking and is intentionally not serialised.

@@ -837,7 +837,7 @@ int main(int argc, char* argv[]) {
                 for (const auto& i : hirCrate->mRootModule.macroItems) {
                     DEBUG(i.first << ": " << i.second->ent.tagStr());
                     if (const auto* e = i.second->ent.opt_ProcMacro()) {
-                        crateForSer.mRootModule.macroItems.insert(std::make_pair(i.first, box$(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
+                        crateForSer.mRootModule.macroItems.insert(std::make_pair(i.first, crateForSer.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
                     }
                 }
                 crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;

@@ -4308,9 +4308,12 @@ namespace {
     };
 
     class ExpanderApply: public HIRVisitor {
+        stl::ObjPool& mPool;
+
     public:
-        explicit ExpanderApply(HIRTypeInterner& types)
+        ExpanderApply(stl::ObjPool& pool, HIRTypeInterner& types)
             : HIRVisitor(nullptr, types)
+            , mPool(pool)
         {
         }
 
@@ -4318,9 +4321,8 @@ namespace {
             if (!mod.inlineStatics.empty()) {
                 for (auto& v : mod.inlineStatics) {
                     // ::std::unique_ptr<VisEnt<ValueItem>>
-                    ::std::unique_ptr<HIRVisEnt<HIRValueItem>> iv;
-                    iv.reset(new HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(mv$(*v.second))});
-                    mod.valueItems.insert(::std::make_pair(v.first, mv$(iv)));
+                    auto* iv = mPool.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(mv$(*v.second))});
+                    mod.valueItems.insert(::std::make_pair(v.first, iv));
                 }
                 mod.inlineStatics.clear();
             }
@@ -4402,7 +4404,7 @@ void ConvertHIRConstantEvaluate(const WireBoard& wb, HIRCrate& crate) {
     exp.pass = Expander::Pass::Values;
     exp.visitCrate(crate);
 
-    ExpanderApply(crate.types).visitCrate(crate);
+    ExpanderApply(*crate.pool, crate.types).visitCrate(crate);
     for (auto& newTyPair : crate.newTypes) {
         auto res = crate.mRootModule.modItems.insert(mv$(newTyPair));
         ASSERT_BUG(Span(), res.second, "Duplicate type in consteval?");

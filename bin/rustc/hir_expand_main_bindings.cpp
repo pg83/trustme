@@ -2989,9 +2989,9 @@ namespace {
             out.newType = [&](const char* prefix, const char* suffix, auto s) -> auto {
                 auto name = RcString::newInterned(FMT(prefix << "I_" << suffix << (suffix[0] ? "_" : "") << closureCount));
                 closureCount += 1;
-                auto boxed = box$((HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), mv$(s)}));
+                auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), mv$(s)});
                 auto* retPtr = &boxed->ent;
-                crate.mRootModule.modItems.insert(::std::make_pair(name, mv$(boxed)));
+                crate.mRootModule.modItems.insert(::std::make_pair(name, boxed));
                 return ::std::make_pair(HIRSimplePath(crate.crateName, {}) + name, retPtr);
             };
 
@@ -3010,7 +3010,7 @@ namespace {
             auto path = p.getSimplePath();
             curModPath = &path;
 
-            ::std::vector<::std::pair<RcString, std::unique_ptr<HIRVisEnt<HIRTypeItem>>>> newTypes;
+            ::std::vector<::std::pair<RcString, HIRVisEnt<HIRTypeItem>*>> newTypes;
 
             auto prevImpls = out.saveCounts();
 
@@ -3020,9 +3020,9 @@ namespace {
                 // TODO: Use a function on `mod` that adds a closure and makes the indexes be per suffix
                 auto name = RcString::newInterned(FMT(prefix << suffix << (suffix[0] ? "_" : "") << closureCount));
                 closureCount += 1;
-                auto boxed = box$((HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), mv$(s)}));
+                auto boxed = mResolve.hirCrate().pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), mv$(s)});
                 auto* retPtr = &boxed->ent;
-                newTypes.push_back(::std::make_pair(name, mv$(boxed)));
+                newTypes.push_back(::std::make_pair(name, boxed));
                 return ::std::make_pair((p + name).getSimplePath(), retPtr);
             };
 
@@ -3169,9 +3169,9 @@ void HIRExpandClosuresExpr(const WireBoard& wb, const HIRCrate& crateRo, HIRType
     out.newType = [&](const char* prefix, const char* suffix, auto s) -> auto {
         auto name = RcString::newInterned(FMT(prefix << "C_" << closureCount));
         closureCount += 1;
-        auto boxed = box$((HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), HIRTypeItem(mv$(s))}));
+        auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{HIRPublicity::newNone(), HIRTypeItem(mv$(s))});
         auto* retPtr = &boxed->ent;
-        crate.newTypes.push_back(::std::make_pair(name, mv$(boxed)));
+        crate.newTypes.push_back(::std::make_pair(name, boxed));
         return ::std::make_pair(HIRSimplePath(crate.crateName, {}) + name, retPtr);
     };
 
@@ -4599,12 +4599,14 @@ public:
             }
 
             struct Nvs: HIREvaluator::Newval {
+                stl::ObjPool& pool;
                 HIRSimplePath currentModulePath;
                 HIRModule& currentModule;
                 size_t nextIdx;
 
-                Nvs(HIRSimplePath currentModulePath, HIRModule& currentModule, size_t idx)
-                    : currentModulePath(::std::move(currentModulePath))
+                Nvs(stl::ObjPool& pool, HIRSimplePath currentModulePath, HIRModule& currentModule, size_t idx)
+                    : pool(pool)
+                    , currentModulePath(::std::move(currentModulePath))
                     , currentModule(currentModule)
                     , nextIdx(idx)
                 {
@@ -4626,17 +4628,15 @@ public:
                     currentModule.valueItems.insert(
                         std::make_pair(
                             name,
-                            box$(
-                                HIRVisEnt<HIRValueItem>{
+                            pool.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{
                                     HIRPublicity::newNone(), // Should really be private, but we're well after checking
                                     HIRValueItem(::std::move(newStatic))
-                                }
-                            )
+                                })
                         )
                     );
                     return path;
                 }
-            } nvs{modPath, mod, modList.second.size()};
+            } nvs{*crate.pool, modPath, mod, modList.second.size()};
 
             for (auto& newStaticPair : modList.second) {
                 Span sp;
@@ -4667,12 +4667,10 @@ public:
                 mod.valueItems.insert(
                     std::make_pair(
                         mv$(newStaticPair.path.components().back()),
-                        box$(
-                            HIRVisEnt<HIRValueItem>{
+                        crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{
                                 HIRPublicity::newNone(), // Should really be private, but we're well after checking
                                 std::move(newEnt)
-                            }
-                        )
+                            })
                     )
                 );
             }
@@ -4866,12 +4864,10 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
                 crate.newValues.push_back(
                     std::make_pair(
                         name,
-                        box$(
-                            HIRVisEnt<HIRValueItem>{
+                        crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{
                                 HIRPublicity::newNone(), // Should really be private, but we're well after checking
                                 HIRValueItem(::std::move(newStatic))
-                            }
-                        )
+                            })
                     )
                 );
 
@@ -4893,8 +4889,8 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
 
         DEBUG(path << " = ?");
         auto vi = isConst ? HIRValueItem(HIRConstant{std::move(newStatic.mParams), std::move(newStatic.mType), std::move(newStatic.mValue)}) : HIRValueItem(std::move(newStatic));
-        auto boxed = box$((HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), std::move(vi)}));
-        crate.newValues.push_back(::std::make_pair(name, mv$(boxed)));
+        auto boxed = crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), std::move(vi)});
+        crate.newValues.push_back(::std::make_pair(name, boxed));
         {
             auto& e = crate.newValues.back().second->ent;
             ASSERT_BUG(sp, e.is_Static() || e.is_Constant(), "");
@@ -5755,9 +5751,9 @@ namespace {
 
             ::std::vector<decltype(mod.modItems)::value_type> newTypes;
             newType = [&](bool pub, auto name, auto s) -> auto {
-                auto boxed = box$((HIRVisEnt<HIRTypeItem>{(pub ? HIRPublicity::newGlobal() : HIRPublicity::newNone()), HIRTypeItem(mv$(s))}));
+                auto boxed = crate.pool->make<HIRVisEnt<HIRTypeItem>>(HIRVisEnt<HIRTypeItem>{(pub ? HIRPublicity::newGlobal() : HIRPublicity::newNone()), HIRTypeItem(mv$(s))});
                 auto ret = (p + name).getSimplePath();
-                newTypes.push_back(::std::make_pair(mv$(name), mv$(boxed)));
+                newTypes.push_back(::std::make_pair(mv$(name), boxed));
                 return ret;
             };
 
