@@ -153,3 +153,7 @@ _(TOK_RWORD_TRY)
 // Internal opaque fragment kinds are append-only: token values are present in
 // serialized crate metadata and existing values must not move.
 _(TOK_INTERPOLATED_STMT_ITEM)
+
+// Lexically one literal token with a suffix which is not a built-in numeric
+// type suffix. Keep appended values append-only for crate metadata too.
+_(TOK_LITERAL_SUFFIXED)

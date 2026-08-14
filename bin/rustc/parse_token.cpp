@@ -435,6 +435,8 @@ struct EscapedString {
             return FMT("\"" << EscapedString(mData.as_String()) << "\"");
         case TOK_CSTRING:
             return FMT("c\"" << EscapedString(mData.as_String()) << "\"");
+        case TOK_LITERAL_SUFFIXED:
+            return mData.as_String();
         case TOK_BYTESTRING:
             return FMT("b\"" << mData.as_String() << "\"");
         case TOK_HASH:
@@ -678,6 +680,7 @@ struct EscapedString {
     switch (tok.type()) {
         case TOK_STRING:
         case TOK_BYTESTRING:
+        case TOK_LITERAL_SUFFIXED:
             if (tok.mData.is_String()) {
                 os << "\"" << EscapedString(tok.str()) << "\"";
             } else if (tok.mData.is_None())

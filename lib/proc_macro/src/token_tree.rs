@@ -302,6 +302,7 @@ impl ::std::fmt::Display for Literal
                 sz.fmt(f)?;
             }
             },
+        LiteralValue::Raw(ref v) => f.write_str(v)?,
         }
         Ok( () )
     }
@@ -316,6 +317,7 @@ pub(crate) enum LiteralValue {
     UnsignedInt(u128, u8),    // Value, size (0=?,8,16,32,64,128)
     SignedInt(i128, u8),    // Value, size (0=?,8,16,32,64,128)
     Float(f64, u8), // Value, size (0, 32, 64)
+    Raw(String),
 }
 impl Literal {
     pub(crate) fn new_u(value: u128, bits: u8) -> Literal {

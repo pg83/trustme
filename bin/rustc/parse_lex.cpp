@@ -304,6 +304,31 @@ bool issym(Codepoint ch) {
     return false;
 }
 
+Token Lexer::withLiteralSuffix(Token tok) {
+    Codepoint ch;
+    try {
+        ch = this->getc();
+    } catch (const Lexer::EndOfFile&) {
+        return tok;
+    }
+    if (ch.isdigit() || !issym(ch)) {
+        this->ungetc();
+        return tok;
+    }
+
+    ::std::string suffix;
+    do {
+        suffix += ch;
+        try {
+            ch = this->getc();
+        } catch (const Lexer::EndOfFile&) {
+            return Token(TOK_LITERAL_SUFFIXED, tok.toStr() + suffix, this->realGetHygiene());
+        }
+    } while (issym(ch));
+    this->ungetc();
+    return Token(TOK_LITERAL_SUFFIXED, tok.toStr() + suffix, this->realGetHygiene());
+}
+
 Position Lexer::getPosition() const {
     return Position(mPath, line, lineOfs);
 }
@@ -461,7 +486,8 @@ Token Lexer::getTokenInt() {
                         } else if (suffix == "f128") {
                             numType = CORETYPE_F128;
                         } else {
-                            ERROR(this->pointSpan(), E0000, "Unknown float suffix " << suffix);
+                            auto tok = Token::makeFloat(fval, CORETYPE_ANY);
+                            return Token(TOK_LITERAL_SUFFIXED, tok.toStr() + suffix, this->realGetHygiene());
                         }
                     } else {
                         this->ungetc();
@@ -512,9 +538,12 @@ Token Lexer::getTokenInt() {
                     } else if (suffix == "f128") {
                         numType = CORETYPE_F128;
                     } else {
-                        // Not a numeric type suffix - rustc allows any identifier here, so emit it as a following ident token
-                        nextTokens.push_back(Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::newInterned(suffix))));
-                        return Token(val, CORETYPE_ANY);
+                        // An arbitrary suffix is part of the literal token. It
+                        // is valid in token trees, but the Rust parser rejects
+                        // this distinct token kind if a macro emits it as an
+                        // expression.
+                        auto tok = Token(val, CORETYPE_ANY);
+                        return Token(TOK_LITERAL_SUFFIXED, tok.toStr() + suffix, this->realGetHygiene());
                     }
                     return Token(val, numType);
                 } else {
@@ -551,7 +580,7 @@ Token Lexer::getTokenInt() {
                                 str += ch;
                             }
                         }
-                        return Token(TOK_BYTESTRING, mv$(str), realGetHygiene());
+                        return this->withLiteralSuffix(Token(TOK_BYTESTRING, mv$(str), realGetHygiene()));
                     }
                     // Byte constant
                     else if (ch == '\'') {
@@ -562,12 +591,12 @@ Token Lexer::getTokenInt() {
                             if (this->getc() != '\'') {
                                 throw CompileErrorGeneric(*this, "Multi-byte character literal");
                             }
-                            return Token(U128(val), CORETYPE_U8);
+                            return this->withLiteralSuffix(Token(U128(val), CORETYPE_U8));
                         } else {
                             if (this->getc() != '\'') {
                                 throw CompileErrorGeneric(*this, "Multi-byte character literal");
                             }
-                            return Token(U128(ch.v), CORETYPE_U8);
+                            return this->withLiteralSuffix(Token(U128(ch.v), CORETYPE_U8));
                         }
                     } else {
                         assert(isByte);
@@ -724,14 +753,14 @@ Token Lexer::getTokenInt() {
                         if (this->getc() != '\'') {
                             TODO(this->pointSpan(), "Proper error for lex failures - multi-char const?");
                         }
-                        return Token(U128(val), CORETYPE_CHAR);
+                        return this->withLiteralSuffix(Token(U128(val), CORETYPE_CHAR));
                     } else if (firstchar.v == '\'') {
                         TODO(this->pointSpan(), "Proper error for empty char literals");
                     } else {
                         ch = this->getc();
                         if (ch == '\'') {
                             // Character constant
-                            return Token(U128(firstchar.v), CORETYPE_CHAR);
+                            return this->withLiteralSuffix(Token(U128(firstchar.v), CORETYPE_CHAR));
                         } else if (firstchar == 'r' && ch == '#') {
                             ::std::string str;
                             ch = this->getc();
@@ -772,7 +801,7 @@ Token Lexer::getTokenInt() {
                             str += ch;
                         }
                     }
-                    return Token(TOK_STRING, mv$(str), realGetHygiene());
+                    return this->withLiteralSuffix(Token(TOK_STRING, mv$(str), realGetHygiene()));
                 }
                 default:
                     assert(!"bugcheck");
@@ -849,7 +878,7 @@ Token Lexer::getTokenIntRawString(bool isByte) {
             }
         }
     }
-    return Token(isByte ? TOK_BYTESTRING : TOK_STRING, mv$(val), realGetHygiene());
+    return this->withLiteralSuffix(Token(isByte ? TOK_BYTESTRING : TOK_STRING, mv$(val), realGetHygiene()));
 }
 
 Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool parseReservedWord) {
@@ -881,7 +910,7 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
                     str += ch;
                 }
             }
-            return Token(TOK_CSTRING, mv$(str), realGetHygiene());
+            return this->withLiteralSuffix(Token(TOK_CSTRING, mv$(str), realGetHygiene()));
         }
     }
 

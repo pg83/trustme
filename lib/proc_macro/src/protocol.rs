@@ -19,6 +19,8 @@ pub enum Token
     SpanRef(usize),
     /// The definition of a span
     SpanDef(SpanDef),
+    /// Literal spelling with a suffix not interpreted by the compiler.
+    RawLiteral(String),
 }
 pub struct SpanDef {
     pub idx: usize,
@@ -93,6 +95,7 @@ impl<R: ::std::io::Read> Reader<R>
             start_ofs: self.get_u128v() as usize,
             end_ofs: self.get_u128v() as usize,
             }),
+        12 => Token::RawLiteral(self.get_string()),
         _ => panic!("Unknown tag byte: {:#x}", hdr_b),
         })
     }
@@ -201,6 +204,7 @@ impl<T: ::std::io::Write> Writer<T>
             self.put_u128v(sd.start_ofs as u128);
             self.put_u128v(sd.end_ofs   as u128);
             },
+        Token::RawLiteral(v) => { self.putb(12); self.put_bytes(v.as_bytes()); },
         }
     }
     pub fn write_sym(&mut self, v: &[u8])

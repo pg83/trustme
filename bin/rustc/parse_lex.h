@@ -76,6 +76,7 @@ private:
     signed int getSymbol();
     Token getTokenIntRawString(bool isByte);
     Token getTokenIntIdentifier(Codepoint ch, Codepoint ch2 = '\0', bool parseReservedWord = true);
+    Token withLiteralSuffix(Token tok);
     enum class NumMode {
         BIN,
         OCT,

@@ -6,3 +6,8 @@ use proc_macro::TokenStream;
 pub fn instrument(_attribute: TokenStream, _item: TokenStream) -> TokenStream {
     "fn instrument_was_invoked() -> u32 { 42 }".parse().unwrap()
 }
+
+#[proc_macro_attribute]
+pub fn identity(_attribute: TokenStream, item: TokenStream) -> TokenStream {
+    item
+}

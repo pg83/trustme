@@ -444,6 +444,7 @@ public:
                 break;
             case ::MacroPatEnt::PAT_TT:  // :tt
             case ::MacroPatEnt::PAT_PAT: // :pat
+            case ::MacroPatEnt::PAT_PAT_PARAM:
             case ::MacroPatEnt::PAT_IDENT:
             case ::MacroPatEnt::PAT_PATH:
             case ::MacroPatEnt::PAT_TYPE:

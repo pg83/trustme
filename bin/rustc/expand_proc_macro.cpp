@@ -183,6 +183,7 @@ enum class TokenClass {
     Float = 9,
     SpanRef = 10,
     SpanDef = 11,
+    RawLiteral = 12,
 };
 enum class FragType {
     Ident = 0,
@@ -277,6 +278,11 @@ public:
 
     void sendString(const ::std::string& s) {
         this->sendU8(static_cast<uint8_t>(TokenClass::String));
+        this->sendBytes(s.data(), s.size());
+    }
+
+    void sendRawLiteral(const ::std::string& s) {
+        this->sendU8(static_cast<uint8_t>(TokenClass::RawLiteral));
         this->sendBytes(s.data(), s.size());
     }
 
@@ -561,6 +567,9 @@ namespace {
                     break;
                 case TOK_CSTRING:
                     TODO(sp, "TOK_CSTRING");
+                case TOK_LITERAL_SUFFIXED:
+                    pmi.sendRawLiteral(tok.str());
+                    break;
 
                 case TOK_HASH:
                     pmi.sendSymbol("#");
@@ -2217,6 +2226,8 @@ Token ProcMacroInv::realGetToken_() {
             this->recvBytesRaw(&val, sizeof(val));
             return Token::makeFloat(val, ty);
         }
+        case TokenClass::RawLiteral:
+            return Token(TOK_LITERAL_SUFFIXED, this->recvBytes(), this->getHygiene());
             //case TokenClass::Fragment:
             //    TODO(this->m_parent_span, "Handle ints/floats/fragments from child process");
     }

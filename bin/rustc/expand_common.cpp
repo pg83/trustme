@@ -358,6 +358,16 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             DEBUG("Searching in " << macMod.path());
             for (const auto& mr : reverse(macMod.macros())) {
                 if (mr.name == name) {
+                    if (mr.data->definitionSpan && miSpan) {
+                        const auto& definition = mr.data->definitionSpan.getTopFileSpan();
+                        const auto& invocation = miSpan.getTopFileSpan();
+                        if (definition.filename == invocation.filename
+                            && (definition.startLine > invocation.startLine
+                                || (definition.startLine == invocation.startLine && definition.startOfs > invocation.startOfs))) {
+                            DEBUG(macMod.path() << "::" << mr.name << " - Defined later, skipping");
+                            continue;
+                        }
+                    }
                     DEBUG(macMod.path() << "::" << mr.name << " - Defined");
                     return MacroRef(&*mr.data);
                 }

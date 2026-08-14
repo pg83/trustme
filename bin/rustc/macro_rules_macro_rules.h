@@ -68,6 +68,8 @@ struct MacroPatEnt {
         PAT_VIS,
         PAT_LIFETIME,
         PAT_LITERAL,
+        // Kept at the end because these values are stored in crate metadata.
+        PAT_PAT_PARAM, // :pat_param, and :pat in pre-2021 macro definitions
     } type;
 
     MacroPatEnt();
@@ -172,6 +174,10 @@ public:
     // Lexical context at the macro definition, before the parser enters the
     // token-tree scope used to distinguish literal RHS tokens.
     Ident::Hygiene definitionHygiene;
+
+    // Source position of a local definition. Deserialised macros leave this
+    // empty: their visibility is determined by the importing module instead.
+    Span definitionSpan;
 
     /// Expansion rules
     ::std::vector<MacroRulesArm> rules;

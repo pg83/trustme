@@ -517,8 +517,9 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
             }
             return InterpolatedFragment(ParseTT(lex, false));
         case MacroPatEnt::PAT_PAT:
-            // TODO: Is this edition check correct? Or should it be uncondiitonally "Yes"?
             return InterpolatedFragment(ParsePattern(lex, AllowOrPattern::Yes));
+        case MacroPatEnt::PAT_PAT_PARAM:
+            return InterpolatedFragment(ParsePattern(lex, AllowOrPattern::No));
         case MacroPatEnt::PAT_TYPE:
             return InterpolatedFragment(ParseType(lex));
         case MacroPatEnt::PAT_EXPR:
@@ -590,6 +591,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
                 case TOK_STRING:
                 case TOK_BYTESTRING:
                 case TOK_CSTRING:
+                case TOK_LITERAL_SUFFIXED:
                 case TOK_RWORD_TRUE:
                 case TOK_RWORD_FALSE:
                     break;
@@ -831,8 +833,10 @@ namespace {
             } else {
             }
 
-            // Consume TTs separately
-            if (lex.next() == TOK_PAREN_OPEN) {
+            // Delimited token trees are opaque here. Operators inside them
+            // (notably `<<` in an array length) cannot close or open this
+            // generic argument list.
+            if (lex.next() == TOK_PAREN_OPEN || lex.next() == TOK_SQUARE_OPEN || lex.next() == TOK_BRACE_OPEN) {
                 consumeTt(lex);
             } else {
                 lex.consume();
@@ -865,7 +869,7 @@ namespace {
             case TOK_RWORD_SUPER:
                 lex.consume();
                 if (lex.next() != TOK_DOUBLE_COLON) {
-                    return false;
+                    return true;
                 }
                 break;
             case TOK_DOUBLE_COLON:
@@ -907,7 +911,7 @@ namespace {
                 if (!consumeTtAngle(lex)) {
                     return false;
                 }
-            } else if (lex.next() == TOK_IDENT) {
+            } else if (lex.next() == TOK_IDENT || lex.next() == TOK_RWORD_SELF || lex.next() == TOK_RWORD_SUPER || lex.next() == TOK_RWORD_CRATE) {
                 lex.consume();
                 if (typeMode && (lex.next() == TOK_LT || lex.next() == TOK_DOUBLE_LT)) {
                     if (!consumeTtAngle(lex)) {
@@ -1073,6 +1077,8 @@ namespace {
                 case TOK_RWORD_CRATE:
                 case TOK_DOUBLE_COLON:
                 case TOK_INTERPOLATED_PATH:
+                case TOK_LT:
+                case TOK_DOUBLE_LT:
                     consumePath(lex);
                     if (lex.next() == TOK_BRACE_OPEN) {
                         if (!consumeTt(lex)) {
@@ -1130,6 +1136,13 @@ namespace {
                 case TOK_FLOAT:
                     lex.consume();
                     break;
+                case TOK_DASH:
+                    lex.consume();
+                    if (lex.next() != TOK_INTEGER && lex.next() != TOK_FLOAT) {
+                        return false;
+                    }
+                    lex.consume();
+                    break;
                 default:
                     return false;
             }
@@ -1149,6 +1162,13 @@ namespace {
                     case TOK_STRING:
                     case TOK_INTEGER:
                     case TOK_FLOAT:
+                        lex.consume();
+                        break;
+                    case TOK_DASH:
+                        lex.consume();
+                        if (lex.next() != TOK_INTEGER && lex.next() != TOK_FLOAT) {
+                            return false;
+                        }
                         lex.consume();
                         break;
                     default:
@@ -1217,7 +1237,14 @@ namespace {
                     case TOK_DOUBLE_AMP:
                     case TOK_AMP:
                         lex.consume();
-                        lex.consumeIf(TOK_RWORD_MUT);
+                        if (lex.next() == TOK_IDENT && lex.nextTok().ident().name == "raw") {
+                            lex.consume();
+                            if (!lex.consumeIf(TOK_RWORD_CONST) && !lex.consumeIf(TOK_RWORD_MUT)) {
+                                return false;
+                            }
+                        } else {
+                            lex.consumeIf(TOK_RWORD_MUT);
+                        }
                         hasPrefix = true;
                         break;
                     default:
@@ -1446,6 +1473,7 @@ namespace {
                                     return false;
                                 }
                             }
+                        } else if (lex.consumeIf(TOK_RWORD_AWAIT)) {
                         } else if (lex.consumeIf(TOK_INTEGER) || lex.consumeIf(TOK_FLOAT))
                             ;
                         else {
@@ -1897,7 +1925,7 @@ namespace {
                 if (lex.consumeIf(TOK_RWORD_FN)) {
                     goto fn;
                 } else {
-                    if (!lex.consumeIf(TOK_IDENT)) {
+                    if (!lex.consumeIf(TOK_IDENT) && !lex.consumeIf(TOK_UNDERSCORE)) {
                         return false;
                     }
                     if (!lex.consumeIf(TOK_COLON)) {
@@ -2044,6 +2072,8 @@ namespace {
                 return consumeStmt(lex, outStmtIsItem);
             case MacroPatEnt::PAT_PAT:
                 return consumePat(lex, true);
+            case MacroPatEnt::PAT_PAT_PARAM:
+                return consumePat(lex, false);
             case MacroPatEnt::PAT_META:
                 if (lex.next() == TOK_INTERPOLATED_META) {
                     lex.consume();
@@ -2090,6 +2120,7 @@ namespace {
                     case TOK_STRING:
                     case TOK_BYTESTRING:
                     case TOK_CSTRING:
+                    case TOK_LITERAL_SUFFIXED:
                     case TOK_RWORD_TRUE:
                     case TOK_RWORD_FALSE:
                         lex.consume();
@@ -2769,6 +2800,9 @@ MacroRulesPtr::~MacroRulesPtr() {
                 case MacroPatEnt::PAT_PAT:
                     os << "pat";
                     break;
+                case MacroPatEnt::PAT_PAT_PARAM:
+                    os << "pat_param";
+                    break;
                 case MacroPatEnt::PAT_IDENT:
                     os << "ident";
                     break;
@@ -2821,6 +2855,9 @@ MacroRulesPtr::~MacroRulesPtr() {
             break;
         case MacroPatEnt::PAT_PAT:
             os << "PAT_PAT";
+            break;
+        case MacroPatEnt::PAT_PAT_PARAM:
+            os << "PAT_PAT_PARAM";
             break;
         case MacroPatEnt::PAT_IDENT:
             os << "PAT_IDENT";
@@ -3057,10 +3094,10 @@ public:
                             ;
                         else if (type == "tt") {
                             ty = MacroPatEnt::PAT_TT;
-                        } else if (type == "pat") { //
-                            ty = MacroPatEnt::PAT_PAT;
+                        } else if (type == "pat") {
+                            ty = lex.editionAfter(ASTEdition::Rust2021) ? MacroPatEnt::PAT_PAT : MacroPatEnt::PAT_PAT_PARAM;
                         } else if (type == "pat_param") { // Added between 39 and 54, explicitly excludes or-patterns
-                            ty = MacroPatEnt::PAT_PAT;
+                            ty = MacroPatEnt::PAT_PAT_PARAM;
                         } else if (type == "ident") {
                             ty = MacroPatEnt::PAT_IDENT;
                         } else if (type == "path") {

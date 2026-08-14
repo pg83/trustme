@@ -1590,10 +1590,16 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
             return mv$(tok.fragPath());
 
         case TOK_RWORD_SELF:
+            if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
+                return ASTPath::newSelf({});
+            }
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
             return ASTPath::newSelf(ParsePathNodes(lex, genericMode));
 
         case TOK_RWORD_SUPER: {
+            if (lex.lookahead(0) != TOK_DOUBLE_COLON) {
+                return ASTPath::newSuper(1, {});
+            }
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
             unsigned int count = 1;
             while (LOOK_AHEAD(lex) == TOK_RWORD_SUPER) {
@@ -1689,8 +1695,15 @@ ASTPath ParsePath(TokenStream& lex, bool isAbs, eParsePathGenericMode genericMod
     while (true) {
         ASTPathParams params;
 
-        GET_CHECK_TOK(tok, lex, TOK_IDENT);
-        auto component = mv$(tok.ident().name);
+        GET_TOK(tok, lex);
+        RcString component;
+        if (tok.type() == TOK_IDENT) {
+            component = mv$(tok.ident().name);
+        } else if (tok.type() == TOK_RWORD_SELF || tok.type() == TOK_RWORD_SUPER || tok.type() == TOK_RWORD_CRATE) {
+            component = RcString::newInterned(tok.toStr());
+        } else {
+            throw ParseErrorUnexpected(lex, tok, TOK_IDENT);
+        }
 
         if (genericMode == PATH_GENERIC_TYPE) {
             // If `foo::<` is seen in type context, then consume the `::` and continue on.

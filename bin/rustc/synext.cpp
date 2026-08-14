@@ -19,6 +19,7 @@ class CMacroRulesExpander: public ExpandProcMacro {
         DEBUG("Parsing macro_rules! " << ident);
         TTStream lex(sp, ParseState(), tt);
         auto mac = ParseMacroRules(lex);
+        mac->definitionSpan = sp;
         DEBUG("macro_rules! " << mod.path() + ident << " " << &*mac);
         mod.addMacro(false, ident, mv$(mac));
 

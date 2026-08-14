@@ -79,6 +79,10 @@ pub fn recv_token_stream<R: ::std::io::Read>(reader: R) -> TokenStream
                     span: crate::Span::call_site(),
                     val: crate::token_tree::LiteralValue::Float(val, ty),
                     }.into(),
+                Token::RawLiteral(val) => Literal {
+                    span: crate::Span::call_site(),
+                    val: crate::token_tree::LiteralValue::Raw(val),
+                    }.into(),
                 };
             toks.push(tt);
         }
@@ -160,6 +164,7 @@ pub fn send_token_stream<T: ::std::io::Write>(out_stream: T, ts: TokenStream)
                 LiteralValue::UnsignedInt(v, sz) => Token::Unsigned(v, sz),
                 LiteralValue::SignedInt(v, sz)   => Token::Signed(v, sz),
                 LiteralValue::Float(v, sz)       => Token::Float(v, sz),
+                LiteralValue::Raw(v)             => Token::RawLiteral(v),
                 }),
             }
         }
