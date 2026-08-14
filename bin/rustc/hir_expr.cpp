@@ -687,9 +687,10 @@ TU_ARMA(Alias, ee) {
         {
         }
 
-        HIRExprNodeReturn::HIRExprNodeReturn(Span sp, HIRExprNodeP value)
+        HIRExprNodeReturn::HIRExprNodeReturn(Span sp, HIRExprNodeP value, bool isTailCall)
             : HIRExprNode(mv$(sp))
             , mValue(mv$(value))
+            , isTailCall(isTailCall)
         {
         }
 

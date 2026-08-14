@@ -194,6 +194,7 @@ struct ASTExprNodeAsm2: public ASTExprNode {
 struct ASTExprNodeFlow: public ASTExprNode {
     enum Type {
         RETURN,
+        TAILCALL,
         YIELD,
         CONTINUE,
         BREAK,

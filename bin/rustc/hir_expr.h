@@ -137,8 +137,9 @@ struct HIRExprNodeAsm2: public HIRExprNode {
 
 struct HIRExprNodeReturn: public HIRExprNode {
     HIRExprNodeP mValue;
+    bool isTailCall;
 
-    HIRExprNodeReturn(Span sp, HIRExprNodeP value);
+    HIRExprNodeReturn(Span sp, HIRExprNodeP value, bool isTailCall = false);
 
     static constexpr unsigned int kind = 5;
     unsigned int nodeKind() const override;

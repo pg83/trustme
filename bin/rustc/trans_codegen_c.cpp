@@ -2406,6 +2406,12 @@ namespace {
                     });
                     emitTarget(e.retBlock);
                 }
+                TU_ARMA(TailCall, e) {
+                    if (cleanup) {
+                        MIR_BUG(localMirRes, "Tail call in a cleanup block");
+                    }
+                    emitTermTailCall(localMirRes, e, indentLevel);
+                }
             }
             of << indent << "// ^ " << term << "\n";
             (void)blockIndex;
@@ -3950,10 +3956,13 @@ namespace {
             }
         }
 
-        void emitTermCall(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Call& e, unsigned indentLevel) {
+        void emitTermCall(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Call& e, unsigned indentLevel, bool tailCall = false) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             const auto* targetPath = e.fcn.opt_Path();
             const bool targetTracksCaller = e.tracksCaller || (targetPath && trackedFunctions.count(*targetPath) != 0);
+            if (tailCall && e.fcn.is_Intrinsic()) {
+                MIR_BUG(localMirRes, "Intrinsic used as an explicit tail-call target");
+            }
             if (targetTracksCaller && !currentFunctionTracksCaller) {
                 of << indent << "static const mrustc_caller_location mrustc_callsite = ";
                 emitSourceLocationInitializer(e.source);
@@ -3981,7 +3990,7 @@ namespace {
                 }
             }
 
-            bool omitAssign = false;
+            bool omitAssign = tailCall;
 
             // If the return type is `()`, omit the assignment (all `()` returning functions are marked as returning
             // void)
@@ -3994,6 +4003,13 @@ namespace {
                 if (this->typeIsBadZst(mirRes->getLvalueType(tmp, e.retVal))) {
                     omitAssign = true;
                 }
+            }
+
+            if (tailCall) {
+                if (targetTracksCaller == currentFunctionTracksCaller) {
+                    of << "MRUSTC_MUSTTAIL ";
+                }
+                of << "return ";
             }
 
             TU_MATCH_HDRA( (e.fcn), {)
@@ -4113,6 +4129,36 @@ namespace {
                 indent.n--;
                 of << indent << "}\n";
             }
+        }
+
+        void emitTermTailCall(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_TailCall& e, unsigned indentLevel) {
+            MIRCallTarget target;
+            TU_MATCH_HDRA((e.fcn), {)
+            TU_ARMA(Value, value) {
+                    target = MIRCallTarget::make_Value(value.clone());
+                }
+                TU_ARMA(Path, path) {
+                    target = MIRCallTarget::make_Path(path.clone());
+                }
+                TU_ARMA(Intrinsic, intrinsic) {
+                    target = MIRCallTarget::make_Intrinsic({intrinsic.name, intrinsic.params.clone()});
+                }
+            }
+            ::std::vector<MIRParam> args;
+            args.reserve(e.args.size());
+            for (const auto& arg : e.args) {
+                args.push_back(arg.clone());
+            }
+            MIRTerminator::Data_Call call{
+                0,
+                MIRUnwindAction::make_Continue({}),
+                MIRLValue::newReturn(),
+                mv$(target),
+                mv$(args),
+                e.source,
+                e.tracksCaller,
+            };
+            emitTermCall(localMirRes, call, indentLevel, true);
         }
 
         bool asmMatchesTemplate(const MIRStatement::Data_Asm& e, const char* tpl, ::std::initializer_list<const char*> inputs, ::std::initializer_list<const char*> outputs) {

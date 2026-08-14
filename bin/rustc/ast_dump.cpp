@@ -205,6 +205,9 @@ public:
             case ASTExprNodeFlow::RETURN:
                 os << "return ";
                 break;
+            case ASTExprNodeFlow::TAILCALL:
+                os << "become ";
+                break;
             case ASTExprNodeFlow::YIELD:
                 os << "yield ";
                 break;

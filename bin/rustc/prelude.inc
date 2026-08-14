@@ -18,6 +18,14 @@ typedef struct { void (*drop)(void*); size_t size; size_t align; } VTABLE_HDR;
 struct mrustc_panic final { void* rust_exception; };
 struct mrustc_caller_location final { SLICE_PTR filename; uint32_t line; uint32_t column; };
 
+#if defined(__clang__)
+#define MRUSTC_MUSTTAIL [[clang::musttail]]
+#elif defined(__GNUC__) && __GNUC__ >= 15
+#define MRUSTC_MUSTTAIL [[gnu::musttail]]
+#else
+#define MRUSTC_MUSTTAIL
+#endif
+
 #if MRUSTC_CODEGEN_DISALLOW_EMPTY_STRUCTS
 typedef struct { char _d; } tUNIT;
 typedef char tBANG;

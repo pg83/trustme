@@ -376,6 +376,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
             // Flow control
             case TOK_RWORD_DO:
                 // `do yeet`
+            case TOK_RWORD_BECOME:
             case TOK_RWORD_RETURN:
             case TOK_RWORD_YIELD:
             case TOK_RWORD_CONTINUE:
@@ -687,6 +688,8 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
             return ParseFlowControl(lex, ASTExprNodeFlow::BREAK);
         case TOK_RWORD_RETURN:
             return ParseFlowControl(lex, ASTExprNodeFlow::RETURN);
+        case TOK_RWORD_BECOME:
+            return ParseFlowControl(lex, ASTExprNodeFlow::TAILCALL);
         case TOK_BRACE_OPEN:
             PUTBACK(tok, lex);
             return ParseExprBlockNode(lex);
@@ -1265,6 +1268,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
 
         // Return/break/continue/... also parsed here (but recurses back up to actually handle them)
         case TOK_RWORD_RETURN:
+        case TOK_RWORD_BECOME:
         case TOK_RWORD_YIELD:
         case TOK_RWORD_CONTINUE:
         case TOK_RWORD_BREAK:

@@ -457,6 +457,22 @@ public:
                 rv |= visitBlockId(e.retBlock);
                 TU_IFLET(MIRUnwindAction, e.unwind, Cleanup, target, rv |= visitBlockId(target);)
             }
+            TU_ARMA(TailCall, e) {
+                TU_MATCH_HDRA((e.fcn), {)
+                TU_ARMA(Value, ce) {
+                        rv |= visitLvalue(ce, MIRValUsage::Read);
+                    }
+                    TU_ARMA(Path, ce) {
+                        visitPath(ce);
+                    }
+                    TU_ARMA(Intrinsic, ce) {
+                        visitPathParams(ce.params);
+                    }
+                }
+                for (auto& v : e.args) {
+                    rv |= visitParam(v, MIRValUsage::Move);
+                }
+            }
             }
             return rv;
     }

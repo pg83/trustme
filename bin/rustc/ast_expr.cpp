@@ -416,6 +416,9 @@ NODE(
             case RETURN:
                 os << "return";
                 break;
+            case TAILCALL:
+                os << "become";
+                break;
             case YIELD:
                 os << "yield";
                 break;

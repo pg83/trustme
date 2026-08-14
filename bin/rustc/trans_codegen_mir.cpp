@@ -1166,6 +1166,20 @@ namespace {
                             of << ") goto " << e.retBlock << " unwind " << e.unwind.tagStr() << "\n";
                         }
                         break;
+                        TU_ARM(term, TailCall, e) {
+                            of << "TAILCALL ";
+                            TU_MATCHA((e.fcn), (f),
+                                (Intrinsic, of << "\"" << f.name << "\"";),
+                                (Value, of << "(" << fmt(f) << ")";),
+                                (Path, of << fmt(f);)
+                            )
+                            of << "(";
+                            for (const auto& arg : e.args) {
+                                of << fmt(arg) << ", ";
+                            }
+                            of << ")\n";
+                        }
+                        break;
                 }
                 of << "\t}\n";
             }

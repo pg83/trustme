@@ -173,7 +173,8 @@ namespace {
                                                                            ) os
                                                                            << "_ => bb" << e.defTarget << "}\n";),
                     (Drop, os << "drop(" << FMT_M(e.slot); if (e.kind == MIRDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") goto bb" << e.target << " unwind "; fmtUnwind(e.unwind); os << "\n";),
-                    (Call, os << FMT_M(e.retVal) << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ") goto bb" << e.retBlock << " unwind "; fmtUnwind(e.unwind); os << "\n";)
+                    (Call, os << FMT_M(e.retVal) << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ") goto bb" << e.retBlock << " unwind "; fmtUnwind(e.unwind); os << "\n";),
+                    (TailCall, os << "tailcall "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ")\n";)
                 )
                 decIndent();
                 os << indent() << "}\n";

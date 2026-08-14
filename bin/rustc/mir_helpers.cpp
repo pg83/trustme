@@ -971,6 +971,9 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, statesToDo.push_back(::std::make_pair(target, state.clone()));)
                     statesToDo.push_back(::std::make_pair(te.retBlock, mv$(state)));
                 }
+                TU_ARMA(TailCall, te) {
+                    state.finalise(stmtIdx);
+                }
             }
         }
     };

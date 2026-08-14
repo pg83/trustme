@@ -4073,6 +4073,41 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 MIR_BUG(state, "Unexpected terminator - " << terminator);
             }
         }
+        TU_ARMA(TailCall, e) {
+            auto callPath = [&](::std::shared_ptr<HIRPath> fcnp, bool indirect) -> unsigned {
+                ::std::vector<MIREvalAllocationPtr> callArgs;
+                callArgs.reserve(e.args.size());
+                for (const auto& arg : e.args) {
+                    HIRTypeRef tmp;
+                    const auto& ty = state.getParamType(tmp, arg);
+                    callArgs.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, ty));
+                    localState.writeParam(MIREvalValueRef(callArgs.back()), arg);
+                }
+
+                const auto oldFrame = this->callStack.size() - 1;
+                if (!this->callFunction(localState, MIRLValue::newReturn(), std::move(fcnp), std::move(callArgs), e.source, indirect)) {
+                    return TERM_RET_RETURN;
+                }
+                this->callStack.erase(this->callStack.begin() + oldFrame);
+                return TERM_RET_PUSHED;
+            };
+
+            if (const auto* path = e.fcn.opt_Path()) {
+                return callPath(::std::make_shared<HIRPath>(path->clone()), false);
+            }
+            if (const auto* value = e.fcn.opt_Value()) {
+                HIRTypeRef tmp;
+                const auto& ty = state.getLvalueType(tmp, *value);
+                MIR_ASSERT(state, ty->is_Function(), "Indirect tail call through non-function-pointer type " << ty);
+
+                auto pointer = localState.getLval(*value).readPtr(state);
+                MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "Function pointer has a nonzero offset");
+                const auto* function = pointer.second.asStaticref();
+                MIR_ASSERT(state, function, "Function pointer has no symbolic function relocation");
+                return callPath(::std::make_shared<HIRPath>(function->path().clone()), true);
+            }
+            MIR_BUG(state, "Intrinsic used as an explicit tail-call target");
+        }
         }
         throw std::runtime_error("Unreachable?");
 }

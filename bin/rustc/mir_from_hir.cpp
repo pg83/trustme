@@ -626,6 +626,47 @@ namespace {
 
         void visit(HIRExprNodeReturn& node) override {
             TRACE_FUNCTION_F("_Return");
+
+            if (node.isTailCall) {
+                MIRCallTarget target;
+                ::std::vector<MIRParam> args;
+
+                if (auto* call = cast<HIRExprNodeCallPath>(node.mValue.get())) {
+                    args = getArgs(call->mArgs);
+                    if (!builder.blockActive()) {
+                        return;
+                    }
+                    if (const auto* path = call->mPath.mData.opt_Generic()) {
+                        const auto& fcn = builder.crate().getFunctionByPath(node.span(), path->mPath);
+                        if (path->mPath.crateName() == "#intrinsics"
+                            || fcn.mAbi == "rust-intrinsic"
+                            || fcn.mAbi == "platform-intrinsic") {
+                            ERROR(node.span(), E0000, "intrinsics cannot be tail-called with `become`");
+                        }
+                    }
+                    target = MIRCallTarget::make_Path(call->mPath.clone());
+                } else if (auto* call = cast<HIRExprNodeCallValue>(node.mValue.get())) {
+                    ASSERT_BUG(node.span(), call->mValue->resType->is_Function(), "Tail call through a non-function value");
+                    this->visitNodePtr(call->mValue);
+                    if (!builder.blockActive()) {
+                        return;
+                    }
+                    auto fcnVal = builder.newTemporary(call->mValue->resType);
+                    builder.pushStmtAssign(call->mValue->span(), fcnVal.clone(), builder.getResult(call->mValue->span()));
+                    args = getArgs(call->mArgs);
+                    if (!builder.blockActive()) {
+                        return;
+                    }
+                    target = MIRCallTarget::make_Value(mv$(fcnVal));
+                } else {
+                    BUG(node.span(), "Tail call expression was not a call");
+                }
+
+                builder.terminateScopeEarly(node.span(), builder.fcnScope());
+                builder.endBlock(MIRTerminator::make_TailCall({mv$(target), mv$(args), SourceLocation(node.span())}));
+                return;
+            }
+
             this->visitNodePtr(node.mValue);
 
             if (!builder.blockActive()) {

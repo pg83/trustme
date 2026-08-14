@@ -712,6 +712,12 @@ TAGGED_UNION(
         ::std::vector<MIRParam> args;
         SourceLocation source;
         bool tracksCaller = false;
+    }),
+    (TailCall, struct {
+        MIRCallTarget fcn;
+        ::std::vector<MIRParam> args;
+        SourceLocation source;
+        bool tracksCaller = false;
     })
 );
 extern ::std::ostream& operator<<(::std::ostream& os, const MIRTerminator& x);

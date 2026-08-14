@@ -1374,6 +1374,14 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     MIRCleanupParam(state, mutator, lv);
                 }
             }
+            TU_ARMA(TailCall, e) {
+                if (e.fcn.is_Value()) {
+                    MIRCleanupLValue(state, mutator, e.fcn.as_Value());
+                }
+                for (auto& param : e.args) {
+                    MIRCleanupParam(state, mutator, param);
+                }
+            }
         }
 
         // VTable calls
@@ -1396,7 +1404,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     }
                 }
 
-                if (path.mData.is_UfcsKnown() && path.mData.as_UfcsKnown().type->is_Function()) {
+                else if (path.mData.is_UfcsKnown() && path.mData.as_UfcsKnown().type->is_Function()) {
                     const auto& pe = path.mData.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_Function();
                     if (pe.trait.mPath == resolve.langFn() || pe.trait.mPath == resolve.langFnMut() || pe.trait.mPath == resolve.langFnOnce()) {
@@ -1419,7 +1427,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         }
                     }
                 }
-                if (path.mData.is_UfcsKnown() && path.mData.as_UfcsKnown().type->is_NamedFunction()) {
+                else if (path.mData.is_UfcsKnown() && path.mData.as_UfcsKnown().type->is_NamedFunction()) {
                     const auto& pe = path.mData.as_UfcsKnown();
                     const auto& fcnTy = pe.type->as_NamedFunction();
                     if (pe.trait.mPath == resolve.langFn() || pe.trait.mPath == resolve.langFnMut() || pe.trait.mPath == resolve.langFnOnce()) {
@@ -1465,6 +1473,67 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 block.statements.push_back(MIRStatement::make_Assign({MIRLValue::newDeref(std::move(e.args.at(0).as_LValue())), std::move(e.args.at(1).as_LValue())}));
                 block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_Tuple({})}));
                 block.terminator = MIRTerminator::make_Goto(e.retBlock);
+            }
+        }
+
+        if (auto* ep = block.terminator.opt_TailCall()) {
+            auto& e = *ep;
+            if (auto* pathP = e.fcn.opt_Path()) {
+                auto& path = *pathP;
+                if (path.mData.is_UfcsKnown() && path.mData.as_UfcsKnown().type->is_TraitObject()) {
+                    const auto& pe = path.mData.as_UfcsKnown();
+                    const auto& traitObject = pe.type->as_TraitObject();
+                    if (traitObject.mTrait.mPath == pe.trait
+                        || resolve.findNamedTraitInTrait(sp, pe.trait.mPath, pe.trait.mParams, *traitObject.mTrait.traitPtr, traitObject.mTrait.mPath.mPath, traitObject.mTrait.mPath.mParams, pe.type, [](const auto&, auto) {
+                            return true;
+                        })) {
+                        e.fcn = MIRCleanupVirtualize(sp, state, mutator, e.args.front().as_LValue(), pe);
+                    }
+                }
+
+                else if (path.mData.is_UfcsKnown() && path.mData.as_UfcsKnown().type->is_Function()) {
+                    const auto& pe = path.mData.as_UfcsKnown();
+                    const auto& fcnTy = pe.type->as_Function();
+                    if (pe.trait.mPath == resolve.langFn() || pe.trait.mPath == resolve.langFnMut() || pe.trait.mPath == resolve.langFnOnce()) {
+                        MIR_ASSERT(state, e.args.size() == 2, "Fn* tail call requires two arguments");
+                        auto fcnLvalue = mv$(e.args[0].as_LValue());
+                        auto argsLvalue = mv$(e.args[1].as_LValue());
+                        e.args.clear();
+                        e.args.reserve(fcnTy.argTypes.size());
+                        for (unsigned int i = 0; i < fcnTy.argTypes.size(); i++) {
+                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
+                        }
+                        e.fcn = pe.trait.mPath == resolve.langFnOnce()
+                            ? mv$(fcnLvalue)
+                            : MIRLValue::newDeref(mv$(fcnLvalue));
+                    }
+                }
+
+                else if (path.mData.is_UfcsKnown() && path.mData.as_UfcsKnown().type->is_NamedFunction()) {
+                    const auto& pe = path.mData.as_UfcsKnown();
+                    const auto& fcnTy = pe.type->as_NamedFunction();
+                    if (pe.trait.mPath == resolve.langFn() || pe.trait.mPath == resolve.langFnMut() || pe.trait.mPath == resolve.langFnOnce()) {
+                        auto nArgs = fcnTy.decay(state.crate.types, state.sp).argTypes.size();
+                        MIR_ASSERT(state, e.args.size() == 2, "Named function tail call requires two arguments");
+                        auto argsLvalue = mv$(e.args[1].as_LValue());
+                        e.args.clear();
+                        e.args.reserve(nArgs);
+                        for (unsigned int i = 0; i < nArgs; i++) {
+                            e.args.push_back(MIRLValue::newField(argsLvalue.clone(), i));
+                        }
+                        TU_MATCH_HDRA((fcnTy.def), {)
+                        TU_ARMA(Function, _) {
+                                e.fcn = fcnTy.path.clone();
+                            }
+                            TU_ARMA(StructConstructor, _) {
+                                MIR_BUG(state, "Struct constructor used as an explicit tail-call target");
+                            }
+                            TU_ARMA(EnumConstructor, _) {
+                                MIR_BUG(state, "Enum constructor used as an explicit tail-call target");
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -1983,6 +2052,14 @@ namespace {
                     rv |= visitMirLvalueMut(v, MIRValUsage::Move, cb);
                 }
                 rv |= visitMirLvalueRawMut(e.retVal, MIRValUsage::Write, cb);
+            }
+            TU_ARMA(TailCall, e) {
+                if (e.fcn.is_Value()) {
+                    rv |= visitMirLvalueRawMut(e.fcn.as_Value(), MIRValUsage::Read, cb);
+                }
+                for (auto& v : e.args) {
+                    rv |= visitMirLvalueMut(v, MIRValUsage::Move, cb);
+                }
             }
         }
         return rv;
@@ -5936,7 +6013,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                             return found;
                         });
                     }
-                    TU_MATCHA((block.terminator), (e), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, DEBUG("TODO: Chain");), (If, stop = true;), (Switch, stop = true;), (SwitchValue, stop = true;), (Drop, stop = true;), (Call, stop = true;))
+                    TU_MATCHA((block.terminator), (e), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, DEBUG("TODO: Chain");), (If, stop = true;), (Switch, stop = true;), (SwitchValue, stop = true;), (Drop, stop = true;), (Call, stop = true;), (TailCall, stop = true;))
                 }
                 // Schedule a replacement in a future pass
                 if (found) {
@@ -7010,7 +7087,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
         depths[info.bbIdx] = ::std::make_pair(info.branchCount, info.level);
         const auto& bb = fcn.blocks[info.bbIdx];
 
-        TU_MATCHA((bb.terminator), (te), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});), (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});), (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});), (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});), (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (Call, todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)))
+        TU_MATCHA((bb.terminator), (te), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});), (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});), (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});), (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});), (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (Call, todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (TailCall, ))
     }
 
     // Sort a list of block indexes by `depths`

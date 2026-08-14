@@ -9496,6 +9496,11 @@ public:
 
     void visit(HIRExprNodeReturn& node) override {
         TRACE_FUNCTION_F(&node << " return ...");
+        if (node.isTailCall
+            && !cast<HIRExprNodeCallPath>(node.mValue.get())
+            && !cast<HIRExprNodeCallValue>(node.mValue.get())) {
+            ERROR(node.span(), E0000, "`become` requires a direct function call");
+        }
         this->context.addIvars(node.mValue->resType);
 
         const auto* retTy = (this->closureRetTypes.size() > 0 ? this->closureRetTypes.back().retType : this->retType);

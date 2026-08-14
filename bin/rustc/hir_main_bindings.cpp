@@ -1474,6 +1474,7 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
                deserialiseMirSwitchvalues()})
             _(Drop, {static_cast<MIRDropKind>(in.readTag()), deserialiseMirLvalue(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction()})
             _(Call, {static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction(), deserialiseMirLvalue(), deserialiseMirCalltarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
+            _(TailCall, {deserialiseMirCalltarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
 #undef _
         default:
             BUG(Span(), "Bad tag for MIR::Terminator - " << tag);
@@ -1946,7 +1947,7 @@ namespace {
         }
 
         void visit(HIRExprNodeReturn& node) override {
-            os << "return";
+            os << (node.isTailCall ? "become" : "return");
             if (node.mValue) {
                 os << " ";
                 this->visitNodePtr(node.mValue);
@@ -3354,7 +3355,8 @@ public:
             (Switch, serialise(e.val); serialiseVec(e.targets); out.writeCount(e.validFlag); out.writeCount(e.invalidTarget);),
             (SwitchValue, serialise(e.val); out.writeCount(e.defTarget); serialiseVec(e.targets); serialise(e.values);),
             (Drop, out.writeTag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.writeCount(e.flagIdx); out.writeCount(e.target); serialiseUnwind(e.unwind);),
-            (Call, out.writeCount(e.retBlock); serialiseUnwind(e.unwind); serialise(e.retVal); serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);)
+            (Call, out.writeCount(e.retBlock); serialiseUnwind(e.unwind); serialise(e.retVal); serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);),
+            (TailCall, serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);)
         )
     }
 

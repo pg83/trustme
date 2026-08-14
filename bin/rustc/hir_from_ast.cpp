@@ -3047,6 +3047,12 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                     mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeReturn>(v.span(), HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>{}))));
                 }
                 break;
+            case ASTExprNodeFlow::TAILCALL:
+                if (!v.mValue) {
+                    ERROR(v.span(), E0000, "`become` requires a call expression");
+                }
+                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeReturn>(v.span(), lower(v.mValue), true));
+                break;
             case ASTExprNodeFlow::YIELD:
                 mHasYield = true;
                 {
