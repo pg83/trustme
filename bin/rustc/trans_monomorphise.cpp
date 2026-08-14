@@ -6,6 +6,7 @@
 #include "mir_operations.h" // Needed for post-monomorph checks and optimisations
 #include "hir_typeck_static.h"
 #include "hir_conv_constant_evaluation.h"
+#include "trans_main_bindings.h"
 
 namespace {
     class Cloner: public MIRCloner {
@@ -91,8 +92,8 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
     return MIRFunctionPointer(box$(output).release());
 }
 
-/// Monomorphise all functions in a TransList
-void TransMonomorphiseList(const WireBoard& wb, const HIRCrate& crate, TransList& list, unsigned mirOptLevel) {
+/// Monomorphise all values and functions in a TransList.
+void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list, unsigned mirOptLevel) {
     ::StaticTraitResolve resolve{wb};
 
     struct Nvs: public HIREvaluator::Newval {
@@ -108,7 +109,7 @@ void TransMonomorphiseList(const WireBoard& wb, const HIRCrate& crate, TransList
         {
         }
 
-        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value) override {
+        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
             // Ensure that the type is in enumeration (it should have been, but maybe not?)
             out.addType(type, false);
             auto name = RcString::newInterned(FMT("ConstEvalMonomorph#" << count));
@@ -118,6 +119,7 @@ void TransMonomorphiseList(const WireBoard& wb, const HIRCrate& crate, TransList
 
             {
                 auto& s = ent->ent.as_Static();
+                s.explicitAlignment = alignment;
                 s.valueGenerated = true;
                 s.valueRes = std::move(value);
                 s.saveLiteral = false;
@@ -128,60 +130,87 @@ void TransMonomorphiseList(const WireBoard& wb, const HIRCrate& crate, TransList
         }
     } nvs{list, crate};
 
-    // Also do constants and statics (stored in where?)
-    // - NOTE: Done in reverse order, because consteval needs used constants to be evaluated
-    for (auto& ent : reverse(list.constants)) {
-        const auto& path = ent.first;
-        const auto& pp = ent.second->pp;
-        const auto& c = *ent.second->ptr;
-        TRACE_FUNCTION_FR("CONSTANT " << path, "CONSTANT " << path);
-        auto ty = pp.monomorph(resolve, c.mType);
-        // 1. Evaluate the constant
-        auto eval = HIREvaluator{pp.sp, wb, nvs};
-        eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.mParams);
-        MonomorphState ms(crate.types);
-        ms.selfTy = pp.selfType;
-        ms.ppImpl = &pp.ppImpl;
-        ms.ppMethod = &pp.ppMethod;
-        DEBUG("ms = " << ms);
-        try {
-            auto newLit = eval.evaluateConstant(path, c.mValue, ::std::move(ty), ::std::move(ms));
-            // 2. Store evaluated HIR::Literal in c.m_monomorph_cache
-            c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
-        } catch (...) {
-            // Deferred - no update
-            BUG(Span(), "Exception thrown during evaluation of: " << path);
-        }
-    }
+    ::std::set<const TransListConst*> evaluatedConstants;
+    ::std::set<const TransListStatic*> evaluatedStatics;
+    size_t insertedStatics = 0;
 
-    for (auto& ent : list.statics) {
-        const auto& path = ent.first;
-        const auto& pp = ent.second->pp;
-        const auto& s = *ent.second->ptr;
+    // CTFE can materialise a global allocation containing relocations to
+    // translation items that were absent from the initial graph.  Enumerating
+    // those items can in turn expose more monomorphised constants, so drive
+    // value evaluation and late enumeration to a fixpoint before touching
+    // function MIR.
+    bool changed;
+    do {
+        changed = false;
 
-        if (!s.mParams.isGeneric()) {
-            continue;
+        // Reverse order is intentional: const-eval commonly needs constants
+        // referenced by a later entry to have been evaluated first.
+        for (auto& ent : reverse(list.constants)) {
+            if (!evaluatedConstants.insert(ent.second.get()).second) {
+                continue;
+            }
+            changed = true;
+
+            const auto& path = ent.first;
+            const auto& pp = ent.second->pp;
+            const auto& c = *ent.second->ptr;
+            TRACE_FUNCTION_FR("CONSTANT " << path, "CONSTANT " << path);
+            auto ty = pp.monomorph(resolve, c.mType);
+            auto eval = HIREvaluator{pp.sp, wb, nvs};
+            eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.mParams);
+            MonomorphState ms(crate.types);
+            ms.selfTy = pp.selfType;
+            ms.ppImpl = &pp.ppImpl;
+            ms.ppMethod = &pp.ppMethod;
+            try {
+                auto newLit = eval.evaluateConstant(path, c.mValue, ::std::move(ty), ::std::move(ms));
+                c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
+            } catch (...) {
+                BUG(Span(), "Exception thrown during evaluation of: " << path);
+            }
         }
 
-        TRACE_FUNCTION_FR("STATIC " << path, "STATIC " << path);
-        auto ty = pp.monomorph(resolve, s.mType);
-        // 1. Evaluate the constant
-        auto eval = HIREvaluator{pp.sp, wb, nvs};
-        eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.mParams);
-        MonomorphState ms(crate.types);
-        ms.selfTy = pp.selfType;
-        ms.ppImpl = &pp.ppImpl;
-        ms.ppMethod = &pp.ppMethod;
-        DEBUG("ms = " << ms);
-        try {
-            auto newLit = eval.evaluateConstant(path, s.mValue, ::std::move(ty), ::std::move(ms));
-            // 2. Store evaluated HIR::Literal in s.m_monomorph_cache
-            s.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
-        } catch (...) {
-            // Deferred - no update
-            BUG(Span(), "Exception thrown during evaluation of: " << path);
+        for (auto& ent : list.statics) {
+            if (!ent.second->ptr->mParams.isGeneric() || !evaluatedStatics.insert(ent.second.get()).second) {
+                continue;
+            }
+            changed = true;
+
+            const auto& path = ent.first;
+            const auto& pp = ent.second->pp;
+            const auto& s = *ent.second->ptr;
+            TRACE_FUNCTION_FR("STATIC " << path, "STATIC " << path);
+            auto ty = pp.monomorph(resolve, s.mType);
+            auto eval = HIREvaluator{pp.sp, wb, nvs};
+            eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.mParams);
+            MonomorphState ms(crate.types);
+            ms.selfTy = pp.selfType;
+            ms.ppImpl = &pp.ppImpl;
+            ms.ppMethod = &pp.ppMethod;
+            try {
+                auto newLit = eval.evaluateConstant(path, s.mValue, ::std::move(ty), ::std::move(ms));
+                s.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
+            } catch (...) {
+                BUG(Span(), "Exception thrown during evaluation of: " << path);
+            }
         }
-    }
+
+        ::std::vector<HIRPath> generated;
+        generated.reserve(nvs.added.size() - insertedStatics);
+        while (insertedStatics < nvs.added.size()) {
+            auto& value = nvs.added[insertedStatics++];
+            auto* out = list.addStatic(crate.types, HIRPath(value.first));
+            ASSERT_BUG(Span(), out, "Generated static " << value.first << " already in TransList?");
+            out->ptr = value.second;
+            generated.push_back(HIRPath(value.first));
+        }
+
+        if (!generated.empty()) {
+            changed = true;
+            TransEnumerateGeneratedStatics(wb, list, generated);
+            TransAutoImpls(wb, crate, list);
+        }
+    } while (changed);
 
     for (auto& fcnEnt : list.functions) {
         const auto& fcn = *fcnEnt.second->ptr;
@@ -230,9 +259,4 @@ void TransMonomorphiseList(const WireBoard& wb, const HIRCrate& crate, TransList
         }
     }
 
-    for (auto& v : nvs.added) {
-        auto* o = list.addStatic(crate.types, HIRPath(v.first));
-        ASSERT_BUG(Span(), o, "Generated static " << v.first << " already in TransList?");
-        o->ptr = v.second;
-    }
 }

@@ -1575,9 +1575,10 @@ namespace {
         }
 
         // Returns `true` if the type is pointer-aligned (i.e. it could contain a pointer)
-        bool emitStaticTy(const HIRTypeData* type, const HIRPath& p, bool isProto) {
+        bool emitStaticTy(const HIRTypeData* type, const HIRPath& p, bool isProto, size_t explicitAlignment) {
             size_t size = 0, align = 0;
             TargetGetSizeAndAlignOf(sp, mResolve, type, size, align);
+            align = std::max(align, explicitAlignment);
             bool rv = (align * 8 >= TargetGetPointerBits());
             of << "union u_static_" << TransMangle(p);
             if (isProto) {
@@ -1585,7 +1586,9 @@ namespace {
                 emitCtype(type, FMT_CB(ss, ss << "val";));
                 of << "; ";
                 if (rv) {
-                    of << "uintptr_t raw[" << (size / (TargetGetPointerBits() / 8)) << "];";
+                    const auto pointerSize = TargetGetPointerBits() / 8;
+                    const auto words = size == 0 ? 0 : 1 + (size - 1) / pointerSize;
+                    of << "uintptr_t raw[" << words << "];";
                 } else {
                     of << "uint8_t raw[" << size << "];";
                 }
@@ -1618,7 +1621,7 @@ namespace {
 
                 of << linkageName << "[0];\n";
 
-                emitStaticTy(type, p, /*is_proto=*/true);
+                emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
                 of << " = { .raw = { (uintptr_t)" << linkageName << " } };";
                 of << "\t// static " << p << " : " << type;
                 of << "\n";
@@ -1630,7 +1633,7 @@ namespace {
             }
 
             of << "extern ";
-            emitStaticTy(type, p, /*is_proto=*/true);
+            emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
             if (linkageName != "") {
                 if (TargetGetCurSpec(mWb).osName == "macos") { // Not macOS only, but all Apple platforms.
                     of << " asm(\"_" << linkageName << "\")";
@@ -1675,7 +1678,10 @@ namespace {
                 of << "__attribute__((weak)) ";
             }
             of << "extern ";
-            emitStaticTy(type, p, /*is_proto=*/true);
+            emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
+            if (item.explicitAlignment != 0) {
+                of << " __attribute__((aligned(" << item.explicitAlignment << ")))";
+            }
             of << ";";
             of << "\t// static " << p << " : " << type;
             of << "\n";
@@ -1697,7 +1703,10 @@ namespace {
             if (item.mParams.isGeneric()) {
                 of << "__attribute__((weak)) ";
             }
-            bool isPacked = emitStaticTy(type, p, /*is_proto=*/false);
+            bool isPacked = emitStaticTy(type, p, /*is_proto=*/false, item.explicitAlignment);
+            if (item.explicitAlignment != 0) {
+                of << " __attribute__((aligned(" << item.explicitAlignment << ")))";
+            }
             of << " = ";
 
             if (isZero) {
@@ -1712,8 +1721,8 @@ namespace {
                     for (size_t i = 0; i < encoded.bytes.size(); i += ptrSize) {
                         uint64_t v = 0;
                         // little-endian only (big-endian targets are unsupported)
-                        for (size_t o = 0, j = 0; j < ptrSize; j++, o++) {
-                            v |= static_cast<uint64_t>(encoded.bytes[i + o]) << (j * 8);
+                        for (size_t o = 0; o < ptrSize && i + o < encoded.bytes.size(); o++) {
+                            v |= static_cast<uint64_t>(encoded.bytes[i + o]) << (o * 8);
                         }
 
                         if (i > 0) {

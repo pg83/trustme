@@ -19,7 +19,7 @@ class MIRTypeResolve;
 struct HIREvaluator {
     class Newval {
     public:
-        virtual HIRPath newStatic(HIRTypeRef type, EncodedLiteral value) = 0;
+        virtual HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) = 0;
     };
 
     class CsePtr {

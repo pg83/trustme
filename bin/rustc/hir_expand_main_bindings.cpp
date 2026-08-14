@@ -4612,7 +4612,7 @@ public:
                 {
                 }
 
-                HIRPath newStatic(HIRTypeRef type, EncodedLiteral value) override {
+                HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
                     auto name = RcString::newInterned(FMT("lifted#" << nextIdx));
                     nextIdx++;
                     auto path = currentModulePath + name;
@@ -4622,6 +4622,7 @@ public:
                         ::std::move(type),
                         /*m_value=*/HIRExprPtr()
                     );
+                    newStatic.explicitAlignment = alignment;
                     newStatic.valueGenerated = true;
                     newStatic.valueRes = ::std::move(value);
                     DEBUG(path << " = " << newStatic.valueRes);
@@ -4848,7 +4849,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
             {
             }
 
-            HIRPath newStatic(HIRTypeRef type, EncodedLiteral value) override {
+            HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
                 auto name = RcString::newInterned(FMT("lifted#C_" << staticCount));
                 staticCount++;
                 auto path = HIRSimplePath() + name;
@@ -4858,6 +4859,7 @@ void HIRExpandStaticBorrowConstantsExpr(const WireBoard& wb, const HIRCrate& cra
                     ::std::move(type),
                     /*m_value=*/HIRExprPtr()
                 );
+                newStatic.explicitAlignment = alignment;
                 newStatic.valueGenerated = true;
                 newStatic.valueRes = ::std::move(value);
                 DEBUG(path << " = " << newStatic.valueRes);

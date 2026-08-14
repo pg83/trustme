@@ -105,6 +105,9 @@ public:
     HIRLinkage linkage;
     bool isMut;
     HIRTypeRef mType;
+    // Stronger alignment requested for compiler-generated storage.  This is
+    // zero for Rust statics, whose alignment is determined by mType.
+    size_t explicitAlignment = 0;
 
     HIRExprPtr mValue;
 
@@ -179,6 +182,9 @@ public:
         std::vector<unsigned> rustcLegacyConstGenerics;
         bool trackCaller = false;
         bool isNaked = false;
+        // Calls to functions with #[rustc_intrinsic] must remain visible to
+        // CTFE even when the function also provides a runtime fallback body.
+        bool isRustcIntrinsic = false;
 
         enum Inline {
             Auto,   // no annotation

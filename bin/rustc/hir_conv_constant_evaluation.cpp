@@ -33,7 +33,7 @@ namespace {
         {
         }
 
-        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value) override {
+        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
             TODO(this->sp, "new_static while evaluating a const generic");
         }
     };
@@ -69,12 +69,13 @@ namespace {
         {
         }
 
-        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value) override {
+        HIRPath newStatic(HIRTypeRef type, EncodedLiteral value, size_t alignment) override {
             ASSERT_BUG(Span(), type != HIRTypeRef(), "");
             auto name = RcString::newInterned(FMT(namePrefix << nextItemIdx));
             nextItemIdx++;
             auto rv = modPath.getSimplePath() + name.c_str();
             auto s = HIRStatic(HIRLinkage(), false, mv$(type), HIRExprPtr());
+            s.explicitAlignment = alignment;
             s.valueRes = ::std::move(value);
             s.valueGenerated = true;
             s.saveLiteral = true;
@@ -144,6 +145,7 @@ public:
 class MIREvalAllocationPtr final: public MIREvalPtr<MIREvalAllocation> {
 public:
     static MIREvalAllocationPtr allocate(stl::ObjPool* pool, const StaticTraitResolve& resolve, const MIRTypeResolve& state, const HIRTypeData* ty);
+    static MIREvalAllocationPtr allocateHeap(stl::ObjPool* pool, size_t size, size_t alignment);
     static MIREvalAllocationPtr allocateRo(stl::ObjPool* pool, const void* data, size_t len);
 };
 
@@ -362,6 +364,10 @@ private:
     unsigned length;
     bool isReadonly;
     HIRTypeRef mType;
+    bool isConstHeap;
+    bool isLive;
+    bool isGlobal;
+    size_t heapAlignment;
     std::vector<Reloc> relocations;
     uint8_t* data;
 
@@ -369,6 +375,10 @@ private:
         : length(len)
         , isReadonly(false)
         , mType(ty)
+        , isConstHeap(false)
+        , isLive(true)
+        , isGlobal(false)
+        , heapAlignment(0)
         , data(data)
     {
         memset(data, 0, len + (len + 7) / 8);
@@ -532,6 +542,33 @@ public:
 
     const HIRTypeData* getType() const {
         return mType;
+    }
+
+    bool isConstHeapAllocation() const {
+        return isConstHeap;
+    }
+
+    bool isAlive() const {
+        return isLive;
+    }
+
+    bool wasMadeGlobal() const {
+        return isGlobal;
+    }
+
+    size_t getHeapAlignment() const {
+        return heapAlignment;
+    }
+
+    void makeGlobal() {
+        assert(isConstHeap && isLive && !isGlobal);
+        isGlobal = true;
+        isReadonly = true;
+    }
+
+    void deallocate() {
+        assert(isConstHeap && isLive && !isGlobal);
+        isLive = false;
     }
 
     const std::vector<Reloc>& getRelocations() const {
@@ -716,6 +753,8 @@ public:
     }
 
     void copyFrom(const MIRTypeResolve& state, const MIREvalValueRef& other) {
+        ensureLive(state);
+        other.ensureLive(state);
         size_t len = std::min(this->len, other.len);
         // Check that there's no overlap
         if (this->storage == other.storage) {
@@ -740,6 +779,7 @@ public:
     }
 
     void writeBytes(const MIRTypeResolve& state, const void* data, size_t len) {
+        ensureLive(state);
         MIR_ASSERT(state, storage, "Writing to invalid slot");
         MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
         if (len > 0) {
@@ -748,6 +788,7 @@ public:
     }
 
     uint8_t* extWriteBytes(const MIRTypeResolve& state, size_t len) {
+        ensureLive(state);
         MIR_ASSERT(state, storage, "Writing to invalid slot");
         MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
         if (len > 0) {
@@ -810,6 +851,7 @@ public:
     }
 
     const uint8_t* extReadBytes(const MIRTypeResolve& state, size_t len) const {
+        ensureLive(state);
         MIR_ASSERT(state, storage, "");
         MIR_ASSERT(state, len >= 1, "");
         const auto* src = storage.asValue().getBytes(ofs, len, /*check_mask*/ true);
@@ -874,6 +916,13 @@ public:
     }
 
     friend std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr);
+
+private:
+    void ensureLive(const MIRTypeResolve& state) const {
+        if (auto* allocation = storage.asAllocation()) {
+            MIR_ASSERT(state, allocation->isAlive(), "use of deallocated const heap allocation");
+        }
+    }
 };
 
 std::ostream& operator<<(std::ostream& os, const MIREvalValueRef& vr) {
@@ -909,6 +958,15 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const St
     MIREvalAllocationPtr rv;
     // TODO: Include the current location from `state` in the allocation header
     rv.ptr = pool->make<MIREvalAllocation>(data, len, ty);
+    return rv;
+}
+
+MIREvalAllocationPtr MIREvalAllocationPtr::allocateHeap(stl::ObjPool* pool, size_t size, size_t alignment) {
+    auto* data = static_cast<uint8_t*>(pool->allocate(size + ((size + 7) / 8)));
+    MIREvalAllocationPtr rv;
+    rv.ptr = pool->make<MIREvalAllocation>(data, size, HIRTypeRef());
+    rv->isConstHeap = true;
+    rv->heapAlignment = alignment;
     return rv;
 }
 
@@ -1012,6 +1070,33 @@ namespace {
             TODO(sp, "Handle StructConstant - " << path);
         }
         throw "";
+    }
+
+    const char* getConstHeapIntrinsic(const Span& sp, const StaticTraitResolve& resolve, const HIRPath& path) {
+        const auto* generic = path.mData.opt_Generic();
+        if (!generic) {
+            return nullptr;
+        }
+        const auto& simple = generic->mPath;
+        const auto& crate = simple.crateName();
+        if (crate != "core" && crate.compare(0, 5, "core-") != 0) {
+            return nullptr;
+        }
+        const auto components = simple.components();
+        if (components.size() != 2 || components[0] != "intrinsics") {
+            return nullptr;
+        }
+        const char* name = components[1].c_str();
+        if (strcmp(name, "const_allocate") == 0
+            || strcmp(name, "const_deallocate") == 0
+            || strcmp(name, "const_make_global") == 0) {
+            MonomorphState intrinsicMs(resolve.hirCrate().types);
+            const auto entity = getEntFullpath(sp, resolve, path, EntNS::Value, intrinsicMs);
+            if (const auto* function = entity.opt_Function(); function && (**function).markings.isRustcIntrinsic) {
+                return name;
+            }
+        }
+        return nullptr;
     }
 
     struct TypeInfo {
@@ -1460,7 +1545,7 @@ public:
         }
     }
 
-    MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr) {
+    MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, uint64_t* rawAddress = nullptr) {
         HIRTypeRef tmpTy = nullptr;
         const HIRTypeData* typ = nullptr;
         MIREvalValueRef metadata;
@@ -1565,8 +1650,27 @@ public:
                     if (auto* staticRef = p.second.asStaticref(); staticRef && !staticRef->hasValue()) {
                         p.second = MIREvalRelocPtr(getStaticref(staticRef->path().clone()));
                     }
-                    MIR_ASSERT(state, p.first >= EncodedLiteral::PTR_BASE, "Null (<PTR_BASE) pointer deref");
                     MIR_ASSERT(state, p.first % al == 0, "Unaligned pointer deref");
+                    bool zeroSizedDeref = sz == 0;
+                    if (sz == SIZE_MAX) {
+                        size_t itemSize = 1;
+                        if (const auto* slice = typ->opt_Slice()) {
+                            if (!TargetGetSizeOf(state.sp, rootResolve, slice->inner, itemSize)) {
+                                throw Defer();
+                            }
+                        } else if (typ != HIRCoreType::Str) {
+                            itemSize = 1;
+                        }
+                        zeroSizedDeref = itemSize == 0 || metadata.readUsize(state) == 0;
+                    }
+                    if (p.first < EncodedLiteral::PTR_BASE) {
+                        MIR_ASSERT(state, p.first != 0 && !p.second && zeroSizedDeref && rawAddress,
+                            "Null (<PTR_BASE) pointer deref");
+                        MIR_ASSERT(state, &w == &lv.wrappers.back(), "Raw pointer deref followed by an lvalue projection");
+                        *rawAddress = p.first;
+                        val = MIREvalValueRef();
+                        continue;
+                    }
                     DEBUG("> " << MIREvalValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
                     // TODO: Determine size using metadata?
                     if (sz == SIZE_MAX) {
@@ -1754,8 +1858,13 @@ public:
     /// Write a borrow of the given lvalue
     void writeBorrow(MIREvalValueRef dst, HIRBorrowType bt, const MIRLValue& lv) {
         MIREvalValueRef meta;
-        auto val = this->getLval(lv, &meta);
-        dst.writePtr(state, EncodedLiteral::PTR_BASE + val.getOfs(), val.getStorage());
+        uint64_t rawAddress = 0;
+        auto val = this->getLval(lv, &meta, &rawAddress);
+        if (rawAddress) {
+            dst.writePtr(state, rawAddress, MIREvalRelocPtr());
+        } else {
+            dst.writePtr(state, EncodedLiteral::PTR_BASE + val.getOfs(), val.getStorage());
+        }
         if (meta.isValid()) {
             auto ptrSize = TargetGetPointerBits() / 8;
             dst.slice(ptrSize).copyFrom(state, meta);
@@ -2409,6 +2518,44 @@ MIREvalAllocationPtr HIREvaluator::runUntilStackEmpty() {
     ERROR(this->rootSpan, E0000, "Constant evaluation ran for too long - " << numStmtsRun << " statements, " << idx << " blocks");
 }
 
+static void writeCtfeUnsizeMetadata(
+    MIREvalCallStackEntry& localState,
+    MIREvalValueRef dst,
+    const HIRTypeData* dynamicTypeD,
+    const HIRTypeData* dynamicTypeS
+) {
+    const auto& state = localState.state;
+    while (const auto* pathD = dynamicTypeD->opt_Path()) {
+        MIR_ASSERT(state, pathD->binding.is_Struct(), "Pointer unsize to " << dynamicTypeD);
+        const auto* pathS = dynamicTypeS->opt_Path();
+        MIR_ASSERT(state, pathS && pathS->binding.is_Struct() && pathS->binding.as_Struct() == pathD->binding.as_Struct(),
+            "Pointer unsize from " << dynamicTypeS << " to " << dynamicTypeD);
+        const auto& markings = pathD->binding.as_Struct()->structMarkings;
+        MIR_ASSERT(state, markings.coerceUnsized != HIRStructMarkings::Coerce::None,
+            "Pointer unsize through non-CoerceUnsized type " << dynamicTypeD);
+        dynamicTypeD = pathD->path.mData.as_Generic().mParams.types.at(markings.unsizedParam);
+        dynamicTypeS = pathS->path.mData.as_Generic().mParams.types.at(markings.unsizedParam);
+    }
+
+    const auto ptrSize = TargetGetPointerBits() / 8;
+    if (const auto* traitObject = dynamicTypeD->opt_TraitObject()) {
+        MIR_ASSERT(state, !dynamicTypeS->is_TraitObject(),
+            "Trait-object pointer upcast must provide explicit metadata");
+        static const RcString rcstringVtable = RcString::newInterned("vtable#");
+        auto vtablePath = HIRPath(dynamicTypeS, traitObject->mTrait.mPath.clone(), rcstringVtable);
+        auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
+        dst.slice(ptrSize).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
+    } else if (dynamicTypeD->is_Slice()) {
+        const auto* array = dynamicTypeS->opt_Array();
+        MIR_ASSERT(state, array && array->size.is_Known(), "Pointer unsize to slice from " << dynamicTypeS);
+        dst.slice(ptrSize).writeUint(state, TargetGetPointerBits(), array->size.as_Known());
+    } else {
+        const auto metadataType = localState.resolve.metadataType(state.sp, dynamicTypeD);
+        MIR_ASSERT(state, metadataType == MetadataType::None || metadataType == MetadataType::Zero,
+            "Unhandled pointer metadata " << metadataType << " for " << dynamicTypeD);
+    }
+}
+
 void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt) {
     const auto& state = localState.state;
     DEBUG("E" << this->evalIndex << " F" << localState.frameIndex << " " << state << stmt);
@@ -2463,11 +2610,12 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             const auto& srcTy = state.getLvalueType(tmp, e.val);
 
             auto inval = localState.getLval(e.val);
+            auto castType = localState.monomorphExpand(e.type);
 
-            TU_MATCH_HDRA( (*e.type), {)
+            TU_MATCH_HDRA( (*castType), {)
             default:
                 // NOTE: Can be an unsizing!
-                MIR_TODO(state, "RValue::Cast to " << e.type << " from " << srcTy << ", val = " << inval);
+                MIR_TODO(state, "RValue::Cast to " << castType << " from " << srcTy << ", val = " << inval);
                 TU_ARMA(Primitive, te) {
                     auto ti = TypeInfo::forPrimitive(te);
                     auto srcTi = TypeInfo::forType(srcTy);
@@ -2535,19 +2683,30 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                             }
                             break;
                         default:
-                            MIR_TODO(state, "RValue::Cast to " << e.type << ", val = " << inval);
+                            MIR_TODO(state, "RValue::Cast to " << castType << ", val = " << inval);
                     }
                 }
                 break;
-                // Allow casting any integer value to a pointer (TODO: Ensure that the pointer is sized?)
-                case HIRTypeData::TAG_Pointer:
-                case HIRTypeData::TAG_Function:
+                TU_ARMA(Pointer, de) {
+                    if (const auto* e = srcTy->opt_NamedFunction()) {
+                        dst.writePtr(state, EncodedLiteral::PTR_BASE, localState.getStaticrefMono(e->path));
+                    } else {
+                        dst.copyFrom(state, inval.slice(0, std::min(inval.getLen(), dst.getLen())));
+
+                        const auto* se = srcTy->opt_Pointer();
+                        if (se && dst.getLen() > inval.getLen()
+                            && localState.resolve.metadataType(state.sp, se->inner) == MetadataType::None) {
+                            writeCtfeUnsizeMetadata(localState, dst, de.inner, se->inner);
+                        }
+                    }
+                }
+                TU_ARMA(Function, de) {
                     if (const auto* e = srcTy->opt_NamedFunction()) {
                         dst.writePtr(state, EncodedLiteral::PTR_BASE, localState.getStaticrefMono(e->path));
                     } else {
                         dst.copyFrom(state, inval.slice(0, std::min(inval.getLen(), dst.getLen())));
                     }
-                    break;
+                }
             }
         }
         TU_ARMA(BinOp, e) {
@@ -2644,37 +2803,23 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                         }
                     }
                     TU_ARMA(Borrow, te) {
-                        const auto* dynamicTypeD = &te.inner;
-                        const auto* dynamicTypeS = &srcTy->as_Borrow().inner;
-                        for (;;) {
-                            if (const auto* tep = (*dynamicTypeD)->opt_Path()) {
-                                MIR_ASSERT(state, tep->binding.is_Struct(), "RValue::MakeDst to " << *dynamicTypeD);
-                                const auto& sm = tep->binding.as_Struct()->structMarkings;
-                                dynamicTypeD = &tep->path.mData.as_Generic().mParams.types.at(sm.unsizedParam);
-                                dynamicTypeS = &(*dynamicTypeS)->as_Path().path.mData.as_Generic().mParams.types.at(sm.unsizedParam);
-                            } else {
-                                break;
-                            }
-                        }
-                        // TODO: What can cast TO a borrow? - Non-converted dyn unsizes .. but they require vtables,
-                        // which aren't available yet!
-                        if (const auto* tep = (*dynamicTypeD)->opt_TraitObject()) {
-                            if (tep->mTrait.mPath == HIRSimplePath() && (*dynamicTypeS)->is_TraitObject()) {
-                                // Dropping a principal trait keeps the source
-                                // vtable: auto-trait-only objects still need
-                                // its drop, size, and alignment entries.
-                                localState.writeParam(dst, e.ptrVal);
-                            } else {
-                                static const RcString rcstringVtable = RcString::newInterned("vtable#");
-                                auto vtablePath = HIRPath(*dynamicTypeS, tep->mTrait.mPath.clone(), rcstringVtable);
-                                auto vtable = MIREvalStaticRefPtr::allocate(localState.valuePool, std::move(vtablePath), nullptr, 0);
-                                dst.slice(TargetGetPointerBits() / 8).writePtr(state, EncodedLiteral::PTR_BASE, std::move(vtable));
-                            }
-                        } else if (/*const auto* tep =*/(*dynamicTypeD)->opt_Slice()) {
-                            auto size = (*dynamicTypeS)->as_Array().size.as_Known();
-                            dst.slice(TargetGetPointerBits() / 8).writeUint(state, TargetGetPointerBits(), size);
+                        MIR_ASSERT(state, srcTy->is_Borrow(), "RValue::MakeDst from " << srcTy << " to " << dstTy);
+                        const auto srcInner = srcTy->as_Borrow().inner;
+                        const auto srcMetadata = localState.resolve.metadataType(state.sp, srcInner);
+                        if (srcMetadata == MetadataType::Slice || srcMetadata == MetadataType::TraitObject) {
+                            localState.writeParam(dst, e.ptrVal);
                         } else {
-                            MIR_BUG(state, "RValue::MakeDst to " << dstTy << " from " << srcTy << " - " << *dynamicTypeD << " from " << *dynamicTypeS);
+                            writeCtfeUnsizeMetadata(localState, dst, te.inner, srcInner);
+                        }
+                    }
+                    TU_ARMA(Pointer, te) {
+                        MIR_ASSERT(state, srcTy->is_Pointer(), "RValue::MakeDst from " << srcTy << " to " << dstTy);
+                        const auto srcInner = srcTy->as_Pointer().inner;
+                        const auto srcMetadata = localState.resolve.metadataType(state.sp, srcInner);
+                        if (srcMetadata == MetadataType::Slice || srcMetadata == MetadataType::TraitObject) {
+                            localState.writeParam(dst, e.ptrVal);
+                        } else {
+                            writeCtfeUnsizeMetadata(localState, dst, te.inner, srcInner);
                         }
                     }
                 }
@@ -3502,6 +3647,63 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 DEBUG("ms=" << ms);
                 auto fcnp = std::make_shared<HIRPath>(ms.monomorphPath(state.sp, fcnpRaw));
 
+                if (const char* intrinsic = getConstHeapIntrinsic(state.sp, resolve, *fcnp)) {
+                    auto dst = localState.getLval(e.retVal);
+                    const unsigned pointerBits = TargetGetPointerBits();
+                    auto readUsize = [&](size_t argument) {
+                        auto value = localState.readParamUint(pointerBits, e.args.at(argument));
+                        MIR_ASSERT(state, value.isU64(), "`" << intrinsic << "` argument does not fit usize");
+                        return value.truncateU64();
+                    };
+                    auto readAlignment = [&](size_t argument) {
+                        uint64_t alignment = readUsize(argument);
+                        // rustc_abi::Align treats zero as one and inherits
+                        // LLVM's maximum supported alignment of 2^29.
+                        if (alignment == 0) {
+                            alignment = 1;
+                        }
+                        if ((alignment & (alignment - 1)) != 0 || alignment > (1ull << 29)) {
+                            ERROR(state.sp, E0000, "`" << intrinsic << "` requires a valid power-of-two alignment, got " << alignment);
+                        }
+                        return alignment;
+                    };
+
+                    if (strcmp(intrinsic, "const_allocate") == 0) {
+                        MIR_ASSERT(state, e.args.size() == 2, "invalid const_allocate signature");
+                        const uint64_t size = readUsize(0);
+                        const uint64_t alignment = readAlignment(1);
+                        MIR_ASSERT(state, size <= SIZE_MAX, "const_allocate size is too large");
+                        MIR_ASSERT(state, alignment <= SIZE_MAX, "const_allocate alignment is too large");
+                        auto allocation = MIREvalAllocationPtr::allocateHeap(localState.valuePool, size, alignment);
+                        dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalRelocPtr(allocation));
+                    } else if (strcmp(intrinsic, "const_deallocate") == 0) {
+                        MIR_ASSERT(state, e.args.size() == 3, "invalid const_deallocate signature");
+                        auto pointer = localState.readParamPtr(e.args.at(0));
+                        const uint64_t size = readUsize(1);
+                        const uint64_t alignment = readAlignment(2);
+                        if (auto* allocation = pointer.second.asAllocation(); allocation && allocation->isConstHeapAllocation()) {
+                            MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "const_deallocate pointer is not at the start of its allocation");
+                            MIR_ASSERT(state, allocation->isAlive(), "const_deallocate of an already deallocated allocation");
+                            MIR_ASSERT(state, !allocation->wasMadeGlobal(), "const_deallocate of an allocation made global in this evaluation");
+                            MIR_ASSERT(state, allocation->size() == size, "const_deallocate size does not match const_allocate");
+                            MIR_ASSERT(state, allocation->getHeapAlignment() == alignment, "const_deallocate alignment does not match const_allocate");
+                            allocation->deallocate();
+                        }
+                    } else {
+                        MIR_ASSERT(state, e.args.size() == 1, "invalid const_make_global signature");
+                        auto pointer = localState.readParamPtr(e.args.at(0));
+                        auto* allocation = pointer.second.asAllocation();
+                        MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "const_make_global pointer is not at the start of its allocation");
+                        MIR_ASSERT(state, allocation && allocation->isConstHeapAllocation(), "const_make_global pointer was not returned by const_allocate");
+                        MIR_ASSERT(state, allocation->isAlive(), "const_make_global of a deallocated allocation");
+                        MIR_ASSERT(state, !allocation->wasMadeGlobal(), "const_make_global called twice for one allocation");
+                        allocation->makeGlobal();
+                        dst.writePtr(state, pointer.first, pointer.second);
+                    }
+                    DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                    return e.retBlock;
+                }
+
                 // Argument values
                 ::std::vector<MIREvalAllocationPtr> callArgs;
                 callArgs.reserve(e.args.size());
@@ -3678,10 +3880,26 @@ EncodedLiteral HIREvaluator::allocationToEncoded(const HIRTypeData* ty, const MI
     for (const auto& r : a.getRelocations()) {
         if (const auto* innerAlloc = r.ptr.asAllocation()) {
             // Create a new static
-            if (innerAlloc->isWritable()) {
+            if (innerAlloc->isConstHeapAllocation() || innerAlloc->isWritable()) {
+                ASSERT_BUG(this->rootSpan, innerAlloc->isAlive(), "constant contains a pointer to a deallocated allocation");
                 auto innerVal = allocationToEncoded(innerAlloc->getType(), *innerAlloc);
+                HIRTypeRef staticType;
+                size_t staticAlignment = 0;
+                if (innerAlloc->isConstHeapAllocation()) {
+                    if (!innerAlloc->wasMadeGlobal()) {
+                        ERROR(this->rootSpan, E0000, "a const heap allocation escaped without const_make_global");
+                    }
+                    staticType = resolve.hirCrate().types.array(
+                        resolve.hirCrate().types.primitive(HIRCoreType::U8),
+                        innerAlloc->size()
+                    );
+                    staticAlignment = innerAlloc->getHeapAlignment();
+                } else {
+                    ASSERT_BUG(this->rootSpan, innerAlloc->getType(), "typed CTFE allocation has no type");
+                    staticType = MonomorphiserNop(resolve.hirCrate().types).monomorphType(Span(), innerAlloc->getType());
+                }
 
-                auto itemPath = nvs.newStatic(MonomorphiserNop(resolve.hirCrate().types).monomorphType(Span(), innerAlloc->getType()), mv$(innerVal));
+                auto itemPath = nvs.newStatic(mv$(staticType), mv$(innerVal), staticAlignment);
 
                 rv.relocations.push_back(Reloc::newNamed(r.offset, TargetGetPointerBits() / 8, mv$(itemPath)));
             } else {

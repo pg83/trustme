@@ -455,6 +455,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             assert(impl.methods.size() == 1);
             e->ptr = &impl.methods.begin()->second.data;
         }
+        transList.autoCloneImpls.clear();
     }
 
     if (!transList.autoFnptrImpls.empty()) {
@@ -500,6 +501,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 e->ptr = &impl.methods.begin()->second.data;
             }
         }
+        transList.autoFnptrImpls.clear();
     }
 
     // Trait object methods
@@ -615,6 +617,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 transList.autoFunctions.pop_back();
             }
         }
+        transList.traitObjectMethods.clear();
     }
 
     // Create VTable instances
@@ -1251,6 +1254,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                 transList.autoFunctions.pop_back();
             }
         }
+        transList.dropGlue.clear();
     }
 }
 
@@ -2075,6 +2079,70 @@ TransList TransEnumerateCommonPost(EnumState& state) {
     TransEnumerateTypes(state);
 
     return mv$(state.rv);
+}
+
+namespace {
+    void mergeEnumeratedItems(HIRTypeInterner& types, TransList& out, TransList additions) {
+        ASSERT_BUG(Span(), additions.roots.empty(), "Incremental translation enumeration unexpectedly added roots");
+        ASSERT_BUG(Span(), additions.autoStatics.empty() && additions.autoFunctions.empty(), "Enumeration generated translation items before TransAutoImpls");
+
+        for (auto& ent : additions.functions) {
+            if (auto* dst = out.addFunction(types, ent.first.clone())) {
+                dst->ptr = ent.second->ptr;
+                dst->pp = mv$(ent.second->pp);
+                dst->monomorphised = mv$(ent.second->monomorphised);
+                dst->forcePrototype = ent.second->forcePrototype;
+            }
+        }
+        for (auto& ent : additions.statics) {
+            if (auto* dst = out.addStatic(types, ent.first.clone())) {
+                dst->ptr = ent.second->ptr;
+                dst->pp = mv$(ent.second->pp);
+            }
+        }
+        for (auto& ent : additions.constants) {
+            if (auto* dst = out.addConst(types, ent.first.clone())) {
+                dst->ptr = ent.second->ptr;
+                dst->pp = mv$(ent.second->pp);
+            }
+        }
+        for (auto& ent : additions.vtables) {
+            out.addVtable(ent.first.clone(), mv$(ent.second));
+        }
+        for (const auto& ty : additions.typeids) {
+            out.typeids.insert(ty);
+        }
+        for (const auto& ty : additions.dropGlue) {
+            out.dropGlue.insert(ty);
+        }
+        for (const auto& path : additions.constructors) {
+            out.constructors.insert(path.clone());
+        }
+        for (const auto& ty : additions.autoCloneImpls) {
+            out.autoCloneImpls.insert(ty);
+        }
+        for (const auto& ty : additions.autoFnptrImpls) {
+            out.autoFnptrImpls.insert(ty);
+        }
+        for (const auto& path : additions.traitObjectMethods) {
+            out.traitObjectMethods.insert(path.clone());
+        }
+        for (const auto& ent : additions.types) {
+            out.addType(ent.first, ent.second);
+        }
+    }
+}
+
+void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const ::std::vector<HIRPath>& paths) {
+    if (paths.empty()) {
+        return;
+    }
+
+    EnumState state{wb};
+    for (const auto& path : paths) {
+        TransEnumerateFillFromPathMono(state, path.clone());
+    }
+    mergeEnumeratedItems(state.crate.types, list, TransEnumerateCommonPost(state));
 }
 
 namespace {

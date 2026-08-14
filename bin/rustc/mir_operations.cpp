@@ -487,7 +487,8 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
         TU_ARMA(Borrow, te) {
             const auto* dataReloc = lit.getReloc();
             const auto data_ptr = lit.readUint(TargetGetPointerBits() / 8);
-            MIR_ASSERT(state, data_ptr >= EncodedLiteral::PTR_BASE, "Bad pointer value - 0x" << std::hex << data_ptr);
+            MIR_ASSERT(state, dataReloc ? data_ptr >= EncodedLiteral::PTR_BASE : data_ptr != 0,
+                "Bad pointer value - 0x" << std::hex << data_ptr);
 
             if (!dataReloc) {
                 HIRTypeRef ptrInner;
@@ -2033,6 +2034,14 @@ namespace {
         DEBUG(e.tagStr() << " " << outParams);
         params.fcnParams = outParams.getMethodParams();
         params.implParams = outParams.ppImpl == nullptr ? HIRPathParams() : outParams.ppImpl == &outParams.ppImplData ? std::move(outParams.ppImplData) : outParams.ppImpl->clone();
+
+        // A #[rustc_intrinsic] with a body has that body only as its runtime
+        // fallback.  Inlining it would erase the call that CTFE replaces with
+        // intrinsic semantics (notably const_allocate/const_make_global).
+        if (e.is_Function() && e.as_Function()->markings.isRustcIntrinsic) {
+            DEBUG("Not inlining #[rustc_intrinsic] " << path);
+            return nullptr;
+        }
 
         // If a TransList is avaliable, then all referenced functions must be in it.
         if (list) {

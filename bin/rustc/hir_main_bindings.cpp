@@ -770,6 +770,7 @@ public:
         HIRFunction::Markings rv;
         rv.rustcLegacyConstGenerics = deserialiseVec<unsigned>();
         rv.trackCaller = in.readBool();
+        rv.isRustcIntrinsic = in.readBool();
         return rv;
     }
 
@@ -809,11 +810,15 @@ public:
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         bool isMut;
         bool saveLiteral;
+        bool hasExplicitAlignment;
         BIT(0, isMut);
         BIT(1, saveLiteral);
+        BIT(2, hasExplicitAlignment);
 #undef BIT
+        auto explicitAlignment = hasExplicitAlignment ? in.readCount() : 0;
         auto ty = deserialiseType();
         auto rv = HIRStatic(mv$(linkage), isMut, mv$(ty), {});
+        rv.explicitAlignment = explicitAlignment;
         if (params.isGeneric()) {
             rv.mValue = deserialiseExprptr();
         }
@@ -3454,6 +3459,7 @@ public:
         auto _ = out.openObject("HIR::Function::Markings");
         serialiseVec(m.rustcLegacyConstGenerics);
         out.writeBool(m.trackCaller);
+        out.writeBool(m.isRustcIntrinsic);
     }
 
     void serialise(const HIRConstant& item) {
@@ -3481,8 +3487,12 @@ public:
         bitflag1 |= 1 << (i);
         BIT(0, item.isMut);
         BIT(1, item.saveLiteral)
+        BIT(2, item.explicitAlignment != 0)
 #undef BIT
         out.writeU8(bitflag1);
+        if (item.explicitAlignment != 0) {
+            out.writeCount(item.explicitAlignment);
+        }
         serialise(item.mType);
 
         if (item.mParams.isGeneric()) {

@@ -1774,6 +1774,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const ASTAttributeList& att
         markings.trackCaller = true;
     }
     markings.isNaked = f.markings.isNaked;
+    markings.isRustcIntrinsic = attrs.has("rustc_intrinsic");
 
     HIRLinkage linkage;
     switch (f.markings.linkage) {
