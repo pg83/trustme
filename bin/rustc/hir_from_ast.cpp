@@ -1835,6 +1835,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const ASTAttributeList& att
     rv.mArgs = mv$(args);
     rv.variadic = f.isVariadic();
     rv.returnType = LowerHIRType(f.rettype());
+    rv.source = SourceLocation(f.sp());
     rv.mCode = LowerHIRExpr(f.code());
     rv.markings = markings;
 

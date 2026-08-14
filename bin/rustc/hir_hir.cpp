@@ -638,6 +638,20 @@ const HIRFunction& HIRCrate::getFunctionByPath(const Span& sp, const HIRSimplePa
     }
 }
 
+bool HIRCrate::functionTracksCaller(const Span& sp, const HIRPath& path, const HIRFunction& function) const {
+    if (function.markings.trackCaller) {
+        return true;
+    }
+    if (const auto* known = path.mData.opt_UfcsKnown()) {
+        const auto& trait = getTraitByPath(sp, known->trait.mPath);
+        const auto item = trait.values.find(known->item);
+        if (item != trait.values.end() && item->second.is_Function()) {
+            return item->second.as_Function().markings.trackCaller;
+        }
+    }
+    return false;
+}
+
 const HIRStatic& HIRCrate::getStaticByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& m = this->getModByPath(sp, path, /*ignore_last*/ true);
     auto it = m.valueItems.find(path.components().back());

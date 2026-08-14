@@ -9,7 +9,7 @@ import re
 
 
 ERROR = re.compile(r" error:[A-Z0-9]*: (.*)")
-GENERIC_ABORT_FRAMES = {"span.cpp:75", "span.cpp:82", "mir_helpers.cpp:29"}
+GENERIC_ABORT_SOURCES = ("span.cpp:", "mir_helpers.cpp:")
 ROOT = Path(__file__).resolve().parent.parent
 SOURCE_LOCATION = re.compile(re.escape(str(ROOT / "bin" / "rustc")) + r"/([^: ]+:[0-9]+)")
 FRAME_LOCATION = re.compile(r" at " + re.escape(str(ROOT / "bin" / "rustc")) + r"/([^: ]+:[0-9]+)")
@@ -25,7 +25,7 @@ def caller(text: str) -> str:
         return "no-backtrace"
     for match in FRAME_LOCATION.finditer(text, thread):
         location = match.group(1)
-        if location not in GENERIC_ABORT_FRAMES:
+        if not location.startswith(GENERIC_ABORT_SOURCES):
             return location
     return "no-rustc-frame"
 
@@ -80,12 +80,12 @@ def abort_signature(text: str) -> tuple[str, str]:
     if line:
         location = compiler_location(line) or frame
         return "bug", f"BUG {location}"
-    message = diagnostic(text)
-    if message is not None:
-        return "compile-error", f"ERROR {frame}"
     assertion = first_line(text, "Assertion `")
     if assertion:
         return "assert", f"ASSERT {compiler_location(assertion) or frame}"
+    message = diagnostic(text)
+    if message is not None:
+        return "compile-error", f"ERROR {frame}"
     exception = re.search(r"uncaught exception of type ([^\n]+)", text)
     if exception:
         return "exception", f"EXCEPTION {exception.group(1)} {frame}"

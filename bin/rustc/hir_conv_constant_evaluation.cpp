@@ -1329,6 +1329,8 @@ public:
     const unsigned frameIndex;
     const std::vector<std::pair<HIRPattern, HIRTypeRef>> argDefs;
     const HIRTypeRef retType;
+    const SourceLocation callerLocation;
+    const bool tracksCaller;
 
     // MIR Resolve Helper
     const StaticTraitResolve& rootResolve;
@@ -1364,12 +1366,16 @@ public:
         MonomorphState ms,
         ::std::vector<MIREvalAllocationPtr> args,
         const HIRGenericParams* itemParamsDef,
-        const HIRGenericParams* implParamsDef
+        const HIRGenericParams* implParamsDef,
+        SourceLocation callerLocation,
+        bool tracksCaller
     )
         : valuePool(valuePool)
         , frameIndex(frameIndex)
         , argDefs(std::move(argDefs))
         , retType(std::move(expTy))
+        , callerLocation(std::move(callerLocation))
+        , tracksCaller(tracksCaller)
         , rootResolve(resolve)
         , resolve(resolve.board())
         , state{rootSpan, this->resolve, std::move(pathStr), this->retType, this->argDefs, fcn}
@@ -2662,8 +2668,8 @@ HIREvaluator::CsePtr::~CsePtr() {
     }
 }
 
-void HIREvaluator::pushStackEntry(::FmtLambda printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef) {
-    this->callStack.push_back(new MIREvalCallStackEntry(this->valuePool.mutPtr(), this->numFrames, this->rootSpan, this->resolve, std::move(printPath), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef));
+void HIREvaluator::pushStackEntry(::FmtLambda printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller) {
+    this->callStack.push_back(new MIREvalCallStackEntry(this->valuePool.mutPtr(), this->numFrames, this->rootSpan, this->resolve, std::move(printPath), std::move(exp), std::move(argDefs), fcn, std::move(ms), std::move(args), itemParamsDef, implParamsDef, std::move(callerLocation), tracksCaller));
     this->numFrames += 1;
 }
 
@@ -3252,6 +3258,23 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
         }
         TU_ARMA(Call, e) {
             const auto& ms = localState.ms;
+            auto callPath = [&](::std::shared_ptr<HIRPath> fcnp, bool indirect) -> unsigned {
+                ::std::vector<MIREvalAllocationPtr> callArgs;
+                callArgs.reserve(e.args.size());
+                for (const auto& a : e.args) {
+                    HIRTypeRef tmp;
+                    const auto& ty = state.getParamType(tmp, a);
+                    callArgs.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, ty));
+                    localState.writeParam(MIREvalValueRef(callArgs.back()), a);
+                }
+
+                if (this->callFunction(localState, e.retVal, std::move(fcnp), std::move(callArgs), e.source, indirect)) {
+                    return TERM_RET_PUSHED;
+                }
+                DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << localState.getLval(e.retVal));
+                return e.retBlock;
+            };
+
             if (const auto* te = e.fcn.opt_Intrinsic()) {
                 auto dst = localState.getLval(e.retVal);
                 auto readTraitObjectVtableUsize = [&](size_t field) -> uint64_t {
@@ -3358,19 +3381,14 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     dst.writePtr(state, EncodedLiteral::PTR_BASE, val);
                     auto rv = MIREvalValueRef(val);
                     auto pb = TargetGetPointerBits() / 8;
-                    const SpanInnerSource* caller = nullptr;
-                    for (const Span* span = &state.sp; span->get(); span = &span->get()->parentSpan) {
-                        caller = cast<const SpanInnerSource>(span->get());
-                        if (caller) {
-                            break;
-                        }
-                    }
-                    const auto* filename = caller ? caller->filename.c_str() : "";
-                    const auto filenameLen = caller ? caller->filename.size() : 0;
+                    MIR_ASSERT(state, localState.tracksCaller, "`caller_location` used outside a #[track_caller] function");
+                    const auto& caller = localState.callerLocation;
+                    const auto* filename = caller.filename.c_str();
+                    const auto filenameLen = caller.filename.size();
                     rv.slice(repr->fields[0].offset + 0, pb).writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(localState.valuePool, filename, filenameLen + 1)); // file.ptr, including trailing NUL
                     rv.slice(repr->fields[0].offset + pb, pb).writeUint(state, TargetGetPointerBits(), filenameLen);                                                                   // file.len
-                    rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller ? caller->startLine : 0);                                                                          // line: u32
-                    rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, 0);                                                                                                       // col: u32 (expression AST stores only the end point)
+                    rv.slice(repr->fields[1].offset, 4).writeUint(state, 32, caller.line);                                                                                             // line: u32
+                    rv.slice(repr->fields[2].offset, 4).writeUint(state, 32, caller.column);                                                                                           // col: u32
                 }
                 // ---
                 else if (te->name == "ctpop") {
@@ -3698,7 +3716,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                         vr.copyFrom(state, argVal.slice(f.offset, size));
                     }
 
-                    if( this->callFunction(localState, e.retVal, std::move(fcnPath), std::move(callArgs)) ) {
+                    if( this->callFunction(localState, e.retVal, std::move(fcnPath), std::move(callArgs), e.source, true) ) {
                         return TERM_RET_PUSHED;
                     }
                 }
@@ -4040,24 +4058,17 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     return e.retBlock;
                 }
 
-                // Argument values
-                ::std::vector<MIREvalAllocationPtr> callArgs;
-                callArgs.reserve(e.args.size());
-                for (const auto& a : e.args) {
-                    HIRTypeRef tmp;
-                    const auto& ty = state.getParamType(tmp, a);
-                    callArgs.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, ty));
-                    auto vr = MIREvalValueRef(callArgs.back());
-                    localState.writeParam(vr, a);
-                }
+                return callPath(std::move(fcnp), false);
+            } else if (const auto* te = e.fcn.opt_Value()) {
+                HIRTypeRef tmp;
+                const auto& ty = state.getLvalueType(tmp, *te);
+                MIR_ASSERT(state, ty->is_Function(), "Indirect call through non-function-pointer type " << ty);
 
-                if (this->callFunction(localState, e.retVal, std::move(fcnp), std::move(callArgs))) {
-                    return TERM_RET_PUSHED;
-                } else {
-                    auto dst = localState.getLval(e.retVal);
-                    DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << dst);
-                    return e.retBlock;
-                }
+                auto pointer = localState.getLval(*te).readPtr(state);
+                MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "Function pointer has a nonzero offset");
+                const auto* function = pointer.second.asStaticref();
+                MIR_ASSERT(state, function, "Function pointer has no symbolic function relocation");
+                return callPath(::std::make_shared<HIRPath>(function->path().clone()), true);
             } else {
                 MIR_BUG(state, "Unexpected terminator - " << terminator);
             }
@@ -4072,7 +4083,7 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
 /// @param fcn_path
 /// @param call_args
 /// @return `true` is a new stack frame was pushed
-bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<HIRPath> fcnPath, ::std::vector<MIREvalAllocationPtr> callArgs) {
+bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<HIRPath> fcnPath, ::std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect) {
     const auto& state = localState.state;
     resolve.revealOpaqueTypesPath(state.sp, *fcnPath);
     MonomorphState fcnMs(resolve.hirCrate().types);
@@ -4178,6 +4189,18 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         auto retTy = this->resolve.monomorphExpand(this->rootSpan, fcn.returnType, fcnMs);
         this->resolve.revealOpaqueTypes(this->rootSpan, retTy);
 
+        const bool tracksCaller = resolve.hirCrate().functionTracksCaller(state.sp, path, fcn);
+        SourceLocation callerLocation;
+        if (tracksCaller) {
+            if (indirect) {
+                callerLocation = fcn.source;
+            } else if (localState.tracksCaller) {
+                callerLocation = localState.callerLocation;
+            } else {
+                callerLocation = callsite;
+            }
+        }
+
         pushStackEntry(
             ::FmtLambda([=](std::ostream& os) {
             os << *fcnPath;
@@ -4188,7 +4211,9 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
             ::std::move(argDefs),
             std::move(callArgs),
             &fcn.mParams,
-            implParamsDef
+            implParamsDef,
+            std::move(callerLocation),
+            tracksCaller
         );
         return true;
     } else if (rv.is_NotFound() && monomorphisePathNeeded(path)) {
@@ -4312,7 +4337,7 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         assert(this->callStack.empty());
         this->numFrames = 0;
         // Note: Since this is the entrypoint, `this->resolve` has the correct GenericParams
-        this->pushStackEntry(FMT_CB(os, os << ip), *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenericsPtr(), resolve.implGenericsPtr());
+        this->pushStackEntry(FMT_CB(os, os << ip), *mir, std::move(ms), std::move(exp), {}, {}, resolve.itemGenericsPtr(), resolve.implGenericsPtr(), SourceLocation(this->rootSpan), false);
         auto rvRaw = this->runUntilStackEmpty();
 
         ASSERT_BUG(this->rootSpan, rvRaw, "evaluate_constant_mir returned null allocation");

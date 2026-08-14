@@ -71,6 +71,29 @@ private:
     void printSpanMessage(::std::function<void(::std::ostream&)> tag, ::std::function<void(::std::ostream&)> msg) const;
 };
 
+struct SourceLocation {
+    RcString filename;
+    unsigned int line = 0;
+    unsigned int column = 0;
+
+    SourceLocation() = default;
+    SourceLocation(RcString filename, unsigned int line, unsigned int column)
+        : filename(::std::move(filename))
+        , line(line)
+        , column(column)
+    {
+    }
+    explicit SourceLocation(const Span& span);
+
+    bool operator==(const SourceLocation& other) const {
+        return filename == other.filename && line == other.line && column == other.column;
+    }
+
+    bool operator!=(const SourceLocation& other) const {
+        return !(*this == other);
+    }
+};
+
 struct ProtoSpan {
     // If `span` is populated, then this `ProtoSpan` was from a macro expansion
     Span span;

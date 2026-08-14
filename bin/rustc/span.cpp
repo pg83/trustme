@@ -29,6 +29,17 @@ Span::Span(const Span& x)
     }
 }
 
+SourceLocation::SourceLocation(const Span& span) {
+    for (const Span* current = &span; current->get(); current = &current->get()->parentSpan) {
+        if (const auto* source = cast<const SpanInnerSource>(current->get())) {
+            filename = source->filename;
+            line = source->startLine;
+            column = source->startOfs + 1;
+            return;
+        }
+    }
+}
+
 Span::~Span() {
     if (ptr) {
         ptr->referenceCount--;

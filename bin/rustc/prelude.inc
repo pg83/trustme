@@ -16,6 +16,7 @@ typedef struct { void* PTR; void* META; } TRAITOBJ_PTR;
 typedef struct { void (*drop)(void*); size_t size; size_t align; } VTABLE_HDR;
 
 struct mrustc_panic final { void* rust_exception; };
+struct mrustc_caller_location final { SLICE_PTR filename; uint32_t line; uint32_t column; };
 
 #if MRUSTC_CODEGEN_DISALLOW_EMPTY_STRUCTS
 typedef struct { char _d; } tUNIT;

@@ -2469,7 +2469,7 @@ namespace {
 
             // If the call wasn't to an intrinsic, emit it as a path
             if (builder.blockActive()) {
-                builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), node.mPath.clone(), mv$(values)}));
+                builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), node.mPath.clone(), mv$(values), SourceLocation(node.span())}));
             }
 
             builder.setCurBlock(panicBlock);
@@ -2511,7 +2511,7 @@ namespace {
             auto panicBlock = builder.newBbUnlinked();
             auto nextBlock = builder.newBbUnlinked();
             auto res = builder.newTemporary(node.resType);
-            builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), mv$(fcnVal), mv$(values)}));
+            builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), mv$(fcnVal), mv$(values), SourceLocation(node.span())}));
 
             builder.setCurBlock(panicBlock);
             emitUnwind(node.span());
@@ -8158,6 +8158,15 @@ void MirBuilder::setCurBlock(unsigned int newBlock) {
 void MirBuilder::endBlock(MIRTerminator term) {
     if (!mBlockActive) {
         BUG(Span(), "Terminating block when none active");
+    }
+    if (auto* call = term.opt_Call(); call && !call->tracksCaller) {
+        if (const auto* path = call->fcn.opt_Path()) {
+            MonomorphState params(mResolve.hirCrate().types);
+            auto value = mResolve.getValue(rootSpan, *path, params, /*signatureOnly=*/true);
+            if (const auto* function = value.opt_Function()) {
+                call->tracksCaller = mResolve.hirCrate().functionTracksCaller(rootSpan, *path, **function);
+            }
+        }
     }
     DEBUG("BB" << currentBlock << " END -> " << term);
     output.blocks.at(currentBlock).terminator = mv$(term);

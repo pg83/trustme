@@ -176,6 +176,7 @@ public:
     bool variadic = false;
     HIRTypeRef returnType;
 
+    SourceLocation source;
     HIRExprPtr mCode;
 
     struct Markings {
@@ -776,6 +777,7 @@ public:
 
     const HIRValueItem& getValitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false) const;
     const HIRFunction& getFunctionByPath(const Span& sp, const HIRSimplePath& path) const;
+    bool functionTracksCaller(const Span& sp, const HIRPath& path, const HIRFunction& function) const;
 
     // NOTE: Special implementation to handle `m_inline_statics`
     const HIRStatic& getStaticByPath(const Span& sp, const HIRSimplePath& path) const;

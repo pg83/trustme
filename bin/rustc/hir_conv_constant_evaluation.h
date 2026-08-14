@@ -79,13 +79,13 @@ public:
     }
 
 private:
-    void pushStackEntry(::FmtLambda printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef);
+    void pushStackEntry(::FmtLambda printPath, const MIRFunction& fcn, MonomorphState ms, HIRTypeRef exp, HIRFunction::argsT argDefs, ::std::vector<MIREvalAllocationPtr> args, const HIRGenericParams* itemParamsDef, const HIRGenericParams* implParamsDef, SourceLocation callerLocation, bool tracksCaller);
 
     MIREvalAllocationPtr runUntilStackEmpty();
     void runStatement(MIREvalCallStackEntry& localState, const MIRStatement& stmt);
     // Returns UINT_MAX on return
     unsigned runTerminator(MIREvalCallStackEntry& localState, const MIRTerminator& stmt);
-    bool callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<HIRPath> path, ::std::vector<MIREvalAllocationPtr> callArgs);
+    bool callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<HIRPath> path, ::std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect);
 
     EncodedLiteral allocationToEncoded(const HIRTypeData* ty, const MIREvalAllocation& a);
 };

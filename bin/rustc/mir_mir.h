@@ -710,6 +710,8 @@ TAGGED_UNION(
         MIRLValue retVal;
         MIRCallTarget fcn;
         ::std::vector<MIRParam> args;
+        SourceLocation source;
+        bool tracksCaller = false;
     })
 );
 extern ::std::ostream& operator<<(::std::ostream& os, const MIRTerminator& x);

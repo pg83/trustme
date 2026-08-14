@@ -762,6 +762,9 @@ public:
         rv.mArgs = deserialiseFcnargs();
         rv.variadic = in.readBool();
         rv.returnType = deserialiseType();
+        rv.source.filename = in.readIstring();
+        rv.source.line = static_cast<unsigned int>(in.readCount());
+        rv.source.column = static_cast<unsigned int>(in.readCount());
         rv.mCode = deserialiseExprptr();
         return rv;
     }
@@ -1470,7 +1473,7 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
             }),
                deserialiseMirSwitchvalues()})
             _(Drop, {static_cast<MIRDropKind>(in.readTag()), deserialiseMirLvalue(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction()})
-            _(Call, {static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction(), deserialiseMirLvalue(), deserialiseMirCalltarget(), deserialiseVec<MIRParam>()})
+            _(Call, {static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction(), deserialiseMirLvalue(), deserialiseMirCalltarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
 #undef _
         default:
             BUG(Span(), "Bad tag for MIR::Terminator - " << tag);
@@ -3351,7 +3354,7 @@ public:
             (Switch, serialise(e.val); serialiseVec(e.targets); out.writeCount(e.validFlag); out.writeCount(e.invalidTarget);),
             (SwitchValue, serialise(e.val); out.writeCount(e.defTarget); serialiseVec(e.targets); serialise(e.values);),
             (Drop, out.writeTag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.writeCount(e.flagIdx); out.writeCount(e.target); serialiseUnwind(e.unwind);),
-            (Call, out.writeCount(e.retBlock); serialiseUnwind(e.unwind); serialise(e.retVal); serialise(e.fcn); serialiseVec(e.args);)
+            (Call, out.writeCount(e.retBlock); serialiseUnwind(e.unwind); serialise(e.retVal); serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);)
         )
     }
 
@@ -3460,6 +3463,9 @@ public:
         DEBUG("m_args = " << fcn.mArgs);
         out.writeBool(fcn.variadic);
         serialise(fcn.returnType);
+        out.writeString(fcn.source.filename);
+        out.writeCount(fcn.source.line);
+        out.writeCount(fcn.source.column);
 
         serialise(fcn.mCode, fcn.saveCode || fcn.isConst);
     }

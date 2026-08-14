@@ -181,6 +181,7 @@ namespace {
 
         ::std::ofstream of;
         const MIRTypeResolve* mirRes = nullptr;
+        bool currentFunctionTracksCaller = false;
 
         struct {
             bool emulatedI128 = false;
@@ -188,6 +189,7 @@ namespace {
         } options;
 
         ::std::set<HIRTypeRef> emittedFnTypes;
+        ::std::set<HIRPath> trackedFunctions;
         ::std::set<const TypeRepr*> embeddedTags;
         ::std::map<HIRTypeRef, HIRTypeRef> normalizedCtypes;
 
@@ -345,7 +347,9 @@ namespace {
                             for (size_t j = 0; j < method.nArgs; j++) {
                                 switch (method.args[j]) {
                                     case AllocatorDataTy::Layout:
-                                        of << "\tauto layout" << layoutArg << " = " << TransMangle(TransAllocatorLayoutCtorPath(crate)) << "(a" << flatArg << ", a" << flatArg + 1 << ");\n";
+                                        of << "\tauto layout" << layoutArg << " = ";
+                                        emitReifiedFunctionName(TransAllocatorLayoutCtorPath(crate));
+                                        of << "(a" << flatArg << ", a" << flatArg + 1 << ");\n";
                                         flatArg += 2;
                                         layoutArg += 1;
                                         break;
@@ -1811,7 +1815,8 @@ namespace {
                                     const auto& ty = relocIt->p->mData.as_UfcsInherent().type;
                                     of << "&__typeid_" << TransMangle(ty);
                                 } else {
-                                    of << "&" << TransMangle(*relocIt->p);
+                                    of << "&";
+                                    emitReifiedFunctionName(*relocIt->p);
                                 }
                             } else {
                                 this->printEscapedString(relocIt->bytes);
@@ -1936,6 +1941,10 @@ namespace {
             };
             mirRes = &topMirRes;
             TRACE_FUNCTION_F(p);
+            const bool tracksCaller = crate.functionTracksCaller(sp, p, item);
+            if (tracksCaller) {
+                trackedFunctions.insert(p.clone());
+            }
 
             of << "// EXTERN extern \"" << item.mAbi << "\" " << p << "\n";
             if (item.linkage.name.rfind("llvm.", 0) == 0) {
@@ -2126,6 +2135,10 @@ namespace {
             }
             of << ";\n";
 
+            if (tracksCaller) {
+                emitTrackCallerReifyWrapper(p, item, params);
+            }
+
             mirRes = nullptr;
         }
 
@@ -2160,6 +2173,11 @@ namespace {
             emitFunctionHeader(p, item, params);
             of << ";\n";
 
+            if (crate.functionTracksCaller(sp, p, item)) {
+                trackedFunctions.insert(p.clone());
+                emitTrackCallerReifyWrapper(p, item, params);
+            }
+
             mirRes = nullptr;
         }
 
@@ -2178,6 +2196,7 @@ namespace {
                 sp, mResolve, FMT_CB(ss, ss << p;), retType, argTypes, *code
             };
             mirRes = &localMirRes;
+            currentFunctionTracksCaller = trackedFunctions.count(p) != 0;
 
             of << "// " << p << "\n";
             if (isExternDef) {
@@ -2212,6 +2231,7 @@ namespace {
                 emitStatement(localMirRes, *nakedAsm, 1);
                 of << "}\n";
                 of.flush();
+                currentFunctionTracksCaller = false;
                 mirRes = nullptr;
                 return;
             }
@@ -2289,7 +2309,7 @@ namespace {
             }
             of << "}\n";
             of.flush();
-            mirRes = nullptr;
+            currentFunctionTracksCaller = false;
             mirRes = nullptr;
         }
 
@@ -3426,7 +3446,8 @@ namespace {
             // Cast of a named function to a function pointer - originate the pointer
             if (ve.type->is_Function() && ty->is_NamedFunction()) {
                 emitLvalue(dst);
-                of << " = " << TransMangle(ty->as_NamedFunction().path);
+                of << " = ";
+                emitReifiedFunctionName(ty->as_NamedFunction().path);
                 return;
             }
 
@@ -3573,7 +3594,7 @@ namespace {
                 }
             }
             if (ty->is_NamedFunction()) {
-                of << TransMangle(ty->as_NamedFunction().path);
+                emitReifiedFunctionName(ty->as_NamedFunction().path);
                 special = true;
             }
             if (ve.type->is_Primitive() && ty->is_Path() && ty->as_Path().binding.is_Enum()) {
@@ -3931,6 +3952,13 @@ namespace {
 
         void emitTermCall(const MIRTypeResolve& localMirRes, const MIRTerminator::Data_Call& e, unsigned indentLevel) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
+            const auto* targetPath = e.fcn.opt_Path();
+            const bool targetTracksCaller = e.tracksCaller || (targetPath && trackedFunctions.count(*targetPath) != 0);
+            if (targetTracksCaller && !currentFunctionTracksCaller) {
+                of << indent << "static const mrustc_caller_location mrustc_callsite = ";
+                emitSourceLocationInitializer(e.source);
+                of << ";\n";
+            }
             of << indent;
 
             bool hasZst = false;
@@ -4071,6 +4099,12 @@ namespace {
                     continue;
                 }
                 emitParam(e.args[j]);
+            }
+            if (targetTracksCaller) {
+                if (!firstCallArgument) {
+                    of << ",";
+                }
+                of << " " << (currentFunctionTracksCaller ? "mrustc_caller" : "&mrustc_callsite");
             }
             of << " );\n";
 
@@ -4807,6 +4841,36 @@ namespace {
         }
 
     private:
+        const HIRFunction* resolveFunction(const HIRPath& path) {
+            MonomorphState ms(crate.types);
+            auto value = mResolve.getValue(sp, path, ms, /*signatureOnly=*/true);
+            if (const auto* function = value.opt_Function()) {
+                return *function;
+            }
+            return nullptr;
+        }
+
+        bool pathTracksCaller(const HIRPath& path) {
+            if (trackedFunctions.count(path) != 0) {
+                return true;
+            }
+            const auto* function = resolveFunction(path);
+            return function && crate.functionTracksCaller(sp, path, *function);
+        }
+
+        void emitSourceLocationInitializer(const SourceLocation& source) {
+            of << "{{(void*)";
+            printEscapedStringInner(source.filename.c_str(), source.filename.c_str() + source.filename.size());
+            of << "," << source.filename.size() << "}," << source.line << "," << source.column << "}";
+        }
+
+        void emitReifiedFunctionName(const HIRPath& path) {
+            of << TransMangle(path);
+            if (pathTracksCaller(path)) {
+                of << "__mrustc_reify";
+            }
+        }
+
         const HIRTypeData* monomorphiseFcnReturn(HIRTypeRef& tmp, const HIRFunction& item, const TransParams& params) {
             bool hasErased = visitTyWith(item.returnType, [&](const auto& x) {
                 return x->is_ErasedType();
@@ -4835,21 +4899,22 @@ namespace {
             }
         }
 
-        void emitFunctionHeader(const HIRPath& p, const HIRFunction& item, const TransParams& params) {
+        void emitFunctionHeader(const HIRPath& p, const HIRFunction& item, const TransParams& params, bool includeCallerLocation = true, const char* nameSuffix = "") {
             HIRTypeRef tmp;
             const auto& retTy = monomorphiseFcnReturn(tmp, item, params);
+            const bool hasCallerLocation = includeCallerLocation && crate.functionTracksCaller(sp, p, item);
             if (item.markings.isNaked) {
                 of << "__attribute__((naked)) ";
             }
             auto cb = FMT_CB(
                 ss,
-                ss << " " << compilerAbiAttribute(item.mAbi) << TransMangle(p) << "(";
-                if (item.mArgs.size() == 0) { ss << "void)"; } else {
+                ss << " " << compilerAbiAttribute(item.mAbi) << TransMangle(p) << nameSuffix << "(";
+                if (item.mArgs.empty() && !hasCallerLocation) { ss << "void)"; } else {
                     for (unsigned int i = 0; i < item.mArgs.size(); i++) {
                         ss << "\n\t\t";
                         auto ty = params.monomorph(mResolve, item.mArgs[i].second);
                         this->emitFunctionArgument(ty, FMT_CB(os, os << "arg" << i;));
-                        if (item.variadic || i + 1 < item.mArgs.size()) {
+                        if (item.variadic || i + 1 < item.mArgs.size() || hasCallerLocation) {
                             of << ",";
                         }
                         of << " // " << ty;
@@ -4857,6 +4922,11 @@ namespace {
 
                     if (item.variadic) {
                         of << "\n\t\t...";
+                    }
+
+                    if (hasCallerLocation) {
+                        MIR_ASSERT(*mirRes, !item.variadic, "#[track_caller] on a variadic function");
+                        of << "\n\t\tconst mrustc_caller_location* mrustc_caller";
                     }
 
                     ss << "\n\t\t)";
@@ -4868,6 +4938,55 @@ namespace {
                 of << "void " << cb;
             }
             of << " // -> " << retTy << "\n";
+        }
+
+        void emitTrackCallerReifyWrapper(const HIRPath& p, const HIRFunction& item, const TransParams& params) {
+            MIR_ASSERT(*mirRes, !item.variadic, "Cannot reify a variadic #[track_caller] function");
+            of << "static ";
+            emitFunctionHeader(p, item, params, /*includeCallerLocation=*/false, "__mrustc_reify");
+            of << "{\n";
+            of << "\tstatic const mrustc_caller_location mrustc_definition = ";
+            emitSourceLocationInitializer(item.source);
+            of << ";\n\t";
+
+            HIRTypeRef returnTypeTmp;
+            const auto& returnType = monomorphiseFcnReturn(returnTypeTmp, item, params);
+            if (returnType != crate.types.unit()) {
+                of << "return ";
+            }
+            of << TransMangle(p) << "(";
+            bool first = true;
+            auto emitArgument = [&](const char* prefix, unsigned index, const char* suffix) {
+                if (!first) {
+                    of << ", ";
+                }
+                first = false;
+                of << prefix << index << suffix;
+            };
+            for (unsigned int i = 0; i < item.mArgs.size(); i++) {
+                auto type = params.monomorph(mResolve, item.mArgs[i].second);
+                switch (metadataType(type)) {
+                    case MetadataType::Unknown:
+                        MIR_BUG(*mirRes, type << " has unknown function-argument metadata");
+                    case MetadataType::None:
+                    case MetadataType::Zero:
+                        emitArgument("arg", i, "");
+                        break;
+                    case MetadataType::Slice:
+                    case MetadataType::TraitObject:
+                        emitArgument("arg", i, "_ptr");
+                        emitArgument("arg", i, "_meta");
+                        break;
+                }
+            }
+            if (!first) {
+                of << ", ";
+            }
+            of << "&mrustc_definition);\n";
+            if (returnType == crate.types.unit()) {
+                of << "\treturn;\n";
+            }
+            of << "}\n";
         }
 
         void emitIntrinsicCall(const RcString& name, const HIRPathParams& params, const MIRTerminator::Data_Call& e) {
@@ -5430,16 +5549,12 @@ namespace {
             }
             // --- #[track_caller]
             else if (name == "caller_location") {
-                auto p = crate.getLangItemPathOpt("panic_location");
-                of << "static struct ";
-                if (p == HIRSimplePath()) {
-                    of << "s_ZRG2cE9core0_0_05panic8Location0g";
-                } else {
-                    of << "s_" << TransMangle(p);
-                }
-                of << " mrustc_empty_caller_location = {._0={._0={(void*)\"\",0}},._1=0,._2=0};";
+                MIR_ASSERT(localMirRes, currentFunctionTracksCaller, "`caller_location` used outside a #[track_caller] function");
                 emitLvalue(e.retVal);
-                of << " = &mrustc_empty_caller_location"; // TODO: Hidden ABI for caller location
+                of << " = (";
+                HIRTypeRef callerTypeTmp;
+                emitCtype(localMirRes.getLvalueType(callerTypeTmp, e.retVal));
+                of << ")mrustc_caller";
             }
             // --- Pointer manipulation
             else if (name == "offset") { // addition, with the reqirement that the resultant pointer be in bounds
@@ -7701,15 +7816,14 @@ namespace {
                     if (c->mData.is_UfcsInherent() && c->mData.as_UfcsInherent().item == "#type_id") {
                         of << "(void*)&__typeid_" << TransMangle(c->mData.as_UfcsInherent().type);
                     } else {
-                        bool isFcn = false;
                         MonomorphState msTmp(crate.types);
                         auto v = mResolve.getValue(sp, *c, msTmp, /*signature_only=*/true);
-                        isFcn = v.is_Function() || v.is_EnumConstructor() || v.is_StructConstructor();
+                        const bool isFcn = v.is_Function() || v.is_EnumConstructor() || v.is_StructConstructor();
                         MIR_ASSERT(*mirRes, !isFcn || !hasOffset, "Function address has a non-zero offset: " << c.offset);
                         if (!isFcn) {
                             of << "&";
                         }
-                        of << TransMangle(*c);
+                        emitReifiedFunctionName(*c);
                         if (!isFcn) {
                             of << ".val";
                         }
