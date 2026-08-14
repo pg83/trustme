@@ -1095,6 +1095,9 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                     case TOK_RWORD_AWAIT:
                         val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::AWait, ::std::move(val));
                         break;
+                    case TOK_RWORD_USE:
+                        val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::USE, ::std::move(val));
+                        break;
                     default:
                         throw ParseErrorUnexpected(lex, mv$(tok));
                 }

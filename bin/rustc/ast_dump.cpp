@@ -849,6 +849,7 @@ public:
             case ASTExprNodeUniOp::QMARK:
                 break;
             case ASTExprNodeUniOp::AWait:
+            case ASTExprNodeUniOp::USE:
                 break;
         }
 
@@ -866,6 +867,9 @@ public:
                 break;
             case ASTExprNodeUniOp::AWait:
                 os << ".await";
+                break;
+            case ASTExprNodeUniOp::USE:
+                os << ".use";
                 break;
             default:
                 break;

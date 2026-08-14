@@ -31,6 +31,10 @@ unsigned int HIRExprNodeAWait::nodeKind() const {
     return HIRExprNodeAWait::kind;
 }
 
+unsigned int HIRExprNodeUse::nodeKind() const {
+    return HIRExprNodeUse::kind;
+}
+
 unsigned int HIRExprNodeLoop::nodeKind() const {
     return HIRExprNodeLoop::kind;
 }
@@ -251,6 +255,11 @@ DEF_VISIT_H(HIRExprNodeYield, node) {
 
 DEF_VISIT_H(HIRExprNodeAWait, node) {
     TRACE_FUNCTION_F("_AWait");
+    visitNodePtr(node.mValue);
+}
+
+DEF_VISIT_H(HIRExprNodeUse, node) {
+    TRACE_FUNCTION_F("_Use");
     visitNodePtr(node.mValue);
 }
 
@@ -701,6 +710,12 @@ TU_ARMA(Alias, ee) {
         }
 
         HIRExprNodeAWait::HIRExprNodeAWait(Span sp, HIRExprNodeP value)
+            : HIRExprNode(mv$(sp))
+            , mValue(mv$(value))
+        {
+        }
+
+        HIRExprNodeUse::HIRExprNodeUse(Span sp, HIRExprNodeP value)
             : HIRExprNode(mv$(sp))
             , mValue(mv$(value))
         {

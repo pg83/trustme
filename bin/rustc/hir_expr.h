@@ -168,6 +168,17 @@ struct HIRExprNodeAWait: public HIRExprNode {
     void visit(HIRExprVisitor& nv) override;
 };
 
+/// @brief Copy, clone, or move (the `.use` postfix operator)
+struct HIRExprNodeUse: public HIRExprNode {
+    HIRExprNodeP mValue;
+
+    HIRExprNodeUse(Span sp, HIRExprNodeP value);
+
+    static constexpr unsigned int kind = 40;
+    unsigned int nodeKind() const override;
+    void visit(HIRExprVisitor& nv) override;
+};
+
 struct HIRExprNodeLoop: public HIRExprNode {
     RcString label;
     HIRExprNodeP mCode;
@@ -824,6 +835,7 @@ public:
     NV(HIRExprNodeReturn)
     NV(HIRExprNodeYield)
     NV(HIRExprNodeAWait)
+    NV(HIRExprNodeUse)
     NV(HIRExprNodeLet)
     NV(HIRExprNodeLoop)
     NV(HIRExprNodeLoopControl)
@@ -886,6 +898,7 @@ public:
     NV(HIRExprNodeReturn)
     NV(HIRExprNodeYield)
     NV(HIRExprNodeAWait)
+    NV(HIRExprNodeUse)
     NV(HIRExprNodeLet)
     NV(HIRExprNodeLoop)
     NV(HIRExprNodeLoopControl)

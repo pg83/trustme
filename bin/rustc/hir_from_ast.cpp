@@ -3326,6 +3326,9 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             case ASTExprNodeUniOp::AWait:
                 mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeAWait>(v.span(), lower(v.mValue)));
                 break;
+            case ASTExprNodeUniOp::USE:
+                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeUse>(v.span(), lower(v.mValue)));
+                break;
 
             case ASTExprNodeUniOp::INVERT:
                 op = HIRExprNodeUniOp::Op::Invert;

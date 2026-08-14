@@ -896,6 +896,9 @@ NODE(
             case AWait:
                 os << "((" << *mValue << ").await)";
                 return;
+            case USE:
+                os << "((" << *mValue << ").use)";
+                return;
         }
         os << *mValue << ")";
     },

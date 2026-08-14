@@ -184,6 +184,10 @@ namespace {
             noRevisit(node);
         }
 
+        void visit(HIRExprNodeUse& node) override {
+            noRevisit(node);
+        }
+
         void visit(HIRExprNodeLet& node) override {
             noRevisit(node);
         }
@@ -1729,6 +1733,10 @@ namespace {
         }
 
         void visit(HIRExprNodeAWait& node) override {
+            noRevisit(node);
+        }
+
+        void visit(HIRExprNodeUse& node) override {
             noRevisit(node);
         }
 
@@ -9535,6 +9543,12 @@ public:
         node.mValue->visit(*this);
         // Require that `return = <[node.value] as `future_trait`>::Output`
         this->context.equateTypesAssoc(node.span(), node.resType, context.mResolve.langFuture(), {}, node.mValue->resType, "Output", {});
+    }
+
+    void visit(HIRExprNodeUse& node) override {
+        this->context.addIvars(node.mValue->resType);
+        node.mValue->visit(*this);
+        this->context.equateTypes(node.span(), node.resType, node.mValue->resType);
     }
 
     void visit(HIRExprNodeLoop& node) override {

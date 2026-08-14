@@ -18,6 +18,14 @@
 
 namespace {
 
+    bool typeIsUseCloned(const StaticTraitResolve& resolve, const Span& sp, const HIRTypeData* type) {
+        const auto& trait = resolve.hirCrate().getLangItemPathOpt("use_cloned");
+        return !trait.components().empty()
+            && resolve.findImpl(sp, trait, HIRPathParams{}, type, [](auto, bool isFuzzed) {
+                return !isFuzzed;
+            });
+    }
+
     class AnnotateExprVisitorMark:
         public HIRExprVisitor //Def
     {
@@ -259,6 +267,15 @@ namespace {
                 }
                 DEBUG("await stack=[" << scope->yieldStack << "]");
             }
+        }
+
+        void visit(HIRExprNodeUse& node) override {
+            const auto* type = node.mValue->resType;
+            const auto innerUsage = mResolve.typeIsCopy(node.span(), type) || typeIsUseCloned(mResolve, node.span(), type)
+                ? HIRValueUsage::Borrow
+                : HIRValueUsage::Move;
+            auto _ = pushUsage(innerUsage);
+            this->visitNodePtr(node.mValue);
         }
 
         void visit(HIRExprNodeLet& node) override {
@@ -2298,12 +2315,7 @@ namespace {
                 auto tyMono = monomorphCb.monomorphType(sp, *capTyP);
 
                 if (node.isUse && bindingType == HIRValueUsage::Move && !mResolve.typeIsCopy(sp, capTy)) {
-                    const auto& langUseCloned = mResolve.hirCrate().getLangItemPathOpt("use_cloned");
-                    const bool isUseCloned = !langUseCloned.components().empty()
-                        && mResolve.findImpl(sp, langUseCloned, HIRPathParams{}, capTy, [](auto, bool isFuzzed) {
-                            return !isFuzzed;
-                        });
-                    if (isUseCloned) {
+                    if (typeIsUseCloned(mResolve, sp, capTy)) {
                         const auto& langClone = mResolve.hirCrate().getLangItemPath(sp, "clone");
                         auto borrowTy = mResolve.hirCrate().types.borrow(HIRBorrowType::Shared, capTy);
                         auto borrowNode = NEWNODE(borrowTy, Borrow, sp, HIRBorrowType::Shared, mv$(valNode));
@@ -5066,6 +5078,23 @@ namespace {
                 node = mv$(mReplacement);
                 node->usage = usage;
             }
+        }
+
+        void visit(HIRExprNodeUse& node) override {
+            const auto& sp = node.span();
+            HIRExprVisitorDef::visit(node);
+
+            const auto* type = node.mValue->resType;
+            if (mResolve.typeIsCopy(sp, type) || !typeIsUseCloned(mResolve, sp, type)) {
+                mReplacement = mv$(node.mValue);
+                return;
+            }
+
+            auto borrowType = crate.types.borrow(HIRBorrowType::Shared, type);
+            auto borrowNode = NEWNODE(borrowType, Borrow, sp, HIRBorrowType::Shared, mv$(node.mValue));
+            auto* cloneCall = crate.pool->make<HIRExprNodeCallPath>(sp, HIRPath(type, HIRGenericPath(crate.getLangItemPath(sp, "clone")), rcstringClone), makeVec1(mv$(borrowNode)));
+            mReplacement = ufcsMkExprnodep(cloneCall, node.resType);
+            cloneCall->cache.argTypes = makeVec2(mv$(borrowType), node.resType);
         }
 
         // ----------

@@ -1968,6 +1968,12 @@ namespace {
             os << ").await";
         }
 
+        void visit(HIRExprNodeUse& node) override {
+            os << "(";
+            this->visitNodePtr(node.mValue);
+            os << ").use";
+        }
+
         void visit(HIRExprNodeLet& node) override {
             os << "let " << node.pattern << ": " << node.mType;
             if (node.mValue) {

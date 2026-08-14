@@ -716,6 +716,7 @@ struct ASTExprNodeUniOp: public ASTExprNode {
         NEGATE, // '-<expr>'
         QMARK,  // '<expr>?'
         AWait,  // `.await`
+        USE,    // `.use`
     };
 
     enum Type mType;

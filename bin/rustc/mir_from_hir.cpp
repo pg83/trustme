@@ -806,6 +806,10 @@ namespace {
             builder.setResult(node.span(), MIRLValue::newField(MIRLValue::newDowncast(std::move(lvPoll), variantReady), 0));
         }
 
+        void visit(HIRExprNodeUse& node) override {
+            BUG(node.span(), "`.use` expression was not expanded before MIR lowering");
+        }
+
         void visit(HIRExprNodeLet& node) override {
             TRACE_FUNCTION_F("_Let " << node.pattern);
             if (node.mValue) {

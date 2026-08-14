@@ -43,8 +43,8 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Repeated parser feature families: 2 ergonomic-clone postfix `.use` forms.
-   The three remaining `TOK_DOUBLE_DOT` failures are range/expression syntax.
+1. Repeated parser feature family: three `TOK_DOUBLE_DOT` range/expression
+   syntax failures.
 2. Trait lookup, normalization, and inference: 29 missing-method failures, 28
    missing-impl failures, 14 unresolved inference variables, 10 inferred trait
    obligations left ambiguous, and 9 const-value relation failures. Total
@@ -95,12 +95,12 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 141.
 
 ## Accepted Rust rejected by the front end
 
-The 516 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 514 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
-| parser | 175 | 89 at `parse_parseerror.cpp:63`, 64 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
+| parser | 173 | 89 at `parse_parseerror.cpp:63`, 62 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
 | type checking, HIR lowering, and resolution | 266 | result relation 42 (22 opaque-bearing, 20 other), missing method 29, missing impl 28 |
 | macro and attribute expansion | 69 | unknown macro 24, missing derive 13 |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
