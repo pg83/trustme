@@ -334,6 +334,12 @@ static inline int slice_cmp(SLICE_PTR left, SLICE_PTR right) {
     return 0;
 }
 
+static inline int raw_fat_ptr_cmp(uintptr_t left_ptr, uintptr_t left_meta, uintptr_t right_ptr, uintptr_t right_meta) {
+    if (left_ptr != right_ptr) return left_ptr < right_ptr ? -1 : 1;
+    if (left_meta != right_meta) return left_meta < right_meta ? -1 : 1;
+    return 0;
+}
+
 static inline SLICE_PTR make_sliceptr(const void* ptr, size_t size) { SLICE_PTR result = {(void*)ptr, size}; return result; }
 static inline TRAITOBJ_PTR make_traitobjptr(const void* ptr, const void* vtable) { TRAITOBJ_PTR result = {(void*)ptr, (void*)vtable}; return result; }
 static inline size_t mrustc_max(size_t a, size_t b) { return a < b ? b : a; }

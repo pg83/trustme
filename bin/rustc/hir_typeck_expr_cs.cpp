@@ -6423,10 +6423,18 @@ namespace {
         }
     };
 
-    bool checkIvarPossFailsBounds(const Span& sp, Context& context, const IvarBoundRefs& boundRefs, const HIRTypeData* tyL, const HIRTypeData* newTy) {
+    bool checkIvarPossFailsBounds(
+        const Span& sp,
+        Context& context,
+        const IvarBoundRefs& boundRefs,
+        const HIRTypeData* tyL,
+        const HIRTypeData* newTy,
+        unsigned int* exactBoundCount = nullptr
+    ) {
         TRACE_FUNCTION_F(tyL << " <- " << newTy);
         const auto ivarIdx = tyL->as_Infer().index;
         bool usedTy = false;
+        unsigned int exactBounds = 0;
 
         struct Cb {
             bool& usedTy;
@@ -6551,6 +6559,7 @@ namespace {
 
             // Search for any trait impl that could match this,
             bool boundFailed = true;
+            bool boundExact = false;
             context.mResolve.findTraitImpls(sp, bound->trait, p, t, [&](const auto impl, auto cmp) {
                 // If this bound specifies an associated type, then check that that type could match
                 if (bound->name != "") {
@@ -6562,22 +6571,29 @@ namespace {
                         boundFailed = false;
                         // - Return false to keep searching
                         return false;
-                    } else if (aty->compareWithPlaceholders(sp, bound->leftTy, context.ivars.callbackResolveInfer()) == HIRCompare::Unequal) {
+                    }
+                    const auto atyComparison = aty->compareWithPlaceholders(sp, bound->leftTy, context.ivars.callbackResolveInfer());
+                    if (atyComparison == HIRCompare::Unequal) {
                         DEBUG("[check_ivar_poss__fails_bounds] ATY " << context.ivars.fmtType(aty) << " != left " << context.ivars.fmtType(bound->leftTy));
-                        boundFailed = true;
-                        // - Bail instantly
-                        return true;
-                    } else {
+                        return false;
                     }
                 }
                 boundFailed = false;
-                return true;
+                // Rank by the trait's input types. An unresolved associated
+                // output is a later inference result and must not make an
+                // otherwise exact input match tie with a fuzzy one.
+                if (cmp == HIRCompare::Equal) {
+                    boundExact = true;
+                    return true;
+                }
+                return false;
             });
             if (boundFailed && !t->is_Infer()) {
                 // If none was found, remove from the possibility list
                 DEBUG("Remove possibility " << newTy << " because it failed a bound");
                 return true;
             }
+            exactBounds += boundExact;
 
             // TODO: Check for the resultant associated type
             DEBUG("Acceptable (Assoc R" << bound->ruleIdx << ")");
@@ -6615,6 +6631,9 @@ namespace {
         }
 
         DEBUG("- Bound passed");
+        if (exactBoundCount) {
+            *exactBoundCount = exactBounds;
+        }
         return false;
     }
 
@@ -7280,17 +7299,27 @@ namespace {
             if (ivarEnt.hasBounded && !ivarEnt.boundsIncludeSelf) {
                 // Look for a bound that matches all other restrictions
                 const HIRTypeData* bestTy = nullptr;
+                const HIRTypeData* strongestTy = nullptr;
+                unsigned int strongestExactBounds = 0;
                 bool foundTwo = false;
+                bool strongestTied = false;
                 for (const auto& bTy : ivarEnt.bounded) {
                     // Check bound against bounds
-                    if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, bTy)) {
+                    unsigned int exactBounds = 0;
+                    if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, bTy, &exactBounds)) {
                         if (bestTy) {
                             DEBUG(bTy << " passed bounds (second)");
                             foundTwo = true;
-                            break;
                         } else {
                             DEBUG(bTy << " passed bounds (first)");
                             bestTy = bTy;
+                        }
+                        if (!strongestTy || exactBounds > strongestExactBounds) {
+                            strongestTy = bTy;
+                            strongestExactBounds = exactBounds;
+                            strongestTied = false;
+                        } else if (exactBounds == strongestExactBounds) {
+                            strongestTied = true;
                         }
                     } else {
                         DEBUG(bTy << " failed bounds");
@@ -7302,15 +7331,16 @@ namespace {
                     DEBUG("Only one bound fit other bounds");
                     context.equateTypes(sp, tyL, bestTy);
                     return true;
+                } else if (strongestTy && !strongestTied) {
+                    DEBUG("Only one bound has the strongest exact obligation match");
+                    context.equateTypes(sp, tyL, strongestTy);
+                    return true;
                 } else {
-                    // If there's no other rules, just pick the first fitting type
-                    // TODO: Should this be restricted to a fallback mode?
                     if (fallbackTy == IvarPossFallbackType::PickFirstBound && possibleTys.empty()) {
-                        DEBUG("Multiple fitting types in bounded and no other rules, picking first (bounded=[" << ivarEnt.bounded << "])");
-                        context.equateTypes(sp, tyL, bestTy);
+                        DEBUG("Multiple equally fitting types in bounded and no other rules, picking first (bounded=[" << ivarEnt.bounded << "])");
+                        context.equateTypes(sp, tyL, strongestTy ? strongestTy : bestTy);
                         return true;
                     }
-                    // Multiple fitting types, keep going
                 }
             }
 
@@ -8395,6 +8425,17 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             }
         } // `if peek_changed` (node revisits)
 
+        // Default numeric literals before making an arbitrary choice between
+        // trait-bound candidates. The default can turn a fuzzy obligation
+        // (for example `u128: CastInto<_>`) into a definite mismatch and leave
+        // the candidate selected by the actual `i32` obligation.
+        if (!context.ivars.peekChanged()) {
+            DEBUG("- Applying defaults");
+            if (context.ivars.applyDefaults()) {
+                context.ivars.markChange();
+            }
+        }
+
         if (!context.ivars.peekChanged()) {
             // Check the possible equations
             DEBUG("--- IVar possibilities (just pick a bound)");
@@ -8411,14 +8452,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 if (checkIvarPoss(context, *ivarBoundIndex, i, context.possibleIvarVals[i], IvarPossFallbackType::FinalOption)) {
                     break;
                 }
-            }
-        }
-
-        // Finally. If nothing changed, apply ivar defaults
-        if (!context.ivars.peekChanged()) {
-            DEBUG("- Applying defaults");
-            if (context.ivars.applyDefaults()) {
-                context.ivars.markChange();
             }
         }
 

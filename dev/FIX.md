@@ -30,14 +30,23 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P1 — internal compiler failures
 
-After the targeted CTFE rerun, 261 of the snapshot's internal compiler failures
-remain. The generic `mir_helpers.h:108` signature must be subdivided by its
-message before fixing.
+After the targeted CTFE rerun, 252 of the snapshot's internal compiler failures
+remain. The former generic `mir_helpers.h:108` cluster is subdivided below by
+its actual MIR error.
 
 | signature | tests | note |
 |---|---:|---|
 | CTFE panic, `hir_conv_constant_evaluation.cpp:3617` | 8 | independent compile-time assertions/dead-code cases |
-| MIR error, `mir_helpers.h:108` | 31 | mixed intrinsics, pointer operations, raw DSTs and SIMD |
+| MIR error, `mir_helpers.h:108`: raw DST ABI/codegen | 6 | |
+| MIR error, `mir_helpers.h:108`: `ptr_mask` | 3 | |
+| MIR error, `mir_helpers.h:108`: `volatile_copy_memory` | 2 | |
+| MIR error, `mir_helpers.h:108`: SIMD `usize`/`isize` | 2 | |
+| MIR error, `mir_helpers.h:108`: `assert_mem_uninitialized_valid` | 2 | |
+| MIR error, `mir_helpers.h:108`: CTFE function-pointer call terminator | 2 | |
+| MIR error, `mir_helpers.h:108`: `vtable_align` | 2 | |
+| MIR error, `mir_helpers.h:108`: `fmuladd` | 1 | |
+| MIR error, `mir_helpers.h:108`: `fadd_fast` | 1 | |
+| MIR error, `mir_helpers.h:108`: extern-type alignment | 1 | |
 | CTFE intrinsic TODO, `hir_conv_constant_evaluation.cpp:3498` | 16 | `black_box`, `forget`, `raw_eq`, pointer offsets, SIMD and comparisons |
 | BUG, `macro_rules_macro_rules.cpp:2189` | 10 | |
 | CTFE unresolved generic, `hir_conv_constant_evaluation.cpp:1751` | 9 | const-generic inference/unevaluated expressions |

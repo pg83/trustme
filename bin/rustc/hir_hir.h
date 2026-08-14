@@ -185,6 +185,7 @@ public:
         // Calls to functions with #[rustc_intrinsic] must remain visible to
         // CTFE even when the function also provides a runtime fallback body.
         bool isRustcIntrinsic = false;
+        bool isRustcPromotable = false;
 
         enum Inline {
             Auto,   // no annotation

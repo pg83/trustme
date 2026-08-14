@@ -3582,15 +3582,22 @@ class StaticBorrowExprVisitorMark: public HIRExprVisitorDef {
     bool isConstant;
     // Running state: Cleared if `m_is_constant` is false after a node visit
     bool mAllConstant;
+    bool promoteAllConstFnCalls;
 
 public:
-    StaticBorrowExprVisitorMark(const StaticTraitResolve& resolve, const HIRTypeData* selfType, const HIRExprPtr& exprPtr)
+    StaticBorrowExprVisitorMark(
+        const StaticTraitResolve& resolve,
+        const HIRTypeData* selfType,
+        const HIRExprPtr& exprPtr,
+        bool promoteAllConstFnCalls = false
+    )
         : HIRExprVisitorDef(resolve.hirCrate().types)
         , mResolve(resolve)
         , selfType(selfType)
         , exprPtr(exprPtr)
         , isConstant(false)
         , mAllConstant(false)
+        , promoteAllConstFnCalls(promoteAllConstFnCalls)
     {
         mLangRangeFull = mResolve.hirCrate().getLangItemPathOpt("range_full");
     }
@@ -3785,8 +3792,9 @@ public:
         if (mAllConstant) {
             MonomorphState msUnused(mResolve.hirCrate().types);
             auto v = mResolve.getValue(node.span(), node.methodPath, msUnused, true);
-            DEBUG(node.methodPath << " is " << (v.as_Function()->isConst ? "" : "NOT ") << "constant");
-            if (v.as_Function()->isConst) {
+            const auto& function = *v.as_Function();
+            DEBUG(node.methodPath << " is " << (function.markings.isRustcPromotable ? "" : "NOT ") << "promotable");
+            if (function.markings.isRustcPromotable || (promoteAllConstFnCalls && function.isConst)) {
                 isConstant = !isMaybeInteriorMut(node);
             }
         }
@@ -3800,8 +3808,9 @@ public:
         if (mAllConstant) {
             MonomorphState msUnused(mResolve.hirCrate().types);
             auto v = mResolve.getValue(node.span(), node.mPath, msUnused, true);
-            DEBUG(node.mPath << " is " << (v.as_Function()->isConst ? "" : "NOT ") << "constant");
-            if (v.as_Function()->isConst) {
+            const auto& function = *v.as_Function();
+            DEBUG(node.mPath << " is " << (function.markings.isRustcPromotable ? "" : "NOT ") << "promotable");
+            if (function.markings.isRustcPromotable || (promoteAllConstFnCalls && function.isConst)) {
                 isConstant = !isMaybeInteriorMut(node);
             }
         }
@@ -4139,7 +4148,7 @@ public:
 
     void visitStatic(HIRItemPath p, HIRStatic& item) override {
         if (item.mValue) {
-            StaticBorrowExprVisitorMark ev(mResolve, selfType, item.mValue);
+            StaticBorrowExprVisitorMark ev(mResolve, selfType, item.mValue, true);
             ev.visitNodePtr(item.mValue);
             if (!ev.allConstant()) {
             }
@@ -4148,7 +4157,7 @@ public:
 
     void visitConstant(HIRItemPath p, HIRConstant& item) override {
         if (item.mValue) {
-            StaticBorrowExprVisitorMark ev(mResolve, selfType, item.mValue);
+            StaticBorrowExprVisitorMark ev(mResolve, selfType, item.mValue, true);
             ev.visitNodePtr(item.mValue);
             if (!ev.allConstant()) {
                 // TODO: The set of operations valid in a `static`/`const` is different to the set that is valid to promote.
@@ -4164,7 +4173,7 @@ public:
                 DEBUG("Enum value " << p << " - " << var.name);
 
                 if (var.expr) {
-                    StaticBorrowExprVisitorMark ev(mResolve, selfType, var.expr);
+                    StaticBorrowExprVisitorMark ev(mResolve, selfType, var.expr, true);
                     ev.visitNodePtr(var.expr);
                 }
             }

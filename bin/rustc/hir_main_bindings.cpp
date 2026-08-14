@@ -771,6 +771,7 @@ public:
         rv.rustcLegacyConstGenerics = deserialiseVec<unsigned>();
         rv.trackCaller = in.readBool();
         rv.isRustcIntrinsic = in.readBool();
+        rv.isRustcPromotable = in.readBool();
         return rv;
     }
 
@@ -3466,6 +3467,7 @@ public:
         serialiseVec(m.rustcLegacyConstGenerics);
         out.writeBool(m.trackCaller);
         out.writeBool(m.isRustcIntrinsic);
+        out.writeBool(m.isRustcPromotable);
     }
 
     void serialise(const HIRConstant& item) {

@@ -2810,32 +2810,48 @@ namespace {
                                 break;
                             } else if (const auto* te = ty->opt_Pointer()) {
                                 if (isDst(te->inner)) {
+                                    of << "(raw_fat_ptr_cmp((uintptr_t)";
+                                    emitParam(ve.valL);
+                                    of << ".PTR, (uintptr_t)";
+                                    emitParam(ve.valL);
+                                    of << ".META, (uintptr_t)";
+                                    emitParam(ve.valR);
+                                    of << ".PTR, (uintptr_t)";
+                                    emitParam(ve.valR);
+                                    of << ".META)";
                                     switch (ve.op) {
                                         case MIRBinOp::EQ:
-                                            emitParam(ve.valL);
-                                            of << ".PTR == ";
-                                            emitParam(ve.valR);
-                                            of << ".PTR && ";
-                                            emitParam(ve.valL);
-                                            of << ".META == ";
-                                            emitParam(ve.valR);
-                                            of << ".META";
+                                            of << " == 0";
                                             break;
                                         case MIRBinOp::NE:
-                                            emitParam(ve.valL);
-                                            of << ".PTR != ";
-                                            emitParam(ve.valR);
-                                            of << ".PTR || ";
-                                            emitParam(ve.valL);
-                                            of << ".META != ";
-                                            emitParam(ve.valR);
-                                            of << ".META";
+                                            of << " != 0";
+                                            break;
+                                        case MIRBinOp::GT:
+                                            of << " > 0";
+                                            break;
+                                        case MIRBinOp::GE:
+                                            of << " >= 0";
+                                            break;
+                                        case MIRBinOp::LT:
+                                            of << " < 0";
+                                            break;
+                                        case MIRBinOp::LE:
+                                            of << " <= 0";
                                             break;
                                         default:
                                             MIR_BUG(localMirRes, "Unknown comparison of a *-ptr - " << e.src << " with " << ty);
                                     }
+                                    of << ")";
                                 } else {
+                                    const bool ordering = ve.op == MIRBinOp::GT || ve.op == MIRBinOp::GE
+                                        || ve.op == MIRBinOp::LT || ve.op == MIRBinOp::LE;
+                                    if (ordering) {
+                                        of << "reinterpret_cast<uintptr_t>(";
+                                    }
                                     emitParam(ve.valL);
+                                    if (ordering) {
+                                        of << ")";
+                                    }
                                     switch (ve.op) {
                                         case MIRBinOp::EQ:
                                             of << " == ";
@@ -2858,7 +2874,13 @@ namespace {
                                         default:
                                             MIR_BUG(localMirRes, "Unknown comparison of a *-ptr - " << e.src << " with " << ty);
                                     }
+                                    if (ordering) {
+                                        of << "reinterpret_cast<uintptr_t>(";
+                                    }
                                     emitParam(ve.valR);
+                                    if (ordering) {
+                                        of << ")";
+                                    }
                                 }
                                 break;
                             } else if (ve.op == MIRBinOp::MOD && (ty == HIRCoreType::F16 || ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
@@ -6242,18 +6264,32 @@ namespace {
             }
             // - CounT POPulated
             else if (name == "ctpop") {
+                const auto& ty = params.types.at(0);
                 emitLvalue(e.retVal);
                 of << " = ";
 
-                if (typeIsEmulatedI128(params.types.at(0))) {
+                if (ty == HIRCoreType::I128 || ty == HIRCoreType::U128) {
                     of << "popcount128(";
+                    if (ty == HIRCoreType::I128) {
+                        if (options.emulatedI128) {
+                            of << "int128_to_uint128(";
+                        } else {
+                            of << "(uint128_t)(";
+                        }
+                    }
                     emitParam(e.args.at(0));
+                    if (ty == HIRCoreType::I128) {
+                        of << ")";
+                    }
                     of << ")";
-                    of << ".lo";
+                    if (options.emulatedI128) {
+                        of << ".lo";
+                    }
                 } else {
                     of << "__builtin_popcountll(";
+                    of << "(uint" << getPrimSize(ty) << "_t)(";
                     emitParam(e.args.at(0));
-                    of << ")";
+                    of << "))";
                 }
             }
             // --- Floating Point

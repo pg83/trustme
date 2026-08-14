@@ -1072,29 +1072,20 @@ namespace {
         throw "";
     }
 
-    const char* getConstHeapIntrinsic(const Span& sp, const StaticTraitResolve& resolve, const HIRPath& path) {
+    const RcString* getRustcIntrinsicName(const Span& sp, const StaticTraitResolve& resolve, const HIRPath& path) {
         const auto* generic = path.mData.opt_Generic();
         if (!generic) {
             return nullptr;
         }
         const auto& simple = generic->mPath;
-        const auto& crate = simple.crateName();
-        if (crate != "core" && crate.compare(0, 5, "core-") != 0) {
-            return nullptr;
-        }
         const auto components = simple.components();
-        if (components.size() != 2 || components[0] != "intrinsics") {
+        if (components.empty()) {
             return nullptr;
         }
-        const char* name = components[1].c_str();
-        if (strcmp(name, "const_allocate") == 0
-            || strcmp(name, "const_deallocate") == 0
-            || strcmp(name, "const_make_global") == 0) {
-            MonomorphState intrinsicMs(resolve.hirCrate().types);
-            const auto entity = getEntFullpath(sp, resolve, path, EntNS::Value, intrinsicMs);
-            if (const auto* function = entity.opt_Function(); function && (**function).markings.isRustcIntrinsic) {
-                return name;
-            }
+        MonomorphState intrinsicMs(resolve.hirCrate().types);
+        const auto entity = getEntFullpath(sp, resolve, path, EntNS::Value, intrinsicMs);
+        if (const auto* function = entity.opt_Function(); function && (**function).markings.isRustcIntrinsic) {
+            return &components.back();
         }
         return nullptr;
     }
@@ -2063,6 +2054,34 @@ public:
 };
 
 namespace {
+    uint8_t pointerGuaranteedCmp(
+        const ::std::pair<uint64_t, MIREvalRelocPtr>& left,
+        const ::std::pair<uint64_t, MIREvalRelocPtr>& right
+    ) {
+        if (!left.second && !right.second) {
+            return left.first == right.first ? 1 : 0;
+        }
+
+        // rustc deliberately reports two provenance-bearing pointers as
+        // unknown, even when the interpreter can see the same allocation and
+        // offset.  This intrinsic must not make CTFE pointer identity stronger
+        // than upstream's public contract.
+        if (left.second && right.second) {
+            return 2;
+        }
+
+        const auto& relocated = left.second ? left : right;
+        const auto& absolute = left.second ? right : left;
+        if (absolute.first != 0 || relocated.first < EncodedLiteral::PTR_BASE) {
+            return 2;
+        }
+
+        // A pointer within (or one byte past) a live allocation is definitely
+        // non-null.  Wrapping pointers outside that range remain unknown.
+        const uint64_t offset = relocated.first - EncodedLiteral::PTR_BASE;
+        return offset <= relocated.second.asValue().size() ? 0 : 2;
+    }
+
     ::std::pair<MIREvalValueRef, MIREvalValueRef> getTupleTBool(const MIREvalCallStackEntry& localState, MIREvalValueRef& src, const HIRTypeData* t) {
         auto tupleT = localState.rootResolve.crate.types.tuple({t, localState.rootResolve.crate.types.primitive(HIRCoreType::Bool)});
         auto* repr = TargetGetTypeRepr(localState.state.sp, localState.rootResolve, tupleT);
@@ -2401,7 +2420,7 @@ namespace {
                 }
                 break;
             }
-            case TypeInfo::Other:
+            case TypeInfo::Other: {
                 const auto* borrowTy = ty->opt_Borrow();
                 if (borrowTy && ((borrowTy->inner->is_Slice() && borrowTy->inner->as_Slice().inner == HIRCoreType::U8) || borrowTy->inner == HIRCoreType::Str)) {
                     struct P {
@@ -2453,6 +2472,8 @@ namespace {
                 } else {
                     MIR_BUG(state, "BinOp on " << ty);
                 }
+                break;
+            }
         }
         return didOverflow;
     }
@@ -3546,12 +3567,11 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     auto ofs = localState.readParamUint(TargetGetPointerBits(), e.args.at(1));
                     dst.writePtr(state, ptrPair.first + ofs.truncateU64() * elementSize, ptrPair.second);
                 }
-                // Returns 1/0/2 (equal / not equal / unknown). Only answer definitively for pointers sharing a relocation; different allocations report 2.
+                // Returns 1/0/2 (equal / not equal / unknown).
                 else if (te->name == "ptr_guaranteed_cmp") {
                     auto a = localState.readParamPtr(e.args.at(0));
                     auto b = localState.readParamPtr(e.args.at(1));
-                    uint8_t rv = (a.second == b.second) ? (a.first == b.first ? 1 : 0) : 2;
-                    dst.writeUint(state, 8, rv);
+                    dst.writeUint(state, 8, pointerGuaranteedCmp(a, b));
                 } else if (te->name == "write_bytes") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     size_t elementSize;
@@ -3647,7 +3667,21 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                 DEBUG("ms=" << ms);
                 auto fcnp = std::make_shared<HIRPath>(ms.monomorphPath(state.sp, fcnpRaw));
 
-                if (const char* intrinsic = getConstHeapIntrinsic(state.sp, resolve, *fcnp)) {
+                const auto* rustcIntrinsic = getRustcIntrinsicName(state.sp, resolve, *fcnp);
+                if (rustcIntrinsic && *rustcIntrinsic == "ptr_guaranteed_cmp") {
+                    MIR_ASSERT(state, e.args.size() == 2, "invalid ptr_guaranteed_cmp signature");
+                    auto left = localState.readParamPtr(e.args.at(0));
+                    auto right = localState.readParamPtr(e.args.at(1));
+                    auto dst = localState.getLval(e.retVal);
+                    dst.writeUint(state, 8, pointerGuaranteedCmp(left, right));
+                    DEBUG("> E" << this->evalIndex << " F" << localState.frameIndex << " " << e.retVal << " := " << dst);
+                    return e.retBlock;
+                }
+
+                if (rustcIntrinsic && (*rustcIntrinsic == "const_allocate"
+                    || *rustcIntrinsic == "const_deallocate"
+                    || *rustcIntrinsic == "const_make_global")) {
+                    const char* intrinsic = rustcIntrinsic->c_str();
                     auto dst = localState.getLval(e.retVal);
                     const unsigned pointerBits = TargetGetPointerBits();
                     auto readUsize = [&](size_t argument) {
