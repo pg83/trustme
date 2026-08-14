@@ -1069,6 +1069,23 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
             _(Pointer, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(NamedFunction, {deserialisePath()})
             _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>()})
+            case HIRTypeData::TAG_Pattern: {
+                auto inner = deserialiseType();
+                HIRTypePattern pattern;
+                auto count = in.readCount();
+                pattern.alternatives.reserve(count);
+                while (count--) {
+                    HIRTypePatternRange range;
+                    range.hasStart = in.readBool();
+                    if (range.hasStart) range.start = deserialiseConstgeneric();
+                    range.hasEnd = in.readBool();
+                    if (range.hasEnd) range.end = deserialiseConstgeneric();
+                    range.endInclusive = in.readBool();
+                    pattern.alternatives.push_back(mv$(range));
+                }
+                rv = typeInterner.intern(HIRTypeData::make_Pattern({inner, mv$(pattern)}));
+                break;
+            }
 #undef _
         default:
             BUG(Span(), "Bad tag for HIR::ASTType* - " << tag);
@@ -2730,6 +2747,17 @@ public:
                 out.writeString(e.mAbi);
                 serialiseType(e.mRettype);
                 serialiseVec(e.argTypes);
+            }
+            TU_ARMA(Pattern, e) {
+                serialiseType(e.inner);
+                out.writeCount(e.pattern.alternatives.size());
+                for (const auto& range : e.pattern.alternatives) {
+                    out.writeBool(range.hasStart);
+                    if (range.hasStart) serialise(range.start);
+                    out.writeBool(range.hasEnd);
+                    if (range.hasEnd) serialise(range.end);
+                    out.writeBool(range.endInclusive);
+                }
             }
             break;
             case HIRTypeData::TAG_NodeType:

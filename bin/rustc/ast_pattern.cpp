@@ -334,3 +334,39 @@ ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, TuplePat pat)
     , mData(Data::make_StructTuple({::std::move(path), ::std::move(pat)}))
 {
 }
+namespace {
+    Ordering ordPatternValue(const ASTPattern::Value& a, const ASTPattern::Value& b) {
+        auto rv = ::ord(static_cast<unsigned>(a.tag()), static_cast<unsigned>(b.tag()));
+        if (rv != OrdEqual) return rv;
+        TU_MATCH(ASTPattern::Value, (a, b), (ae, be),
+            (Invalid, return OrdEqual;),
+            (Integer, rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; return ::ord(ae.value, be.value);),
+            (Float, rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; rv = ::ord(ae.value.bitsHi(), be.value.bitsHi()); if (rv != OrdEqual) return rv; return ::ord(ae.value.bitsLo(), be.value.bitsLo());),
+            (String, return ::ord(ae, be);),
+            (ByteString, return ::ord(ae.v, be.v);),
+            (Named, return ae.ord(be);)
+        )
+        throw "";
+    }
+}
+
+Ordering ord(const ASTPattern& a, const ASTPattern& b) {
+    auto rv = ::ord(static_cast<unsigned>(a.data().tag()), static_cast<unsigned>(b.data().tag()));
+    if (rv != OrdEqual) return rv;
+    TU_MATCH(ASTPattern::Data, (a.data(), b.data()), (ae, be),
+        (Value, rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);),
+        (ValueLeftInc, rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);),
+        (Or, rv = ::ord(ae.size(), be.size()); if (rv != OrdEqual) return rv; for (size_t i = 0; i < ae.size(); i++) { rv = ::ord(ae[i], be[i]); if (rv != OrdEqual) return rv; } return OrdEqual;),
+        (MaybeBind, return ::ord(ae.name.name, be.name.name);),
+        (Macro, throw CompileErrorBugCheck("ord on unexpanded pattern macro");),
+        (Any, return OrdEqual;),
+        (Box, return ::ord(*ae.sub, *be.sub);),
+        (Ref, rv = ::ord(ae.mut, be.mut); if (rv != OrdEqual) return rv; return ::ord(*ae.sub, *be.sub);),
+        (Tuple, throw CompileErrorBugCheck("ord on unsupported tuple pattern type");),
+        (StructTuple, throw CompileErrorBugCheck("ord on unsupported tuple-struct pattern type");),
+        (Struct, throw CompileErrorBugCheck("ord on unsupported struct pattern type");),
+        (Slice, throw CompileErrorBugCheck("ord on unsupported slice pattern type");),
+        (SplitSlice, throw CompileErrorBugCheck("ord on unsupported split-slice pattern type");)
+    )
+    throw "";
+}

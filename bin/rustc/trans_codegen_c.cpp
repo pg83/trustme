@@ -7561,6 +7561,9 @@ namespace {
                         of << ".META";
                     }, indentLevel);
                 }
+                TU_ARMA(Pattern, te) {
+                    emitDestructorCall(slot, te.inner, unsizedValid, indentLevel);
+                }
             }
         }
 
@@ -8062,6 +8065,9 @@ namespace {
                 }
                 TU_ARMA(Function, te) {
                     of << "t_" << TransMangle(ty) << " " << inner;
+                }
+                TU_ARMA(Pattern, te) {
+                    emitCtype(te.inner, mv$(inner), isExternC);
                 }
                 break;
                 case HIRTypeData::TAG_NodeType:

@@ -690,6 +690,9 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
         TU_ARMA(NodeType, te) {
             return false;
         }
+        TU_ARMA(Pattern, te) {
+            return TargetGetSizeAndAlignOf(sp, resolve, te.inner, outSize, outAlign);
+        }
     }
     return false;
 }
@@ -990,6 +993,91 @@ namespace {
         return false;
     }
 
+    bool getPatternValidRanges(const HIRTypeData::Data_Pattern& pattern, size_t& scalarSize, ::std::vector<::std::pair<size_t, size_t>>& ranges) {
+        const auto* primitive = pattern.inner->opt_Primitive();
+        if (!primitive) {
+            return false;
+        }
+
+        size_t defaultMax;
+        switch (*primitive) {
+            case HIRCoreType::Bool:
+                scalarSize = 1;
+                defaultMax = 1;
+                break;
+            case HIRCoreType::U8:
+                scalarSize = 1;
+                defaultMax = UINT8_MAX;
+                break;
+            case HIRCoreType::U16:
+                scalarSize = 2;
+                defaultMax = UINT16_MAX;
+                break;
+            case HIRCoreType::U32:
+                scalarSize = 4;
+                defaultMax = UINT32_MAX;
+                break;
+            case HIRCoreType::U64:
+                if (sizeof(size_t) < 8) return false;
+                scalarSize = 8;
+                defaultMax = SIZE_MAX;
+                break;
+            case HIRCoreType::Usize:
+                scalarSize = TargetGetPointerBits() / 8;
+                if (scalarSize > sizeof(size_t)) return false;
+                defaultMax = scalarSize == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (scalarSize * 8)) - 1;
+                break;
+            case HIRCoreType::Char:
+                scalarSize = 4;
+                defaultMax = 0x10FFFF;
+                break;
+            default:
+                // Signed ranges need signed ordering, and 128-bit scalars cannot
+                // be represented by TypeRepr's size_t niche value.
+                return false;
+        }
+
+        ranges.clear();
+        ranges.reserve(pattern.pattern.alternatives.size());
+        for (const auto& range : pattern.pattern.alternatives) {
+            size_t start = 0;
+            size_t end = defaultMax;
+            if (range.hasStart) {
+                const auto* value = range.start.opt_Evaluated();
+                if (!value) return false;
+                const auto encoded = EncodedLiteralSlice(**value).readUint();
+                if (!encoded.isU64() || encoded.truncateU64() > SIZE_MAX) return false;
+                start = static_cast<size_t>(encoded.truncateU64());
+            }
+            if (range.hasEnd) {
+                const auto* value = range.end.opt_Evaluated();
+                if (!value) return false;
+                const auto encoded = EncodedLiteralSlice(**value).readUint();
+                if (!encoded.isU64() || encoded.truncateU64() > SIZE_MAX) return false;
+                end = static_cast<size_t>(encoded.truncateU64());
+                if (!range.endInclusive) {
+                    if (end == 0) return false;
+                    end--;
+                }
+            }
+            if (start > end || end > defaultMax) return false;
+            ranges.push_back({start, end});
+        }
+        if (ranges.empty()) return false;
+
+        ::std::sort(ranges.begin(), ranges.end());
+        size_t out = 0;
+        for (const auto& range : ranges) {
+            if (out != 0 && range.first <= ranges[out - 1].second + (ranges[out - 1].second != SIZE_MAX)) {
+                ranges[out - 1].second = ::std::max(ranges[out - 1].second, range.second);
+            } else {
+                ranges[out++] = range;
+            }
+        }
+        ranges.resize(out);
+        return true;
+    }
+
     bool getNonzeroPath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, TypeRepr::FieldPath& outPath) {
         switch (ty->tag()) {
             TU_ARM(*ty, Tuple, te) {
@@ -1072,6 +1160,13 @@ namespace {
             TU_ARM(*ty, Function, _te)(void) _te;
             TargetGetSizeOf(sp, resolve, ty, outPath.size);
             return true;
+            TU_ARM(*ty, Pattern, te) {
+                ::std::vector<::std::pair<size_t, size_t>> ranges;
+                if (getPatternValidRanges(te, outPath.size, ranges) && ranges.front().first != 0) {
+                    return true;
+                }
+            }
+            break;
             default:
                 break;
         }
@@ -1357,6 +1452,35 @@ namespace {
                     default:
                         break;
                 }
+            }
+            TU_ARM(*ty, Pattern, te) {
+                size_t scalarSize;
+                ::std::vector<::std::pair<size_t, size_t>> ranges;
+                if (minOffset != 0 || !getPatternValidRanges(te, scalarSize, ranges) || scalarSize > maxOffset) {
+                    return false;
+                }
+                const size_t scalarMax = scalarSize == sizeof(size_t) ? SIZE_MAX : (size_t(1) << (scalarSize * 8)) - 1;
+                size_t bestStart = 0;
+                size_t bestCount = ranges.front().first;
+                for (size_t i = 1; i < ranges.size(); i++) {
+                    const size_t count = ranges[i].first - ranges[i - 1].second - 1;
+                    if (count > bestCount) {
+                        bestStart = ranges[i - 1].second + 1;
+                        bestCount = count;
+                    }
+                }
+                const size_t trailingCount = scalarMax - ranges.back().second;
+                if (trailingCount > bestCount) {
+                    bestStart = ranges.back().second + 1;
+                    bestCount = trailingCount;
+                }
+                if (requiredCount <= bestCount) {
+                    outPath.size = scalarSize;
+                    outPath.subFields.clear();
+                    nicheStart = bestStart;
+                    return true;
+                }
+                return false;
             }
             TU_ARM(*ty, Borrow, te) {
                 (void)te;
@@ -1997,6 +2121,7 @@ namespace {
             case HIRTypeData::TAG_Primitive:
             case HIRTypeData::TAG_Borrow:
             case HIRTypeData::TAG_Pointer:
+            case HIRTypeData::TAG_Pattern:
                 return nullptr;
             default:
                 TODO(sp, "Type repr for " << ty);
@@ -2057,6 +2182,9 @@ bool TargetTypeHasUserAlignment(const Span& sp, const StaticTraitResolve& resolv
         return TargetTypeHasUserAlignment(sp, resolve, te->inner);
     }
     if (const auto* te = ty->opt_Slice()) {
+        return TargetTypeHasUserAlignment(sp, resolve, te->inner);
+    }
+    if (const auto* te = ty->opt_Pattern()) {
         return TargetTypeHasUserAlignment(sp, resolve, te->inner);
     }
     // Aggregates cache it on their repr; everything else is naturally aligned by definition

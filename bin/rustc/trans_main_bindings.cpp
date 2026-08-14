@@ -1020,6 +1020,10 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     TU_ARMA(Primitive, te) {
                         // Nothing to do
                     }
+                    TU_ARMA(Pattern, te) {
+                        // Pattern types are restricted scalars and have no
+                        // independent drop glue beyond their base type.
+                    }
                     TU_ARMA(NamedFunction, te) {
                         // Nothing to do
                     }
@@ -2327,6 +2331,9 @@ namespace {
                     TU_ARMA(Borrow, te) {
                         visitType(te.inner, Mode::Shallow);
                     }
+                    TU_ARMA(Pattern, te) {
+                        visitType(te.inner, Mode::Shallow);
+                    }
                 }
             } else {
                 if (activeSet.find(ty) != activeSet.end()) {
@@ -2391,6 +2398,9 @@ namespace {
                         visitType(te.inner, mode);
                     }
                     TU_ARMA(Slice, te) {
+                        visitType(te.inner, mode);
+                    }
+                    TU_ARMA(Pattern, te) {
                         visitType(te.inner, mode);
                     }
                     TU_ARMA(Borrow, te) {

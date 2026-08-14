@@ -2108,6 +2108,10 @@ void ResolveAbsoluteType(Context& context, ASTType*& type) {
         TU_ARMA(Slice, e) {
             ResolveAbsoluteType(context, e.inner);
         }
+        TU_ARMA(Pattern, e) {
+            ResolveAbsoluteType(context, e.inner);
+            ResolveAbsolutePattern(context, true, *e.pattern);
+        }
         TU_ARMA(Generic, e) {
             if (e.name == rcstringSelf) {
                 type = context.getSelf();
@@ -2782,6 +2786,7 @@ void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName) {
     TU_ARMA(Pointer, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
     TU_ARMA(Array, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
     TU_ARMA(Slice, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
+    TU_ARMA(Pattern, e) { ReplaceDelegatedSelf(e.inner, replacementName); }
     TU_ARMA(Generic, e) { if (e.name == rcstringSelf) { e.name = replacementName; } }
     TU_ARMA(Path, e) { ReplaceDelegatedSelf(*e, replacementName); }
     TU_ARMA(TraitObject, e) { for (auto& trait : e.traits) { ReplaceDelegatedSelf(*trait.path, replacementName); } }
@@ -2929,6 +2934,7 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
     TU_ARMA(ErasedType, e) { BUG(span, "Erased type in an external delegation signature"); }
     TU_ARMA(Array, e) { BUG(span, "Array in an external delegation signature"); }
     TU_ARMA(Slice, e) { return mkType(pool, ASTTypeTags::UnsizedArray(), span, HIRTypeToAST(context, span, e.inner)); }
+    TU_ARMA(Pattern, e) { BUG(span, "Pattern type in an external delegation signature"); }
     TU_ARMA(Tuple, e) {
         ::std::vector<ASTType*> types;
         for (const auto& inner : e) { types.push_back(HIRTypeToAST(context, span, inner)); }

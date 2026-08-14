@@ -611,6 +611,9 @@ TU_ARMA(Alias, ee) {
     (Slice,
         this->visitType( e.inner );
         ),
+    (Pattern,
+        this->visitType(e.inner);
+        ),
     (Tuple,
         for(auto& t : e) {
     this->visitType(t);

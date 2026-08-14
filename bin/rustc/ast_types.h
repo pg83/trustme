@@ -23,6 +23,7 @@ class ASTLifetimeParam;
 class ASTPath;
 struct ASTPathParams;
 class ASTMacroInvocation;
+class ASTPattern;
 struct ASTType;
 
 enum class ASTBoundConstness : uint8_t {
@@ -132,6 +133,11 @@ TAGGED_UNION(
          ::std::shared_ptr<ASTExprNode> size;
      }),
     (Slice, struct { ASTType* inner; }),
+    (Pattern,
+     struct {
+         ASTType* inner;
+         ASTPattern* pattern;
+     }),
     (Generic,
      struct {
          RcString name;
@@ -265,4 +271,3 @@ inline ::std::ostream& operator<<(::std::ostream& os, const ASTType* tr) {
     return tr ? (os << *tr) : (os << "(null-type)");
 }
 extern Ordering ord(ASTType* a, ASTType* b);
-

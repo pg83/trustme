@@ -86,6 +86,48 @@
         return os;
 }
 
+HIRTypePatternRange HIRTypePatternRange::clone() const {
+    return {hasStart, start.clone(), hasEnd, end.clone(), endInclusive};
+}
+
+Ordering HIRTypePatternRange::ord(const HIRTypePatternRange& x) const {
+    ORD(hasStart, x.hasStart);
+    if (hasStart) ORD(start, x.start);
+    ORD(hasEnd, x.hasEnd);
+    if (hasEnd) ORD(end, x.end);
+    ORD(endInclusive, x.endInclusive);
+    return OrdEqual;
+}
+
+void HIRTypePatternRange::fmt(::std::ostream& os) const {
+    if (hasStart) os << start;
+    os << (endInclusive ? "..=" : "..");
+    if (hasEnd) os << end;
+}
+
+HIRTypePattern HIRTypePattern::clone() const {
+    HIRTypePattern rv;
+    rv.alternatives.reserve(alternatives.size());
+    for (const auto& range : alternatives) rv.alternatives.push_back(range.clone());
+    return rv;
+}
+
+Ordering HIRTypePattern::ord(const HIRTypePattern& x) const {
+    ORD(alternatives.size(), x.alternatives.size());
+    for (size_t i = 0; i < alternatives.size(); i++) {
+        auto rv = alternatives[i].ord(x.alternatives[i]);
+        if (rv != OrdEqual) return rv;
+    }
+    return OrdEqual;
+}
+
+void HIRTypePattern::fmt(::std::ostream& os) const {
+    for (size_t i = 0; i < alternatives.size(); i++) {
+        if (i != 0) os << " | ";
+        alternatives[i].fmt(os);
+    }
+}
+
 void HIRGenericRef::fmt(std::ostream& os) const {
     os << this->name << "/*";
     if (this->binding == GENERICSelf) {
@@ -308,6 +350,10 @@ void HIRTypeData::fmt(::std::ostream& os) const {
         }
         TU_ARMA(Slice, e) {
             os << "[" << e.inner << "]";
+        }
+        TU_ARMA(Pattern, e) {
+            os << e.inner << " is ";
+            e.pattern.fmt(os);
         }
         TU_ARMA(Tuple, e) {
             os << "(";
@@ -623,6 +669,7 @@ namespace {
             }
             TU_ARMA(Array, ae, be) return ae.inner == be.inner && exactArraySizeEqual(ae.size, be.size);
             TU_ARMA(Slice, ae, be) return ae.inner == be.inner;
+            TU_ARMA(Pattern, ae, be) return ae.inner == be.inner && ae.pattern.ord(be.pattern) == OrdEqual;
             TU_ARMA(Tuple, ae, be) return ae == be;
             TU_ARMA(Borrow, ae, be) return ae.type == be.type && ae.inner == be.inner;
             TU_ARMA(Pointer, ae, be) return ae.type == be.type && ae.inner == be.inner;
@@ -754,6 +801,17 @@ namespace {
                 }
             }
             TU_ARMA(Slice, e) addTypeFlags(flags, e.inner);
+            TU_ARMA(Pattern, e) {
+                addTypeFlags(flags, e.inner);
+                for (const auto& range : e.pattern.alternatives) {
+                    const HIRConstGeneric* values[] = {range.hasStart ? &range.start : nullptr, range.hasEnd ? &range.end : nullptr};
+                    for (const auto* value : values) {
+                        if (!value) continue;
+                        if (value->is_Generic()) flags |= HIRTypeData::HAS_TYPE_PARAM;
+                        else if (value->is_Infer() || value->is_Unevaluated()) flags |= HIRTypeData::HAS_DEFERRED_CONST;
+                    }
+                }
+            }
             TU_ARMA(Tuple, e) for (const auto inner : e) addTypeFlags(flags, inner);
             TU_ARMA(Borrow, e) {
                 addTypeFlags(flags, e.inner);
@@ -944,6 +1002,17 @@ namespace {
             }
             }
             TU_ARMA(Slice, e) h = hashMix(h, hashTypeRef(e.inner));
+            TU_ARMA(Pattern, e) {
+                h = hashMix(h, hashTypeRef(e.inner));
+                h = hashMix(h, e.pattern.alternatives.size());
+                for (const auto& range : e.pattern.alternatives) {
+                    h = hashMix(h, range.hasStart);
+                    if (range.hasStart) h = hashMix(h, hashConstGeneric(range.start));
+                    h = hashMix(h, range.hasEnd);
+                    if (range.hasEnd) h = hashMix(h, hashConstGeneric(range.end));
+                    h = hashMix(h, range.endInclusive);
+                }
+            }
             TU_ARMA(Tuple, e) {
                 for (auto t : e) {
                     h = hashMix(h, hashTypeRef(t));
@@ -1132,6 +1201,9 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
         TU_ARMA(Slice, te, xe) {
             return te.inner->equalsIgnoringRegions(xe.inner);
         }
+        TU_ARMA(Pattern, te, xe) {
+            return te.inner->equalsIgnoringRegions(xe.inner) && te.pattern.ord(xe.pattern) == OrdEqual;
+        }
         TU_ARMA(Tuple, te, xe) {
             if (te.size() != xe.size()) {
                 return false;
@@ -1224,6 +1296,7 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         (ErasedType, ORD(te.inner, xe.inner); return OrdEqual;),
         (Array, ORD(te.inner, xe.inner); ORD(te.size, xe.size); return OrdEqual;),
         (Slice, return ::ord(te.inner, xe.inner);),
+        (Pattern, ORD(te.inner, xe.inner); return te.pattern.ord(xe.pattern);),
         (Tuple, return ::ord(te, xe);),
         (Borrow, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
         (Pointer, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
@@ -1597,6 +1670,19 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
         TU_ARMA(Slice, te, xe) {
             return this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);
         }
+        TU_ARMA(Pattern, te, xe) {
+            if (te.pattern.alternatives.size() != xe.pattern.alternatives.size()) return HIRCompare::Unequal;
+            auto rv = this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);
+            for (size_t i = 0; i < te.pattern.alternatives.size(); i++) {
+                const auto& left = te.pattern.alternatives[i];
+                const auto& right = xe.pattern.alternatives[i];
+                if (left.hasStart != right.hasStart || left.hasEnd != right.hasEnd || left.endInclusive != right.endInclusive) return HIRCompare::Unequal;
+                if (left.hasStart) rv &= matchValues(sp, left.start, right.start, *this);
+                if (left.hasEnd) rv &= matchValues(sp, left.end, right.end, *this);
+                if (rv == HIRCompare::Unequal) return rv;
+            }
+            return rv;
+        }
         TU_ARMA(Tuple, te, xe) {
             if (te.size() != xe.size()) {
                 return HIRCompare::Unequal;
@@ -1754,6 +1840,9 @@ HIRTypeData HIRTypeData::cloneData() const {
         }
         TU_ARMA(Slice, e) {
             return HIRTypeData::make_Slice({e.inner});
+        }
+        TU_ARMA(Pattern, e) {
+            return HIRTypeData::make_Pattern({e.inner, e.pattern.clone()});
         }
         TU_ARMA(Tuple, e) {
             ::std::vector<HIRTypeRef> types;
@@ -2034,6 +2123,26 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
         }
         TU_ARMA(Slice, le, re) {
             return le.inner->compareWithPlaceholders(sp, re.inner, resolvePlaceholder);
+        }
+        TU_ARMA(Pattern, le, re) {
+            if (le.pattern.alternatives.size() != re.pattern.alternatives.size()) return HIRCompare::Unequal;
+            auto rv = le.inner->compareWithPlaceholders(sp, re.inner, resolvePlaceholder);
+            auto compareValue = [&](const HIRConstGeneric& left, const HIRConstGeneric& right) {
+                const auto& leftResolved = resolvePlaceholder.getVal(sp, left);
+                const auto& rightResolved = resolvePlaceholder.getVal(sp, right);
+                if (leftResolved.is_Infer() || rightResolved.is_Infer()) return HIRCompare::Fuzzy;
+                if (leftResolved == rightResolved) return HIRCompare::Equal;
+                return leftResolved.is_Unevaluated() || rightResolved.is_Unevaluated() ? HIRCompare::Fuzzy : HIRCompare::Unequal;
+            };
+            for (size_t i = 0; i < le.pattern.alternatives.size(); i++) {
+                const auto& left = le.pattern.alternatives[i];
+                const auto& right = re.pattern.alternatives[i];
+                if (left.hasStart != right.hasStart || left.hasEnd != right.hasEnd || left.endInclusive != right.endInclusive) return HIRCompare::Unequal;
+                if (left.hasStart) rv &= compareValue(left.start, right.start);
+                if (left.hasEnd) rv &= compareValue(left.end, right.end);
+                if (rv == HIRCompare::Unequal) return rv;
+            }
+            return rv;
         }
         TU_ARMA(Tuple, le, re) {
             if (le.size() != re.size()) {

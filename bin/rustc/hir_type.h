@@ -185,6 +185,26 @@ struct HIRTypeDataFunctionPointer {
     ::std::vector<HIRTypeRef> argTypes;
 };
 
+struct HIRTypePatternRange {
+    bool hasStart;
+    HIRConstGeneric start;
+    bool hasEnd;
+    HIRConstGeneric end;
+    bool endInclusive;
+
+    HIRTypePatternRange clone() const;
+    Ordering ord(const HIRTypePatternRange& x) const;
+    void fmt(::std::ostream& os) const;
+};
+
+struct HIRTypePattern {
+    ::std::vector<HIRTypePatternRange> alternatives;
+
+    HIRTypePattern clone() const;
+    Ordering ord(const HIRTypePattern& x) const;
+    void fmt(::std::ostream& os) const;
+};
+
 TAGGED_UNION_EX(
     HIRTypeDataNamedFunctionTy,
     (),
@@ -265,7 +285,12 @@ TAGGED_UNION_EX(
              HIRTypeDataFunctionPointer decay(HIRTypeInterner& types, const Span& sp) const;
          }),
         (Function, HIRTypeDataFunctionPointer), // TODO: Pointer wrap, this is quite large
-        (NodeType, HIRTypeDataNodeType)),
+        (NodeType, HIRTypeDataNodeType),
+        (Pattern,
+         struct {
+             HIRTypeRef inner;
+             HIRTypePattern pattern;
+         })),
         (, flags(x.flags)),
         (flags = x.flags;),
         (

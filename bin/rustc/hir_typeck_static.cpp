@@ -1730,6 +1730,13 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
         TU_ARMA(Slice, e) {
             expandAssociatedTypesInner(sp, e.inner);
         }
+        TU_ARMA(Pattern, e) {
+            expandAssociatedTypesInner(sp, e.inner);
+            for (auto& range : e.pattern.alternatives) {
+                if (range.hasStart) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, e.inner, range.start);
+                if (range.hasEnd) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, e.inner, range.end);
+            }
+        }
         TU_ARMA(Tuple, e) {
             for (auto& sub : e) {
                 expandAssociatedTypesInner(sp, sub);
@@ -2397,6 +2404,9 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             // [T] isn't Sized, so isn't Copy ether
             return false;
         }
+        TU_ARMA(Pattern, e) {
+            return typeIsCopy(sp, e.inner);
+        }
         TU_ARMA(TraitObject, e) {
             // (Trait) isn't Sized, so isn't Copy ether
             return false;
@@ -2506,6 +2516,9 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
         TU_ARMA(Slice, e) {
             // [T] isn't Sized, so isn't Copy ether
             return false;
+        }
+        TU_ARMA(Pattern, e) {
+            return typeIsClone(sp, e.inner);
         }
         TU_ARMA(TraitObject, e) {
             // (Trait) isn't Sized, so isn't Copy ether
@@ -2633,6 +2646,9 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty)
                 return typeIsImpossible(sp, e.inner);
             }
             TU_ARMA(Slice, e) {
+                return typeIsImpossible(sp, e.inner);
+            }
+            TU_ARMA(Pattern, e) {
                 return typeIsImpossible(sp, e.inner);
             }
             TU_ARMA(Tuple, e) {
@@ -2949,6 +2965,9 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
         TU_ARMA(Slice, e) {
             return this->typeIsInteriorMutable(sp, e.inner);
         }
+        TU_ARMA(Pattern, e) {
+            return this->typeIsInteriorMutable(sp, e.inner);
+        }
         TU_ARMA(Tuple, e) {
             for (const auto& t : e) {
                 auto rv = this->typeIsInteriorMutable(sp, t);
@@ -3116,6 +3135,9 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
         TU_ARMA(Slice, e) {
             return MetadataType::Slice;
         }
+        TU_ARMA(Pattern, e) {
+            return this->metadataType(sp, e.inner, errOnUnknown);
+        }
         TU_ARMA(TraitObject, e) {
             return MetadataType::TraitObject;
         }
@@ -3257,6 +3279,9 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             return typeNeedsDropGlue(sp, e.inner);
         }
         TU_ARMA(Slice, e) {
+            return typeNeedsDropGlue(sp, e.inner);
+        }
+        TU_ARMA(Pattern, e) {
             return typeNeedsDropGlue(sp, e.inner);
         }
         TU_ARMA(TraitObject, e) {

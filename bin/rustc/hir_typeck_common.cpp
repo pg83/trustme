@@ -146,6 +146,9 @@ struct TyVisitor {
             TU_ARMA(Slice, e) {
                 return visitType(e.inner);
             }
+            TU_ARMA(Pattern, e) {
+                return visitType(e.inner);
+            }
             TU_ARMA(Tuple, e) {
                 for (auto& ty : e) {
                     if (visitType(ty)) {
@@ -312,6 +315,7 @@ namespace {
                     }
                     TU_ARMA(Array, e) childStop = rewriteType(e.inner);
                     TU_ARMA(Slice, e) childStop = rewriteType(e.inner);
+                    TU_ARMA(Pattern, e) childStop = rewriteType(e.inner);
                     TU_ARMA(Tuple, e) for (auto& inner : e) if (!childStop) childStop = rewriteType(inner);
                     TU_ARMA(Borrow, e) childStop = rewriteType(e.inner);
                     TU_ARMA(Pointer, e) childStop = rewriteType(e.inner);
@@ -453,6 +457,21 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         }
         TU_ARMA(Slice, e) {
             return types.slice(this->monomorphType(sp, e.inner, allowInfer));
+        }
+        TU_ARMA(Pattern, e) {
+            HIRTypePattern pattern;
+            pattern.alternatives.reserve(e.pattern.alternatives.size());
+            for (const auto& range : e.pattern.alternatives) {
+                HIRTypePatternRange out{
+                    range.hasStart,
+                    range.hasStart ? this->monomorphConstgeneric(sp, range.start, allowInfer) : HIRConstGeneric(),
+                    range.hasEnd,
+                    range.hasEnd ? this->monomorphConstgeneric(sp, range.end, allowInfer) : HIRConstGeneric(),
+                    range.endInclusive,
+                };
+                pattern.alternatives.push_back(mv$(out));
+            }
+            return types.intern(HIRTypeData::make_Pattern({this->monomorphType(sp, e.inner, allowInfer), mv$(pattern)}));
         }
         TU_ARMA(Tuple, e) {
             ::std::vector<HIRTypeRef> types;

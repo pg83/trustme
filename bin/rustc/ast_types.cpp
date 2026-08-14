@@ -2,6 +2,7 @@
 
 #include "ast_ast.h"
 #include "ast_expr.h"
+#include "ast_pattern.h"
 #include "ast_crate.h"
 #include <std/mem/obj_pool.h>
 
@@ -188,6 +189,7 @@ ASTType* ASTType::clone() const {
             _CLONE(Pointer, {old.isMut, old.inner->clone()})
             _CLONE(Array, {old.inner->clone(), old.size})
             _CLONE(Slice, {old.inner->clone()})
+            _CLONE(Pattern, {old.inner->clone(), p.make<ASTPattern>(old.pattern->clone())})
             _COPY(Generic)
             _CLONE(Path, p.make<ASTPath>(*old))
             _COPY(TraitObject)
@@ -240,7 +242,7 @@ Ordering ASTType::ord(const ASTType& x) const {
         return rv;
     }
 
-    TU_MATCH(TypeData, (mData, x.mData), (ent, xEnt), (None, return OrdEqual;), (Macro, throw CompileErrorBugCheck("ASTType*::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);), (Function, return ent.info.ord(xEnt.info);), (Tuple, return ::ord(ent.innerTypes, xEnt.innerTypes);), (Borrow, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Pointer, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Array, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return ent.inner->ord(*xEnt.inner);), (Generic, return ::ord(ent.name, xEnt.name);), (Path, return ent->ord(*xEnt);), (TraitObject, return ::ord(ent.traits, xEnt.traits);), (ErasedType, ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;))
+    TU_MATCH(TypeData, (mData, x.mData), (ent, xEnt), (None, return OrdEqual;), (Macro, throw CompileErrorBugCheck("ASTType*::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);), (Function, return ent.info.ord(xEnt.info);), (Tuple, return ::ord(ent.innerTypes, xEnt.innerTypes);), (Borrow, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Pointer, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Array, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return ent.inner->ord(*xEnt.inner);), (Pattern, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; return ::ord(*ent.pattern, *xEnt.pattern);), (Generic, return ::ord(ent.name, xEnt.name);), (Path, return ent->ord(*xEnt);), (TraitObject, return ::ord(ent.traits, xEnt.traits);), (ErasedType, ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;))
     throw ::std::runtime_error(FMT("BUGCHECK - Unhandled ASTType* class '" << mData.tag() << "'"));
 }
 
@@ -307,6 +309,7 @@ void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
             _(Pointer, os << "*" << (ent.isMut ? "mut " : "const "); ent.inner->print(os, isDebug);)
             _(Array, os << "["; ent.inner->print(os, isDebug); os << "; "; if (ent.size.get()) { os << *ent.size; } else { os << "_"; } os << "]";)
             _(Slice, os << "["; ent.inner->print(os, isDebug); os << "]";)
+            _(Pattern, ent.inner->print(os, isDebug); os << " is " << *ent.pattern;)
             _(Generic, if (isDebug) os << "/* arg */ "; os << ent.name; if (isDebug) os << "/*" << ent.index << "*/";)
             _(Path, ent->printPretty(os, true, isDebug);)
             _(TraitObject, os << "("; bool needsPlus = false; for (const auto& it : ent.traits) {

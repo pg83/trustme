@@ -471,6 +471,9 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
             }
             throw "";
         }
+        TU_ARMA(Pattern, te) {
+            return MIRCleanupLiteralToRValue(state, mutator, lit, te.inner, params, mv$(path));
+        }
         TU_ARMA(Pointer, te) {
             if (lit.getReloc()) {
                 // Share logic with `Borrow` below, but wrap returned value in a cast op

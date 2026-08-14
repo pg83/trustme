@@ -166,19 +166,24 @@ public:
             fmtType(ty);
         }
         for (const auto& v : pp.values) {
-            const auto& ev = *v.as_Evaluated();
-            os << "V";
-            os << ev.bytes.size();
-            os << "_";
-            // TODO: Base64 data? (`_` and `$` as the other two?)
-            for (size_t i = 0; i < ev.bytes.size(); i++) {
-                os << "0123456789abcdef"[ev.bytes[i] >> 4];
-                os << "0123456789abcdef"[ev.bytes[i] & 0xF];
-            }
-            if (ev.relocations.size() > 0) {
-                os << "_" << ev.relocations.size() << "R";
-                TODO(Span(), "Mangle relocated values");
-            }
+            fmtConstGeneric(v);
+        }
+    }
+
+    void fmtConstGeneric(const HIRConstGeneric& value) {
+        const auto* evaluated = value.opt_Evaluated();
+        if (!evaluated) {
+            BUG(Span(), "Non-encodable const generic " << value);
+        }
+        const auto& literal = **evaluated;
+        os << "V" << literal.bytes.size() << "_";
+        for (const auto byte : literal.bytes) {
+            os << "0123456789abcdef"[byte >> 4];
+            os << "0123456789abcdef"[byte & 0xF];
+        }
+        if (!literal.relocations.empty()) {
+            os << "_" << literal.relocations.size() << "R";
+            TODO(Span(), "Mangle relocated values");
         }
     }
 
@@ -398,6 +403,17 @@ public:
             }
             TU_ARMA(Diverge, _e) {
                 os << 'C' << 'z';
+            }
+            TU_ARMA(Pattern, e) {
+                os << "Q";
+                this->fmtType(e.inner);
+                os << e.pattern.alternatives.size() << "r";
+                for (const auto& range : e.pattern.alternatives) {
+                    os << (range.hasStart ? 's' : 'n');
+                    if (range.hasStart) this->fmtConstGeneric(range.start);
+                    os << (range.hasEnd ? (range.endInclusive ? 'i' : 'e') : 'n');
+                    if (range.hasEnd) this->fmtConstGeneric(range.end);
+                }
             }
         }
     }

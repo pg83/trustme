@@ -2610,8 +2610,10 @@ namespace {
             TRACE_FUNCTION_F("_Literal");
             TU_MATCH_HDRA( (node.mData), {)
             TU_ARMA(Integer, e) {
-                    ASSERT_BUG(node.span(), node.resType->is_Primitive(), "Non-primitive return type for Integer literal - " << node.resType);
-                    auto ity = node.resType->as_Primitive();
+                    const HIRTypeData* literalType = node.resType;
+                    if (const auto* pattern = literalType->opt_Pattern()) literalType = pattern->inner;
+                    ASSERT_BUG(node.span(), literalType->is_Primitive(), "Non-primitive-backed return type for Integer literal - " << node.resType);
+                    auto ity = literalType->as_Primitive();
                     switch (ity) {
                         case HIRCoreType::U8:
                         case HIRCoreType::U16:
@@ -2637,8 +2639,10 @@ namespace {
                     }
                 }
                 TU_ARMA(Float, e) {
-                    ASSERT_BUG(node.span(), node.resType->is_Primitive(), "Non-primitive return type for Float literal - " << node.resType);
-                    auto ity = node.resType->as_Primitive();
+                    const HIRTypeData* literalType = node.resType;
+                    if (const auto* pattern = literalType->opt_Pattern()) literalType = pattern->inner;
+                    ASSERT_BUG(node.span(), literalType->is_Primitive(), "Non-primitive-backed return type for Float literal - " << node.resType);
+                    auto ity = literalType->as_Primitive();
                     builder.setResult(node.span(), MIRRValue::make_Constant(MIRConstant::make_Float({e.mValue, ity})));
                 }
                 TU_ARMA(Boolean, e) {
@@ -4596,6 +4600,9 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                     break;
             }
         }
+        TU_ARMA(Pattern, e) {
+            this->appendFromLit(sp, lit, e.inner);
+        }
         TU_ARMA(Tuple, e) {
             auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
             ASSERT_BUG(sp, repr, "Matching with generic constant type not valid - " << ty);
@@ -4945,7 +4952,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         tyP = &(*tyP)->as_Borrow().inner;
         fieldPath.push_back(FIELD_DEREF);
     }
-    const auto& ty = *tyP;
+    const HIRTypeData* ty = *tyP;
+    if (const auto* pattern = ty->opt_Pattern()) ty = pattern->inner;
 
     // TODO: Outer handling for Value::Named patterns
     // - Convert them into either a pattern, or just a variant of this function that operates on ::HIR::Literal
@@ -5029,6 +5037,9 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     }
                 }
         }
+        }
+        TU_ARMA(Pattern, e) {
+            BUG(sp, "Pattern type was not reduced to its base type");
         }
         TU_ARMA(Tuple, e) {
             fieldPath.push_back(0);
@@ -5850,6 +5861,7 @@ namespace {
             TU_ARMA(Infer, e)   BUG(sp, "Ivar for in match type");
                 TU_ARMA(Diverge, e) BUG(sp, "Diverge in match type");
                 TU_ARMA(Primitive, e) BUG(sp, "Destructuring a primitive");
+                TU_ARMA(Pattern, e) BUG(sp, "Destructuring a pattern type");
                 TU_ARMA(Tuple, e) {
                     ASSERT_BUG(sp, idx < e.size(), "Tuple index out of range");
                     lval = MIRLValue::newField(mv$(lval), idx);
@@ -5975,6 +5987,10 @@ namespace {
             }
         }
 
+        if (const auto* pattern = curTy->opt_Pattern()) {
+            lval = builder.lvalueOrTemp(sp, pattern->inner, MIRRValue::make_Cast({mv$(lval), pattern->inner}));
+            curTy = pattern->inner;
+        }
         outTy = curTy;
         outVal = mv$(lval);
     }
@@ -6258,6 +6274,9 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                             builder.setCurBlock(succBb);
                 } break;
                 }
+            }
+            TU_ARMA(Pattern, te) {
+                BUG(sp, "Pattern type was not reduced to its base type");
             }
             TU_ARMA(Path, te) {
             TU_MATCH_HDRA( (te.binding), {)
@@ -6883,6 +6902,9 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
         }
         TU_ARMA(Primitive, te) {
             this->genDispatchPrimitive(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
+        }
+        TU_ARMA(Pattern, te) {
+            BUG(sp, "Pattern type was not reduced to its base type");
         }
         TU_ARMA(Path, te) {
             // Matching over a path can only happen with an enum.

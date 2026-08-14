@@ -372,6 +372,11 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
             this->printType(os, e.inner, stack);
             os << "; " << e.size << "]";
         }
+        TU_ARMA(Pattern, e) {
+            this->printType(os, e.inner, stack);
+            os << " is ";
+            e.pattern.fmt(os);
+        }
         TU_ARMA(NodeType, e) {
             e.fmt(os);
         TU_MATCH_HDRA((e), {)
@@ -550,6 +555,18 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
         TU_ARMA(Slice, e) {
             this->expandIvars(e.inner);
         }
+        TU_ARMA(Pattern, e) {
+            this->expandIvars(e.inner);
+            for (auto& range : e.pattern.alternatives) {
+                HIRConstGeneric* values[] = {range.hasStart ? &range.start : nullptr, range.hasEnd ? &range.end : nullptr};
+                for (auto* value : values) {
+                    if (value && value->is_Infer()) {
+                        const auto& resolved = this->getValue(*value);
+                        if (!resolved.is_Infer()) *value = resolved.clone();
+                    }
+                }
+            }
+        }
         TU_ARMA(Tuple, e) {
             for (auto& ty : e) {
                 this->expandIvars(ty);
@@ -640,6 +657,13 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
         }
         TU_ARMA(Slice, e) {
             addIvars(e.inner);
+        }
+        TU_ARMA(Pattern, e) {
+            addIvars(e.inner);
+            for (auto& range : e.pattern.alternatives) {
+                if (range.hasStart) addIvars(range.start);
+                if (range.hasEnd) addIvars(range.end);
+            }
         }
         TU_ARMA(Tuple, e) {
             for (auto& ty : e) {
@@ -848,6 +872,7 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
                 (e),
                 (ERROR(sp, E0000, "Type unificiation of literal with invalid type - " << rootIvar.type);),
                 (Primitive, checkTypeClassPrimitive(sp, type, lE->tyClass, e);),
+                (Pattern, const auto* primitive = e.inner->opt_Primitive(); if (!primitive) { ERROR(sp, E0000, "Type unificiation of literal with invalid pattern type - " << rootIvar.type); } checkTypeClassPrimitive(sp, type, lE->tyClass, *primitive);),
                 (Infer,
                  // Check for right having a ty_class
                  if (e.tyClass != HIRInferClass::None && e.tyClass != lE->tyClass) { ERROR(sp, E0000, "Unifying types with mismatching literal classes - " << type << " := " << rootIvar.type); })
@@ -892,6 +917,12 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
                     // `type` can't be an ivar, so it has to be a primitive (or an associated?)
                     if (const auto* lE = type->opt_Primitive()) {
                         checkTypeClassPrimitive(sp, type, e->tyClass, *lE);
+                    } else if (const auto* pattern = type->opt_Pattern()) {
+                        const auto* primitive = pattern->inner->opt_Primitive();
+                        if (!primitive) {
+                            BUG(sp, "Setting primitive to " << type);
+                        }
+                        checkTypeClassPrimitive(sp, type, e->tyClass, *primitive);
                     } else if (type->is_Diverge()) {
                         // ... acceptable
                     } else {
@@ -930,6 +961,12 @@ void HMTypeInferrence::ivarUnify(unsigned int leftSlot, unsigned int rightSlot) 
                     }
                 } else if (const auto* le = leftIvar.type->opt_Primitive()) {
                     checkTypeClassPrimitive(sp, leftIvar.type, re->tyClass, *le);
+                } else if (const auto* pattern = leftIvar.type->opt_Pattern()) {
+                    const auto* primitive = pattern->inner->opt_Primitive();
+                    if (!primitive) {
+                        ERROR(sp, E0000, "Type unificiation of literal with invalid pattern type - " << leftIvar.type);
+                    }
+                    checkTypeClassPrimitive(sp, leftIvar.type, re->tyClass, *primitive);
                 } else {
                     ERROR(sp, E0000, "Type unificiation of literal with invalid type - " << leftIvar.type);
                 }
@@ -1026,6 +1063,9 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
         return typeContainsIvars(e.inner, onlyUnbound);
         ),
     (Slice,
+        return typeContainsIvars(e.inner, onlyUnbound);
+        ),
+    (Pattern,
         return typeContainsIvars(e.inner, onlyUnbound);
         ),
     (Array,
@@ -1143,6 +1183,9 @@ TU_ARMA(Alias, ee) {
         ),
     (Slice,
         return typesEqual(le.inner, re.inner);
+        ),
+    (Pattern,
+        return le.pattern.ord(re.pattern) == OrdEqual && typesEqual(le.inner, re.inner);
         ),
     (Array,
         if( le.size != re.size )
@@ -4522,6 +4565,9 @@ TU_ARMA(Alias, ee) {
         TU_ARMA(Slice, e) {
             return hasAssociatedType(e.inner);
         }
+        TU_ARMA(Pattern, e) {
+            return hasAssociatedType(e.inner);
+        }
         TU_ARMA(Tuple, e) {
             bool rv = false;
             for (const auto& sub : e) {
@@ -4687,6 +4733,15 @@ TU_ARMA(Alias, ee) {
         }
         TU_ARMA(Slice, e) {
             expandAssociatedTypesInplace(sp, e.inner, stack);
+        }
+        TU_ARMA(Pattern, e) {
+            expandAssociatedTypesInplace(sp, e.inner, stack);
+            for (auto& range : e.pattern.alternatives) {
+                HIRConstGeneric* values[] = {range.hasStart ? &range.start : nullptr, range.hasEnd ? &range.end : nullptr};
+                for (auto* value : values) {
+                    if (value) ConvertHIRConstantEvaluateConstGeneric(sp, this->wb, crate, e.inner, *value);
+                }
+            }
         }
         TU_ARMA(Tuple, e) {
             for (auto& sub : e) {

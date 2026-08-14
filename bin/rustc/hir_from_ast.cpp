@@ -1071,6 +1071,53 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
             auto inner = LowerHIRType(e.inner);
             return mCrate->types.slice(inner);
         }
+        TU_ARMA(Pattern, e) {
+            auto lowerValue = [&](const ASTPattern::Value& value, const Span& sp) -> HIRConstGeneric {
+                TU_MATCH_HDRA((value), {)
+                TU_ARMA(Integer, v) {
+                    ASTExprNodeInteger node(v.value, v.type);
+                    node.setSpan(sp);
+                    return LowerHIRConstGeneric(node);
+                }
+                TU_ARMA(Named, v) {
+                    ASTExprNodeNamedValue node(v);
+                    node.setSpan(sp);
+                    return LowerHIRConstGeneric(node);
+                }
+                TU_ARMA(Invalid, v) BUG(sp, "invalid pattern endpoint");
+                TU_ARMA(Float, v) ERROR(sp, E0000, "float pattern types are not supported");
+                TU_ARMA(String, v) ERROR(sp, E0000, "string pattern types are not supported");
+                TU_ARMA(ByteString, v) ERROR(sp, E0000, "byte-string pattern types are not supported");
+                }
+                throw "";
+            };
+
+            HIRTypePattern pattern;
+            std::function<void(const ASTPattern&)> lowerPattern = [&](const ASTPattern& pat) {
+                TU_MATCH_HDRA((pat.data()), {)
+                TU_ARMA(Value, range) {
+                    if (range.end.is_Invalid()) ERROR(pat.span(), E0000, "pattern types require a range pattern");
+                    HIRTypePatternRange out{!range.start.is_Invalid(), {}, !range.end.is_Invalid(), {}, true};
+                    if (out.hasStart) out.start = lowerValue(range.start, pat.span());
+                    if (out.hasEnd) out.end = lowerValue(range.end, pat.span());
+                    pattern.alternatives.push_back(mv$(out));
+                }
+                TU_ARMA(ValueLeftInc, range) {
+                    HIRTypePatternRange out{!range.start.is_Invalid(), {}, !range.end.is_Invalid(), {}, false};
+                    if (out.hasStart) out.start = lowerValue(range.start, pat.span());
+                    if (out.hasEnd) out.end = lowerValue(range.end, pat.span());
+                    pattern.alternatives.push_back(mv$(out));
+                }
+                TU_ARMA(Or, alternatives) {
+                    for (const auto& alternative : alternatives) lowerPattern(alternative);
+                }
+                default:
+                    ERROR(pat.span(), E0000, "pattern not supported in pattern types");
+                }
+            };
+            lowerPattern(*e.pattern);
+            return mCrate->types.intern(HIRTypeData::make_Pattern({LowerHIRType(e.inner), mv$(pattern)}));
+        }
         TU_ARMA(Path, e) {
             if (const auto* l = e->cls.opt_Local()) {
                 unsigned int slot;

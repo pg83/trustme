@@ -478,6 +478,13 @@ void HIRVisitor::visitTypeData(HIRTypeData& data) {
         TU_ARMA(Slice, e) {
             this->visitType(e.inner);
         }
+        TU_ARMA(Pattern, e) {
+            this->visitType(e.inner);
+            for (auto& range : e.pattern.alternatives) {
+                if (range.hasStart) this->visitConstgeneric(range.start);
+                if (range.hasEnd) this->visitConstgeneric(range.end);
+            }
+        }
         TU_ARMA(Tuple, e) {
             for (auto& t : e) {
                 this->visitType(t);

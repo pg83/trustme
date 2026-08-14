@@ -1281,6 +1281,9 @@ namespace {
         }
 
         static TypeInfo forType(const HIRTypeData* ty) {
+            if (const auto* pattern = ty->opt_Pattern()) {
+                return forType(pattern->inner);
+            }
             if (!ty->is_Primitive()) {
                 return TypeInfo{Other, 0};
             }
@@ -1494,6 +1497,9 @@ public:
             }
             TU_ARMA(Primitive, te) {
                 return false;
+            }
+            TU_ARMA(Pattern, te) {
+                return valueNeedsNonConstDrop(te.inner, value);
             }
             TU_ARMA(Pointer, te) {
                 return false;
@@ -4680,6 +4686,24 @@ namespace {
                 auto& e = data.as_Array();
                 TRACE_FUNCTION_FR(ty, ty);
                 visitArraysize(e.size);
+                ty = crate.types.intern(mv$(data));
+            }
+
+            if (ty->is_Pattern()) {
+                auto data = ty->cloneData();
+                auto& e = data.as_Pattern();
+                auto evaluateEndpoint = [&](HIRConstGeneric& value) {
+                    if (const auto* unevaluated = value.opt_Unevaluated()) {
+                        try {
+                            value = HIREncodedLiteralPtr(evaluateConstgeneric(Span(), wb, crate, e.inner, **unevaluated));
+                        } catch (const Defer&) {
+                        }
+                    }
+                };
+                for (auto& range : e.pattern.alternatives) {
+                    if (range.hasStart) evaluateEndpoint(range.start);
+                    if (range.hasEnd) evaluateEndpoint(range.end);
+                }
                 ty = crate.types.intern(mv$(data));
             }
 

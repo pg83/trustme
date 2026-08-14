@@ -210,3 +210,4 @@ struct ASTStructPatternEntry {
 
 extern ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val);
 extern ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::TuplePat& val);
+extern Ordering ord(const ASTPattern& a, const ASTPattern& b);

@@ -621,6 +621,10 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
         TU_ARMA(Slice, e) {
             ExpandType(es, mod, e.inner);
         }
+        TU_ARMA(Pattern, e) {
+            ExpandType(es, mod, e.inner);
+            ExpandPattern(es, mod, *e.pattern, true);
+        }
         TU_ARMA(Generic, e) {
         }
         TU_ARMA(Path, e) {

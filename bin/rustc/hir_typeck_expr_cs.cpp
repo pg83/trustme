@@ -308,6 +308,9 @@ namespace {
                 TU_ARMA(Slice, e) {
                     bad_cast(sp, srcTy, tgtTy, "dst");
                 }
+                TU_ARMA(Pattern, e) {
+                    bad_cast(sp, srcTy, tgtTy, "dst");
+                }
                 TU_ARMA(Tuple, e) {
                     bad_cast(sp, srcTy, tgtTy, "dst");
                 }
@@ -1582,7 +1585,11 @@ namespace {
         }
 
         void visit(HIRExprNodeLiteral& node) override {
-            TU_MATCH(HIRExprNodeLiteral::Data, (node.mData), (e), (Integer, ASSERT_BUG(node.span(), node.resType->is_Primitive(), "Integer _Literal didn't return primitive - " << node.resType); e.mType = node.resType->as_Primitive();), (Float, ASSERT_BUG(node.span(), node.resType->is_Primitive(), "Float Literal didn't return primitive - " << node.resType); e.mType = node.resType->as_Primitive();), (Boolean, ), (ByteString, ), (CString, ), (String, ))
+            const HIRTypeData* literalType = node.resType;
+            if (const auto* pattern = literalType->opt_Pattern()) {
+                literalType = pattern->inner;
+            }
+            TU_MATCH(HIRExprNodeLiteral::Data, (node.mData), (e), (Integer, ASSERT_BUG(node.span(), literalType->is_Primitive(), "Integer _Literal didn't return primitive-backed type - " << node.resType); e.mType = literalType->as_Primitive();), (Float, ASSERT_BUG(node.span(), literalType->is_Primitive(), "Float Literal didn't return primitive-backed type - " << node.resType); e.mType = literalType->as_Primitive();), (Boolean, ), (ByteString, ), (CString, ), (String, ))
         }
 
         void visit(HIRExprNodeCast& node) override {
@@ -2307,6 +2314,21 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                 }
                 TU_ARMA(Slice, lE, rE) {
+                    this->equateTypesInner(sp, lE.inner, rE.inner);
+                }
+                TU_ARMA(Pattern, lE, rE) {
+                    if (lE.pattern.alternatives.size() != rE.pattern.alternatives.size()) {
+                        ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - pattern alternative counts differ");
+                    }
+                    for (size_t i = 0; i < lE.pattern.alternatives.size(); i++) {
+                        const auto& left = lE.pattern.alternatives[i];
+                        const auto& right = rE.pattern.alternatives[i];
+                        if (left.hasStart != right.hasStart || left.hasEnd != right.hasEnd || left.endInclusive != right.endInclusive) {
+                            ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT << " - pattern shapes differ");
+                        }
+                        if (left.hasStart) this->equateValues(sp, left.start, right.start);
+                        if (left.hasEnd) this->equateValues(sp, left.end, right.end);
+                    }
                     this->equateTypesInner(sp, lE.inner, rE.inner);
                 }
                 TU_ARMA(Tuple, lE, rE) {

@@ -45,6 +45,14 @@ namespace {
     }
 }
 
+class CPatternTypeExpander: public ExpandProcMacro {
+public:
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override {
+        return box$(TTStreamO(sp, ParseState(), tt.clone()));
+    }
+};
+STATIC_MACRO("pattern_type", CPatternTypeExpander);
+
 class CLlvmAsmExpander: public ExpandProcMacro {
 public:
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
