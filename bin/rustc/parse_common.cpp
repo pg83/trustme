@@ -1319,8 +1319,9 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                     PUTBACK(tok, lex);
                     return NEWNODE(ASTExprNodeNamedValue, ::std::move(path));
                 // `builtin # <name>` - seems to be a 1.74 era hack to extend syntax
-                // - Only `builtin # offset_of( <ty>, <field>[, <subfield>]... )` is implemented
-                //   > mrustc translates this to an intrinsic call with the fields as string/integer arguments (simple to pass through)
+                // - `offset_of` is translated to an intrinsic call with the fields as
+                //   string/integer arguments. `type_ascribe` maps directly to the
+                //   existing type-annotation expression.
                 case TOK_HASH:
                     if (path.isTrivial() && path.asTrivial() == "builtin") {
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
@@ -1400,6 +1401,13 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                             path = ASTPath(RcString::newInterned("#intrinsics"), {ASTPathNode("offset_of")});
                             path.nodes().back().args().entries.push_back(std::move(ty));
                             return NEWNODE(ASTExprNodeCallPath, std::move(path), std::move(args));
+                        } else if (tok.ident() == "type_ascribe") {
+                            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+                            auto value = ParseExpr0(lex);
+                            GET_CHECK_TOK(tok, lex, TOK_COMMA);
+                            auto ty = ParseType(lex);
+                            GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+                            return NEWNODE(ASTExprNodeTypeAnnotation, std::move(value), std::move(ty));
                         } else {
                             TODO(lex.pointSpan(), "`builtin #` support - " << tok.ident());
                         }

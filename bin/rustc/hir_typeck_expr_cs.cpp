@@ -3110,14 +3110,16 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         rv = true;
                     }
                     TU_ARM(pattern.mData, Value, pe) {
-                        // no-op?
                         if (pe.val.is_Named()) {
-                            // TODO: If the value is a borrow, then unwind borrows.
-                            ASSERT_BUG(sp, pe.val.as_Named().binding, pattern);
-                            const auto& ty = pe.val.as_Named().binding->mType;
-                            if (ty->is_Borrow()) {
+                            const auto valueType = getPossibleTypeVal(context, pe.val);
+                            ASSERT_BUG(sp, valueType, "No type for named value pattern " << pattern);
+                            const auto* resolvedValueType = context.getType(*valueType);
+                            if (const auto* valueBorrow = resolvedValueType->opt_Borrow()) {
                                 ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, "");
                                 pattern.implicitDerefCount -= 1;
+                                context.equateTypes(sp, ty, valueBorrow->inner);
+                            } else {
+                                context.equateTypes(sp, ty, resolvedValueType);
                             }
                         } else if (pe.val.is_String() || pe.val.is_ByteString()) {
                             ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, "");

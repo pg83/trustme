@@ -1297,7 +1297,7 @@ struct CExpandExpr: public ASTNodeVisitor {
                 }
 
                 void visit(ASTExprNodeTypeAnnotation& v) override {
-                    invalid(v);
+                    slot(v);
                 }
 
                 void visit(ASTExprNodeBinOp& v) override {

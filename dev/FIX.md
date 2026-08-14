@@ -30,7 +30,7 @@ causes: a generic reporting location can contain several unrelated bugs.
 
 ## P1 — internal compiler failures
 
-After the targeted raw-DST rerun, 203 of the snapshot's internal compiler failures
+After the targeted type-ascription rerun, 198 of the snapshot's internal compiler failures
 remain. The former generic `mir_helpers.h:108` cluster is subdivided below by
 its actual MIR error.
 
@@ -46,7 +46,6 @@ its actual MIR error.
 | MIR error, `mir_helpers.h:108`: `fmuladd` | 1 | |
 | MIR error, `mir_helpers.h:108`: `fadd_fast` | 1 | |
 | MIR error, `mir_helpers.h:108`: extern-type alignment | 1 | |
-| BUG, `parse_common.cpp:1404` | 5 | |
 | assertion, `hir_expr_ptr.cpp:130` | 5 | |
 | seven signatures with four failures each | 28 | `trans_codegen_c`, `synext_macro`, typeck, MIR, bad-char parsing, HIR path assertion |
 | 99 smaller signatures | 141 | one to three tests each |
