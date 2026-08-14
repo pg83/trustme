@@ -1506,7 +1506,7 @@ TransList TransEnumerateMain(const WireBoard& wb, const HIRCrate& crate) {
 }
 
 namespace {
-    void TransEnumerateGenericFunctionItems(EnumState& state, const Span& sp, const HIRFunction& e, MonomorphStatePtr ms) {
+    void TransEnumerateGenericFunctionItems(EnumState& state, const Span& sp, const HIRFunction& e, MonomorphStatePtr ms, bool hasConditionalBounds) {
         if (e.mCode.mir) {
             const auto& mirFcn = *e.mCode.mir;
             auto params = HIRPathParams();
@@ -1522,7 +1522,21 @@ namespace {
                     DEBUG("Path " << *path);
                     MonomorphState unusedMs(state.crate.types);
                     auto v = state.resolve.getValue(sp, *path, unusedMs, true);
+                    bool deferBoundPath = hasConditionalBounds && v.is_NotYetKnown();
+                    if (hasConditionalBounds && !deferBoundPath && v.is_Function() && path->mData.is_UfcsKnown() && !path->mData.as_UfcsKnown().type->is_TraitObject()) {
+                        // Signature-only lookup can return the trait method even
+                        // when no concrete impl is available.  Resolve just
+                        // these UFCS paths fully before treating them as roots.
+                        MonomorphState implMs(state.crate.types);
+                        deferBoundPath = state.resolve.getValue(sp, *path, implMs, false).is_NotYetKnown();
+                    }
                     if (v.is_StructConstructor() || v.is_EnumConstructor()) {
+                    } else if (deferBoundPath) {
+                        // A path can be concrete while its availability still
+                        // depends on this generic function's bounds.  It must
+                        // be resolved when the saved MIR is instantiated, not
+                        // emitted as an unconditional item of this crate.
+                        DEBUG("Defer conditionally available path " << *path);
                     } else {
                         auto p = ms.monomorphPath(sp, *path);
                         state.rv.roots.push_back(p.clone());
@@ -1628,7 +1642,7 @@ namespace {
                     // Enumerate concrete items used
                     // - These are functions that have to be emitted, even if they're not public themselves
                     if (e.saveCode) {
-                        TransEnumerateGenericFunctionItems(state, sp, e, MonomorphStatePtr(state.crate.types));
+                        TransEnumerateGenericFunctionItems(state, sp, e, MonomorphStatePtr(state.crate.types), !e.mParams.bounds.empty());
                     }
                 }
                 break;
@@ -1682,7 +1696,7 @@ namespace {
                 ms.ppImpl = &params;
                 for (const auto& vi : e->values) {
                     if (const auto* fcn = vi.second.opt_Function()) {
-                        TransEnumerateGenericFunctionItems(state, Span(), *fcn, ms);
+                        TransEnumerateGenericFunctionItems(state, Span(), *fcn, ms, !e->mParams.bounds.empty() || !fcn->mParams.bounds.empty());
                     }
                 }
             }
@@ -1698,6 +1712,22 @@ namespace {
         MonomorphStatePtr ms(state.crate.types);
         ms.ppImpl = &paramsImpl;
         if (!impl.mParams.isGeneric()) {
+            // Erased lifetimes and concrete `where` clauses leave an impl with
+            // no translation parameters, but do not make the impl
+            // unconditionally available.  Ask the normal trait resolver to
+            // prove this exact impl before eagerly emitting its public items.
+            bool implAvailable = true;
+            if (!impl.mParams.bounds.empty()) {
+                implAvailable = resolve.findImpl(sp, traitPath, impl.traitArgs, implTy, [&](const ImplRef& implRef, bool isFuzzy) {
+                    const auto* candidate = implRef.mData.opt_TraitImpl();
+                    return !isFuzzy && candidate && candidate->impl == &impl;
+                });
+            }
+            if (!implAvailable) {
+                DEBUG("Skip conditionally unavailable concrete impl");
+                return;
+            }
+
             auto implParams = HIRPathParams();
             auto cbMonomorph = MonomorphStatePtr(state.crate.types, implTy, &impl.traitArgs, nullptr);
             auto cbMonomorph2 = MonomorphStatePtr(state.crate.types, nullptr, &implParams, nullptr);
@@ -1766,13 +1796,13 @@ namespace {
             for (auto& m : impl.methods) {
                 if (m.second.data.mParams.isGeneric()) {
                     m.second.data.saveCode = true;
-                    TransEnumerateGenericFunctionItems(state, Span(), m.second.data, ms);
+                    TransEnumerateGenericFunctionItems(state, Span(), m.second.data, ms, !m.second.data.mParams.bounds.empty());
                 }
             }
         } else {
             for (auto& m : impl.methods) {
                 m.second.data.saveCode = true;
-                TransEnumerateGenericFunctionItems(state, Span(), m.second.data, ms);
+                TransEnumerateGenericFunctionItems(state, Span(), m.second.data, ms, !impl.mParams.bounds.empty() || !m.second.data.mParams.bounds.empty());
             }
         }
     }
@@ -1826,13 +1856,13 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
                         fcn.second.data.saveCode = true;
                     }
                     if (fcn.second.data.saveCode) {
-                        TransEnumerateGenericFunctionItems(state, Span(), fcn.second.data, ms);
+                        TransEnumerateGenericFunctionItems(state, Span(), fcn.second.data, ms, !impl.mParams.bounds.empty() || !fcn.second.data.mParams.bounds.empty());
                     }
                 }
             } else {
                 for (auto& m : impl.methods) {
                     m.second.data.saveCode = true;
-                    TransEnumerateGenericFunctionItems(state, Span(), m.second.data, ms);
+                    TransEnumerateGenericFunctionItems(state, Span(), m.second.data, ms, !impl.mParams.bounds.empty() || !m.second.data.mParams.bounds.empty());
                 }
             }
             for (auto& e : impl.constants) {

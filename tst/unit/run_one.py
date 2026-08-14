@@ -1,7 +1,8 @@
 #!/ usr / bin / env python3
-"""Compile and run one tst/unit/test_*.rs against a prebuilt libstd, then write
-a stamp. Each unit test is its own graph node — a self-contained regression for
-one compiler fix that must compile and exit 0.
+"""Compile one tst/unit/test_*.rs against a prebuilt libstd, then write a stamp.
+Each unit test is its own graph node — a self-contained regression for one
+compiler fix. Binaries and test harnesses must exit 0; `//@ crate-type: lib`
+units are compile-only.
 
     run_one.py <test.rs> <libstd.tar> <stamp>
 
@@ -36,6 +37,12 @@ def main() -> int:
     compile_flags = (
         shlex.split(compile_flags_match.group(1)) if compile_flags_match else []
     )
+    crate_type_match = re.search(
+        r"^//@\s*crate-type:\s*([a-z_]+)\s*$", source_text, re.MULTILINE
+    )
+    crate_type = crate_type_match.group(1) if crate_type_match else "bin"
+    if crate_type not in {"bin", "lib"}:
+        raise RuntimeError(f"unsupported unit crate type: {crate_type}")
     rust_lib_dependencies = "//@ rust-lib-dev-dependencies" in source_text
 
     with lib.workdir() as work:
@@ -55,7 +62,7 @@ def main() -> int:
                 ["rand", "rand_xorshift"],
             )
         binary = os.path.join(work, "t")
-        mode = ["--test"] if test_harness else ["--crate-type", "bin"]
+        mode = ["--test"] if test_harness else ["--crate-type", crate_type]
         command = lib.wrap_gdb(
             [rustc, src, "-L", os.path.join(libstd, "release"), "-o", binary,
              *mode, "--edition", edition, *dependency_args, *compile_flags]
@@ -85,7 +92,8 @@ def main() -> int:
                                      check=True)
             if b": test" not in listing.stdout:
                 raise RuntimeError("test harness contains no tests")
-        lib.run([binary], env=env, timeout=60)
+        if test_harness or crate_type == "bin":
+            lib.run([binary], env=env, timeout=60)
 
     os.makedirs(os.path.dirname(stamp), exist_ok=True)
     open(stamp, "w").close()
