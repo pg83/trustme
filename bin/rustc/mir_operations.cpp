@@ -6471,6 +6471,19 @@ bool MIROptimiseNoopRemoval(MIRTypeResolve& state, MIRFunction& fcn) {
                 continue;
             }
 
+            // Unit has a single value, so retaining a local read cannot carry
+            // any information.  Canonicalising it also handles compiler-built
+            // bodies such as `custom_mir`, where the macro's synthetic RET
+            // binding is intentionally left without a Rust assignment.
+            if (it->is_Assign() && it->as_Assign().src.is_Use() && state.getLvalueType(tmpTy, it->as_Assign().src.as_Use()) == state.crate.types.unit()) {
+                DEBUG(state << "Replace unit local with the canonical value - " << *it);
+                it->as_Assign().src = MIRRValue::make_Tuple({});
+                changed = true;
+
+                ++it;
+                continue;
+            }
+
             // `Value = Borrow(Deref(Value))`
             if (it->is_Assign() && it->as_Assign().src.is_Borrow() && it->as_Assign().src.as_Borrow().val.is_Deref() && it->as_Assign().src.as_Borrow().val.cloneUnwrapped() == it->as_Assign().dst) {
                 DEBUG(state << "Useless assignment (v = &*v), remove - " << *it);

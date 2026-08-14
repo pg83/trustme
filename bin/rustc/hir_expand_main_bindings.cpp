@@ -1624,6 +1624,26 @@ namespace {
             }
         }
 
+        void visit(HIRExprNodeGenerator& node) override {
+            assert(!node.mCode);
+
+            visitGenericPath(HIRVisitor::PathContext::VALUE, node.objPath);
+            visitType(node.stateDataType);
+            for (auto& subnode : node.captures) {
+                visitNodePtr(subnode);
+            }
+        }
+
+        void visit(HIRExprNodeAsyncBlock& node) override {
+            assert(!node.mCode);
+
+            visitGenericPath(HIRVisitor::PathContext::VALUE, node.objPath);
+            visitType(node.stateDataType);
+            for (auto& subnode : node.captures) {
+                visitNodePtr(subnode);
+            }
+        }
+
         void visit(HIRExprNodeVariable& node) override {
             // 1. Is it a closure-local?
             {
@@ -2567,6 +2587,26 @@ namespace {
             void visit(HIRExprNodeClosure& node) override {
                 assert(!node.mCode);
                 visitGenericPath(HIRVisitor::PathContext::TYPE, node.objPath);
+
+                for (auto& cap : node.captures) {
+                    visitNodePtr(cap);
+                }
+            }
+
+            void visit(HIRExprNodeGenerator& node) override {
+                assert(!node.mCode);
+                visitGenericPath(HIRVisitor::PathContext::TYPE, node.objPath);
+                visitType(node.stateDataType);
+
+                for (auto& cap : node.captures) {
+                    visitNodePtr(cap);
+                }
+            }
+
+            void visit(HIRExprNodeAsyncBlock& node) override {
+                assert(!node.mCode);
+                visitGenericPath(HIRVisitor::PathContext::TYPE, node.objPath);
+                visitType(node.stateDataType);
 
                 for (auto& cap : node.captures) {
                     visitNodePtr(cap);
