@@ -267,10 +267,22 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
     TRACE_FUNCTION;
     Token tok;
     ASTExprNodeP ret;
+    const bool isBlockLine = addSilence != nullptr;
     bool addSilenceIgnored = false;
     if (!addSilence) {
         addSilence = &addSilenceIgnored;
     }
+    const auto finishBlockExpression = [&](ASTExprNodeP ret) {
+        if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
+            lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, ret.release())));
+            return ParseExprBlockLineStmt(lex, *addSilence);
+        }
+        if (LOOK_AHEAD(lex) == TOK_SEMICOLON) {
+            GET_TOK(tok, lex);
+            *addSilence = true;
+        }
+        return ret;
+    };
 
     if (GET_TOK(tok, lex) == TOK_LIFETIME) {
         // Lifetimes can only precede loops... and blocks?
@@ -278,23 +290,27 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
         GET_CHECK_TOK(tok, lex, TOK_COLON);
 
         switch (GET_TOK(tok, lex)) {
-            case TOK_RWORD_LOOP:
-                return NEWNODE(ASTExprNodeLoop, lifetime, ParseExprBlockNode(lex));
+            case TOK_RWORD_LOOP: {
+                ret = NEWNODE(ASTExprNodeLoop, lifetime, ParseExprBlockNode(lex));
+                break;
+            }
             case TOK_RWORD_WHILE:
-                return ParseWhileStmt(lex, lifetime);
+                ret = ParseWhileStmt(lex, lifetime);
+                break;
             case TOK_RWORD_FOR:
-                return ParseForStmt(lex, lifetime);
+                ret = ParseForStmt(lex, lifetime);
+                break;
             // NOTE: 1.39's libsyntax uses labelled block
             case TOK_BRACE_OPEN:
                 PUTBACK(tok, lex);
                 ret = ParseExprBlockNode(lex, /*is_unsafe*/ ASTExprNodeBlock::Type::Bare, lifetime);
-                return ret;
+                break;
             case TOK_RWORD_UNSAFE:
                 ret = ParseExprBlockNode(lex, /*is_unsafe*/ ASTExprNodeBlock::Type::Unsafe, lifetime);
-                return ret;
+                break;
             case TOK_RWORD_CONST:
                 ret = ParseExprBlockNode(lex, /*is_unsafe*/ ASTExprNodeBlock::Type::Const, lifetime);
-                return ret;
+                break;
                 // TODO: Can these have labels?
                 //case TOK_RWORD_IF:
                 //case TOK_RWORD_MATCH:
@@ -302,6 +318,8 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
             default:
                 throw ParseErrorUnexpected(lex, tok);
         }
+
+        return isBlockLine ? finishBlockExpression(mv$(ret)) : mv$(ret);
     } else {
         if (tok.type() == TOK_RWORD_SUPER && lex.lookahead(0) == TOK_RWORD_LET) {
             GET_CHECK_TOK(tok, lex, TOK_RWORD_LET);
@@ -410,18 +428,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 return ParseExprBlockLineStmt(lex, *addSilence);
         }
 
-        // If the block is followed by `.` or `?`, it's actually an expression!
-        if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
-            lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, ret.release())));
-            return ParseExprBlockLineStmt(lex, *addSilence);
-        }
-
-        if (LOOK_AHEAD(lex) == TOK_SEMICOLON) {
-            GET_TOK(tok, lex);
-            *addSilence = true;
-        }
-
-        return ret;
+        return finishBlockExpression(mv$(ret));
     }
 }
 
