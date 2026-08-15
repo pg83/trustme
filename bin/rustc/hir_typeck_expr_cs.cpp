@@ -2039,6 +2039,27 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
         }
     }
 
+    // Relating two applications of the same opaque alias constrains the
+    // alias arguments.  This has to precede the defining-scope handling
+    // below: neither application is the hidden type of the other.
+    if (const auto* lErased = lT->opt_ErasedType()) {
+        if (const auto* rErased = rT->opt_ErasedType()) {
+            const auto* lAlias = lErased->inner.opt_Alias();
+            const auto* rAlias = rErased->inner.opt_Alias();
+            if (lAlias && rAlias && lAlias->inner == rAlias->inner) {
+                ASSERT_BUG(sp, lAlias->params.types.size() == rAlias->params.types.size(), "Opaque alias type argument count mismatch");
+                ASSERT_BUG(sp, lAlias->params.values.size() == rAlias->params.values.size(), "Opaque alias const argument count mismatch");
+                for (size_t i = 0; i < lAlias->params.types.size(); i++) {
+                    equateTypesInner(sp, lAlias->params.types[i], rAlias->params.types[i]);
+                }
+                for (size_t i = 0; i < lAlias->params.values.size(); i++) {
+                    equateValues(sp, lAlias->params.values[i], rAlias->params.values[i]);
+                }
+                return;
+            }
+        }
+    }
+
     auto equateErasedAlias = [&](const HIRTypeDataErasedType& erased, const auto& alias, const HIRTypeData* hiddenType) {
         if (!mResolve.isOpaqueAliasDefiningScope(*alias.inner)) {
             return false;
