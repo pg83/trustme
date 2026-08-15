@@ -2472,8 +2472,12 @@ public:
     void visitTypeImpl(HIRTypeImpl& impl) override {
         TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << impl.mType << " (mod=" << impl.srcModule << ")");
         auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
-        auto _g = mResolve.setImplGenerics(impl.mType, impl.mParams);
+        auto _g = mResolve.setImplGenerics(MetadataType::Unknown, impl.mParams);
         mCurrentType = impl.mType;
+
+        this->visitType(impl.mType);
+        mResolve.updateImplSelfMetadata(impl.mType);
+
         HIRVisitor::visitTypeImpl(impl);
         mCurrentType = nullptr;
     }
@@ -2496,6 +2500,10 @@ public:
 
         // The implemented trait is always in scope
         traits.push_back(::std::make_pair(&traitPath, currentTrait));
+
+        this->visitType(impl.mType);
+        mResolve.updateImplSelfMetadata(impl.mType);
+
         HIRVisitor::visitMarkerImpl(traitPath, impl);
         traits.pop_back();
 

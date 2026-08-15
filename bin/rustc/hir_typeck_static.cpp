@@ -1585,7 +1585,8 @@ void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& inpu
             this->expandAssociatedTypesParams(sp, e2.params);
         }
         TU_ARMA(UfcsUnknown, e2) {
-            BUG(sp, "Encountered UfcsUnknown in EAT - " << input);
+            this->expandAssociatedTypesInner(sp, e2.type);
+            this->expandAssociatedTypesParams(sp, e2.params);
         }
     }
 }
@@ -1710,7 +1711,8 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
                     return;
                 }
                 TU_ARMA(UfcsUnknown, e2) {
-                    BUG(sp, "Encountered UfcsUnknown in EAT - " << e.path);
+                    this->expandAssociatedTypesInner(sp, e2.type);
+                    expandAssociatedTypesParams(sp, e2.params);
                 }
         }
         }
@@ -1783,7 +1785,8 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
                     expandAssociatedTypesParams(sp, e2.params);
                 }
                 TU_ARMA(UfcsUnknown, e2) {
-                    BUG(sp, "Encountered UfcsUnknown in EAT - " << e.path);
+                    this->expandAssociatedTypesInner(sp, e2.type);
+                    expandAssociatedTypesParams(sp, e2.params);
                 }
         }
         }
