@@ -5,6 +5,7 @@
 #include "hir_type.h"
 #include "hir_typeck_static.h" // StaticTraitResolve for Copy
 
+#include <functional>
 #include <map>
 
 class MirBuilder;
@@ -242,6 +243,10 @@ class MirBuilder {
     //   the optimiser.
     MIRLValue ifCondLval;
 
+    using DeepDropEmitter = ::std::function<bool(const Span&, MIRLValue, unsigned int)>;
+    DeepDropEmitter deepDropEmitter;
+    DeepDropEmitter shallowDropEmitter;
+
 public:
     MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* retTy, const HIRFunction::argsT& args, MIRFunction& output);
 
@@ -320,6 +325,8 @@ public:
     void pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bool updateDestState = true);
     // Push a drop (likely only used by scope cleanup)
     void pushStmtDrop(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);
+    // Push a drop without invoking the coroutine async-drop elaborator.
+    void pushStmtDropRaw(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);
     // Push a shallow drop (for Box)
     void pushStmtDropShallow(const Span& sp, MIRLValue val, unsigned int dropFlag = ~0u);
     // Push an inline assembly statement (NOTE: inputs aren't marked as moved)
@@ -330,6 +337,14 @@ public:
     void pushStmtSetDropflagDefault(const Span& sp, unsigned int index);
 
     void pushStmt(const Span& sp, MIRStatement stmt);
+
+    void setDeepDropEmitter(DeepDropEmitter emitter) {
+        deepDropEmitter = ::std::move(emitter);
+    }
+
+    void setShallowDropEmitter(DeepDropEmitter emitter) {
+        shallowDropEmitter = ::std::move(emitter);
+    }
 
     // - Block management
     bool blockActive() const {

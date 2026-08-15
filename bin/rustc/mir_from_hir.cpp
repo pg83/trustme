@@ -94,7 +94,372 @@ namespace {
                 generatorState.bbOpen = builder.pauseCurBlock();
                 generatorState.states.push_back(GeneratorState::State(builder.newBbUnlinked()));
                 builder.setCurBlock(generatorState.states.back().entrypoint);
+                if (generatorState.isFuture) {
+                    builder.setDeepDropEmitter([this](const Span& sp, MIRLValue value, unsigned int flag) {
+                        return emitAsyncDrop(sp, std::move(value), flag);
+                    });
+                    builder.setShallowDropEmitter([this](const Span& sp, MIRLValue value, unsigned int flag) {
+                        return emitAsyncBoxShallowDrop(sp, std::move(value), flag);
+                    });
+                }
             }
+        }
+
+        bool findAsyncDrop(const Span& sp, const HIRTypeData* ty, HIRPath& path, HIRTypeRef& futureTy) const {
+            const auto& trait = builder.crate().getLangItemPathOpt("async_drop");
+            if (trait.components().empty() || monomorphiseTypeNeeded(ty)) {
+                return false;
+            }
+
+            bool found = false;
+            builder.resolve().findImpl(sp, trait, HIRPathParams{}, ty, [&](ImplRef impl, bool fuzzed) {
+                if (!fuzzed && impl.mData.is_TraitImpl()) {
+                    found = true;
+                    return true;
+                }
+                return false;
+            });
+            if (!found) {
+                return false;
+            }
+
+            path = HIRPath(ty, HIRGenericPath(trait), RcString::newInterned("drop"), HIRPathParams{});
+            MonomorphState params(builder.crate().types);
+            auto value = builder.resolve().getValue(sp, path, params);
+            const auto* function = value.opt_Function();
+            ASSERT_BUG(sp, function, "AsyncDrop::drop did not resolve for " << ty);
+            futureTy = params.monomorphType(sp, (*function)->returnType);
+            builder.resolve().expandAssociatedTypes(sp, futureTy);
+            return true;
+        }
+
+        bool hasDropImpl(const Span& sp, const HIRTypeData* ty) const {
+            const auto& trait = builder.resolve().langDrop();
+            if (trait.components().empty()) {
+                return false;
+            }
+            return builder.resolve().findImpl(sp, trait, HIRPathParams{}, ty, [](ImplRef impl, bool fuzzed) {
+                return !fuzzed && impl.mData.is_TraitImpl();
+            });
+        }
+
+        bool typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty, ::std::set<const HIRTypeData*>& stack) const {
+            HIRPath path{HIRSimplePath()};
+            HIRTypeRef futureTy;
+            if (findAsyncDrop(sp, ty, path, futureTy)) {
+                return true;
+            }
+            if (!stack.insert(ty).second) {
+                return false;
+            }
+
+            bool rv = false;
+            if (const auto* array = ty->opt_Array()) {
+                rv = typeNeedsAsyncDrop(sp, array->inner, stack);
+            } else if (const auto* tuple = ty->opt_Tuple()) {
+                for (const auto& field : *tuple) {
+                    if (typeNeedsAsyncDrop(sp, field, stack)) {
+                        rv = true;
+                        break;
+                    }
+                }
+            } else if (const auto* pathTy = ty->opt_Path()) {
+                const auto* generic = pathTy->path.mData.opt_Generic();
+                if (generic && generic->mPath != builder.crate().getLangItemPathOpt("manually_drop")) {
+                    auto monomorph = MonomorphStatePtr(builder.crate().types, ty, &generic->mParams, nullptr);
+                    if (const auto* str = pathTy->binding.opt_Struct()) {
+                        TU_MATCHA(
+                            ((*str)->mData),
+                            (fields),
+                            (Unit, ),
+                            (Tuple,
+                             for (const auto& field : fields) {
+                                 auto fieldTy = monomorph.monomorphType(sp, field.ent);
+                                 builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                                 if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
+                                     rv = true;
+                                     break;
+                                 }
+                             }),
+                            (Named,
+                             for (const auto& field : fields) {
+                                 auto fieldTy = monomorph.monomorphType(sp, field.ty);
+                                 builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                                 if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
+                                     rv = true;
+                                     break;
+                                 }
+                             })
+                        )
+                    } else if (const auto* enm = pathTy->binding.opt_Enum()) {
+                        if (const auto* variants = (*enm)->mData.opt_Data()) {
+                            for (const auto& variant : *variants) {
+                                auto fieldTy = monomorph.monomorphType(sp, variant.type);
+                                builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                                if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
+                                    rv = true;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            stack.erase(ty);
+            return rv;
+        }
+
+        bool typeNeedsAsyncDrop(const Span& sp, const HIRTypeData* ty) const {
+            ::std::set<const HIRTypeData*> stack;
+            return typeNeedsAsyncDrop(sp, ty, stack);
+        }
+
+        void emitSyncDestructor(const Span& sp, const HIRTypeData* ty, MIRLValue value) {
+            auto& types = builder.crate().types;
+            auto refTy = types.borrow(HIRBorrowType::Unique, ty);
+            auto refValue = builder.lvalueOrTemp(sp, refTy, MIRRValue::make_Borrow({HIRBorrowType::Unique, false, std::move(value)}));
+            auto result = builder.newTemporary(types.unit());
+            auto bbRet = builder.newBbUnlinked();
+            auto bbPanic = builder.newBbUnlinked();
+            auto path = HIRPath(ty, HIRGenericPath(builder.resolve().langDrop()), RcString::newInterned("drop"), HIRPathParams{});
+            builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), result.clone(), std::move(path), makeVec1(MIRParam(refValue.clone()))}));
+            builder.movedLvalue(sp, std::move(refValue));
+            builder.setCurBlock(bbPanic);
+            emitUnwind(sp);
+            builder.setCurBlock(bbRet);
+            builder.markValueAssigned(sp, result);
+        }
+
+        MIRLValue awaitFuture(const Span& sp, const HIRTypeData* futureTy, MIRLValue future, const HIRTypeData* outputTy) {
+            const auto stateValue = static_cast<unsigned>(generatorState.states.size());
+            generatorState.states.back().saved = builder.getActiveLocals(sp, generatorState.savedDropFlags);
+            generatorState.states.push_back(builder.newBbUnlinked());
+            builder.endBlock(generatorState.states.back().entrypoint);
+            builder.setCurBlock(generatorState.states.back().entrypoint);
+
+            const auto& langPin = builder.crate().getLangItemPath(sp, "pin");
+            auto& types = builder.crate().types;
+            auto typeMut = types.borrow(HIRBorrowType::Unique, futureTy);
+            auto typePin = types.path(HIRGenericPath(langPin, HIRPathParams(typeMut)), &builder.crate().getStructByPath(sp, langPin));
+            auto lvMut = builder.lvalueOrTemp(sp, typeMut, MIRRValue::make_Borrow({HIRBorrowType::Unique, false, std::move(future)}));
+            auto lvPin = builder.newTemporary(typePin);
+            {
+                auto bbRet = builder.newBbUnlinked();
+                auto bbPanic = builder.newBbUnlinked();
+                builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), lvPin.clone(), HIRPath(typePin, "new_unchecked"), makeVec1(MIRParam(lvMut.clone()))}));
+                builder.movedLvalue(sp, std::move(lvMut));
+                builder.setCurBlock(bbPanic);
+                emitUnwind(sp);
+                builder.setCurBlock(bbRet);
+                builder.markValueAssigned(sp, lvPin);
+            }
+
+            const auto& langPoll = builder.crate().getLangItemPath(sp, "Poll");
+            auto typePoll = types.path(HIRGenericPath(langPoll, HIRPathParams(outputTy)), &builder.crate().getEnumByPath(sp, langPoll));
+            auto lvPoll = builder.newTemporary(typePoll);
+            {
+                auto bbRet = builder.newBbUnlinked();
+                auto bbPanic = builder.newBbUnlinked();
+                builder.endBlock(MIRTerminator::make_Call({
+                    bbRet,
+                    MIRUnwindAction::make_Cleanup(bbPanic),
+                    lvPoll.clone(),
+                    HIRPath(futureTy, builder.resolve().langFuture(), "poll"),
+                    makeVec2(
+                        MIRParam(lvPin.clone()),
+                        MIRParam::make_Borrow({HIRBorrowType::Unique, MIRLValue::newDeref(MIRLValue::newArgument(1))})
+                    )
+                }));
+                builder.movedLvalue(sp, std::move(lvPin));
+                builder.setCurBlock(bbPanic);
+                emitUnwind(sp);
+                builder.setCurBlock(bbRet);
+                builder.markValueAssigned(sp, lvPoll);
+            }
+
+            const auto bbPending = builder.newBbUnlinked();
+            const auto bbReady = builder.newBbUnlinked();
+            ASSERT_BUG(sp, typePoll->as_Path().binding.as_Enum()->findVariant("Ready") == 0, "");
+            ASSERT_BUG(sp, typePoll->as_Path().binding.as_Enum()->findVariant("Pending") == 1, "");
+            builder.endBlock(MIRTerminator::make_Switch({lvPoll.clone(), makeVec2(bbReady, bbPending)}));
+            builder.setCurBlock(bbPending);
+
+            HIRGenericPath returnPollPath;
+            builder.withValType(sp, MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
+                returnPollPath = ty->as_Path().path.mData.as_Generic().clone();
+            });
+            builder.pushStmtAssign(sp, MIRLValue::newReturn(), MIRRValue::make_EnumVariant({std::move(returnPollPath), 1, {}}));
+            builder.pushStmtAssign(sp, generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), stateValue, {}}));
+            builder.endBlock(MIRTerminator::make_Return({}));
+            builder.setCurBlock(bbReady);
+
+            return MIRLValue::newField(MIRLValue::newDowncast(std::move(lvPoll), 0), 0);
+        }
+
+        void emitDropFields(const Span& sp, const HIRTypeData* ty, const MIRLValue& value) {
+            if (const auto* array = ty->opt_Array()) {
+                if (!array->size.is_Known()) {
+                    TODO(sp, "async drop of an array with unevaluated length");
+                }
+                for (size_t i = 0; i < array->size.as_Known(); i++) {
+                    auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
+                    if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, array->inner)) {
+                        builder.pushStmtDropRaw(sp, std::move(field));
+                    }
+                }
+                return;
+            }
+            if (const auto* tuple = ty->opt_Tuple()) {
+                for (size_t i = 0; i < tuple->size(); i++) {
+                    auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
+                    if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, tuple->at(i))) {
+                        builder.pushStmtDropRaw(sp, std::move(field));
+                    }
+                }
+                return;
+            }
+            const auto* pathTy = ty->opt_Path();
+            if (!pathTy || !pathTy->path.mData.is_Generic()) {
+                return;
+            }
+            const auto& generic = pathTy->path.mData.as_Generic();
+            if (generic.mPath == builder.crate().getLangItemPathOpt("manually_drop")) {
+                return;
+            }
+            const auto* str = pathTy->binding.opt_Struct();
+            if (!str) {
+                return;
+            }
+
+            auto monomorph = MonomorphStatePtr(builder.crate().types, ty, &generic.mParams, nullptr);
+            TU_MATCHA(
+                ((*str)->mData),
+                (fields),
+                (Unit, ),
+                (Tuple,
+                 for (size_t i = 0; i < fields.size(); i++) {
+                     auto fieldTy = monomorph.monomorphType(sp, fields[i].ent);
+                     builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                     auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
+                     if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, fieldTy)) {
+                         builder.pushStmtDropRaw(sp, std::move(field));
+                     }
+                 }),
+                (Named,
+                 for (size_t i = 0; i < fields.size(); i++) {
+                     auto fieldTy = monomorph.monomorphType(sp, fields[i].ty);
+                     builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                     auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
+                     if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, fieldTy)) {
+                         builder.pushStmtDropRaw(sp, std::move(field));
+                     }
+                 })
+            )
+        }
+
+        bool emitAsyncDrop(const Span& sp, MIRLValue value, unsigned int flag) {
+            const HIRTypeData* ty = nullptr;
+            builder.withValType(sp, value, [&](const HIRTypeData* valueTy) { ty = valueTy; });
+            HIRPath dropPath{HIRSimplePath()};
+            HIRTypeRef futureTy;
+            const bool hasAsyncDestructor = findAsyncDrop(sp, ty, dropPath, futureTy);
+            if (!hasAsyncDestructor && !typeNeedsAsyncDrop(sp, ty)) {
+                return false;
+            }
+
+            if (flag != ~0u) {
+                auto& types = builder.crate().types;
+                const auto& langPoll = builder.crate().getLangItemPath(sp, "Poll");
+                auto conditionTy = types.path(HIRGenericPath(langPoll, HIRPathParams(types.unit())), &builder.crate().getEnumByPath(sp, langPoll));
+                auto condition = builder.newTemporary(conditionTy);
+                builder.pushStmtAssign(sp, condition.clone(), MIRRValue::make_EnumVariant({conditionTy->as_Path().path.mData.as_Generic().clone(), 1, {}}));
+                auto dropBb = builder.newBbUnlinked();
+                auto nextBb = builder.newBbUnlinked();
+                builder.endBlock(MIRTerminator::make_Switch({std::move(condition), ::std::vector<MIRBasicBlockId>{dropBb, dropBb}, flag, nextBb}));
+                builder.setCurBlock(dropBb);
+                const bool emitted = emitAsyncDrop(sp, value.clone(), ~0u);
+                ASSERT_BUG(sp, emitted, "conditional async drop stopped being async for " << ty);
+                builder.endBlock(MIRTerminator::make_Goto(nextBb));
+                builder.setCurBlock(nextBb);
+                return true;
+            }
+
+            const auto* boxedTy = builder.isTypeOwnedBox(ty);
+            if (boxedTy) {
+                auto pointee = MIRLValue::newDeref(value.clone());
+                if (!emitAsyncDrop(sp, pointee.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, boxedTy)) {
+                    builder.pushStmtDropRaw(sp, std::move(pointee));
+                }
+            }
+
+            auto& types = builder.crate().types;
+            if (hasAsyncDestructor) {
+                const auto& langPin = builder.crate().getLangItemPath(sp, "pin");
+                auto refTy = types.borrow(HIRBorrowType::Unique, ty);
+                auto pinTy = types.path(HIRGenericPath(langPin, HIRPathParams(refTy)), &builder.crate().getStructByPath(sp, langPin));
+                auto refValue = builder.lvalueOrTemp(sp, refTy, MIRRValue::make_Borrow({HIRBorrowType::Unique, false, value.clone()}));
+                auto pinValue = builder.newTemporary(pinTy);
+                {
+                    auto bbRet = builder.newBbUnlinked();
+                    auto bbPanic = builder.newBbUnlinked();
+                    builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), pinValue.clone(), HIRPath(pinTy, "new_unchecked"), makeVec1(MIRParam(refValue.clone()))}));
+                    builder.movedLvalue(sp, std::move(refValue));
+                    builder.setCurBlock(bbPanic);
+                    emitUnwind(sp);
+                    builder.setCurBlock(bbRet);
+                    builder.markValueAssigned(sp, pinValue);
+                }
+
+                auto future = builder.newTemporary(futureTy);
+                {
+                    auto bbRet = builder.newBbUnlinked();
+                    auto bbPanic = builder.newBbUnlinked();
+                    builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), future.clone(), std::move(dropPath), makeVec1(MIRParam(pinValue.clone()))}));
+                    builder.movedLvalue(sp, std::move(pinValue));
+                    builder.setCurBlock(bbPanic);
+                    emitUnwind(sp);
+                    builder.setCurBlock(bbRet);
+                    builder.markValueAssigned(sp, future);
+                }
+
+                (void)awaitFuture(sp, futureTy, future.clone(), types.unit());
+                builder.movedLvalue(sp, future.clone());
+                builder.pushStmtDropRaw(sp, std::move(future));
+            } else if (hasDropImpl(sp, ty)) {
+                emitSyncDestructor(sp, ty, value.clone());
+            }
+
+            emitDropFields(sp, ty, value);
+            return true;
+        }
+
+        bool emitAsyncBoxShallowDrop(const Span& sp, MIRLValue value, unsigned int flag) {
+            const HIRTypeData* ty = nullptr;
+            builder.withValType(sp, value, [&](const HIRTypeData* valueTy) { ty = valueTy; });
+            if (!builder.isTypeOwnedBox(ty) || !typeNeedsAsyncDrop(sp, ty)) {
+                return false;
+            }
+            if (flag != ~0u) {
+                auto& types = builder.crate().types;
+                const auto& langPoll = builder.crate().getLangItemPath(sp, "Poll");
+                auto conditionTy = types.path(HIRGenericPath(langPoll, HIRPathParams(types.unit())), &builder.crate().getEnumByPath(sp, langPoll));
+                auto condition = builder.newTemporary(conditionTy);
+                builder.pushStmtAssign(sp, condition.clone(), MIRRValue::make_EnumVariant({conditionTy->as_Path().path.mData.as_Generic().clone(), 1, {}}));
+                auto dropBb = builder.newBbUnlinked();
+                auto nextBb = builder.newBbUnlinked();
+                builder.endBlock(MIRTerminator::make_Switch({std::move(condition), ::std::vector<MIRBasicBlockId>{dropBb, dropBb}, flag, nextBb}));
+                builder.setCurBlock(dropBb);
+                const bool emitted = emitAsyncBoxShallowDrop(sp, value.clone(), ~0u);
+                ASSERT_BUG(sp, emitted, "conditional shallow Box drop stopped being async for " << ty);
+                builder.endBlock(MIRTerminator::make_Goto(nextBb));
+                builder.setCurBlock(nextBb);
+                return true;
+            }
+            if (hasDropImpl(sp, ty)) {
+                emitSyncDestructor(sp, ty, value.clone());
+            }
+            emitDropFields(sp, ty, value);
+            return true;
         }
 
         SaveAndEditVal<const ScopeHandle*> disableBorrowExtension() override {
@@ -730,80 +1095,7 @@ namespace {
             }
             auto lvRes = builder.getResultInLvalue(sp, tyInner);
 
-            auto stateValue = static_cast<unsigned>(generatorState.states.size());
-            generatorState.states.back().saved = builder.getActiveLocals(node.span(), generatorState.savedDropFlags);
-            generatorState.states.push_back(builder.newBbUnlinked());
-            builder.endBlock(generatorState.states.back().entrypoint);
-            builder.setCurBlock(generatorState.states.back().entrypoint);
-
-            // Create `Pin<&mut >` as the reciever, using `Pin::new_unchecked`
-            const auto& langPin = builder.resolve().crate.getLangItemPath(sp, "pin");
-            auto& types = builder.resolve().crate.types;
-            auto typeMut = types.borrow(HIRBorrowType::Unique, tyInner);
-            auto pinPath = HIRGenericPath(langPin, HIRPathParams(typeMut));
-            auto typePin = types.path(std::move(pinPath), &builder.resolve().crate.getStructByPath(sp, langPin));
-
-            auto lvMut = builder.lvalueOrTemp(sp, typeMut, MIRRValue::make_Borrow({HIRBorrowType::Unique, false, std::move(lvRes)}));
-            auto lvPin = builder.newTemporary(typePin);
-            {
-                auto bbRet = builder.newBbUnlinked();
-                auto bbPanic = builder.newBbUnlinked();
-                builder.endBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), lvPin.clone(), HIRPath(typePin, "new_unchecked"), makeVec1(MIRParam(lvMut.clone()))}));
-                builder.movedLvalue(node.span(), std::move(lvMut));
-                builder.setCurBlock(bbPanic);
-                emitUnwind(sp);
-                builder.setCurBlock(bbRet);
-            }
-            // Call `Future::poll`
-            const auto& langPoll = builder.resolve().crate.getLangItemPath(sp, "Poll");
-            auto typePoll = types.path(HIRGenericPath(langPoll, HIRPathParams(node.resType)), &builder.resolve().crate.getEnumByPath(sp, langPoll));
-            auto lvPoll = builder.newTemporary(typePoll);
-            {
-                auto bbRet = builder.newBbUnlinked();
-                auto bbPanic = builder.newBbUnlinked();
-                builder.endBlock(
-                    MIRTerminator::make_Call(
-                        {bbRet,
-                         MIRUnwindAction::make_Cleanup(bbPanic),
-                         lvPoll.clone(),
-                         HIRPath(tyInner, builder.resolve().langFuture(), "poll"),
-                         makeVec2(
-                             MIRParam(lvPin.clone()),
-                             MIRParam::make_Borrow({
-                                 HIRBorrowType::Unique,
-                                 MIRLValue::newDeref(MIRLValue::newArgument(1)) // Context is the second argument (first is `self`)
-                             })
-                         )}
-                    )
-                );
-                builder.movedLvalue(node.span(), std::move(lvPin));
-                builder.setCurBlock(bbPanic);
-                emitUnwind(sp);
-                builder.setCurBlock(bbRet);
-            }
-            // Check return
-            const auto variantReady = 0;
-            {
-                auto bbPending = builder.newBbUnlinked();
-                auto bbReady = builder.newBbUnlinked();
-                ASSERT_BUG(node.span(), typePoll->as_Path().binding.as_Enum()->findVariant("Ready") == variantReady, "");
-                ASSERT_BUG(node.span(), typePoll->as_Path().binding.as_Enum()->findVariant("Pending") == 1, "");
-                builder.endBlock(MIRTerminator::make_Switch({lvPoll.clone(), makeVec2(bbReady, bbPending)}));
-                builder.setCurBlock(bbPending);
-
-                // `retval = ::core::task::Poll::Pending; RETURN`
-                HIRGenericPath pathLocalPoll;
-                builder.withValType(sp, MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
-                    pathLocalPoll = ty->as_Path().path.mData.as_Generic().clone();
-                });
-                builder.pushStmtAssign(node.span(), MIRLValue::newReturn(), MIRRValue::make_EnumVariant({std::move(pathLocalPoll), 1, {}}));
-                builder.pushStmtAssign(node.span(), generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), stateValue, {}}));
-                builder.endBlock(MIRTerminator::make_Return({}));
-
-                builder.setCurBlock(bbReady);
-            }
-            // lv_poll.#0.0 to get the field of the first variant
-            builder.setResult(node.span(), MIRLValue::newField(MIRLValue::newDowncast(std::move(lvPoll), variantReady), 0));
+            builder.setResult(node.span(), awaitFuture(sp, tyInner, std::move(lvRes), node.resType));
         }
 
         void visit(HIRExprNodeUse& node) override {
@@ -8124,6 +8416,15 @@ void MirBuilder::pushStmtDrop(const Span& sp, MIRLValue val, unsigned int flag /
         return;
     }
 
+    if (!buildingCleanup && deepDropEmitter && deepDropEmitter(sp, val.clone(), flag)) {
+        return;
+    }
+
+    this->pushStmtDropRaw(sp, mv$(val), flag);
+}
+
+void MirBuilder::pushStmtDropRaw(const Span& sp, MIRLValue val, unsigned int flag /*=~0u*/) {
+    ASSERT_BUG(sp, mBlockActive, "Pushing statement with no active block");
     this->pushDropTerminator(sp, MIRDropKind::DEEP, mv$(val), flag);
 }
 
@@ -8131,6 +8432,10 @@ void MirBuilder::pushStmtDropShallow(const Span& sp, MIRLValue val, unsigned int
     ASSERT_BUG(sp, mBlockActive, "Pushing statement with no active block");
 
     // TODO: Ensure that the type is a Box?
+
+    if (!buildingCleanup && shallowDropEmitter && shallowDropEmitter(sp, val.clone(), flag)) {
+        return;
+    }
 
     this->pushDropTerminator(sp, MIRDropKind::SHALLOW, mv$(val), flag);
 }
@@ -9936,7 +10241,7 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
         (Invalid, ),
         (Valid, vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv));),
         (
-            MovedOut, bool isBox = false; withValType(
+            MovedOut, auto movedState = vse.innerState->clone(); const auto outerFlag = vse.outerFlag; vs = VarState::make_Invalid(InvalidType::Moved); bool isBox = false; withValType(
                 sp,
                 lv,
                 [&](const auto& ty) {
@@ -9944,15 +10249,13 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
     }
             );
             if (isBox) {
-        dropValueFromState(sp, *vse.innerState, MIRLValue::newDeref(lv.clone()));
-        const auto outerFlag = vse.outerFlag;
-        vs = VarState::make_Invalid(InvalidType::Moved);
+        dropValueFromState(sp, movedState, MIRLValue::newDeref(lv.clone()));
         pushStmtDropShallow(sp, mv$(lv), outerFlag);
             } else {
         TODO(sp, ""); }
         ),
         (
-            Partial, bool is_enum = false; bool isUnion = false; withValType(
+            Partial, auto partialState = vs.clone(); vs = VarState::make_Invalid(InvalidType::Moved); auto& partial = partialState.as_Partial(); bool is_enum = false; bool isUnion = false; withValType(
                 sp,
                 lv,
                 [&](const auto& ty) {
@@ -9962,58 +10265,52 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
             );
             if (is_enum) {
         bool hasValidVariant = false;
-        for (const auto& state : vse.innerStates) {
+        for (const auto& state : partial.innerStates) {
             hasValidVariant |= !state.is_Invalid();
         }
         if (!hasValidVariant) {
             return;
         }
 
-        auto originalState = vs.clone();
-        const auto outerFlag = vse.outerFlag;
+        const auto outerFlag = partial.outerFlag;
         const auto nextBb = newBbUnlinked();
         ::std::vector<MIRBasicBlockId> arms;
         ::std::vector<MIRBasicBlockId> cleanupBlocks;
-        arms.reserve(vse.innerStates.size());
-        cleanupBlocks.reserve(vse.innerStates.size());
-        for (const auto& state : vse.innerStates) {
+        arms.reserve(partial.innerStates.size());
+        cleanupBlocks.reserve(partial.innerStates.size());
+        for (const auto& state : partial.innerStates) {
             const auto cleanupBb = state.is_Invalid() ? nextBb : newBbUnlinked();
             arms.push_back(cleanupBb);
             cleanupBlocks.push_back(cleanupBb);
         }
         endBlock(MIRTerminator::make_Switch({lv.clone(), mv$(arms), outerFlag, outerFlag == ~0u ? ~0u : nextBb}));
 
-        const auto variantCount = originalState.as_Partial().innerStates.size();
+        const auto variantCount = partial.innerStates.size();
         for (size_t i = 0; i < variantCount; i++) {
-            if (originalState.as_Partial().innerStates[i].is_Invalid()) {
+            if (partial.innerStates[i].is_Invalid()) {
                 continue;
             }
             setCurBlock(cleanupBlocks[i]);
-            vs = originalState.clone();
-            dropValueFromState(sp, vs.as_Partial().innerStates[i], MIRLValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)));
-            vs = VarState::make_Invalid(InvalidType::Moved);
+            dropValueFromState(sp, partial.innerStates[i], MIRLValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)));
             endBlock(MIRTerminator::make_Goto(nextBb));
         }
-        vs = VarState::make_Invalid(InvalidType::Moved);
         setCurBlock(nextBb);
             } else if (isUnion) {
         // NOTE: Unions don't drop inner items.
-        vs = VarState::make_Invalid(InvalidType::Moved);
             } else {
-        for (size_t i = 0; i < vse.innerStates.size(); i++) {
-            dropValueFromState(sp, vse.innerStates[i], MIRLValue::newField(lv.clone(), static_cast<unsigned int>(i)));
+        for (size_t i = 0; i < partial.innerStates.size(); i++) {
+            dropValueFromState(sp, partial.innerStates[i], MIRLValue::newField(lv.clone(), static_cast<unsigned int>(i)));
         }
-        vs = VarState::make_Invalid(InvalidType::Moved);
             }
         ),
         (Optional, const auto flag = vse; vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv), flag);),
         (
-            PartialArray,
+            PartialArray, auto arrayState = vs.clone(); vs = VarState::make_Invalid(InvalidType::Moved); auto& array = arrayState.as_PartialArray();
             unsigned int fillFlag = ~0u;
             bool fillDrop = true;
-            TU_MATCH_HDRA((*vse.fillState), {)
+            TU_MATCH_HDRA((*array.fillState), {)
             default:
-                BUG(sp, "Composite fill state in PartialArray drop - " << *vse.fillState);
+                BUG(sp, "Composite fill state in PartialArray drop - " << *array.fillState);
         TU_ARMA(Valid, fe) {
         }
         TU_ARMA(Invalid, fe) {
@@ -10024,7 +10321,7 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
         }
             }
             size_t prev = 0;
-            for (auto& kv : vse.otherStates) {
+            for (auto& kv : array.otherStates) {
         if (fillDrop) {
             emitArrayElementDropLoop(sp, lv, prev, kv.first, fillFlag);
         }
@@ -10032,9 +10329,8 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
         prev = kv.first + 1;
             }
             if (fillDrop) {
-        emitArrayElementDropLoop(sp, lv, prev, vse.count, fillFlag);
+        emitArrayElementDropLoop(sp, lv, prev, array.count, fillFlag);
             }
-            vs = VarState::make_Invalid(InvalidType::Moved);
         )
     )
 }
@@ -10044,7 +10340,8 @@ void MirBuilder::dropScopeValues(ScopeDef& sd) {
         (sd.data),
         (e),
         (Owning,
-         for (const auto& slot : ::reverse(e.dropSlots)) {
+         const auto dropSlots = e.dropSlots;
+         for (const auto& slot : ::reverse(dropSlots)) {
              const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
              auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);
              if (buildingCleanup) {
