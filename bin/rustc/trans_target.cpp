@@ -490,6 +490,51 @@ void TargetSetCfg(WireBoard& wb, const ::std::string& targetName) {
     });
 }
 
+namespace {
+    bool closureHasNoCaptures(const StaticTraitResolve& resolve, const HIRExprNodeClosure& closure) {
+        if (closure.cls == HIRExprNodeClosure::Class::NoCapture) {
+            return true;
+        }
+        if (closure.cls != HIRExprNodeClosure::Class::Unknown) {
+            return false;
+        }
+
+        struct CaptureVisitor: HIRExprVisitorDef {
+            ::std::vector<unsigned int> definitions;
+            ::std::vector<unsigned int> uses;
+
+            explicit CaptureVisitor(HIRTypeInterner& types)
+                : HIRExprVisitorDef(types)
+            {
+            }
+
+            void visitPattern(const Span& sp, HIRPattern& pattern) override {
+                for (const auto& binding : pattern.mBindings) {
+                    definitions.push_back(binding.slot);
+                }
+                if (const auto* split = pattern.mData.opt_SplitSlice(); split && split->extraBind.isValid()) {
+                    definitions.push_back(split->extraBind.slot);
+                }
+                HIRExprVisitorDef::visitPattern(sp, pattern);
+            }
+
+            void visit(HIRExprNodeVariable& node) override {
+                uses.push_back(node.slot);
+            }
+        } visitor(resolve.hirCrate().types);
+
+        // The expression visitor predates const traversal. This pass is read-only;
+        // it only uses the mutable interface to enumerate the closure's patterns
+        // and variable nodes before the normal capture-annotation phase.
+        const_cast<HIRExprNodeClosure&>(closure).visit(visitor);
+        ::std::sort(visitor.definitions.begin(), visitor.definitions.end());
+        visitor.definitions.erase(::std::unique(visitor.definitions.begin(), visitor.definitions.end()), visitor.definitions.end());
+        return ::std::all_of(visitor.uses.begin(), visitor.uses.end(), [&](unsigned int slot) {
+            return ::std::binary_search(visitor.definitions.begin(), visitor.definitions.end(), slot);
+        });
+    }
+}
+
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
     TU_MATCH_HDRA( (*ty), {)
     TU_ARMA(Infer, te) {
@@ -688,6 +733,11 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             return true;
         }
         TU_ARMA(NodeType, te) {
+            if (const auto* closure = te.opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
+                outSize = 0;
+                outAlign = 1;
+                return true;
+            }
             return false;
         }
         TU_ARMA(Pattern, te) {
@@ -2117,6 +2167,13 @@ namespace {
                         BUG(sp, "Encountered invalid type in make_type_repr - " << ty);
                 }
                 throw "unreachable";
+            case HIRTypeData::TAG_NodeType:
+                if (const auto* closure = ty->as_NodeType().opt_Closure(); closure && closureHasNoCaptures(resolve, **closure)) {
+                    auto repr = box$(TypeRepr());
+                    repr->align = 1;
+                    return repr;
+                }
+                TODO(sp, "Type repr for " << ty);
             // TODO: Why is `make_type_repr` being called on these?
             case HIRTypeData::TAG_Primitive:
             case HIRTypeData::TAG_Borrow:
