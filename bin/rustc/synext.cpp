@@ -187,18 +187,11 @@ class CMacroUseHandler: public ExpandDecorator {
     }
 };
 
-class CMacroExportHandler: public ExpandDecorator {
-    AttrStage stage() const override {
-        return AttrStage::Post;
-    }
-
-    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        // TODO: Flags on the attribute
-        // - `local_inner_macros`: Forces macro lookups within the expansion to search within the source crate
-        //   > Strictly speaking, not the same as `macro`-style macros?
+namespace {
+    bool macroExportUsesLocalInnerMacros(const ASTAttribute& attr) {
         bool localInnerMacros = false;
-        if (mi.data().size() > 0) {
-            mi.parseParenIdentList([&](const Span& sp, RcString ident) {
+        if (attr.data().size() > 0) {
+            attr.parseParenIdentList([&](const Span& sp, RcString ident) {
                 if (ident == "local_inner_macros") {
                     localInnerMacros = true;
                 } else {
@@ -206,6 +199,49 @@ class CMacroExportHandler: public ExpandDecorator {
                 }
             });
         }
+        return localInnerMacros;
+    }
+
+    void exportMacroRules(const Span& sp, const WireBoard& wb, ASTCrate& crate, ASTModule& mod, const RcString& name, bool localInnerMacros) {
+        auto it = ::std::find_if(mod.macros().begin(), mod.macros().end(), [&](const auto& x) {
+            return x.name == name;
+        });
+        ASSERT_BUG(sp, it != mod.macros().end(), "Macro '" << name << "' not defined in this module");
+        auto e = mv$(*it);
+        mod.macros().erase(it);
+
+        // Leave an alias here, so existing references are valid.
+        mod.macroImports.push_back(ASTModule::MacroImport{false, name, ASTAbsolutePath("", {name}), &*e.data});
+        DEBUG(mod.path() << ": macro_use Import " << mod.macroImports.back().name << " = " << mod.macroImports.back().path);
+
+        if (localInnerMacros) {
+            Ident::ModPath mp;
+            mp.crate = "";
+            // Empty node list, so macro lookups start at the crate root.
+            e.data->mHygiene.setModPath(*wb.pool, mv$(mp));
+        }
+
+        e.data->exported = true;
+        DEBUG("- Export macro " << name << "!");
+        crate.mRootModule.macros().push_back(mv$(e));
+    }
+}
+
+void ExpandExportMacroRules(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, ASTModule& mod, const RcString& name) {
+    exportMacroRules(sp, wb, crate, mod, name, macroExportUsesLocalInnerMacros(attr));
+}
+
+class CMacroExportHandler: public ExpandDecorator {
+    AttrStage stage() const override {
+        return AttrStage::Post;
+    }
+
+    bool runDuringIter() const override {
+        return true;
+    }
+
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+        const bool localInnerMacros = macroExportUsesLocalInnerMacros(mi);
 
         if (i.is_None()) {
         }
@@ -226,33 +262,7 @@ class CMacroExportHandler: public ExpandDecorator {
             if (!(mac.path().isTrivial() && mac.path().asTrivial() == "macro_rules")) {
                 ERROR(sp, E0000, "#[macro_export] is only valid on macro_rules!");
             }
-            const auto& name = mac.inputIdent();
-
-            // Tag the macro in the module for crate export
-            // AND move it to the root module
-            auto it = ::std::find_if(mod.macros().begin(), mod.macros().end(), [&](const auto& x) {
-                return x.name == name;
-            });
-            ASSERT_BUG(sp, it != mod.macros().end(), "Macro '" << name << "' not defined in this module");
-            auto e = mv$(*it);
-            mod.macros().erase(it);
-
-            // Leave an alias here, so existing references are valid
-            mod.macroImports.push_back(ASTModule::MacroImport{false, name, ASTAbsolutePath("", {name}), &*e.data});
-            DEBUG(mod.path() << ": macro_use Import " << mod.macroImports.back().name << " = " << mod.macroImports.back().path);
-
-            if (localInnerMacros) {
-                Ident::ModPath mp;
-                mp.crate = "";
-                // Empty node list, will search the crate root
-                // TODO: Strictly speaking, this shouldn't apply to non-macro paths
-                DEBUG("#[macro_export(local_inner_macros)] mp=" << mp);
-                e.data->mHygiene.setModPath(*wb.pool, mv$(mp));
-            }
-
-            e.data->exported = true;
-            DEBUG("- Export macro " << name << "!");
-            crate.mRootModule.macros().push_back(mv$(e));
+            exportMacroRules(sp, wb, crate, mod, mac.inputIdent(), localInnerMacros);
         } else if (i.is_Macro()) {
             const auto& name = path.nodes.back();
             if (i.as_Macro()) {

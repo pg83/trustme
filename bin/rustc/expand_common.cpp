@@ -358,7 +358,7 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
             DEBUG("Searching in " << macMod.path());
             for (const auto& mr : reverse(macMod.macros())) {
                 if (mr.name == name) {
-                    if (mr.data->definitionSpan && miSpan) {
+                    if (!mr.data->exported && mr.data->definitionSpan && miSpan) {
                         const auto& definition = mr.data->definitionSpan.getTopFileSpan();
                         const auto& invocation = miSpan.getTopFileSpan();
                         if (definition.filename == invocation.filename
@@ -493,10 +493,15 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
 
             auto tt = ExpandMacro(es, mod, *e.inv);
             if (tt) {
-                auto& lex = *tt;
-                auto newpat = ParsePattern(lex);
-                if (LOOK_AHEAD(lex) != TOK_EOF) {
-                    ERROR(span, E0000, "Trailing tokens in macro expansion");
+                ASTPattern newpat;
+                if (tt->isMacroExpansionPlaceholder() && tt->lookahead(0) == TOK_EOF) {
+                    newpat = ASTPattern(span, ASTPattern::Data::make_Any({}));
+                } else {
+                    auto& lex = *tt;
+                    newpat = ParsePattern(lex);
+                    if (LOOK_AHEAD(lex) != TOK_EOF) {
+                        ERROR(span, E0000, "Trailing tokens in macro expansion");
+                    }
                 }
 
                 for (auto& b : pat.bindings()) {
@@ -586,9 +591,14 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
         TU_ARMA(Macro, e) {
             auto tt = ExpandMacro(es, mod, *e.inv);
             if (tt) {
-                auto newTy = ParseType(*tt);
-                if (tt->lookahead(0) != TOK_EOF) {
-                    ERROR(e.inv->span(), E0000, "Extra tokens after parsed type");
+                ASTType* newTy;
+                if (tt->isMacroExpansionPlaceholder() && tt->lookahead(0) == TOK_EOF) {
+                    newTy = mkType(*es.crate.pool, ASTTypeTags::Unit(), e.inv->span());
+                } else {
+                    newTy = ParseType(*tt);
+                    if (tt->lookahead(0) != TOK_EOF) {
+                        ERROR(e.inv->span(), E0000, "Extra tokens after parsed type");
+                    }
                 }
                 ty = mv$(newTy);
 
@@ -858,6 +868,9 @@ struct CExpandExpr: public ASTNodeVisitor {
                     if (ttl->lookahead(0) != TOK_EOF) {
                         ERROR(node.span(), E0000, "Unused tokens at the end of macro expansion - " << ttl->getToken());
                     }
+                } else if (ttl->isMacroExpansionPlaceholder()) {
+                    rv = ASTExprNodeP(new ASTExprNodeTuple({}));
+                    rv->setSpan(node.span());
                 }
             } else {
                 while (ttl->lookahead(0) != TOK_EOF) {
@@ -933,6 +946,8 @@ struct CExpandExpr: public ASTNodeVisitor {
             assert(it->node.get());
 
             if (auto* nodeMac = cast<ASTExprNodeMacro>(it->node.get())) {
+                const bool definesMacro = nodeMac->mPath.isTrivial() && nodeMac->mPath.asTrivial() == "macro_rules";
+                const auto macroName = nodeMac->ident;
                 auto attrs = std::move(it->node->attrs());
                 ExpandAttrsCfgAttr(*expandState.wb.settings, attrs);
                 ExpandAttrs(expandState, attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
@@ -948,6 +963,14 @@ struct CExpandExpr: public ASTNodeVisitor {
 
                 ::std::vector<ASTExprNodeBlock::Line> newNodes;
                 this->visitMacro(*nodeMac, &newNodes);
+                if (definesMacro && !nodeMac->mPath.isValid()) {
+                    for (auto& attr : nodeMac->attrs().mItems) {
+                        if (!attr.isInert() && attr.name() == "macro_export") {
+                            ExpandExportMacroRules(attr.span(), attr, this->expandState.wb, this->crate, this->curMod(), macroName);
+                            attr.markInert();
+                        }
+                    }
+                }
                 for (const auto& n : newNodes) {
                     DEBUG("++ " << *n.node << (n.hasSemicolon ? " ;" : ""));
                 }
@@ -2097,8 +2120,6 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
 
                     auto ttl = ExpandMacro(es, mod, miOwned);
                     if (ttl) {
-                        ExpandAttrs(es, attrs, AttrStage::Post, path, mod, idx, vis, dat);
-
                         // Parse
                         DEBUG("-- Parsing as mod items");
                         size_t oldLen = mod.mItems.size();

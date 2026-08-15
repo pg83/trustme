@@ -43,26 +43,25 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Macro expansion: 4 unresolved macro invocations.
-2. Opaque types (`TAIT`, `RPIT`, `RPITIT`, and async return types): 22
+1. Opaque types (`TAIT`, `RPIT`, `RPITIT`, and async return types): 22
    opaque-bearing result-type relation failures at
    `hir_typeck_expr_cs.cpp:2196` and 13 erased types rejected outside return
    position at `hir_conv_main_bindings.cpp:455`. Total adjacent impact: 35
    tests. All 22 relation failures were rerun after the opaque identity and
    refined-RPITIT fixes and still reproduce, so this row contains a different
    root cause.
-3. Trait lookup, normalization, and inference: 14 unresolved inference
+2. Trait lookup, normalization, and inference: 14 unresolved inference
    variables, 10 inferred trait obligations left ambiguous, and 9 const-value
    relation failures. Total adjacent impact: 33 tests.
-4. Result typing and coercion outside opaque types: 20 heterogeneous failures
+3. Result typing and coercion outside opaque types: 20 heterogeneous failures
    share the final diagnostic at `hir_typeck_expr_cs.cpp:2196`. They include
    block/loop results, match ergonomics, function-item coercions, patterns,
    async types, and ordinary generic inference; the common error line is not a
    common implementation root.
-5. Unresolved types reaching translation: 11 infer/async/closure types rejected
+4. Unresolved types reaching translation: 11 infer/async/closure types rejected
    by mangling at `trans_mangling.cpp:257`, plus 4 `sizeof` operations on infer
    types at `trans_target.cpp:496`.
-6. Shared backend/runtime families: 12 pointer equality/provenance tests, 9
+5. Shared backend/runtime families: 12 pointer equality/provenance tests, 9
    `core::num::dec2flt` library tests, 9 Miri x86-intrinsic aborts, 9 async-drop
    output mismatches, and 5 remaining `track_caller` cases spanning a trait
    object, closure, FFI, indexing, and macro declaration.
@@ -86,14 +85,14 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 141.
 
 ## Accepted Rust rejected by the front end
 
-The 419 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 415 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
 | parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
 | type checking, HIR lowering, and resolution | 209 | result relation 42 (22 opaque-bearing, 20 other) |
-| macro and attribute expansion | 36 | unknown macro 4 |
+| macro and attribute expansion | 32 | other expansion and attribute failures |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |
 

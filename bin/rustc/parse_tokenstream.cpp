@@ -18,6 +18,14 @@ TokenStream::TokenStream(ParseState ps)
 TokenStream::~TokenStream() {
 }
 
+void TokenStream::markMacroExpansionPlaceholder() {
+    mMacroExpansionPlaceholder = true;
+}
+
+bool TokenStream::isMacroExpansionPlaceholder() const {
+    return mMacroExpansionPlaceholder;
+}
+
 stl::ObjPool& TokenStream::typePool() const {
     return *mParseState.wb->pool;
 }

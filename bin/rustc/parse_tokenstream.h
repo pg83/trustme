@@ -55,6 +55,7 @@ class TokenStream {
 
     ::std::vector<LookaheadEnt> mLookahead;
     ParseState mParseState;
+    bool mMacroExpansionPlaceholder = false;
 
 public:
     TokenStream(ParseState ps);
@@ -81,6 +82,10 @@ public:
     ParseState& parseState() {
         return mParseState;
     }
+
+    void markMacroExpansionPlaceholder();
+
+    bool isMacroExpansionPlaceholder() const;
 
     // The pool that owns AST type nodes created while parsing this stream.
     stl::ObjPool& typePool() const;

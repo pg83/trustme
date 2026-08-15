@@ -22,6 +22,12 @@
 #include <string_view>
 
 namespace {
+    ::std::unique_ptr<TokenStream> makeMacroExpansionPlaceholder(const Span& sp) {
+        auto rv = box$(TTStreamO(sp, ParseState(), TokenTree()));
+        rv->markMacroExpansionPlaceholder();
+        return rv;
+    }
+
     ::std::string getString(const Span& sp, TokenStream& lex, const ASTCrate& crate, ASTModule& mod) {
         auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
 
@@ -44,6 +50,40 @@ namespace {
         throw ParseErrorUnexpected(lex, tok, TOK_IDENT);
     }
 }
+
+class CTraceMacrosExpander: public ExpandProcMacro {
+public:
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override {
+        auto lex = TTStream(sp, ParseState(), tt);
+        const auto setting = lex.getToken();
+        if (setting.type() != TOK_RWORD_TRUE && setting.type() != TOK_RWORD_FALSE) {
+            ERROR(sp, E0000, "trace_macros! expects `true` or `false`");
+        }
+        if (lex.lookahead(0) != TOK_EOF) {
+            ERROR(sp, E0000, "trace_macros! expects exactly one boolean argument");
+        }
+        return makeMacroExpansionPlaceholder(sp);
+    }
+};
+STATIC_MACRO("trace_macros", CTraceMacrosExpander);
+
+class CLogSyntaxExpander: public ExpandProcMacro {
+public:
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard&, const ASTCrate&, const TokenTree& tt, ASTModule&) override {
+        auto lex = TTStream(sp, ParseState(), tt);
+        bool first = true;
+        while (lex.lookahead(0) != TOK_EOF) {
+            if (!first) {
+                ::std::cout << ' ';
+            }
+            ::std::cout << lex.getToken().toStr();
+            first = false;
+        }
+        ::std::cout << ::std::endl;
+        return makeMacroExpansionPlaceholder(sp);
+    }
+};
+STATIC_MACRO("log_syntax", CLogSyntaxExpander);
 
 class CPatternTypeExpander: public ExpandProcMacro {
 public:

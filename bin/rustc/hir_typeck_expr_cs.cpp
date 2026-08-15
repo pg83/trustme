@@ -4565,7 +4565,15 @@ void Context::addVar(const Span& sp, unsigned int index, const RcString& name, H
     assert(index != ~0u);
     ASSERT_BUG(sp, type != HIRTypeRef(), "Unset ivar in variable type");
     if (mBindings.size() <= index) {
+        const auto oldSize = mBindings.size();
         mBindings.resize(index + 1);
+        for (auto i = oldSize; i < mBindings.size(); i++) {
+            // Constant expressions can consume lexical binding slots before
+            // they are evaluated out of the surrounding function. Keep the
+            // resulting unused slots valid so the dense MIR local table never
+            // contains a null type.
+            mBindings[i].ty = crate.types.unit();
+        }
     }
     if (mBindings[index].name == "") {
         mBindings[index] = Binding{name, mv$(type)};
