@@ -2081,14 +2081,32 @@ namespace {
                     of << "\tif(arg0) rv._0 |= __builtin_add_overflow(rv._1, 1, &rv._1);\n";
                     of << "\treturn rv;\n";
                 }
+                // `fn llvm_addcarry_u64(a: u8, b: u64, c: u64) -> (u8, u64)`
+                else if (item.linkage.name == "llvm.x86.addcarry.64") {
+                    of << "\trv._0 = __builtin_add_overflow(arg1, arg2, &rv._1);\n";
+                    of << "\tif(arg0) rv._0 |= __builtin_add_overflow(rv._1, 1, &rv._1);\n";
+                    of << "\treturn rv;\n";
+                }
                 // `fn llvm_addcarryx_u32(a: u8, b: u32, c: u32, d: *mut u8) -> u8`
                 else if (item.linkage.name == "llvm.x86.addcarryx.u32") {
                     of << "\trv = __builtin_add_overflow(arg1, arg2, (uint32_t*)arg3);\n";
                     of << "\tif(arg0) rv |= __builtin_add_overflow(*arg3, 1, (uint32_t*)arg3);\n";
                     of << "\treturn rv;\n";
                 }
+                // `fn llvm_addcarryx_u64(a: u8, b: u64, c: u64, d: *mut u64) -> u8`
+                else if (item.linkage.name == "llvm.x86.addcarryx.u64") {
+                    of << "\trv = __builtin_add_overflow(arg1, arg2, (uint64_t*)arg3);\n";
+                    of << "\tif(arg0) rv |= __builtin_add_overflow(*arg3, 1, (uint64_t*)arg3);\n";
+                    of << "\treturn rv;\n";
+                }
                 // `fn llvm_subborrow(a: u8, b: u32, c: u32) -> (u8, u32);`
                 else if (item.linkage.name == "llvm.x86.subborrow.32") {
+                    of << "\trv._0 = __builtin_sub_overflow(arg1, arg2, &rv._1);\n";
+                    of << "\tif(arg0) rv._0 |= __builtin_sub_overflow(rv._1, 1, &rv._1);\n";
+                    of << "\treturn rv;\n";
+                }
+                // `fn llvm_subborrow(a: u8, b: u64, c: u64) -> (u8, u64);`
+                else if (item.linkage.name == "llvm.x86.subborrow.64") {
                     of << "\trv._0 = __builtin_sub_overflow(arg1, arg2, &rv._1);\n";
                     of << "\tif(arg0) rv._0 |= __builtin_sub_overflow(rv._1, 1, &rv._1);\n";
                     of << "\treturn rv;\n";
