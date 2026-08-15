@@ -2074,6 +2074,66 @@ namespace {
                        << "\tdst[0] = w16; dst[1] = w17; dst[2] = w18; dst[3] = w19;\n"
                        << "\treturn rv;\n";
                 }
+                // Bit-manipulation intrinsics. Keep these portable: callers
+                // may use runtime feature detection, but the generated C++
+                // itself must not require BMI instructions.
+                else if (item.linkage.name == "llvm.x86.bmi.bextr.32") {
+                    of << "\tuint32_t start = arg1 & 0xff;\n"
+                       << "\tuint32_t length = (arg1 >> 8) & 0xff;\n"
+                       << "\tif(start >= 32 || length == 0) return 0;\n"
+                       << "\tif(length > 32 - start) length = 32 - start;\n"
+                       << "\treturn (arg0 >> start) & (UINT32_MAX >> (32 - length));\n";
+                } else if (item.linkage.name == "llvm.x86.bmi.bextr.64") {
+                    of << "\tuint64_t start = arg1 & 0xff;\n"
+                       << "\tuint64_t length = (arg1 >> 8) & 0xff;\n"
+                       << "\tif(start >= 64 || length == 0) return 0;\n"
+                       << "\tif(length > 64 - start) length = 64 - start;\n"
+                       << "\treturn (arg0 >> start) & (UINT64_MAX >> (64 - length));\n";
+                } else if (item.linkage.name == "llvm.x86.bmi.bzhi.32") {
+                    of << "\tuint32_t index = arg1 & 0xff;\n"
+                       << "\tif(index >= 32) return arg0;\n"
+                       << "\treturn index == 0 ? 0 : arg0 & (UINT32_MAX >> (32 - index));\n";
+                } else if (item.linkage.name == "llvm.x86.bmi.bzhi.64") {
+                    of << "\tuint64_t index = arg1 & 0xff;\n"
+                       << "\tif(index >= 64) return arg0;\n"
+                       << "\treturn index == 0 ? 0 : arg0 & (UINT64_MAX >> (64 - index));\n";
+                } else if (item.linkage.name == "llvm.x86.bmi.pext.32") {
+                    of << "\trv = 0;\n"
+                       << "\tuint32_t output_bit = 1;\n"
+                       << "\twhile(arg1) {\n"
+                       << "\t\tuint32_t mask_bit = arg1 & -arg1;\n"
+                       << "\t\tif(arg0 & mask_bit) rv |= output_bit;\n"
+                       << "\t\targ1 &= arg1 - 1; output_bit <<= 1;\n"
+                       << "\t}\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.bmi.pext.64") {
+                    of << "\trv = 0;\n"
+                       << "\tuint64_t output_bit = 1;\n"
+                       << "\twhile(arg1) {\n"
+                       << "\t\tuint64_t mask_bit = arg1 & -arg1;\n"
+                       << "\t\tif(arg0 & mask_bit) rv |= output_bit;\n"
+                       << "\t\targ1 &= arg1 - 1; output_bit <<= 1;\n"
+                       << "\t}\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.bmi.pdep.32") {
+                    of << "\trv = 0;\n"
+                       << "\tuint32_t input_bit = 1;\n"
+                       << "\twhile(arg1) {\n"
+                       << "\t\tuint32_t mask_bit = arg1 & -arg1;\n"
+                       << "\t\tif(arg0 & input_bit) rv |= mask_bit;\n"
+                       << "\t\targ1 &= arg1 - 1; input_bit <<= 1;\n"
+                       << "\t}\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.bmi.pdep.64") {
+                    of << "\trv = 0;\n"
+                       << "\tuint64_t input_bit = 1;\n"
+                       << "\twhile(arg1) {\n"
+                       << "\t\tuint64_t mask_bit = arg1 & -arg1;\n"
+                       << "\t\tif(arg0 & input_bit) rv |= mask_bit;\n"
+                       << "\t\targ1 &= arg1 - 1; input_bit <<= 1;\n"
+                       << "\t}\n"
+                       << "\treturn rv;\n";
+                }
                 // Add with carry
                 // `fn llvm_addcarry_u32(a: u8, b: u32, c: u32) -> (u8, u32)`
                 else if (item.linkage.name == "llvm.x86.addcarry.32") {
