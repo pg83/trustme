@@ -4879,6 +4879,7 @@ namespace {
                 DEBUG("From? " << outTy);
                 count += 1;
 
+                bool literalMatchesDestination = false;
                 if (const auto* sep = outTy->opt_Infer()) {
                     if (!sep->isLit()) {
                         // Hit a _, so can't keep going
@@ -4898,7 +4899,13 @@ namespace {
                         DEBUG("Src derefs to ivar (" << src << "), return Unknown");
                         return CoerceResult::Unknown;
                     }
-                    // Literal infer, keep going (but remember how many times we dereferenced?)
+                    const auto* primitive = dst->opt_Primitive();
+                    literalMatchesDestination = primitive
+                        && ((sep->tyClass == HIRInferClass::Integer && isInteger(*primitive))
+                            || (sep->tyClass == HIRInferClass::Float && isFloat(*primitive)));
+                    if (literalMatchesDestination && contextMut) {
+                        contextMut->equateTypes(sp, dst, outTy);
+                    }
                 }
 
                 if (TU_TEST1(*outTy, Generic, .isPlaceholder())) {
@@ -4911,10 +4918,10 @@ namespace {
                     return CoerceResult::Unknown;
                 }
 
-                types.push_back(outTy);
+                types.push_back(literalMatchesDestination ? dst : outTy);
 
                 // Types aren't equal
-                if (context.ivars.typesEqual(dst, outTy) == false) {
+                if (!literalMatchesDestination && context.ivars.typesEqual(dst, outTy) == false) {
                     // Check if they can be considered equivalent.
                     // - E.g. a fuzzy match, or both are slices/arrays
                     if (dst->tag() != outTy->tag()) {
