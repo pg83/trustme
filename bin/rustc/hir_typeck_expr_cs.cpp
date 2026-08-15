@@ -772,10 +772,11 @@ namespace {
                 // - Don't even bother
                 return;
             }
-            if (this->context.mResolve.hasAssociatedType(tyO) && this->context.mResolve.typeContainsIvars(tyO)) {
-                return;
+            if (const auto* path = tyO->opt_Path()) {
+                if (path->binding.is_Unbound() && path->path.mData.is_UfcsKnown() && this->context.mResolve.typeContainsIvars(tyO)) {
+                    return;
+                }
             }
-
             const auto& langFnOnce = this->context.mResolve.langFnOnce();
 
             // 1. Create a param set with a single tuple (of all argument types)
@@ -2049,9 +2050,103 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
         return;
     }
 
+    // AliasRelate first tries to normalise projections.  If both sides stay
+    // as the same rigid projection with a Self inference variable, defer the
+    // structural Self relation until ordinary constraints have had a chance
+    // to resolve it.  Eagerly assigning Self here treats associated types as
+    // injective and can select an arbitrary type whose associated output
+    // happens to match; at fallback the expected function signature can still
+    // guide an otherwise free Self.
+    const auto* lPath = lT->opt_Path();
+    const auto* rPath = rT->opt_Path();
+    const auto* lProjection = lPath ? lPath->path.mData.opt_UfcsKnown() : nullptr;
+    const auto* rProjection = rPath ? rPath->path.mData.opt_UfcsKnown() : nullptr;
+    const bool lRigidProjection = lPath && (lPath->binding.is_Unbound() || lPath->binding.is_Opaque());
+    const bool rRigidProjection = rPath && (rPath->binding.is_Unbound() || rPath->binding.is_Opaque());
+    const auto typesMayRelate = [&](const HIRTypeData* left, const HIRTypeData* right) {
+        if (left == right || left->equalsIgnoringRegions(right)) {
+            return true;
+        }
+        return this->ivars.getType(left)->is_Infer() || this->ivars.getType(right)->is_Infer();
+    };
+    const auto paramsMayRelate = [&](const HIRPathParams& left, const HIRPathParams& right) {
+        if (left.types.size() != right.types.size() || left.values.size() != right.values.size()) {
+            return false;
+        }
+        for (size_t i = 0; i < left.types.size(); i++) {
+            if (left.types[i] != right.types[i] && !left.types[i]->equalsIgnoringRegions(right.types[i])) {
+                return false;
+            }
+        }
+        for (size_t i = 0; i < left.values.size(); i++) {
+            if (left.values[i] != right.values[i]) {
+                return false;
+            }
+        }
+        return true;
+    };
+    if (lRigidProjection && rRigidProjection && lProjection && rProjection
+        && lProjection->trait.mPath == rProjection->trait.mPath
+        && lProjection->item == rProjection->item
+        && (this->ivars.getType(lProjection->type)->is_Infer() || this->ivars.getType(rProjection->type)->is_Infer())
+        && typesMayRelate(lProjection->type, rProjection->type)
+        && paramsMayRelate(lProjection->trait.mParams, rProjection->trait.mParams)
+        && paramsMayRelate(lProjection->params, rProjection->params)) {
+        struct DeferredRigidProjectionSelf final: Revisitor {
+            Span sp;
+            HIRTypeRef leftAlias;
+            HIRTypeRef rightAlias;
+            HIRTypeRef leftSelf;
+            HIRTypeRef rightSelf;
+
+            DeferredRigidProjectionSelf(Span sp, HIRTypeRef leftAlias, HIRTypeRef rightAlias, HIRTypeRef leftSelf, HIRTypeRef rightSelf)
+                : sp(mv$(sp))
+                , leftAlias(leftAlias)
+                , rightAlias(rightAlias)
+                , leftSelf(leftSelf)
+                , rightSelf(rightSelf)
+            {
+            }
+
+            const Span& span() const override {
+                return sp;
+            }
+
+            void fmt(::std::ostream& os) const override {
+                os << "Deferred rigid projection self " << leftSelf << " = " << rightSelf;
+            }
+
+            bool revisit(Context& context, bool isFallback) override {
+                const auto left = context.ivars.getType(leftSelf);
+                const auto right = context.ivars.getType(rightSelf);
+                if (!left->is_Infer() && !right->is_Infer()) {
+                    context.equateTypes(sp, leftAlias, rightAlias);
+                    return true;
+                }
+                if (!isFallback) {
+                    return false;
+                }
+                context.equateTypes(sp, left, right);
+                return true;
+            }
+        };
+        this->addRevisitAdv(box$((DeferredRigidProjectionSelf(
+            sp,
+            lT,
+            rT,
+            lProjection->type,
+            rProjection->type
+        ))));
+        return;
+    }
+
     auto bindInferToAlias = [&](const HIRTypeData* infer, const HIRTypeData* alias) {
         const auto* inferData = infer->opt_Infer();
-        if (!inferData || inferData->isLit() || visitTyWith(alias, [&](const HIRTypeData* inner) {
+        // Keep an unresolved projection containing ivars as an AliasRelate
+        // goal.  Eagerly assigning it to the output ivar can hide that the
+        // projection's self is subsequently equated with that same output,
+        // turning a solvable deferred cycle into an opaque ivar binding.
+        if (!inferData || inferData->isLit() || this->mResolve.typeContainsIvars(alias) || visitTyWith(alias, [&](const HIRTypeData* inner) {
             return inner == infer;
         })) {
             return false;
