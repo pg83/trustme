@@ -391,6 +391,14 @@ namespace {
                                 }
                                 if (const auto* dEI = ity->opt_Infer()) {
                                     this->context.possibleEquateIvar(sp, dEI->index, sE.inner, Context::PossibleTypeSource::UnsizeFrom);
+                                    if (!this->isFallback) {
+                                        // `&value as *const _` may get its pointee
+                                        // type from the surrounding expression.  Keep
+                                        // the source pointee as the final fallback
+                                        // instead of selecting it before that context
+                                        // has been resolved.
+                                        this->context.possibleEquateIvarUnknown(sp, dEI->index, Context::IvarUnknownType::From);
+                                    }
                                 }
 
                                 // If this looks like `&mut [?; N]` -> `*mut ?` then do a possible equate between the two types
