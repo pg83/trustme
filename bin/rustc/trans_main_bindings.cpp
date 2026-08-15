@@ -1326,6 +1326,7 @@ namespace {
         ::std::vector<TransListFunction*> fcnsToTypeVisit;
 
         ::std::set<std::string> emittedFunctions;
+        ::std::set<HIRPath> activePaths;
 
         // Map of locally-defined exported `link_name` functions
         ::std::unordered_map<std::string, std::pair<HIRSimplePath, const HIRFunction*>> linkFunctions;
@@ -2830,6 +2831,34 @@ namespace {
         }
     }
 
+    void enumerateConstRelocations(EnumState& state, const HIRPathParams& params) {
+        for (const auto& value : params.values) {
+            if (const auto* evaluated = value.opt_Evaluated()) {
+                TransEnumerateFillFromLiteral(state, **evaluated, TransParams(state.crate.types));
+            }
+        }
+    }
+
+    void enumerateConstRelocations(EnumState& state, const HIRPath& path, const TransParams& params) {
+        enumerateConstRelocations(state, params.ppImpl);
+        enumerateConstRelocations(state, params.ppMethod);
+        TU_MATCH_HDRA((path.mData), {)
+        TU_ARMA(Generic, pe) {
+            enumerateConstRelocations(state, pe.mParams);
+        }
+        TU_ARMA(UfcsKnown, pe) {
+            enumerateConstRelocations(state, pe.trait.mParams);
+            enumerateConstRelocations(state, pe.params);
+        }
+        TU_ARMA(UfcsInherent, pe) {
+            enumerateConstRelocations(state, pe.params);
+            enumerateConstRelocations(state, pe.implParams);
+        }
+        TU_ARMA(UfcsUnknown, pe) {
+        }
+        }
+    }
+
     EntPtr getEntFullpath(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRPath& path, TransParams& params) {
         TRACE_FUNCTION_F(path);
         StaticTraitResolve resolve{wb};
@@ -2965,6 +2994,26 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     DEBUG("sub_pp.pp_method = " << subPp.ppMethod);
     DEBUG("sub_pp.pp_impl = " << subPp.ppImpl);
     evaluateTranslationImplAndTraitParams(sp, state.resolve.board(), state.crate, pathMono, subPp);
+    if (pathAlreadyEnumerated(state, pathMono)) {
+        DEBUG("> Already enumerated after const evaluation");
+        return;
+    }
+
+    auto activePath = state.activePaths.insert(pathMono.clone());
+    if (!activePath.second) {
+        DEBUG("> Already being enumerated");
+        return;
+    }
+    struct ActivePathGuard {
+        ::std::set<HIRPath>& paths;
+        ::std::set<HIRPath>::iterator path;
+
+        ~ActivePathGuard() {
+            paths.erase(path);
+        }
+    } activePathGuard{state.activePaths, activePath.first};
+
+    enumerateConstRelocations(state, pathMono, subPp);
     TU_MATCH_HDRA( (itemRef), {)
     TU_ARMA(NotFound, e) {
             BUG(sp, "Item not found for " << pathMono);
@@ -3109,6 +3158,7 @@ void TransEnumerateFillFromMIRConstant(MIREnumCache& state, const MIRConstant& c
         (Bool, ),
         (Bytes, ),
         (StaticString, ), // String
+        (Encoded, for (const auto& reloc : ce.value.relocations) if (reloc.p) state.insertPath(*reloc.p);),
         (Const,
          // - Check if this constant has a value of Defer
          state.insertPath(*ce.p);),

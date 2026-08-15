@@ -214,6 +214,9 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
         TU_ARMA(StaticString, e) {
             return crate.types.borrow(HIRBorrowType::Shared, crate.types.primitive(HIRCoreType::Str));
         }
+        TU_ARMA(Encoded, e) {
+            return e.type;
+        }
         TU_ARMA(Const, e) {
             MonomorphState p(crate.types);
             auto v = mResolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);

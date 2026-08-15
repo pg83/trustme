@@ -1883,6 +1883,9 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
             case TOK_DASH:
             case TOK_INTEGER:
             case TOK_FLOAT:
+            case TOK_STRING:
+            case TOK_CSTRING:
+            case TOK_BYTESTRING:
             case TOK_INTERPOLATED_EXPR:
             case TOK_BRACE_OPEN:
                 PUTBACK(tok, lex);

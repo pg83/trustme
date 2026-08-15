@@ -5349,6 +5349,8 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                         }
                                         TU_ARMA(StaticString, ve) {
                                         }
+                                        TU_ARMA(Encoded, ve) {
+                                        }
                                         TU_ARMA(Const, ve) {
                                             // TODO:
                                         }
@@ -5380,6 +5382,7 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                 ),
                             (Bytes, ),
                             (StaticString, ),
+                            (Encoded, ),
                             (Const,
                                 // TODO:
                                 ),

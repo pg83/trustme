@@ -1959,6 +1959,9 @@ public:
                 dst.writePtr(state, EncodedLiteral::PTR_BASE, MIREvalConstantPtr::allocate(valuePool, e2.data(), e2.size()));
                 dst.slice(TargetGetPointerBits() / 8).writeUint(state, TargetGetPointerBits(), e2.size());
             }
+            TU_ARM(c, Encoded, e2) {
+                writeEncoded(dst, e2.value);
+            }
             TU_ARM(c, Const, e2) {
                 HIRTypeRef ty;
                 assert(e2.p);

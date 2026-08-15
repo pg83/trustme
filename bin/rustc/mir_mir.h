@@ -3,6 +3,7 @@
 #include "floats.h"
 #include "int128.h"
 #include "hir_asm.h"
+#include "hir_encoded_literal.h"
 #include "hir_type.h"
 #include "tagged_union.h"
 
@@ -543,7 +544,12 @@ TAGGED_UNION_EX(
      // ZST function type, NOT its address
      (Function, struct { ::std::unique_ptr<HIRPath> p; }),
      // Address within a named allocation
-     (ItemAddr, ItemAddress)),
+     (ItemAddr, ItemAddress),
+     (Encoded,
+      struct {
+          HIRTypeRef type;
+          EncodedLiteral value;
+      })),
     (),
     (),
     (friend ::std::ostream & operator<<(::std::ostream& os, const MIRConstant& v); ::Ordering ord(const MIRConstant& b) const; inline bool operator==(const MIRConstant& b) const { return ord(b) == ::OrdEqual; } inline bool operator!=(const MIRConstant& b) const { return ord(b) != ::OrdEqual; } inline bool operator<(const MIRConstant& b) const { return ord(b) == ::OrdLess; } inline bool operator<=(const MIRConstant& b) const { return ord(b) != ::OrdGreater; } inline bool operator>(const MIRConstant& b) const { return ord(b) == ::OrdGreater; } inline bool operator>=(const MIRConstant& b) const { return ord(b) != ::OrdLess; } MIRConstant clone() const;)

@@ -183,7 +183,19 @@ public:
         }
         if (!literal.relocations.empty()) {
             os << "_" << literal.relocations.size() << "R";
-            TODO(Span(), "Mangle relocated values");
+            for (const auto& relocation : literal.relocations) {
+                os << relocation.ofs << "o" << relocation.len;
+                if (relocation.p) {
+                    os << "p";
+                    fmtPath(*relocation.p);
+                } else {
+                    os << "b" << relocation.bytes.size() << "_";
+                    for (const auto byte : relocation.bytes) {
+                        os << "0123456789abcdef"[static_cast<unsigned char>(byte) >> 4];
+                        os << "0123456789abcdef"[static_cast<unsigned char>(byte) & 0xF];
+                    }
+                }
+            }
         }
     }
 

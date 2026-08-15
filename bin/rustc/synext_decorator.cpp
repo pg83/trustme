@@ -2320,6 +2320,45 @@ public:
     }
 } gDeriveConstParamTy;
 
+class DeriverUnsizedConstParamTy: public Deriver {
+    ASTImpl handleGeneric(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound) const {
+        const ASTPath traitPath = getPath(opts.coreName, "marker", "UnsizedConstParamTy");
+        const ASTPath eqPath = getPath(opts.coreName, "cmp", "Eq");
+
+        ::std::vector<ASTType*> typesToBoundByEq;
+        for (const auto* boundedType : typesToBound) {
+            typesToBoundByEq.push_back(boundedType->clone());
+        }
+
+        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+        unsigned int typeIndex = 0;
+        for (const auto& param : p.mParams) {
+            if (const auto* typeParam = param.opt_Type()) {
+                params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*type->pool, sp, typeParam->name(), typeIndex), {}, eqPath}));
+                typeIndex++;
+            }
+        }
+        for (auto*& boundedType : typesToBoundByEq) {
+            params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mv$(boundedType), {}, eqPath}));
+        }
+
+        return ASTImpl(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
+    }
+
+public:
+    const char* traitName() const override {
+        return "UnsizedConstParamTy";
+    }
+
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
+        return handleGeneric(sp, opts, p, type, this->getFieldBounds(str));
+    }
+
+    ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
+        return handleGeneric(sp, opts, p, type, this->getFieldBounds(enm));
+    }
+} gDeriveUnsizedConstParamTy;
+
 // --------------------------------------------------------------------
 // Select and dispatch the correct derive() handler
 // --------------------------------------------------------------------
@@ -2339,7 +2378,25 @@ static const Deriver* findImpl(const RcString& traitName) {
     _(gDeriveRustcEncodable)
     _(gDeriveRustcDecodable)
     _(gDeriveConstParamTy)
+    _(gDeriveUnsizedConstParamTy)
 #undef _
+    return nullptr;
+}
+
+static const Deriver* findBuiltinDerive(const ASTPath& traitPath) {
+    if (traitPath.isTrivial()) {
+        return findImpl(traitPath.asTrivial());
+    }
+    if (const auto* path = traitPath.cls.opt_Relative()) {
+        if (path->nodes.size() >= 2 && (path->nodes.front().name() == "core" || path->nodes.front().name() == "std")) {
+            return findImpl(path->nodes.back().name());
+        }
+    }
+    if (const auto* path = traitPath.cls.opt_Absolute()) {
+        if (!path->nodes.empty() && (path->crate == "=core" || path->crate == "=std")) {
+            return findImpl(path->nodes.back().name());
+        }
+    }
     return nullptr;
 }
 
@@ -2701,15 +2758,10 @@ static void deriveItem(const Span& sp, const WireBoard& wb, const ASTCrate& crat
             continue;
         }
 
-        if (traitPath.isTrivial()) {
-            auto dp = findImpl(traitPath.asTrivial());
-            if (dp) {
-                mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", dp->handleItem(sp, opts, item.params(), type, item), {});
-                continue;
-            }
+        if (auto dp = findBuiltinDerive(traitPath)) {
+            mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", dp->handleItem(sp, opts, item.params(), type, item), {});
+            continue;
         }
-
-        // TODO: Handle full paths to standard library traits
 
         std::vector<RcString> macPath = findMacro(sp, wb, crate, mod, traitPath);
         if (!macPath.empty()) {
@@ -2721,22 +2773,6 @@ static void deriveItem(const Span& sp, const WireBoard& wb, const ASTCrate& crat
                 ERROR(sp, E0000, "proc_macro derive failed");
             }
             continue;
-        }
-
-        // HACK! If the trait path is for `=core` and the last component passes `find_impl`, then assume it's a proper path
-        // Some crates spell builtin derives as fully-qualified `::core` paths.
-
-        // Absolute path
-        if (const auto* ap = traitPath.cls.opt_Absolute()) {
-            // For `::core` (encoded as `=core` due to how it's parsed in `get_derive_items`)
-            if (ap->crate == "=core") {
-                // And if the last node (ignore intermediate nodes) returns a valid builtin
-                if (auto dp = findImpl(ap->nodes.back().name())) {
-                    // Use that
-                    mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", dp->handleItem(sp, opts, item.params(), type, item), {});
-                    continue;
-                }
-            }
         }
 
         DEBUG("> No handler for " << traitPath);

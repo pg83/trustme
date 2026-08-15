@@ -651,6 +651,7 @@ public:
                 return MIRConstant::make_Bytes(mv$(bytes));
             }
                 _(StaticString, in.readString())
+                _(Encoded, {deserialiseType(), deserialiseEncodedliteral()})
                 _(Const, {box$(deserialisePath())})
                 _(Generic, deserialiseGenericref())
                 _(Function, {box$(deserialisePath())})
@@ -3449,7 +3450,7 @@ public:
 
     void serialise(const MIRConstant& v) {
         out.writeTag(v.tag());
-        TU_MATCHA((v), (e), (Int, out.writeU128(e.v.getInner()); out.writeTag(static_cast<unsigned>(e.t));), (Uint, out.writeU128(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Float, out.writeFloatValue(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Bool, out.writeBool(e.v);), (Bytes, out.writeCount(e.size()); out.write(e.data(), e.size());), (StaticString, out.writeString(e);), (Const, ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), "Unexpected Constant: " << *e.p); serialisePath(*e.p);), (Generic, serialise(e);), (Function, serialisePath(*e.p);), (ItemAddr, serialisePath(*e); out.writeU128(e.offset);))
+        TU_MATCHA((v), (e), (Int, out.writeU128(e.v.getInner()); out.writeTag(static_cast<unsigned>(e.t));), (Uint, out.writeU128(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Float, out.writeFloatValue(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Bool, out.writeBool(e.v);), (Bytes, out.writeCount(e.size()); out.write(e.data(), e.size());), (StaticString, out.writeString(e);), (Encoded, serialise(e.type); serialise(e.value);), (Const, ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), "Unexpected Constant: " << *e.p); serialisePath(*e.p);), (Generic, serialise(e);), (Function, serialisePath(*e.p);), (ItemAddr, serialisePath(*e); out.writeU128(e.offset);))
     }
 
     void serialise(const HIRTypeItem& item) {

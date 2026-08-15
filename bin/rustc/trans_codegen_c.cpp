@@ -7752,6 +7752,71 @@ namespace {
             emitLvalue(MIRLValue::CRef(val));
         }
 
+        void emitEncodedConstant(const HIRTypeData* type, const EncodedLiteral& encoded) {
+            size_t size = 0;
+            size_t align = 0;
+            TargetGetSizeAndAlignOf(sp, mResolve, type, size, align);
+            const bool pointerAligned = align * 8 >= TargetGetPointerBits();
+
+            of << "([]() { union { ";
+            emitCtype(type, FMT_CB(ss, ss << "val";));
+            of << "; ";
+            if (pointerAligned) {
+                const auto pointerSize = TargetGetPointerBits() / 8;
+                const auto words = size == 0 ? 0 : 1 + (size - 1) / pointerSize;
+                of << "uintptr_t raw[" << words << "]";
+            } else {
+                of << "uint8_t raw[" << size << "]";
+            }
+            of << "; } value = { .raw = {";
+
+            if (pointerAligned) {
+                const auto pointerSize = TargetGetPointerBits() / 8;
+                auto relocation = encoded.relocations.begin();
+                for (size_t i = 0; i < encoded.bytes.size(); i += pointerSize) {
+                    uint64_t word = 0;
+                    for (size_t byte = 0; byte < pointerSize && i + byte < encoded.bytes.size(); byte++) {
+                        word |= static_cast<uint64_t>(encoded.bytes[i + byte]) << (byte * 8);
+                    }
+                    if (i > 0) {
+                        of << ",";
+                    }
+                    if (relocation != encoded.relocations.end() && relocation->ofs <= i) {
+                        MIR_ASSERT(*mirRes, relocation->ofs == i, "Relocation not aligned to a pointer - " << relocation->ofs << " != " << i);
+                        MIR_ASSERT(*mirRes, relocation->len == pointerSize, "Relocation size not pointer size - " << relocation->len << " != " << pointerSize);
+                        word -= EncodedLiteral::PTR_BASE;
+                        of << "(uintptr_t)";
+                        if (relocation->p) {
+                            if (relocation->p->mData.is_UfcsInherent() && relocation->p->mData.as_UfcsInherent().item == "#type_id") {
+                                of << "&__typeid_" << TransMangle(relocation->p->mData.as_UfcsInherent().type);
+                            } else {
+                                of << "&";
+                                emitReifiedFunctionName(*relocation->p);
+                            }
+                        } else {
+                            printEscapedString(relocation->bytes);
+                        }
+                        if (word > 0) {
+                            of << "+" << word;
+                        }
+                        ++relocation;
+                    } else {
+                        of << "0x" << std::hex << word << "ull" << std::dec;
+                    }
+                }
+                MIR_ASSERT(*mirRes, relocation == encoded.relocations.end(), "Relocation outside encoded constant");
+            } else {
+                MIR_ASSERT(*mirRes, encoded.relocations.empty(), "Non-pointer-aligned encoded constant has relocations");
+                for (size_t i = 0; i < encoded.bytes.size(); i++) {
+                    if (i > 0) {
+                        of << ",";
+                    }
+                    of << static_cast<unsigned>(encoded.bytes[i]);
+                }
+            }
+            of << "} }; return value.val; }())";
+        }
+
         void emitConstant(const MIRConstant& ve, const MIRLValue* dstPtr = nullptr) {
             TU_MATCH_HDRA( (ve), {)
             TU_ARMA(Int, c) {
@@ -7846,6 +7911,9 @@ namespace {
                     of << "make_sliceptr(";
                     this->printEscapedString(c);
                     of << ", " << ::std::dec << c.size() << ")";
+                }
+                TU_ARMA(Encoded, c) {
+                    emitEncodedConstant(c.type, c.value);
                 }
                 TU_ARMA(Const, c) {
                     MIR_BUG(*mirRes, "Unexpected Constant::Const - " << ve);
