@@ -2028,6 +2028,69 @@ namespace {
                        << "\tresult[0] = mrustc_x86_cmp_f32(lhs[0], rhs[0], arg2) ? UINT32_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse.comieq.ss"
+                        || item.linkage.name == "llvm.x86.sse.comige.ss"
+                        || item.linkage.name == "llvm.x86.sse.comile.ss"
+                        || item.linkage.name == "llvm.x86.sse.comilt.ss"
+                        || item.linkage.name == "llvm.x86.sse.comineq.ss"
+                        || item.linkage.name == "llvm.x86.sse.ucomieq.ss"
+                        || item.linkage.name == "llvm.x86.sse.ucomige.ss"
+                        || item.linkage.name == "llvm.x86.sse.ucomigt.ss"
+                        || item.linkage.name == "llvm.x86.sse.ucomile.ss"
+                        || item.linkage.name == "llvm.x86.sse.ucomilt.ss"
+                        || item.linkage.name == "llvm.x86.sse.ucomineq.ss") {
+                    const char* op = nullptr;
+                    if (item.linkage.name == "llvm.x86.sse.comieq.ss" || item.linkage.name == "llvm.x86.sse.ucomieq.ss") op = "==";
+                    else if (item.linkage.name == "llvm.x86.sse.comige.ss" || item.linkage.name == "llvm.x86.sse.ucomige.ss") op = ">=";
+                    else if (item.linkage.name == "llvm.x86.sse.ucomigt.ss") op = ">";
+                    else if (item.linkage.name == "llvm.x86.sse.comile.ss" || item.linkage.name == "llvm.x86.sse.ucomile.ss") op = "<=";
+                    else if (item.linkage.name == "llvm.x86.sse.comilt.ss" || item.linkage.name == "llvm.x86.sse.ucomilt.ss") op = "<";
+                    else op = "!=";
+                    of << "\tfloat lhs[4], rhs[4];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\treturn lhs[0] " << op << " rhs[0];\n";
+                } else if (item.linkage.name == "llvm.x86.sse.cvtsi2ss" || item.linkage.name == "llvm.x86.sse.cvtsi642ss") {
+                    of << "\tfloat result[4];\n"
+                       << "\tmemcpy(result, &arg0, sizeof(result)); result[0] = (float)arg1;\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse.cvtss2si"
+                        || item.linkage.name == "llvm.x86.sse.cvttss2si"
+                        || item.linkage.name == "llvm.x86.sse.cvtss2si64"
+                        || item.linkage.name == "llvm.x86.sse.cvttss2si64") {
+                    const bool truncate = item.linkage.name == "llvm.x86.sse.cvttss2si" || item.linkage.name == "llvm.x86.sse.cvttss2si64";
+                    const bool is64 = item.linkage.name == "llvm.x86.sse.cvtss2si64" || item.linkage.name == "llvm.x86.sse.cvttss2si64";
+                    of << "\tfloat input[4]; memcpy(input, &arg0, sizeof(input));\n"
+                       << "\tfloat value = __builtin_" << (truncate ? "truncf" : "nearbyintf") << "(input[0]);\n";
+                    if (is64) {
+                        of << "\tif(__builtin_isnan(value) || value >= 9223372036854775808.0 || value < -9223372036854775808.0) return INT64_MIN;\n"
+                           << "\treturn (int64_t)value;\n";
+                    } else {
+                        of << "\tif(__builtin_isnan(value) || value >= 2147483648.0f || value < -2147483648.0f) return INT32_MIN;\n"
+                           << "\treturn (int32_t)value;\n";
+                    }
+                } else if (item.linkage.name == "llvm.x86.sse.min.ps"
+                        || item.linkage.name == "llvm.x86.sse.min.ss"
+                        || item.linkage.name == "llvm.x86.sse.max.ps"
+                        || item.linkage.name == "llvm.x86.sse.max.ss") {
+                    const bool isMin = item.linkage.name == "llvm.x86.sse.min.ps" || item.linkage.name == "llvm.x86.sse.min.ss";
+                    const bool scalar = item.linkage.name == "llvm.x86.sse.min.ss" || item.linkage.name == "llvm.x86.sse.max.ss";
+                    of << "\tfloat lhs[4], rhs[4], result[4];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n"
+                       << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 4) << "; i++) result[i] = lhs[i] " << (isMin ? "<" : ">") << " rhs[i] ? lhs[i] : rhs[i];\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse.rcp.ps"
+                        || item.linkage.name == "llvm.x86.sse.rcp.ss"
+                        || item.linkage.name == "llvm.x86.sse.rsqrt.ps"
+                        || item.linkage.name == "llvm.x86.sse.rsqrt.ss") {
+                    const bool reciprocalSqrt = item.linkage.name == "llvm.x86.sse.rsqrt.ps" || item.linkage.name == "llvm.x86.sse.rsqrt.ss";
+                    const bool scalar = item.linkage.name == "llvm.x86.sse.rcp.ss" || item.linkage.name == "llvm.x86.sse.rsqrt.ss";
+                    of << "\tfloat result[4]; memcpy(result, &arg0, sizeof(result));\n"
+                       << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 4) << "; i++) result[i] = 1.0f / ";
+                    if (reciprocalSqrt) of << "__builtin_sqrtf(result[i])";
+                    else of << "result[i]";
+                    of << ";\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.cmp.pd") {
                     of << "\tdouble lhs[2], rhs[2]; uint64_t result[2];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
