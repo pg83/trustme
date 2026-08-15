@@ -212,50 +212,77 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         }
     } while (changed);
 
-    for (auto& fcnEnt : list.functions) {
-        const auto& fcn = *fcnEnt.second->ptr;
-        // Trait methods (which are the only case where `Self` can exist in the argument list at this stage) always need to be monomorphised.
-        bool isMethod = (fcn.mArgs.size() > 0 && visitTyWith(fcn.mArgs[0].second, [&](const auto& x) {
-            return x == crate.types.self();
-        }));
-        bool monomorphNeeded = fcnEnt.second->pp.hasTypes() || isMethod;
-
-        if (monomorphNeeded) {
-            const auto& path = fcnEnt.first;
-            const auto& pp = fcnEnt.second->pp;
-            TRACE_FUNCTION_FR("FUNCTION " << path, "FUNCTION " << path);
-            ASSERT_BUG(Span(), fcn.mCode.mir, "No code for " << path);
-
-            // TODO: Get the item params too
-            if (fcnEnt.second->pp.ppImpl.hasParams()) {
-                assert(pp.gdefImpl);
-            }
-            resolve.setBothGenericsRaw(pp.gdefImpl, &fcn.mParams);
-
-            auto mir = TransMonomorphise(resolve, fcnEnt.second->pp, fcn.mCode.mir);
-
-            // TODO: Should these be moved to their own pass? Potentially not, the extra pass should just be an inlining optimise pass
-            auto retType = pp.monomorph(resolve, fcn.returnType);
-            HIRFunction::argsT args;
-            for (const auto& a : fcn.mArgs) {
-                args.push_back(::std::make_pair(HIRPattern{}, pp.monomorph(resolve, a.second)));
+    // MIR cleanup can make a previously generic coercion concrete and insert
+    // translation paths such as `<T as Trait>::vtable#`.  Those paths do not
+    // exist in the pre-monomorphisation MIR, so collect and prepare them until
+    // the translation graph reaches a fixed point.
+    ::std::set<const TransListFunction*> initialFunctions;
+    for (const auto& ent : list.functions) {
+        initialFunctions.insert(ent.second.get());
+    }
+    ::std::set<const TransListFunction*> processedFunctions;
+    while (processedFunctions.size() < list.functions.size()) {
+        ::std::vector<const MIRFunction*> generatedMir;
+        for (auto& fcnEnt : list.functions) {
+            auto* transFcn = fcnEnt.second.get();
+            if (!processedFunctions.insert(transFcn).second) {
+                continue;
             }
 
-            //::std::string s = FMT(path);
-            HIRItemPath ip(path);
-            MIRCleanup(resolve, ip, *mir, args, retType);
-            if (mirOptLevel == 0) {
-                MIROptimiseMin(resolve, ip, *mir, args, retType);
+            const auto& fcn = *transFcn->ptr;
+            // Trait methods (which are the only case where `Self` can exist in the argument list at this stage) always need to be monomorphised.
+            bool isMethod = (fcn.mArgs.size() > 0 && visitTyWith(fcn.mArgs[0].second, [&](const auto& x) {
+                return x == crate.types.self();
+            }));
+            bool monomorphNeeded = transFcn->pp.hasTypes() || isMethod;
+
+            if (monomorphNeeded) {
+                const auto& path = fcnEnt.first;
+                const auto& pp = transFcn->pp;
+                TRACE_FUNCTION_FR("FUNCTION " << path, "FUNCTION " << path);
+                ASSERT_BUG(Span(), fcn.mCode.mir, "No code for " << path);
+
+                // TODO: Get the item params too
+                if (pp.ppImpl.hasParams()) {
+                    assert(pp.gdefImpl);
+                }
+                resolve.setBothGenericsRaw(pp.gdefImpl, &fcn.mParams);
+
+                auto mir = TransMonomorphise(resolve, pp, fcn.mCode.mir);
+
+                // TODO: Should these be moved to their own pass? Potentially not, the extra pass should just be an inlining optimise pass
+                auto retType = pp.monomorph(resolve, fcn.returnType);
+                HIRFunction::argsT args;
+                for (const auto& a : fcn.mArgs) {
+                    args.push_back(::std::make_pair(HIRPattern{}, pp.monomorph(resolve, a.second)));
+                }
+
+                HIRItemPath ip(path);
+                MIRCleanup(resolve, ip, *mir, args, retType);
+                if (mirOptLevel == 0) {
+                    MIROptimiseMin(resolve, ip, *mir, args, retType);
+                } else {
+                    MIROptimise(resolve, ip, *mir, args, retType, mirOptLevel, /*do_inline*/ false);
+                }
+
+                transFcn->monomorphised.retTy = ::std::move(retType);
+                transFcn->monomorphised.argTys = ::std::move(args);
+                transFcn->monomorphised.code = ::std::move(mir);
+                generatedMir.push_back(&*transFcn->monomorphised.code);
+                resolve.clearBothGenerics();
             } else {
-                MIROptimise(resolve, ip, *mir, args, retType, mirOptLevel, /*do_inline*/ false);
+                DEBUG("Non-generic: FUNCTION " << fcnEnt.first);
+                // Concrete MIR was already collected by the initial
+                // enumeration.  Only automatic functions created by a late
+                // TransAutoImpls pass need their raw MIR collected here.
+                if (initialFunctions.count(transFcn) == 0 && fcn.mCode.mir) {
+                    generatedMir.push_back(&*fcn.mCode.mir);
+                }
             }
+        }
 
-            fcnEnt.second->monomorphised.retTy = ::std::move(retType);
-            fcnEnt.second->monomorphised.argTys = ::std::move(args);
-            fcnEnt.second->monomorphised.code = ::std::move(mir);
-            resolve.clearBothGenerics();
-        } else {
-            DEBUG("Non-generic: FUNCTION " << fcnEnt.first);
+        if (TransEnumerateGeneratedMIR(wb, list, generatedMir)) {
+            TransAutoImpls(wb, crate, list);
         }
     }
 

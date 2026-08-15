@@ -5734,84 +5734,97 @@ namespace {
                 MIR_ASSERT(localMirRes, TargetGetAlignOf(sp, mResolve, params.types.at(0), align), "Can't get alignment of " << params.types.at(0));
                 emitLvalue(e.retVal);
                 of << " = " << align;
-            } else if (name == "size_of_val") {
+            } else if (name == "vtable_size" || name == "vtable_align") {
                 emitLvalue(e.retVal);
-                of << " = ";
+                of << " = ((VTABLE_HDR*)";
+                emitParam(e.args.at(0));
+                of << ")->" << (name == "vtable_size" ? "size" : "align");
+            } else if (name == "size_of_val") {
                 const auto& ty = params.types.at(0);
                 // Get the unsized type and use that in place of MetadataType
                 auto innerTy = getInnerUnsizedType(ty);
-                if (innerTy == HIRTypeRef()) {
-                    size_t size = 0;
-                    MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, mResolve, ty, size), "Can't get size of " << ty);
-                    of << size;
-                }
-                // slice metadata (`[T]` and `str`)
-                else if (innerTy->is_Slice() || innerTy == HIRCoreType::Str) {
-                    bool alignNeeded = false;
-                    size_t itemSize = 0;
-                    size_t itemAlign = 0;
-                    if (const auto* te = innerTy->opt_Slice()) {
-                        MIR_ASSERT(localMirRes, TargetGetSizeAndAlignOf(sp, mResolve, te->inner, itemSize, itemAlign), "Can't get size of " << te->inner);
-                    } else {
-                        assert(innerTy == HIRCoreType::Str);
-                        itemSize = 1;
-                        itemAlign = 1;
-                    }
-                    if (!ty->is_Slice() && !ty->is_Primitive()) {
-                        // TODO: What if the wrapper has no other fields?
-                        // Get the alignment and check if it's higher than the item alignment
-                        size_t wrapperAlign = 0, wrapperSizeIgnore = 0;
-                        MIR_ASSERT(localMirRes, TargetGetSizeAndAlignOf(sp, mResolve, ty, wrapperSizeIgnore, wrapperAlign), "Can't get align of " << ty);
-                        if (wrapperAlign > itemAlign) {
-                            itemAlign = wrapperAlign;
-                            alignNeeded = true;
-                            of << "ALIGN_TO(";
-                        }
-                        const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
-                        of << repr->fields.back().offset << " + ";
-                    }
-                    emitParam(e.args.at(0));
-                    of << ".META * " << itemSize;
-                    if (alignNeeded) {
-                        of << ", " << itemAlign << ")";
-                    }
-                }
-                // Trait object metadata.
-                else if (innerTy->is_TraitObject()) {
-                    emitTraitObjectDstSize(ty, e.args.at(0));
+                if (isExternUnsizedType(innerTy)) {
+                    emitExternTypeLayoutPanic(innerTy);
                 } else {
-                    MIR_BUG(localMirRes, "Unknown inner unsized type " << innerTy << " for " << ty);
+                    emitLvalue(e.retVal);
+                    of << " = ";
+                    if (innerTy == HIRTypeRef()) {
+                        size_t size = 0;
+                        MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, mResolve, ty, size), "Can't get size of " << ty);
+                        of << size;
+                    }
+                    // slice metadata (`[T]` and `str`)
+                    else if (innerTy->is_Slice() || innerTy == HIRCoreType::Str) {
+                        bool alignNeeded = false;
+                        size_t itemSize = 0;
+                        size_t itemAlign = 0;
+                        if (const auto* te = innerTy->opt_Slice()) {
+                            MIR_ASSERT(localMirRes, TargetGetSizeAndAlignOf(sp, mResolve, te->inner, itemSize, itemAlign), "Can't get size of " << te->inner);
+                        } else {
+                            assert(innerTy == HIRCoreType::Str);
+                            itemSize = 1;
+                            itemAlign = 1;
+                        }
+                        if (!ty->is_Slice() && !ty->is_Primitive()) {
+                            // TODO: What if the wrapper has no other fields?
+                            // Get the alignment and check if it's higher than the item alignment
+                            size_t wrapperAlign = 0, wrapperSizeIgnore = 0;
+                            MIR_ASSERT(localMirRes, TargetGetSizeAndAlignOf(sp, mResolve, ty, wrapperSizeIgnore, wrapperAlign), "Can't get align of " << ty);
+                            if (wrapperAlign > itemAlign) {
+                                itemAlign = wrapperAlign;
+                                alignNeeded = true;
+                                of << "ALIGN_TO(";
+                            }
+                            const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
+                            of << repr->fields.back().offset << " + ";
+                        }
+                        emitParam(e.args.at(0));
+                        of << ".META * " << itemSize;
+                        if (alignNeeded) {
+                            of << ", " << itemAlign << ")";
+                        }
+                    }
+                    // Trait object metadata.
+                    else if (innerTy->is_TraitObject()) {
+                        emitTraitObjectDstSize(ty, e.args.at(0));
+                    } else {
+                        MIR_BUG(localMirRes, "Unknown inner unsized type " << innerTy << " for " << ty);
+                    }
                 }
                 // TODO: Align up
             } else if (name == "min_align_of_val" || name == "align_of_val") {
-                emitLvalue(e.retVal);
-                of << " = ";
                 const auto& ty = params.types.at(0);
                 auto innerTy = getInnerUnsizedType(ty);
-                if (innerTy == HIRTypeRef()) {
-                    of << "ALIGNOF(";
-                    emitCtype(ty);
-                    of << ")";
-                } else if (const auto* te = innerTy->opt_Slice()) {
-                    of << "ALIGNOF(";
-                    if (ty->is_Slice()) {
-                        emitCtype(te->inner);
-                    } else {
-                        emitCtype(ty);
-                    }
-                    of << ")";
-                } else if (innerTy == HIRCoreType::Str) {
-                    if (!ty->is_Primitive()) {
+                if (isExternUnsizedType(innerTy)) {
+                    emitExternTypeLayoutPanic(innerTy);
+                } else {
+                    emitLvalue(e.retVal);
+                    of << " = ";
+                    if (innerTy == HIRTypeRef()) {
                         of << "ALIGNOF(";
                         emitCtype(ty);
                         of << ")";
+                    } else if (const auto* te = innerTy->opt_Slice()) {
+                        of << "ALIGNOF(";
+                        if (ty->is_Slice()) {
+                            emitCtype(te->inner);
+                        } else {
+                            emitCtype(ty);
+                        }
+                        of << ")";
+                    } else if (innerTy == HIRCoreType::Str) {
+                        if (!ty->is_Primitive()) {
+                            of << "ALIGNOF(";
+                            emitCtype(ty);
+                            of << ")";
+                        } else {
+                            of << "1";
+                        }
+                    } else if (innerTy->is_TraitObject()) {
+                        emitTraitObjectDstAlign(ty, e.args.at(0));
                     } else {
-                        of << "1";
+                        MIR_BUG(localMirRes, "Unknown inner unsized type " << innerTy << " for " << ty);
                     }
-                } else if (innerTy->is_TraitObject()) {
-                    emitTraitObjectDstAlign(ty, e.args.at(0));
-                } else {
-                    MIR_BUG(localMirRes, "Unknown inner unsized type " << innerTy << " for " << ty);
                 }
             }
             // --- Type assertions ---
@@ -7034,7 +7047,43 @@ namespace {
                 }
             }
             // --- Floating Point
-            else if ((name.size() > 3 && name.compare(name.size() - 3, 3, "f16") == 0) || (name.size() > 3 && name.compare(name.size() - 3, 3, "f32") == 0) || (name.size() > 3 && name.compare(name.size() - 3, 3, "f64") == 0) || (name.size() > 4 && name.compare(name.size() - 4, 4, "f128") == 0)) {
+            else if (name == "fadd_fast" || name == "fsub_fast" || name == "fmul_fast" || name == "fdiv_fast" || name == "frem_fast") {
+                const auto& ty = params.types.at(0);
+                MIR_ASSERT(localMirRes, ty->is_Primitive(), "Fast float intrinsic instantiated with " << ty);
+                const auto coreTy = ty->as_Primitive();
+                MIR_ASSERT(localMirRes, coreTy == HIRCoreType::F16 || coreTy == HIRCoreType::F32 || coreTy == HIRCoreType::F64 || coreTy == HIRCoreType::F128, "Fast float intrinsic instantiated with " << ty);
+
+                emitLvalue(e.retVal);
+                of << " = ";
+                if (coreTy == HIRCoreType::F128) {
+                    of << "f128_";
+                    if (name == "fadd_fast") of << "add";
+                    else if (name == "fsub_fast") of << "sub";
+                    else if (name == "fmul_fast") of << "mul";
+                    else if (name == "fdiv_fast") of << "div";
+                    else of << "mod";
+                    of << "(";
+                    emitParam(e.args.at(0));
+                    of << ", ";
+                    emitParam(e.args.at(1));
+                    of << ")";
+                } else if (name == "frem_fast") {
+                    of << (coreTy == HIRCoreType::F64 ? "__builtin_fmod" : "__builtin_fmodf") << "(";
+                    emitParam(e.args.at(0));
+                    of << ", ";
+                    emitParam(e.args.at(1));
+                    of << ")";
+                } else {
+                    of << "(";
+                    emitParam(e.args.at(0));
+                    if (name == "fadd_fast") of << " + ";
+                    else if (name == "fsub_fast") of << " - ";
+                    else if (name == "fmul_fast") of << " * ";
+                    else of << " / ";
+                    emitParam(e.args.at(1));
+                    of << ")";
+                }
+            } else if ((name.size() > 3 && name.compare(name.size() - 3, 3, "f16") == 0) || (name.size() > 3 && name.compare(name.size() - 3, 3, "f32") == 0) || (name.size() > 3 && name.compare(name.size() - 3, 3, "f64") == 0) || (name.size() > 4 && name.compare(name.size() - 4, 4, "f128") == 0)) {
                 const bool isF16 = name.compare(name.size() - 3, 3, "f16") == 0;
                 const bool isF128 = name.size() > 4 && name.compare(name.size() - 4, 4, "f128") == 0;
                 auto emitMathName = [&](const char* op) {
@@ -7127,7 +7176,7 @@ namespace {
                     emit1("cos");
                 } else if (name == "sinf16" || name == "sinf32" || name == "sinf64" || name == "sinf128") {
                     emit1("sin");
-                } else if (name == "fmaf16" || name == "fmaf32" || name == "fmaf64" || name == "fmaf128") {
+                } else if (name == "fmaf16" || name == "fmaf32" || name == "fmaf64" || name == "fmaf128" || name == "fmuladdf16" || name == "fmuladdf32" || name == "fmuladdf64" || name == "fmuladdf128") {
                     emitLvalue(e.retVal);
                     of << " = ";
                     if (isF128) {
@@ -8669,6 +8718,9 @@ namespace {
                 default:
                     MIR_BUG(*mirRes, "Unbound/opaque path in trans - " << ty);
                     throw "";
+                    TU_ARMA(ExternType, tpb) {
+                        return ty;
+                    }
                     TU_ARMA(Struct, tpb) {
                         switch (tpb->structMarkings.dstType) {
                             case HIRStructMarkings::DstType::None:
@@ -8702,6 +8754,18 @@ namespace {
             } else {
                 return HIRTypeRef();
             }
+        }
+
+        bool isExternUnsizedType(const HIRTypeData* ty) const {
+            return ty && ty->is_Path() && ty->as_Path().binding.is_ExternType();
+        }
+
+        void emitExternTypeLayoutPanic(const HIRTypeData* ty) {
+            const auto message = FMT("attempted to compute the size or alignment of extern type `" << ty << "`");
+            const auto& panicPath = crate.getLangItemPath(sp, "panic_nounwind");
+            const auto panicName = TransMangle(panicPath);
+            of << "{ extern tBANG " << panicName << "(SLICE_PTR); ";
+            of << panicName << "(SLICE_PTR{(void*)\"" << FmtEscaped(message) << "\", " << message.size() << "}); abort(); }";
         }
 
         unsigned getPackingMaxAlign(const HIRTypeData* ty) const {

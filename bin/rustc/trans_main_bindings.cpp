@@ -2169,12 +2169,14 @@ TransList TransEnumerateCommonPost(EnumState& state) {
 }
 
 namespace {
-    void mergeEnumeratedItems(HIRTypeInterner& types, TransList& out, TransList additions) {
+    bool mergeEnumeratedItems(HIRTypeInterner& types, TransList& out, TransList additions) {
         ASSERT_BUG(Span(), additions.roots.empty(), "Incremental translation enumeration unexpectedly added roots");
         ASSERT_BUG(Span(), additions.autoStatics.empty() && additions.autoFunctions.empty(), "Enumeration generated translation items before TransAutoImpls");
 
+        bool changed = false;
         for (auto& ent : additions.functions) {
             if (auto* dst = out.addFunction(types, ent.first.clone())) {
+                changed = true;
                 dst->ptr = ent.second->ptr;
                 dst->pp = mv$(ent.second->pp);
                 dst->monomorphised = mv$(ent.second->monomorphised);
@@ -2183,40 +2185,50 @@ namespace {
         }
         for (auto& ent : additions.statics) {
             if (auto* dst = out.addStatic(types, ent.first.clone())) {
+                changed = true;
                 dst->ptr = ent.second->ptr;
                 dst->pp = mv$(ent.second->pp);
             }
         }
         for (auto& ent : additions.constants) {
             if (auto* dst = out.addConst(types, ent.first.clone())) {
+                changed = true;
                 dst->ptr = ent.second->ptr;
                 dst->pp = mv$(ent.second->pp);
             }
         }
         for (auto& ent : additions.vtables) {
-            out.addVtable(ent.first.clone(), mv$(ent.second));
+            changed |= out.addVtable(ent.first.clone(), mv$(ent.second));
         }
         for (const auto& ty : additions.typeids) {
-            out.typeids.insert(ty);
+            changed |= out.typeids.insert(ty).second;
         }
         for (const auto& ty : additions.dropGlue) {
-            out.dropGlue.insert(ty);
+            changed |= out.dropGlue.insert(ty).second;
         }
         for (const auto& path : additions.constructors) {
-            out.constructors.insert(path.clone());
+            changed |= out.constructors.insert(path.clone()).second;
         }
         for (const auto& ty : additions.autoCloneImpls) {
-            out.autoCloneImpls.insert(ty);
+            changed |= out.autoCloneImpls.insert(ty).second;
         }
         for (const auto& ty : additions.autoFnptrImpls) {
-            out.autoFnptrImpls.insert(ty);
+            changed |= out.autoFnptrImpls.insert(ty).second;
         }
         for (const auto& path : additions.traitObjectMethods) {
-            out.traitObjectMethods.insert(path.clone());
+            changed |= out.traitObjectMethods.insert(path.clone()).second;
         }
         for (const auto& ent : additions.types) {
-            out.addType(ent.first, ent.second);
+            changed |= out.addType(ent.first, ent.second);
         }
+        return changed;
+    }
+
+    bool transListContainsPath(const TransList& list, const HIRPath& path) {
+        return list.findFunction(path)
+            || list.statics.count(path)
+            || list.constants.count(path)
+            || list.vtables.count(path);
     }
 }
 
@@ -2230,6 +2242,26 @@ void TransEnumerateGeneratedStatics(const WireBoard& wb, TransList& list, const 
         TransEnumerateFillFromPathMono(state, path.clone());
     }
     mergeEnumeratedItems(state.crate.types, list, TransEnumerateCommonPost(state));
+}
+
+bool TransEnumerateGeneratedMIR(const WireBoard& wb, TransList& list, const ::std::vector<const MIRFunction*>& functions) {
+    EnumState state{wb};
+    for (const auto* function : functions) {
+        MIREnumCache cache;
+        TransEnumerateFillFromMIR(cache, *function);
+        for (const auto* ty : cache.typeids) {
+            if (list.typeids.count(ty) == 0) {
+                state.rv.typeids.insert(ty);
+            }
+        }
+        for (const auto* path : cache.paths) {
+            ASSERT_BUG(Span(), !monomorphisePathNeeded(*path), "Generated MIR contains a generic translation path: " << *path);
+            if (!transListContainsPath(list, *path)) {
+                TransEnumerateFillFromPathMono(state, path->clone());
+            }
+        }
+    }
+    return mergeEnumeratedItems(state.crate.types, list, TransEnumerateCommonPost(state));
 }
 
 namespace {
