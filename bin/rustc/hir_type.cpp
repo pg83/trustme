@@ -1651,29 +1651,17 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             throw "";
         }
         TU_ARMA(Array, te, xe) {
-            auto rv = HIRCompare::Equal;
-            if (const auto* tse = te.size.opt_Unevaluated()) {
-                HIRConstGeneric v;
-                if (xe.size.opt_Known()) {
-                    rv &= matchValues(sp, *tse, HIREncodedLiteralPtr(EncodedLiteral::makeUsize(xe.size.as_Known())), *this);
-                } else {
-                    rv &= matchValues(sp, *tse, xe.size.as_Unevaluated(), *this);
-                }
-            } else if (const auto* xse = xe.size.opt_Unevaluated()) {
-                // `te.size` must be known here, all we need to handle is `Infer`?
-                if (xse->is_Infer()) {
-                    rv &= HIRCompare::Fuzzy;
-                } else {
-                    ASSERT_BUG(sp, !xse->is_Evaluated(), "TODO: Handle " << te.size << " ?= " << xe.size);
-                    // - Evaluated? (TODO - could use `EncodedLiteralPtr( EncodedLiteral::make_usize(te.size.as_Known()) )`)
-                    // - Generic - could only match with another generic, i.e. `tse` must have been `Unevaluated,Generic`
-                    // - Unevaluated - could only match with another Unevaluated, i.e. `tse` must have been `Unevaluated,Unevaluated`
-                    return HIRCompare::Unequal;
-                }
-            } else if (te.size != xe.size) {
-                return HIRCompare::Unequal;
-            }
-            return this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);
+            HIRConstGeneric teKnown;
+            HIRConstGeneric xeKnown;
+            const auto& teValue = te.size.is_Known()
+                ? (teKnown = HIREncodedLiteralPtr(EncodedLiteral::makeUsize(te.size.as_Known())))
+                : resolvePlaceholder.getVal(sp, te.size.as_Unevaluated());
+            const auto& xeValue = xe.size.is_Known()
+                ? (xeKnown = HIREncodedLiteralPtr(EncodedLiteral::makeUsize(xe.size.as_Known())))
+                : resolvePlaceholder.getVal(sp, xe.size.as_Unevaluated());
+            auto rv = matchValues(sp, teValue, xeValue, *this);
+            rv &= this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);
+            return rv;
         }
         TU_ARMA(Slice, te, xe) {
             return this->cmpType(sp, te.inner, xe.inner, resolvePlaceholder);
