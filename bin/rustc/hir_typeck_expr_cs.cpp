@@ -8080,18 +8080,27 @@ namespace {
                 && std::all_of(possibleTys.begin(), possibleTys.end(), [](const auto& e) {
                 return e.hasType() && (TU_TEST1(*e.ty, NodeType, .is_Closure()) || (e.ty)->is_NamedFunction());
             })) {
-                HIRTypeRef newTy;
-                if (const auto* te = (possibleTys[0].ty)->opt_NamedFunction()) {
-                    newTy = context.crate.types.function(te->decay(context.crate.types, sp));
-                } else if (const auto* t1Nodep = TU_OPT1(*possibleTys[0].ty, NodeType, .opt_Closure())) {
-                    auto ft = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*t1Nodep)->returnType, {}};
-                    for (const auto& t : (*t1Nodep)->mArgs) {
-                        ft.argTypes.push_back(t.second);
+                ::std::optional<HIRTypeDataFunctionPointer> target;
+                for (const auto& possible : possibleTys) {
+                    HIRTypeDataFunctionPointer candidate;
+                    if (const auto* function = possible.ty->opt_NamedFunction()) {
+                        candidate = function->decay(context.crate.types, sp);
+                    } else if (const auto* closure = TU_OPT1(*possible.ty, NodeType, .opt_Closure())) {
+                        candidate = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*closure)->returnType, {}};
+                        for (const auto& argument : (*closure)->mArgs) {
+                            candidate.argTypes.push_back(argument.second);
+                        }
+                    } else {
+                        BUG(sp, "");
                     }
-                    newTy = context.crate.types.function(std::move(ft));
-                } else {
-                    BUG(sp, "");
+
+                    if (target) {
+                        target->isUnsafe |= candidate.isUnsafe;
+                    } else {
+                        target = std::move(candidate);
+                    }
                 }
+                auto newTy = context.crate.types.function(std::move(*target));
                 DEBUG("All options are closures/functions, adding a function pointer - " << newTy);
                 context.equateTypes(sp, tyL, newTy);
                 return true;
