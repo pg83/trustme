@@ -2133,6 +2133,20 @@ namespace {
                        << "\t\targ1 &= arg1 - 1; input_bit <<= 1;\n"
                        << "\t}\n"
                        << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.pclmulqdq") {
+                    of << "\tuint64_t a_words[2], b_words[2], result[2] = {0, 0};\n"
+                       << "\tmemcpy(a_words, &arg0, sizeof(a_words));\n"
+                       << "\tmemcpy(b_words, &arg1, sizeof(b_words));\n"
+                       << "\tuint64_t a = a_words[arg2 & 1];\n"
+                       << "\tuint64_t b = b_words[(arg2 >> 4) & 1];\n"
+                       << "\tfor(unsigned i = 0; i < 64; i++) {\n"
+                       << "\t\tif((b >> i) & 1) {\n"
+                       << "\t\t\tresult[0] ^= a << i;\n"
+                       << "\t\t\tif(i != 0) result[1] ^= a >> (64 - i);\n"
+                       << "\t\t}\n"
+                       << "\t}\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
                 }
                 // Add with carry
                 // `fn llvm_addcarry_u32(a: u8, b: u32, c: u32) -> (u8, u32)`
