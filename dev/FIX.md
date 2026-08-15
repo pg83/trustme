@@ -57,12 +57,12 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 131.
 
 ## Accepted Rust rejected by the front end
 
-The 259 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 224 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
-| parser | 98 | remaining failures at `parse_parseerror.cpp` and `parse_common.cpp` require syntax-family regrouping |
+| parser | 63 | remaining failures at `parse_parseerror.cpp` and `parse_common.cpp` require syntax-family regrouping |
 | type checking, HIR lowering, and resolution | 124 | async closure `Fn*` selection 1; `IntoFuture` await selection 1; diverging-pattern match 1 |
 | macro and attribute expansion | 31 | other expansion and attribute failures |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
