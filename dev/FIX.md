@@ -43,11 +43,10 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Trait lookup, normalization, and inference: 2 unresolved inference
-   variables (`wf/unnormalized-projection-guides-inference.rs` and
-   `borrowck/async-reference-generality.rs`), 10 inferred trait obligations
+1. Trait lookup, normalization, and inference: 1 unresolved inference variable
+   (`borrowck/async-reference-generality.rs`), 10 inferred trait obligations
    left ambiguous, and 9 const-value relation failures. Total adjacent impact:
-   21 tests.
+   20 tests.
 2. Result typing and coercion outside opaque types: 20 heterogeneous failures
    share the final diagnostic at `hir_typeck_expr_cs.cpp:2196`. They include
    block/loop results, match ergonomics, function-item coercions, patterns,
@@ -80,13 +79,13 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 141.
 
 ## Accepted Rust rejected by the front end
 
-The 368 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 367 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
 | parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
-| type checking, HIR lowering, and resolution | 162 | result relation 20 |
+| type checking, HIR lowering, and resolution | 161 | result relation 20 |
 | macro and attribute expansion | 32 | other expansion and attribute failures |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |

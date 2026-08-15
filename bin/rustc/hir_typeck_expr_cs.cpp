@@ -92,6 +92,8 @@ namespace {
 
 #define NEWNODE(TY, SP, CLASS, ...) mkExprnodep(context.crate.pool->make<HIRExprNode##CLASS>(SP, ##__VA_ARGS__), TY)
 
+void applyBoundsAsRules(Context& context, const Span& sp, const HIRGenericParams& paramsDef, const Monomorphiser& ms, bool isImplLevel);
+
 namespace {
 
     // -----------------------------------------------------------------------
@@ -9595,6 +9597,17 @@ public:
     void visitType(HIRTypeRef& ty) override {
         this->context.addIvars(ty);
         innerVisitType(ty);
+        visitTyWith(ty, [&](const HIRTypeData* inner) {
+            if (const auto* path = inner->opt_Path()) {
+                if (const auto* projection = path->path.mData.opt_UfcsKnown()) {
+                    context.addTraitBound(Span(), projection->type, projection->trait.mPath, projection->trait.mParams.clone());
+                    const auto& trait = context.crate.getTraitByPath(Span(), projection->trait.mPath);
+                    auto monomorph = MonomorphStatePtr(context.crate.types, projection->type, &projection->trait.mParams, nullptr);
+                    applyBoundsAsRules(context, Span(), trait.mParams, monomorph, true);
+                }
+            }
+            return false;
+        });
     }
 
     void visit(HIRExprNodeLet& node) override {
