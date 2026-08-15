@@ -2875,8 +2875,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
     // still applies.
     {
         // There's not a `&` or `ref` in the pattern, so run the match ergonomics handler.
-        // TODO: Default binding mode can be overridden back to "move" with `mut`
-
         struct MatchErgonomicsRevisit: public Revisitor {
             Span sp;
             bool isIrrefutable;
@@ -3183,7 +3181,8 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 // Binding applies to the raw input type (not after dereferencing)
                 for (auto& pb : pattern.mBindings) {
                     // - Binding present, use the current binding mode
-                    if (pb.mType == HIRPatternBinding::Type::Move && !pb.isMutable) {
+                    if (pb.mType == HIRPatternBinding::Type::Move
+                        && (!pb.isMutable || context.crate.edition >= ASTEdition::Rust2024)) {
                         pb.mType = bindingMode;
                     }
                     HIRTypeRef tmp;
