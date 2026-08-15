@@ -10083,6 +10083,10 @@ public:
 
         for (auto& arm : node.arms) {
             TRACE_FUNCTION_F("ARM " << arm.patterns);
+            const bool unconditionallySelected = &arm == &node.arms.front()
+                && ::std::any_of(arm.patterns.begin(), arm.patterns.end(), [](const HIRPattern& pattern) {
+                    return pattern.mData.is_Any();
+                });
             for (auto& pat : arm.patterns) {
                 this->context.handlePattern(node.span(), pat, valType);
             }
@@ -10098,6 +10102,12 @@ public:
                 } else {
                     c.val->visit(*this);
                     this->context.handlePattern(node.span(), c.pat, c.val->resType);
+                }
+                // `if`/`if let` is lowered to `match ()` with a wildcard first
+                // arm.  A diverging first guard on that arm is always evaluated;
+                // later guards may be skipped when an earlier guard is false.
+                if (unconditionallySelected && &c == &arm.guards.front()) {
+                    this->inheritDivergence(node, *c.val);
                 }
             }
 

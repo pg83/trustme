@@ -43,7 +43,7 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Result typing and coercion outside opaque types: 12 heterogeneous failures
+1. Result typing and coercion outside opaque types: 11 heterogeneous failures
    share the final diagnostic at `hir_typeck_expr_cs.cpp:2196`. They include
    block/loop results, match ergonomics, function-item coercions, patterns,
    async types, and ordinary generic inference; the common error line is not a
@@ -69,17 +69,17 @@ There are 130 unfinished compiler-internal failures in 90 stable signatures.
 The eight signal failures are two SIGILLs at `mir_operations.cpp:1473`, two
 SIGSEGVs at `hir_conv_main_bindings.cpp:1430`, the recursive pattern-lowering
 SIGSEGV at `mir_from_hir.cpp:4760`, and three other one-test SIGSEGV signatures.
-Four uncaught exceptions and five explicit MIR TODOs are included in the 142.
+Four uncaught exceptions and five explicit MIR TODOs are included in the 130.
 
 ## Accepted Rust rejected by the front end
 
-The 347 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 346 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
 | parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
-| type checking, HIR lowering, and resolution | 141 | result relation 12 |
+| type checking, HIR lowering, and resolution | 140 | result relation 11 |
 | macro and attribute expansion | 32 | other expansion and attribute failures |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |
