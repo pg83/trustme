@@ -1248,6 +1248,12 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
              os << "box ";
              printPattern(*v.sub, isRefutable);
          }),
+        (Deref,
+         {
+             os << "deref!(";
+             printPattern(*v.sub, isRefutable);
+             os << ")";
+         }),
         (Ref,
          {
              const auto& v = p.data().as_Ref();

@@ -2007,6 +2007,14 @@ ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr) {
     // TODO: Why is this here explicitly?
     if (tok.type() == TOK_IDENT && lex.lookahead(0) == TOK_EXCLAM) {
         lex.getToken();
+        if (tok.ident().name == "deref") {
+            GET_TOK(tok, lex);
+            CHECK_TOK(tok, TOK_PAREN_OPEN);
+            auto sub = ParsePattern(lex, AllowOrPattern::Yes);
+            GET_TOK(tok, lex);
+            CHECK_TOK(tok, TOK_PAREN_CLOSE);
+            return ASTPattern(ASTPattern::TagDeref(), lex.endSpan(ps), mv$(sub));
+        }
         return ASTPattern(ASTPattern::TagMacro(), lex.endSpan(ps), box$(ParseMacroInvocation(ps, tok.ident().name, lex)));
     }
     if (tok.type() == TOK_INTERPOLATED_PATTERN) {

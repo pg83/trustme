@@ -90,6 +90,9 @@
         TU_ARMA(Box, ent) {
             os << "box " << *ent.sub;
         }
+        TU_ARMA(Deref, ent) {
+            os << "deref!(" << *ent.sub << ")";
+        }
         TU_ARMA(Ref, ent) {
             os << "&" << (ent.mut ? "mut " : "") << *ent.sub;
         }
@@ -214,6 +217,9 @@ ASTPattern ASTPattern::clone() const {
         TU_ARMA(Box, e) {
             rv.mData = Data::make_Box({H::cloneSp(e.sub)});
         }
+        TU_ARMA(Deref, e) {
+            rv.mData = Data::make_Deref({H::cloneSp(e.sub)});
+        }
         TU_ARMA(Ref, e) {
             rv.mData = Data::make_Ref({e.mut, H::cloneSp(e.sub)});
         }
@@ -299,6 +305,12 @@ ASTPattern::ASTPattern(TagBox, Span sp, ASTPattern sub)
 {
 }
 
+ASTPattern::ASTPattern(TagDeref, Span sp, ASTPattern sub)
+    : mSpan(mv$(sp))
+    , mData(Data::make_Deref({unique_ptr<ASTPattern>(new ASTPattern(mv$(sub)))}))
+{
+}
+
 ASTPattern::ASTPattern(TagValue, Span sp, Value val, Value end)
     : mSpan(mv$(sp))
     , mData(Data::make_Value({::std::move(val), ::std::move(end)}))
@@ -361,6 +373,7 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
         (Macro, throw CompileErrorBugCheck("ord on unexpanded pattern macro");),
         (Any, return OrdEqual;),
         (Box, return ::ord(*ae.sub, *be.sub);),
+        (Deref, return ::ord(*ae.sub, *be.sub);),
         (Ref, rv = ::ord(ae.mut, be.mut); if (rv != OrdEqual) return rv; return ::ord(*ae.sub, *be.sub);),
         (Tuple, throw CompileErrorBugCheck("ord on unsupported tuple pattern type");),
         (StructTuple, throw CompileErrorBugCheck("ord on unsupported tuple-struct pattern type");),

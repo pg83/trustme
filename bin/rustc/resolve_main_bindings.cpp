@@ -2439,6 +2439,9 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
         TU_ARMA(Box, e) {
             ResolveAbsolutePattern(context, allowRefutable, *e.sub);
         }
+        TU_ARMA(Deref, e) {
+            ResolveAbsolutePattern(context, allowRefutable, *e.sub);
+        }
         TU_ARMA(Ref, e) {
             ResolveAbsolutePattern(context, allowRefutable, *e.sub);
         }

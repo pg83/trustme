@@ -46,6 +46,13 @@ enum class HIRPatternBindingOrder {
 };
 
 struct HIRPattern {
+    enum class DerefKind {
+        Unknown,
+        Box,
+        Shared,
+        Unique,
+    };
+
     TAGGED_UNION(
         Value,
         String,
@@ -105,6 +112,12 @@ struct HIRPattern {
         // Irrefutable / destructuring
         (Any, struct {}),
         (Box, struct { ::std::unique_ptr<HIRPattern> sub; }),
+        (Deref,
+         struct {
+             DerefKind kind;
+             HIRTypeRef targetType;
+             ::std::unique_ptr<HIRPattern> sub;
+         }),
         (Ref,
          struct {
              HIRBorrowType type;

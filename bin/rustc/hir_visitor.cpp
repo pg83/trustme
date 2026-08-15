@@ -525,6 +525,10 @@ void HIRVisitor::visitPattern(HIRPattern& pat) {
         TU_ARMA(Box, e) {
             this->visitPattern(*e.sub);
         }
+        TU_ARMA(Deref, e) {
+            if (e.targetType) this->visitType(e.targetType);
+            this->visitPattern(*e.sub);
+        }
         TU_ARMA(Ref, e) {
             this->visitPattern(*e.sub);
         }

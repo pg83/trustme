@@ -353,6 +353,8 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
         return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
         TU_ARMA(Box, e)
         return HIRPattern{mv$(bindings), HIRPattern::Data::make_Box({box$(LowerHIRPattern(*e.sub))})};
+        TU_ARMA(Deref, e)
+        return HIRPattern{mv$(bindings), HIRPattern::Data::make_Deref({HIRPattern::DerefKind::Unknown, nullptr, box$(LowerHIRPattern(*e.sub))})};
         TU_ARMA(Ref, e)
         return HIRPattern{mv$(bindings), HIRPattern::Data::make_Ref({(e.mut ? HIRBorrowType::Unique : HIRBorrowType::Shared), box$(LowerHIRPattern(*e.sub))})};
         TU_ARMA(Tuple, e) {

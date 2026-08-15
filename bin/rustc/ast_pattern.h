@@ -75,6 +75,7 @@ public:
         (Macro, struct { unique_ptr<ASTMacroInvocation> inv; }),
         (Any, struct {}),
         (Box, struct { unique_ptr<ASTPattern> sub; }),
+        (Deref, struct { unique_ptr<ASTPattern> sub; }),
         (Ref,
          struct {
              bool mut;
@@ -143,6 +144,10 @@ public:
     struct TagBox {};
 
     ASTPattern(TagBox, Span sp, ASTPattern sub);
+
+    struct TagDeref {};
+
+    ASTPattern(TagDeref, Span sp, ASTPattern sub);
 
     struct TagValue {};
 

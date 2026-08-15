@@ -508,6 +508,10 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
         TU_ARMA(Box, e) {
             this->visitPattern(sp, *e.sub);
         }
+        TU_ARMA(Deref, e) {
+            if (e.targetType) this->visitType(e.targetType);
+            this->visitPattern(sp, *e.sub);
+        }
         TU_ARMA(Ref, e) {
             this->visitPattern(sp, *e.sub);
         }

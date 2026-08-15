@@ -315,6 +315,14 @@ namespace {
                     bad_cast(sp, srcTy, tgtTy, "dst");
                 }
                 TU_ARMA(Borrow, e) {
+                    // An `as &[T]` cast is an unsizing operation on the
+                    // already-typed source.  Do not let its destination pick
+                    // the type of an otherwise pending source variable: that
+                    // would turn a later `&[T; N]` into `&[T]` globally.
+                    if (!this->isFallback && (srcTy->is_Infer()
+                        || (srcTy->is_Borrow() && this->context.getType(srcTy->as_Borrow().inner)->is_Infer()))) {
+                        return;
+                    }
                     // Emit a coercion and delete this revisit
                     this->context.equateTypesCoerce(sp, tgtTy, node.mValue);
                     this->completed = true;
@@ -1378,6 +1386,10 @@ namespace {
         }
 
         void visitPattern(const Span& sp, HIRPattern& pat) override {
+            if (auto* deref = pat.mData.opt_Deref()) {
+                ASSERT_BUG(sp, deref->targetType, "Untyped deref pattern");
+                this->checkTypeResolvedTop(sp, deref->targetType);
+            }
             TU_MATCH_HDRA( (pat.mData), { )
             default:
                 break;
@@ -2674,6 +2686,9 @@ namespace {
             TU_ARMA(Box, e) {
                 fixupPatternValuePaths(context, sp, *e.sub);
             }
+            TU_ARMA(Deref, e) {
+                fixupPatternValuePaths(context, sp, *e.sub);
+            }
             TU_ARMA(Ref, e) {
                 fixupPatternValuePaths(context, sp, *e.sub);
             }
@@ -2887,6 +2902,11 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         // TODO: Get type info (Box<_>) ?
                         // - Is this possible? Shouldn't a box pattern disable ergonomics?
                     }
+                    TU_ARM(pattern.mData, Deref, pe) {
+                        // The inner pattern constrains `Deref::Target`, not the
+                        // smart-pointer source itself.  It cannot be used as a
+                        // fallback type for the outer scrutinee.
+                    }
                     TU_ARM(pattern.mData, Ref, pe) {
                         BUG(sp, "Match ergonomics - & pattern");
                     }
@@ -3005,6 +3025,63 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     possibleTypePattern = &pattern;
                 }
                 return possibleType;
+            }
+
+            static bool hasMutableBinding(const HIRPattern& pattern) {
+                for (const auto& binding : pattern.mBindings) {
+                    if (binding.mType == HIRPatternBinding::Type::MutRef) return true;
+                }
+                TU_MATCH_HDRA((pattern.mData), {)
+                TU_ARMA(Any, e) return false;
+                TU_ARMA(Value, e) return false;
+                TU_ARMA(Range, e) return false;
+                TU_ARMA(Box, e) return hasMutableBinding(*e.sub);
+                TU_ARMA(Deref, e) return hasMutableBinding(*e.sub);
+                TU_ARMA(Ref, e) return hasMutableBinding(*e.sub);
+                TU_ARMA(Tuple, e) { for (const auto& sub : e.subPatterns) if (hasMutableBinding(sub)) return true; return false; }
+                TU_ARMA(SplitTuple, e) { for (const auto& sub : e.leading) if (hasMutableBinding(sub)) return true; for (const auto& sub : e.trailing) if (hasMutableBinding(sub)) return true; return false; }
+                TU_ARMA(PathValue, e) return false;
+                TU_ARMA(PathTuple, e) { for (const auto& sub : e.leading) if (hasMutableBinding(sub)) return true; for (const auto& sub : e.trailing) if (hasMutableBinding(sub)) return true; return false; }
+                TU_ARMA(PathNamed, e) { for (const auto& sub : e.subPatterns) if (hasMutableBinding(sub.second)) return true; return false; }
+                TU_ARMA(Slice, e) { for (const auto& sub : e.subPatterns) if (hasMutableBinding(sub)) return true; return false; }
+                TU_ARMA(SplitSlice, e) { if (e.extraBind.mType == HIRPatternBinding::Type::MutRef) return true; for (const auto& sub : e.leading) if (hasMutableBinding(sub)) return true; for (const auto& sub : e.trailing) if (hasMutableBinding(sub)) return true; return false; }
+                TU_ARMA(Or, e) { for (const auto& sub : e) if (hasMutableBinding(sub)) return true; return false; }
+                }
+                throw "";
+            }
+
+            static bool directlyMatches(const HIRPattern& pattern, const HIRTypeData* type) {
+                auto matchesPath = [&](const HIRPath& patternPath, const HIRPattern::PathBinding& binding) {
+                    const auto* actual = type->opt_Path();
+                    if (!actual || !actual->path.mData.is_Generic() || !patternPath.mData.is_Generic()) return false;
+                    const auto& actualPath = actual->path.mData.as_Generic().mPath;
+                    const auto& patternGeneric = patternPath.mData.as_Generic();
+                    return binding.is_Enum() ? actualPath == getParentPath(patternGeneric).mPath
+                                             : actualPath == patternGeneric.mPath;
+                };
+                TU_MATCH_HDRA((pattern.mData), {)
+                TU_ARMA(Any, e) return true;
+                TU_ARMA(Deref, e) return true;
+                TU_ARMA(Box, e) return type->is_Path();
+                TU_ARMA(Ref, e) return type->is_Borrow();
+                TU_ARMA(Tuple, e) return type->is_Tuple();
+                TU_ARMA(SplitTuple, e) return type->is_Tuple();
+                TU_ARMA(Slice, e) return type->is_Array() || type->is_Slice();
+                TU_ARMA(SplitSlice, e) return type->is_Array() || type->is_Slice();
+                TU_ARMA(PathValue, e) return matchesPath(e.path, e.binding);
+                TU_ARMA(PathTuple, e) return matchesPath(e.path, e.binding);
+                TU_ARMA(PathNamed, e) return matchesPath(e.path, e.binding);
+                TU_ARMA(Range, e) return type->is_Primitive();
+                TU_ARMA(Value, e) {
+                    if (e.val.is_Named()) return true;
+                    if (e.val.is_String()) return type->is_Primitive() && type->as_Primitive() == HIRCoreType::Str;
+                    if (e.val.is_ByteString()) return type->is_Array() || type->is_Slice();
+                    if (e.val.is_Integer() || e.val.is_Float()) return type->is_Primitive();
+                    return false;
+                }
+                TU_ARMA(Or, e) return !e.empty() && directlyMatches(e.front(), type);
+                }
+                throw "";
             }
 
             bool revisitInnerReal(Context& context, HIRPattern& pattern, const HIRTypeData* type, HIRPatternBinding::Type bindingMode, bool isFallback) const {
@@ -3151,6 +3228,36 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                 }
 
+                if (!pattern.mData.is_Deref() && !directlyMatches(pattern, ty)) {
+                    HIRPattern::DerefKind derefKind;
+                    HIRTypeRef target;
+                    if (const auto* inner = context.mResolve.typeIsOwnedBox(sp, ty)) {
+                        derefKind = HIRPattern::DerefKind::Box;
+                        target = inner;
+                    } else {
+                        ::std::optional<HIRTypeRef> implType;
+                        const auto result = context.mResolve.autoderefStep(sp, ty, target, &implType);
+                        if (result == TraitResolution::AutoderefResult::Ambiguous) return false;
+                        if (result == TraitResolution::AutoderefResult::NoMatch || !implType) {
+                            ERROR(sp, E0000, "Pattern " << pattern << " cannot match " << ty);
+                        }
+                        context.equateTypes(sp, ty, *implType);
+                        context.equateTypesAssoc(sp, target, context.crate.getLangItemPath(sp, "deref"), {}, ty, "Target", {}, true, TypeckPrimitiveOperator::Deref);
+                        context.addTraitBound(sp, ty, context.crate.getLangItemPath(sp, "deref_pure"), {});
+                        const bool unique = bindingMode == HIRPatternBinding::Type::MutRef || hasMutableBinding(pattern);
+                        if (unique) context.addTraitBound(sp, ty, context.crate.getLangItemPath(sp, "deref_mut"), {});
+                        derefKind = unique ? HIRPattern::DerefKind::Unique : HIRPattern::DerefKind::Shared;
+                    }
+
+                    HIRPattern inner(::std::vector<HIRPatternBinding>{}, mv$(pattern.mData));
+                    pattern.mData = HIRPattern::Data::make_Deref({derefKind, target, box$(mv$(inner))});
+                    auto& deref = pattern.mData.as_Deref();
+                    // An overloaded dereference borrows the smart pointer, but unlike
+                    // peeling an `&` it does not change the default binding mode of
+                    // bindings in the inner pattern.
+                    return this->revisitInner(context, *deref.sub, target, bindingMode);
+                }
+
                 bool rv = false;
                 TU_MATCH_HDR( (pattern.mData), { )
                 TU_ARM(pattern.mData, Ref, pe) {
@@ -3175,9 +3282,24 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             } else {
                                 context.equateTypes(sp, ty, resolvedValueType);
                             }
-                        } else if (pe.val.is_String() || pe.val.is_ByteString()) {
-                            ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, "");
-                            pattern.implicitDerefCount -= 1;
+                        } else if (pe.val.is_String()) {
+                            if (!(ty->is_Primitive() && ty->as_Primitive() == HIRCoreType::Str)) {
+                                ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, "");
+                                pattern.implicitDerefCount -= 1;
+                            }
+                        } else if (pe.val.is_ByteString()) {
+                            const auto& bytes = pe.val.as_ByteString().v;
+                            if (const auto* array = ty->opt_Array()) {
+                                context.equateTypes(sp, array->inner, context.crate.types.primitive(HIRCoreType::U8));
+                                if (array->size.is_Known() && array->size.as_Known() != bytes.size()) {
+                                    ERROR(sp, E0000, "Byte string pattern has length " << bytes.size() << ", but is matching " << ty);
+                                }
+                            } else if (const auto* slice = ty->opt_Slice()) {
+                                context.equateTypes(sp, slice->inner, context.crate.types.primitive(HIRCoreType::U8));
+                            } else {
+                                ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, "");
+                                pattern.implicitDerefCount -= 1;
+                            }
                         }
                         rv = true;
                     }
@@ -3195,6 +3317,31 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                             TODO(sp, "Match ergonomics - box pattern - Non Box<T> type: " << ty);
                             //::HIR::GenericPath  path { m_lang_Box, ::HIR::PathParams(mv$(inner)) };
                         }
+                    }
+                    TU_ARM(pattern.mData, Deref, pe) {
+                        if (const auto* inner = context.mResolve.typeIsOwnedBox(sp, ty)) {
+                            pe.kind = HIRPattern::DerefKind::Box;
+                            pe.targetType = inner;
+                            rv = this->revisitInner(context, *pe.sub, inner, bindingMode);
+                            break;
+                        }
+
+                        HIRTypeRef target;
+                        ::std::optional<HIRTypeRef> implType;
+                        const auto result = context.mResolve.autoderefStep(sp, ty, target, &implType);
+                        if (result == TraitResolution::AutoderefResult::Ambiguous) return false;
+                        if (result == TraitResolution::AutoderefResult::NoMatch || !implType) {
+                            ERROR(sp, E0000, "Type " << ty << " cannot be used in a deref pattern");
+                        }
+                        context.equateTypes(sp, ty, *implType);
+                        context.equateTypesAssoc(sp, target, context.crate.getLangItemPath(sp, "deref"), {}, ty, "Target", {}, true, TypeckPrimitiveOperator::Deref);
+                        context.addTraitBound(sp, ty, context.crate.getLangItemPath(sp, "deref_pure"), {});
+
+                        const bool unique = bindingMode == HIRPatternBinding::Type::MutRef || hasMutableBinding(*pe.sub);
+                        if (unique) context.addTraitBound(sp, ty, context.crate.getLangItemPath(sp, "deref_mut"), {});
+                        pe.kind = unique ? HIRPattern::DerefKind::Unique : HIRPattern::DerefKind::Shared;
+                        pe.targetType = target;
+                        rv = this->revisitInner(context, *pe.sub, target, bindingMode);
                     }
                     TU_ARM(pattern.mData, Tuple, e) {
                         if (!ty->is_Tuple()) {
@@ -3390,6 +3537,9 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     TU_ARMA(Box, e) {
                         disablePossibilitiesOnBindings(sp, context, *e.sub);
                     }
+                    TU_ARMA(Deref, e) {
+                        disablePossibilitiesOnBindings(sp, context, *e.sub);
+                    }
                     TU_ARMA(Ref, e) {
                         disablePossibilitiesOnBindings(sp, context, *e.sub);
                     }
@@ -3463,6 +3613,9 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     TU_ARMA(Range, e) {
                     }
                     TU_ARMA(Box, e) {
+                        createBindings(sp, context, *e.sub);
+                    }
+                    TU_ARMA(Deref, e) {
                         createBindings(sp, context, *e.sub);
                     }
                     TU_ARMA(Ref, e) {
@@ -3638,6 +3791,27 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             this->handlePatternDirectInner(sp, *e.sub, inner);
             HIRGenericPath path{mLangBox, HIRPathParams(mv$(inner))};
             this->equateTypes(sp, type, crate.types.path(mv$(path), HIRTypePathBinding(&crate.getStructByPath(sp, mLangBox))));
+        }
+        TU_ARMA(Deref, e) {
+            const auto* ty = this->getType(type);
+            if (const auto* inner = mResolve.typeIsOwnedBox(sp, ty)) {
+                e.kind = HIRPattern::DerefKind::Box;
+                e.targetType = inner;
+                this->handlePatternDirectInner(sp, *e.sub, inner);
+                break;
+            }
+            HIRTypeRef target;
+            ::std::optional<HIRTypeRef> implType;
+            const auto result = mResolve.autoderefStep(sp, ty, target, &implType);
+            if (result != TraitResolution::AutoderefResult::Match || !implType) {
+                ERROR(sp, E0000, "Type " << ty << " cannot be used in a deref pattern");
+            }
+            equateTypes(sp, ty, *implType);
+            equateTypesAssoc(sp, target, crate.getLangItemPath(sp, "deref"), {}, ty, "Target", {}, true, TypeckPrimitiveOperator::Deref);
+            addTraitBound(sp, ty, crate.getLangItemPath(sp, "deref_pure"), {});
+            e.kind = HIRPattern::DerefKind::Shared;
+            e.targetType = target;
+            this->handlePatternDirectInner(sp, *e.sub, target);
         }
         TU_ARMA(Ref, e) {
             const auto& ty = this->getType(type);

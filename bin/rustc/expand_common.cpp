@@ -512,6 +512,9 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
         TU_ARMA(Box, e) {
             ExpandPattern(es, mod, *e.sub, isRefutable);
         }
+        TU_ARMA(Deref, e) {
+            ExpandPattern(es, mod, *e.sub, isRefutable);
+        }
         TU_ARMA(Ref, e) {
             ExpandPattern(es, mod, *e.sub, isRefutable);
         }

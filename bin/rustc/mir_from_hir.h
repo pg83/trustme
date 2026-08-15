@@ -164,17 +164,18 @@ struct fieldPathT {
 /// Binding from an expanded pattern
 struct PatternBinding {
     fieldPathT field;
+    unsigned rootIndex;
     const HIRPatternBinding* binding;
     std::pair<size_t, size_t> splitSlice;
 
-    PatternBinding(fieldPathT field, const HIRPatternBinding& binding);
+    PatternBinding(fieldPathT field, const HIRPatternBinding& binding, unsigned rootIndex = 0);
 
     bool isSplitSlice() const {
         return splitSlice.first != SIZE_MAX;
     }
 
     bool operator==(const PatternBinding& x) const {
-        return field == x.field && binding == x.binding && splitSlice == x.splitSlice;
+        return rootIndex == x.rootIndex && field == x.field && binding == x.binding && splitSlice == x.splitSlice;
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const PatternBinding& x);

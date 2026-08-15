@@ -928,6 +928,9 @@ namespace {
                 TU_ARMA(Box, e) {
                     addClosureDefFromPattern(sp, *e.sub);
                 }
+                TU_ARMA(Deref, e) {
+                    addClosureDefFromPattern(sp, *e.sub);
+                }
                 TU_ARMA(Ref, e) {
                     addClosureDefFromPattern(sp, *e.sub);
                 }
@@ -1031,6 +1034,13 @@ namespace {
                     // NOTE: Specific to `owned_box`
                     const auto& sty = ty->as_Path().path.mData.as_Generic().mParams.types.at(0);
                     return getUsageForPattern(sp, *pe.sub, sty);
+                }
+                TU_ARMA(Deref, pe) {
+                    ASSERT_BUG(sp, pe.kind != HIRPattern::DerefKind::Unknown && pe.targetType, "Untyped deref pattern");
+                    if (pe.kind == HIRPattern::DerefKind::Box) {
+                        return getUsageForPattern(sp, *pe.sub, pe.targetType);
+                    }
+                    return pe.kind == HIRPattern::DerefKind::Unique ? HIRValueUsage::Mutate : HIRValueUsage::Borrow;
                 }
                 TU_ARMA(Ref, pe) {
                     return getUsageForPattern(sp, *pe.sub, ty->as_Borrow().inner);

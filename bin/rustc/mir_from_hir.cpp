@@ -3416,9 +3416,10 @@ TAGGED_UNION_EX(
         // _ pattern
         (Any, struct {})
     ),
-    (, fieldPath(mv$(x.fieldPath))),
-    (fieldPath = mv$(x.fieldPath);),
+    (, fieldPath(mv$(x.fieldPath)), rootIndex(x.rootIndex)),
+    (fieldPath = mv$(x.fieldPath); rootIndex = x.rootIndex;),
     (fieldPathT fieldPath;
+     unsigned rootIndex = 0;
 
      bool operator<(const PatternRule & x) const { return this->ord(x) == OrdLess; } bool operator==(const PatternRule & x) const { return this->ord(x) == OrdEqual; } bool operator!=(const PatternRule & x) const { return this->ord(x) != OrdEqual; } Ordering ord(const PatternRule& x) const;
      PatternRule clone() const;)
@@ -3427,11 +3428,22 @@ TAGGED_UNION_EX(
 
 /// Constructed set of rules from a pattern
 struct PatternRuleset {
+    struct Deref {
+        unsigned rootIndex;
+        unsigned parentRoot;
+        fieldPathT field;
+        const HIRTypeData* sourceType;
+        const HIRTypeData* targetType;
+        HIRPattern::DerefKind kind;
+        unsigned resultLocal = ~0u;
+    };
+
     unsigned int armIdx;
     unsigned int armRuleIdx;
 
     ::std::vector<PatternRule> rules;
     ::std::vector<PatternBinding> mBindings;
+    ::std::vector<Deref> derefs;
 
     static ::Ordering ruleIsBefore(const PatternRule& l, const PatternRule& r);
 
@@ -3472,8 +3484,13 @@ struct ArmCode {
 
 typedef ::std::vector<PatternRuleset> tArmRules;
 
+void allocatePatternDerefLocals(MirBuilder& builder, PatternRuleset& ruleset);
+void materializePatternDerefs(MirBuilder& builder, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal);
+MIRLValue getPatternBindingValue(MirConverter& conv, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal, const PatternBinding& binding);
+void destructurePatternRuleset(MirConverter& conv, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal, bool updateStates = true);
+
 void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
-int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int numRules, const HIRTypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb);
+int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRuleset* ruleset, const PatternRule* rules, unsigned int numRules, const HIRTypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb);
 void MIRLowerHIRMatchGrouped(MirBuilder& builder, MirConverter& conv, const Span& sp, const HIRTypeData* matchTy, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock);
 void MIRLowerHIRMatchDecisionTree(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armCode, MIRBasicBlockId firstCmpBlock);
 
@@ -3487,6 +3504,7 @@ struct PatternRulesetBuilder {
         bool isImpossible;
         ::std::vector<PatternRule> rules;
         ::std::vector<PatternBinding> mBindings;
+        ::std::vector<PatternRuleset::Deref> derefs;
         // Source-order path through nested or-pattern alternatives.  The
         // matching semantics are depth-first and left-to-right, so this path
         // orders the cartesian product after each expansion.
@@ -3504,6 +3522,7 @@ struct PatternRulesetBuilder {
                 rv.rules.push_back(e.clone());
             }
             rv.mBindings = mBindings;
+            rv.derefs = derefs;
             rv.orPath = orPath;
             return rv;
         }
@@ -3513,12 +3532,16 @@ struct PatternRulesetBuilder {
     size_t subsetStart, subsetEnd;
 
     fieldPathT fieldPath;
+    unsigned rootIndex = 0;
+    unsigned nextRootStorage = 1;
+    unsigned* nextRootIndex;
 
-    PatternRulesetBuilder(const StaticTraitResolve& resolve)
+    PatternRulesetBuilder(const StaticTraitResolve& resolve, unsigned* sharedNextRootIndex = nullptr)
         : mResolve(resolve)
         , rulesets(1)
         , subsetStart(0)
         , subsetEnd(1)
+        , nextRootIndex(sharedNextRootIndex ? sharedNextRootIndex : &nextRootStorage)
     {
         if (resolve.hirCrate().mLangItems.count("owned_box") > 0) {
             mLangBox = &resolve.hirCrate().mLangItems.at("owned_box");
@@ -3532,6 +3555,7 @@ private:
     void pushRule(PatternRule r);
     void pushBinding(PatternBinding b);
     void pushBindings(std::vector<PatternBinding> b);
+    void pushDerefs(std::vector<PatternRuleset::Deref> derefs);
     void setImpossible();
 
     void multiplyRulesets(size_t n, std::function<void(size_t idx)> cb);
@@ -3641,11 +3665,12 @@ void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, con
             DEBUG("LET PAT #" << patIdx << " " << pat << " ==> IMPOSSIBLE [" << sr.rules << "]");
         } else {
             DEBUG("LET PAT #" << patIdx << " " << pat << " ==> [" << sr.rules << "]");
-            armRules.push_back(PatternRuleset{patIdx, 0, mv$(sr.rules), mv$(sr.mBindings)});
+            armRules.push_back(PatternRuleset{patIdx, 0, mv$(sr.rules), mv$(sr.mBindings), mv$(sr.derefs)});
+            allocatePatternDerefLocals(builder, armRules.back());
 
             auto patNode = builder.newBbUnlinked();
             builder.setCurBlock(patNode);
-            conv.destructureFromList(sp, outerTy, val.clone(), armRules.back().mBindings);
+            destructurePatternRuleset(conv, sp, armRules.back(), outerTy, val);
             builder.endSplitArm(sp, patScope, /*reachable=*/true);
             builder.endBlock(MIRTerminator::make_Goto(successNode));
 
@@ -3663,7 +3688,21 @@ void MIRLowerHIRLet(MirBuilder& builder, MirConverter& conv, const Span& sp, con
         TODO(sp, "Handle let-else");
     }
 
-    MIRLowerHIRMatchGrouped(builder, conv, sp, outerTy, mv$(val), mv$(armRules), mv$(armCode), firstCmpBlock);
+    if (::std::any_of(armRules.begin(), armRules.end(), [](const auto& ruleset) { return !ruleset.derefs.empty(); })) {
+        builder.setCurBlock(firstCmpBlock);
+        auto failed = builder.newBbUnlinked();
+        for (size_t i = 0; i < armRules.size(); i++) {
+            auto& ruleset = armRules[i];
+            materializePatternDerefs(builder, sp, ruleset, outerTy, val);
+            MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, &ruleset, ruleset.rules.data(), ruleset.rules.size(), outerTy, val, 0, failed);
+            builder.endBlock(MIRTerminator::make_Goto(armCode[i].rules[0].entry));
+            builder.setCurBlock(failed);
+            failed = builder.newBbUnlinked();
+        }
+        builder.endBlock(MIRTerminator::make_Unreachable({}));
+    } else {
+        MIRLowerHIRMatchGrouped(builder, conv, sp, outerTy, mv$(val), mv$(armRules), mv$(armCode), firstCmpBlock);
+    }
 
     builder.setCurBlock(successNode);
 }
@@ -3738,7 +3777,9 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                             ASSERT_BUG(sp, fr.mBindings[j].binding->slot == sr.mBindings[j].binding->slot, "Disagreement in bindings between pattern - {" << armRules[firstRule].mBindings << "} vs {" << sr.mBindings << "}");
                         }
                     }
-                    armRules.push_back(PatternRuleset{armIdx, static_cast<unsigned>(armRules.size() - firstArmRuleIdx), mv$(sr.rules), mv$(sr.mBindings)});
+                    armRules.push_back(PatternRuleset{armIdx, static_cast<unsigned>(armRules.size() - firstArmRuleIdx), mv$(sr.rules), mv$(sr.mBindings), mv$(sr.derefs)});
+                    allocatePatternDerefLocals(builder, armRules.back());
+                    if (!armRules.back().derefs.empty()) fallBackOnSimple = true;
                 }
             }
         }
@@ -3775,7 +3816,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             for (const auto& b : bindings0) {
                 HIRTypeRef finalTy = conv.getBindingType(sp, b.binding->slot);
                 const Span& sp = arm.mCode->span();
-                auto val = conv.getValueForBindingPath(sp, matchTy, matchVal, b);
+                auto val = getPatternBindingValue(conv, sp, armRules[firstArmRuleIdx], matchTy, matchVal, b);
                 DEBUG("Set alias for: " << *b.binding << " := " << val);
                 if (b.binding->mType != HIRPatternBinding::Type::Move) {
                     const auto& borrow = finalTy->as_Borrow();
@@ -3850,26 +3891,31 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                     // Generate simplified rules from patterns
                     auto patBuilder = PatternRulesetBuilder{builder.resolve()};
                     patBuilder.appendFrom(node.span(), c.pat, c.val->resType);
+                    ::std::vector<PatternRuleset> conditionRulesets;
+                    conditionRulesets.reserve(patBuilder.rulesets.size());
+                    for (auto& ruleset : patBuilder.rulesets) {
+                        if (!ruleset.isImpossible) {
+                            conditionRulesets.push_back(PatternRuleset{0, 0, mv$(ruleset.rules), mv$(ruleset.mBindings), mv$(ruleset.derefs)});
+                            allocatePatternDerefLocals(builder, conditionRulesets.back());
+                        }
+                    }
 
                     /// Block for when a pattern fails to match
                     auto localFalse = builder.newBbUnlinked();
                     bool localFalseUsed = false;
                     // OR'd patterns
-                    ::std::vector<std::pair<MIRBasicBlockId, const PatternRulesetBuilder::Ruleset*>> ends;
-                    for (auto& sr : patBuilder.rulesets) {
-                        if (sr.isImpossible) {
-                            // The rule is impossible, so don't visit
-                        } else {
-                            if (localFalseUsed) {
-                                localFalse = builder.newBbUnlinked();
-                            }
-
-                            ASSERT_BUG(c.val->span(), builder.blockActive(), "Block not active");
-                            MIRLowerHIRMatchSimpleGeneratePattern(builder, c.val->span(), sr.rules.data(), sr.rules.size(), c.val->resType, matchCondVal, 0, localFalse);
-                            ends.push_back(std::make_pair(builder.pauseCurBlock(), &sr));
-                            builder.setCurBlock(localFalse);
-                            localFalseUsed = true;
+                    ::std::vector<std::pair<MIRBasicBlockId, const PatternRuleset*>> ends;
+                    for (auto& sr : conditionRulesets) {
+                        if (localFalseUsed) {
+                            localFalse = builder.newBbUnlinked();
                         }
+
+                        ASSERT_BUG(c.val->span(), builder.blockActive(), "Block not active");
+                        materializePatternDerefs(builder, c.val->span(), sr, c.val->resType, matchCondVal);
+                        MIRLowerHIRMatchSimpleGeneratePattern(builder, c.val->span(), &sr, sr.rules.data(), sr.rules.size(), c.val->resType, matchCondVal, 0, localFalse);
+                        ends.push_back(std::make_pair(builder.pauseCurBlock(), &sr));
+                        builder.setCurBlock(localFalse);
+                        localFalseUsed = true;
                     }
                     if (!localFalseUsed) {
                         // None of the patterns were possible?
@@ -3897,7 +3943,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                     // - This stops the `terminate_scope_early` from dropping too eagerly
                     for (const auto& e : ends) {
                         builder.setCurBlock(e.first);
-                        conv.destructureFromList(arm.mCode->span(), c.val->resType, matchCondVal.clone(), e.second->mBindings, /*update_states=*/&e == ends.data());
+                        destructurePatternRuleset(conv, arm.mCode->span(), *e.second, c.val->resType, matchCondVal, /*updateStates=*/&e == ends.data());
                         builder.endBlock(MIRTerminator::make_Goto(destructure));
                     }
 
@@ -3943,7 +3989,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                     ASSERT_BUG(sp, bindingTemps.size() == armRules[i].mBindings.size(), "Mismatched guard bindings");
                     for (size_t j = 0; j < bindingTemps.size(); j++) {
                         const auto& b = armRules[i].mBindings[j];
-                        auto val = conv.getValueForBindingPath(sp, matchTy, matchVal, b);
+                        auto val = getPatternBindingValue(conv, sp, armRules[i], matchTy, matchVal, b);
                         if (b.binding->mType != HIRPatternBinding::Type::Move) {
                             MIRLValue tmp2;
                             if (bindingTempsAlt[j] == ~0u) {
@@ -3986,7 +4032,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             scopes.push_back({builder.newScopeVar(arm.mCode->span()), false});
             conv.schedulePatternDrops(node.span(), arm.patterns.back(), PatternDropOrder::LastCandidate);
             auto bindingSplit = builder.newScopeSplit(arm.mCode->span());
-            conv.destructureFromList(arm.mCode->span(), matchTy, matchVal.clone(), bindings0);
+            destructurePatternRuleset(conv, arm.mCode->span(), armRules[firstArmRuleIdx], matchTy, matchVal);
             builder.endSplitArm(arm.mCode->span(), bindingSplit, /*reachable=*/true);
             builder.endBlock(MIRTerminator::make_Goto(armBodyBlock));
 
@@ -4043,7 +4089,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                 assert(bindingTemps.size() == armRules[i].mBindings.size());
                 for (size_t j = 0; j < bindingTemps.size(); j++) {
                     const auto& b = armRules[i].mBindings[j];
-                    auto val = conv.getValueForBindingPath(sp, matchTy, matchVal, b);
+                    auto val = getPatternBindingValue(conv, sp, armRules[i], matchTy, matchVal, b);
                     DEBUG("Set alias for: " << *b.binding << " := " << val);
                     if (b.binding->mType != HIRPatternBinding::Type::Move) {
                         MIRLValue tmp2;
@@ -4069,7 +4115,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
                 // Add the final bindings and jump to the body
                 builder.setCurBlock(mapper.newCondTrue);
                 DEBUG("Arm " << armIdx << " rule " << i - firstArmRuleIdx << ":  Destructure");
-                conv.destructureFromList(arm.mCode->span(), matchTy, matchVal.clone(), armRules[i].mBindings);
+                destructurePatternRuleset(conv, arm.mCode->span(), armRules[i], matchTy, matchVal);
                 builder.endSplitArm(arm.mCode->span(), bindingSplit, /*reachable=*/true);
                 builder.endBlock(MIRTerminator::make_Goto(armBodyBlock));
 
@@ -4139,7 +4185,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
     }
 
     // Sort columns of `arm_rules` to maximise effectiveness
-    if (armRules[0].rules.size() > 1) {
+    if (!fallBackOnSimple && armRules[0].rules.size() > 1) {
         // TODO: Should columns be sorted within equal sub-arms too?
         ::std::vector<unsigned> columnWeights(armRules[0].rules.size());
         for (const auto& armRule : armRules) {
@@ -4230,7 +4276,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 // Common Code - Pattern Rules
 // --------------------------------------------------------------------
 ::std::ostream& operator<<(::std::ostream& os, const PatternRule& x) {
-    os << "{" << x.fieldPath << "}=";
+    os << "{root" << x.rootIndex << ":" << x.fieldPath << "}=";
     TU_MATCH_HDRA( (x), {)
     TU_ARMA(Any, e) {
             os << "_";
@@ -4264,6 +4310,7 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
 
 ::Ordering PatternRule::ord(const PatternRule& x) const {
     ORD(static_cast<int>(tag()), static_cast<int>(x.tag()));
+    ORD(this->rootIndex, x.rootIndex);
     ORD(this->fieldPath, x.fieldPath);
 
     TU_MATCH_HDRA( (*this, x), {)
@@ -4352,6 +4399,7 @@ PatternRule PatternRule::clone() const {
 
     auto rv = H::cloneInner(*this);
     rv.fieldPath = this->fieldPath;
+    rv.rootIndex = this->rootIndex;
     return rv;
 }
 
@@ -4431,6 +4479,7 @@ void PatternRulesetBuilder::pushRule(PatternRule r) {
     for (size_t i = subsetStart; i < subsetEnd; i++) {
         rulesets[i].rules.push_back(i == subsetEnd - 1 ? std::move(r) : r.clone());
         rulesets[i].rules.back().fieldPath = fieldPath;
+        rulesets[i].rules.back().rootIndex = rootIndex;
     }
 }
 
@@ -4439,6 +4488,7 @@ void PatternRulesetBuilder::pushBinding(PatternBinding b) {
     assert(this->subsetEnd <= rulesets.size());
     for (size_t i = subsetStart; i < subsetEnd; i++) {
         DEBUG(i << " " << b);
+        b.rootIndex = rootIndex;
         rulesets[i].mBindings.push_back(b);
     }
 }
@@ -4450,6 +4500,15 @@ void PatternRulesetBuilder::pushBindings(std::vector<PatternBinding> bindings) {
         auto& l = rulesets[i].mBindings;
         l.insert(l.end(), bindings.begin(), bindings.end());
         DEBUG(i << " [" << bindings << "] = [" << l << "]");
+    }
+}
+
+void PatternRulesetBuilder::pushDerefs(std::vector<PatternRuleset::Deref> derefs) {
+    assert(this->subsetStart < this->subsetEnd);
+    assert(this->subsetEnd <= rulesets.size());
+    for (size_t i = subsetStart; i < subsetEnd; i++) {
+        auto& out = rulesets[i].derefs;
+        out.insert(out.end(), derefs.begin(), derefs.end());
     }
 }
 
@@ -4981,6 +5040,31 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         }
     }
 
+    if (const auto* pe = pat.mData.opt_Deref()) {
+        ASSERT_BUG(sp, pe->kind != HIRPattern::DerefKind::Unknown && pe->targetType, "Untyped deref pattern " << pat);
+        if (pe->kind == HIRPattern::DerefKind::Box) {
+            fieldPath.push_back(FIELD_DEREF);
+            this->appendFrom(sp, *pe->sub, pe->targetType);
+            fieldPath.pop_back();
+        } else {
+            const auto parentRoot = rootIndex;
+            const auto inputField = fieldPath;
+            const auto newRoot = (*nextRootIndex)++;
+            for (size_t i = subsetStart; i < subsetEnd; i++) {
+                rulesets[i].derefs.push_back(PatternRuleset::Deref{newRoot, parentRoot, inputField, ty, pe->targetType, pe->kind});
+            }
+            const auto savedField = fieldPath;
+            const auto savedRoot = rootIndex;
+            fieldPath = {};
+            rootIndex = newRoot;
+            this->appendFrom(sp, *pe->sub, pe->targetType);
+            rootIndex = savedRoot;
+            fieldPath = savedField;
+        }
+        for (size_t i = 0; i < pat.implicitDerefCount; i++) fieldPath.pop_back();
+        return;
+    }
+
     if (pat.mData.is_Or()) {
         // Multiply the current pattern (sub)set out, visit with sub-sets
         const auto& e = pat.mData.as_Or();
@@ -5030,6 +5114,10 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                         case HIRCoreType::Bool:
                             // TODO: Support values from `const` too
                             this->pushRule(PatternRule::make_Bool(pe.val.as_Integer().value != 0));
+                            break;
+                        case HIRCoreType::Str:
+                            ASSERT_BUG(sp, pe.val.is_String(), "Matching `str` with non-string value pattern - " << pat);
+                            this->pushRule(PatternRule::make_Value(pe.val.as_String()));
                             break;
                         default:
                             this->pushRule(H::getPatternValue(sp, pat, pe.val, e));
@@ -5277,8 +5365,9 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                             assert(pe.binding.is_Enum());
                             const auto& be = pe.binding.as_Enum();
 
-                            PatternRulesetBuilder subBuilder{this->mResolve};
+                            PatternRulesetBuilder subBuilder{this->mResolve, this->nextRootIndex};
                             subBuilder.fieldPath = fieldPath;
+                            subBuilder.rootIndex = rootIndex;
                             ASSERT_BUG(sp, be.varIdx < FIELD_INDEX_MAX, "Too-large variant index in " << ty);
                             subBuilder.fieldPath.push_back(be.varIdx);
                             subBuilder.fieldPath.push_back(0);
@@ -5292,14 +5381,16 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                                 }
                                 this->pushRule(PatternRule::make_Variant({be.varIdx, mv$(sr.rules)}));
                                 this->pushBindings(mv$(sr.mBindings));
+                                this->pushDerefs(mv$(sr.derefs));
                             });
                         }
                         TU_ARMA(PathNamed, pe) {
                             assert(pe.binding.is_Enum());
                             const auto& be = pe.binding.as_Enum();
 
-                            PatternRulesetBuilder subBuilder{this->mResolve};
+                            PatternRulesetBuilder subBuilder{this->mResolve, this->nextRootIndex};
                             subBuilder.fieldPath = fieldPath;
+                            subBuilder.rootIndex = rootIndex;
                             ASSERT_BUG(sp, be.varIdx < FIELD_INDEX_MAX, "Too-large variant index");
                             subBuilder.fieldPath.push_back(be.varIdx);
                             subBuilder.fieldPath.push_back(0);
@@ -5328,6 +5419,7 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                                 }
                                 this->pushRule(PatternRule::make_Variant({be.varIdx, mv$(sr.rules)}));
                                 this->pushBindings(mv$(sr.mBindings));
+                                this->pushDerefs(mv$(sr.derefs));
                             });
                         }
             }
@@ -5367,6 +5459,15 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 TU_ARMA(Any, pe) {
                     for (unsigned int i = 0; i < e.size.as_Known(); i++) {
                         this->appendFrom(sp, emptyPattern, e.inner);
+                        fieldPath.back()++;
+                    }
+                }
+                TU_ARMA(Value, pe) {
+                    ASSERT_BUG(sp, pe.val.is_ByteString(), "Matching array with non-byte-string value pattern - " << pat);
+                    const auto& bytes = pe.val.as_ByteString().v;
+                    ASSERT_BUG(sp, e.inner == HIRCoreType::U8 && e.size.as_Known() == bytes.size(), "Byte string pattern type mismatch - " << pat << " vs " << ty);
+                    for (auto byte : bytes) {
+                        this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<uint8_t>(byte)), HIRCoreType::U8})));
                         fieldPath.back()++;
                     }
                 }
@@ -5431,10 +5532,20 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                 TU_ARMA(Any, pe) {
                     this->pushRule(PatternRule::make_Any({}));
                 }
+                TU_ARMA(Value, pe) {
+                    ASSERT_BUG(sp, pe.val.is_ByteString() && e.inner == HIRCoreType::U8, "Matching slice with non-byte-string value pattern - " << pat);
+                    ::std::vector<uint8_t> data;
+                    data.reserve(pe.val.as_ByteString().v.size());
+                    for (auto byte : pe.val.as_ByteString().v) {
+                        data.push_back(static_cast<uint8_t>(byte));
+                    }
+                    this->pushRule(PatternRule::make_Value(mv$(data)));
+                }
                 TU_ARMA(Slice, pe) {
                     // Sub-patterns
-                    PatternRulesetBuilder subBuilder{this->mResolve};
+                    PatternRulesetBuilder subBuilder{this->mResolve, this->nextRootIndex};
                     subBuilder.fieldPath = fieldPath;
+                    subBuilder.rootIndex = rootIndex;
                     subBuilder.fieldPath.push_back(0);
                     ASSERT_BUG(sp, pe.subPatterns.size() < FIELD_INDEX_MAX, "Too many slice rules to fit encodng");
                     for (const auto& subpat : pe.subPatterns) {
@@ -5450,11 +5561,13 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                         }
                         this->pushRule(PatternRule::make_Slice({static_cast<unsigned int>(pe.subPatterns.size()), mv$(sr.rules)}));
                         this->pushBindings(mv$(sr.mBindings));
+                        this->pushDerefs(mv$(sr.derefs));
                     });
                 }
                 TU_ARMA(SplitSlice, pe) {
-                    PatternRulesetBuilder subBuilder{this->mResolve};
+                    PatternRulesetBuilder subBuilder{this->mResolve, this->nextRootIndex};
                     subBuilder.fieldPath = fieldPath;
+                    subBuilder.rootIndex = rootIndex;
                     ASSERT_BUG(sp, pe.leading.size() < FIELD_INDEX_MAX, "Too many leading slice rules to fit encodng");
                     subBuilder.fieldPath.push_back(0);
                     for (const auto& subpat : pe.leading) {
@@ -5500,6 +5613,8 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                         this->pushRule(PatternRule::make_SplitSlice({static_cast<unsigned int>(pe.leading.size() + pe.trailing.size()), static_cast<unsigned int>(pe.trailing.size()), mv$(rulesL.rules), mv$(rulesT.rules)}));
                         this->pushBindings(mv$(rulesL.mBindings));
                         this->pushBindings(mv$(rulesT.mBindings));
+                        this->pushDerefs(mv$(rulesL.derefs));
+                        this->pushDerefs(mv$(rulesT.derefs));
                     });
                 }
         }
@@ -6000,6 +6115,86 @@ namespace {
 // Dumb and Simple
 // --------------------------------------------------------------------
 
+namespace {
+    void getPatternRoot(const Span& sp, const PatternRuleset& ruleset, unsigned rootIndex, const HIRTypeData* topTy, const MIRLValue& topVal, HIRTypeRef& rootTy, MIRLValue& rootVal) {
+        if (rootIndex == 0) {
+            rootTy = topTy;
+            rootVal = topVal.clone();
+            return;
+        }
+        const auto derefIt = ::std::find_if(ruleset.derefs.begin(), ruleset.derefs.end(), [&](const auto& deref) {
+            return deref.rootIndex == rootIndex;
+        });
+        ASSERT_BUG(sp, derefIt != ruleset.derefs.end(), "Invalid pattern root " << rootIndex);
+        const auto& deref = *derefIt;
+        ASSERT_BUG(sp, deref.resultLocal != ~0u, "Pattern deref root has no MIR local");
+        rootTy = deref.targetType;
+        rootVal = MIRLValue::newDeref(MIRLValue::newLocal(deref.resultLocal));
+    }
+}
+
+void allocatePatternDerefLocals(MirBuilder& builder, PatternRuleset& ruleset) {
+    for (auto& deref : ruleset.derefs) {
+        const auto borrow = deref.kind == HIRPattern::DerefKind::Unique ? HIRBorrowType::Unique : HIRBorrowType::Shared;
+        deref.resultLocal = builder.newTemporary(builder.resolve().crate.types.borrow(borrow, deref.targetType)).as_Local();
+    }
+}
+
+void materializePatternDerefs(MirBuilder& builder, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal) {
+    for (const auto& deref : ruleset.derefs) {
+        HIRTypeRef parentTy;
+        MIRLValue parentVal;
+        getPatternRoot(sp, ruleset, deref.parentRoot, topTy, topVal, parentTy, parentVal);
+
+        HIRTypeRef sourceTy;
+        MIRLValue sourceVal;
+        getTyAndVal(sp, builder, parentTy, parentVal, deref.field, 0, sourceTy, sourceVal);
+        ASSERT_BUG(sp, sourceTy == deref.sourceType, "Deref pattern source changed from " << deref.sourceType << " to " << sourceTy);
+
+        const auto borrow = deref.kind == HIRPattern::DerefKind::Unique ? HIRBorrowType::Unique : HIRBorrowType::Shared;
+        const char* langItem = borrow == HIRBorrowType::Unique ? "deref_mut" : "deref";
+        const char* method = borrow == HIRBorrowType::Unique ? "deref_mut" : "deref";
+        auto argument = builder.lvalueOrTemp(sp, builder.resolve().crate.types.borrow(borrow, sourceTy), MIRRValue::make_Borrow({borrow, false, mv$(sourceVal)}));
+        builder.movedLvalue(sp, argument);
+
+        auto okBlock = builder.newBbUnlinked();
+        auto unwindBlock = builder.newBbUnlinked();
+        auto methodPath = HIRPath(sourceTy, HIRGenericPath(builder.resolve().crate.getLangItemPath(sp, langItem), {}), method, HIRPathParams());
+        builder.endBlock(MIRTerminator::make_Call({
+            okBlock,
+            MIRUnwindAction::make_Cleanup(unwindBlock),
+            MIRLValue::newLocal(deref.resultLocal),
+            mv$(methodPath),
+            makeVec1(MIRParam(mv$(argument))),
+        }));
+        builder.setCurBlock(unwindBlock);
+        builder.emitUnwindCleanup(sp);
+        if (builder.blockActive()) builder.endBlock(MIRTerminator::make_UnwindResume({}));
+        builder.setCurBlock(okBlock);
+    }
+}
+
+MIRLValue getPatternBindingValue(MirConverter& conv, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal, const PatternBinding& binding) {
+    HIRTypeRef rootTy;
+    MIRLValue rootVal;
+    getPatternRoot(sp, ruleset, binding.rootIndex, topTy, topVal, rootTy, rootVal);
+    return conv.getValueForBindingPath(sp, rootTy, rootVal, binding);
+}
+
+void destructurePatternRuleset(MirConverter& conv, const Span& sp, const PatternRuleset& ruleset, const HIRTypeData* topTy, const MIRLValue& topVal, bool updateStates) {
+    if (ruleset.derefs.empty()) {
+        conv.destructureFromList(sp, topTy, topVal.clone(), ruleset.mBindings, updateStates);
+        return;
+    }
+    for (size_t i = ruleset.mBindings.size(); i--;) {
+        const auto& binding = ruleset.mBindings[i];
+        HIRTypeRef rootTy;
+        MIRLValue rootVal;
+        getPatternRoot(sp, ruleset, binding.rootIndex, topTy, topVal, rootTy, rootVal);
+        conv.destructureFromList(sp, rootTy, mv$(rootVal), ::std::vector<PatternBinding>{binding}, updateStates);
+    }
+}
+
 void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch& node, MIRLValue matchVal, tArmRules armRules, ::std::vector<ArmCode> armsCode, MIRBasicBlockId firstCmpBlock) {
     TRACE_FUNCTION;
 
@@ -6021,8 +6216,9 @@ void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNode
 
         // 1. Check
         // - If the ruleset is empty, this is a _ arm over a value
+        materializePatternDerefs(builder, arm.mCode->span(), patRule, node.mValue->resType, matchVal);
         if (patRule.rules.size() > 0) {
-            MIRLowerHIRMatchSimpleGeneratePattern(builder, arm.mCode->span(), patRule.rules.data(), patRule.rules.size(), node.mValue->resType, matchVal, 0, nextPatternBb);
+            MIRLowerHIRMatchSimpleGeneratePattern(builder, arm.mCode->span(), &patRule, patRule.rules.data(), patRule.rules.size(), node.mValue->resType, matchVal, 0, nextPatternBb);
         }
         builder.endBlock(MIRTerminator::make_Goto(rc.entry));
 
@@ -6044,7 +6240,7 @@ void MIRLowerHIRMatchSimple(MirBuilder& builder, MirConverter& conv, HIRExprNode
     builder.endBlock(MIRTerminator::make_Unreachable({}));
 }
 
-int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRule* rules, unsigned int numRules, const HIRTypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb) {
+int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, const PatternRuleset* ruleset, const PatternRule* rules, unsigned int numRules, const HIRTypeData* topTy, const MIRLValue& topVal, unsigned int fieldPathOfs, MIRBasicBlockId failBb) {
     TRACE_FUNCTION_F("top_ty = " << topTy << ", rules = [" << FMT_CB(os, for (size_t i = 0; i < numRules; i++) os << rules[i] << ",";));
     for (unsigned int ruleIdx = 0; ruleIdx < numRules; ruleIdx++) {
         const auto& rule = rules[ruleIdx];
@@ -6058,7 +6254,15 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
         MIRLValue val;
         HIRTypeRef ity;
 
-        getTyAndVal(sp, builder, topTy, topVal, rule.fieldPath, fieldPathOfs, ity, val);
+        if (rule.rootIndex == 0) {
+            getTyAndVal(sp, builder, topTy, topVal, rule.fieldPath, fieldPathOfs, ity, val);
+        } else {
+            ASSERT_BUG(sp, ruleset, "Adjusted pattern rule without a ruleset");
+            HIRTypeRef rootTy;
+            MIRLValue rootVal;
+            getPatternRoot(sp, *ruleset, rule.rootIndex, topTy, topVal, rootTy, rootVal);
+            getTyAndVal(sp, builder, rootTy, rootVal, rule.fieldPath, 0, ity, val);
+        }
         DEBUG("ty = " << ity << ", val = " << val);
 
         const auto& ty = ity;
@@ -6334,7 +6538,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                             const auto& varTyM = (monomorphiseTypeNeeded(varTy) ? tmp = monomorph(varTy) : varTy);
 
                             // Recurse with the new ruleset
-                            MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, re.subRules.data(), re.subRules.size(), varTyM, MIRLValue::newDowncast(val.clone(), varIdx), rule.fieldPath.size() + 1, failBb);
+                            MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, ruleset, re.subRules.data(), re.subRules.size(), varTyM, MIRLValue::newDowncast(val.clone(), varIdx), rule.fieldPath.size() + 1, failBb);
                         }
                     } // TypePathBinding::Enum
             }
@@ -6381,7 +6585,7 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     builder.setCurBlock(lenSuccBb);
 
                     // Recurse checking values
-                    MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, re.subRules.data(), re.subRules.size(), topTy, topVal, fieldPathOfs, failBb);
+                    MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, ruleset, re.subRules.data(), re.subRules.size(), topTy, topVal, fieldPathOfs, failBb);
                 } else if (rule.is_SplitSlice()) {
                     const auto& re = rule.as_SplitSlice();
 
@@ -6394,9 +6598,9 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                     builder.endBlock(MIRTerminator::make_If({mv$(cmpLval), failBb, lenSuccBb})); // if len < test : FAIL
                     builder.setCurBlock(lenSuccBb);
 
-                    MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, re.leading.data(), re.leading.size(), topTy, topVal, fieldPathOfs, failBb);
+                    MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, ruleset, re.leading.data(), re.leading.size(), topTy, topVal, fieldPathOfs, failBb);
 
-                    MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, re.trailing.data(), re.trailing.size(), topTy, topVal, fieldPathOfs, failBb);
+                    MIRLowerHIRMatchSimpleGeneratePattern(builder, sp, ruleset, re.trailing.data(), re.trailing.size(), topTy, topVal, fieldPathOfs, failBb);
                 } else {
                     BUG(sp, "Invalid rule type for slice - " << rule);
                 }
@@ -10053,8 +10257,9 @@ ScopeHandle::ScopeHandle(ScopeHandle&& x)
     x.idx = ~0;
 }
 
-PatternBinding::PatternBinding(fieldPathT field, const HIRPatternBinding& binding)
+PatternBinding::PatternBinding(fieldPathT field, const HIRPatternBinding& binding, unsigned rootIndex)
     : field(std::move(field))
+    , rootIndex(rootIndex)
     , binding(&binding)
     , splitSlice(SIZE_MAX, SIZE_MAX)
 {

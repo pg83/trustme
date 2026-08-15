@@ -955,6 +955,13 @@ namespace {
                     visitTuplePattern(e);
                     pmi.sendSymbol(")");
                 }
+                TU_ARMA(Deref, e) {
+                    pmi.sendIdent(Ident({}, "deref"));
+                    pmi.sendSymbol("!");
+                    pmi.sendSymbol("(");
+                    visitPattern(*e.sub);
+                    pmi.sendSymbol(")");
+                }
                 TU_ARMA(Struct, e) {
                     this->visitPath(e.path);
                     pmi.sendSymbol("{");
