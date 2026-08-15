@@ -1402,7 +1402,11 @@ TU_ARMA(Alias, ee) {
             if (trait == langCopy()) {
                 auto cmp = this->typeIsCopy(sp, type);
                 if (cmp != HIRCompare::Unequal) {
-                    return callback(ImplRef(type, &nullParams, &nullAssoc), cmp);
+                    auto impl = ImplRef(type, &nullParams, &nullAssoc);
+                    if (cmp == HIRCompare::Fuzzy) {
+                        impl.markAmbiguousIdentity();
+                    }
+                    return callback(std::move(impl), cmp);
                 } else {
                     return false;
                 }

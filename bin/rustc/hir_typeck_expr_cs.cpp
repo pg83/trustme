@@ -1293,7 +1293,38 @@ namespace {
         }
 
         void visit(HIRExprNodeArraySized& node) override {
-            noRevisit(node);
+            if (cast<HIRExprNodeConstBlock>(node.val.get())) {
+                completed = true;
+                return;
+            }
+            if (const auto* path = cast<HIRExprNodePathValue>(node.val.get())) {
+                if (path->target == HIRExprNodePathValue::CONSTANT) {
+                    completed = true;
+                    return;
+                }
+            }
+
+            bool requireCopy = false;
+            if (node.mSize.is_Known()) {
+                requireCopy = node.mSize.as_Known() > 1;
+            } else {
+                const auto& count = this->context.ivars.getValue(node.mSize.as_Unevaluated());
+                if (count.is_Infer()) {
+                    return;
+                }
+                if (count.is_Evaluated()) {
+                    requireCopy = count.as_Evaluated()->readUsize(0) > 1;
+                } else {
+                    // A generic or unevaluated count can exceed one after
+                    // monomorphisation, so its element must be Copy.
+                    requireCopy = true;
+                }
+            }
+
+            if (requireCopy) {
+                this->context.addTraitBound(node.span(), node.val->resType, this->context.mResolve.langCopy(), {});
+            }
+            completed = true;
         }
 
         void visit(HIRExprNodeClosure& node) override {
@@ -11076,6 +11107,7 @@ public:
 
         node.val->visit(*this);
         node.diverges = this->nodeDiverges(*node.val);
+        this->context.addRevisit(node);
     }
 
     void visit(HIRExprNodeLiteral& node) override {
