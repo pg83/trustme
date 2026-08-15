@@ -1148,6 +1148,8 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                                     MIRCleanupLValue(state, mutator, *v.output);
                                 }
                             }
+                            TU_ARMA(Label, v) {
+                            }
                     }
                     }
                 }
@@ -1383,6 +1385,18 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 }
                 for (auto& param : e.args) {
                     MIRCleanupParam(state, mutator, param);
+                }
+            }
+            TU_ARMA(Asm2, e) {
+                for (auto& p : e.params) {
+                    if (auto* reg = p.opt_Reg()) {
+                        if (reg->input) {
+                            MIRCleanupParam(state, mutator, *reg->input);
+                        }
+                        if (reg->output) {
+                            MIRCleanupLValue(state, mutator, *reg->output);
+                        }
+                    }
                 }
             }
         }
@@ -1997,6 +2011,8 @@ namespace {
                                 rv |= visitMirLvalueRawMut(*v.output, MIRValUsage::Write, cb);
                             }
                         }
+                        TU_ARMA(Label, v) {
+                        }
                 }
                 }
             }
@@ -2062,6 +2078,18 @@ namespace {
                 }
                 for (auto& v : e.args) {
                     rv |= visitMirLvalueMut(v, MIRValUsage::Move, cb);
+                }
+            }
+            TU_ARMA(Asm2, e) {
+                for (auto& p : e.params) {
+                    if (auto* reg = p.opt_Reg()) {
+                        if (reg->input) {
+                            rv |= visitMirLvalueMut(*reg->input, MIRValUsage::Read, cb);
+                        }
+                        if (reg->output) {
+                            rv |= visitMirLvalueRawMut(*reg->output, MIRValUsage::Write, cb);
+                        }
+                    }
                 }
             }
         }
@@ -6034,7 +6062,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                             return found;
                         });
                     }
-                    TU_MATCHA((block.terminator), (e), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, DEBUG("TODO: Chain");), (If, stop = true;), (Switch, stop = true;), (SwitchValue, stop = true;), (Drop, stop = true;), (Call, stop = true;), (TailCall, stop = true;))
+                    TU_MATCHA((block.terminator), (e), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, DEBUG("TODO: Chain");), (If, stop = true;), (Switch, stop = true;), (SwitchValue, stop = true;), (Drop, stop = true;), (Call, stop = true;), (TailCall, stop = true;), (Asm2, stop = true;))
                 }
                 // Schedule a replacement in a future pass
                 if (found) {
@@ -7108,7 +7136,7 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
         depths[info.bbIdx] = ::std::make_pair(info.branchCount, info.level);
         const auto& bb = fcn.blocks[info.bbIdx];
 
-        TU_MATCHA((bb.terminator), (te), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});), (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});), (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});), (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});), (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (Call, todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (TailCall, ))
+        TU_MATCHA((bb.terminator), (te), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});), (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});), (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});), (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});), (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (Call, todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (TailCall, ), (Asm2, if (te.retBlock != ~0u) todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); for (const auto& p : te.params) if (const auto* dst = p.opt_Label()) todo.push_back(Todo{*dst, ++branches, info.level + 1});))
     }
 
     // Sort a list of block indexes by `depths`

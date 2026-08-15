@@ -213,6 +213,9 @@ namespace {
                     }
                     TU_ARMA(Sym, e) {
                     }
+                    TU_ARMA(Label, e) {
+                        visitNodePtr(e.code);
+                    }
                     TU_ARMA(RegSingle, e) {
                         visitNodePtr(e.val);
                     }

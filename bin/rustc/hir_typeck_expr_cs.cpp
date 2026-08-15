@@ -10074,6 +10074,7 @@ public:
     void visit(HIRExprNodeAsm2& node) override {
         TRACE_FUNCTION_F(&node << " asm! ...");
 
+        bool hasLabel = false;
         this->pushInnerCoerce(false);
         for (auto& v : node.mParams) {
                 TU_MATCH_HDRA( (v), { )
@@ -10083,6 +10084,12 @@ public:
                     this->inheritDivergence(node, *e);
                 }
                 TU_ARMA(Sym, e) {
+                }
+                TU_ARMA(Label, e) {
+                    hasLabel = true;
+                    this->context.addIvars(e.code->resType);
+                    visitNodePtr(e.code);
+                    this->context.equateTypes(e.code->span(), e.code->resType, this->context.crate.types.unit());
                 }
                 TU_ARMA(RegSingle, e) {
                     this->context.addIvars(e.val->resType);
@@ -10105,7 +10112,7 @@ public:
         }
         this->popInnerCoerce();
         // TODO: Revisit to check that the input are integers, and the outputs are integer lvalues
-        if (node.options.noreturn) {
+        if (node.options.noreturn && !hasLabel) {
             node.diverges = true;
             this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
         } else {

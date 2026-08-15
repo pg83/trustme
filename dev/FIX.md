@@ -40,11 +40,10 @@ until this file is exhausted.
 
 ## Internal compiler failures
 
-There are 131 unfinished compiler-internal failures in 91 stable signatures.
+There are 126 unfinished compiler-internal failures in 90 stable signatures.
 
 | signature or root cause | tests | note |
 |---|---:|---|
-| inline-assembly token assertion, `parse_token.h:71` | 5 | five Rust Reference asm fragments |
 | intrinsic/unsized translation errors, `mir_helpers.h:108` | 5 | two `vtable_align`; one each `fmuladdf32`, `fadd_fast`, and extern-type alignment |
 | `sizeof` on infer type, `trans_target.cpp:496` | 4 | const-generic/type-relation cases |
 | `super let` without expression scope, `mir_from_hir.cpp:1139` | 1 | `pin_macro::temp_lifetime` |

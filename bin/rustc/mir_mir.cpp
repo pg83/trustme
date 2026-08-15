@@ -237,7 +237,7 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
     auto fmtUnwind = [&os](const MIRUnwindAction& action) {
         TU_MATCHA((action), (ue), (Continue, os << "continue";), (Cleanup, os << "cleanup bb" << ue;), (Terminate, os << "terminate";), (Unreachable, os << "unreachable";))
     };
-    TU_MATCHA((x), (e), (Incomplete, os << "Invalid";), (Return, os << "Return";), (UnwindResume, os << "UnwindResume";), (UnwindTerminate, os << "UnwindTerminate";), (Unreachable, os << "Unreachable";), (Goto, os << "Goto(" << e << ")";), (If, os << "If( " << e.cond << " : " << e.bbTrue << ", " << e.bbFalse << ")";), (Switch, os << "Switch( "; if (e.validFlag != ~0u) os << "IF df$" << e.validFlag << " ELSE bb" << e.invalidTarget << ", "; os << e.val << " : "; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << ")";), (SwitchValue, os << "SwitchValue( " << e.val << " : "; TU_MATCHA((e.values), (ve), (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";), (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";), (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";), (ByteString, for (unsigned int j = 0; j < e.targets.size(); j++) os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";)) os << "else bb" << e.defTarget << ")";), (Drop, os << "Drop(" << e.slot; if (e.kind == MIRDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") -> bb" << e.target << " unwind "; fmtUnwind(e.unwind);), (Call, os << "Call( " << e.retVal << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << e2 << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << "), bb" << e.retBlock << ", "; fmtUnwind(e.unwind); os << ")";), (TailCall, os << "TailCall( "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << e2 << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << ") )";))
+    TU_MATCHA((x), (e), (Incomplete, os << "Invalid";), (Return, os << "Return";), (UnwindResume, os << "UnwindResume";), (UnwindTerminate, os << "UnwindTerminate";), (Unreachable, os << "Unreachable";), (Goto, os << "Goto(" << e << ")";), (If, os << "If( " << e.cond << " : " << e.bbTrue << ", " << e.bbFalse << ")";), (Switch, os << "Switch( "; if (e.validFlag != ~0u) os << "IF df$" << e.validFlag << " ELSE bb" << e.invalidTarget << ", "; os << e.val << " : "; for (unsigned int j = 0; j < e.targets.size(); j++) os << j << " => bb" << e.targets[j] << ", "; os << ")";), (SwitchValue, os << "SwitchValue( " << e.val << " : "; TU_MATCHA((e.values), (ve), (Unsigned, for (unsigned int j = 0; j < e.targets.size(); j++) os << ve[j] << " => bb" << e.targets[j] << ", ";), (Signed, for (unsigned int j = 0; j < e.targets.size(); j++) os << (ve[j] >= 0 ? "+" : "") << ve[j] << " => bb" << e.targets[j] << ", ";), (String, for (unsigned int j = 0; j < e.targets.size(); j++) os << "\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";), (ByteString, for (unsigned int j = 0; j < e.targets.size(); j++) os << "b\"" << ve[j] << "\" => bb" << e.targets[j] << ", ";)) os << "else bb" << e.defTarget << ")";), (Drop, os << "Drop(" << e.slot; if (e.kind == MIRDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") -> bb" << e.target << " unwind "; fmtUnwind(e.unwind);), (Call, os << "Call( " << e.retVal << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << e2 << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << "), bb" << e.retBlock << ", "; fmtUnwind(e.unwind); os << ")";), (TailCall, os << "TailCall( "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << e2 << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << arg << ", "; os << ") )";), (Asm2, os << "asm!(...) -> "; if (e.retBlock != ~0u) os << "bb" << e.retBlock << ", "; for (const auto& p : e.params) if (const auto* bb = p.opt_Label()) os << "label bb" << *bb << ", ";))
 
     return os;
 }
@@ -253,7 +253,7 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
         TU_MATCHA((lhs, rhs), (le, re), (Continue, return true;), (Cleanup, return le == re;), (Terminate, return true;), (Unreachable, return true;))
         return false;
     };
-    TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, if (ae != be) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bbTrue != be.bbTrue) return false; if (ae.bbFalse != be.bbFalse) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.validFlag != be.validFlag) return false; if (ae.invalidTarget != be.invalidTarget) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.defTarget != be.defTarget) return false; if (ae.values != be.values) return false;), (Drop, if (ae.kind != be.kind || ae.slot != be.slot || ae.flagIdx != be.flagIdx || ae.target != be.target || !unwindEqual(ae.unwind, be.unwind)) return false;), (Call, if (ae.retVal != be.retVal) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.retBlock != be.retBlock) return false; if (!unwindEqual(ae.unwind, be.unwind)) return false; if (ae.source != be.source) return false; if (ae.tracksCaller != be.tracksCaller) return false;), (TailCall, if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.source != be.source) return false; if (ae.tracksCaller != be.tracksCaller) return false;))
+    TU_MATCHA((a, b), (ae, be), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, if (ae != be) return false;), (If, if (ae.cond != be.cond) return false; if (ae.bbTrue != be.bbTrue) return false; if (ae.bbFalse != be.bbFalse) return false;), (Switch, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.validFlag != be.validFlag) return false; if (ae.invalidTarget != be.invalidTarget) return false;), (SwitchValue, if (ae.val != be.val) return false; if (ae.targets != be.targets) return false; if (ae.defTarget != be.defTarget) return false; if (ae.values != be.values) return false;), (Drop, if (ae.kind != be.kind || ae.slot != be.slot || ae.flagIdx != be.flagIdx || ae.target != be.target || !unwindEqual(ae.unwind, be.unwind)) return false;), (Call, if (ae.retVal != be.retVal) return false; if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.retBlock != be.retBlock) return false; if (!unwindEqual(ae.unwind, be.unwind)) return false; if (ae.source != be.source) return false; if (ae.tracksCaller != be.tracksCaller) return false;), (TailCall, if (ae.fcn.tag() != be.fcn.tag()) return false; TU_MATCHA((ae.fcn, be.fcn), (afe, bfe), (Value, if (afe != bfe) return false;), (Path, if (afe != bfe) return false;), (Intrinsic, if (afe.name != bfe.name) return false; if (afe.params != bfe.params) return false;)) if (ae.args != be.args) return false; if (ae.source != be.source) return false; if (ae.tracksCaller != be.tracksCaller) return false;), (Asm2, if (ae.options != be.options || ae.lines != be.lines || ae.params != be.params || ae.retBlock != be.retBlock) return false;))
     return true;
 }
 
@@ -287,6 +287,9 @@ bool operator==(const MIRAsmParam& a, const MIRAsmParam& b) {
             if (ae.output && *ae.output != *be.output) {
                 return false;
             }
+        }
+        TU_ARMA(Label, ae, be) {
+            return ae == be;
         }
         }
         return true;
@@ -338,6 +341,9 @@ bool operator==(const MIRAsmParam& a, const MIRAsmParam& b) {
                         } else {
                             os << "_";
                         }
+                    }
+                    TU_ARMA(Label, v) {
+                        os << "label bb" << v;
                     }
                 }
             }
@@ -540,6 +546,8 @@ HIRPathParams MIRCloner::monomorph(const HIRPathParams& ty) const {
             rv.push_back(this->monomorph(v));
             TU_ARMA(Reg, v)
             rv.push_back(MIRAsmParam::make_Reg({v.dir, v.spec.clone(), v.input ? box$(this->cloneParam(*v.input)) : std::unique_ptr<MIRParam>(), v.output ? box$(this->cloneLval(*v.output)) : std::unique_ptr<MIRLValue>()}));
+            TU_ARMA(Label, v)
+            rv.push_back(MIRAsmParam::make_Label(mapBbIdx(v)));
         }
     }
     return rv;
@@ -632,6 +640,9 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
             MIRCallTarget tgt;
             TU_MATCHA((se.fcn), (ste), (Value, tgt = MIRCallTarget::make_Value(this->cloneLval(ste));), (Path, tgt = MIRCallTarget::make_Path(this->monomorph(ste));), (Intrinsic, tgt = MIRCallTarget::make_Intrinsic({ste.name, this->monomorph(ste.params)});))
             return MIRTerminator::make_TailCall({mv$(tgt), this->cloneParamVec(se.args), se.source, se.tracksCaller});
+        }
+        TU_ARMA(Asm2, se) {
+            return MIRTerminator::make_Asm2({se.options, se.lines, this->cloneAsmParams(se.params), se.retBlock == ~0u ? ~0u : mapBbIdx(se.retBlock)});
         }
     }
     throw "";

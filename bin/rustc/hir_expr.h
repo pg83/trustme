@@ -113,6 +113,7 @@ struct HIRExprNodeAsm2: public HIRExprNode {
         Const,
         (Const, HIRExprNodeP),
         (Sym, HIRPath),
+        (Label, struct { HIRExprNodeP code; }),
         (RegSingle,
          struct {
              AsmDirection dir;

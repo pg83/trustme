@@ -1055,6 +1055,9 @@ struct CExpandExpr: public ASTNodeVisitor {
                 TU_ARMA(Sym, e) {
                     ExpandPath(this->expandState, this->curMod(), e);
                 }
+                TU_ARMA(Label, e) {
+                    this->visitNodelete(node, e.code);
+                }
                 TU_ARMA(RegSingle, e) {
                     this->visitNodelete(node, e.val);
                 }

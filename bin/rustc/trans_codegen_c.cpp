@@ -2847,6 +2847,12 @@ namespace {
                     }
                     emitTermTailCall(localMirRes, e, indentLevel);
                 }
+                TU_ARMA(Asm2, e) {
+                    if (cleanup) {
+                        MIR_BUG(localMirRes, "asm goto in a cleanup block");
+                    }
+                    emitAsm2Gcc(localMirRes, e.options, e.lines, e.params, true, e.retBlock, indentLevel);
+                }
             }
             of << indent << "// ^ " << term << "\n";
             (void)blockIndex;
@@ -4794,24 +4800,24 @@ namespace {
 
         struct Asm2TplMatch {
             const MIRTypeResolve& mirRes;
-            const MIRStatement& stmt;
-            const MIRStatement::Data_Asm2& e;
+            const std::vector<AsmLine>& lines;
+            const std::vector<MIRAsmParam>& params;
             std::vector<std::string> fmtLines;
             std::vector<std::string> fmtParams;
 
-            Asm2TplMatch(const MIRTypeResolve& localMirRes, const MIRStatement& stmt)
+            Asm2TplMatch(const MIRTypeResolve& localMirRes, const std::vector<AsmLine>& lines, const std::vector<MIRAsmParam>& params)
                 : mirRes(localMirRes)
-                , stmt(stmt)
-                , e(stmt.as_Asm2())
+                , lines(lines)
+                , params(params)
             {
-                for (const auto& v : e.lines) {
+                for (const auto& v : lines) {
                     fmtLines.push_back(FMT(FMT_CB(os, v.fmt(os))));
                     fmtLines.back().erase(fmtLines.back().begin());
                     fmtLines.back().pop_back();
                     DEBUG(fmtLines.back());
                 }
 
-                for (const auto& p : e.params) {
+                for (const auto& p : params) {
                     fmtParams.push_back(getParamText(p));
                 }
             }
@@ -4824,8 +4830,8 @@ namespace {
                 if (!checkList(fmtParams, params)) {
                     MIR_BUG(
                         mirRes,
-                        "Hard-coded asm translation doesn't apply - " << stmt << "\n"
-                                                                      << "[" << fmtParams << "] != \n[" << FMT_CB(os, for (auto it = params.begin(); it != params.end(); ++it) os << *it << ", ") << "]"
+                        "Hard-coded asm translation doesn't apply\n"
+                            << "[" << fmtParams << "] != \n[" << FMT_CB(os, for (auto it = params.begin(); it != params.end(); ++it) os << *it << ", ") << "]"
                     );
                 }
 
@@ -4833,17 +4839,17 @@ namespace {
             }
 
             const MIRAsmParam& p(size_t i) const {
-                return e.params.at(i);
+                return params.at(i);
             }
 
             const MIRParam& input(size_t i) const {
-                MIR_ASSERT(mirRes, e.params.at(i).as_Reg().input, "Parameter " << i << " isn't a register input");
-                return *e.params.at(i).as_Reg().input;
+                MIR_ASSERT(mirRes, params.at(i).as_Reg().input, "Parameter " << i << " isn't a register input");
+                return *params.at(i).as_Reg().input;
             }
 
             const MIRLValue& output(size_t i) const {
-                MIR_ASSERT(mirRes, e.params.at(i).as_Reg().output, "Parameter " << i << " isn't a register output");
-                return *e.params.at(i).as_Reg().output;
+                MIR_ASSERT(mirRes, params.at(i).as_Reg().output, "Parameter " << i << " isn't a register output");
+                return *params.at(i).as_Reg().output;
             }
 
         private:
@@ -4864,6 +4870,8 @@ namespace {
                     return "const";
                     TU_ARMA(Sym, e)
                     return "sym";
+                    TU_ARMA(Label, e)
+                    return "label";
                 }
                 throw "";
             }
@@ -4900,9 +4908,13 @@ namespace {
         };
 
         void emitAsm2Gcc(const MIRTypeResolve& localMirRes, const MIRStatement& stmt, unsigned indentLevel) {
+            const auto& e = stmt.as_Asm2();
+            emitAsm2Gcc(localMirRes, e.options, e.lines, e.params, false, ~0u, indentLevel);
+        }
+
+        void emitAsm2Gcc(const MIRTypeResolve& localMirRes, const AsmOptions& asmOptions, const std::vector<AsmLine>& asmLines, const std::vector<MIRAsmParam>& asmParams, bool asmGoto, MIRBasicBlockId retBlock, unsigned indentLevel) {
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
-            Asm2TplMatch m{localMirRes, stmt};
-            const auto& se = stmt.as_Asm2();
+            Asm2TplMatch m{localMirRes, asmLines, asmParams};
 
             // The following clobber overlaps with an output
             if (m.matchesTemplate({"movq %rbx, {0:r}", "cpuid", "xchgq %rbx, {0:r}"}, {"lateout:reg", "inlateout=eax", "inlateout=ecx", "lateout=edx"})) {
@@ -5005,16 +5017,16 @@ namespace {
                 return;
             }
             // HACK: Abort on various `v*` operations, as they have overly complex register specs that gcc doesn't like
-            else if (se.lines[0].frags.size() > 0 && (false || se.lines[0].frags[0].before.find("vmov") == 0 || se.lines[0].frags[0].before.find("vexpand") == 0 || se.lines[0].frags[0].before.find("vpexpand") == 0)) {
+            else if (asmLines[0].frags.size() > 0 && (false || asmLines[0].frags[0].before.find("vmov") == 0 || asmLines[0].frags[0].before.find("vexpand") == 0 || asmLines[0].frags[0].before.find("vpexpand") == 0)) {
                 of << "abort();\n";
                 return;
             } else {
-                std::vector<unsigned> argMappings(se.params.size(), UINT_MAX);
+                std::vector<unsigned> argMappings(asmParams.size(), UINT_MAX);
                 // If there is an explicit register, create a block and add `register uintptr_t asm_REGNAME asm("REGNAME");`
                 // - Requires updating the arg mappings, as doing so would remove the argument from the list.
                 bool blockOpen = false;
-                for (size_t i = 0; i < se.params.size(); i++) {
-                    if (const auto* pe = se.params[i].opt_Reg()) {
+                for (size_t i = 0; i < asmParams.size(); i++) {
+                    if (const auto* pe = asmParams[i].opt_Reg()) {
                         if (!pe->input && !pe->output) {
                         } else if (const auto* regnameP = pe->spec.opt_Explicit()) {
                             argMappings[i] = UINT_MAX - 1;
@@ -5033,8 +5045,8 @@ namespace {
                 }
                 std::vector<const MIRAsmParam::Data_Reg*> outputs;
                 // Outputs
-                for (size_t i = 0; i < se.params.size(); i++) {
-                    if (const auto* pe = se.params[i].opt_Reg()) {
+                for (size_t i = 0; i < asmParams.size(); i++) {
+                    if (const auto* pe = asmParams[i].opt_Reg()) {
                         if (pe->spec.is_Explicit()) {
                             // Ignore, handled explicitly above
                             if (pe->output) {
@@ -5057,29 +5069,29 @@ namespace {
                 }
                 // Inputs
                 std::vector<const MIRAsmParam*> inputs;
-                for (size_t i = 0; i < se.params.size(); i++) {
-                    if (const auto* pe = se.params[i].opt_Reg()) {
+                for (size_t i = 0; i < asmParams.size(); i++) {
+                    if (const auto* pe = asmParams[i].opt_Reg()) {
                         if (pe->spec.opt_Explicit()) {
                             // Ignore, handled explicitly above
                             // An in+out explicit register is fully covered by its
                             // read-write output constraint; emitting a matching
                             // input for it too is rejected by clang.
                             if (pe->input && !pe->output) {
-                                inputs.push_back(&se.params[i]);
+                                inputs.push_back(&asmParams[i]);
                             }
                         } else if (pe->input) {
                             if (!pe->output) {
                                 argMappings[i] = outputs.size() + inputs.size();
                             }
-                            inputs.push_back(&se.params[i]);
+                            inputs.push_back(&asmParams[i]);
                         }
                     }
                 }
                 // Clobbers
                 std::vector<const char*> clobbers;
-                for (size_t i = 0; i < se.params.size(); i++) {
+                for (size_t i = 0; i < asmParams.size(); i++) {
                     // An explicit register, not "In" and output parameter
-                    if (const auto* pe = se.params[i].opt_Reg()) {
+                    if (const auto* pe = asmParams[i].opt_Reg()) {
                         if (!pe->input && !pe->output && pe->spec.is_Explicit()) {
                             const auto& regname = pe->spec.as_Explicit();
                             clobbers.push_back(regname.c_str());
@@ -5087,42 +5099,50 @@ namespace {
                     }
                 }
 
-                const bool emitAttSyntax = usesIntelCompilerAsmDialect() && se.options.attSyntax;
+                const bool emitAttSyntax = usesIntelCompilerAsmDialect() && asmOptions.attSyntax;
                 of << indent << "__asm__ ";
                 of << "__volatile__"; // Default everything to volatile
+                if (asmGoto) {
+                    of << " goto";
+                }
                 of << "(\"";
                 if (emitAttSyntax) {
                     of << ".att_syntax prefix; ";
                 }
                 bool escapePercent = true || !inputs.empty() || !outputs.empty();
-                for (const auto& l : se.lines) {
+                for (const auto& l : asmLines) {
                     for (const auto& f : l.frags) {
                         of << FmtGccAsm(f.before, escapePercent);
-                        const auto& param = se.params.at(f.index);
+                        const auto& param = asmParams.at(f.index);
                         if (const auto* constant = param.opt_Const()) {
-                            MIR_ASSERT(localMirRes, f.modifier == '\0', "Modifier on asm const operand - " << stmt);
+                            MIR_ASSERT(localMirRes, f.modifier == '\0', "Modifier on asm const operand");
                             auto text = inlineAsmConstant(*constant);
                             of << FmtGccAsm(text, escapePercent);
                             continue;
                         }
                         if (const auto* path = param.opt_Sym()) {
-                            MIR_ASSERT(localMirRes, f.modifier == '\0', "Modifier on asm sym operand - " << stmt);
+                            MIR_ASSERT(localMirRes, f.modifier == '\0', "Modifier on asm sym operand");
                             auto text = asmSymbol(localMirRes.sp, *path);
                             of << FmtGccAsm(text, escapePercent);
                             continue;
                         }
-                        MIR_ASSERT(localMirRes, argMappings.at(f.index) != UINT_MAX, stmt);
+                        if (param.is_Label()) {
+                            MIR_ASSERT(localMirRes, asmGoto && f.modifier == '\0', "Invalid asm label operand");
+                            of << "%l[bb" << param.as_Label() << "]";
+                            continue;
+                        }
+                        MIR_ASSERT(localMirRes, argMappings.at(f.index) != UINT_MAX, "Invalid asm operand mapping");
                         if (emitAttSyntax) {
                             of << "%%";
                         }
                         of << "%";
                         if (argMappings.at(f.index) == UINT_MAX - 1) {
-                            of << se.params[f.index].as_Reg().spec.as_Explicit();
+                            of << asmParams[f.index].as_Reg().spec.as_Explicit();
                             continue;
                         }
                         switch (f.modifier) {
                             case '\0': {
-                                if (const auto* reg = se.params[f.index].opt_Reg()) {
+                                if (const auto* reg = asmParams[f.index].opt_Reg()) {
                                     if (const auto* regClass = reg->spec.opt_Class()) {
                                         switch (*regClass) {
                                             case AsmRegisterClass::x86Reg:
@@ -5146,7 +5166,7 @@ namespace {
                                 of << 'k'; // x86: `k` selects eax instead of rax
                                 break;
                             default:
-                                MIR_TODO(localMirRes, "Asm2 GCC: modifier " << f.modifier << " - " << stmt);
+                                MIR_TODO(localMirRes, "Asm2 GCC: modifier " << f.modifier);
                         }
                         of << argMappings.at(f.index);
                     }
@@ -5157,7 +5177,7 @@ namespace {
                     of << ".intel_syntax noprefix; ";
                 }
                 of << "\"";
-                if (se.options.naked) {
+                if (asmOptions.naked) {
                     MIR_ASSERT(localMirRes, outputs.empty() && inputs.empty() && clobbers.empty() && !blockOpen, "naked_asm contains register operands");
                     of << ");\n";
                     return;
@@ -5185,7 +5205,7 @@ namespace {
                                 of << "=";
                                 break;
                             case AsmDirection::In:
-                                MIR_BUG(localMirRes, "Input-only asm parameter listed as an output - " << stmt);
+                                MIR_BUG(localMirRes, "Input-only asm parameter listed as an output");
                         }
                     }
                     TU_MATCH_HDRA((p.spec), {)
@@ -5251,7 +5271,7 @@ namespace {
                         of << "\"";
                         if (r.output && !r.spec.is_Explicit()) {
                             const auto it = ::std::find(outputs.begin(), outputs.end(), &r);
-                            MIR_ASSERT(localMirRes, it != outputs.end(), stmt);
+                            MIR_ASSERT(localMirRes, it != outputs.end(), "Missing asm output");
                             of << (it - outputs.begin());
                         } else {
                             TU_MATCH_HDRA((r.spec), {)
@@ -5303,20 +5323,34 @@ namespace {
                         }
                         of << ")";
                     }
-                        TU_ARMA(Const, c) MIR_TODO(localMirRes, "Asm2 GCC - Const: " << stmt);
-                        TU_ARMA(Sym, c) MIR_TODO(localMirRes, "Asm2 GCC - Sym: " << stmt);
+                        TU_ARMA(Const, c) MIR_TODO(localMirRes, "Asm2 GCC - Const");
+                        TU_ARMA(Sym, c) MIR_TODO(localMirRes, "Asm2 GCC - Sym");
+                        TU_ARMA(Label, c) MIR_BUG(localMirRes, "Asm label listed as an input");
                     }
                 }
-                of << ":";
+                of << " :";
                 for (size_t i = 0; i < clobbers.size(); i++) {
                     if (i > 0) {
                         of << ",";
                     }
                     of << " \"" << clobbers[i] << "\"";
                 }
+                if (asmGoto) {
+                    of << " :";
+                    bool firstLabel = true;
+                    for (size_t i = 0; i < asmParams.size(); ++i) {
+                        if (const auto* label = asmParams[i].opt_Label()) {
+                            if (!firstLabel) {
+                                of << ",";
+                            }
+                            firstLabel = false;
+                            of << " bb" << *label;
+                        }
+                    }
+                }
                 of << ");\n";
-                for (size_t i = 0; i < se.params.size(); i++) {
-                    if (const auto* pe = se.params[i].opt_Reg()) {
+                for (size_t i = 0; i < asmParams.size(); i++) {
+                    if (const auto* pe = asmParams[i].opt_Reg()) {
                         if (const auto* regnameP = pe->spec.opt_Explicit()) {
                             if (pe->output) {
                                 of << indent;
@@ -5329,6 +5363,13 @@ namespace {
                                 of << "asm_" << *regnameP << ";\n";
                             }
                         }
+                    }
+                }
+                if (asmGoto) {
+                    if (retBlock == ~0u) {
+                        of << indent << "__builtin_unreachable();\n";
+                    } else {
+                        of << indent << "goto bb" << retBlock << ";\n";
                     }
                 }
                 if (blockOpen) {

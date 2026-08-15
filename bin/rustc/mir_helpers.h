@@ -376,6 +376,9 @@ public:
                                 rv |= visitLvalue(*v.output, MIRValUsage::Write);
                             }
                         }
+                        TU_ARMA(Label, v) {
+                            rv |= visitBlockId(v);
+                        }
                     }
                 }
             }
@@ -472,6 +475,20 @@ public:
                 for (auto& v : e.args) {
                     rv |= visitParam(v, MIRValUsage::Move);
                 }
+            }
+            TU_ARMA(Asm2, e) {
+                for (auto& p : e.params) {
+                    TU_MATCH_HDRA((p), {)
+                    TU_ARMA(Const, v) rv |= visitConst(v);
+                    TU_ARMA(Sym, v) visitPath(v);
+                    TU_ARMA(Reg, v) {
+                        if (v.input) rv |= visitParam(*v.input, MIRValUsage::Read);
+                        if (v.output) rv |= visitLvalue(*v.output, MIRValUsage::Write);
+                    }
+                    TU_ARMA(Label, v) rv |= visitBlockId(v);
+                    }
+                }
+                if (e.retBlock != ~0u) rv |= visitBlockId(e.retBlock);
             }
             }
             return rv;

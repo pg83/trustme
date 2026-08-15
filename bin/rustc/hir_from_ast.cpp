@@ -3113,6 +3113,9 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 TU_ARMA(Sym, e) {
                     params.push_back(mCtx.LowerHIRPath(v.span(), e, FromASTPathClass::Value));
                 }
+                TU_ARMA(Label, e) {
+                    params.push_back(HIRExprNodeAsm2::Param::make_Label({lower(e.code)}));
+                }
                 TU_ARMA(RegSingle, e) {
                     params.push_back(
                         HIRExprNodeAsm2::Param::make_RegSingle({

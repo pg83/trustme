@@ -166,6 +166,7 @@ struct ASTExprNodeAsm2: public ASTExprNode {
         Const,
         (Const, ASTExprNodeP),
         (Sym, ASTPath),
+        (Label, struct { ASTExprNodeP code; }),
         (RegSingle,
          struct {
              AsmDirection dir;

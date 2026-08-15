@@ -90,6 +90,9 @@ namespace {
                                             os << "_";
                                         }
                                     }
+                                    TU_ARMA(Label, v) {
+                                        os << "label bb" << v;
+                                    }
                             }
                             }
                             if (e.options.any()) {
@@ -174,7 +177,8 @@ namespace {
                                                                            << "_ => bb" << e.defTarget << "}\n";),
                     (Drop, os << "drop(" << FMT_M(e.slot); if (e.kind == MIRDropKind::SHALLOW) os << " SHALLOW"; if (e.flagIdx != ~0u) os << " IF df$" << e.flagIdx; os << ") goto bb" << e.target << " unwind "; fmtUnwind(e.unwind); os << "\n";),
                     (Call, os << FMT_M(e.retVal) << " = "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ") goto bb" << e.retBlock << " unwind "; fmtUnwind(e.unwind); os << "\n";),
-                    (TailCall, os << "tailcall "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ")\n";)
+                    (TailCall, os << "tailcall "; TU_MATCHA((e.fcn), (e2), (Value, os << "(" << FMT_M(e2) << ")";), (Path, os << e2;), (Intrinsic, os << "\"" << e2.name << "\"::" << e2.params;)) os << "( "; for (const auto& arg : e.args) os << FMT_M(arg) << ", "; os << ")\n";),
+                    (Asm2, os << "asm2!("; for (const auto& l : e.lines) l.fmt(os); os << ") -> "; if (e.retBlock != ~0u) os << "bb" << e.retBlock << ", "; for (const auto& p : e.params) if (const auto* target = p.opt_Label()) os << "bb" << *target << ", "; os << "\n";)
                 )
                 decIndent();
                 os << indent() << "}\n";

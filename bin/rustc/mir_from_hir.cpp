@@ -874,6 +874,7 @@ namespace {
             MIRStatement::Data_Asm2 ent;
             ent.options = node.options;
             ent.lines = node.lines;
+            std::vector<std::pair<MIRBasicBlockId, HIRExprNodeP*>> labels;
 
             auto movedParam = [&](const MIRParam& p) {
                 if (const auto* e = p.opt_LValue()) {
@@ -895,6 +896,11 @@ namespace {
                     }
                     TU_ARMA(Sym, e) {
                         ent.params.push_back(MIRAsmParam::make_Sym(e.clone()));
+                    }
+                    TU_ARMA(Label, e) {
+                        auto bb = builder.newBbUnlinked();
+                        ent.params.push_back(MIRAsmParam::make_Label(bb));
+                        labels.push_back({bb, &e.code});
                     }
                     TU_ARMA(RegSingle, e) {
                         std::unique_ptr<MIRParam> input;
@@ -959,8 +965,49 @@ namespace {
                     }
                 }
             }
-            builder.pushStmt(node.span(), mv$(ent));
+
+            if (labels.empty()) {
+                builder.pushStmt(node.span(), mv$(ent));
+                if (!node.options.noreturn) {
+                    builder.setResult(node.span(), MIRRValue::make_Tuple({}));
+                } else {
+                    builder.endBlock(MIRTerminator::make_Unreachable({}));
+                }
+                return;
+            }
+
+            const auto nextBb = builder.newBbUnlinked();
+            auto splitScope = builder.newScopeSplit(node.span());
+            builder.endBlock(MIRTerminator::make_Asm2({std::move(ent.options), std::move(ent.lines), std::move(ent.params), node.options.noreturn ? ~0u : nextBb}));
+
+            bool hasReachableArm = false;
             if (!node.options.noreturn) {
+                builder.setCurBlock(nextBb);
+                builder.endSplitArm(node.span(), splitScope, /*reachable=*/true);
+                builder.pauseCurBlock();
+                hasReachableArm = true;
+            } else {
+                builder.endSplitArm(node.span(), splitScope, /*reachable=*/false);
+            }
+
+            for (auto& label : labels) {
+                builder.setCurBlock(label.first);
+                this->visitNodePtr(*label.second);
+                if (builder.blockActive()) {
+                    if (builder.hasResult()) {
+                        builder.getResult((*label.second)->span());
+                    }
+                    builder.endSplitArm((*label.second)->span(), splitScope, /*reachable=*/true);
+                    builder.endBlock(MIRTerminator::make_Goto(nextBb));
+                    hasReachableArm = true;
+                } else {
+                    builder.endSplitArm((*label.second)->span(), splitScope, /*reachable=*/false);
+                }
+            }
+
+            builder.setCurBlock(nextBb);
+            builder.terminateScope(node.span(), mv$(splitScope), hasReachableArm);
+            if (hasReachableArm) {
                 builder.setResult(node.span(), MIRRValue::make_Tuple({}));
             } else {
                 builder.endBlock(MIRTerminator::make_Unreachable({}));

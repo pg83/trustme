@@ -673,6 +673,14 @@ enum class MIRDropKind {
     DEEP,
 };
 
+TAGGED_UNION(MIRAsmParam, Const, (Const, MIRConstant), (Sym, HIRPath), (Reg, struct {
+                 AsmDirection dir;
+                 AsmRegisterSpec spec;
+                 std::unique_ptr<MIRParam> input;
+                 std::unique_ptr<MIRLValue> output;
+             }), (Label, MIRBasicBlockId));
+extern bool operator==(const MIRAsmParam& a, const MIRAsmParam& b);
+
 TAGGED_UNION(
     MIRTerminator,
     Incomplete,
@@ -724,6 +732,14 @@ TAGGED_UNION(
         ::std::vector<MIRParam> args;
         SourceLocation source;
         bool tracksCaller = false;
+    }),
+    // Inline assembly with label operands. Unlike statement-form Asm2, this is
+    // a terminator because the assembly can branch to any Label parameter.
+    (Asm2, struct {
+        AsmOptions options;
+        std::vector<AsmLine> lines;
+        ::std::vector<MIRAsmParam> params;
+        MIRBasicBlockId retBlock;
     })
 );
 extern ::std::ostream& operator<<(::std::ostream& os, const MIRTerminator& x);
@@ -732,14 +748,6 @@ extern bool operator==(const MIRTerminator& a, const MIRTerminator& b);
 static inline bool operator!=(const MIRTerminator& a, const MIRTerminator& b) {
     return !(a == b);
 }
-
-TAGGED_UNION(MIRAsmParam, Const, (Const, MIRConstant), (Sym, HIRPath), (Reg, struct {
-                 AsmDirection dir;
-                 AsmRegisterSpec spec;
-                 std::unique_ptr<MIRParam> input;
-                 std::unique_ptr<MIRLValue> output;
-             }));
-extern bool operator==(const MIRAsmParam& a, const MIRAsmParam& b);
 
 TAGGED_UNION(
     MIRStatement,

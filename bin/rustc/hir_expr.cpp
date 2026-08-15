@@ -228,6 +228,9 @@ DEF_VISIT_H(HIRExprNodeAsm2, node) {
             TU_ARMA(Sym, e) {
                 visitPath(HIRVisitor::PathContext::VALUE, e);
             }
+            TU_ARMA(Label, e) {
+                visitNodePtr(e.code);
+            }
             TU_ARMA(RegSingle, e) {
                 visitNodePtr(e.val);
             }

@@ -363,6 +363,9 @@ NODE(
             TU_ARMA(Sym, e) {
                 os << "sym " << e;
             }
+            TU_ARMA(Label, e) {
+                os << "label " << *e.code;
+            }
             TU_ARMA(RegSingle, e) {
                 os << "reg(" << e.dir << " " << e.spec << ") " << *e.val;
             }
@@ -395,6 +398,9 @@ NODE(
             }
             TU_ARMA(Sym, e) {
                 params.push_back(Param::make_Sym(e));
+            }
+            TU_ARMA(Label, e) {
+                params.push_back(Param::make_Label({e.code->clone()}));
             }
             TU_ARMA(RegSingle, e) {
                 params.push_back(Param::make_RegSingle({e.dir, e.spec.clone(), e.val->clone()}));
@@ -946,6 +952,9 @@ NV(ASTExprNodeAsm2, {
                 visit(e);
             }
             TU_ARMA(Sym, e) {
+            }
+            TU_ARMA(Label, e) {
+                visit(e.code);
             }
             TU_ARMA(RegSingle, e) {
                 visit(e.val);

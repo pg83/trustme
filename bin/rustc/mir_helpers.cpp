@@ -878,6 +878,8 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                                         }
                                     }
                                 }
+                                TU_ARMA(Label, v) {
+                                }
                         }
                         }
                     }
@@ -976,6 +978,30 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 }
                 TU_ARMA(TailCall, te) {
                     state.finalise(stmtIdx);
+                }
+                TU_ARMA(Asm2, te) {
+                    for (const auto& p : te.params) {
+                        if (const auto* reg = p.opt_Reg()) {
+                            if (reg->output && *reg->output == mLv) {
+                                state.finalise(stmtIdx);
+                                return;
+                            }
+                        }
+                    }
+                    bool hasTarget = false;
+                    if (te.retBlock != ~0u) {
+                        statesToDo.push_back(::std::make_pair(te.retBlock, state.clone()));
+                        hasTarget = true;
+                    }
+                    for (const auto& p : te.params) {
+                        if (const auto* target = p.opt_Label()) {
+                            statesToDo.push_back(::std::make_pair(*target, state.clone()));
+                            hasTarget = true;
+                        }
+                    }
+                    if (!hasTarget) {
+                        state.finalise(stmtIdx);
+                    }
                 }
             }
         }

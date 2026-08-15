@@ -296,6 +296,98 @@ namespace {
         }
         ERROR(sp, E0000, "Unknown architecture for asm!");
     }
+
+    std::string canonicalX86Register(const std::string& name, bool is64Bit) {
+        static const std::pair<const char*, const char*> aliases[] = {
+            {"al", "rax"}, {"ah", "rax"}, {"ax", "rax"}, {"eax", "rax"}, {"rax", "rax"},
+            {"bl", "rbx"}, {"bh", "rbx"}, {"bx", "rbx"}, {"ebx", "rbx"}, {"rbx", "rbx"},
+            {"cl", "rcx"}, {"ch", "rcx"}, {"cx", "rcx"}, {"ecx", "rcx"}, {"rcx", "rcx"},
+            {"dl", "rdx"}, {"dh", "rdx"}, {"dx", "rdx"}, {"edx", "rdx"}, {"rdx", "rdx"},
+            {"sil", "rsi"}, {"si", "rsi"}, {"esi", "rsi"}, {"rsi", "rsi"},
+            {"dil", "rdi"}, {"di", "rdi"}, {"edi", "rdi"}, {"rdi", "rdi"},
+        };
+        for (const auto& alias : aliases) {
+            if (name == alias.first) {
+                if (!is64Bit && alias.second[0] == 'r') {
+                    return std::string("e") + (alias.second + 1);
+                }
+                return alias.second;
+            }
+        }
+        if (name.size() >= 4 && (name[0] == 'x' || name[0] == 'y' || name[0] == 'z') && name.substr(1, 2) == "mm") {
+            return std::string("zmm") + name.substr(3);
+        }
+        if (name == "st" || name == "st(0)") {
+            return "st(0)";
+        }
+        if (is64Bit && name.size() >= 2 && name[0] == 'r' && std::isdigit(static_cast<unsigned char>(name[1]))) {
+            auto end = name.find_first_not_of("0123456789", 1);
+            return name.substr(0, end);
+        }
+        return name;
+    }
+
+    std::vector<std::string> getClobberAbiRegisters(const WireBoard& wb, const Span& sp, const std::string& abi) {
+        const auto& arch = TargetGetCurSpec(wb).arch.mName;
+        if (arch == "x86_64") {
+            const bool sysv = abi == "C" || abi == "system" || abi == "sysv64";
+            const bool win = abi == "win64" || abi == "efiapi";
+            if (!sysv && !win) {
+                ERROR(sp, E0000, "Unsupported clobber ABI `" << abi << "` for x86-64");
+            }
+            std::vector<std::string> rv = {"rax", "rcx", "rdx"};
+            if (sysv) {
+                rv.push_back("rsi");
+                rv.push_back("rdi");
+            }
+            for (unsigned i = 8; i <= 11; i++) {
+                rv.push_back(FMT("r" << i));
+            }
+            for (unsigned i = 0; i <= 15; i++) {
+                rv.push_back(FMT("xmm" << i));
+            }
+            for (unsigned i = 16; i <= 31; i++) {
+                rv.push_back(FMT("zmm" << i));
+            }
+            for (unsigned i = 0; i <= 7; i++) {
+                rv.push_back(FMT("k" << i));
+                rv.push_back(FMT("mm" << i));
+                rv.push_back(i == 0 ? "st" : FMT("st(" << i << ")"));
+                rv.push_back(FMT("tmm" << i));
+            }
+            return rv;
+        }
+        if (arch == "x86") {
+            if (abi != "C" && abi != "system" && abi != "efiapi" && abi != "cdecl" && abi != "stdcall" && abi != "fastcall") {
+                ERROR(sp, E0000, "Unsupported clobber ABI `" << abi << "` for x86");
+            }
+            std::vector<std::string> rv = {"eax", "ecx", "edx"};
+            for (unsigned i = 0; i <= 7; i++) {
+                rv.push_back(FMT("xmm" << i));
+                rv.push_back(FMT("k" << i));
+                rv.push_back(FMT("mm" << i));
+                rv.push_back(i == 0 ? "st" : FMT("st(" << i << ")"));
+            }
+            return rv;
+        }
+        if (arch == "riscv64") {
+            if (abi != "C" && abi != "system" && abi != "efiapi") {
+                ERROR(sp, E0000, "Unsupported clobber ABI `" << abi << "` for RISC-V");
+            }
+            std::vector<std::string> rv;
+            for (auto i : {1u, 5u, 6u, 7u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 28u, 29u, 30u, 31u}) {
+                rv.push_back(FMT("x" << i));
+            }
+            for (auto i : {0u, 1u, 2u, 3u, 4u, 5u, 6u, 7u, 10u, 11u, 12u, 13u, 14u, 15u, 16u, 17u, 28u, 29u, 30u, 31u}) {
+                rv.push_back(FMT("f" << i));
+            }
+            for (unsigned i = 0; i <= 31; i++) {
+                rv.push_back(FMT("v" << i));
+            }
+            return rv;
+        }
+        ERROR(sp, E0000, "clobber_abi is unsupported for target architecture `" << arch << "`");
+    }
 }
 
 class CAsmExpander: public ExpandProcMacro {
@@ -326,6 +418,7 @@ public:
 
         std::vector<ASTExprNodeAsm2::Param> params;
         std::vector<RcString> names;
+        std::vector<std::string> clobberAbis;
         AsmOptions options;
         while (tok.type() == TOK_COMMA) {
             if (lex.lookahead(0) == TOK_EOF) {
@@ -335,6 +428,21 @@ public:
 
             RcString bindingName;
             auto v = getTokIdentRword(lex);
+            if (v == "clobber_abi") {
+                GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+                do {
+                    GET_CHECK_TOK(tok, lex, TOK_STRING);
+                    clobberAbis.push_back(tok.str());
+                    if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
+                        GET_TOK(tok, lex);
+                        break;
+                    }
+                } while (GET_TOK(tok, lex) == TOK_COMMA);
+                CHECK_TOK(tok, TOK_PAREN_CLOSE);
+
+                GET_TOK(tok, lex);
+                continue;
+            }
             if (v == "options") {
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
                 do {
@@ -404,6 +512,12 @@ public:
             } else if (v == "sym") {
                 auto p = ParsePath(lex, PATH_GENERIC_EXPR);
                 paramSpec = ASTExprNodeAsm2::Param::make_Sym(std::move(p));
+            } else if (v == "label") {
+                auto e = ParseExpr0(lex);
+                if (!cast<ASTExprNodeBlock>(e.get())) {
+                    ERROR(sp, E0000, "asm! label operand requires a block");
+                }
+                paramSpec = ASTExprNodeAsm2::Param::make_Label({std::move(e)});
             } else {
                 AsmDirection dir;
                 if (v == "inlateout") {
@@ -417,7 +531,7 @@ public:
                 } else if (v == "inout") {
                     dir = AsmDirection::InOut;
                 } else {
-                    ERROR(sp, E0000, "Unknown asm fragment - `" << tok.ident().name << "`");
+                    ERROR(sp, E0000, "Unknown asm fragment - `" << v << "`");
                 }
 
                 GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
@@ -477,6 +591,55 @@ public:
             GET_TOK(tok, lex);
         }
         CHECK_TOK(tok, TOK_EOF);
+
+        bool hasLabel = false;
+        bool hasOutputValue = false;
+        for (const auto& param : params) {
+            if (param.is_Label()) {
+                hasLabel = true;
+            } else if (const auto* reg = param.opt_RegSingle()) {
+                hasOutputValue |= reg->dir != AsmDirection::In;
+            } else if (const auto* reg = param.opt_Reg()) {
+                hasOutputValue |= bool(reg->valOut);
+            }
+        }
+        if (hasLabel && hasOutputValue) {
+            ERROR(sp, E0000, "using both label and output operands for inline assembly is unstable in Rust 1.90");
+        }
+
+        if (!clobberAbis.empty()) {
+            const auto& arch = TargetGetCurSpec(wb).arch.mName;
+            const bool isX86 = arch == "x86" || arch == "x86_64";
+            const bool is64Bit = arch == "x86_64";
+            std::set<std::string> explicitOutputs;
+            for (const auto& param : params) {
+                const AsmRegisterSpec* spec = nullptr;
+                if (const auto* e = param.opt_Reg()) {
+                    if (e->dir != AsmDirection::In) {
+                        spec = &e->spec;
+                    }
+                } else if (const auto* e = param.opt_RegSingle()) {
+                    if (e->dir != AsmDirection::In) {
+                        spec = &e->spec;
+                    }
+                }
+                if (spec && spec->is_Explicit()) {
+                    explicitOutputs.insert(isX86 ? canonicalX86Register(spec->as_Explicit(), is64Bit) : spec->as_Explicit());
+                }
+            }
+
+            std::set<std::string> added;
+            for (const auto& abi : clobberAbis) {
+                for (auto reg : getClobberAbiRegisters(wb, sp, abi)) {
+                    const auto canonical = isX86 ? canonicalX86Register(reg, is64Bit) : reg;
+                    if (explicitOutputs.count(canonical) || !added.insert(canonical).second) {
+                        continue;
+                    }
+                    names.push_back({});
+                    params.push_back(ASTExprNodeAsm2::Param::make_Reg({AsmDirection::LateOut, AsmRegisterSpec::make_Explicit(mv$(reg)), nullptr, nullptr}));
+                }
+            }
+        }
 
         // - Sanity-check options
         if (options.nomem && options.readonly) {
@@ -614,6 +777,9 @@ public:
                 }
                 TU_ARMA(Sym, path) {
                     globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Sym(std::move(path)));
+                }
+                TU_ARMA(Label, _param) {
+                    ERROR(sp, E0000, "`label` is not allowed in `global_asm!`");
                 }
                 TU_ARMA(RegSingle, _param) {
                     ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");

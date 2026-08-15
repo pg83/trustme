@@ -1414,6 +1414,8 @@ MIRAsmParam HirDeserialiser::deserialiseAsmParam() {
             return MIRAsmParam::make_Const(deserialiseMirConstant());
         case MIRAsmParam::TAG_Reg:
             return MIRAsmParam::make_Reg({static_cast<AsmDirection>(in.readTag()), deserialiseAsmSpec(), in.readBool() ? ::std::make_unique<MIRParam>(deserialiseMirParam()) : std::unique_ptr<MIRParam>(), in.readBool() ? ::std::make_unique<MIRLValue>(deserialiseMirLvalue()) : std::unique_ptr<MIRLValue>()});
+        case MIRAsmParam::TAG_Label:
+            return MIRAsmParam::make_Label(static_cast<unsigned int>(in.readCount()));
         default:
             BUG(Span(), "Bad tag for MIR::AsmParam - " << tag);
     }
@@ -1496,6 +1498,7 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
             _(Drop, {static_cast<MIRDropKind>(in.readTag()), deserialiseMirLvalue(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction()})
             _(Call, {static_cast<unsigned int>(in.readCount()), deserialiseMirUnwindAction(), deserialiseMirLvalue(), deserialiseMirCalltarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
             _(TailCall, {deserialiseMirCalltarget(), deserialiseVec<MIRParam>(), {in.readIstring(), static_cast<unsigned int>(in.readCount()), static_cast<unsigned int>(in.readCount())}, in.readBool()})
+            _(Asm2, {deserialiseAsmOptions(), deserialiseVec<AsmLine>(), deserialiseVec<MIRAsmParam>(), static_cast<unsigned int>(in.readCount())})
 #undef _
         default:
             BUG(Span(), "Bad tag for MIR::Terminator - " << tag);
@@ -3314,6 +3317,9 @@ public:
                     serialise(e.output);
                 }
             }
+            TU_ARMA(Label, e) {
+                out.writeCount(e);
+            }
             }
     }
 
@@ -3404,6 +3410,7 @@ public:
             (Drop, out.writeTag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.writeCount(e.flagIdx); out.writeCount(e.target); serialiseUnwind(e.unwind);),
             (Call, out.writeCount(e.retBlock); serialiseUnwind(e.unwind); serialise(e.retVal); serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);),
             (TailCall, serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);)
+            ,(Asm2, serialise(e.options); serialiseVec(e.lines); serialiseVec(e.params); out.writeCount(e.retBlock);)
         )
     }
 

@@ -1013,6 +1013,9 @@ namespace {
                                                 of << "_";
                                             }
                                         }
+                                        TU_ARMA(Label, v) {
+                                            of << "label " << v;
+                                        }
                             }
                                 }
                                 of << ", ";
@@ -1050,6 +1053,23 @@ namespace {
                         break;
                         TU_ARM(term, Unreachable, _e)(void) _e;
                         of << "UNREACHABLE\n";
+                        break;
+                        TU_ARM(term, Asm2, e) {
+                            of << "ASM2_GOTO (";
+                            for (const auto& line : e.lines) {
+                                of << line;
+                            }
+                            of << ") -> ";
+                            if (e.retBlock != ~0u) {
+                                of << e.retBlock << ", ";
+                            }
+                            for (const auto& p : e.params) {
+                                if (const auto* target = p.opt_Label()) {
+                                    of << *target << ", ";
+                                }
+                            }
+                            of << "\n";
+                        }
                         break;
                         TU_ARM(term, Goto, e)
                         of << "GOTO " << e << "\n";

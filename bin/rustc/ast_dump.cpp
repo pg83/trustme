@@ -175,6 +175,10 @@ public:
                 TU_ARMA(Sym, e) {
                     os << "sym " << e;
                 }
+                TU_ARMA(Label, e) {
+                    os << "label ";
+                    ASTNodeVisitor::visit(e.code);
+                }
                 TU_ARMA(RegSingle, e) {
                     os << e.dir << "(" << e.spec << ") ";
                     ASTNodeVisitor::visit(e.val);
