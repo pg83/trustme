@@ -348,7 +348,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                             lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())));
                             return ParseExprBlockLineStmt(lex, *addSilence);
                         }
-                        return rv;
+                        return isBlockLine ? finishBlockExpression(mv$(rv)) : mv$(rv);
                     }
                     tok = Token(Token::TagTakeIP(), InterpolatedFragment(std::move(p), std::move(pathSpan)));
                 }
