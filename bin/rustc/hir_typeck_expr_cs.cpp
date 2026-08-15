@@ -10463,6 +10463,7 @@ public:
         this->context.equateTypes(node.span(), node.resType, ty);
 
         const tTupleFields* fieldsPtr = nullptr;
+        const HIRGenericParams* generics = nullptr;
             TU_MATCH_HDRA( (ty->as_Path().binding), {)
             TU_ARMA(Unbound, e) {
             }
@@ -10471,6 +10472,7 @@ public:
             TU_ARMA(Enum, e) {
                 const auto& varName = node.mPath.mPath.components().back();
                 const auto& enm = *e;
+                generics = &enm.mParams;
                 size_t idx = enm.findVariant(varName);
                 ASSERT_BUG(sp, idx < enm.mData.as_Data().size(), "Unknown variant - " << node.mPath);
                 const auto& varTy = enm.mData.as_Data()[idx].type;
@@ -10483,6 +10485,7 @@ public:
             TU_ARMA(Struct, e) {
                 ASSERT_BUG(sp, e->mData.is_Tuple(), "Pointed struct in TupleVariant (" << node.mPath << ") isn't a Tuple");
                 fieldsPtr = &e->mData.as_Tuple();
+                generics = &e->mParams;
             }
             TU_ARMA(Union, e) {
                 BUG(sp, "TupleVariant pointing to a union");
@@ -10492,12 +10495,15 @@ public:
             }
             }
             assert(fieldsPtr);
+            assert(generics);
             const tTupleFields& fields = *fieldsPtr;
             if( fields.size() != node.mArgs.size() ) {
             ERROR(node.span(), E0000, "Tuple variant constructor argument count doesn't match type - " << node.mPath);
             }
 
             auto monomorphCb = MonomorphStatePtr(this->context.crate.types, ty, &node.mPath.mParams, nullptr);
+
+            applyBoundsAsRules(this->context, sp, *generics, monomorphCb, /*is_impl_level=*/true);
 
             // Bind fields with type params (coercable)
             node.argTypes.resize( node.mArgs.size() );
@@ -10670,11 +10676,30 @@ public:
     void visit(HIRExprNodeUnitVariant& node) override {
         TRACE_FUNCTION_F(&node << " " << node.mPath << " [" << (node.isStruct ? "struct" : "enum") << "]");
 
-        // TODO: Check?
-
         // - Create ivars in path, and set result type
         const auto ty = this->getStructenumTy(node.span(), node.isStruct, node.mPath);
         this->context.equateTypes(node.span(), node.resType, ty);
+
+        const HIRGenericParams* generics = nullptr;
+        TU_MATCH_HDRA((ty->as_Path().binding), {)
+        TU_ARMA(Unbound, e) {
+        }
+        TU_ARMA(Opaque, e) {
+        }
+        TU_ARMA(Enum, e) {
+            generics = &e->mParams;
+        }
+        TU_ARMA(Union, e) {
+        }
+        TU_ARMA(ExternType, e) {
+        }
+        TU_ARMA(Struct, e) {
+            generics = &e->mParams;
+        }
+        }
+        ASSERT_BUG(node.span(), generics, "Unit variant has invalid type " << ty);
+        auto monomorph = MonomorphStatePtr(this->context.crate.types, ty, &node.mPath.mParams, nullptr);
+        applyBoundsAsRules(this->context, node.span(), *generics, monomorph, /*is_impl_level=*/true);
     }
 
     void visit(HIRExprNodeCallPath& node) override {
@@ -10999,6 +11024,7 @@ public:
                         auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.mParams, nullptr);
                         auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.mPath.clone(), &s}));
 
+                        applyBoundsAsRules(this->context, sp, s.mParams, ms, /*is_impl_level=*/true);
                         this->context.equateTypes(sp, node.resType, ty);
                     } break;
                     case HIRExprNodePathValue::ENUM_VAR_CONSTR: {
@@ -11012,6 +11038,7 @@ public:
 
                         auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, &e.mParams, nullptr);
                         auto ty = this->context.crate.types.intern(HIRTypeData::make_NamedFunction({node.mPath.clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({&enm, idx})}));
+                        applyBoundsAsRules(this->context, sp, enm.mParams, ms, /*is_impl_level=*/true);
                         this->context.equateTypes(sp, node.resType, ty);
                     } break;
                     case HIRExprNodePathValue::STATIC: {
