@@ -1456,6 +1456,11 @@ namespace {
             HIRExprVisitorDef::visit(node);
         }
 
+        void visit(HIRExprNodeAsyncBlock& node) override {
+            this->checkTypeResolvedTop(node.span(), node.returnType);
+            HIRExprVisitorDef::visit(node);
+        }
+
         void visit(HIRExprNodeGeneratorWrapper& node) override {
             BUG(node.span(), "");
         }

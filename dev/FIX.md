@@ -48,23 +48,19 @@ of a shared root cause; split a row whenever minimal reproducers diverge.
    block/loop results, match ergonomics, function-item coercions, patterns,
    async types, and ordinary generic inference; the common error line is not a
    common implementation root.
-2. Unresolved types reaching translation: 12 infer/async/closure types rejected
-   by mangling at `trans_mangling.cpp:274`, plus 4 `sizeof` operations on infer
-   types at `trans_target.cpp:496`.
-3. Shared backend/runtime families: 12 pointer equality/provenance tests, 9
+2. Shared backend/runtime families: 12 pointer equality/provenance tests, 9
    `core::num::dec2flt` library tests, 9 Miri x86-intrinsic aborts, 9 async-drop
    output mismatches, and 5 remaining `track_caller` cases spanning a trait
    object, closure, FFI, indexing, and macro declaration.
-4. Trait lookup, normalization, and inference: 8 inferred trait obligations
+3. Trait lookup, normalization, and inference: 8 inferred trait obligations
    remain ambiguous.
 
 ## Internal compiler failures
 
-There are 142 unfinished compiler-internal failures in 91 stable signatures.
+There are 130 unfinished compiler-internal failures in 90 stable signatures.
 
 | signature or root cause | tests | note |
 |---|---:|---|
-| non-encodable type, `trans_mangling.cpp:274` | 12 | infer variables, async and closure types reach mangling |
 | inline-assembly token assertion, `parse_token.h:71` | 5 | five Rust Reference asm fragments |
 | intrinsic/unsized translation errors, `mir_helpers.h:108` | 5 | two `vtable_align`; one each `fmuladdf32`, `fadd_fast`, and extern-type alignment |
 | `sizeof` on infer type, `trans_target.cpp:496` | 4 | const-generic/type-relation cases |

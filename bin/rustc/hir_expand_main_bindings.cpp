@@ -2755,6 +2755,18 @@ namespace {
             return rv;
         }
 
+        void fixCoroutineVarTypes(const Span& sp, const HIRGenericParams& params, const Monomorph& monomorphCb, CrVars& vars) const {
+            ClosureExprVisitorFixup fixup{mResolve.board(), &params, monomorphCb, &out};
+            for (auto& type : vars.newLocals) {
+                fixup.mResolve.expandAssociatedTypes(sp, type);
+                fixup.visitType(type);
+            }
+            for (auto& field : vars.structEnts) {
+                fixup.mResolve.expandAssociatedTypes(sp, field.ent);
+                fixup.visitType(field.ent);
+            }
+        }
+
         /// <summary>
         /// Main extraction generator visitor
         /// </summary>
@@ -2786,6 +2798,7 @@ namespace {
 
             // Generate the structure,
             auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb);
+            fixCoroutineVarTypes(sp, params, monomorphCb, crVars);
 
             {
                 TRACE_FUNCTION_F("-- Rewrite variables");
@@ -2925,6 +2938,7 @@ namespace {
             auto returnTy = monomorphCb.monomorphType(sp, node.returnType);
 
             auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb);
+            fixCoroutineVarTypes(sp, params, monomorphCb, crVars);
 
             {
                 ExprVisitorGeneratorRewrite visitorRewrite(monomorphCb, crVars.variableRewrites);
