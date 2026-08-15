@@ -3580,9 +3580,25 @@ namespace {
                 return;
             }
 
-            // Standard cast
             HIRTypeRef dstTmp;
             const auto& dstTy = localMirRes.getLvalueType(dstTmp, dst);
+            const auto* dstPrimitive = ve.type->opt_Primitive();
+            if (dstPrimitive && isInteger(*dstPrimitive)
+                && (ty->is_NamedFunction() || ty->is_Function() || ty->is_Pointer())) {
+                emitLvalue(dst);
+                of << " = static_cast<";
+                emitCtype(dstTy);
+                of << ">(reinterpret_cast<uintptr_t>(";
+                if (ty->is_NamedFunction()) {
+                    emitReifiedFunctionName(ty->as_NamedFunction().path);
+                } else {
+                    emitLvalue(ve.val);
+                }
+                of << "))";
+                return;
+            }
+
+            // Standard cast
             emitLvalue(dst);
             of << " = ";
             of << "(";

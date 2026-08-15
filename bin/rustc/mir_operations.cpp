@@ -4479,6 +4479,20 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
 #endif
     bool changed = false;
     TRACE_FUNCTION_FR("", changed);
+    auto roundFloatValue = [&](FloatValue value, HIRCoreType type) {
+        switch (type) {
+            case HIRCoreType::F16:
+                return FloatValue(static_cast<double>(static_cast<float>(F16(value))));
+            case HIRCoreType::F32:
+                return FloatValue(static_cast<double>(static_cast<float>(value)));
+            case HIRCoreType::F64:
+                return FloatValue(static_cast<double>(value));
+            case HIRCoreType::F128:
+                return value;
+            default:
+                MIR_BUG(state, "Rounding non-float constant " << type);
+        }
+    };
     auto makeFloatArithmeticResult = [](FloatValue value, HIRCoreType type) {
         if (floatValueIsNan(value)) {
             value = positiveNanFloatValue();
@@ -4835,9 +4849,10 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                         } else if (const auto* vp = nv.opt_Bool()) {
                                             newValue = MIRConstant::make_Uint({U128(vp->v ? 1u : 0u), *te});
                                         } else if (const auto* vp = nv.opt_Float()) {
+                                            const auto value = roundFloatValue(vp->v, vp->t);
                                             // NaN fails both comparisons and is left unfolded
-                                            if (FloatValue() <= vp->v && vp->v < FloatValue(18446744073709551616.0)) {
-                                                newValue = MIRConstant::make_Uint({H::truncateU(*te, U128(static_cast<uint64_t>(vp->v))), *te});
+                                            if (FloatValue() <= value && value < FloatValue(18446744073709551616.0)) {
+                                                newValue = MIRConstant::make_Uint({H::truncateU(*te, U128(static_cast<uint64_t>(value))), *te});
                                             } else {
                                                 // UB: Casting float out of range?
                                             }

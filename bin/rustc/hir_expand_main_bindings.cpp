@@ -3990,7 +3990,14 @@ public:
         auto savedAllConstant = mAllConstant;
         mAllConstant = true;
         HIRExprVisitorDef::visit(node);
-        isConstant = mAllConstant;
+        const auto* dstPrimitive = node.resType->opt_Primitive();
+        const bool exposesAddress = dstPrimitive && isInteger(*dstPrimitive)
+            && (node.mValue->resType->is_NamedFunction()
+                || node.mValue->resType->is_Function()
+                || node.mValue->resType->is_Pointer());
+        // A function or data address only becomes an integer at runtime.
+        // Promoting this cast would force CTFE to invent that address.
+        isConstant = mAllConstant && !exposesAddress;
         mAllConstant = savedAllConstant;
     }
 

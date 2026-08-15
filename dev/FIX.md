@@ -57,19 +57,19 @@ of a shared root cause; split a row whenever minimal reproducers diverge.
 
 ## Internal compiler failures
 
-There are 131 unfinished compiler-internal failures in 91 stable signatures.
+There are 130 unfinished compiler-internal failures in 90 stable signatures.
 
 | signature or root cause | tests | note |
 |---|---:|---|
 | inline-assembly token assertion, `parse_token.h:71` | 5 | five Rust Reference asm fragments |
 | intrinsic/unsized translation errors, `mir_helpers.h:108` | 5 | two `vtable_align`; one each `fmuladdf32`, `fadd_fast`, and extern-type alignment |
 | `sizeof` on infer type, `trans_target.cpp:496` | 4 | const-generic/type-relation cases |
-| 88 smaller stable signatures | 117 | one to three tests each |
+| 87 smaller stable signatures | 116 | one to three tests each |
 
 The eight signal failures are two SIGILLs at `mir_operations.cpp:1473`, two
 SIGSEGVs at `hir_conv_main_bindings.cpp:1430`, the recursive pattern-lowering
 SIGSEGV at `mir_from_hir.cpp:4760`, and three other one-test SIGSEGV signatures.
-Four uncaught exceptions and five explicit MIR TODOs are included in the 131.
+Four uncaught exceptions and five explicit MIR TODOs are included in the 130.
 
 ## Accepted Rust rejected by the front end
 
@@ -101,10 +101,10 @@ group the concrete examples by the missing language rule.
 
 ## Generated code and linking
 
-Thirty-three tests produce C++ rejected by clang. Repeated generated-code
+Thirty tests produce C++ rejected by clang. Repeated generated-code
 families are incomplete or unknown generated types (8), invalid `main` ABI
-(4), invalid assignments (4), enum-discriminant narrowing (3), pointer to
-small-integer casts (3), and inline assembly (3). Eight smaller failures remain.
+(4), invalid assignments (4), enum-discriminant narrowing (3), and inline
+assembly (3). Eight smaller failures remain.
 
 Six tests reach the linker: three miss generated constant symbols, two refer to
 intentional native symbols, and one exercises native-link directives.
