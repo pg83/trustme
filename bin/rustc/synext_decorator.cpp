@@ -2395,6 +2395,244 @@ namespace {
         return type;
     }
 
+    bool substituteType(ASTType*& type, const RcString& from, ASTType* to);
+    bool substitutePath(ASTPath& path, const RcString& from, ASTType* to);
+
+    bool substitutePathParams(ASTPathParams& params, const RcString& from, ASTType* to) {
+        bool changed = false;
+        for (auto& param : params.entries) {
+            TU_MATCH_HDRA((param), {)
+            TU_ARMA(Null, e) {}
+            TU_ARMA(Lifetime, e) {}
+            TU_ARMA(Type, e) { changed |= substituteType(e, from, to); }
+            TU_ARMA(Value, e) {}
+            TU_ARMA(AssociatedTyEqual, e) {
+                changed |= substitutePathParams(e.first.args(), from, to);
+                changed |= substituteType(e.second, from, to);
+            }
+            TU_ARMA(AssociatedTyBound, e) {
+                changed |= substitutePathParams(e.first.args(), from, to);
+                for (auto& trait : e.second) {
+                    changed |= substitutePath(*trait.path, from, to);
+                }
+            }
+            }
+        }
+        return changed;
+    }
+
+    bool substitutePath(ASTPath& path, const RcString& from, ASTType* to) {
+        bool changed = false;
+        if (!path.cls.is_Local() && !path.cls.is_Invalid()) {
+            for (auto& node : path.nodes()) {
+                changed |= substitutePathParams(node.args(), from, to);
+            }
+        }
+        if (auto* ufcs = path.cls.opt_UFCS()) {
+            changed |= substituteType(ufcs->type, from, to);
+            if (ufcs->trait) {
+                changed |= substitutePath(*ufcs->trait, from, to);
+            }
+        }
+        return changed;
+    }
+
+    bool substituteType(ASTType*& type, const RcString& from, ASTType* to) {
+        if (const auto* generic = type->mData.opt_Generic()) {
+            if (generic->name == from) {
+                type = to->clone();
+                return true;
+            }
+            return false;
+        }
+        if (const auto* path = type->mData.opt_Path()) {
+            if ((*path)->isTrivial() && (*path)->asTrivial() == from) {
+                type = to->clone();
+                return true;
+            }
+        }
+
+        bool changed = false;
+        TU_MATCH_HDRA((type->mData), {)
+        TU_ARMA(None, e) {}
+        TU_ARMA(Any, e) {}
+        TU_ARMA(Bang, e) {}
+        TU_ARMA(Unit, e) {}
+        TU_ARMA(Macro, e) {}
+        TU_ARMA(Primitive, e) {}
+        TU_ARMA(Function, e) {
+            changed |= substituteType(e.info.mRettype, from, to);
+            for (auto*& arg : e.info.argTypes) {
+                changed |= substituteType(arg, from, to);
+            }
+        }
+        TU_ARMA(Tuple, e) {
+            for (auto*& inner : e.innerTypes) {
+                changed |= substituteType(inner, from, to);
+            }
+        }
+        TU_ARMA(Borrow, e) { changed |= substituteType(e.inner, from, to); }
+        TU_ARMA(Pointer, e) { changed |= substituteType(e.inner, from, to); }
+        TU_ARMA(Array, e) { changed |= substituteType(e.inner, from, to); }
+        TU_ARMA(Slice, e) { changed |= substituteType(e.inner, from, to); }
+        TU_ARMA(Pattern, e) { changed |= substituteType(e.inner, from, to); }
+        TU_ARMA(Generic, e) {}
+        TU_ARMA(Path, e) { changed |= substitutePath(*e, from, to); }
+        TU_ARMA(TraitObject, e) {
+            for (auto& trait : e.traits) {
+                changed |= substitutePath(*trait.path, from, to);
+            }
+        }
+        TU_ARMA(ErasedType, e) {
+            for (auto& trait : e->traits) {
+                changed |= substitutePath(*trait.path, from, to);
+            }
+            for (auto& trait : e->maybeTraits) {
+                changed |= substitutePath(*trait.path, from, to);
+            }
+            if (e->use) {
+                changed |= substitutePathParams(*e->use, from, to);
+            }
+        }
+        }
+        return changed;
+    }
+
+    bool substituteBound(ASTGenericBound& bound, const RcString& from, ASTType* to) {
+        bool changed = false;
+        TU_MATCH_HDRA((bound), {)
+        TU_ARMA(None, e) {}
+        TU_ARMA(Lifetime, e) {}
+        TU_ARMA(TypeLifetime, e) { changed |= substituteType(e.type, from, to); }
+        TU_ARMA(IsTrait, e) {
+            changed |= substituteType(e.type, from, to);
+            changed |= substitutePath(e.trait, from, to);
+        }
+        TU_ARMA(MaybeTrait, e) {
+            changed |= substituteType(e.type, from, to);
+            changed |= substitutePath(e.trait, from, to);
+        }
+        TU_ARMA(NotTrait, e) {
+            changed |= substituteType(e.type, from, to);
+            changed |= substitutePath(e.trait, from, to);
+        }
+        TU_ARMA(Equality, e) {
+            changed |= substituteType(e.type, from, to);
+            changed |= substituteType(e.replacement, from, to);
+        }
+        }
+        return changed;
+    }
+
+    ASTGenericParams makeImplParams(stl::ObjPool& pool, const Span& sp, const ASTGenericParams& source) {
+        auto params = source.clone();
+        for (auto& param : params.mParams) {
+            if (auto* type = param.opt_Type()) {
+                type->getDefault() = mkType(pool, sp);
+            } else if (auto* value = param.opt_Value()) {
+                value->defaultValue() = ASTExpr();
+            }
+        }
+        return params;
+    }
+
+    bool isCoercePointee(const ASTPath& traitPath) {
+        if (traitPath.isTrivial()) {
+            return traitPath.asTrivial() == "CoercePointee";
+        }
+        if (const auto* path = traitPath.cls.opt_Relative()) {
+            return path->nodes.size() == 3
+                && (path->nodes[0].name() == "core" || path->nodes[0].name() == "std")
+                && path->nodes[1].name() == "marker"
+                && path->nodes[2].name() == "CoercePointee";
+        }
+        if (const auto* path = traitPath.cls.opt_Absolute()) {
+            return (path->crate == "=core" || path->crate == "=std")
+                && path->nodes.size() == 2
+                && path->nodes[0].name() == "marker"
+                && path->nodes[1].name() == "CoercePointee";
+        }
+        return false;
+    }
+
+    void addCoercePointeeImpl(const Span& sp, ASTModule& mod, ASTPath traitPath, ASTGenericParams params, ASTType* selfType) {
+        mod.addItem(sp, ASTVisibility::makeBarePrivate(), "", ASTImpl(ASTImplDef(mv$(params), makeSpanned(sp, mv$(traitPath)), selfType)), {});
+    }
+
+    void deriveCoercePointee(const Span& sp, const DeriveOpts& opts, ASTModule& mod, const ASTGenericParams& sourceParams, ASTType* selfType, const ASTStruct& str) {
+        bool hasField = false;
+        TU_MATCH_HDRA((str.mData), {)
+        TU_ARMA(Unit, e) {}
+        TU_ARMA(Struct, e) { hasField = !e.ents.empty(); }
+        TU_ARMA(Tuple, e) { hasField = !e.ents.empty(); }
+        }
+        if (!hasField) {
+            ERROR(sp, E0000, "CoercePointee can only be derived for a struct with fields");
+        }
+
+        size_t pointeeIndex = SIZE_MAX;
+        size_t typeCount = 0;
+        for (size_t i = 0; i < sourceParams.mParams.size(); i++) {
+            if (const auto* type = sourceParams.mParams[i].opt_Type()) {
+                typeCount++;
+                if (type->attrs().has("pointee")) {
+                    if (pointeeIndex != SIZE_MAX) {
+                        ERROR(sp, E0000, "Only one CoercePointee type parameter can have #[pointee]");
+                    }
+                    pointeeIndex = i;
+                }
+            }
+        }
+        if (typeCount == 0) {
+            ERROR(sp, E0000, "CoercePointee requires a generic type parameter");
+        }
+        if (typeCount == 1 && pointeeIndex == SIZE_MAX) {
+            for (size_t i = 0; i < sourceParams.mParams.size(); i++) {
+                if (sourceParams.mParams[i].is_Type()) {
+                    pointeeIndex = i;
+                    break;
+                }
+            }
+        }
+        if (pointeeIndex == SIZE_MAX) {
+            ERROR(sp, E0000, "One CoercePointee type parameter must have #[pointee]");
+        }
+
+        const auto& pointeeName = sourceParams.mParams[pointeeIndex].as_Type().name();
+        const auto targetName = RcString::newInterned("__S");
+        auto* targetParamType = mkType(*selfType->pool, sp, targetName);
+        auto* targetSelfType = selfType->clone();
+        ASSERT_BUG(sp, substituteType(targetSelfType, pointeeName, targetParamType), "CoercePointee self type does not use " << pointeeName);
+
+        addCoercePointeeImpl(sp, mod, getPath(opts.coreName, "marker", "CoercePointeeValidated"), makeImplParams(*selfType->pool, sp, sourceParams), selfType->clone());
+
+        auto params = makeImplParams(*selfType->pool, sp, sourceParams);
+        for (const auto& sourceBound : sourceParams.bounds) {
+            auto targetBound = sourceBound.clone();
+            if (substituteBound(targetBound, pointeeName, targetParamType)) {
+                params.bounds.push_back(mv$(targetBound));
+            }
+        }
+        params.addTyParam(ASTTypeParam(*selfType->pool, sp, ASTAttributeList(), targetName));
+
+        auto unsizePath = getPath(opts.coreName, "marker", "Unsize");
+        unsizePath.nodes().back().args().entries.push_back(targetParamType->clone());
+        params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(*selfType->pool, sp, pointeeName), {}, mv$(unsizePath)}));
+
+        auto dispatchPath = getPath(opts.coreName, "ops", "DispatchFromDyn");
+        dispatchPath.nodes().back().args().entries.push_back(targetSelfType->clone());
+        addCoercePointeeImpl(sp, mod, mv$(dispatchPath), params.clone(), selfType->clone());
+
+        auto coercePath = getPath(opts.coreName, "ops", "CoerceUnsized");
+        coercePath.nodes().back().args().entries.push_back(targetSelfType);
+        addCoercePointeeImpl(sp, mod, mv$(coercePath), mv$(params), selfType->clone());
+    }
+
+    template <typename T>
+    void deriveCoercePointee(const Span& sp, const DeriveOpts&, ASTModule&, const ASTGenericParams&, ASTType*, const T&) {
+        ERROR(sp, E0000, "CoercePointee can only be derived for structs");
+    }
+
     std::vector<RcString> findMacro(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const ASTModule& mod, const ASTPath& traitPath) {
         std::vector<RcString> macPath;
 
@@ -2457,6 +2695,11 @@ static void deriveItem(const Span& sp, const WireBoard& wb, const ASTCrate& crat
     ::std::vector<ASTPath> missingHandlers;
     for (const auto& traitPath : deriveItems) {
         DEBUG("- " << traitPath);
+
+        if (isCoercePointee(traitPath)) {
+            deriveCoercePointee(sp, opts, mod, item.params(), type, item);
+            continue;
+        }
 
         if (traitPath.isTrivial()) {
             auto dp = findImpl(traitPath.asTrivial());
