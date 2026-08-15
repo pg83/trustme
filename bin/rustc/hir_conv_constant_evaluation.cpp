@@ -5114,6 +5114,26 @@ void ConvertHIRConstantEvaluateConstant(const WireBoard& wb, const HIRCrate& cra
     exp.pass = Expander::Pass::Values;
     exp.implParams = implParams;
     exp.visitConstant(ip, e);
+
+    const auto path = ip.getFullPath();
+    if (e.valueState != HIRConstant::ValueState::Generic || e.monomorphCache.count(path)) {
+        return;
+    }
+
+    StaticTraitResolve resolve(wb);
+    MonomorphState constMs(crate.types);
+    const HIRGenericParams* resolvedImplParams = nullptr;
+    auto value = resolve.getValue(e.mValue.span(), path, constMs, false, &resolvedImplParams);
+    const auto* constant = value.opt_Constant();
+    ASSERT_BUG(e.mValue.span(), constant && *constant == &e, "Resolved a different constant for " << path);
+
+    HIRItemPath modIp{e.mValue.state->modPath};
+    auto nvs = NewvalState(e.mValue.state->mModule, modIp, FMT("const" << &e << "#"));
+    auto eval = HIREvaluator(e.mValue.span(), wb, nvs);
+    eval.resolve.setBothGenericsRaw(resolvedImplParams, &e.mParams);
+    auto type = constMs.monomorphType(e.mValue.span(), e.mType);
+    auto literal = eval.evaluateConstant(HIRItemPath(path), e.mValue, std::move(type), std::move(constMs));
+    e.monomorphCache.emplace(path.clone(), std::move(literal));
 }
 
 void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRTypeData* ty, HIRConstGeneric& cg) {

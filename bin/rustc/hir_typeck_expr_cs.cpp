@@ -3226,6 +3226,16 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     }
                     return rv;
                 }
+                if (auto* pe = pattern.mData.opt_Value(); pe && pe->val.is_Named()) {
+                    // A named constant is itself the pattern and can have a reference type.
+                    // Unlike literals and destructuring patterns, rustc does not peel the
+                    // scrutinee before relating it to the constant's instantiated type.
+                    const auto valueType = getPossibleTypeVal(context, pe->val);
+                    ASSERT_BUG(sp, valueType, "No type for named value pattern " << pattern);
+                    pattern.implicitDerefCount = 0;
+                    context.equateTypes(sp, type, context.getType(*valueType));
+                    return true;
+                }
 
                 // If the type is a borrow, then count derefs required for the borrow
                 // - If the first non-borrow inner is an ivar, return false
@@ -3363,18 +3373,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         rv = true;
                     }
                     TU_ARM(pattern.mData, Value, pe) {
-                        if (pe.val.is_Named()) {
-                            const auto valueType = getPossibleTypeVal(context, pe.val);
-                            ASSERT_BUG(sp, valueType, "No type for named value pattern " << pattern);
-                            const auto* resolvedValueType = context.getType(*valueType);
-                            if (const auto* valueBorrow = resolvedValueType->opt_Borrow()) {
-                                ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, "");
-                                pattern.implicitDerefCount -= 1;
-                                context.equateTypes(sp, ty, valueBorrow->inner);
-                            } else {
-                                context.equateTypes(sp, ty, resolvedValueType);
-                            }
-                        } else if (pe.val.is_String()) {
+                        if (pe.val.is_String()) {
                             if (!(ty->is_Primitive() && ty->as_Primitive() == HIRCoreType::Str)) {
                                 ASSERT_BUG(sp, pattern.implicitDerefCount >= 1, "");
                                 pattern.implicitDerefCount -= 1;

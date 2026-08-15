@@ -5025,15 +5025,29 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
     if (const auto* pe = pat.mData.opt_Value()) {
         if (const auto* pve = pe->val.opt_Named()) {
             if (pve->binding) {
-                // Request consteval
-                if (pve->binding->valueState == HIRConstant::ValueState::Unknown) {
-                    MonomorphState unusedMs(mResolve.hirCrate().types);
-                    const HIRGenericParams* implDef = nullptr;
-                    auto v = mResolve.getValue(sp, pve->path, unusedMs, false, &implDef);
-                    ConvertHIRConstantEvaluateConstant(mResolve.board(), mResolve.hirCrate(), implDef, pve->path, const_cast<HIRConstant&>(*pve->binding));
+                const HIRConstant* binding = pve->binding;
+                MonomorphState valueMs(mResolve.hirCrate().types);
+                const HIRGenericParams* implDef = nullptr;
+                auto value = mResolve.getValue(sp, pve->path, valueMs, false, &implDef);
+                if (const auto* constant = value.opt_Constant()) {
+                    binding = *constant;
                 }
-                ASSERT_BUG(sp, pve->binding->valueState == HIRConstant::ValueState::Known, "Match with an unresolved constant - " << pve->path);
-                this->appendFromLit(sp, pve->binding->valueRes, ty);
+                // Request consteval
+                if (binding->valueState == HIRConstant::ValueState::Unknown
+                    || (binding->valueState == HIRConstant::ValueState::Generic && !binding->monomorphCache.count(pve->path))) {
+                    ConvertHIRConstantEvaluateConstant(mResolve.board(), mResolve.hirCrate(), implDef, pve->path, const_cast<HIRConstant&>(*binding));
+                }
+                const EncodedLiteral* literal = nullptr;
+                if (binding->valueState == HIRConstant::ValueState::Known) {
+                    literal = &binding->valueRes;
+                } else if (binding->valueState == HIRConstant::ValueState::Generic) {
+                    const auto cached = binding->monomorphCache.find(pve->path);
+                    if (cached != binding->monomorphCache.end()) {
+                        literal = &cached->second;
+                    }
+                }
+                ASSERT_BUG(sp, literal, "Match with an unresolved constant - " << pve->path);
+                this->appendFromLit(sp, *literal, ty);
                 for (size_t i = 0; i < pat.implicitDerefCount; i++) {
                     fieldPath.pop_back();
                 }

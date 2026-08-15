@@ -3317,14 +3317,14 @@ public:
                     }
                 }
                 TU_ARMA(UfcsKnown, pe) {
-                    bool rv = this->mResolve.findImpl(sp, pe.trait.mPath, &pe.trait.mParams, pe.type, [&](const auto& impl, bool) {
-                        if (!impl.mData.is_TraitImpl()) {
-                            return true;
-                        }
-                        ve.binding = &impl.mData.as_TraitImpl().impl->constants.at(pe.item).data;
-                        return true;
-                    });
-                    if (!rv) {
+                    // The pattern's expected type participates in selecting `Self` for a
+                    // trait-associated constant.  Keep the trait declaration here instead of
+                    // committing to the first fuzzy impl before expression type checking.
+                    MonomorphState params(crate.types);
+                    auto value = mResolve.getValue(sp, ve.path, params, /*signatureOnly=*/true);
+                    if (const auto* constant = value.opt_Constant()) {
+                        ve.binding = *constant;
+                    } else {
                         ERROR(sp, E0000, "Constant " << ve.path << " couldn't be found");
                     }
                 }
