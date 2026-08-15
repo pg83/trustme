@@ -1848,6 +1848,7 @@ void Expand_Impl(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTImpl
             }
             TU_ARMA(Static, e) {
                 TRACE_FUNCTION_F("static " << i.name);
+                ExpandGenericParams(es, mod, e.params());
                 ExpandExpr(es, e.value());
                 ExpandType(es, mod, e.type());
             }
@@ -1902,6 +1903,7 @@ void Expand_ExternBlock(const ExpandState& es, ASTModule& mod, ASTExternBlock& b
                 ExpandFunction(es, mod, e);
             }
             TU_ARMA(Static, e) {
+                ExpandGenericParams(es, mod, e.params());
                 ExpandExpr(es, e.value());
                 ExpandType(es, mod, e.type());
             }
@@ -2382,6 +2384,7 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                             ExpandFunction(es, mod, e);
                         }
                         TU_ARMA(Static, e) {
+                            ExpandGenericParams(es, mod, e.params());
                             ExpandExpr(es, e.value());
                             ExpandType(es, mod, e.type());
                         }
@@ -2408,6 +2411,7 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                 ExpandFunction(es, mod, e);
             }
             TU_ARMA(Static, e) {
+                ExpandGenericParams(es, mod, e.params());
                 ExpandExpr(es, e.value());
                 ExpandType(es, mod, e.type());
             }

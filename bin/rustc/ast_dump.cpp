@@ -40,6 +40,7 @@ public:
     void handleTrait(const ASTTrait& s);
 
     void handleFunction(const ASTVisibility& vis, const RcString& name, const ASTFunction& f);
+    void handleStatic(const ASTVisibility& vis, const RcString& name, const ASTStatic& s);
 
     virtual bool isConst() const override {
         return true;
@@ -1051,21 +1052,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
             needNl = false;
         }
         printAttrs(item.attrs);
-        os << indent() << item.vis;
-        switch (e.sClass()) {
-            case ASTStatic::CONST:
-                os << "const ";
-                break;
-            case ASTStatic::STATIC:
-                os << "static ";
-                break;
-            case ASTStatic::MUT:
-                os << "static mut ";
-                break;
-        }
-        os << item.name << ": " << e.type() << " = ";
-        e.value().visitNodes(*this);
-        os << ";\n";
+        handleStatic(item.vis, item.name, e);
     }
 
     for (const auto& ip : mod.mItems) {
@@ -1116,20 +1103,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
                     // TODO: Dump macro invocations
                 ),
                 (
-                    Static, os << indent(); switch (e.sClass()) {
-                        case ASTStatic::CONST:
-                            os << "const ";
-                            break;
-                        case ASTStatic::STATIC:
-                            os << "static ";
-                            break;
-                        case ASTStatic::MUT:
-                            os << "static mut ";
-                            break;
-                    } os << it.name
-                         << ": " << e.type() << " = ";
-                    e.value().visitNodes(*this);
-                    os << ";\n";
+                    Static, handleStatic(it.vis, it.name, e);
                 ),
                 (Type, os << indent() << "type " << it.name << " = " << e.type() << ";\n";),
                 (Function, handleFunction(it.vis, it.name, e);)
@@ -1400,12 +1374,40 @@ void RustPrinter::handleTrait(const ASTTrait& s) {
     incIndent();
 
     for (const auto& i : s.items()) {
-        TU_MATCH_DEF(ASTItem, (i.data), (e), (), (Type, os << indent() << "type " << i.name << ";\n";), (Function, handleFunction(ASTVisibility::makeBarePrivate(), i.name, e);))
+        TU_MATCH_DEF(ASTItem, (i.data), (e), (), (Type, os << indent() << "type " << i.name << ";\n";), (Static, handleStatic(ASTVisibility::makeBarePrivate(), i.name, e);), (Function, handleFunction(ASTVisibility::makeBarePrivate(), i.name, e);))
     }
 
     decIndent();
     os << indent() << "}\n";
     os << "\n";
+}
+
+void RustPrinter::handleStatic(const ASTVisibility& vis, const RcString& name, const ASTStatic& s) {
+    os << indent() << vis;
+    switch (s.sClass()) {
+        case ASTStatic::CONST:
+            os << "const ";
+            break;
+        case ASTStatic::STATIC:
+            os << "static ";
+            break;
+        case ASTStatic::MUT:
+            os << "static mut ";
+            break;
+    }
+    os << name;
+    printParams(s.params());
+    os << ": " << s.type();
+    if (s.value().isValid()) {
+        os << " = ";
+        s.value().visitNodes(*this);
+    }
+    if (!s.params().bounds.empty()) {
+        os << "\n";
+        printBounds(s.params());
+        os << indent();
+    }
+    os << ";\n";
 }
 
 void RustPrinter::handleFunction(const ASTVisibility& vis, const RcString& name, const ASTFunction& f) {

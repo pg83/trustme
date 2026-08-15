@@ -3325,17 +3325,27 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
         case TOK_RWORD_CONST: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             name = tok.ident().name;
+            auto params = ParseGenericParamsOpt(lex);
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             auto ty = ParseType(lex);
 
             ASTExpr val;
-            if (GET_TOK(tok, lex) == TOK_EQUAL) {
+            GET_TOK(tok, lex);
+            if (tok.type() == TOK_RWORD_WHERE) {
+                ParseWhereClause(lex, params);
+                GET_TOK(tok, lex);
+            }
+            if (tok.type() == TOK_EQUAL) {
                 val = ParseExpr(lex);
+                GET_TOK(tok, lex);
+            }
+            if (tok.type() == TOK_RWORD_WHERE) {
+                ParseWhereClause(lex, params);
                 GET_TOK(tok, lex);
             }
             CHECK_TOK(tok, TOK_SEMICOLON);
 
-            rv = ASTStatic(ASTStatic::CONST, mv$(ty), val);
+            rv = ASTStatic(ASTStatic::CONST, mv$(ty), val, mv$(params));
             break;
         }
         // Associated type
@@ -3832,13 +3842,20 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
         GET_TOK(tok, lex);
         CHECK_TOK(tok, TOK_IDENT);
         auto name = tok.ident().name;
+        auto params = ParseGenericParamsOpt(lex);
         GET_CHECK_TOK(tok, lex, TOK_COLON);
         auto ty = ParseType(lex);
+        if (lex.getTokenIf(TOK_RWORD_WHERE)) {
+            ParseWhereClause(lex, params);
+        }
         GET_CHECK_TOK(tok, lex, TOK_EQUAL);
         auto val = ParseExpr(lex);
+        if (lex.getTokenIf(TOK_RWORD_WHERE)) {
+            ParseWhereClause(lex, params);
+        }
         GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
 
-        auto i = ASTStatic(ASTStatic::CONST, mv$(ty), mv$(val));
+        auto i = ASTStatic(ASTStatic::CONST, mv$(ty), mv$(val), mv$(params));
         impl.addStatic(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(i));
         return;
     }
@@ -4448,12 +4465,19 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     PUTBACK(tok, lex);
                     itemName = getOptionalIdent(lex);
 
+                    auto params = ParseGenericParamsOpt(lex);
                     GET_CHECK_TOK(tok, lex, TOK_COLON);
                     ASTType* type = ParseType(lex);
+                    if (lex.getTokenIf(TOK_RWORD_WHERE)) {
+                        ParseWhereClause(lex, params);
+                    }
                     GET_CHECK_TOK(tok, lex, TOK_EQUAL);
                     ASTExpr val = ParseExpr(lex);
+                    if (lex.getTokenIf(TOK_RWORD_WHERE)) {
+                        ParseWhereClause(lex, params);
+                    }
                     GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
-                    itemData = ASTItem(ASTStatic(ASTStatic::CONST, mv$(type), mv$(val)));
+                    itemData = ASTItem(ASTStatic(ASTStatic::CONST, mv$(type), mv$(val), mv$(params)));
                     break;
                 }
                 case TOK_RWORD_UNSAFE: {

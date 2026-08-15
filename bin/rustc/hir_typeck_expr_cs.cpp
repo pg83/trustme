@@ -9244,6 +9244,61 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
             {
             }
 
+            void evaluateConstantParams(const Span& sp, HIRPath& path) {
+                HIRPathParams* params = nullptr;
+                TU_MATCH_HDRA((path.mData), {)
+                TU_ARMA(Generic, e) params = &e.mParams;
+                TU_ARMA(UfcsKnown, e) params = &e.params;
+                TU_ARMA(UfcsInherent, e) params = &e.params;
+                TU_ARMA(UfcsUnknown, e) BUG(sp, "Unresolved constant path " << path);
+                }
+
+                const bool hasUnevaluated = ::std::any_of(params->values.begin(), params->values.end(), [](const HIRConstGeneric& value) {
+                    return value.is_Unevaluated();
+                });
+                if (!hasUnevaluated) {
+                    return;
+                }
+
+                MonomorphState outParams(ms.crate.types);
+                auto value = staticResolve.getValue(sp, path, outParams, /*signatureOnly=*/true, nullptr);
+                const auto* constant = value.opt_Constant();
+                ASSERT_BUG(sp, constant, "Constant path resolved to " << value.tagStr() << ": " << path);
+                ConvertHIRConstantEvaluateMethodParams(sp, ms.wb, ms.crate, &(*constant)->mParams, *params);
+            }
+
+            void visit(HIRExprNodePathValue& node) override {
+                HIRExprVisitorDef::visit(node);
+                if (node.target == HIRExprNodePathValue::CONSTANT) {
+                    evaluateConstantParams(node.span(), node.mPath);
+                }
+            }
+
+            void visitPatternValue(const Span& sp, HIRPattern::Value& value) {
+                if (auto* named = value.opt_Named()) {
+                    evaluateConstantParams(sp, named->path);
+                }
+            }
+
+            void visitPattern(const Span& sp, HIRPattern& pattern) override {
+                HIRExprVisitorDef::visitPattern(sp, pattern);
+                TU_MATCH_HDRA((pattern.mData), {)
+                default:
+                    break;
+                TU_ARMA(Value, e) {
+                    visitPatternValue(sp, e.val);
+                }
+                TU_ARMA(Range, e) {
+                    if (e.start) {
+                        visitPatternValue(sp, *e.start);
+                    }
+                    if (e.end) {
+                        visitPatternValue(sp, *e.end);
+                    }
+                }
+                }
+            }
+
             void visit(HIRExprNodeCallMethod& node) override {
                 HIRExprVisitorDef::visit(node);
 
@@ -11319,10 +11374,14 @@ public:
                     case HIRExprNodePathValue::CONSTANT: {
                         const auto& v = this->context.crate.getConstantByPath(sp, e.mPath);
                         DEBUG("const" << v.mParams.fmtArgs() << " v.m_type = " << v.mType);
-                        if (v.mParams.types.size() > 0) {
-                            TODO(sp, "Support generic constants in typeck");
-                        }
-                        this->context.equateTypes(sp, node.resType, v.mType);
+                        fixParamCount(sp, this->context, HIRTypeRef(), false, e, v.mParams, e.mParams);
+
+                        auto ms = MonomorphStatePtr(this->context.crate.types, nullptr, nullptr, &e.mParams);
+                        applyBoundsAsRules(this->context, sp, v.mParams, ms, /*is_impl_level=*/false);
+
+                        HIRTypeRef tmp;
+                        const auto& ty = ms.maybeMonomorphType(sp, tmp, v.mType);
+                        this->context.equateTypes(sp, node.resType, ty);
                     } break;
                 }
             }
@@ -11344,7 +11403,11 @@ public:
                 }
                 TU_MATCH_HDRA( (it->second), {)
                 TU_ARMA(Constant, ie) {
-                        auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.mParams, nullptr);
+                        fixParamCount(sp, this->context, e.type, false, node.mPath, ie.mParams, e.params);
+
+                        auto ms = MonomorphStatePtr(this->context.crate.types, e.type, &e.trait.mParams, &e.params);
+                        applyBoundsAsRules(this->context, sp, ie.mParams, ms, /*is_impl_level=*/false);
+
                         HIRTypeRef tmp;
                         const auto& ty = ms.maybeMonomorphType(sp, tmp, ie.mType);
                         this->context.equateTypes(sp, node.resType, ty);
@@ -11454,6 +11517,7 @@ public:
                     const auto& ty = monomorphCb.maybeMonomorphType(sp, tmp, constPtr->mType);
 
                     applyBoundsAsRules(this->context, sp, implPtr->mParams, monomorphCb, /*is_impl_level=*/true);
+                    applyBoundsAsRules(this->context, sp, constPtr->mParams, monomorphCb, /*is_impl_level=*/false);
                     this->context.equateTypes(node.span(), node.resType, ty);
                 }
             }

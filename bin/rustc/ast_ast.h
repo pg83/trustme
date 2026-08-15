@@ -126,6 +126,7 @@ public:
 
 private:
     Class cls;
+    ASTGenericParams mParams;
     ASTType* mType;
     ASTExpr mValue;
 
@@ -136,10 +137,18 @@ public:
         ASTLinkage linkage = ASTLinkage::Default;
     } markings;
 
-    ASTStatic(Class sClass, ASTType* type, ASTExpr value);
+    ASTStatic(Class sClass, ASTType* type, ASTExpr value, ASTGenericParams params = {});
 
     const Class& sClass() const {
         return cls;
+    }
+
+    const ASTGenericParams& params() const {
+        return mParams;
+    }
+
+    ASTGenericParams& params() {
+        return mParams;
     }
 
     ASTType* type() const {

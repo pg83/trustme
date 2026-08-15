@@ -2447,6 +2447,11 @@ public:
         HIRVisitor::visitFunction(p, item);
     }
 
+    void visitConstant(HIRItemPath p, HIRConstant& item) override {
+        auto _ = mResolve.setItemGenerics(item.mParams);
+        HIRVisitor::visitConstant(p, item);
+    }
+
     void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override {
         // NOTE: Disabled, because generics in type aliases are never checked
         // Re-enabled to resolve a UFCS properly (1.90.0 libcore)

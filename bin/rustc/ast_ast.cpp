@@ -251,7 +251,7 @@ ASTTypeAlias ASTTypeAlias::clone() const {
 }
 
 ASTStatic ASTStatic::clone() const {
-    return ASTStatic(cls, mType->clone(), mValue.isValid() ? ASTExpr(mValue.node().clone()) : ASTExpr());
+    return ASTStatic(cls, mType->clone(), mValue.isValid() ? ASTExpr(mValue.node().clone()) : ASTExpr(), mParams.clone());
 }
 
 ASTFunction::ASTFunction(Span sp, ::std::string abi, Flags flags, ASTGenericParams params, ASTType* retType, Arglist args, bool isVariadic)
@@ -672,8 +672,9 @@ ASTTraitAlias ASTTraitAlias::clone() const {
     return rv;
 }
 
-ASTStatic::ASTStatic(Class sClass, ASTType* type, ASTExpr value)
+ASTStatic::ASTStatic(Class sClass, ASTType* type, ASTExpr value, ASTGenericParams params)
     : cls(sClass)
+    , mParams(std::move(params))
     , mType(std::move(type))
     , mValue(std::move(value))
 {

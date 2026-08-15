@@ -1710,7 +1710,8 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
             }
             TU_ARMA(Static, i) {
                 if (i.sClass() == ASTStatic::CONST) {
-                    rv.values.insert(::std::make_pair(item.name, HIRTraitValueItem::make_Constant(HIRConstant(HIRGenericParams{}, LowerHIRType(i.type()), LowerHIRExpr(i.value())))));
+                    auto constantParams = LowerHIRGenericParams(i.params(), nullptr);
+                    rv.values.insert(::std::make_pair(item.name, HIRTraitValueItem::make_Constant(HIRConstant(mv$(constantParams), LowerHIRType(i.type()), LowerHIRExpr(i.value())))));
                 } else {
                     HIRLinkage linkage;
                     rv.values.insert(::std::make_pair(item.name, HIRTraitValueItem::make_Static(HIRStatic(mv$(linkage), (i.sClass() == ASTStatic::MUT), LowerHIRType(i.type()), LowerHIRExpr(i.value())))));
@@ -2039,12 +2040,13 @@ void _add_mod_mac_item(stl::ObjPool& pool, HIRModule& mod, RcString name, HIRPub
 HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name) {
     TRACE_FUNCTION_F(p);
 
+    auto params = LowerHIRGenericParams(e.params(), nullptr);
     auto value = LowerHIRExpr(e.value());
     value.defineOpaque = LowerHIRDefineOpaque(p, p.parent->getSimplePath(), attrs);
 
     if (e.sClass() == ASTStatic::CONST) {
         // Note: Empty names are allowed for `const _: ...`
-        return HIRValueItem::make_Constant(HIRConstant(HIRGenericParams{}, LowerHIRType(e.type()), mv$(value)));
+        return HIRValueItem::make_Constant(HIRConstant(mv$(params), LowerHIRType(e.type()), mv$(value)));
     } else {
         // Note: Empty names are allowed for `const _: ...`
         ASSERT_BUG(sp, name != "", "Empty constant name " << p);
@@ -2391,7 +2393,8 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                         TU_ARMA(Static, e) {
                             if (e.sClass() == ASTStatic::CONST) {
                                 // TODO: Check signature against the trait?
-                                constants.insert(::std::make_pair(item.name, HIRTraitImpl::ImplEnt<HIRConstant>{item.isSpecialisable, HIRConstant(HIRGenericParams{}, LowerHIRType(e.type()), LowerHIRExpr(e.value()))}));
+                                auto constantParams = LowerHIRGenericParams(e.params(), nullptr);
+                                constants.insert(::std::make_pair(item.name, HIRTraitImpl::ImplEnt<HIRConstant>{item.isSpecialisable, HIRConstant(mv$(constantParams), LowerHIRType(e.type()), LowerHIRExpr(e.value()))}));
                             } else {
                                 TODO(item.sp, "Associated statics in trait impl");
                             }
@@ -2476,7 +2479,8 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                     }
                     TU_ARMA(Static, e) {
                         if (e.sClass() == ASTStatic::CONST) {
-                            constants.insert(::std::make_pair(item.name, HIRTypeImpl::VisImplEnt<HIRConstant>{getVis(item.vis), item.isSpecialisable, HIRConstant(HIRGenericParams{}, LowerHIRType(e.type()), LowerHIRExpr(e.value()))}));
+                            auto constantParams = LowerHIRGenericParams(e.params(), nullptr);
+                            constants.insert(::std::make_pair(item.name, HIRTypeImpl::VisImplEnt<HIRConstant>{getVis(item.vis), item.isSpecialisable, HIRConstant(mv$(constantParams), LowerHIRType(e.type()), LowerHIRExpr(e.value()))}));
                         } else {
                             TODO(item.sp, "Associated statics in inherent impl");
                         }

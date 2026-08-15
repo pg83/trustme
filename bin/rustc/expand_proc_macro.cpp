@@ -1663,6 +1663,7 @@ namespace {
                     break;
             }
             pmi.sendIdent(name.c_str());
+            this->visitParams(i.params());
             pmi.sendSymbol(":");
             this->visitType(i.type());
 
@@ -1670,6 +1671,7 @@ namespace {
                 pmi.sendSymbol("=");
                 this->visitNode(i.value().node());
             }
+            this->visitBounds(i.params());
             pmi.sendSymbol(";");
         }
 

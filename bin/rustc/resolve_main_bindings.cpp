@@ -880,6 +880,7 @@ void ResolveAbsoluteFunction(
     bool hasParentSelf = false,
     bool isTraitImpl = false
 );
+void ResolveAbsoluteStatic(Context& itemContext, ASTStatic& e);
 
 void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPathParams& args) {
     for (auto& ent : args.entries) {
@@ -2555,9 +2556,7 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTNamedList<ASTItem>& items
             }
             TU_ARMA(Static, e) {
                 DEBUG("Static - " << i.name);
-                ResolveAbsoluteType(itemContext, e.type());
-                auto _h = itemContext.enterRootblock();
-                ResolveAbsoluteExpr(itemContext, e.value());
+                ResolveAbsoluteStatic(itemContext, e);
             }
         }
     }
@@ -2711,7 +2710,7 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTImpl& impl) {
                 }
                 ResolveAbsoluteFunction(itemContext, e, signatureSource, true, impl.def().trait().ent.isValid());
             ),
-            (Static, DEBUG("Static - " << i.name); ResolveAbsoluteType(itemContext, e.type()); auto _h = itemContext.enterRootblock(); ResolveAbsoluteExpr(itemContext, e.value());)
+            (Static, DEBUG("Static - " << i.name); ResolveAbsoluteStatic(itemContext, e);)
         )
     }
 }
@@ -3173,9 +3172,17 @@ void ResolveAbsoluteFunction(
 }
 
 void ResolveAbsoluteStatic(Context& itemContext, ASTStatic& e) {
+    itemContext.push(e.params(), GenericSlot::Level::Method);
+    auto* previousIblTarget = itemContext.iblTargetGenerics;
+    itemContext.iblTargetGenerics = &e.params();
+    ResolveAbsoluteGeneric(itemContext, e.params());
     ResolveAbsoluteType(itemContext, e.type());
-    auto _h = itemContext.enterRootblock();
-    ResolveAbsoluteExpr(itemContext, e.value());
+    itemContext.iblTargetGenerics = previousIblTarget;
+    {
+        auto _h = itemContext.enterRootblock();
+        ResolveAbsoluteExpr(itemContext, e.value());
+    }
+    itemContext.pop(e.params());
 }
 
 void ResolveAbsoluteStruct(Context& itemContext, ASTStruct& e) {
