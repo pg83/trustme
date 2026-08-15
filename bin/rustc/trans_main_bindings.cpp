@@ -1085,9 +1085,9 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                     hasDrop = true;
                                 }
 
-                                if (ty->is_Path() && ty->as_Path().isGenerator()) {
+                                if (ty->is_Path() && (ty->as_Path().isGenerator() || ty->as_Path().isFuture())) {
                                     ASSERT_BUG(sp, hasDrop, "");
-                                    // Generators use a custom Drop impl that handles dropping values
+                                    // Coroutines use a custom Drop impl that handles dropping values
                                 } else {
                                     // NOTE: Lazy option of monomorphising and handling the two classes
                                     const auto* repr = TargetGetTypeRepr(sp, state.resolve, ty);
@@ -2142,6 +2142,10 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
         newList.functions.insert(std::make_pair(std::move(fnPath), nullptr));
     }
 
+    list.clearTypes();
+    for (const auto& ty : newList.types) {
+        ASSERT_BUG(Span(), list.addType(ty.first, ty.second), "Duplicate type in cleaned translation list: " << ty.first);
+    }
     removeMissing(list.functions, newList.functions);
     removeMissing(list.statics, newList.statics);
 }
