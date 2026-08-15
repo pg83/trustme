@@ -698,6 +698,21 @@ namespace {
                     fieldsPtr = &tpb.as_Union()->mVariants;
                 } else {
                     const auto& str = *tpb.as_Struct();
+                    if (str.mData.is_Tuple()) {
+                        ASSERT_BUG(sp, node.values.empty(), "Named values provided in tuple struct update");
+                        const auto monomorphCb = MonomorphStatePtr(mResolve.hirCrate().types, nullptr, &tyPath.mParams, nullptr);
+                        for (const auto& field : str.mData.as_Tuple()) {
+                            HIRTypeRef tmp;
+                            const auto& fieldType = monomorphiseTypeWithOpt(node.span(), tmp, field.ent, monomorphCb);
+                            if (!mResolve.typeIsCopy(node.span(), fieldType)) {
+                                isMoved = true;
+                                break;
+                            }
+                        }
+                        auto _ = pushUsage(isMoved ? HIRValueUsage::Move : HIRValueUsage::Borrow);
+                        this->visitNodePtr(node.baseValue);
+                        return;
+                    }
                     ASSERT_BUG(sp, str.mData.is_Named(), "");
                     fieldsPtr = &str.mData.as_Named();
                 }

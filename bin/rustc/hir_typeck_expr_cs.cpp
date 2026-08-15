@@ -1650,6 +1650,12 @@ namespace {
                         ASSERT_BUG(node.span(), !node.baseValue, "Values provided for unit-like struct");
                         return;
                     }
+                    if (e->mData.is_Tuple()) {
+                        ASSERT_BUG(node.span(), node.values.empty(), "Named values provided in tuple struct update");
+                        ASSERT_BUG(node.span(), node.baseValue, "Tuple struct literal has no values or base");
+                        HIRExprVisitorDef::visit(node);
+                        return;
+                    }
 
                     ASSERT_BUG(node.span(), e->mData.is_Named(), "StructLiteral not pointing to a braced struct, instead " << e->mData.tagStr() << " - " << ty);
                     fieldsPtr = &e->mData.as_Named();

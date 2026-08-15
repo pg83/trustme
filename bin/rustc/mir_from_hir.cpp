@@ -1768,29 +1768,23 @@ namespace {
             TRACE_FUNCTION_F("_Assign");
             const auto& sp = node.span();
             auto _ = disableBorrowExtension(); // A bit of a hack
+            const auto& tySlot = node.slot->resType;
+            const auto& tyVal = node.mValue->resType;
 
             this->visitNodePtr(node.mValue);
             if (!builder.blockActive() || !builder.hasResult()) {
                 return;
             }
             MIRRValue val = builder.getResult(sp);
+            auto rhs = builder.newTemporary(tyVal);
+            builder.pushStmtAssign(node.mValue->span(), rhs.clone(), mv$(val));
 
             this->visitNodePtr(node.slot);
             auto dst = builder.getResultUnwrapLvalue(sp);
 
-            const auto& tySlot = node.slot->resType;
-            const auto& tyVal = node.mValue->resType;
-
             if (node.op != HIRExprNodeAssign::Op::None) {
                 auto dstClone = dst.clone();
-                MIRParam valP;
-                if (auto* e = val.opt_Use()) {
-                    valP = mv$(*e);
-                } else if (auto* e = val.opt_Constant()) {
-                    valP = mv$(*e);
-                } else {
-                    valP = builder.lvalueOrTemp(node.span(), tyVal, mv$(val));
-                }
+                MIRParam valP = mv$(rhs);
 
                 ASSERT_BUG(sp, tySlot->is_Primitive(), "Assignment operator overloads are only valid on primitives - ty_slot=" << tySlot);
                 ASSERT_BUG(sp, tyVal->is_Primitive(), "Assignment operator overloads are only valid on primitives - ty_val=" << tyVal);
@@ -1844,7 +1838,7 @@ namespace {
 #undef _
             } else {
                 ASSERT_BUG(sp, tySlot == tyVal || tySlot->equalsIgnoringRegions(tyVal), "Types must match for assignment - " << tySlot << " != " << tyVal);
-                builder.pushStmtAssign(node.span(), mv$(dst), mv$(val));
+                builder.pushStmtAssign(node.span(), mv$(dst), MIRRValue::make_Use(mv$(rhs)));
             }
             builder.setResult(node.span(), MIRRValue::make_Tuple({}));
         }
@@ -3270,6 +3264,22 @@ namespace {
                 TU_ARMA(Struct, e) {
                     if (e->mData.is_Unit()) {
                         builder.setResult(node.span(), MIRRValue::make_Struct({tyPath.clone(), {}}));
+                        return;
+                    }
+                    if (e->mData.is_Tuple()) {
+                        ASSERT_BUG(node.span(), node.values.empty(), "Named values provided in tuple struct update");
+                        ASSERT_BUG(node.span(), node.baseValue, "Tuple struct literal has no values or base");
+                        this->visitNodePtr(node.baseValue);
+                        if (!builder.blockActive()) {
+                            return;
+                        }
+                        auto baseValue = builder.getResultInLvalue(node.baseValue->span(), node.baseValue->resType);
+                        std::vector<MIRParam> values;
+                        values.reserve(e->mData.as_Tuple().size());
+                        for (size_t i = 0; i < e->mData.as_Tuple().size(); i++) {
+                            values.push_back(MIRLValue::newField(baseValue.clone(), static_cast<unsigned>(i)));
+                        }
+                        builder.setResult(node.span(), MIRRValue::make_Struct({tyPath.clone(), std::move(values)}));
                         return;
                     }
 
