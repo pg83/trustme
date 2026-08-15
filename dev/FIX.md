@@ -40,17 +40,16 @@ until this file is exhausted.
 
 ## Internal compiler failures
 
-There are 117 unfinished compiler-internal failures in 88 stable signatures.
+There are 116 unfinished compiler-internal failures in 87 stable signatures.
 
 | signature or root cause | tests | note |
 |---|---:|---|
-| `super let` without expression scope, `mir_from_hir.cpp:1139` | 1 | `pin_macro::temp_lifetime` |
-| 87 smaller stable signatures | 116 | one to three tests each |
+| 87 stable signatures | 116 | one to three tests each |
 
 The eight signal failures are two SIGILLs at `mir_operations.cpp:1473`, two
 SIGSEGVs at `hir_conv_main_bindings.cpp:1430`, the recursive pattern-lowering
 SIGSEGV at `mir_from_hir.cpp:4760`, and three other one-test SIGSEGV signatures.
-Four uncaught exceptions and five explicit MIR TODOs are included in the 117.
+Four uncaught exceptions and five explicit MIR TODOs are included in the 116.
 
 ## Accepted Rust rejected by the front end
 

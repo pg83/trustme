@@ -788,6 +788,8 @@ namespace {
                 const Span& sp = subnode->span();
 
                 auto localStmtScope = builder.newScopeTemp(sp);
+                const auto* tailScope = stmtScope ? stmtScope : &tailTmpScope;
+                auto _super_let_scope = saveAndEdit(superLetScope, superLetScope ? superLetScope : tailScope);
                 this->visitNodePtr(subnode);
                 if (builder.hasResult() || builder.blockActive()) {
                     ASSERT_BUG(sp, builder.blockActive(), "Result yielded, but no active block");
