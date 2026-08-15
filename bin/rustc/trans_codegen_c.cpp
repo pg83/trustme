@@ -2016,6 +2016,99 @@ namespace {
                        << "\t\tdst[k] = sum;\n"
                        << "\t}\n"
                        << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse.cmp.ps") {
+                    of << "\tfloat lhs[4], rhs[4]; uint32_t result[4];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 4; i++) result[i] = mrustc_x86_cmp_f32(lhs[i], rhs[i], arg2) ? UINT32_MAX : 0;\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse.cmp.ss") {
+                    of << "\tfloat lhs[4], rhs[4]; uint32_t result[4];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n"
+                       << "\tresult[0] = mrustc_x86_cmp_f32(lhs[0], rhs[0], arg2) ? UINT32_MAX : 0;\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.cmp.pd") {
+                    of << "\tdouble lhs[2], rhs[2]; uint64_t result[2];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 2; i++) result[i] = mrustc_x86_cmp_f64(lhs[i], rhs[i], arg2) ? UINT64_MAX : 0;\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.cmp.sd") {
+                    of << "\tdouble lhs[2], rhs[2]; uint64_t result[2];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n"
+                       << "\tresult[0] = mrustc_x86_cmp_f64(lhs[0], rhs[0], arg2) ? UINT64_MAX : 0;\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse3.hadd.ps" || item.linkage.name == "llvm.x86.sse3.hsub.ps") {
+                    const char op = item.linkage.name == "llvm.x86.sse3.hadd.ps" ? '+' : '-';
+                    of << "\tfloat lhs[4], rhs[4], result[4];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 2; i++) { result[i] = lhs[2*i] " << op << " lhs[2*i+1]; result[i+2] = rhs[2*i] " << op << " rhs[2*i+1]; }\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse3.hadd.pd" || item.linkage.name == "llvm.x86.sse3.hsub.pd") {
+                    const char op = item.linkage.name == "llvm.x86.sse3.hadd.pd" ? '+' : '-';
+                    of << "\tdouble lhs[2], rhs[2], result[2];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tresult[0] = lhs[0] " << op << " lhs[1]; result[1] = rhs[0] " << op << " rhs[1];\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse3.ldu.dq") {
+                    of << "\tmemcpy(&rv, arg0, sizeof(rv));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.ssse3.phadd.d.128" || item.linkage.name == "llvm.x86.ssse3.phsub.d.128") {
+                    const char op = item.linkage.name == "llvm.x86.ssse3.phadd.d.128" ? '+' : '-';
+                    of << "\tuint32_t lhs[4], rhs[4], result[4];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 2; i++) { result[i] = lhs[2*i] " << op << " lhs[2*i+1]; result[i+2] = rhs[2*i] " << op << " rhs[2*i+1]; }\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.ssse3.phadd.w.128" || item.linkage.name == "llvm.x86.ssse3.phsub.w.128") {
+                    const char op = item.linkage.name == "llvm.x86.ssse3.phadd.w.128" ? '+' : '-';
+                    of << "\tuint16_t lhs[8], rhs[8], result[8];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 4; i++) { result[i] = lhs[2*i] " << op << " lhs[2*i+1]; result[i+4] = rhs[2*i] " << op << " rhs[2*i+1]; }\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.ssse3.phadd.sw.128" || item.linkage.name == "llvm.x86.ssse3.phsub.sw.128") {
+                    const char op = item.linkage.name == "llvm.x86.ssse3.phadd.sw.128" ? '+' : '-';
+                    of << "\tint16_t lhs[8], rhs[8], result[8];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 4; i++) {\n"
+                       << "\t\tint32_t a = (int32_t)lhs[2*i] " << op << " lhs[2*i+1]; int32_t b = (int32_t)rhs[2*i] " << op << " rhs[2*i+1];\n"
+                       << "\t\tresult[i] = (int16_t)(a > INT16_MAX ? INT16_MAX : (a < INT16_MIN ? INT16_MIN : a));\n"
+                       << "\t\tresult[i+4] = (int16_t)(b > INT16_MAX ? INT16_MAX : (b < INT16_MIN ? INT16_MIN : b));\n"
+                       << "\t}\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.ssse3.pmul.hr.sw.128") {
+                    of << "\tint16_t lhs[8], rhs[8], result[8];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 8; i++) {\n"
+                       << "\t\tint32_t value = ((int32_t)lhs[i] * rhs[i] + 0x4000) >> 15;\n"
+                       << "\t\tresult[i] = (int16_t)value;\n"
+                       << "\t}\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.ssse3.psign.b.128") {
+                    of << "\tuint8_t lhs[16], result[16]; int8_t signs[16];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n"
+                       << "\tfor(unsigned i = 0; i < 16; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.ssse3.psign.w.128") {
+                    of << "\tuint16_t lhs[8], result[8]; int16_t signs[8];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n"
+                       << "\tfor(unsigned i = 0; i < 8; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.ssse3.psign.d.128") {
+                    of << "\tuint32_t lhs[4], result[4]; int32_t signs[4];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n"
+                       << "\tfor(unsigned i = 0; i < 4; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n"
+                       << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.psrli.d") {
                     of << "\tconst uint32_t* src = (const uint32_t*)&arg0;\n"
                        << "\tuint32_t* dst = (uint32_t*)&rv;\n"
@@ -7380,7 +7473,30 @@ namespace {
                     simdCmp(">=");
                 }
                 // Arithmetic
-                else if (nameStrip == "simd_add") {
+                else if (nameStrip == "simd_neg") {
+                    auto info = SimdInfo::forTy(*this, params.types.at(0));
+                    emitLvalue(e.retVal);
+                    of << " = ";
+                    emitParam(e.args.at(0));
+                    of << "; for(int i = 0; i < " << info.count << "; i++) ";
+                    if (info.ty == SimdInfo::Float) {
+                        of << "((";
+                        info.emitValTy(*this);
+                        of << "*)&";
+                        emitLvalue(e.retVal);
+                        of << ")[i] = -((";
+                        info.emitValTy(*this);
+                        of << "*)&";
+                        emitParam(e.args.at(0));
+                        of << ")[i]";
+                    } else {
+                        of << "((uint" << (info.itemSize * 8) << "_t*)&";
+                        emitLvalue(e.retVal);
+                        of << ")[i] = 0 - ((uint" << (info.itemSize * 8) << "_t*)&";
+                        emitParam(e.args.at(0));
+                        of << ")[i]";
+                    }
+                } else if (nameStrip == "simd_add") {
                     simdArith("+");
                 } else if (nameStrip == "simd_sub") {
                     simdArith("-");

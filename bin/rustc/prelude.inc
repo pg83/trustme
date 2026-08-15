@@ -433,6 +433,34 @@ static inline uint64_t __mrustc_op_imax64(uint64_t a, uint64_t b) { return (int6
 static inline uint64_t __mrustc_op_imin64(uint64_t a, uint64_t b) { return (int64_t)a < (int64_t)b ? a : b; }
 static inline uint64_t __mrustc_op_and_not64(uint64_t a, uint64_t b) { return ~(a & b); }
 
+static inline bool mrustc_x86_cmp_f32(float lhs, float rhs, uint8_t predicate) {
+    const bool unordered = __builtin_isnan(lhs) || __builtin_isnan(rhs);
+    switch(predicate & 7) {
+    case 0: return !unordered && lhs == rhs;
+    case 1: return !unordered && lhs < rhs;
+    case 2: return !unordered && lhs <= rhs;
+    case 3: return unordered;
+    case 4: return unordered || lhs != rhs;
+    case 5: return unordered || !(lhs < rhs);
+    case 6: return unordered || !(lhs <= rhs);
+    default: return !unordered;
+    }
+}
+
+static inline bool mrustc_x86_cmp_f64(double lhs, double rhs, uint8_t predicate) {
+    const bool unordered = __builtin_isnan(lhs) || __builtin_isnan(rhs);
+    switch(predicate & 7) {
+    case 0: return !unordered && lhs == rhs;
+    case 1: return !unordered && lhs < rhs;
+    case 2: return !unordered && lhs <= rhs;
+    case 3: return unordered;
+    case 4: return unordered || lhs != rhs;
+    case 5: return unordered || !(lhs < rhs);
+    case 6: return unordered || !(lhs <= rhs);
+    default: return !unordered;
+    }
+}
+
 typedef _Float16 f16;
 static inline f16 make_f16_bits(uint16_t bits) { f16 result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
 static inline float make_f32_bits(uint32_t bits) { float result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
