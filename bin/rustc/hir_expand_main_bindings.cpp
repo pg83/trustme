@@ -4820,41 +4820,51 @@ public:
                 }
             } nvs{*crate.pool, modPath, mod, modList.second.size()};
 
-            for (auto& newStaticPair : modList.second) {
-                Span sp;
-                auto& newStatic = newStaticPair.data;
-
-                TRACE_FUNCTION_F("New static " << newStaticPair.path << newStatic.mParams.fmtArgs());
-
-                if (!newStatic.mParams.isGeneric()) {
-                    newStatic.mValue.state->stage = HIRExprState::Stage::Sbc;
-                    newStatic.valueRes = HIREvaluator(sp, this->mResolve.board(), nvs).evaluateConstant(newStaticPair.path, newStatic.mValue, newStatic.mType);
-                    newStatic.valueGenerated = true;
+            struct H {
+                static HIRConstant toConst(HIRStatic& s) {
+                    HIRConstant rv{std::move(s.mParams), std::move(s.mType), std::move(s.mValue)};
+                    rv.valueState = rv.mParams.isGeneric() ? HIRConstant::ValueState::Generic : HIRConstant::ValueState::Unknown;
+                    return rv;
                 }
+            };
 
-                struct H {
-                    static HIRConstant toConst(HIRStatic& s) {
-                        HIRConstant rv{std::move(s.mParams), std::move(s.mType), std::move(s.mValue)};
-                        if (s.valueGenerated) {
-                            rv.valueState = HIRConstant::ValueState::Known;
-                            rv.valueRes = std::move(s.valueRes);
-                        } else {
-                            rv.valueState = HIRConstant::ValueState::Generic;
-                        }
-                        return rv;
-                    }
-                };
-
+            // Publish the complete set first. Evaluating one promotion can
+            // compile a const fn which refers to another promotion from this
+            // same pass, and path lookup must already be able to find it.
+            for (auto& newStaticPair : modList.second) {
+                auto& newStatic = newStaticPair.data;
                 auto newEnt = newStaticPair.isConst ? HIRValueItem(H::toConst(newStatic)) : HIRValueItem(std::move(newStaticPair.data));
-                mod.valueItems.insert(
+                auto inserted = mod.valueItems.insert(
                     std::make_pair(
-                        mv$(newStaticPair.path.components().back()),
+                        newStaticPair.path.components().back(),
                         crate.pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{
                                 HIRPublicity::newNone(), // Should really be private, but we're well after checking
                                 std::move(newEnt)
                             })
                     )
                 );
+                ASSERT_BUG(Span(), inserted.second, "Duplicate promoted value " << newStaticPair.path);
+            }
+
+            for (const auto& newStaticPair : modList.second) {
+                Span sp;
+                auto& value = mod.valueItems.at(newStaticPair.path.components().back())->ent;
+                if (auto* newConst = value.opt_Constant()) {
+                    TRACE_FUNCTION_F("New constant " << newStaticPair.path << newConst->mParams.fmtArgs());
+                    if (newConst->valueState == HIRConstant::ValueState::Unknown) {
+                        newConst->mValue.state->stage = HIRExprState::Stage::Sbc;
+                        newConst->valueRes = HIREvaluator(sp, this->mResolve.board(), nvs).evaluateConstant(newStaticPair.path, newConst->mValue, newConst->mType);
+                        newConst->valueState = HIRConstant::ValueState::Known;
+                    }
+                } else {
+                    auto& newStatic = value.as_Static();
+                    TRACE_FUNCTION_F("New static " << newStaticPair.path << newStatic.mParams.fmtArgs());
+                    if (!newStatic.mParams.isGeneric() && !newStatic.valueGenerated) {
+                        newStatic.mValue.state->stage = HIRExprState::Stage::Sbc;
+                        newStatic.valueRes = HIREvaluator(sp, this->mResolve.board(), nvs).evaluateConstant(newStaticPair.path, newStatic.mValue, newStatic.mType);
+                        newStatic.valueGenerated = true;
+                    }
+                }
             }
         }
     }
