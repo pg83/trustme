@@ -4382,14 +4382,11 @@ TU_ARMA(Alias, ee) {
         }
 
         bool TraitResolution::isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const {
-            if (alias.isPublicTo(mVisPath)) {
-                return true;
-            }
             if (::std::find(definingOpaqueAliases.begin(), definingOpaqueAliases.end(), alias.path) != definingOpaqueAliases.end()) {
                 return true;
             }
             for (const auto& path : opaqueAliasScopes) {
-                if (alias.isPublicTo(path)) {
+                if (alias.isLocalTo(path)) {
                     return true;
                 }
             }
@@ -7534,20 +7531,31 @@ TU_ARMA(Alias, ee) {
             // TODO: Have a cache of name+receiver_type to a list of types and impls
             // e.g. `len` `&Self` = `[T]`
             DEBUG("> Inherent methods");
-            this->wb.inherentMethods->find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRTypeData* selfTy, const HIRTypeImpl& impl) {
-                if (!impl.methods.at(methodName).publicity.isVisible(this->mVisPath)) {
-                    // Ignore method: Not visibile
-                    return;
-                }
-                HIRPathParams implParams;
-                auto cmp = fticCheckParams(sp, HIRSimplePath(), nullptr, selfTy, impl.mParams, {}, impl.mType, implParams);
-                if (cmp != HIRCompare::Unequal) {
-                    DEBUG("Found `impl" << impl.mParams.fmtArgs() << " " << impl.mType << "` fn " << methodName /* << " - " << top_ty*/);
-                    possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, methodName, {})));
-                    DEBUG("++ " << possibilities.back());
-                    rv = true;
-                }
-            });
+            const auto* inherentReceiver = ty;
+            while (const auto* borrow = inherentReceiver->opt_Borrow()) {
+                inherentReceiver = this->ivars.getType(borrow->inner);
+            }
+            const auto* erased = inherentReceiver->opt_ErasedType();
+            const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+            const bool opaqueCanReveal = !erased
+                || (alias && this->isOpaqueAliasDefiningScope(*alias->inner))
+                || erased->inner.is_Known();
+            if (opaqueCanReveal) {
+                this->wb.inherentMethods->find(sp, methodName, ty, this->ivars.callbackResolveInfer(), [&](const HIRTypeData* selfTy, const HIRTypeImpl& impl) {
+                    if (!impl.methods.at(methodName).publicity.isVisible(this->mVisPath)) {
+                        // Ignore method: Not visibile
+                        return;
+                    }
+                    HIRPathParams implParams;
+                    auto cmp = fticCheckParams(sp, HIRSimplePath(), nullptr, selfTy, impl.mParams, {}, impl.mType, implParams);
+                    if (cmp != HIRCompare::Unequal) {
+                        DEBUG("Found `impl" << impl.mParams.fmtArgs() << " " << impl.mType << "` fn " << methodName /* << " - " << top_ty*/);
+                        possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, methodName, {})));
+                        DEBUG("++ " << possibilities.back());
+                        rv = true;
+                    }
+                });
+            }
 
             // TODO: Handle custom recievers by finding the bottom of a deref chain (or take the top-level reciever as an argument here?)
 

@@ -747,6 +747,8 @@ namespace {
                 }
                 if (defineOpaque) {
                     expr.state->defineOpaque = *defineOpaque;
+                } else if (!expr.defineOpaque.empty()) {
+                    expr.state->defineOpaque = expr.defineOpaque;
                 }
             }
 

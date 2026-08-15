@@ -132,7 +132,7 @@ struct HIRTypeDataErasedTypeAliasInner {
     HIRTypeRef type;
 
     HIRTypeDataErasedTypeAliasInner(const HIRItemPath& p, const HIRGenericParams& params);
-    bool isPublicTo(const HIRSimplePath& p) const;
+    bool isLocalTo(const HIRSimplePath& p) const;
 };
 
 TAGGED_UNION(

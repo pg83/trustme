@@ -75,6 +75,7 @@ struct AST2HIR {
     HIRUnion LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAttributeList& attrs);
     HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttributeList& attrs);
     HIRTraitAlias LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const ASTTraitAlias& f);
+    ::std::vector<HIRSimplePath> LowerHIRDefineOpaque(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs);
     HIRFunction LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType);
     HIRValueItem LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name);
     HIRModule LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::std::vector<HIRSimplePath> traits = {});
@@ -1737,11 +1738,7 @@ HIRTraitAlias AST2HIR::LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const A
     return ta;
 }
 
-HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType) {
-    static Span sp;
-
-    TRACE_FUNCTION_F(p);
-
+::std::vector<HIRSimplePath> AST2HIR::LowerHIRDefineOpaque(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs) {
     ::std::vector<HIRSimplePath> defineOpaque;
     if (const auto* attr = attrs.get("define_opaque")) {
         TTStream tokens(attr->span(), ParseState(), attr->data());
@@ -1780,6 +1777,15 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
         }
         tokens.getTokenCheck(TOK_PAREN_CLOSE);
     }
+    return defineOpaque;
+}
+
+HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType) {
+    static Span sp;
+
+    TRACE_FUNCTION_F(p);
+
+    auto defineOpaque = LowerHIRDefineOpaque(p, sourceModule, attrs);
 
     ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> args;
     for (const auto& arg : f.args()) {
@@ -2033,9 +2039,12 @@ void _add_mod_mac_item(stl::ObjPool& pool, HIRModule& mod, RcString name, HIRPub
 HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name) {
     TRACE_FUNCTION_F(p);
 
+    auto value = LowerHIRExpr(e.value());
+    value.defineOpaque = LowerHIRDefineOpaque(p, p.parent->getSimplePath(), attrs);
+
     if (e.sClass() == ASTStatic::CONST) {
         // Note: Empty names are allowed for `const _: ...`
-        return HIRValueItem::make_Constant(HIRConstant(HIRGenericParams{}, LowerHIRType(e.type()), LowerHIRExpr(e.value())));
+        return HIRValueItem::make_Constant(HIRConstant(HIRGenericParams{}, LowerHIRType(e.type()), mv$(value)));
     } else {
         // Note: Empty names are allowed for `const _: ...`
         ASSERT_BUG(sp, name != "", "Empty constant name " << p);
@@ -2060,7 +2069,7 @@ HIRValueItem AST2HIR::LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attr
             linkage.name = name.c_str();
         }
 
-        return HIRValueItem::make_Static(HIRStatic(mv$(linkage), (e.sClass() == ASTStatic::MUT), LowerHIRType(e.type()), LowerHIRExpr(e.value())));
+        return HIRValueItem::make_Static(HIRStatic(mv$(linkage), (e.sClass() == ASTStatic::MUT), LowerHIRType(e.type()), mv$(value)));
     }
 }
 

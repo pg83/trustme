@@ -11547,6 +11547,18 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
     , nextRuleIdx(0)
     , mLangBox(crate.getLangItemPathOpt("owned_box"))
 {
+    if (currentTraitImpl) {
+        for (const auto& entry : currentTraitImpl->types) {
+            visitTyWith(entry.second.data, [&](const HIRTypeData* type) {
+                const auto* erased = type->opt_ErasedType();
+                const auto* alias = erased ? erased->inner.opt_Alias() : nullptr;
+                if (alias && alias->inner->path.components().back().c_str()[0] == '#') {
+                    mResolve.addDefiningOpaqueAlias(alias->inner->path);
+                }
+                return false;
+            });
+        }
+    }
     mResolve.setInherentTypeConstraint([this](const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) {
         this->equateTypesInner(sp, receiver, implType);
     });

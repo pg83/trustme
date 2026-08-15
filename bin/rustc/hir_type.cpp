@@ -185,8 +185,16 @@ HIRTypeDataErasedTypeAliasInner::HIRTypeDataErasedTypeAliasInner(const HIRItemPa
     this->generics.bounds.clear();
 }
 
-bool HIRTypeDataErasedTypeAliasInner::isPublicTo(const HIRSimplePath& p) const {
-    return p.startsWith(this->path, /*skip_last=*/true);
+bool HIRTypeDataErasedTypeAliasInner::isLocalTo(const HIRSimplePath& p) const {
+    const auto components = path.components();
+    bool local = false;
+    for (size_t i = 0; i + 1 < components.size(); i++) {
+        if (components[i].c_str()[0] == '#') {
+            local = true;
+            break;
+        }
+    }
+    return local && p.startsWith(path, /*skip_last=*/true);
 }
 
 HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterner& types, const Span& sp) const {

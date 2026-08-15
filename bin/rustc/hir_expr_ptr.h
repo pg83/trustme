@@ -13,6 +13,7 @@ namespace stl {
 
 class HIRTypeData;
 using HIRTypeRef = const HIRTypeData*;
+class HIRSimplePath;
 class HIRExprNode;
 class HIRCrate;
 class HIRExprState;
@@ -99,6 +100,7 @@ public:
     //::std::vector< ::HIR::ASTType*>  m_type_table;
     ::std::vector<HIRTypeRef> mBindings;
     ::std::vector<HIRTypeRef> erasedTypes;
+    ::std::vector<HIRSimplePath> defineOpaque;
 
     // Public because too much relies on access to it
     MIRFunctionPointer mir;
