@@ -427,9 +427,9 @@ struct EscapedString {
             return FMT("'\\u{" << ::std::hex << mData.as_Integer().intval << "}");
         case TOK_FLOAT:
             if (mData.as_Float().datatype == CORETYPE_ANY) {
-                return FMT(mData.as_Float().floatval);
+                return formatFloatValueForToken(mData.as_Float().floatval);
             } else {
-                return FMT(mData.as_Float().floatval << "_" << mData.as_Float().datatype);
+                return FMT(formatFloatValueForToken(mData.as_Float().floatval) << "_" << coretypeName(mData.as_Float().datatype));
             }
         case TOK_STRING:
             return FMT("\"" << EscapedString(mData.as_String()) << "\"");

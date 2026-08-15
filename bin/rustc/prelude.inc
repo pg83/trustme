@@ -435,6 +435,8 @@ static inline uint64_t __mrustc_op_and_not64(uint64_t a, uint64_t b) { return ~(
 
 typedef _Float16 f16;
 static inline f16 make_f16_bits(uint16_t bits) { f16 result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
+static inline float make_f32_bits(uint32_t bits) { float result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
+static inline double make_f64_bits(uint64_t bits) { double result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
 
 typedef struct alignas(MRUSTC_TARGET_U128_ALIGN) f128 { uint128_t v; } f128;
 #if MRUSTC_TARGET_EMULATED_I128

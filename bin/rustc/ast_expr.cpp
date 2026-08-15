@@ -638,7 +638,16 @@ NODE(
     },
     { return NEWNODE(ASTExprNodeInteger, mValue, datatype); }
 )
-NODE(ASTExprNodeFloat, { os << mValue << "_" << datatype; }, { return NEWNODE(ASTExprNodeFloat, mValue, datatype); })
+NODE(
+    ASTExprNodeFloat,
+    {
+        os << formatFloatValueForToken(mValue);
+        if (datatype != CORETYPE_ANY) {
+            os << "_" << coretypeName(datatype);
+        }
+    },
+    { return NEWNODE(ASTExprNodeFloat, mValue, datatype); }
+)
 NODE(ASTExprNodeBool, { os << mValue; }, { return NEWNODE(ASTExprNodeBool, mValue); })
 NODE(ASTExprNodeString, { os << "\"" << mValue << "\""; }, { return NEWNODE(ASTExprNodeString, mValue, mHygiene); })
 NODE(ASTExprNodeByteString, { os << "b\"" << mValue << "\""; }, { return NEWNODE(ASTExprNodeByteString, mValue); })

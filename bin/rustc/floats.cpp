@@ -1,5 +1,7 @@
 #include "floats.h"
 
+#include <iomanip>
+
 FloatValue parseFloatValue(const char* text) {
     return Float128::parseDecimal(text);
 }
@@ -50,6 +52,15 @@ FloatValue floatValueMaximumNumber(FloatValue lhs, FloatValue rhs) {
 
 FloatValue positiveNanFloatValue() {
     return Float128::quietNan();
+}
+
+::std::string formatFloatValueForToken(FloatValue value) {
+    // binary128 has 113 significand bits, requiring 36 decimal digits for a
+    // guaranteed round trip. Token rendering must not inherit iostream's
+    // six-digit default: macro fragments are reparsed after expansion.
+    ::std::ostringstream os;
+    os << ::std::setprecision(36) << value;
+    return os.str();
 }
 
 std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value) {

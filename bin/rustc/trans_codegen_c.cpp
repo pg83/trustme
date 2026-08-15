@@ -13,6 +13,7 @@
 #include <codegen_c_prelude.h>
 
 #include <cmath>
+#include <cstring>
 #include <limits>
 #include <fstream>
 #include <iomanip>
@@ -1854,22 +1855,21 @@ namespace {
             if (ty == HIRCoreType::F16) {
                 const F16 bits(v);
                 of << "make_f16_bits(0x" << ::std::hex << bits.v << "u)" << ::std::dec;
+            } else if (ty == HIRCoreType::F32) {
+                const float value = static_cast<float>(v);
+                uint32_t bits;
+                ::std::memcpy(&bits, &value, sizeof(bits));
+                of << "make_f32_bits(0x" << ::std::hex << bits << "u)" << ::std::dec;
+            } else if (ty == HIRCoreType::F64) {
+                const double value = static_cast<double>(v);
+                uint64_t bits;
+                ::std::memcpy(&bits, &value, sizeof(bits));
+                of << "make_f64_bits(0x" << ::std::hex << bits << "ull)" << ::std::dec;
             } else if (ty == HIRCoreType::F128) {
                 const F128 bits(v);
                 of << "make_f128_bits(0x" << ::std::hex << bits.hi << "ull, 0x" << bits.lo << "ull)" << ::std::dec;
-            } else if (floatValueIsNan(v)) {
-                of << (ty == HIRCoreType::F32 ? "__builtin_nanf(\"\")" : "__builtin_nan(\"\")");
-            } else if (floatValueIsInfinite(v)) {
-                of << (v < 0 ? "-" : "");
-                of << (ty == HIRCoreType::F32 ? "__builtin_inff()" : "__builtin_inf()");
             } else {
-                if (ty == HIRCoreType::F32) {
-                    of.precision(::std::numeric_limits<float>::max_digits10 + 1);
-                    of << ::std::scientific << v << "f";
-                } else {
-                    of.precision(::std::numeric_limits<double>::max_digits10 + 1);
-                    of << ::std::scientific << v;
-                }
+                BUG(Span(), "Unexpected floating-point type " << ty);
             }
         }
 

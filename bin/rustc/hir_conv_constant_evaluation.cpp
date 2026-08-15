@@ -2987,15 +2987,19 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                     break;
                 }
                 case TypeInfo::Float: {
-                    auto v = localState.getLval(e.val).readFloat(state, ti.bits);
                     switch (e.op) {
                         case MIRUniOp::INV:
                             MIR_BUG(state, "Invalid invert of Float");
-                        case MIRUniOp::NEG:
-                            v = -v;
+                        case MIRUniOp::NEG: {
+                            // IEEE negation toggles only the sign bit. Doing
+                            // this through a host float would canonicalise NaN
+                            // payloads and can discard the newly-set sign.
+                            auto bits = localState.getLval(e.val).readUint(state, ti.bits);
+                            bits = bits ^ (U128(1) << (ti.bits - 1));
+                            dst.writeUint(state, ti.bits, bits);
                             break;
+                        }
                     }
-                    dst.writeFloat(state, ti.bits, v);
                     break;
                 }
                 case TypeInfo::Other:
