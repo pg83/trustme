@@ -43,13 +43,13 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Result typing and coercion outside opaque types: 14 heterogeneous failures
+1. Result typing and coercion outside opaque types: 12 heterogeneous failures
    share the final diagnostic at `hir_typeck_expr_cs.cpp:2196`. They include
    block/loop results, match ergonomics, function-item coercions, patterns,
    async types, and ordinary generic inference; the common error line is not a
    common implementation root.
-2. Unresolved types reaching translation: 11 infer/async/closure types rejected
-   by mangling at `trans_mangling.cpp:257`, plus 4 `sizeof` operations on infer
+2. Unresolved types reaching translation: 12 infer/async/closure types rejected
+   by mangling at `trans_mangling.cpp:274`, plus 4 `sizeof` operations on infer
    types at `trans_target.cpp:496`.
 3. Shared backend/runtime families: 12 pointer equality/provenance tests, 9
    `core::num::dec2flt` library tests, 9 Miri x86-intrinsic aborts, 9 async-drop
@@ -60,11 +60,11 @@ of a shared root cause; split a row whenever minimal reproducers diverge.
 
 ## Internal compiler failures
 
-There are 141 unfinished compiler-internal failures in 91 stable signatures.
+There are 142 unfinished compiler-internal failures in 91 stable signatures.
 
 | signature or root cause | tests | note |
 |---|---:|---|
-| non-encodable type, `trans_mangling.cpp:257` | 11 | infer variables, async and closure types reach mangling |
+| non-encodable type, `trans_mangling.cpp:274` | 12 | infer variables, async and closure types reach mangling |
 | inline-assembly token assertion, `parse_token.h:71` | 5 | five Rust Reference asm fragments |
 | intrinsic/unsized translation errors, `mir_helpers.h:108` | 5 | two `vtable_align`; one each `fmuladdf32`, `fadd_fast`, and extern-type alignment |
 | `sizeof` on infer type, `trans_target.cpp:496` | 4 | const-generic/type-relation cases |
@@ -73,17 +73,17 @@ There are 141 unfinished compiler-internal failures in 91 stable signatures.
 The eight signal failures are two SIGILLs at `mir_operations.cpp:1473`, two
 SIGSEGVs at `hir_conv_main_bindings.cpp:1430`, the recursive pattern-lowering
 SIGSEGV at `mir_from_hir.cpp:4760`, and three other one-test SIGSEGV signatures.
-Four uncaught exceptions and five explicit MIR TODOs are included in the 141.
+Four uncaught exceptions and five explicit MIR TODOs are included in the 142.
 
 ## Accepted Rust rejected by the front end
 
-The 349 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 347 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
 | parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
-| type checking, HIR lowering, and resolution | 143 | result relation 14 |
+| type checking, HIR lowering, and resolution | 141 | result relation 12 |
 | macro and attribute expansion | 32 | other expansion and attribute failures |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |

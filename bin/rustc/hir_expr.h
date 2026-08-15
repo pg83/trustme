@@ -34,6 +34,9 @@ public:
     Span mSpan;
     HIRTypeRef resType; // TODO: Replace this with an index into an ivar table
     //unsigned m_res_type_idx;
+    // Evaluation of this expression cannot complete normally.  This is
+    // independent of `resType`: e.g. `(return, 0)` still has a tuple type.
+    bool diverges = false;
     HIRValueUsage usage = HIRValueUsage::Unknown;
 
     const Span& span() const {
@@ -182,7 +185,6 @@ struct HIRExprNodeUse: public HIRExprNode {
 struct HIRExprNodeLoop: public HIRExprNode {
     RcString label;
     HIRExprNodeP mCode;
-    bool diverges = false;
     bool requireLabel = false;
 
     HIRExprNodeLoop(Span sp, RcString label, HIRExprNodeP code, bool requireLabel = false);

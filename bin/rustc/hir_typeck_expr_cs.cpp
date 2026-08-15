@@ -109,6 +109,10 @@ namespace {
         /// and using a trait method instead)
         bool isFallback;
 
+        bool nodeDiverges(const HIRExprNode& node) const {
+            return node.diverges || this->context.getType(node.resType)->is_Diverge();
+        }
+
     public:
         ExprVisitorRevisit(Context& context, bool fallback = false)
             : context(context)
@@ -122,20 +126,16 @@ namespace {
         }
 
         void visit(HIRExprNodeBlock& node) override {
-            const auto isDiverge = [&](const HIRTypeData* rty) -> bool {
-                const auto& ty = this->context.getType(rty);
-                // TODO: Search the entire type for `!`? (What about pointers to it? or Option/Result?)
-                // - A correct search will search for unconditional (ignoring enums with a non-! variant) non-rawptr instances of ! in the type
-                return ty->is_Diverge();
-            };
-
             assert(!node.nodes.empty());
-            const auto& lastTy = this->context.getType(node.nodes.back()->resType);
+            const auto& lastNode = *node.nodes.back();
+            const auto& lastTy = this->context.getType(lastNode.resType);
             DEBUG("_Block: last_ty = " << lastTy);
 
             bool diverges = false;
             // NOTE: If the final statement in the block diverges, mark this as diverging
-            if (const auto* e = lastTy->opt_Infer()) {
+            if (lastNode.diverges) {
+                diverges = true;
+            } else if (const auto* e = lastTy->opt_Infer()) {
                 switch (e->tyClass) {
                     case HIRInferClass::Integer:
                     case HIRInferClass::Float:
@@ -145,7 +145,7 @@ namespace {
                         this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
                         return;
                 }
-            } else if (isDiverge(lastTy)) {
+            } else if (lastTy->is_Diverge()) {
                 diverges = true;
             } else {
                 diverges = false;
@@ -158,6 +158,7 @@ namespace {
                 DEBUG("_Block: doesn't diverge but doesn't yield a value, yield ()");
                 this->context.equateTypes(node.span(), node.resType, context.crate.types.unit());
             }
+            node.diverges = diverges;
             this->completed = true;
         }
 
@@ -198,12 +199,14 @@ namespace {
                 return;
             }
             const auto* valueType = this->context.getType(node.mValue->resType);
-            if (const auto* infer = valueType->opt_Infer(); infer && infer->tyClass == HIRInferClass::None) {
+            const auto* infer = valueType->opt_Infer();
+            if (!node.mValue->diverges && infer && infer->tyClass == HIRInferClass::None) {
                 this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
                 return;
             }
+            node.diverges = this->nodeDiverges(*node.mValue);
             this->context.equateTypes(node.span(), node.resType,
-                valueType->is_Diverge() ? this->context.crate.types.diverge() : this->context.crate.types.unit());
+                node.diverges ? this->context.crate.types.diverge() : this->context.crate.types.unit());
             this->completed = true;
         }
 
@@ -1426,7 +1429,7 @@ namespace {
                 checkTypesEqual(node.span(), node.resType, node.valueNode->resType);
             }
             // If the last node diverges (yields `!`) then this block can yield `!` (or anything)
-            else if (!node.nodes.empty() && node.nodes.back()->resType == context.crate.types.diverge()) {
+            else if (node.diverges) {
             } else {
                 // Non-diverging (empty, or with a non-diverging last node) blocks must yield `()`
                 checkTypesEqual(node.span(), node.resType, context.crate.types.unit());
@@ -9720,14 +9723,8 @@ public:
 
         this->context.mResolve.addOpaqueAliasScope(node.localMod);
 
-        const auto isDiverge = [&](const HIRTypeData* rty) -> bool {
-            const auto& ty = this->context.getType(rty);
-            // TODO: Search the entire type for `!`? (What about pointers to it? or Option/Result?)
-            // - A correct search will search for unconditional (ignoring enums with a non-! variant) non-rawptr instances of ! in the type
-            return ty->is_Diverge();
-        };
-
         bool diverges = false;
+        node.diverges = false;
         this->pushTraits(node.traits);
         if (node.nodes.size() > 0) {
             this->pushInnerCoerce(false);
@@ -9737,7 +9734,7 @@ public:
                 snp->visit(*this);
 
                 // If this statement yields !, then mark the block as diverging
-                if (isDiverge(snp->resType)) {
+                if (this->nodeDiverges(*snp)) {
                     diverges = true;
                 } else {
                     struct RevisitDefaultUnit: public Context::Revisitor {
@@ -9789,6 +9786,7 @@ public:
             this->context.equateTypes(snp->span(), node.resType, snp->resType);
             this->context.requireSized(snp->span(), snp->resType);
             snp->visit(*this);
+            node.diverges = diverges || this->nodeDiverges(*snp);
         } else if (node.nodes.size() > 0) {
             // NOTE: If the final statement in the block diverges, mark this as diverging
             const auto& snp = node.nodes.back();
@@ -9804,7 +9802,7 @@ public:
                             defer = true;
                             break;
                     }
-                } else if (isDiverge(snp->resType)) {
+                } else if (this->nodeDiverges(*snp)) {
                     diverges = true;
                 } else {
                     diverges = false;
@@ -9822,6 +9820,7 @@ public:
                 DEBUG("Block doesn't diverge but doesn't yield a value, yield ()");
                 this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
             }
+            node.diverges = diverges;
         } else {
             // Result should be `()`
             DEBUG("Block is empty, yield ()");
@@ -9835,6 +9834,7 @@ public:
         this->context.addIvars(node.inner->resType);
 
         node.inner->visit(*this);
+        node.diverges = this->nodeDiverges(*node.inner);
         this->context.equateTypes(node.span(), node.resType, node.inner->resType);
     }
 
@@ -9845,10 +9845,12 @@ public:
         for (auto& v : node.outputs) {
             this->context.addIvars(v.value->resType);
             v.value->visit(*this);
+            this->inheritDivergence(node, *v.value);
         }
         for (auto& v : node.inputs) {
             this->context.addIvars(v.value->resType);
             v.value->visit(*this);
+            this->inheritDivergence(node, *v.value);
         }
         this->popInnerCoerce();
         // TODO: Revisit to check that the input are integers, and the outputs are integer lvalues
@@ -9864,21 +9866,25 @@ public:
                 TU_ARMA(Const, e) {
                     this->context.addIvars(e->resType);
                     visitNodePtr(e);
+                    this->inheritDivergence(node, *e);
                 }
                 TU_ARMA(Sym, e) {
                 }
                 TU_ARMA(RegSingle, e) {
                     this->context.addIvars(e.val->resType);
                     visitNodePtr(e.val);
+                    this->inheritDivergence(node, *e.val);
                 }
                 TU_ARMA(Reg, e) {
                     if (e.valIn) {
                         this->context.addIvars(e.valIn->resType);
                         visitNodePtr(e.valIn);
+                        this->inheritDivergence(node, *e.valIn);
                     }
                     if (e.valOut) {
                         this->context.addIvars(e.valOut->resType);
                         visitNodePtr(e.valOut);
+                        this->inheritDivergence(node, *e.valOut);
                     }
                 }
                 }
@@ -9886,6 +9892,7 @@ public:
         this->popInnerCoerce();
         // TODO: Revisit to check that the input are integers, and the outputs are integer lvalues
         if (node.options.noreturn) {
+            node.diverges = true;
             this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
         } else {
             this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
@@ -9907,6 +9914,7 @@ public:
         this->pushInnerCoerce(true);
         node.mValue->visit(*this);
         this->popInnerCoerce();
+        node.diverges = true;
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
     }
 
@@ -9924,6 +9932,7 @@ public:
         this->pushInnerCoerce(true);
         node.mValue->visit(*this);
         this->popInnerCoerce();
+        this->inheritDivergence(node, *node.mValue);
         this->context.equateTypes(node.span(), node.resType, resumeTy);
     }
 
@@ -9931,6 +9940,7 @@ public:
         TRACE_FUNCTION_F(&node << "(...).await");
         this->context.addIvars(node.mValue->resType);
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
         // Require that `return = <[node.value] as `future_trait`>::Output`
         this->context.equateTypesAssoc(node.span(), node.resType, context.mResolve.langFuture(), {}, node.mValue->resType, "Output", {});
     }
@@ -9938,6 +9948,7 @@ public:
     void visit(HIRExprNodeUse& node) override {
         this->context.addIvars(node.mValue->resType);
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
         this->context.equateTypes(node.span(), node.resType, node.mValue->resType);
     }
 
@@ -10003,6 +10014,7 @@ public:
                 this->context.equateTypes(node.span(), loopNode.resType, this->context.crate.types.unit());
             }
         }
+        node.diverges = true;
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
     }
 
@@ -10032,12 +10044,14 @@ public:
             this->popInnerCoerce();
 
             const auto* valueType = this->context.getType(node.mValue->resType);
-            if (const auto* infer = valueType->opt_Infer(); infer && infer->tyClass == HIRInferClass::None) {
+            const auto* infer = valueType->opt_Infer();
+            if (!node.mValue->diverges && infer && infer->tyClass == HIRInferClass::None) {
                 deferResultType = true;
             } else {
-                diverges = valueType->is_Diverge();
+                diverges = this->nodeDiverges(*node.mValue);
             }
         }
+        node.diverges = diverges;
         if (deferResultType) {
             this->context.addRevisit(node);
         } else {
@@ -10056,6 +10070,7 @@ public:
             this->context.addIvars(node.mValue->resType);
 
             node.mValue->visit(*this);
+            this->inheritDivergence(node, *node.mValue);
             // TODO: If a coercion point (and ivar for the value) is placed here, it will allow `match &string { "..." ... }`
             // - But, this can break some parts of inferrence
             this->context.equateTypes(node.span(), valType, node.mValue->resType);
@@ -10164,9 +10179,11 @@ public:
         }
 
         node.slot->visit(*this);
+        this->inheritDivergence(node, *node.slot);
 
         auto _2 = this->pushInnerCoerceScoped(node.op == HIRExprNodeAssign::Op::None);
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
         this->context.requireSized(node.span(), node.mValue->resType);
 
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
@@ -10191,10 +10208,11 @@ public:
             node.right->visit(*this);
         }
 
-        const bool leftDiverges = this->context.getType(node.left->resType)->is_Diverge();
-        const bool rightDiverges = this->context.getType(node.right->resType)->is_Diverge();
+        const bool leftDiverges = this->nodeDiverges(*node.left);
+        const bool rightDiverges = this->nodeDiverges(*node.right);
         const bool diverges = leftDiverges
             || (rightDiverges && node.op != HIRExprNodeBinOp::Op::BoolAnd && node.op != HIRExprNodeBinOp::Op::BoolOr);
+        node.diverges = diverges;
         const HIRTypeData* operatorResultType = node.resType;
         if (diverges) {
             operatorResultType = this->context.ivars.newIvarTr();
@@ -10338,6 +10356,7 @@ public:
         TRACE_FUNCTION_F(&node << " " << HIRExprNodeUniOp::opname(node.op) << "...");
         this->context.addIvars(node.mValue->resType);
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
 
         const char* itemName = nullptr;
         auto operatorKind = TypeckPrimitiveOperator::None;
@@ -10378,6 +10397,7 @@ public:
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.borrow(node.mType, node.mValue->resType));
 
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
     }
 
     void visit(HIRExprNodeRawBorrow& node) override {
@@ -10387,6 +10407,7 @@ public:
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.pointer(node.mType, node.mValue->resType));
 
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
     }
 
     void visit(HIRExprNodeCast& node) override {
@@ -10396,6 +10417,7 @@ public:
         TRACE_FUNCTION_F(&node << " ... as " << node.dstType);
 
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
 
         this->context.equateTypes(node.span(), node.resType, node.dstType);
         // TODO: Only revisit if the cast type requires inferring.
@@ -10406,6 +10428,7 @@ public:
         // _Unsize is emitted for type annotations, and adds a coercion point to its inner
         this->context.addIvars(node.dstType);
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
 
         this->context.equateTypesCoerce(node.mValue->span(), node.dstType, node.mValue);
         this->context.equateTypes(node.span(), node.resType, node.dstType);
@@ -10421,6 +10444,8 @@ public:
 
         node.mValue->visit(*this);
         node.index->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
+        this->inheritDivergence(node, *node.index);
         this->context.equateTypesCoerce(node.index->span(), node.cache.indexTy, node.index);
 
         this->context.addRevisit(node);
@@ -10433,6 +10458,7 @@ public:
         this->context.addIvars(node.mValue->resType);
 
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
 
         // Resolve native dereference versus an overloaded Deref before
         // the enclosing expression's coercion is considered.  A trait
@@ -10462,8 +10488,10 @@ public:
         this->context.addIvars(node.mValue->resType);
 
         node.place->visit(*this);
+        this->inheritDivergence(node, *node.place);
         auto _2 = this->pushInnerCoerceScoped(true);
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
 
         this->context.addRevisit(node);
     }
@@ -10507,6 +10535,7 @@ public:
     void visit(HIRExprNodeTupleVariant& node) override {
         const auto& sp = node.span();
         TRACE_FUNCTION_F(&node << " " << node.mPath << "(...) [" << (node.isStruct ? "struct" : "enum") << "]");
+        node.diverges = false;
         for (auto& val : node.mArgs) {
             this->context.addIvars(val->resType);
         }
@@ -10577,12 +10606,14 @@ public:
             for( auto& val : node.mArgs ) {
             val->visit(*this);
             this->context.requireSized(node.span(), val->resType);
+            node.diverges = node.diverges || this->nodeDiverges(*val);
             }
     }
 
     void visit(HIRExprNodeStructLiteral& node) override {
         const auto& sp = node.span();
         TRACE_FUNCTION_F(&node << " " << node.mType << " (" << node.realPath << ") {...} [" << (node.isStruct ? "struct" : "enum") << "]");
+        node.diverges = false;
         auto _ = this->pushInnerCoerceScoped(true);
 
         // Note: This can happen if doing a second pass on a const function (run first time for const eval)
@@ -10673,6 +10704,7 @@ public:
                     if (node.baseValue) {
                         auto _ = this->pushInnerCoerceScoped(false);
                         node.baseValue->visit(*this);
+                        this->inheritDivergence(node, *node.baseValue);
                     }
                     return;
                 }
@@ -10720,10 +10752,12 @@ public:
             for( auto& val : node.values ) {
             val.second->visit(*this);
             this->context.requireSized(node.span(), val.second->resType);
+            node.diverges = node.diverges || this->nodeDiverges(*val.second);
             }
             if( node.baseValue ) {
             auto _ = this->pushInnerCoerceScoped(false);
             node.baseValue->visit(*this);
+            node.diverges = node.diverges || this->nodeDiverges(*node.baseValue);
             }
     }
 
@@ -10795,6 +10829,7 @@ public:
             auto _ = this->pushInnerCoerceScoped(true);
             for (auto& val : node.mArgs) {
                 val->visit(*this);
+                this->inheritDivergence(node, *val);
             }
         }
         if (cacheOk) {
@@ -10815,11 +10850,13 @@ public:
             auto _ = this->pushInnerCoerceScoped(false);
             node.mValue->visit(*this);
         }
+        this->inheritDivergence(node, *node.mValue);
         auto _ = this->pushInnerCoerceScoped(true);
         for (unsigned int i = 0; i < node.mArgs.size(); i++) {
             auto& val = node.mArgs[i];
             this->context.equateTypesCoerce(val->span(), node.argIvars[i], val);
             val->visit(*this);
+            this->inheritDivergence(node, *val);
         }
         this->context.requireSized(node.span(), node.resType);
 
@@ -10901,9 +10938,11 @@ public:
             auto _ = this->pushInnerCoerceScoped(false);
             node.mValue->visit(*this);
         }
+        this->inheritDivergence(node, *node.mValue);
         auto _ = this->pushInnerCoerceScoped(true);
         for (auto& val : node.mArgs) {
             val->visit(*this);
+            this->inheritDivergence(node, *val);
         }
         this->context.requireSized(node.span(), node.resType);
 
@@ -10918,12 +10957,14 @@ public:
         this->context.addIvars(node.mValue->resType);
 
         node.mValue->visit(*this);
+        this->inheritDivergence(node, *node.mValue);
 
         this->context.addRevisit(node);
     }
 
     void visit(HIRExprNodeTuple& node) override {
         TRACE_FUNCTION_F(&node << " (...,)");
+        node.diverges = false;
         for (auto& val : node.vals) {
             this->context.addIvars(val->resType);
         }
@@ -10964,11 +11005,13 @@ public:
         for (auto& val : node.vals) {
             val->visit(*this);
             this->context.requireSized(node.span(), val->resType);
+            node.diverges = node.diverges || this->nodeDiverges(*val);
         }
     }
 
     void visit(HIRExprNodeArrayList& node) override {
         TRACE_FUNCTION_F(&node << " [...,]");
+        node.diverges = false;
         auto _ = this->pushInnerCoerceScoped(true);
         for (auto& val : node.vals) {
             this->context.addIvars(val->resType);
@@ -10984,11 +11027,13 @@ public:
 
         for (auto& val : node.vals) {
             val->visit(*this);
+            node.diverges = node.diverges || this->nodeDiverges(*val);
         }
     }
 
     void visit(HIRExprNodeArraySized& node) override {
         TRACE_FUNCTION_F(&node << " [...; " << node.mSize << "]");
+        node.diverges = false;
         this->context.addIvars(node.val->resType);
 
         // Create result type (can't be known until after const expansion)
@@ -11000,6 +11045,7 @@ public:
         this->equateTypesInnerCoerce(node.span(), innerTy, node.val);
 
         node.val->visit(*this);
+        node.diverges = this->nodeDiverges(*node.val);
     }
 
     void visit(HIRExprNodeLiteral& node) override {
@@ -11326,6 +11372,14 @@ public:
     }
 
 private:
+    bool nodeDiverges(const HIRExprNode& node) const {
+        return node.diverges || this->context.getType(node.resType)->is_Diverge();
+    }
+
+    void inheritDivergence(HIRExprNode& node, const HIRExprNode& child) const {
+        node.diverges = node.diverges || this->nodeDiverges(child);
+    }
+
     void pushTraits(const tTraitList& list) {
         this->traits.insert(this->traits.end(), list.begin(), list.end());
     }
