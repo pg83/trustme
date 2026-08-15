@@ -6147,44 +6147,15 @@ namespace {
             if (const auto* be = b.opt_Value()) {
                 return (ae->first <= *be && isWithinRight(*be, *ae));
             } else if (const auto* be = b.opt_ValueRange()) {
-                // First ends before the second starts (or vice-versa): Disjoint
-                if (ae->last < be->first) {
+                // Range starts are inclusive, while their ends can be either
+                // inclusive or exclusive.
+                if (ae->last < be->first || (ae->last == be->first && !ae->isInclusive)) {
                     return false;
                 }
-                if (be->last < ae->first) {
+                if (be->last < ae->first || (be->last == ae->first && !be->isInclusive)) {
                     return false;
                 }
-                // If the starts are the same (always inclusive) then overlap
-                if (ae->first == be->first) {
-                    return true;
-                }
-
-                //    return lo.is_inclusive == hi.is_inclusive ? lo.last <= hi.last
-                //        : (lo.is_inclusive
-                //            ? lo.last < hi.last // Lower side is inclusive, higher side exlusive - must be less than higher side
-                //            : throw "TODO" // Lower side is excl, higher side incl - lower+1 < higher = lower < higher-1 = lower
-                ASSERT_BUG(Span(), ae->isInclusive && be->isInclusive, "TODO: Handle overlap with exclusive ranges: " << ae->first << ".." << (ae->isInclusive ? "=" : "") << ae->last << " and " << be->first << ".." << (be->isInclusive ? "=" : "") << be->last);
-                assert(ae->isInclusive && "TODO: Exclusive ranges");
-                assert(be->isInclusive && "TODO: Exclusive ranges");
-                // Start of B within A
-                if (ae->first <= be->first && isWithinRight(be->first, *ae)) {
-                    return true;
-                }
-                // End of B within A
-                if (isWithinRight(ae->first, *be) && be->last <= ae->last) { // TODO: Right-exclusive (if equal type then original check, otherwise complex)
-                    return true;
-                }
-                // Start of A within B
-                if (be->first <= ae->first && isWithinRight(ae->first, *be)) {
-                    return true;
-                }
-                // End of A within B
-                if (isWithinRight(be->first, *ae) && ae->last <= be->last) { // TODO: Right-exclusive
-                    return true;
-                }
-
-                // Disjoint
-                return false;
+                return true;
             } else {
                 TODO(Span(), "Check overlap of " << a << " and " << b);
             }
