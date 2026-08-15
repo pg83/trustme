@@ -742,6 +742,71 @@ class CConcatExpander: public ExpandProcMacro {
     }
 };
 
+class CConcatBytesExpander: public ExpandProcMacro {
+    static char getArrayByte(const Span& sp, const ASTExprNode& node) {
+        const auto* value = cast<const ASTExprNodeInteger>(&node);
+        if (!value || (value->datatype != CORETYPE_ANY && value->datatype != CORETYPE_U8)
+            || !value->mValue.isU64() || value->mValue.truncateU64() > 0xff) {
+            ERROR(sp, E0000, "concat_bytes! array elements must be byte or u8 literals");
+        }
+        return static_cast<char>(value->mValue.truncateU64());
+    }
+
+    static void append(const Span& sp, ::std::string& output, const ASTExprNode& node) {
+        if (const auto* value = cast<const ASTExprNodeInteger>(&node)) {
+            if (value->datatype != CORETYPE_U8 || !value->mValue.isU64() || value->mValue.truncateU64() > 0xff) {
+                ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
+            }
+            output.push_back(static_cast<char>(value->mValue.truncateU64()));
+            return;
+        }
+        if (const auto* value = cast<const ASTExprNodeByteString>(&node)) {
+            output += value->mValue;
+            return;
+        }
+        if (const auto* value = cast<const ASTExprNodeArray>(&node)) {
+            if (!value->mSize) {
+                for (const auto& element : value->values) {
+                    output.push_back(getArrayByte(sp, *element));
+                }
+                return;
+            }
+
+            const auto* count = cast<const ASTExprNodeInteger>(value->mSize.get());
+            if (!count || !count->mValue.isU64()) {
+                ERROR(sp, E0000, "concat_bytes! repeat count must be an integer literal");
+            }
+            const auto byte = getArrayByte(sp, *value->values.at(0));
+            output.append(static_cast<size_t>(count->mValue.truncateU64()), byte);
+            return;
+        }
+        ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
+    }
+
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
+        Token tok;
+        auto lex = TTStream(sp, ParseState(), tt);
+        lex.parseState().wb = &wb;
+
+        ::std::string output;
+        do {
+            if (LOOK_AHEAD(lex) == TOK_EOF) {
+                GET_TOK(tok, lex);
+                break;
+            }
+
+            auto value = ParseExpr0(lex);
+            ExpandBareExpr(wb, crate, mod, value);
+            append(sp, output, *value);
+        } while (GET_TOK(tok, lex) == TOK_COMMA);
+        if (tok.type() != TOK_EOF) {
+            throw ParseErrorUnexpected(lex, tok, {TOK_COMMA, TOK_EOF});
+        }
+
+        return box$(TTStreamO(sp, ParseState(), TokenTree(tt.getEdition(), Token(TOK_BYTESTRING, mv$(output), {}))));
+    }
+};
+
 class CConcatIdentsExpander: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         Token tok;
@@ -769,6 +834,7 @@ class CConcatIdentsExpander: public ExpandProcMacro {
 };
 
 STATIC_MACRO("concat", CConcatExpander);
+STATIC_MACRO("concat_bytes", CConcatBytesExpander);
 STATIC_MACRO("concat_idents", CConcatIdentsExpander);
 
 namespace {
