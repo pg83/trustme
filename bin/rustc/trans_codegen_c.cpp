@@ -2250,6 +2250,39 @@ namespace {
                     of << "\tdouble input[2], result[2]; memcpy(input, &arg" << (scalar ? 1 : 0) << ", sizeof(input)); memcpy(result, &arg0, sizeof(result));\n"
                        << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 2) << "; i++) result[i] = mrustc_x86_round_f64(input[i], arg" << (scalar ? 2 : 1) << ");\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse42.crc32.32.8"
+                        || item.linkage.name == "llvm.x86.sse42.crc32.32.16"
+                        || item.linkage.name == "llvm.x86.sse42.crc32.32.32"
+                        || item.linkage.name == "llvm.x86.sse42.crc32.64.64") {
+                    const unsigned bits = item.linkage.name == "llvm.x86.sse42.crc32.32.8" ? 8
+                        : (item.linkage.name == "llvm.x86.sse42.crc32.32.16" ? 16
+                        : (item.linkage.name == "llvm.x86.sse42.crc32.32.32" ? 32 : 64));
+                    of << "\treturn mrustc_x86_crc32c((uint32_t)arg0, arg1, " << bits << ");\n";
+                } else if (item.linkage.name.rfind("llvm.x86.sse42.pcmp", 0) == 0) {
+                    const bool explicitLengths = item.linkage.name.find("pcmpestr") != ::std::string::npos;
+                    const char* control = explicitLengths ? "arg4" : "arg2";
+                    if (explicitLengths) {
+                        of << "\tmrustc_x86_pcmp_state state = mrustc_x86_pcmp(&arg0, arg1, &arg2, arg3, arg4, true);\n";
+                    } else {
+                        of << "\tmrustc_x86_pcmp_state state = mrustc_x86_pcmp(&arg0, 0, &arg1, 0, arg2, false);\n";
+                    }
+                    if (item.linkage.name.find("pcmpestrm128") != ::std::string::npos || item.linkage.name.find("pcmpistrm128") != ::std::string::npos) {
+                        of << "\tmrustc_x86_pcmp_mask(&rv, state, " << control << ");\n\treturn rv;\n";
+                    } else if (item.linkage.name.find("pcmpestri128") != ::std::string::npos || item.linkage.name.find("pcmpistri128") != ::std::string::npos) {
+                        of << "\treturn mrustc_x86_pcmp_index(state, " << control << ");\n";
+                    } else if (item.linkage.name.find("pcmpestria128") != ::std::string::npos || item.linkage.name.find("pcmpistria128") != ::std::string::npos) {
+                        of << "\treturn state.mask == 0 && state.len2 == state.count;\n";
+                    } else if (item.linkage.name.find("pcmpestric128") != ::std::string::npos || item.linkage.name.find("pcmpistric128") != ::std::string::npos) {
+                        of << "\treturn state.mask != 0;\n";
+                    } else if (item.linkage.name.find("pcmpestrio128") != ::std::string::npos || item.linkage.name.find("pcmpistrio128") != ::std::string::npos) {
+                        of << "\treturn state.mask & 1;\n";
+                    } else if (item.linkage.name.find("pcmpestris128") != ::std::string::npos || item.linkage.name.find("pcmpistris128") != ::std::string::npos) {
+                        of << "\treturn state.len1 < state.count;\n";
+                    } else if (item.linkage.name.find("pcmpestriz128") != ::std::string::npos || item.linkage.name.find("pcmpistriz128") != ::std::string::npos) {
+                        of << "\treturn state.len2 < state.count;\n";
+                    } else {
+                        BUG(sp, "Unknown SSE4.2 string comparison intrinsic " << item.linkage.name);
+                    }
                 } else if (item.linkage.name == "llvm.x86.sse3.hadd.ps" || item.linkage.name == "llvm.x86.sse3.hsub.ps") {
                     const char op = item.linkage.name == "llvm.x86.sse3.hadd.ps" ? '+' : '-';
                     of << "\tfloat lhs[4], rhs[4], result[4];\n"

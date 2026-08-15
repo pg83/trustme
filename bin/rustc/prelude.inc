@@ -505,6 +505,141 @@ static inline double mrustc_x86_round_f64(double value, uint8_t mode) {
     }
 }
 
+static inline uint32_t mrustc_x86_crc32c(uint32_t crc, uint64_t value, unsigned bits) {
+    for (unsigned byte = 0; byte < bits / 8; byte++) {
+        crc ^= (uint8_t)value;
+        value >>= 8;
+        for (unsigned bit = 0; bit < 8; bit++) crc = (crc >> 1) ^ (0x82f63b78u & (0u - (crc & 1)));
+    }
+    return crc;
+}
+
+typedef struct {
+    uint32_t mask;
+    uint8_t len1;
+    uint8_t len2;
+    uint8_t count;
+} mrustc_x86_pcmp_state;
+
+static inline int32_t mrustc_x86_pcmp_element(const uint8_t* input, unsigned index, uint8_t control) {
+    if (control & 1) {
+        uint16_t value;
+        memcpy(&value, input + index * 2, sizeof(value));
+        return control & 2 ? (int16_t)value : value;
+    }
+    return control & 2 ? (int8_t)input[index] : input[index];
+}
+
+static inline uint8_t mrustc_x86_pcmp_implicit_length(const uint8_t* input, uint8_t count, uint8_t control) {
+    for (uint8_t i = 0; i < count; i++) if (mrustc_x86_pcmp_element(input, i, control) == 0) return i;
+    return count;
+}
+
+static inline uint8_t mrustc_x86_pcmp_explicit_length(int32_t length, uint8_t count) {
+    uint32_t magnitude = length < 0 ? (uint32_t)-(int64_t)length : (uint32_t)length;
+    return magnitude < count ? (uint8_t)magnitude : count;
+}
+
+static inline mrustc_x86_pcmp_state mrustc_x86_pcmp(
+    const void* raw1,
+    int32_t explicit_len1,
+    const void* raw2,
+    int32_t explicit_len2,
+    uint8_t control,
+    bool explicit_lengths
+) {
+    const uint8_t* input1 = (const uint8_t*)raw1;
+    const uint8_t* input2 = (const uint8_t*)raw2;
+    mrustc_x86_pcmp_state state;
+    state.count = control & 1 ? 8 : 16;
+    state.len1 = explicit_lengths
+        ? mrustc_x86_pcmp_explicit_length(explicit_len1, state.count)
+        : mrustc_x86_pcmp_implicit_length(input1, state.count, control);
+    state.len2 = explicit_lengths
+        ? mrustc_x86_pcmp_explicit_length(explicit_len2, state.count)
+        : mrustc_x86_pcmp_implicit_length(input2, state.count, control);
+    const uint32_t all = (1u << state.count) - 1;
+    state.mask = 0;
+
+    switch((control >> 2) & 3) {
+    case 0:
+        for (uint8_t i = 0; i < state.len2; i++) {
+            int32_t second = mrustc_x86_pcmp_element(input2, i, control);
+            for (uint8_t j = 0; j < state.len1; j++) {
+                if (mrustc_x86_pcmp_element(input1, j, control) == second) {
+                    state.mask |= 1u << i;
+                    break;
+                }
+            }
+        }
+        break;
+    case 1: {
+        uint8_t paired_len = state.len1 & (uint8_t)~1;
+        for (uint8_t i = 0; i < state.len2; i++) {
+            int32_t value = mrustc_x86_pcmp_element(input2, i, control);
+            for (uint8_t j = 0; j < paired_len; j += 2) {
+                int32_t low = mrustc_x86_pcmp_element(input1, j, control);
+                int32_t high = mrustc_x86_pcmp_element(input1, j + 1, control);
+                if (low <= value && value <= high) state.mask |= 1u << i;
+            }
+        }
+        break;
+    }
+    case 2: {
+        uint8_t maximum = state.len1 > state.len2 ? state.len1 : state.len2;
+        uint8_t minimum = state.len1 < state.len2 ? state.len1 : state.len2;
+        state.mask = all ^ ((1u << maximum) - 1);
+        for (uint8_t i = 0; i < minimum; i++) {
+            if (mrustc_x86_pcmp_element(input1, i, control) == mrustc_x86_pcmp_element(input2, i, control)) state.mask |= 1u << i;
+        }
+        break;
+    }
+    default:
+        if (state.len1 == 0) {
+            state.mask = all;
+        } else if (state.len1 <= state.len2) {
+            for (uint8_t i = 0; i + state.len1 <= state.len2; i++) {
+                bool equal = true;
+                for (uint8_t j = 0; j < state.len1; j++) {
+                    if (mrustc_x86_pcmp_element(input1, j, control) != mrustc_x86_pcmp_element(input2, i + j, control)) {
+                        equal = false;
+                        break;
+                    }
+                }
+                if (equal) state.mask |= 1u << i;
+            }
+        }
+        break;
+    }
+
+    if (((control >> 4) & 3) == 3) state.mask ^= (1u << state.len2) - 1;
+    else if (((control >> 4) & 3) == 1) state.mask ^= all;
+    state.mask &= all;
+    return state;
+}
+
+static inline int32_t mrustc_x86_pcmp_index(mrustc_x86_pcmp_state state, uint8_t control) {
+    if (state.mask == 0) return state.count;
+    return control & 0x40 ? 31 - __builtin_clz(state.mask) : __builtin_ctz(state.mask);
+}
+
+static inline void mrustc_x86_pcmp_mask(void* output, mrustc_x86_pcmp_state state, uint8_t control) {
+    memset(output, 0, 16);
+    if (control & 0x40) {
+        if (control & 1) {
+            for (uint8_t i = 0; i < state.count; i++) {
+                uint16_t value = state.mask & (1u << i) ? UINT16_MAX : 0;
+                memcpy((uint8_t*)output + i * sizeof(value), &value, sizeof(value));
+            }
+        } else {
+            uint8_t* bytes = (uint8_t*)output;
+            for (uint8_t i = 0; i < state.count; i++) bytes[i] = state.mask & (1u << i) ? UINT8_MAX : 0;
+        }
+    } else {
+        memcpy(output, &state.mask, sizeof(state.mask));
+    }
+}
+
 typedef _Float16 f16;
 static inline f16 make_f16_bits(uint16_t bits) { f16 result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
 static inline float make_f32_bits(uint32_t bits) { float result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
