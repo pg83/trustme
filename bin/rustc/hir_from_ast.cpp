@@ -3625,7 +3625,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             }
         };
 
-        if (v.datatype == CORETYPE_F16 || v.datatype == CORETYPE_F32 || v.datatype == CORETYPE_F64) {
+        if (v.datatype == CORETYPE_F16 || v.datatype == CORETYPE_F32 || v.datatype == CORETYPE_F64 || v.datatype == CORETYPE_F128) {
             DEBUG("Integer annotated as float, create float node");
             HIRCoreType type;
             switch (v.datatype) {
@@ -3638,10 +3638,14 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 case CORETYPE_F64:
                     type = HIRCoreType::F64;
                     break;
+                case CORETYPE_F128:
+                    type = HIRCoreType::F128;
+                    break;
                 default:
                     BUG(v.span(), "Unexpected floating point type");
             }
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Float({type, v.mValue.toDouble()})));
+            const auto text = FMT(v.mValue);
+            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Float({type, parseFloatValue(text.c_str())})));
             return;
         }
         mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Integer({H::getType(v.span(), v.datatype), v.mValue})));
