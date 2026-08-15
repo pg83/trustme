@@ -1105,6 +1105,34 @@ namespace {
                 auto& fcnPath = possibleMethods.front().second;
                 DEBUG("- deref_count = " << derefCount << ", fcn_path = " << fcnPath);
 
+                // Inside a trait impl, unconstrained trait arguments on a
+                // call through the current Self default to this impl's
+                // arguments.  They remain defaults: the method signature can
+                // still select a different impl (for example
+                // PartialOrd<Ipv4Addr> from inside PartialOrd<IpAddr>).
+                if (context.currentTraitImpl) {
+                    const auto* selected = fcnPath.mData.opt_UfcsKnown();
+                    const auto* currentTrait = context.mResolve.currentTraitPath();
+                    const auto* selectedSelf = selected ? context.ivars.getType(selected->type) : nullptr;
+                    const auto* currentSelf = context.ivars.getType(context.currentTraitImpl->mType);
+                    if (selected && currentTrait && (selectedSelf == currentSelf || selectedSelf->equalsIgnoringRegions(currentSelf))) {
+                        HIRGenericPath exactTrait;
+                        const auto& trait = context.crate.getTraitByPath(sp, currentTrait->mPath);
+                        if (context.mResolve.traitContainsMethod(sp, *currentTrait, trait, selectedSelf, node.method, exactTrait)
+                            && selected->trait.mPath == exactTrait.mPath
+                            && selected->trait.mParams.types.size() == exactTrait.mParams.types.size()) {
+                            for (unsigned int i = 0; i < selected->trait.mParams.types.size(); i++) {
+                                const auto* selectedParam = context.ivars.getType(selected->trait.mParams.types[i]);
+                                if (const auto* infer = selectedParam->opt_Infer()) {
+                                    if (auto* possible = context.getIvarPossibilities(sp, infer->index)) {
+                                        possible->typesDefault.insert(exactTrait.mParams.types[i]);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 node.methodPath = mv$(fcnPath);
                 // NOTE: Steals the params from the node
                 TU_MATCH(HIRPath::Data, (node.methodPath.mData), (e), (Generic, ), (UfcsUnknown, ), (UfcsKnown, e.params = mv$(node.mParams);), (UfcsInherent, e.params = mv$(node.mParams);))
@@ -2673,7 +2701,53 @@ namespace {
             MonomorphStatePtr rightMonomorph(context.crate.types, rightValue.selfType, &rightValue.paramsImpl, &rightValue.paramsItem);
             const auto leftPath = leftMonomorph.monomorphPath(sp, left);
             const auto rightPath = rightMonomorph.monomorphPath(sp, right);
-            return leftPath == rightPath || leftPath.equalsIgnoringRegions(rightPath);
+            if (leftPath == rightPath || leftPath.equalsIgnoringRegions(rightPath)) {
+                return true;
+            }
+
+            auto equateParams = [&](const HIRPathParams& leftParams, const HIRPathParams& rightParams) {
+                if (leftParams.types.size() != rightParams.types.size() || leftParams.values.size() != rightParams.values.size()) {
+                    return false;
+                }
+                for (unsigned int i = 0; i < leftParams.types.size(); i++) {
+                    context.equateTypesInner(sp, leftParams.types[i], rightParams.types[i]);
+                }
+                for (unsigned int i = 0; i < leftParams.values.size(); i++) {
+                    context.equateValues(sp, leftParams.values[i], rightParams.values[i]);
+                }
+                return true;
+            };
+
+            if (leftPath.mData.tag() != rightPath.mData.tag()) {
+                return false;
+            }
+            TU_MATCH_HDRA((leftPath.mData, rightPath.mData), {)
+            TU_ARMA(Generic, l, r) {
+                    return l.mPath == r.mPath && equateParams(l.mParams, r.mParams);
+                }
+                TU_ARMA(UfcsInherent, l, r) {
+                    if (l.item != r.item || !equateParams(l.params, r.params)) {
+                        return false;
+                    }
+                    context.equateTypesInner(sp, l.type, r.type);
+                    return true;
+                }
+                TU_ARMA(UfcsKnown, l, r) {
+                    if (l.trait.mPath != r.trait.mPath || l.item != r.item || !equateParams(l.trait.mParams, r.trait.mParams) || !equateParams(l.params, r.params)) {
+                        return false;
+                    }
+                    context.equateTypesInner(sp, l.type, r.type);
+                    return true;
+                }
+                TU_ARMA(UfcsUnknown, l, r) {
+                    if (l.item != r.item || !equateParams(l.params, r.params)) {
+                        return false;
+                    }
+                    context.equateTypesInner(sp, l.type, r.type);
+                    return true;
+                }
+            }
+            throw "";
         }
 
         bool equateNode(const HIRConstGenericUnevaluated& leftValue, const HIRExprNode& left, const HIRConstGenericUnevaluated& rightValue, const HIRExprNode& right) const {

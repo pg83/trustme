@@ -537,8 +537,11 @@ namespace {
 
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
     TU_MATCH_HDRA( (*ty), {)
-    TU_ARMA(Infer, te) {
-            BUG(sp, "sizeof on _ type");
+        TU_ARMA(Infer, te) {
+            // Layout queries are also used while relating unevaluated generic
+            // constants.  An inference variable has no layout yet; report the
+            // query as deferred, just like a generic or unresolved opaque type.
+            return false;
         }
         TU_ARMA(Diverge, te) {
             outSize = 0;
