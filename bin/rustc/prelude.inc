@@ -485,6 +485,26 @@ static inline int64_t mrustc_x86_f64_to_i64(double input, bool truncate) {
     return (int64_t)value;
 }
 
+static inline float mrustc_x86_round_f32(float value, uint8_t mode) {
+    if (mode & 4) return __builtin_nearbyintf(value);
+    switch(mode & 3) {
+    case 0: return __builtin_roundevenf(value);
+    case 1: return __builtin_floorf(value);
+    case 2: return __builtin_ceilf(value);
+    default: return __builtin_truncf(value);
+    }
+}
+
+static inline double mrustc_x86_round_f64(double value, uint8_t mode) {
+    if (mode & 4) return __builtin_nearbyint(value);
+    switch(mode & 3) {
+    case 0: return __builtin_roundeven(value);
+    case 1: return __builtin_floor(value);
+    case 2: return __builtin_ceil(value);
+    default: return __builtin_trunc(value);
+    }
+}
+
 typedef _Float16 f16;
 static inline f16 make_f16_bits(uint16_t bits) { f16 result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
 static inline float make_f32_bits(uint32_t bits) { float result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }

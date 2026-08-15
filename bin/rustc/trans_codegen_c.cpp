@@ -2193,6 +2193,63 @@ namespace {
                         of << "\t\tresult[i] = count >= " << bits << " ? 0 : input[i] " << (left ? "<<" : ">>") << " count;\n";
                     }
                     of << "\t}\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse41.dpps") {
+                    of << "\tfloat lhs[4], rhs[4], product[4] = {0, 0, 0, 0}, result[4];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 4; i++) if(arg2 & (1 << (i + 4))) product[i] = lhs[i] * rhs[i];\n"
+                       << "\tfloat sum = (product[0] + product[1]) + (product[2] + product[3]);\n"
+                       << "\tfor(unsigned i = 0; i < 4; i++) result[i] = arg2 & (1 << i) ? sum : 0.0f;\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse41.dppd") {
+                    of << "\tdouble lhs[2], rhs[2], product[2] = {0, 0}, result[2];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 2; i++) if(arg2 & (1 << (i + 4))) product[i] = lhs[i] * rhs[i];\n"
+                       << "\tdouble sum = product[0] + product[1];\n"
+                       << "\tfor(unsigned i = 0; i < 2; i++) result[i] = arg2 & (1 << i) ? sum : 0.0;\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse41.insertps") {
+                    of << "\tuint32_t lhs[4], rhs[4], result[4];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, lhs, sizeof(result));\n"
+                       << "\tresult[(arg2 >> 4) & 3] = rhs[(arg2 >> 6) & 3];\n"
+                       << "\tfor(unsigned i = 0; i < 4; i++) if(arg2 & (1 << i)) result[i] = 0;\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse41.mpsadbw") {
+                    of << "\tuint8_t lhs[16], rhs[16]; uint16_t result[8];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tunsigned lhs_start = arg2 & 4 ? 4 : 0; unsigned rhs_start = (arg2 & 3) * 4;\n"
+                       << "\tfor(unsigned i = 0; i < 8; i++) {\n"
+                       << "\t\tresult[i] = 0;\n"
+                       << "\t\tfor(unsigned j = 0; j < 4; j++) { int d = (int)lhs[lhs_start + i + j] - (int)rhs[rhs_start + j]; result[i] += d < 0 ? -d : d; }\n"
+                       << "\t}\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse41.packusdw") {
+                    of << "\tint32_t lhs[4], rhs[4]; uint16_t result[8];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 8; i++) { int32_t value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > UINT16_MAX ? UINT16_MAX : (value < 0 ? 0 : (uint16_t)value); }\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse41.phminposuw") {
+                    of << "\tuint16_t input[8], result[8] = {0, 0, 0, 0, 0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n"
+                       << "\tresult[0] = input[0];\n"
+                       << "\tfor(unsigned i = 1; i < 8; i++) if(input[i] < result[0]) { result[0] = input[i]; result[1] = i; }\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse41.ptestz"
+                        || item.linkage.name == "llvm.x86.sse41.ptestc"
+                        || item.linkage.name == "llvm.x86.sse41.ptestnzc") {
+                    of << "\tuint64_t lhs[2], rhs[2]; memcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tbool intersection = (lhs[0] & rhs[0]) != 0 || (lhs[1] & rhs[1]) != 0;\n"
+                       << "\tbool outside = (~lhs[0] & rhs[0]) != 0 || (~lhs[1] & rhs[1]) != 0;\n";
+                    if (item.linkage.name == "llvm.x86.sse41.ptestz") of << "\treturn !intersection;\n";
+                    else if (item.linkage.name == "llvm.x86.sse41.ptestc") of << "\treturn !outside;\n";
+                    else of << "\treturn intersection && outside;\n";
+                } else if (item.linkage.name == "llvm.x86.sse41.round.ps" || item.linkage.name == "llvm.x86.sse41.round.ss") {
+                    const bool scalar = item.linkage.name == "llvm.x86.sse41.round.ss";
+                    of << "\tfloat input[4], result[4]; memcpy(input, &arg" << (scalar ? 1 : 0) << ", sizeof(input)); memcpy(result, &arg0, sizeof(result));\n"
+                       << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 4) << "; i++) result[i] = mrustc_x86_round_f32(input[i], arg" << (scalar ? 2 : 1) << ");\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse41.round.pd" || item.linkage.name == "llvm.x86.sse41.round.sd") {
+                    const bool scalar = item.linkage.name == "llvm.x86.sse41.round.sd";
+                    of << "\tdouble input[2], result[2]; memcpy(input, &arg" << (scalar ? 1 : 0) << ", sizeof(input)); memcpy(result, &arg0, sizeof(result));\n"
+                       << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 2) << "; i++) result[i] = mrustc_x86_round_f64(input[i], arg" << (scalar ? 2 : 1) << ");\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse3.hadd.ps" || item.linkage.name == "llvm.x86.sse3.hsub.ps") {
                     const char op = item.linkage.name == "llvm.x86.sse3.hadd.ps" ? '+' : '-';
                     of << "\tfloat lhs[4], rhs[4], result[4];\n"
