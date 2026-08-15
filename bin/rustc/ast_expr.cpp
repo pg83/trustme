@@ -242,6 +242,54 @@ namespace {
         return ASTExprNodeP(en);
     }
 
+    bool macroTokenNeedsSpace(eTokenType previous, eTokenType current) {
+        switch (current) {
+            case TOK_PAREN_CLOSE:
+            case TOK_SQUARE_CLOSE:
+            case TOK_BRACE_CLOSE:
+            case TOK_COMMA:
+            case TOK_SEMICOLON:
+            case TOK_COLON:
+            case TOK_DOUBLE_COLON:
+            case TOK_DOT:
+            case TOK_EXCLAM:
+                return false;
+            default:
+                break;
+        }
+        switch (previous) {
+            case TOK_PAREN_OPEN:
+            case TOK_SQUARE_OPEN:
+            case TOK_DOUBLE_COLON:
+            case TOK_DOT:
+            case TOK_EXCLAM:
+            case TOK_AMP:
+                return false;
+            default:
+                break;
+        }
+        if ((current == TOK_PAREN_OPEN || current == TOK_SQUARE_OPEN) && previous == TOK_IDENT) {
+            return false;
+        }
+        return true;
+    }
+
+    void printMacroTokens(::std::ostream& os, const TokenTree& tree, bool& hasPrevious, eTokenType& previous) {
+        if (tree.isToken()) {
+            const auto current = tree.tok().type();
+            if (hasPrevious && macroTokenNeedsSpace(previous, current)) {
+                os << " ";
+            }
+            os << tree.tok().toStr();
+            previous = current;
+            hasPrevious = true;
+            return;
+        }
+        for (size_t i = 0; i < tree.size(); i++) {
+            printMacroTokens(os, tree[i], hasPrevious, previous);
+        }
+    }
+
 #define NEWNODE(type, ...) mkExprnodep(span(), new type(__VA_ARGS__))
 }
 
@@ -250,9 +298,9 @@ NODE(
     {
         os << "{";
         for (const auto& n : nodes) {
-            os << *n.node << (n.hasSemicolon ? ";" : "");
+            os << " " << *n.node << (n.hasSemicolon ? ";" : "");
         }
-        os << "}";
+        os << " }";
     },
     {
         ::std::vector<Line> newNodes;
@@ -270,11 +318,16 @@ NODE(ASTExprNodeTry, { os << "try " << *inner; }, { return NEWNODE(ASTExprNodeTr
 NODE(
     ASTExprNodeMacro,
     {
-        os << mPath << "!";
+        mPath.printPretty(os, false);
+        os << "!";
         if (ident.size() > 0) {
             os << " " << ident << " ";
         }
-        os << "(" << " /*TODO*/ " << ")";
+        os << (isBraced ? "{ " : "(");
+        bool hasPrevious = false;
+        eTokenType previous = TOK_NULL;
+        printMacroTokens(os, tokens, hasPrevious, previous);
+        os << (isBraced ? " }" : ")");
     },
     { return NEWNODE(ASTExprNodeMacro, ASTPath(mPath), ident, tokens.clone(), isBraced, definitionHygiene); }
 )
@@ -459,14 +512,38 @@ NODE(
     { return NEWNODE(ASTExprNodeLetBinding, pat.clone(), mType->clone(), OPT_CLONE(mValue), OPT_CLONE(elseNode), isSuper); }
 )
 
-NODE(ASTExprNodeAssign, { os << *slot << " = " << *mValue; }, { return NEWNODE(ASTExprNodeAssign, op, slot->clone(), mValue->clone()); })
+NODE(
+    ASTExprNodeAssign,
+    {
+        os << *slot << " ";
+        switch (op) {
+            case NONE: os << "="; break;
+            case ADD: os << "+="; break;
+            case SUB: os << "-="; break;
+            case MUL: os << "*="; break;
+            case DIV: os << "/="; break;
+            case MOD: os << "%="; break;
+            case AND: os << "&="; break;
+            case OR: os << "|="; break;
+            case XOR: os << "^="; break;
+            case SHR: os << ">>="; break;
+            case SHL: os << "<<="; break;
+        }
+        os << " " << *mValue;
+    },
+    { return NEWNODE(ASTExprNodeAssign, op, slot->clone(), mValue->clone()); }
+)
 
 NODE(
     ASTExprNodeCallPath,
     {
-        os << mPath << "(";
+        mPath.printPretty(os, false);
+        os << "(";
         for (const auto& a : mArgs) {
-            os << *a << ",";
+            if (&a != &mArgs.front()) {
+                os << ", ";
+            }
+            os << *a;
         }
         os << ")";
     },
@@ -638,7 +715,7 @@ NODE(
             if (datatype == CORETYPE_ANY)
                 ;
             else {
-                os << "_" << coretypeName(datatype);
+                os << coretypeName(datatype);
             }
         }
     },
@@ -649,7 +726,7 @@ NODE(
     {
         os << formatFloatValueForToken(mValue);
         if (datatype != CORETYPE_ANY) {
-            os << "_" << coretypeName(datatype);
+            os << coretypeName(datatype);
         }
     },
     { return NEWNODE(ASTExprNodeFloat, mValue, datatype); }
@@ -691,14 +768,21 @@ NODE(
 NODE(
     ASTExprNodeStructLiteral,
     {
-        os << mPath << " { ";
+        mPath.printPretty(os, false);
+        os << " { ";
         for (const auto& v : values) {
-            os << v.name << ": " << *v.value << ", ";
+            if (&v != &values.front()) {
+                os << ", ";
+            }
+            os << v.name << ": " << *v.value;
         }
         if (baseValue) {
+            if (!values.empty()) {
+                os << ", ";
+            }
             os << ".." << *baseValue;
         }
-        os << "}";
+        os << " }";
     },
     {
         ASTExprNodeStructLiteral::tValues vals;
@@ -885,37 +969,37 @@ NODE(
     {
         switch (mType) {
             case NEGATE:
-                os << "(-";
+                os << "-";
                 break;
             case INVERT:
-                os << "(!";
+                os << "!";
                 break;
             case BOX:
-                os << "(box ";
+                os << "box ";
                 break;
             case REF:
-                os << "(&";
+                os << "&";
                 break;
             case REFMUT:
-                os << "(&mut ";
+                os << "&mut ";
                 break;
             case RawBorrow:
-                os << "(&raw const ";
+                os << "&raw const ";
                 break;
             case RawBorrowMut:
-                os << "(&raw mut ";
+                os << "&raw mut ";
                 break;
             case QMARK:
-                os << "(" << *mValue << "?)";
+                os << *mValue << "?";
                 return;
             case AWait:
-                os << "((" << *mValue << ").await)";
+                os << *mValue << ".await";
                 return;
             case USE:
-                os << "((" << *mValue << ").use)";
+                os << *mValue << ".use";
                 return;
         }
-        os << *mValue << ")";
+        os << *mValue;
     },
     { return NEWNODE(ASTExprNodeUniOp, mType, mValue->clone()); }
 )

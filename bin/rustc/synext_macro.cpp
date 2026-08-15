@@ -1108,38 +1108,27 @@ class CExpanderOptionEnv: public ExpandProcMacro {
 STATIC_MACRO("env", CExpanderEnv);
 STATIC_MACRO("option_env", CExpanderOptionEnv);
 
-namespace {
-    const SpanInnerSource* getTopSpan(const Span& sp) {
-        return &sp.getTopFileSpan();
-    }
-}
-
 class CExpanderFile: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, ::std::string(getTopSpan(sp)->filename.c_str()), {}))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(TOK_STRING, ::std::string(SourceLocation(sp).filename.c_str()), {}))));
     }
 };
 
 class CExpanderLine: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(getTopSpan(sp)->startLine), CORETYPE_U32))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(SourceLocation(sp).line), CORETYPE_U32))));
     }
 };
 
 class CExpanderColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        const auto offset = getTopSpan(sp)->startOfs;
-        ASSERT_BUG(sp, offset >= 10, "column! invocation span is too short");
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - 10 + 1), CORETYPE_U32))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(SourceLocation(sp).column), CORETYPE_U32))));
     }
 };
 
 class CExpanderUnstableColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
-        const auto offset = getTopSpan(sp)->startOfs;
-        constexpr unsigned macroWidth = sizeof("__rust_unstable_column!()") - 1 + 1;
-        ASSERT_BUG(sp, offset >= macroWidth, "__rust_unstable_column! invocation span is too short");
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - macroWidth + 1), CORETYPE_U32))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(SourceLocation(sp).column), CORETYPE_U32))));
     }
 };
 

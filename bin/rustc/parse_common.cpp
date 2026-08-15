@@ -43,7 +43,7 @@ ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime);
 ASTExprNodeP ParseExprMatch(TokenStream& lex);
 ASTExprNodeP ParseExpr1(TokenStream& lex);
 ASTExprNodeP ParseExprFC(TokenStream& lex);
-ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath tok);
+ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath tok, Span pathSpan);
 ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName);
 ::std::vector<::std::pair<RcString, ASTFunction>> SplitDelegationFunction(const ASTFunction& fcn);
 
@@ -342,7 +342,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                     auto p = ParsePath(lex, PATH_GENERIC_EXPR);
                     if (lex.lookahead(0) == TOK_EXCLAM && lex.lookahead(1) == TOK_BRACE_OPEN) {
                         GET_CHECK_TOK(tok, lex, TOK_EXCLAM);
-                        auto rv = ParseExprMacro(lex, std::move(p));
+                        auto rv = ParseExprMacro(lex, std::move(p), std::move(pathSpan));
                         // If the block is followed by `.` or `?`, it's actually an expression!
                         if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
                             lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, rv.release())));
@@ -1393,7 +1393,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
             DEBUG("path = " << path << ", lookahead=" << Token::typestr(lex.lookahead(0)));
             switch (GET_TOK(tok, lex)) {
                 case TOK_EXCLAM:
-                    return ParseExprMacro(lex, mv$(path));
+                    return ParseExprMacro(lex, mv$(path), mv$(pathSpan));
                 case TOK_PAREN_OPEN:
                     // Function call
                     PUTBACK(tok, lex);
@@ -1599,7 +1599,7 @@ ASTExprNodeP ParseExprVal(TokenStream& lex) {
     return rv;
 }
 
-ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath path) {
+ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath path, Span pathSpan) {
     Token tok;
     auto definitionHygiene = lex.getHygiene();
 
@@ -1624,7 +1624,9 @@ ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath path) {
     }
 
     DEBUG("name=" << path << ", ident=" << ident << ", tt=" << tt);
-    return NEWNODE(ASTExprNodeMacro, mv$(path), mv$(ident), mv$(tt), isBraced, mv$(definitionHygiene));
+    auto rv = NEWNODE(ASTExprNodeMacro, mv$(path), mv$(ident), mv$(tt), isBraced, mv$(definitionHygiene));
+    rv->setSpan(mv$(pathSpan));
+    return rv;
 }
 
 // Token Tree Parsing
