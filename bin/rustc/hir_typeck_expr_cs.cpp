@@ -2490,6 +2490,42 @@ namespace {
             throw "";
         }
 
+        const EncodedLiteral* evaluatedPath(const HIRConstGenericUnevaluated& value, const HIRExprNodePathValue& node) const {
+            MonomorphStatePtr monomorph(context.crate.types, value.selfType, &value.paramsImpl, &value.paramsItem);
+            auto path = monomorph.monomorphPath(sp, node.mPath);
+            StaticTraitResolve resolve(context.mResolve.board());
+            MonomorphState params(context.crate.types);
+            auto resolved = resolve.getValue(sp, path, params);
+            const auto* constant = resolved.opt_Constant();
+            if (!constant) {
+                return nullptr;
+            }
+
+            const auto& item = **constant;
+            if (item.valueState == HIRConstant::ValueState::Known) {
+                return &item.valueRes;
+            }
+            if (item.valueState == HIRConstant::ValueState::Generic) {
+                auto cached = item.monomorphCache.find(path);
+                return cached == item.monomorphCache.end() ? nullptr : &cached->second;
+            }
+            return nullptr;
+        }
+
+        bool equateLiteralPath(const HIRExprNodeLiteral& literal, const HIRConstGenericUnevaluated& pathValue, const HIRExprNodePathValue& path) const {
+            const auto* evaluated = evaluatedPath(pathValue, path);
+            if (!evaluated || !evaluated->relocations.empty() || evaluated->bytes.empty()) {
+                return false;
+            }
+            if (const auto* integer = literal.mData.opt_Integer()) {
+                return EncodedLiteralSlice(*evaluated).readUint() == integer->mValue;
+            }
+            if (const auto* boolean = literal.mData.opt_Boolean()) {
+                return (EncodedLiteralSlice(*evaluated).readUint() != 0) == *boolean;
+            }
+            return false;
+        }
+
         bool equatePath(const HIRConstGenericUnevaluated& leftValue, const HIRPath& left, const HIRConstGenericUnevaluated& rightValue, const HIRPath& right) const {
             MonomorphStatePtr leftMonomorph(context.crate.types, leftValue.selfType, &leftValue.paramsImpl, &leftValue.paramsItem);
             MonomorphStatePtr rightMonomorph(context.crate.types, rightValue.selfType, &rightValue.paramsImpl, &rightValue.paramsItem);
@@ -2543,12 +2579,22 @@ namespace {
                 return true;
             }
             if (const auto* l = cast<const HIRExprNodeLiteral>(&left)) {
-                const auto* r = cast<const HIRExprNodeLiteral>(&right);
-                return r && equateLiteral(*l, *r);
+                if (const auto* r = cast<const HIRExprNodeLiteral>(&right)) {
+                    return equateLiteral(*l, *r);
+                }
+                if (const auto* r = cast<const HIRExprNodePathValue>(&right)) {
+                    return equateLiteralPath(*l, rightValue, *r);
+                }
+                return false;
             }
             if (const auto* l = cast<const HIRExprNodePathValue>(&left)) {
-                const auto* r = cast<const HIRExprNodePathValue>(&right);
-                return r && l->target == r->target && equatePath(leftValue, l->mPath, rightValue, r->mPath);
+                if (const auto* r = cast<const HIRExprNodePathValue>(&right)) {
+                    return l->target == r->target && equatePath(leftValue, l->mPath, rightValue, r->mPath);
+                }
+                if (const auto* r = cast<const HIRExprNodeLiteral>(&right)) {
+                    return equateLiteralPath(*r, leftValue, *l);
+                }
+                return false;
             }
             if (const auto* l = cast<const HIRExprNodeBinOp>(&left)) {
                 const auto* r = cast<const HIRExprNodeBinOp>(&right);
