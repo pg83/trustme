@@ -461,6 +461,30 @@ static inline bool mrustc_x86_cmp_f64(double lhs, double rhs, uint8_t predicate)
     }
 }
 
+static inline int32_t mrustc_x86_f32_to_i32(float input, bool truncate) {
+    float value = truncate ? __builtin_truncf(input) : __builtin_nearbyintf(input);
+    if (__builtin_isnan(value) || value >= 2147483648.0f || value < -2147483648.0f) return INT32_MIN;
+    return (int32_t)value;
+}
+
+static inline int64_t mrustc_x86_f32_to_i64(float input, bool truncate) {
+    float value = truncate ? __builtin_truncf(input) : __builtin_nearbyintf(input);
+    if (__builtin_isnan(value) || value >= 9223372036854775808.0 || value < -9223372036854775808.0) return INT64_MIN;
+    return (int64_t)value;
+}
+
+static inline int32_t mrustc_x86_f64_to_i32(double input, bool truncate) {
+    double value = truncate ? __builtin_trunc(input) : __builtin_nearbyint(input);
+    if (__builtin_isnan(value) || value >= 2147483648.0 || value < -2147483648.0) return INT32_MIN;
+    return (int32_t)value;
+}
+
+static inline int64_t mrustc_x86_f64_to_i64(double input, bool truncate) {
+    double value = truncate ? __builtin_trunc(input) : __builtin_nearbyint(input);
+    if (__builtin_isnan(value) || value >= 9223372036854775808.0 || value < -9223372036854775808.0) return INT64_MIN;
+    return (int64_t)value;
+}
+
 typedef _Float16 f16;
 static inline f16 make_f16_bits(uint16_t bits) { f16 result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
 static inline float make_f32_bits(uint32_t bits) { float result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }

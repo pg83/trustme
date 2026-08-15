@@ -2061,14 +2061,7 @@ namespace {
                     const bool truncate = item.linkage.name == "llvm.x86.sse.cvttss2si" || item.linkage.name == "llvm.x86.sse.cvttss2si64";
                     const bool is64 = item.linkage.name == "llvm.x86.sse.cvtss2si64" || item.linkage.name == "llvm.x86.sse.cvttss2si64";
                     of << "\tfloat input[4]; memcpy(input, &arg0, sizeof(input));\n"
-                       << "\tfloat value = __builtin_" << (truncate ? "truncf" : "nearbyintf") << "(input[0]);\n";
-                    if (is64) {
-                        of << "\tif(__builtin_isnan(value) || value >= 9223372036854775808.0 || value < -9223372036854775808.0) return INT64_MIN;\n"
-                           << "\treturn (int64_t)value;\n";
-                    } else {
-                        of << "\tif(__builtin_isnan(value) || value >= 2147483648.0f || value < -2147483648.0f) return INT32_MIN;\n"
-                           << "\treturn (int32_t)value;\n";
-                    }
+                       << "\treturn mrustc_x86_f32_to_i" << (is64 ? 64 : 32) << "(input[0], " << truncate << ");\n";
                 } else if (item.linkage.name == "llvm.x86.sse.min.ps"
                         || item.linkage.name == "llvm.x86.sse.min.ss"
                         || item.linkage.name == "llvm.x86.sse.max.ps"
@@ -2103,6 +2096,103 @@ namespace {
                        << "\tresult[0] = mrustc_x86_cmp_f64(lhs[0], rhs[0], arg2) ? UINT64_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.comieq.sd"
+                        || item.linkage.name == "llvm.x86.sse2.comige.sd"
+                        || item.linkage.name == "llvm.x86.sse2.comigt.sd"
+                        || item.linkage.name == "llvm.x86.sse2.comile.sd"
+                        || item.linkage.name == "llvm.x86.sse2.comilt.sd"
+                        || item.linkage.name == "llvm.x86.sse2.comineq.sd"
+                        || item.linkage.name == "llvm.x86.sse2.ucomieq.sd"
+                        || item.linkage.name == "llvm.x86.sse2.ucomige.sd"
+                        || item.linkage.name == "llvm.x86.sse2.ucomigt.sd"
+                        || item.linkage.name == "llvm.x86.sse2.ucomile.sd"
+                        || item.linkage.name == "llvm.x86.sse2.ucomilt.sd"
+                        || item.linkage.name == "llvm.x86.sse2.ucomineq.sd") {
+                    const char* op = nullptr;
+                    if (item.linkage.name == "llvm.x86.sse2.comieq.sd" || item.linkage.name == "llvm.x86.sse2.ucomieq.sd") op = "==";
+                    else if (item.linkage.name == "llvm.x86.sse2.comige.sd" || item.linkage.name == "llvm.x86.sse2.ucomige.sd") op = ">=";
+                    else if (item.linkage.name == "llvm.x86.sse2.comigt.sd" || item.linkage.name == "llvm.x86.sse2.ucomigt.sd") op = ">";
+                    else if (item.linkage.name == "llvm.x86.sse2.comile.sd" || item.linkage.name == "llvm.x86.sse2.ucomile.sd") op = "<=";
+                    else if (item.linkage.name == "llvm.x86.sse2.comilt.sd" || item.linkage.name == "llvm.x86.sse2.ucomilt.sd") op = "<";
+                    else op = "!=";
+                    of << "\tdouble lhs[2], rhs[2];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\treturn lhs[0] " << op << " rhs[0];\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.cvtpd2dq"
+                        || item.linkage.name == "llvm.x86.sse2.cvttpd2dq"
+                        || item.linkage.name == "llvm.x86.sse2.cvtps2dq"
+                        || item.linkage.name == "llvm.x86.sse2.cvttps2dq") {
+                    const bool inputIsDouble = item.linkage.name == "llvm.x86.sse2.cvtpd2dq" || item.linkage.name == "llvm.x86.sse2.cvttpd2dq";
+                    const bool truncate = item.linkage.name == "llvm.x86.sse2.cvttpd2dq" || item.linkage.name == "llvm.x86.sse2.cvttps2dq";
+                    if (inputIsDouble) {
+                        of << "\tdouble input[2]; int32_t result[4] = {0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n"
+                           << "\tfor(unsigned i = 0; i < 2; i++) result[i] = mrustc_x86_f64_to_i32(input[i], " << truncate << ");\n";
+                    } else {
+                        of << "\tfloat input[4]; int32_t result[4]; memcpy(input, &arg0, sizeof(input));\n"
+                           << "\tfor(unsigned i = 0; i < 4; i++) result[i] = mrustc_x86_f32_to_i32(input[i], " << truncate << ");\n";
+                    }
+                    of << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.cvtsd2si"
+                        || item.linkage.name == "llvm.x86.sse2.cvttsd2si"
+                        || item.linkage.name == "llvm.x86.sse2.cvtsd2si64"
+                        || item.linkage.name == "llvm.x86.sse2.cvttsd2si64") {
+                    const bool truncate = item.linkage.name == "llvm.x86.sse2.cvttsd2si" || item.linkage.name == "llvm.x86.sse2.cvttsd2si64";
+                    const bool is64 = item.linkage.name == "llvm.x86.sse2.cvtsd2si64" || item.linkage.name == "llvm.x86.sse2.cvttsd2si64";
+                    of << "\tdouble input[2]; memcpy(input, &arg0, sizeof(input));\n"
+                       << "\treturn mrustc_x86_f64_to_i" << (is64 ? 64 : 32) << "(input[0], " << truncate << ");\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.cvtsd2ss") {
+                    of << "\tfloat result[4]; double input[2];\n"
+                       << "\tmemcpy(result, &arg0, sizeof(result)); memcpy(input, &arg1, sizeof(input)); result[0] = (float)input[0];\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.cvtss2sd") {
+                    of << "\tdouble result[2]; float input[4];\n"
+                       << "\tmemcpy(result, &arg0, sizeof(result)); memcpy(input, &arg1, sizeof(input)); result[0] = (double)input[0];\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.min.pd"
+                        || item.linkage.name == "llvm.x86.sse2.min.sd"
+                        || item.linkage.name == "llvm.x86.sse2.max.pd"
+                        || item.linkage.name == "llvm.x86.sse2.max.sd") {
+                    const bool isMin = item.linkage.name == "llvm.x86.sse2.min.pd" || item.linkage.name == "llvm.x86.sse2.min.sd";
+                    const bool scalar = item.linkage.name == "llvm.x86.sse2.min.sd" || item.linkage.name == "llvm.x86.sse2.max.sd";
+                    of << "\tdouble lhs[2], rhs[2], result[2];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n"
+                       << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 2) << "; i++) result[i] = lhs[i] " << (isMin ? "<" : ">") << " rhs[i] ? lhs[i] : rhs[i];\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.packssdw.128") {
+                    of << "\tint32_t lhs[4], rhs[4]; int16_t result[8];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 8; i++) { int32_t value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > INT16_MAX ? INT16_MAX : (value < INT16_MIN ? INT16_MIN : (int16_t)value); }\n"
+                       << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.packsswb.128" || item.linkage.name == "llvm.x86.sse2.packuswb.128") {
+                    const bool unsignedResult = item.linkage.name == "llvm.x86.sse2.packuswb.128";
+                    of << "\tint16_t lhs[8], rhs[8]; " << (unsignedResult ? "uint8_t" : "int8_t") << " result[16];\n"
+                       << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                       << "\tfor(unsigned i = 0; i < 16; i++) { int16_t value = i < 8 ? lhs[i] : rhs[i - 8]; ";
+                    if (unsignedResult) of << "result[i] = value > UINT8_MAX ? UINT8_MAX : (value < 0 ? 0 : (uint8_t)value);";
+                    else of << "result[i] = value > INT8_MAX ? INT8_MAX : (value < INT8_MIN ? INT8_MIN : (int8_t)value);";
+                    of << " }\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
+                } else if (item.linkage.name == "llvm.x86.sse2.psll.w"
+                        || item.linkage.name == "llvm.x86.sse2.psll.d"
+                        || item.linkage.name == "llvm.x86.sse2.psll.q"
+                        || item.linkage.name == "llvm.x86.sse2.psrl.w"
+                        || item.linkage.name == "llvm.x86.sse2.psrl.d"
+                        || item.linkage.name == "llvm.x86.sse2.psrl.q"
+                        || item.linkage.name == "llvm.x86.sse2.psra.w"
+                        || item.linkage.name == "llvm.x86.sse2.psra.d") {
+                    const bool left = item.linkage.name.compare(14, 4, "psll") == 0;
+                    const bool arithmetic = item.linkage.name.compare(14, 4, "psra") == 0;
+                    const unsigned bits = item.linkage.name.back() == 'w' ? 16 : (item.linkage.name.back() == 'd' ? 32 : 64);
+                    of << "\tuint64_t count_words[2]; memcpy(count_words, &arg1, sizeof(count_words)); uint64_t count = count_words[0];\n"
+                       << "\tuint" << bits << "_t input[" << 128 / bits << "], result[" << 128 / bits << "]; memcpy(input, &arg0, sizeof(input));\n"
+                       << "\tfor(unsigned i = 0; i < " << 128 / bits << "; i++) {\n";
+                    if (arithmetic) {
+                        of << "\t\tif(count >= " << bits << ") result[i] = input[i] >> " << bits - 1 << " ? UINT" << bits << "_MAX : 0;\n"
+                           << "\t\telse if(count == 0) result[i] = input[i];\n"
+                           << "\t\telse { result[i] = input[i] >> count; if(input[i] >> " << bits - 1 << ") result[i] |= UINT" << bits << "_MAX << (" << bits << " - count); }\n";
+                    } else {
+                        of << "\t\tresult[i] = count >= " << bits << " ? 0 : input[i] " << (left ? "<<" : ">>") << " count;\n";
+                    }
+                    of << "\t}\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse3.hadd.ps" || item.linkage.name == "llvm.x86.sse3.hsub.ps") {
                     const char op = item.linkage.name == "llvm.x86.sse3.hadd.ps" ? '+' : '-';
                     of << "\tfloat lhs[4], rhs[4], result[4];\n"
