@@ -15,6 +15,23 @@
 namespace {
     const HIRGenericParams emptyParams;
 
+    bool specializationLookupNeedsResolution(const HIRTypeData* type, const HIRPathParams& params) {
+        auto typeNeedsResolution = [](const HIRTypeData* inner) {
+            return inner->hasTypeInfer() || inner->needsMonomorphisation() || inner->mayHaveAssociatedType();
+        };
+
+        if (typeNeedsResolution(type) || monomorphisePathparamsNeeded(params)) {
+            return true;
+        }
+        for (const auto& inner : params.types) {
+            if (typeNeedsResolution(inner)) {
+                return true;
+            }
+        }
+        return ::std::any_of(params.values.begin(), params.values.end(), [](const auto& value) {
+            return value.is_Infer();
+        });
+    }
 }
 
 class StaticTraitResolve::NextSolverBridge {
@@ -2161,6 +2178,20 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         return replacementHappened;
     }
     if( bestImpl.isValid() ) {
+        // A default associated type is the selected projection once the
+        // receiver is concrete and no more-specific impl matched. Generic or
+        // unresolved receivers must remain opaque until specialization can be
+        // decided.
+        if (!specializationLookupNeedsResolution(e2.type, traitPath.mParams)) {
+            auto nt = bestImpl.getType(crate.types, e2.item.c_str(), e2.params);
+            if (nt != HIRTypeRef()) {
+                input = mv$(nt);
+                if (recurse) {
+                    this->expandAssociatedTypes(sp, input);
+                }
+                return true;
+            }
+        }
         e.binding = HIRTypePathBinding::make_Opaque({});
         publish();
         this->replaceEqualities(input);
@@ -3443,16 +3474,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 bool hasFuzzyImpl = false;
                 ImplRef bestImpl;
                 ValuePtr rv;
-                auto typeNeedsResolution = [](const HIRTypeData* type) {
-                    return type->hasTypeInfer() || type->needsMonomorphisation() || type->mayHaveAssociatedType();
-                };
-                bool lookupNeedsResolution = typeNeedsResolution(pe.type) || monomorphisePathparamsNeeded(pe.trait.mParams);
-                for (const auto& type : pe.trait.mParams.types) {
-                    lookupNeedsResolution |= typeNeedsResolution(type);
-                }
-                for (const auto& value : pe.trait.mParams.values) {
-                    lookupNeedsResolution |= value.is_Infer();
-                }
+                bool lookupNeedsResolution = specializationLookupNeedsResolution(pe.type, pe.trait.mParams);
                 this->findImpl(sp, pe.trait.mPath, &pe.trait.mParams, pe.type, [&](auto impl, bool isFuzz) -> bool {
                     DEBUG(impl);
                     if (!impl.mData.is_TraitImpl()) {
