@@ -2341,7 +2341,7 @@ namespace {
             // Store result of that call in `val` (which will be derefed below)
             auto okBlock = builder.newBbUnlinked();
             auto panicBlock = builder.newBbUnlinked();
-            builder.endBlock(MIRTerminator::make_Call({okBlock, MIRUnwindAction::make_Cleanup(panicBlock), resVal.clone(), std::move(methodPath), std::move(args)}));
+            builder.endBlock(MIRTerminator::make_Call({okBlock, MIRUnwindAction::make_Cleanup(panicBlock), resVal.clone(), std::move(methodPath), std::move(args), SourceLocation(node.span())}));
             builder.setCurBlock(panicBlock);
             emitUnwind(sp);
 

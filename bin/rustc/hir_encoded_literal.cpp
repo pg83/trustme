@@ -3,6 +3,7 @@
 Ordering Reloc::ord(const Reloc& x) const {
     ORD(ofs, x.ofs);
     ORD(len, x.len);
+    ORD(preserveTrackCaller, x.preserveTrackCaller);
     if (p) {
         if (!x.p) {
             return OrdLess;
@@ -49,6 +50,9 @@ EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs, size_t len) const {
     os << "@" << std::hex << "0x" << x.ofs << std::dec << "+" << x.len << " = ";
     if (x.p) {
         os << "&" << *x.p;
+        if (x.preserveTrackCaller) {
+            os << " [track_caller ABI]";
+        }
     } else {
         os << "\"" << FmtEscaped(x.bytes) << "\"";
     }

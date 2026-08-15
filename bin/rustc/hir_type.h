@@ -183,6 +183,10 @@ struct HIRTypeDataFunctionPointer {
     RcString mAbi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
     HIRTypeRef mRettype;
     ::std::vector<HIRTypeRef> argTypes;
+    // Internal ABI bit used by trait-object vtables. Ordinary Rust function
+    // pointers erase #[track_caller], but a tracked trait method keeps the
+    // implicit caller-location argument across dynamic dispatch.
+    bool trackCaller = false;
 };
 
 struct HIRTypePatternRange {

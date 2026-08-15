@@ -466,10 +466,12 @@ DEF_VISIT_H(HIRExprNodeClosure, node) {
 
 DEF_VISIT_H(HIRExprNodeGenerator, node) {
     TRACE_FUNCTION_F("_Generator");
-    //}
     visitType(node.returnType);
     visitType(node.yieldTy);
     visitType(node.resumeTy);
+    if (node.hasResumePattern) {
+        visitPattern(node.span(), node.resumePattern);
+    }
     if (node.mCode) {
         visitNodePtr(node.mCode);
     } else {
@@ -1046,10 +1048,12 @@ TU_ARMA(Alias, ee) {
         {
         }
 
-        HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody)
+        HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRPattern resumePattern, bool hasResumePattern, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody)
             : HIRExprNode(mv$(sp))
             , returnType(::std::move(rv))
             , resumeTy(resumeTy)
+            , resumePattern(::std::move(resumePattern))
+            , hasResumePattern(hasResumePattern)
             , yieldTy(yieldTy)
             , mCode(::std::move(code))
             , isMove(isMove)

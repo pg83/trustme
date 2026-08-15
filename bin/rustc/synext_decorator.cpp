@@ -561,12 +561,16 @@ STATIC_DECORATOR("rustc_intrinsic", CHandlerRustcIntrinsic);
 
 class CHandlerTrackCaller: public ExpandDecorator {
     AttrStage stage() const override {
-        return AttrStage::Post;
+        return AttrStage::Pre;
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (/*auto* e =*/i.opt_Function()) {
             // Handled by HIR lower
+        } else if (i.opt_Macro()) {
+            // Accepted and ignored, matching rustc.
+        } else if (const auto* invocation = i.opt_MacroInv(); invocation && invocation->path().isTrivial() && invocation->path().asTrivial() == "macro_rules") {
+            // macro_rules! is still an invocation at the pre-expansion stage.
         } else {
             ERROR(sp, E0000, "#[track_caller] on non-function");
         }
@@ -590,7 +594,7 @@ class CHandlerTrackCaller: public ExpandDecorator {
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTExprNodeP& expr) const override {
         if (auto* n = cast<ASTExprNodeClosure>(expr.get())) {
-            (void)n;
+            n->trackCaller = true;
         } else {
             ERROR(sp, E0000, "#[track_caller] on non-function");
         }

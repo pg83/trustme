@@ -1896,7 +1896,7 @@ EncodedLiteral EncodedLiteral::clone() const {
     rv.relocations.reserve(relocations.size());
     for (const auto& r : relocations) {
         if (r.p) {
-            rv.relocations.push_back(Reloc::newNamed(r.ofs, r.len, r.p->clone()));
+            rv.relocations.push_back(Reloc::newNamed(r.ofs, r.len, r.p->clone(), r.preserveTrackCaller));
         } else {
             rv.relocations.push_back(Reloc::newBytes(r.ofs, r.len, r.bytes));
         }

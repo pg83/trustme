@@ -964,7 +964,7 @@ class CExpanderColumn: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         const auto offset = getTopSpan(sp)->startOfs;
         ASSERT_BUG(sp, offset >= 10, "column! invocation span is too short");
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - 10), CORETYPE_U32))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - 10 + 1), CORETYPE_U32))));
     }
 };
 
@@ -973,7 +973,7 @@ class CExpanderUnstableColumn: public ExpandProcMacro {
         const auto offset = getTopSpan(sp)->startOfs;
         constexpr unsigned macroWidth = sizeof("__rust_unstable_column!()") - 1 + 1;
         ASSERT_BUG(sp, offset >= macroWidth, "__rust_unstable_column! invocation span is too short");
-        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - macroWidth), CORETYPE_U32))));
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(U128(offset - macroWidth + 1), CORETYPE_U32))));
     }
 };
 

@@ -343,8 +343,8 @@ namespace {
             mir.blocks.back().terminator = mv$(term);
         }
 
-        void terminateCall(MIRLValue rv, MIRCallTarget tgt, std::vector<MIRParam> args, MIRBasicBlockId bbRet, MIRBasicBlockId bbPanic) {
-            this->terminateBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), mv$(rv), mv$(tgt), mv$(args)}));
+        void terminateCall(MIRLValue rv, MIRCallTarget tgt, std::vector<MIRParam> args, MIRBasicBlockId bbRet, MIRBasicBlockId bbPanic, bool tracksCaller = false) {
+            this->terminateBlock(MIRTerminator::make_Call({bbRet, MIRUnwindAction::make_Cleanup(bbPanic), mv$(rv), mv$(tgt), mv$(args), {}, tracksCaller}));
         }
 
         MIRBasicBlockId pushCallDrop(const HIRTypeData* ty) {
@@ -527,6 +527,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             MonomorphStatePtr ms(crate.types, pe.type, &traitPath.mParams, &pp);
 
             HIRFunction newFcn;
+            newFcn.markings.trackCaller = fcnDef.markings.trackCaller;
             newFcn.returnType = ms.monomorphType(sp, fcnDef.returnType);
             state.resolve.expandAssociatedTypes(sp, newFcn.returnType);
             for (const auto& arg : fcnDef.mArgs) {
@@ -597,7 +598,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             for (size_t i = 1; i < fcnDef.mArgs.size(); i++) {
                 callArgs.push_back(MIRLValue::newArgument(i));
             }
-            builder.terminateCall(MIRLValue::newReturn(), MIRLValue::newField(MIRLValue::newDeref(mv$(lvVtable)), vtableIdx), mv$(callArgs), 1, 2);
+            builder.terminateCall(MIRLValue::newReturn(), MIRLValue::newField(MIRLValue::newDeref(mv$(lvVtable)), vtableIdx), mv$(callArgs), 1, 2, fcnDef.markings.trackCaller);
             // bb1:
             //   RETURN
             builder.ensureOpen();
@@ -763,10 +764,10 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             const auto ptrBytes = TargetGetPointerBits() / 8;
             vtableData.bytes.resize(repr->size);
             size_t ofs = 0;
-            auto pushPtr = [&vtableData, &ofs, ptrBytes](HIRPath p) {
+            auto pushPtr = [&vtableData, &ofs, ptrBytes](HIRPath p, bool preserveTrackCaller = false) {
                 DEBUG("@" << ofs << " = " << p);
                 assert(ofs + ptrBytes <= vtableData.bytes.size());
-                vtableData.relocations.push_back(Reloc::newNamed(ofs, ptrBytes, mv$(p)));
+                vtableData.relocations.push_back(Reloc::newNamed(ofs, ptrBytes, mv$(p), preserveTrackCaller));
                 vtableData.writeUint(ofs, ptrBytes, EncodedLiteral::PTR_BASE);
                 ofs += ptrBytes;
                 assert(ofs <= vtableData.bytes.size());
@@ -836,10 +837,10 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             const auto ptrBytes = TargetGetPointerBits() / 8;
             vtableData.bytes.resize(repr->size);
             size_t ofs = 0;
-            auto pushPtr = [&vtableData, &ofs, ptrBytes](HIRPath p) {
+            auto pushPtr = [&vtableData, &ofs, ptrBytes](HIRPath p, bool preserveTrackCaller = false) {
                 DEBUG("@" << ofs << " = " << p);
                 assert(ofs + ptrBytes <= vtableData.bytes.size());
-                vtableData.relocations.push_back(Reloc::newNamed(ofs, ptrBytes, mv$(p)));
+                vtableData.relocations.push_back(Reloc::newNamed(ofs, ptrBytes, mv$(p), preserveTrackCaller));
                 vtableData.writeUint(ofs, ptrBytes, EncodedLiteral::PTR_BASE);
                 ofs += ptrBytes;
                 assert(ofs <= vtableData.bytes.size());
@@ -877,9 +878,11 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                     auto srcTraitMs = MonomorphStatePtr(crate.types, type, &itemPath.mData.as_UfcsKnown().trait.mParams, nullptr);
                     const auto& srcTrait = state.resolve.hirCrate().getTraitByPath(sp, m.second.second.mPath);
                     const auto& item = srcTrait.values.at(m.first);
+                    bool preserveTrackCaller = false;
                     // If the entry is a by-value function, then emit a reference to a shim
                     if (item.is_Function()) {
                         const auto& tplFcn = item.as_Function();
+                        preserveTrackCaller = tplFcn.markings.trackCaller;
                         if (tplFcn.receiver == HIRFunction::Receiver::Value) {
                             auto callPath = itemPath.clone();
                             itemPath.mData.as_UfcsKnown().item = RcString::newInterned(FMT(m.first << "#ptr"));
@@ -887,6 +890,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                             if (e) {
                                 // Create the shim (forward to the true call, dereferencing the first argument)
                                 HIRFunction newFcn;
+                                newFcn.markings.trackCaller = preserveTrackCaller;
                                 newFcn.returnType = srcTraitMs.monomorphType(sp, tplFcn.returnType);
                                 state.resolve.expandAssociatedTypes(sp, newFcn.returnType);
                                 newFcn.mArgs.push_back(std::make_pair(HIRPattern(), crate.types.borrow(HIRBorrowType::Owned, type)));
@@ -909,7 +913,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                 for (size_t i = 1; i < tplFcn.mArgs.size(); i++) {
                                     callArgs.push_back(MIRLValue::newArgument(i));
                                 }
-                                builder.terminateCall(MIRLValue::newReturn(), mv$(callPath), std::move(callArgs), 1, 2);
+                                builder.terminateCall(MIRLValue::newReturn(), mv$(callPath), std::move(callArgs), 1, 2, preserveTrackCaller);
                                 // bb1:
                                 //   RETURN
                                 builder.ensureOpen();
@@ -927,7 +931,7 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         }
                     }
                     //MIR_ASSERT(*m_mir_res, tr.m_values.at(m.first).is_Function(), "TODO: Handle generating vtables with non-function items");
-                    pushPtr(mv$(itemPath));
+                    pushPtr(mv$(itemPath), preserveTrackCaller);
                 }
             }
             // Parent trait vtables

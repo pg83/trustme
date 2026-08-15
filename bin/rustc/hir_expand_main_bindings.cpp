@@ -852,6 +852,9 @@ namespace {
         void visit(HIRExprNodeGenerator& node) override {
             closureStack.push_back(CoroutineScope(node));
 
+            if (node.hasResumePattern) {
+                addDefsFromPattern(node.span(), node.resumePattern);
+            }
             {
                 auto _ = pushUsage(HIRValueUsage::Move);
                 this->visitNodePtr(node.mCode);
@@ -2250,11 +2253,12 @@ namespace {
 
             const auto& sp = node.span();
 
-            TRACE_FUNCTION_F("Extract closure - " << node.resType);
+            TRACE_FUNCTION_F("Extract closure - " << node.resType << ", track_caller=" << node.trackCaller);
 
             ASSERT_BUG(sp, node.objPath == HIRGenericPath(), "Closure path already set? " << node.objPath);
 
             HIRExprVisitorDef::visit(node);
+            const auto implCounts = out.saveCounts();
 
             // A closure can only expose call traits that exist in a no_core
             // crate. Preserve the strongest available receiver class and
@@ -2568,15 +2572,19 @@ namespace {
                     break;
             }
 
-            for (auto& ti : out.implsClosure) {
+            for (size_t i = implCounts.closure; i < out.implsClosure.size(); i++) {
+                auto& ti = out.implsClosure[i];
                 for (auto& m : ti.second.methods) {
+                    m.second.data.markings.trackCaller = node.trackCaller;
                     if (!m.second.data.mCode.state) {
                         m.second.data.mCode.state = exprPtr.state.clone(pool);
                     }
                 }
             }
-            for (auto& ti : out.implsType) {
+            for (size_t i = implCounts.type; i < out.implsType.size(); i++) {
+                auto& ti = out.implsType[i];
                 for (auto& m : ti->methods) {
+                    m.second.data.markings.trackCaller = node.trackCaller;
                     if (!m.second.data.mCode.state) {
                         m.second.data.mCode.state = exprPtr.state.clone(pool);
                     }
@@ -2803,6 +2811,9 @@ namespace {
             {
                 TRACE_FUNCTION_F("-- Rewrite variables");
                 ExprVisitorGeneratorRewrite visitorRewrite(monomorphCb, crVars.variableRewrites);
+                if (node.hasResumePattern) {
+                    visitorRewrite.visitPattern(sp, node.resumePattern);
+                }
                 visitorRewrite.visitNodePtr(node.mCode);
             }
 
@@ -2863,6 +2874,22 @@ namespace {
                 ClosureExprVisitorFixup fixup{mResolve.board(), &params, monomorphCb, &out};
                 fixup.visitNodePtr(bodyNode);
             }
+            if (node.hasResumePattern) {
+                auto* resumeValue = pool->make<HIRExprNodeVariable>(sp, RcString::newInterned("resume"), 1);
+                resumeValue->resType = resumeTy;
+                auto* initialiseResume = pool->make<HIRExprNodeLet>(sp, std::move(node.resumePattern), resumeTy, HIRExprNodeP(resumeValue));
+                initialiseResume->resType = mResolve.hirCrate().types.unit();
+
+                if (auto* block = cast<HIRExprNodeBlock>(bodyNode.get())) {
+                    block->nodes.insert(block->nodes.begin(), HIRExprNodeP(initialiseResume));
+                } else {
+                    auto* wrappedBlock = pool->make<HIRExprNodeBlock>(sp);
+                    wrappedBlock->nodes.push_back(HIRExprNodeP(initialiseResume));
+                    wrappedBlock->valueNode = std::move(bodyNode);
+                    wrappedBlock->resType = wrappedBlock->valueNode->resType;
+                    bodyNode.reset(wrappedBlock);
+                }
+            }
 
             // -- Prepare drop impl for later filling
             HIRFunction* fcnDropPtr;
@@ -2886,9 +2913,13 @@ namespace {
 
             // -- Create function
             HIRFunction fcnResume;
+            fcnResume.markings.trackCaller = node.trackCaller;
             // - `self: Pin<&mut {Self}>`
             fcnResume.mArgs.push_back(std::make_pair(HIRPattern(), selfArgTy));
-            fcnResume.mArgs.push_back(std::make_pair(HIRPattern(), resumeTy));
+            fcnResume.mArgs.push_back(std::make_pair(
+                node.hasResumePattern ? HIRPattern{HIRPatternBinding{false, HIRPatternBinding::Type::Move, RcString::newInterned("resume"), 1}, HIRPattern::Data::make_Any({})} : HIRPattern(),
+                resumeTy));
+            node.hasResumePattern = false;
             // - `-> GeneratorState<{Yield},{Return}>`
             HIRPathParams retParams;
             retParams.types.push_back(yieldTy);
@@ -6087,6 +6118,7 @@ namespace {
                                 HIRTypeDataFunctionPointer ft;
                                 ft.isUnsafe = ve.unsafe;
                                 ft.isVariadic = ve.variadic;
+                                ft.trackCaller = ve.markings.trackCaller;
                                 ft.mAbi = ve.mAbi;
                                 ft.mRettype = resolvePtr->monomorphExpand(sp, ve.returnType, m);
                                 ft.argTypes.reserve(ve.mArgs.size());

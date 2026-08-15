@@ -1199,7 +1199,7 @@ TU_ARMA(Alias, ee) {
         return H::comparePath(*this, le.path, re.path);
         ),
     (Function,
-        if( le.isUnsafe != re.isUnsafe || le.mAbi != re.mAbi )
+        if( le.isUnsafe != re.isUnsafe || le.mAbi != re.mAbi || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller )
             return false;
         if( !typeListEqual(*this, le.argTypes, re.argTypes) )
             return false;

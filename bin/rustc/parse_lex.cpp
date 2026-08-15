@@ -347,6 +347,12 @@ Ident::Hygiene Lexer::realGetHygiene() const {
 
 Token Lexer::realGetToken() {
     while (true) {
+        auto tokenPosition = this->getPosition();
+        // Whitespace scanning leaves the first non-whitespace codepoint in
+        // the one-character cache after advancing the source offset.
+        if (lastCharValid && tokenPosition.ofs > 0) {
+            tokenPosition.ofs--;
+        }
         Token tok = getTokenInt();
 #ifdef TRACE_RAW_TOKENS
         ::std::cout << "getTokenInt: tok = " << tok << ::std::endl;
@@ -360,6 +366,9 @@ Token Lexer::realGetToken() {
                 continue;
             }
             default:
+                if (tok.getPos().filename == "" && !tok.getPos().span) {
+                    tok.setPos(std::move(tokenPosition));
+                }
                 return tok;
         }
     }
@@ -1528,8 +1537,9 @@ Codepoint Lexer::getc() {
         if (lastChar == '\n') {
             line += 1;
             lineOfs = 0;
+        } else {
+            lineOfs += 1;
         }
-        lineOfs += 1;
 #ifdef TRACE_CHARS
         ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << " (replayed)" << ::std::endl;
 #endif
@@ -1537,7 +1547,9 @@ Codepoint Lexer::getc() {
         replayChars.clear();
         replayCharOffset = 0;
         lastChar = this->getcCp();
-        lineOfs += 1;
+        if (lastChar != '\n') {
+            lineOfs += 1;
+        }
 #ifdef TRACE_CHARS
         ::std::cout << "getc(): U+" << ::std::hex << lastChar.v << ::std::endl;
 #endif

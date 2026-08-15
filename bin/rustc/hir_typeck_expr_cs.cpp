@@ -2416,7 +2416,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                     }
                 }
                 TU_ARMA(Function, lE, rE) {
-                    if (lE.isUnsafe != rE.isUnsafe || lE.mAbi != rE.mAbi || lE.argTypes.size() != rE.argTypes.size()) {
+                    if (lE.isUnsafe != rE.isUnsafe || lE.isVariadic != rE.isVariadic || lE.trackCaller != rE.trackCaller || lE.mAbi != rE.mAbi || lE.argTypes.size() != rE.argTypes.size()) {
                         ERROR(sp, E0000, "Type mismatch between " << lT << " and " << rT);
                     }
                     // TODO: HRLs
@@ -11363,11 +11363,13 @@ public:
 
     void visit(HIRExprNodeGenerator& node) override {
         TRACE_FUNCTION_F(&node << " /*gen*/ || ...");
-        //}
         this->context.addIvars(node.returnType);
         this->context.addIvars(node.yieldTy);
         this->context.addIvars(node.resumeTy);
         this->context.addIvars(node.mCode->resType);
+        if (node.hasResumePattern) {
+            this->context.handlePattern(node.span(), node.resumePattern, node.resumeTy);
+        }
 
         // Generator result type
         this->context.equateTypes(node.span(), node.resType, this->context.crate.types.generator(&node));

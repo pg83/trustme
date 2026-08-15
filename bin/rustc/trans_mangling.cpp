@@ -312,6 +312,7 @@ public:
                 // - Function: 'F' <abi:RcString> <nargs> [args: <ASTType*> ...] <ret:ASTType*>
                 os << "F";
                 os << (e.isUnsafe ? "u" : ""); // Optional allowed, next is a number
+                os << (e.trackCaller ? "c" : "");
                 if (e.mAbi != ABI_RUST) {
                     os << "e";
                     this->fmtName(e.mAbi.c_str());

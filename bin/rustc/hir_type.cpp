@@ -403,6 +403,9 @@ void HIRTypeData::fmt(::std::ostream& os) const {
             os << "fn{" << (e.def.is_Function() && !e.def.as_Function() ? "!" : "") << e.path << "}";
         }
         TU_ARMA(Function, e) {
+            if (e.trackCaller) {
+                os << "#[track_caller] ";
+            }
             if (e.isUnsafe) {
                 os << "unsafe ";
             }
@@ -693,7 +696,7 @@ namespace {
             throw "";
             }
             TU_ARMA(Function, ae, be) {
-                return ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.mAbi == be.mAbi && ae.mRettype == be.mRettype && ae.argTypes == be.argTypes;
+                return ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.mAbi == be.mAbi && ae.mRettype == be.mRettype && ae.argTypes == be.argTypes && ae.trackCaller == be.trackCaller;
             }
             TU_ARMA(NodeType, ae, be) return ae == be;
         }
@@ -1043,6 +1046,7 @@ namespace {
                 h = hashMix(h, ::std::hash<RcString>()(e.mAbi));
                 h = hashMix(h, e.isUnsafe);
                 h = hashMix(h, e.isVariadic);
+                h = hashMix(h, e.trackCaller);
                 h = hashMix(h, hashTypeRef(e.mRettype));
                 for (auto t : e.argTypes) {
                     h = hashMix(h, hashTypeRef(t));
@@ -1310,7 +1314,7 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         (Borrow, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
         (Pointer, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
         (NamedFunction, return ::ord(te.path, xe.path);),
-        (Function, ORD(te.isUnsafe, xe.isUnsafe); ORD(te.mAbi, xe.mAbi); ORD(te.argTypes, xe.argTypes); return ::ord(te.mRettype, xe.mRettype);),
+        (Function, ORD(te.isUnsafe, xe.isUnsafe); ORD(te.isVariadic, xe.isVariadic); ORD(te.trackCaller, xe.trackCaller); ORD(te.mAbi, xe.mAbi); ORD(te.argTypes, xe.argTypes); return ::ord(te.mRettype, xe.mRettype);),
         (NodeType, return te.ord(xe);)
     )
     throw "";
@@ -1858,7 +1862,7 @@ HIRTypeData HIRTypeData::cloneData() const {
             return HIRTypeData::make_NamedFunction({e.path.clone(), e.def.clone()});
         }
         TU_ARMA(Function, e) {
-            HIRTypeDataFunctionPointer ft{e.isUnsafe, e.isVariadic, e.mAbi, e.mRettype, {}};
+            HIRTypeDataFunctionPointer ft{e.isUnsafe, e.isVariadic, e.mAbi, e.mRettype, {}, e.trackCaller};
             for (const auto& a : e.argTypes) {
                 ft.argTypes.push_back(a);
             }
@@ -2173,7 +2177,7 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
             return le.path.compareWithPlaceholders(sp, re.path, resolvePlaceholder);
         }
         TU_ARMA(Function, le, re) {
-            if (le.mAbi != re.mAbi || le.isUnsafe != re.isUnsafe) {
+            if (le.mAbi != re.mAbi || le.isUnsafe != re.isUnsafe || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller) {
                 return HIRCompare::Unequal;
             }
             if (le.argTypes.size() != re.argTypes.size()) {

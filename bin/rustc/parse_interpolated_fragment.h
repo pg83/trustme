@@ -1,5 +1,7 @@
 #pragma once
 
+#include "span.h"
+
 #include <iosfwd>
 #include <cassert>
 
@@ -36,13 +38,14 @@ public:
 
     // Owned type-pruned pointer
     void* ptr;
+    Span span;
 
     InterpolatedFragment(InterpolatedFragment&&);
     InterpolatedFragment& operator=(InterpolatedFragment&&);
 
     InterpolatedFragment(TokenTree);
     InterpolatedFragment(ASTPattern);
-    InterpolatedFragment(ASTPath);
+    InterpolatedFragment(ASTPath, Span span = {});
     InterpolatedFragment(::ASTType*);
     InterpolatedFragment(ASTAttribute);
     InterpolatedFragment(ASTNamed<ASTItem>);

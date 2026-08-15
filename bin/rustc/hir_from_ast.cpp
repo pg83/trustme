@@ -3068,7 +3068,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         auto inner = lowerIsolated(v.inner);
         mHasYield = origHasYield;
 
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), mCtx.mCrate->types.infer(), mCtx.mCrate->types.infer(), mv$(inner), v.isMove, false, v.isCoroutineClosureBody));
+        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), mCtx.mCrate->types.infer(), HIRPattern(), false, mCtx.mCrate->types.infer(), mv$(inner), v.isMove, false, v.isCoroutineClosureBody));
         mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallPath>(v.span(), HIRSimplePath(mCtx.mCoreCrate, {"iter", "sources", "from_coroutine", "from_coroutine"}), makeVec1(mv$(mRv))));
         mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallMethod>(v.span(), mv$(mRv), RcString::newInterned("fuse"), HIRPathParams(), ::std::vector<HIRExprNodeP>()));
     }
@@ -3694,16 +3694,22 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         mHasYield = origHasYield;
 
         if (hasYield) {
-            // NOTE: One argument could be present with yielding arguments?
-            if (!args.empty()) {
-                ERROR(v.span(), E0000, "Generator closures don't take arguments.");
+            if (args.size() > 1) {
+                ERROR(v.span(), E0000, "Coroutine closures take at most one resume argument.");
             }
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), mCtx.mCrate->types.unit(), mCtx.mCrate->types.infer(), mv$(inner), v.isMove, v.isPinned, false));
+            const bool hasResumePattern = !args.empty();
+            auto resumeTy = hasResumePattern ? args.front().second : mCtx.mCrate->types.unit();
+            auto resumePattern = hasResumePattern ? ::std::move(args.front().first) : HIRPattern();
+            auto* generator = mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), resumeTy, ::std::move(resumePattern), hasResumePattern, mCtx.mCrate->types.infer(), mv$(inner), v.isMove, v.isPinned, false);
+            generator->trackCaller = v.trackCaller;
+            mRv.reset(generator);
         } else {
             if (v.isPinned) {
                 ERROR(v.span(), E0000, "Invalid use of `static` on non-yielding closure");
             }
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeClosure>(v.span(), std::move(args), mCtx.LowerHIRType(v.returnType), std::move(inner), v.isMove, v.isUse));
+            auto* closure = mCtx.mCrate->pool->make<HIRExprNodeClosure>(v.span(), std::move(args), mCtx.LowerHIRType(v.returnType), std::move(inner), v.isMove, v.isUse);
+            closure->trackCaller = v.trackCaller;
+            mRv.reset(closure);
         }
     }
 

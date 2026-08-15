@@ -545,7 +545,12 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
             if (lex.lookahead(0) == TOK_INTERPOLATED_TYPE) {
                 return InterpolatedFragment(std::move(lex.getToken().fragType()));
             }
-            return InterpolatedFragment(ParsePath(lex, PATH_GENERIC_TYPE)); // non-expr mode
+            GET_TOK(tok, lex);
+            {
+                auto span = lex.tokenStartSpan(tok);
+                PUTBACK(tok, lex);
+                return InterpolatedFragment(ParsePath(lex, PATH_GENERIC_TYPE), std::move(span)); // non-expr mode
+            }
         case MacroPatEnt::PAT_BLOCK:
             return InterpolatedFragment(InterpolatedFragment::BLOCK, ParseExprBlockNode(lex).release());
         case MacroPatEnt::PAT_META:

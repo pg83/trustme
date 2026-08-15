@@ -1069,7 +1069,7 @@ HIRTypeRef HirDeserialiser::deserialiseType() {
             _(Borrow, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(Pointer, {static_cast<HIRBorrowType>(in.readTag()), deserialiseType()})
             _(NamedFunction, {deserialisePath()})
-            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>()})
+            _(Function, {in.readBool(), in.readBool(), in.readIstring(), deserialiseType(), deserialiseVec<HIRTypeRef>(), in.readBool()})
             case HIRTypeData::TAG_Pattern: {
                 auto inner = deserialiseType();
                 HIRTypePattern pattern;
@@ -1327,9 +1327,10 @@ EncodedLiteral HirDeserialiser::deserialiseEncodedliteral() {
     for (size_t i = 0; i < nreloc; i++) {
         auto ofs = in.readCount();
         auto len = in.readCount();
+        const bool preserveTrackCaller = in.readBool();
         switch (in.readTag()) {
             case 0:
-                rv.relocations.push_back(Reloc::newNamed(ofs, len, deserialisePath()));
+                rv.relocations.push_back(Reloc::newNamed(ofs, len, deserialisePath(), preserveTrackCaller));
                 break;
             case 1:
                 rv.relocations.push_back(Reloc::newBytes(ofs, len, in.readString()));
@@ -2750,6 +2751,7 @@ public:
                 out.writeString(e.mAbi);
                 serialiseType(e.mRettype);
                 serialiseVec(e.argTypes);
+                out.writeBool(e.trackCaller);
             }
             TU_ARMA(Pattern, e) {
                 serialiseType(e.inner);
@@ -3208,6 +3210,7 @@ public:
         for (const auto& reloc : lit.relocations) {
             out.writeCount(reloc.ofs);
             out.writeCount(reloc.len);
+            out.writeBool(reloc.preserveTrackCaller);
             if (reloc.p) {
                 out.writeTag(0);
                 serialisePath(*reloc.p);

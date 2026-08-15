@@ -337,6 +337,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
             case TOK_DOUBLE_COLON:
             case TOK_RWORD_SELF:
                 if (tok.type() != TOK_RWORD_SELF || lex.lookahead(0) == TOK_DOUBLE_COLON) {
+                    auto pathSpan = lex.tokenStartSpan(tok);
                     PUTBACK(tok, lex);
                     auto p = ParsePath(lex, PATH_GENERIC_EXPR);
                     if (lex.lookahead(0) == TOK_EXCLAM && lex.lookahead(1) == TOK_BRACE_OPEN) {
@@ -349,7 +350,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                         }
                         return rv;
                     }
-                    tok = Token(Token::TagTakeIP(), InterpolatedFragment(std::move(p)));
+                    tok = Token(Token::TagTakeIP(), InterpolatedFragment(std::move(p), std::move(pathSpan)));
                 }
                 break;
             default:
@@ -407,6 +408,7 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
             case TOK_RWORD_YIELD:
             case TOK_RWORD_CONTINUE:
             case TOK_RWORD_BREAK: {
+                const auto flowToken = tok.type();
                 PUTBACK(tok, lex);
                 auto ret = ParseStmt(lex);
                 if (LOOK_AHEAD(lex) == TOK_EOF) {
@@ -414,7 +416,13 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                     CHECK_TOK(tok, TOK_BRACE_CLOSE);
                     PUTBACK(tok, lex);
                 } else {
-                    // return/continue/break don't need silencing
+                    // Unlike the diverging flow-control expressions, `yield`
+                    // evaluates to the next resume argument.  Its trailing
+                    // semicolon therefore changes the containing block's
+                    // result to `()`.
+                    if (flowToken == TOK_RWORD_YIELD) {
+                        *addSilence = true;
+                    }
                 }
                 return ret;
             }
@@ -1048,16 +1056,24 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                     PUTBACK(tok, lex);
                     return val;
                 }
+                {
+                auto callSpan = val->span();
                 PUTBACK(tok, lex);
                 val = NEWNODE(ASTExprNodeCallObject, ::std::move(val), ParseParenList(lex));
+                val->setSpan(::std::move(callSpan));
+                }
                 break;
             case TOK_SQUARE_OPEN:
                 if (CHECK_PARSE_FLAG(lex, disallowCallOrIndex)) {
                     PUTBACK(tok, lex);
                     return val;
                 }
+                {
+                const auto indexPosition = tok.getPos();
                 val = NEWNODE(ASTExprNodeIndex, ::std::move(val), ParseExpr0(lex));
                 GET_CHECK_TOK(tok, lex, TOK_SQUARE_CLOSE);
+                val->setSpan(lex.subSpan(indexPosition));
+                }
                 break;
 
             case TOK_QMARK:
@@ -1068,11 +1084,13 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                 // Field access / method call / tuple index
                 switch (GET_TOK(tok, lex)) {
                     case TOK_IDENT: {
+                        const auto methodPosition = tok.getPos();
                         ASTPathNode pn(tok.ident().name, {});
                         switch (GET_TOK(tok, lex)) {
                             case TOK_PAREN_OPEN:
                                 PUTBACK(tok, lex);
                                 val = NEWNODE(ASTExprNodeCallMethod, ::std::move(val), ::std::move(pn), ParseParenList(lex));
+                                val->setSpan(lex.subSpan(methodPosition));
                                 break;
                             case TOK_DOUBLE_COLON:
                                 if (lex.getTokenIf(TOK_DOUBLE_LT)) {
@@ -1082,6 +1100,7 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                                 }
                                 pn.args() = ParsePathGenericList(lex);
                                 val = NEWNODE(ASTExprNodeCallMethod, ::std::move(val), ::std::move(pn), ParseParenList(lex));
+                                val->setSpan(lex.subSpan(methodPosition));
                                 break;
                             default:
                                 val = NEWNODE(ASTExprNodeField, ::std::move(val), pn.name());
@@ -1366,6 +1385,8 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
         case TOK_DOUBLE_COLON:
         case TOK_IDENT:
         case TOK_INTERPOLATED_PATH:
+            {
+            auto pathSpan = lex.tokenStartSpan(tok);
             PUTBACK(tok, lex);
             path = ParsePath(lex, PATH_GENERIC_EXPR);
 
@@ -1376,7 +1397,11 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                 case TOK_PAREN_OPEN:
                     // Function call
                     PUTBACK(tok, lex);
-                    return NEWNODE(ASTExprNodeCallPath, ::std::move(path), ParseParenList(lex));
+                    {
+                    auto rv = NEWNODE(ASTExprNodeCallPath, ::std::move(path), ParseParenList(lex));
+                    rv->setSpan(::std::move(pathSpan));
+                    return rv;
+                    }
                 case TOK_BRACE_OPEN:
                     if (!CHECK_PARSE_FLAG(lex, disallowStructLiteral)) {
                         return ParseExprValStructLiteral(lex, ::std::move(path));
@@ -1484,6 +1509,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                     // Value
                     PUTBACK(tok, lex);
                     return NEWNODE(ASTExprNodeNamedValue, ::std::move(path));
+            }
             }
         // Closures
         case TOK_RWORD_STATIC:
@@ -2936,7 +2962,7 @@ ASTFunction::Arg ParseFunctionArg(TokenStream& lex, bool expectNamed) {
 }
 
 /// Parse a function definition (after the 'fn <name>')
-ASTFunction ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBePrototype, std::string abi, ASTFunction::Flags flags) {
+ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSelf, bool canBePrototype, std::string abi, ASTFunction::Flags flags) {
     TRACE_FUNCTION;
     static const RcString rcstringSelfLower = RcString::newInterned("self");
     static const RcString rcstringSelf = RcString::newInterned("Self");
@@ -3066,12 +3092,12 @@ ASTFunction ParseFunctionDef(TokenStream& lex, bool allowSelf, bool canBePrototy
         ParseWhereClause(lex, params);
     }
 
-    return ASTFunction(lex.endSpan(ps), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic);
+    return ASTFunction(std::move(definitionSpan), mv$(abi), mv$(flags), mv$(params), mv$(retType), mv$(args), isVariadic);
 }
 
-ASTFunction ParseFunctionDefWithCode(TokenStream& lex, bool allowSelf, std::string abi, ASTFunction::Flags flags) {
+ASTFunction ParseFunctionDefWithCode(TokenStream& lex, Span definitionSpan, bool allowSelf, std::string abi, ASTFunction::Flags flags) {
     Token tok;
-    auto ret = ParseFunctionDef(lex, allowSelf, /*can_be_prototype=*/false, std::move(abi), flags);
+    auto ret = ParseFunctionDef(lex, std::move(definitionSpan), allowSelf, /*can_be_prototype=*/false, std::move(abi), flags);
     GET_TOK(tok, lex);
     if (tok == TOK_BRACE_OPEN) {
     } else if (tok.type() == TOK_INTERPOLATED_BLOCK) {
@@ -3341,10 +3367,11 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
 
         // Functions (possibly unsafe, async, or extern)
         case TOK_RWORD_FN: {
+            auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             name = tok.ident().name;
             // Self allowed, prototype-form allowed (optional names and no code)
-            auto fcn = ParseFunctionDef(lex, /*allow_self*/ true, /*can_be_proto*/ true, std::move(abi), fnFlags);
+            auto fcn = ParseFunctionDef(lex, std::move(definitionSpan), /*allow_self*/ true, /*can_be_proto*/ true, std::move(abi), fnFlags);
             if (lex.lookahead(0) == TOK_BRACE_OPEN) {
                 // Enter a new hygine scope for the function body. (TODO: Should this be in Parse_ExprBlock?)
                 lex.pushHygine();
@@ -3816,12 +3843,13 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
         return;
     }
     CHECK_TOK(tok, TOK_RWORD_FN);
+    auto definitionSpan = lex.tokenStartSpan(tok);
     GET_CHECK_TOK(tok, lex, TOK_IDENT);
     // TODO: Hygine on function names? - Not in impl blocks?
     auto name = tok.ident().name;
     DEBUG("Function " << name);
     // - Self allowed, can't be prototype-form
-    auto fcn = ParseFunctionDefWithCode(lex, /*allow_self=*/true, std::move(abi), fnFlags);
+    auto fcn = ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/true, std::move(abi), fnFlags);
     impl.addFunction(lex.endSpan(ps), mv$(itemAttrs), vis, isSpecialisable, mv$(name), mv$(fcn));
 }
 
@@ -3851,11 +3879,12 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
     }
     switch (GET_TOK(tok, lex)) {
         case TOK_RWORD_FN: {
+            auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             auto name = tok.ident().name;
             // parse function as prototype
             // - no self, is prototype, is unsafe and not const
-            auto i = ASTItem(ParseFunctionDef(lex, /*allow_self*/ false, /*can_be_prototype=*/true, abi, ASTFunction::Flags::makeUnsafe()));
+            auto i = ASTItem(ParseFunctionDef(lex, std::move(definitionSpan), /*allow_self*/ false, /*can_be_prototype=*/true, abi, ASTFunction::Flags::makeUnsafe()));
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
 
             return ASTNamed<ASTItem>{lex.endSpan(ps), mv$(metaItems), vis, mv$(name), mv$(i)};
@@ -4334,9 +4363,10 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     switch (GET_TOK(tok, lex)) {
                         // `extern "<ABI>" fn ...`
                         case TOK_RWORD_FN: {
+                            auto definitionSpan = lex.tokenStartSpan(tok);
                             GET_CHECK_TOK(tok, lex, TOK_IDENT);
                             itemName = tok.ident().name;
-                            itemData = ASTItem(ParseFunctionDefWithCode(lex, /*allow_self=*/false, abi, ASTFunction::Flags()));
+                            itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags()));
                             break;
                         }
                         // `extern "ABI" {`
@@ -4350,11 +4380,13 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     break;
                 }
                 // `extern fn ...`
-                case TOK_RWORD_FN:
+                case TOK_RWORD_FN: {
+                    auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().name;
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, /*allow_self=*/false, "C", ASTFunction::Flags()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, "C", ASTFunction::Flags()));
                     break;
+                }
 
                 // NOTE: `extern { ...` is handled in caller
                 case TOK_BRACE_OPEN:
@@ -4430,9 +4462,10 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         abi = lex.lookahead(0) == TOK_STRING ? lex.getToken().str() : "C";
                     }
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
+                    auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().name;
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, /*allow_self=*/false, abi, ASTFunction::Flags().setConst().setUnsafe()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags().setConst().setUnsafe()));
                     break;
                 }
                 case TOK_RWORD_ASYNC: {
@@ -4445,25 +4478,29 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         abi = lex.lookahead(0) == TOK_STRING ? lex.getToken().str() : "C";
                     }
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
+                    auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().name;
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, /*allow_self=*/false, abi, flags));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, flags));
                     break;
                 }
                 case TOK_RWORD_EXTERN: {
                     auto abi = lex.lookahead(0) == TOK_STRING ? lex.getToken().str() : "C";
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
+                    auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().name;
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, /*allow_self=*/false, abi, ASTFunction::Flags().setConst()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, abi, ASTFunction::Flags().setConst()));
                     break;
                 }
-                case TOK_RWORD_FN:
+                case TOK_RWORD_FN: {
+                    auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().name;
                     // - self not allowed, not prototype
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, /*allow_self=*/false, ABI_RUST, ASTFunction::Flags().setConst()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), /*allow_self=*/false, ABI_RUST, ASTFunction::Flags().setConst()));
                     break;
+                }
                 default:
                     throw ParseErrorUnexpected(lex, tok, {TOK_IDENT, TOK_UNDERSCORE, TOK_RWORD_UNSAFE, TOK_RWORD_FN});
             }
@@ -4509,19 +4546,22 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                         itemData = ASTItem(ParseExternBlock(lex, "C", metaItems));
                     } else {
                         GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
+                        auto definitionSpan = lex.tokenStartSpan(tok);
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
                         itemName = tok.ident().name;
-                        itemData = ASTItem(ParseFunctionDefWithCode(lex, false, abi, ASTFunction::Flags().setUnsafe()));
+                        itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, abi, ASTFunction::Flags().setUnsafe()));
                     }
                     break;
                 }
                 // `unsafe fn`
-                case TOK_RWORD_FN:
+                case TOK_RWORD_FN: {
+                    auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
                     itemName = tok.ident().name;
                     // - self not allowed, not prototype
-                    itemData = ASTItem(ParseFunctionDefWithCode(lex, false, ABI_RUST, ASTFunction::Flags().setUnsafe()));
+                    itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags().setUnsafe()));
                     break;
+                }
                 // `unsafe trait`
                 case TOK_RWORD_TRAIT: {
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
@@ -4568,19 +4608,22 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 flags.isUnsafe = true;
             }
             GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
+            auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             itemName = tok.ident().name;
             // - self not allowed, not prototype
-            itemData = ASTItem(ParseFunctionDefWithCode(lex, false, ABI_RUST, flags));
+            itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, flags));
             break;
         }
         // `fn`
-        case TOK_RWORD_FN:
+        case TOK_RWORD_FN: {
+            auto definitionSpan = lex.tokenStartSpan(tok);
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             itemName = tok.ident().name;
             // - self not allowed, not prototype
-            itemData = ASTItem(ParseFunctionDefWithCode(lex, false, ABI_RUST, ASTFunction::Flags()));
+            itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags()));
             break;
+        }
         // `type`
         case TOK_RWORD_TYPE:
             GET_CHECK_TOK(tok, lex, TOK_IDENT);

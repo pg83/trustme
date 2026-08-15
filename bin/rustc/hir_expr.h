@@ -701,6 +701,7 @@ struct HIRExprNodeClosure: public HIRExprNode {
     HIRExprNodeP mCode;
     bool isMove = false;
     bool isUse = false;
+    bool trackCaller = false;
 
     enum class Class {
         Unknown,
@@ -742,13 +743,15 @@ struct HIRExprNodeClosure: public HIRExprNode {
 ::std::ostream& operator<<(::std::ostream& os, const HIRExprNodeClosure::AvuCache::Capture& x);
 
 struct HIRExprNodeGenerator: public HIRExprNode {
-    //ExprNodeClosure::args_t    m_args;
     HIRTypeRef returnType;
     HIRTypeRef resumeTy;
+    HIRPattern resumePattern;
+    bool hasResumePattern;
     HIRTypeRef yieldTy;
     HIRExprNodeP mCode;
     bool isMove;
     bool isPinned;
+    bool trackCaller = false;
     // Move parent locals, but capture parent upvars through the parent closure.
     bool isCoroutineClosureBody;
 
@@ -767,7 +770,7 @@ struct HIRExprNodeGenerator: public HIRExprNode {
     // State data type (needed for initialising)
     HIRTypeRef stateDataType;
 
-    HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody);
+    HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRPattern resumePattern, bool hasResumePattern, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody);
 
     static constexpr unsigned int kind = 37;
     unsigned int nodeKind() const override;

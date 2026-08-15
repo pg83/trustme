@@ -678,7 +678,7 @@ NODE(
         for (const auto& a : mArgs) {
             args.push_back(::std::make_pair(a.first.clone(), a.second->clone()));
         }
-        return NEWNODE(ASTExprNodeClosure, mv$(args), returnType->clone(), mCode->clone(), isMove, isUse, isPinned);
+        return NEWNODE(ASTExprNodeClosure, mv$(args), returnType->clone(), mCode->clone(), isMove, isUse, isPinned, trackCaller);
     }
 );
 

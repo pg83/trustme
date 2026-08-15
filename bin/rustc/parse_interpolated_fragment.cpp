@@ -41,6 +41,7 @@ InterpolatedFragment::~InterpolatedFragment() {
 
 InterpolatedFragment::InterpolatedFragment(InterpolatedFragment&& x)
     : mType(x.mType)
+    , span(std::move(x.span))
 {
     ptr = x.ptr, x.ptr = nullptr;
 }
@@ -48,6 +49,7 @@ InterpolatedFragment::InterpolatedFragment(InterpolatedFragment&& x)
 InterpolatedFragment& InterpolatedFragment::operator=(InterpolatedFragment&& x) {
     mType = x.mType;
     ptr = x.ptr, x.ptr = nullptr;
+    span = std::move(x.span);
     return *this;
 }
 
@@ -82,9 +84,10 @@ InterpolatedFragment::InterpolatedFragment(TokenTree v)
 {
 }
 
-InterpolatedFragment::InterpolatedFragment(ASTPath v)
+InterpolatedFragment::InterpolatedFragment(ASTPath v, Span span)
     : mType(InterpolatedFragment::PATH)
     , ptr(new ASTPath(mv$(v)))
+    , span(std::move(span))
 {
 }
 

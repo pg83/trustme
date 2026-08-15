@@ -133,6 +133,9 @@ Token::Token(const InterpolatedFragment& frag) {
             break;
         }
     }
+    if (frag.span) {
+        pos = Position(frag.span);
+    }
 }
 
 Token::Token(TagTakeIP, InterpolatedFragment frag) {
@@ -184,6 +187,9 @@ Token::Token(TagTakeIP, InterpolatedFragment frag) {
             mData = frag.ptr;
             frag.ptr = nullptr;
             break;
+    }
+    if (frag.span) {
+        pos = Position(std::move(frag.span));
     }
 }
 

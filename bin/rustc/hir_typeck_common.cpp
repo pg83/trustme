@@ -500,6 +500,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             HIRTypeDataFunctionPointer ft;
             ft.isUnsafe = e.isUnsafe;
             ft.isVariadic = e.isVariadic;
+            ft.trackCaller = e.trackCaller;
             ft.mAbi = e.mAbi;
             ft.mRettype = this->monomorphType(sp, e.mRettype, allowInfer);
             for (const auto& arg : e.argTypes) {

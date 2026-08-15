@@ -105,6 +105,7 @@ public:
     ProtoSpan startSpan() const;
     Span endSpan(ProtoSpan ps) const;
     Span pointSpan() const;
+    Span tokenStartSpan(const Token& tok) const;
 
     Span subSpan(const Position& p) const {
         return Span(outerSpan(), p);

@@ -43,12 +43,9 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Shared backend/runtime families: one suspended-future async-drop output
-   mismatch and 5 remaining `track_caller` cases spanning a trait
-   object, closure, FFI, indexing, and macro declaration.
-2. Trait lookup, normalization, and inference: 8 inferred trait obligations
+1. Trait lookup, normalization, and inference: 8 inferred trait obligations
    remain ambiguous.
-3. Result typing and coercion outside opaque types: one nested closure return
+2. Result typing and coercion outside opaque types: one nested closure return
    inference failure in `issue-115780-pat-lt-bracket-in-macro-call.rs`.
 
 ## Internal compiler failures
@@ -69,14 +66,14 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 130.
 
 ## Accepted Rust rejected by the front end
 
-The 336 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 335 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
 | parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
 | type checking, HIR lowering, and resolution | 130 | result relation 1 |
-| macro and attribute expansion | 32 | other expansion and attribute failures |
+| macro and attribute expansion | 31 | other expansion and attribute failures |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |
 
@@ -107,10 +104,9 @@ intentional native symbols, and one exercises native-link directives.
 
 ## Runtime semantics
 
-- 85 executables panic with exit 101. The panic exit itself is not a root
+- 81 executables panic with exit 101. The panic exit itself is not a root
   cause; the repeated semantic families are listed in the impact order above.
-- Three outputs differ: one suspended-future async-drop test and RustSmith
-  seeds 19 and 102.
+- Two outputs differ: RustSmith seeds 19 and 102.
 - Two executables abort: one async Miri double-free and one library test.
 - Five generated executables hit assertions: two SysV empty-struct ABI cases,
   three SIMD/library intrinsic cases (`reduce_add`, `round`, and `neg`).

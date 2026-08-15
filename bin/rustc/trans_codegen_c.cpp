@@ -1060,7 +1060,7 @@ namespace {
             of << "*";
             emitCtype(ty);
             of << ")(";
-            if (te.argTypes.size() == 0) {
+            if (te.argTypes.empty() && !te.trackCaller) {
                 of << "void)";
             } else {
                 for (unsigned int i = 0; i < te.argTypes.size(); i++) {
@@ -1072,6 +1072,13 @@ namespace {
                 }
                 if (te.isVariadic) {
                     of << ", ...";
+                }
+                if (te.trackCaller) {
+                    MIR_ASSERT(*mirRes, !te.isVariadic, "#[track_caller] on a variadic function pointer");
+                    if (!te.argTypes.empty()) {
+                        of << ",";
+                    }
+                    of << " const mrustc_caller_location* mrustc_caller";
                 }
                 of << " )";
             }
@@ -1817,7 +1824,7 @@ namespace {
                                     of << "&__typeid_" << TransMangle(ty);
                                 } else {
                                     of << "&";
-                                    emitReifiedFunctionName(*relocIt->p);
+                                    emitReifiedFunctionName(*relocIt->p, relocIt->preserveTrackCaller);
                                 }
                             } else {
                                 this->printEscapedString(relocIt->bytes);
@@ -5354,9 +5361,9 @@ namespace {
             of << "," << source.filename.size() << "}," << source.line << "," << source.column << "}";
         }
 
-        void emitReifiedFunctionName(const HIRPath& path) {
+        void emitReifiedFunctionName(const HIRPath& path, bool preserveTrackCaller = false) {
             of << TransMangle(path);
-            if (pathTracksCaller(path)) {
+            if (!preserveTrackCaller && pathTracksCaller(path)) {
                 of << "__mrustc_reify";
             }
         }
@@ -8258,7 +8265,7 @@ namespace {
                                 of << "&__typeid_" << TransMangle(relocation->p->mData.as_UfcsInherent().type);
                             } else {
                                 of << "&";
-                                emitReifiedFunctionName(*relocation->p);
+                                emitReifiedFunctionName(*relocation->p, relocation->preserveTrackCaller);
                             }
                         } else {
                             printEscapedString(relocation->bytes);

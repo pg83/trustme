@@ -10,13 +10,14 @@ struct Reloc {
     size_t len;
     ::std::unique_ptr<HIRPath> p;
     ::std::string bytes;
+    bool preserveTrackCaller = false;
 
-    static Reloc newNamed(size_t ofs, size_t len, HIRPath p) {
-        return Reloc{ofs, len, box$(p), ""};
+    static Reloc newNamed(size_t ofs, size_t len, HIRPath p, bool preserveTrackCaller = false) {
+        return Reloc{ofs, len, box$(p), "", preserveTrackCaller};
     }
 
     static Reloc newBytes(size_t ofs, size_t len, ::std::string bytes) {
-        return Reloc{ofs, len, nullptr, ::std::move(bytes)};
+        return Reloc{ofs, len, nullptr, ::std::move(bytes), false};
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const Reloc& x);

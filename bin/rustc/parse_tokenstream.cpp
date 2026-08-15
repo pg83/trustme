@@ -32,7 +32,7 @@ stl::ObjPool& TokenStream::typePool() const {
 
 Token TokenStream::innerGetToken() {
     Token ret = this->realGetToken();
-    if (ret != TOK_EOF && ret.getPos().filename == "") {
+    if (ret != TOK_EOF && ret.getPos().filename == "" && !ret.getPos().span) {
         ret.setPos(this->getPosition());
     }
     return ret;
@@ -150,6 +150,18 @@ Span TokenStream::pointSpan() const {
         return this->outerSpan();
     }
     return Span(this->outerSpan(), p);
+}
+
+Span TokenStream::tokenStartSpan(const Token& tok) const {
+    const auto& pos = tok.getPos();
+    if (pos.span) {
+        return pos.span;
+    }
+    if (pos.filename == "") {
+        return this->pointSpan();
+    }
+
+    return this->subSpan(pos);
 }
 
 ParseState::ParseState() {
