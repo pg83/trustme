@@ -8005,6 +8005,31 @@ namespace {
             DEBUG(nIvars << " ivars (" << nSrcIvars << " src, " << nDstIvars << " dst)");
             (void)nIvars;
 
+            // Distinct function items and closures have distinct source types,
+            // but can share a function-pointer coercion target. Select that
+            // target before the generic fallback can choose one source item.
+            if (possibleTys.size() >= 2
+                && (fallbackTy == IvarPossFallbackType::FinalOption || nSrcIvars == 0)
+                && std::all_of(possibleTys.begin(), possibleTys.end(), [](const auto& e) {
+                return e.hasType() && (TU_TEST1(*e.ty, NodeType, .is_Closure()) || (e.ty)->is_NamedFunction());
+            })) {
+                HIRTypeRef newTy;
+                if (const auto* te = (possibleTys[0].ty)->opt_NamedFunction()) {
+                    newTy = context.crate.types.function(te->decay(context.crate.types, sp));
+                } else if (const auto* t1Nodep = TU_OPT1(*possibleTys[0].ty, NodeType, .opt_Closure())) {
+                    auto ft = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*t1Nodep)->returnType, {}};
+                    for (const auto& t : (*t1Nodep)->mArgs) {
+                        ft.argTypes.push_back(t.second);
+                    }
+                    newTy = context.crate.types.function(std::move(ft));
+                } else {
+                    BUG(sp, "");
+                }
+                DEBUG("All options are closures/functions, adding a function pointer - " << newTy);
+                context.equateTypes(sp, tyL, newTy);
+                return true;
+            }
+
             if (ivarEnt.hasBounded && ivarEnt.boundsIncludeSelf) {
                 nIvars += 1;
             }
@@ -8367,30 +8392,6 @@ namespace {
                 it = (removeOption ? possibleTys.erase(it) : it + 1);
             }
             DEBUG("possible_tys = " << possibleTys);
-
-            if (possibleTys.size() >= 2
-                // && n_ivars == 0
-                && (fallbackTy == IvarPossFallbackType::FinalOption || nSrcIvars == 0)
-                // && (fallback_ty == IvarPossFallbackType::FinalOption || n_ivars == 0)
-                && std::all_of(possibleTys.begin(), possibleTys.end(), [](const auto& e) {
-                return e.hasType() && (TU_TEST1(*e.ty, NodeType, .is_Closure()) || (e.ty)->is_NamedFunction());
-            })) {
-                HIRTypeRef newTy;
-                if (const auto* te = (possibleTys[0].ty)->opt_NamedFunction()) {
-                    newTy = context.crate.types.function(te->decay(context.crate.types, sp));
-                } else if (const auto* t1Nodep = TU_OPT1(*possibleTys[0].ty, NodeType, .opt_Closure())) {
-                    auto ft = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*t1Nodep)->returnType, {}};
-                    for (const auto& t : (*t1Nodep)->mArgs) {
-                        ft.argTypes.push_back(t.second);
-                    }
-                    newTy = context.crate.types.function(std::move(ft));
-                } else {
-                    BUG(sp, "");
-                }
-                DEBUG("HACK: All options are closures/functions, adding a function pointer - " << newTy);
-                context.equateTypes(sp, tyL, newTy);
-                return true;
-            }
 
             // Remove any options that are filled by other options (e.g. `str` and a derferencable String)
             for (auto it = possibleTys.begin(); it != possibleTys.end();) {
