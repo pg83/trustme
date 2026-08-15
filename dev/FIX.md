@@ -43,10 +43,10 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Shared backend/runtime families: 12 pointer equality/provenance tests, 9
-   `core::num::dec2flt` library tests, 9 Miri x86-intrinsic aborts, 9 async-drop
-   output mismatches, and 5 remaining `track_caller` cases spanning a trait
-   object, closure, FFI, indexing, and macro declaration.
+1. Shared backend/runtime families: 9 `core::num::dec2flt` library tests, 9
+   Miri x86-intrinsic aborts, 9 async-drop output mismatches, and 5 remaining
+   `track_caller` cases spanning a trait object, closure, FFI, indexing, and
+   macro declaration.
 2. Trait lookup, normalization, and inference: 8 inferred trait obligations
    remain ambiguous.
 3. Result typing and coercion outside opaque types: one nested closure return
@@ -108,7 +108,7 @@ intentional native symbols, and one exercises native-link directives.
 
 ## Runtime semantics
 
-- 106 executables panic with exit 101. The panic exit itself is not a root
+- 94 executables panic with exit 101. The panic exit itself is not a root
   cause; the repeated semantic families are listed in the impact order above.
 - Eleven outputs differ: nine async-drop tests and RustSmith seeds 19 and 102.
 - Eleven executables abort: nine Miri x86-intrinsic cases, one async Miri

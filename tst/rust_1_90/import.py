@@ -68,6 +68,11 @@ def selected_for_host(text: str) -> bool:
 def selected(text: str) -> bool:
     if not re.search(r"^//@\s*run-pass(?:\s|$)", text, re.MULTILINE):
         return False
+    # `known-bug` cases intentionally assert current rustc miscompilations or
+    # otherwise incorrect behavior.  They are upstream bug reproducers, not a
+    # conformance corpus for another compiler.
+    if re.search(r"^//@\s*known-bug(?:\s|:|$)", text, re.MULTILINE):
+        return False
     if not re.search(r"\bfn\s+main\s*\(", text):
         return False
     if any(re.search(rf"^//@.*{re.escape(item)}", text, re.MULTILINE)

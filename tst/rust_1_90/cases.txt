@@ -166,7 +166,6 @@ associated-types/issue-55846.rs
 associated-types/object-method-numbering.rs
 associated-types/project-defer-unification.rs
 async-await/async-drop/async-drop-box-allocator.rs
-async-await/async-drop/async-drop-box.rs
 async-await/async-drop/async-drop-future-from-future.rs
 async-await/async-drop/async-drop-future-in-sync-context.rs
 async-await/async-drop/async-drop-glue-array.rs
@@ -515,18 +514,6 @@ codegen/StackColoring-not-blowup-stack-issue-40883.rs
 codegen/alias-uninit-value.rs
 codegen/assign-expr-unit-type.rs
 codegen/dynamic-size-of-prefix-correctly-36278.rs
-codegen/equal-pointers-unequal/as-cast/inline1.rs
-codegen/equal-pointers-unequal/as-cast/inline2.rs
-codegen/equal-pointers-unequal/as-cast/segfault.rs
-codegen/equal-pointers-unequal/as-cast/zero.rs
-codegen/equal-pointers-unequal/exposed-provenance/inline1.rs
-codegen/equal-pointers-unequal/exposed-provenance/inline2.rs
-codegen/equal-pointers-unequal/exposed-provenance/segfault.rs
-codegen/equal-pointers-unequal/exposed-provenance/zero.rs
-codegen/equal-pointers-unequal/strict-provenance/inline1.rs
-codegen/equal-pointers-unequal/strict-provenance/inline2.rs
-codegen/equal-pointers-unequal/strict-provenance/segfault.rs
-codegen/equal-pointers-unequal/strict-provenance/zero.rs
 codegen/issue-101585-128bit-repeat.rs
 codegen/issue-16602-1.rs
 codegen/issue-16602-2.rs
