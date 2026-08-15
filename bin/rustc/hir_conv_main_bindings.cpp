@@ -133,6 +133,7 @@ namespace {
 
         HIRItemPath* fcnPath = nullptr;
         HIRFunction* fcnPtr = nullptr;
+        const ::std::vector<HIRSimplePath>* defineOpaque = nullptr;
         unsigned int fcnErasedCount = 0;
 
     public:
@@ -562,6 +563,7 @@ namespace {
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
             auto _ = this->ms.setItemGenerics(item.mParams);
             fcnPtr = &item;
+            defineOpaque = &item.defineOpaque;
 
             // Visit arguments
             // - Used to convert `impl Trait` in argument position into generics
@@ -582,6 +584,7 @@ namespace {
             fcnPtr = nullptr;
 
             HIRVisitor::visitFunction(p, item);
+            defineOpaque = nullptr;
         }
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override {
@@ -717,6 +720,9 @@ namespace {
                 expr.state->currentTraitImpl = ms.currentTraitImpl;
                 if (ms.currentTrait) {
                     expr.state->mCurrentTraitPath = ms.currentTrait->mPath;
+                }
+                if (defineOpaque) {
+                    expr.state->defineOpaque = *defineOpaque;
                 }
             }
 

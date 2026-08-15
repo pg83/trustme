@@ -4872,6 +4872,10 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
     static HIRPattern emptyPattern;
     TRACE_FUNCTION_F("pat=" << pat << ", ty=" << topTy << ",   m_field_path=[" << fieldPath << "]");
 
+    HIRTypeRef revealedTopTy = topTy;
+    mResolve.revealOpaqueTypes(sp, revealedTopTy);
+    topTy = revealedTopTy;
+
     struct H {
         static U128 getPatternValueInt(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
             TU_MATCH_DEF(HIRPattern::Value, (val), (e), (BUG(sp, "Invalid Value type in " << pat);), (Integer, return e.value;), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readUint();))
@@ -5963,12 +5967,18 @@ namespace {
     ) {
         const StaticTraitResolve& resolve = builder.resolve();
         MIRLValue lval = topVal.clone();
-        HIRTypeRef tmpTy;
+        HIRTypeRef tmpTy = topTy;
         const HIRTypeData* curTy = topTy;
+        auto revealCurTy = [&]() {
+            tmpTy = curTy;
+            resolve.revealOpaqueTypes(sp, tmpTy);
+            curTy = tmpTy;
+        };
 
         // TODO: Cache the correspondance of path->type (lval can be inferred)
         ASSERT_BUG(sp, fieldPathOfs <= fieldPath.size(), "Field path offset " << fieldPathOfs << " is larger than the path [" << fieldPath << "]");
         for (unsigned int i = fieldPathOfs; i < fieldPath.size(); i++) {
+            revealCurTy();
             unsigned idx = fieldPath.data[i];
             DEBUG("> " << curTy << " #" << idx);
 
@@ -6101,6 +6111,8 @@ namespace {
                 }
             }
         }
+
+        revealCurTy();
 
         if (const auto* pattern = curTy->opt_Pattern()) {
             lval = builder.lvalueOrTemp(sp, pattern->inner, MIRRValue::make_Cast({mv$(lval), pattern->inner}));
@@ -9490,6 +9502,11 @@ void MirBuilder::completeScope(ScopeDef& sd) {
 void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::function<void(const HIRTypeData*)> cb, const MIRLValue::Wrapper* stopWrapper /*=nullptr*/) const {
     HIRTypeRef tmp;
     const HIRTypeData* ty = nullptr;
+    auto revealType = [&](const HIRTypeData* input) {
+        HIRTypeRef revealed = input;
+        mResolve.revealOpaqueTypes(sp, revealed);
+        return revealed;
+    };
     TU_MATCHA((val.root), (e), (Return, ty = retTy;), (Argument, ty = mArgs.at(e).second;), (Local, ty = output.locals.at(e);), (Static, TU_MATCHA((e.mData), (pe), (Generic, ASSERT_BUG(sp, pe.mParams.types.empty(), "Path params on static"); const auto& s = mResolve.hirCrate().getStaticByPath(sp, pe.mPath); ty = s.mType;), (UfcsKnown, TODO(sp, "Static - UfcsKnown - " << e);), (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown in Static - " << e);), (UfcsInherent, TODO(sp, "Static - UfcsInherent - " << e);))))
     assert(ty);
     for (const auto& w : val.wrappers) {
@@ -9497,7 +9514,7 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
             stopWrapper = nullptr; // Reset so the below bugcheck can work
             break;
         }
-        const auto* currentTy = ty;
+        const auto* currentTy = revealType(ty);
         ty = nullptr;
         auto maybeMonomorph = [&](const HIRGenericParams& paramsDef, const HIRPath& p, const HIRTypeData* t) -> const HIRTypeData* {
             if (monomorphiseTypeNeeded(t)) {
@@ -9586,7 +9603,7 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
         assert(ty);
     }
     ASSERT_BUG(sp, !stopWrapper, "A stop wrapper was passed, but not found");
-    cb(ty);
+    cb(revealType(ty));
 }
 
 bool MirBuilder::lvalueIsCopy(const Span& sp, const MIRLValue& val) const {

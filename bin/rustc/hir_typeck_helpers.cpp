@@ -4133,7 +4133,7 @@ TU_ARMA(Alias, ee) {
                 const HIRTypeData* candidateAssocType = assocType;
                 if (candidateAssocType) {
                     if (const auto* erased = candidateAssocType->opt_ErasedType()) {
-                        if (const auto* alias = erased->inner.opt_Alias(); alias && alias->inner->isPublicTo(mResolve.mVisPath)) {
+                        if (const auto* alias = erased->inner.opt_Alias(); alias && mResolve.isOpaqueAliasDefiningScope(*alias->inner)) {
                             // A defining opaque is an output of alias-relate, not
                             // an input that can reject an otherwise valid impl.
                             // Return the projection response to the caller, which
@@ -4364,6 +4364,36 @@ TU_ARMA(Alias, ee) {
             mItemGenerics = itemParams;
             eatCache.clear();
             prepIndexes(Span());
+        }
+
+        void TraitResolution::addOpaqueAliasScope(const HIRSimplePath& path) {
+            if (path.components().empty()) {
+                return;
+            }
+            if (::std::find(opaqueAliasScopes.begin(), opaqueAliasScopes.end(), path) == opaqueAliasScopes.end()) {
+                opaqueAliasScopes.push_back(path);
+            }
+        }
+
+        void TraitResolution::addDefiningOpaqueAlias(const HIRSimplePath& path) {
+            if (::std::find(definingOpaqueAliases.begin(), definingOpaqueAliases.end(), path) == definingOpaqueAliases.end()) {
+                definingOpaqueAliases.push_back(path);
+            }
+        }
+
+        bool TraitResolution::isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const {
+            if (alias.isPublicTo(mVisPath)) {
+                return true;
+            }
+            if (::std::find(definingOpaqueAliases.begin(), definingOpaqueAliases.end(), alias.path) != definingOpaqueAliases.end()) {
+                return true;
+            }
+            for (const auto& path : opaqueAliasScopes) {
+                if (alias.isPublicTo(path)) {
+                    return true;
+                }
+            }
+            return false;
         }
 
         HIRPathParams TraitResolution::makeFreshImplParams(const HIRGenericParams& params) const {

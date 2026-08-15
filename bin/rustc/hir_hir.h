@@ -181,6 +181,9 @@ public:
 
     SourceLocation source;
     HIRExprPtr mCode;
+    // Exact aliases named by this current-crate function's
+    // #[define_opaque(...)] attribute.
+    std::vector<HIRSimplePath> defineOpaque;
 
     struct Markings {
         std::vector<unsigned> rustcLegacyConstGenerics;
@@ -688,7 +691,7 @@ public:
 
     // Current-crate functions carrying #[define_opaque(...)].  The map is a
     // query index for lazy type checking and is intentionally not serialised.
-    std::map<RcString, std::vector<HIRPath>> opaqueTypeDefiners;
+    std::map<HIRSimplePath, std::vector<HIRPath>> opaqueTypeDefiners;
 
     template <typename T>
     struct ImplGroup {

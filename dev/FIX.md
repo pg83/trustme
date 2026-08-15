@@ -43,13 +43,8 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Opaque types (`TAIT`, `RPIT`, `RPITIT`, and async return types): 22
-   opaque-bearing result-type relation failures at
-   `hir_typeck_expr_cs.cpp:2196` and 13 erased types rejected outside return
-   position at `hir_conv_main_bindings.cpp:455`. Total adjacent impact: 35
-   tests. All 22 relation failures were rerun after the opaque identity and
-   refined-RPITIT fixes and still reproduce, so this row contains a different
-   root cause.
+1. Opaque types (`TAIT`, `RPIT`, `RPITIT`, and async return types): 13 erased
+   types rejected outside return position at `hir_conv_main_bindings.cpp:455`.
 2. Trait lookup, normalization, and inference: 14 unresolved inference
    variables, 10 inferred trait obligations left ambiguous, and 9 const-value
    relation failures. Total adjacent impact: 33 tests.
@@ -85,13 +80,13 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 141.
 
 ## Accepted Rust rejected by the front end
 
-The 415 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 393 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
 | parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
-| type checking, HIR lowering, and resolution | 209 | result relation 42 (22 opaque-bearing, 20 other) |
+| type checking, HIR lowering, and resolution | 187 | result relation 20 |
 | macro and attribute expansion | 32 | other expansion and attribute failures |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |

@@ -75,7 +75,7 @@ struct AST2HIR {
     HIRUnion LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAttributeList& attrs);
     HIRTrait LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttributeList& attrs);
     HIRTraitAlias LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const ASTTraitAlias& f);
-    HIRFunction LowerHIRFunction(HIRItemPath p, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType);
+    HIRFunction LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType);
     HIRValueItem LowerHIRStatic(HIRItemPath p, const ASTAttributeList& attrs, const ASTStatic& e, const Span& sp, const RcString& name);
     HIRModule LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::std::vector<HIRSimplePath> traits = {});
     void LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate);
@@ -1690,7 +1690,7 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
                 rv.types.insert(::std::make_pair(item.name, HIRAssociatedType{mv$(gps), isSized, mv$(traitBounds), LowerHIRType(i.type())}));
             }
             TU_ARMA(Function, i) {
-                auto fcn = LowerHIRFunction(itemPath, item.attrs, i, mCrate->types.self());
+                auto fcn = LowerHIRFunction(itemPath, traitPath.parent(), item.attrs, i, mCrate->types.self());
                 RpititTypeCollector(mCrate->types, [&](unsigned index, HIRTypeRef type) {
                     const auto& erased = type->as_ErasedType();
                     auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << item.name << "_" << index));
@@ -1737,18 +1737,43 @@ HIRTraitAlias AST2HIR::LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const A
     return ta;
 }
 
-HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType) {
+HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& sourceModule, const ASTAttributeList& attrs, const ASTFunction& f, const HIRTypeData* realSelfType) {
     static Span sp;
 
     TRACE_FUNCTION_F(p);
 
+    ::std::vector<HIRSimplePath> defineOpaque;
     if (const auto* attr = attrs.get("define_opaque")) {
         TTStream tokens(attr->span(), ParseState(), attr->data());
         tokens.getTokenCheck(TOK_PAREN_OPEN);
         while (tokens.lookahead(0) != TOK_PAREN_CLOSE) {
             auto opaquePath = ParsePath(tokens, PATH_GENERIC_NONE);
-            ASSERT_BUG(attr->span(), !opaquePath.nodes().empty(), "Empty path in #[define_opaque]");
-            mCrate->opaqueTypeDefiners[opaquePath.nodes().back().name()].push_back(p.getFullPath());
+            auto appendNodes = [&](HIRSimplePath path, const auto& nodes) {
+                for (const auto& node : nodes) {
+                    ASSERT_BUG(attr->span(), node.args().isEmpty(), "Generic path in #[define_opaque]");
+                    path += node.name();
+                }
+                return path;
+            };
+
+            HIRSimplePath aliasPath;
+            if (const auto* path = opaquePath.cls.opt_Absolute()) {
+                aliasPath = appendNodes(HIRSimplePath(path->crate == "" ? mCrateName : path->crate), path->nodes);
+            } else if (const auto* path = opaquePath.cls.opt_Relative()) {
+                aliasPath = appendNodes(sourceModule.clone(), path->nodes);
+            } else if (const auto* path = opaquePath.cls.opt_Self()) {
+                aliasPath = appendNodes(sourceModule.clone(), path->nodes);
+            } else if (const auto* path = opaquePath.cls.opt_Super()) {
+                ASSERT_BUG(attr->span(), path->count <= sourceModule.components().size(), "Too many `super` components in #[define_opaque]");
+                auto components = sourceModule.componentsVec();
+                components.resize(components.size() - path->count);
+                aliasPath = appendNodes(HIRSimplePath(sourceModule.crateName(), components), path->nodes);
+            } else {
+                ERROR(attr->span(), E0000, "Unsupported path in #[define_opaque]: " << opaquePath);
+            }
+            ASSERT_BUG(attr->span(), !aliasPath.components().empty(), "Empty path in #[define_opaque]");
+            mCrate->opaqueTypeDefiners[aliasPath].push_back(p.getFullPath());
+            defineOpaque.push_back(::std::move(aliasPath));
             if (!tokens.getTokenIf(TOK_COMMA)) {
                 break;
             }
@@ -1973,6 +1998,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const ASTAttributeList& att
     rv.returnType = LowerHIRType(f.rettype());
     rv.source = SourceLocation(f.sp());
     rv.mCode = LowerHIRExpr(f.code());
+    rv.defineOpaque = ::std::move(defineOpaque);
     rv.markings = markings;
 
     if (f.isAsync()) {
@@ -2216,7 +2242,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
                 _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRTraitAlias(sp, itemPath, e));
             }
             TU_ARMA(Function, e) {
-                _add_mod_val_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRFunction(itemPath, item.attrs, e, HIRTypeRef{}));
+                _add_mod_val_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRFunction(itemPath, modPath, item.attrs, e, HIRTypeRef{}));
             }
             TU_ARMA(Static, e) {
                 _add_mod_val_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRStatic(itemPath, item.attrs, e, sp, item.name));
@@ -2378,7 +2404,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                         }
                         TU_ARMA(Function, e) {
                             DEBUG("- method " << item.name);
-                            auto fcn = LowerHIRFunction(itemPath, item.attrs, e, type);
+                            auto fcn = LowerHIRFunction(itemPath, modPath, item.attrs, e, type);
                             if (impl.def().isConst()) {
                                 fcn.isConst = true;
                             }
@@ -2458,7 +2484,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                         types.insert(::std::make_pair(item.name, HIRTypeImpl::VisImplEnt<HIRTypeAlias>{getVis(item.vis), item.isSpecialisable, HIRTypeAlias{mv$(atyParams), mv$(atyType)}}));
                     }
                     TU_ARMA(Function, e) {
-                        methods.insert(::std::make_pair(item.name, HIRTypeImpl::VisImplEnt<HIRFunction>{getVis(item.vis), item.isSpecialisable, LowerHIRFunction(itemPath, item.attrs, e, type)}));
+                        methods.insert(::std::make_pair(item.name, HIRTypeImpl::VisImplEnt<HIRFunction>{getVis(item.vis), item.isSpecialisable, LowerHIRFunction(itemPath, modPath, item.attrs, e, type)}));
                     }
                 }
             }

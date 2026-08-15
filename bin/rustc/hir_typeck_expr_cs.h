@@ -143,6 +143,14 @@ struct Context {
 
     ::std::map<HIRTypeDataErasedTypeAliasInner*, TaitEntry> erasedTypeAliases;
 
+    struct RpitEntry {
+        const HIRPath* origin;
+        unsigned int index;
+        HIRTypeRef ourType;
+    };
+
+    ::std::vector<RpitEntry> rpitTypes;
+
     const HIRSimplePath mLangBox;
 
     Context(const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& modPath, const HIRGenericPath* currentTrait, const HIRTraitImpl* currentTraitImpl);
@@ -243,6 +251,10 @@ struct Context {
     const HIRTypeData* getType(const HIRTypeData* ty) const {
         return ivars.getType(ty);
     }
+
+    const HIRTypeData* revealOpaqueType(const HIRTypeData* type) const;
+
+    void addRpitType(const HIRPath& origin, unsigned int index, HIRTypeRef type);
 
     /// Create an autoderef operation from val_node->m_res_type to ty_dst (handling implicit unsizing)
     HIRExprNodeP createAutoderef(HIRExprNodeP valNode, HIRTypeRef tyDst) const;

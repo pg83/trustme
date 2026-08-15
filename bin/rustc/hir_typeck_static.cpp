@@ -1443,8 +1443,7 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
             }
             TU_ARMA(Alias, e) {
                 if (e.inner->type == HIRTypeRef()) {
-                    const auto& name = e.inner->path.components().back();
-                    auto definers = resolve.hirCrate().opaqueTypeDefiners.find(name);
+                    auto definers = resolve.hirCrate().opaqueTypeDefiners.find(e.inner->path);
                     if (definers != resolve.hirCrate().opaqueTypeDefiners.end()) {
                         for (const auto& path : definers->second) {
                             MonomorphState monomorph(resolve.hirCrate().types);

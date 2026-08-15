@@ -2,6 +2,7 @@
 
 #include "hir_hir.h"
 #include "hir_expr.h"
+#include "hir_expr_state.h"
 #include "settings.h"
 #include "wire_board.h"
 #include "hir_visitor.h"
@@ -1207,7 +1208,7 @@ namespace {
 
             // TODO: autoderef_find_field?
             do {
-                const auto& ty = this->context.ivars.getType(currentTy);
+                const auto* ty = this->context.revealOpaqueType(currentTy);
                 if (ty->is_Infer()) {
                     DEBUG("Hit ivar, returning early");
                     return;
@@ -2039,7 +2040,7 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
     }
 
     auto equateErasedAlias = [&](const HIRTypeDataErasedType& erased, const auto& alias, const HIRTypeData* hiddenType) {
-        if (!alias.inner->isPublicTo(mResolve.mVisPath)) {
+        if (!mResolve.isOpaqueAliasDefiningScope(*alias.inner)) {
             return false;
         }
 
@@ -2092,6 +2093,13 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
                 return;
             }
         }
+    }
+
+    const auto* lRevealed = revealOpaqueType(lT);
+    const auto* rRevealed = revealOpaqueType(rT);
+    if (lRevealed != lT || rRevealed != rT) {
+        equateTypesInner(sp, lRevealed, rRevealed);
+        return;
     }
 
     auto setIvar = [&](const HIRTypeData* dst, const HIRTypeData* src) {
@@ -3139,11 +3147,11 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 // - If the first non-borrow inner is an ivar, return false
                 unsigned nDeref = 0;
                 HIRBorrowType bt = HIRBorrowType::Owned;
-                const auto* ty = context.getType(type);
+                const auto* ty = context.revealOpaqueType(type);
                 while (const auto* te = ty->opt_Borrow()) {
                     DEBUG("bt " << bt << ", " << te->type);
                     bt = ::std::min(bt, te->type);
-                    ty = context.getType(te->inner);
+                    ty = context.revealOpaqueType(te->inner);
                     nDeref++;
                 }
                 DEBUG("- " << nDeref << " derefs of class " << bt << " to get " << ty);
@@ -6180,7 +6188,7 @@ namespace {
                     bool definingOpaqueOutput = false;
                     if (const auto* erased = v.leftTy->opt_ErasedType()) {
                         if (const auto* alias = erased->inner.opt_Alias()) {
-                            definingOpaqueOutput = alias->inner->isPublicTo(context.mResolve.mVisPath);
+                            definingOpaqueOutput = context.mResolve.isOpaqueAliasDefiningScope(*alias->inner);
                         }
                     }
                     if (cmp2 == HIRCompare::Unequal && !definingOpaqueOutput) {
@@ -8628,6 +8636,9 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
     HIRExprNodeP rootPtr(expr.get());
     assert(!ms.modPaths.empty());
     Context context{ms.wb, ms.mImplGenerics, ms.mItemGenerics, ms.modPaths.back(), ms.currentTrait, ms.currentTraitImpl};
+    for (const auto& path : expr.state->defineOpaque) {
+        context.mResolve.addDefiningOpaqueAlias(path);
+    }
 
     // - Build up ruleset from node tree
     TypecheckCodeCSEnumerateRules(context, ms, args, resultType, expr, rootPtr);
@@ -9563,6 +9574,8 @@ public:
 
     void visit(HIRExprNodeBlock& node) override {
         TRACE_FUNCTION_FR(&node << " { ... }", &node << " " << this->context.getType(node.resType));
+
+        this->context.mResolve.addOpaqueAliasScope(node.localMod);
 
         const auto isDiverge = [&](const HIRTypeData* rty) -> bool {
             const auto& ty = this->context.getType(rty);
@@ -11259,6 +11272,7 @@ void TypecheckCodeCSEnumerateRules(Context& context, const TypeckModuleState& ms
                     ASSERT_BUG(sp, expr.erasedTypes[ee->index] == HIRTypeRef(), "Multiple-visits to erased type #" << ee->index);
                     expr.erasedTypes[ee->index] = context.ivars.newIvarTr();
                     auto rv = expr.erasedTypes[ee->index];
+                    context.addRpitType(ee->origin, ee->index, rv);
 
                     auto prevCurSelf = this->curSelf;
                     this->curSelf = rv;
@@ -11419,6 +11433,116 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
     mResolve.setInherentTypeConstraint([this](const Span& sp, const HIRTypeData* receiver, const HIRTypeData* implType) {
         this->equateTypesInner(sp, receiver, implType);
     });
+}
+
+namespace {
+    class RpitOriginMonomorph: public HIRMatchGenerics, public Monomorphiser {
+        ::std::map<uint32_t, HIRTypeRef> typeBindings;
+        ::std::map<uint32_t, HIRConstGeneric> valueBindings;
+
+    public:
+        explicit RpitOriginMonomorph(HIRTypeInterner& types)
+            : Monomorphiser(types)
+        {
+        }
+
+        HIRCompare matchTy(const HIRGenericRef& generic, const HIRTypeData* type, tCbResolveType resolve) override {
+            type = resolve.getType(Span(), type);
+            auto inserted = typeBindings.emplace(generic.binding, type);
+            if (inserted.second) {
+                return HIRCompare::Equal;
+            }
+            return inserted.first->second->compareWithPlaceholders(Span(), type, resolve);
+        }
+
+        HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
+            auto inserted = valueBindings.emplace(generic.binding, value.clone());
+            return inserted.second || inserted.first->second == value ? HIRCompare::Equal : HIRCompare::Unequal;
+        }
+
+        HIRTypeRef getType(const Span&, const HIRGenericRef& generic) const override {
+            const auto it = typeBindings.find(generic.binding);
+            return it == typeBindings.end() ? types.generic(generic.name, generic.binding) : it->second;
+        }
+
+        HIRConstGeneric getValue(const Span&, const HIRGenericRef& generic) const override {
+            const auto it = valueBindings.find(generic.binding);
+            return it == valueBindings.end() ? HIRConstGeneric::make_Generic(generic) : it->second.clone();
+        }
+    };
+}
+
+const HIRTypeData* Context::revealOpaqueType(const HIRTypeData* type) const {
+    type = ivars.getType(type);
+    const size_t maxDepth = erasedTypeAliases.size() + rpitTypes.size();
+    for (size_t depth = 0; depth < maxDepth; depth++) {
+        const HIRTypeData* hiddenType = nullptr;
+        auto revealRpit = [&](const HIRPath& origin, unsigned int index) {
+            for (const auto& entry : rpitTypes) {
+                if (entry.index != index) {
+                    continue;
+                }
+                RpitOriginMonomorph monomorph(crate.types);
+                if (monomorph.cmpPath(Span(), *entry.origin, origin, ivars.callbackResolveInfer()) != HIRCompare::Unequal) {
+                    hiddenType = monomorph.monomorphType(Span(), ivars.getType(entry.ourType));
+                    break;
+                }
+            }
+        };
+
+        if (const auto* erased = type->opt_ErasedType()) {
+            if (const auto* alias = erased->inner.opt_Alias()) {
+                if (!mResolve.isOpaqueAliasDefiningScope(*alias->inner)) {
+                    return type;
+                }
+                const auto it = erasedTypeAliases.find(alias->inner.get());
+                if (it != erasedTypeAliases.end()) {
+                    hiddenType = it->second.ourType;
+                }
+            } else if (const auto* fcn = erased->inner.opt_Fcn()) {
+                revealRpit(fcn->origin, fcn->index);
+            }
+        } else if (const auto* path = type->opt_Path()) {
+            if (const auto* projection = path->path.mData.opt_UfcsKnown()) {
+                for (const auto& entry : rpitTypes) {
+                    const auto* origin = entry.origin->mData.opt_UfcsKnown();
+                    if (!origin) {
+                        continue;
+                    }
+                    const auto expectedName = RcString::newInterned(FMT(ATY_PREFIX_ERASED << origin->item << "_" << entry.index));
+                    if (projection->item != expectedName) {
+                        continue;
+                    }
+                    HIRPath projectedOrigin(projection->type, projection->trait.clone(), origin->item, projection->params.clone());
+                    revealRpit(projectedOrigin, entry.index);
+                    if (hiddenType) {
+                        break;
+                    }
+                }
+            }
+        } else {
+            return type;
+        }
+        if (!hiddenType) {
+            return type;
+        }
+        const auto* revealed = ivars.getType(hiddenType);
+        if (revealed == type) {
+            return type;
+        }
+        type = revealed;
+    }
+    return type;
+}
+
+void Context::addRpitType(const HIRPath& origin, unsigned int index, HIRTypeRef type) {
+    for (const auto& entry : rpitTypes) {
+        if (entry.index == index && *entry.origin == origin) {
+            ASSERT_BUG(Span(), entry.ourType == type, "RPIT hidden type registered twice for " << origin << "#" << index);
+            return;
+        }
+    }
+    rpitTypes.push_back(RpitEntry{&origin, index, type});
 }
 
 const HIRTypeData* Context::coercionHint(const HIRExprNode& node) const {

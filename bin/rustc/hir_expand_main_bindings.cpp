@@ -1011,6 +1011,10 @@ namespace {
         }
 
         HIRValueUsage getUsageForPattern(const Span& sp, const HIRPattern& pat, const HIRTypeData* outerTy) const {
+            HIRTypeRef revealedOuterTy = outerTy;
+            mResolve.revealOpaqueTypes(sp, revealedOuterTy);
+            outerTy = revealedOuterTy;
+
             if (pat.mBindings.size() > 0) {
                 auto vu = HIRValueUsage::Borrow;
                 for (const auto& pb : pat.mBindings) {

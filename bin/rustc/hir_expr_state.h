@@ -19,6 +19,7 @@ public:
     const HIRTraitImpl* currentTraitImpl;
 
     ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> traits;
+    ::std::vector<HIRSimplePath> defineOpaque;
 
     enum class Stage {
         Created,

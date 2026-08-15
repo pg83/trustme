@@ -184,12 +184,20 @@ private:
     mutable HMTypeInferrence coherenceIvars;
     mutable TraitResolution* coherenceResolve = nullptr;
     ::std::function<void(const Span&, const HIRTypeData*, const HIRTypeData*)> inherentTypeConstraint;
+    ::std::vector<HIRSimplePath> opaqueAliasScopes;
+    ::std::vector<HIRSimplePath> definingOpaqueAliases;
 
 public:
     TraitResolution(const HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait);
     ~TraitResolution();
 
     void setGenericContext(const HIRGenericParams* implParams, const HIRGenericParams* itemParams);
+
+    void addOpaqueAliasScope(const HIRSimplePath& path);
+
+    void addDefiningOpaqueAlias(const HIRSimplePath& path);
+
+    bool isOpaqueAliasDefiningScope(const HIRTypeDataErasedTypeAliasInner& alias) const;
 
     void setInherentTypeConstraint(::std::function<void(const Span&, const HIRTypeData*, const HIRTypeData*)> constraint) {
         inherentTypeConstraint = mv$(constraint);
