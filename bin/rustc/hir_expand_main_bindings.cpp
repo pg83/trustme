@@ -3614,6 +3614,21 @@ namespace {
                 arg = doReborrow(mv$(arg));
             }
         }
+
+        void visit(HIRExprNodeGenerator& node) override {
+            HIRExprVisitorDef::visit(node);
+            for (auto& arg : node.captures) {
+                arg = doReborrow(mv$(arg));
+            }
+        }
+
+        void visit(HIRExprNodeAsyncBlock& node) override {
+            HIRExprVisitorDef::visit(node);
+            for (auto& arg : node.captures) {
+                visitNodePtr(arg);
+                arg = doReborrow(mv$(arg));
+            }
+        }
     };
 
     class ReborrowOuterVisitor: public HIRVisitor {

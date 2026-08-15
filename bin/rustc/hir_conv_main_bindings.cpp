@@ -130,6 +130,7 @@ namespace {
         } curModule;
 
         unsigned inExpr;
+        bool inImplTraitBinding = false;
 
         HIRItemPath* fcnPath = nullptr;
         HIRFunction* fcnPtr = nullptr;
@@ -450,6 +451,10 @@ namespace {
                         }
                         ty = ::std::move(newTy);
                         return;
+                    } else if (inImplTraitBinding) {
+                        // `impl Trait` in a local binding is an inference type
+                        // constrained by these bounds, not an opaque type with
+                        // an identity. Type checking lowers it to ivars.
                     } else {
                         // TODO: If we're in a top-level `type`, then it must be used as the return type of a function.
                         // https://rust-lang.github.io/rfcs/2515-type_alias_impl_trait.html#type-alias
@@ -580,6 +585,22 @@ namespace {
                 TRACE_FUNCTION_F("RET " << item.returnType);
                 visitType(item.returnType);
             }
+
+            // Lowering an async function stores its declared return type both
+            // as Future::Output and as the async block's return type. Binding
+            // replaces the former with an interned type carrying the RPIT
+            // identity, so keep the latter on that exact same type.
+            if (auto* asyncBlock = cast<HIRExprNodeAsyncBlock>(item.mCode.get())) {
+                if (const auto* erased = item.returnType->opt_ErasedType()) {
+                    for (const auto& trait : erased->traits) {
+                        const auto output = trait.typeBounds.find(RcString::newInterned("Output"));
+                        if (output != trait.typeBounds.end()) {
+                            asyncBlock->returnType = output->second.type;
+                            break;
+                        }
+                    }
+                }
+            }
             fcnPath = nullptr;
             fcnPtr = nullptr;
 
@@ -623,9 +644,12 @@ namespace {
                 }
 
                 void visit(HIRExprNodeLet& node) override {
+                    const bool saved = upperVisitor.inImplTraitBinding;
+                    upperVisitor.inImplTraitBinding = true;
                     upperVisitor.visitType(node.mType);
                     upperVisitor.visitPattern(node.pattern);
                     HIRExprVisitorDef::visit(node);
+                    upperVisitor.inImplTraitBinding = saved;
                 }
 
                 void visit(HIRExprNodeMatch& node) override {

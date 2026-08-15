@@ -9480,6 +9480,56 @@ bool visitCallPopulateCacheUfcsInherent(Context& context, const Span& sp, HIRPat
 class ExprVisitorAddIvars: public HIRExprVisitorDef {
     Context& context;
 
+    struct LocalImplTraitLowering: Monomorphiser {
+        Context& context;
+        mutable const HIRTypeData* curSelf = nullptr;
+
+        explicit LocalImplTraitLowering(Context& context)
+            : Monomorphiser(context.crate.types)
+            , context(context)
+        {
+        }
+
+        HIRTypeRef getType(const Span& sp, const HIRGenericRef& generic) const override {
+            if (generic.binding == GENERICErasedSelf && curSelf) {
+                return curSelf;
+            }
+            return types.generic(generic.name, generic.binding);
+        }
+
+        HIRConstGeneric getValue(const Span& sp, const HIRGenericRef& generic) const override {
+            return generic;
+        }
+
+        HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* type, bool allowInfer = true) const override {
+            if (const auto* erased = type->opt_ErasedType()) {
+                if (const auto* fcn = erased->inner.opt_Fcn(); fcn && fcn->origin == HIRSimplePath()) {
+                    auto result = context.ivars.newIvarTr();
+                    const auto* savedSelf = curSelf;
+                    curSelf = result;
+
+                    for (const auto& trait : erased->traits) {
+                        auto bound = this->monomorphTraitpath(sp, trait, allowInfer);
+                        if (bound.typeBounds.empty()) {
+                            context.addTraitBound(sp, result, bound.mPath.mPath, mv$(bound.mPath.mParams));
+                        } else {
+                            for (auto& associated : bound.typeBounds) {
+                                context.equateTypesAssoc(sp, associated.second.type, bound.mPath.mPath, bound.mPath.mParams.clone(), result, associated.first.c_str(), associated.second.atyParams, false);
+                            }
+                        }
+                    }
+                    if (erased->isSized) {
+                        context.requireSized(sp, result);
+                    }
+
+                    curSelf = savedSelf;
+                    return result;
+                }
+            }
+            return Monomorphiser::monomorphType(sp, type, allowInfer);
+        }
+    };
+
 public:
     ExprVisitorAddIvars(Context& context)
         : HIRExprVisitorDef(context.crate.types)
@@ -9524,6 +9574,11 @@ public:
     void visitType(HIRTypeRef& ty) override {
         this->context.addIvars(ty);
         innerVisitType(ty);
+    }
+
+    void visit(HIRExprNodeLet& node) override {
+        node.mType = LocalImplTraitLowering(context).monomorphType(node.span(), node.mType);
+        HIRExprVisitorDef::visit(node);
     }
 };
 
@@ -11141,6 +11196,7 @@ public:
     void visit(HIRExprNodeAsyncBlock& node) override {
         TRACE_FUNCTION_F(&node << " async { ... }");
         ASSERT_BUG(node.span(), node.mCode, "empty async?");
+        node.returnType = this->context.revealOpaqueType(node.returnType);
         this->context.addIvars(node.returnType);
         this->context.addIvars(node.mCode->resType);
 
