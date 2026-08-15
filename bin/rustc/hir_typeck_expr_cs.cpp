@@ -6105,6 +6105,19 @@ namespace {
         const auto& sp = v.span;
         TRACE_FUNCTION_F(v);
 
+        // Trait matching compares evaluated const arguments structurally.  A
+        // monomorphised generic expression still carries its original HIR
+        // together with the now-concrete substitutions, so evaluate it before
+        // probing candidates instead of treating every concrete impl as fuzzy.
+        auto normalizeConstParams = [&](HIRPathParams& params) {
+            context.ivars.expandIvarsParams(params);
+            for (auto& value : params.values) {
+                ConvertHIRConstantEvaluateConstGeneric(sp, context.mResolve.board(), context.crate, value);
+            }
+        };
+        normalizeConstParams(v.params);
+        normalizeConstParams(v.atyPp);
+
         ::std::optional<HIRTypeRef> outputType;
 
         struct H {

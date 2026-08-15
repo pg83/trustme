@@ -43,11 +43,9 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Const-generic trait selection: two ambiguous obligations remain in
-   `const_eval_resolve_canonical.rs` and `issue-73899.rs`.
-2. Higher-ranked trait-bound inference: one ambiguous `Variable` obligation
+1. Higher-ranked trait-bound inference: one ambiguous `Variable` obligation
    remains in `issue-90875.rs`.
-3. Result typing and coercion outside opaque types: one nested closure return
+2. Result typing and coercion outside opaque types: one nested closure return
    inference failure in `issue-115780-pat-lt-bracket-in-macro-call.rs`.
 
 ## Internal compiler failures
@@ -68,13 +66,13 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 130.
 
 ## Accepted Rust rejected by the front end
 
-The 330 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 328 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
 | parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
-| type checking, HIR lowering, and resolution | 125 | result relation 1 |
+| type checking, HIR lowering, and resolution | 123 | result relation 1 |
 | macro and attribute expansion | 31 | other expansion and attribute failures |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |

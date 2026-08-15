@@ -130,6 +130,7 @@ public:
 
     void checkForLoops();
     void expandIvars(HIRTypeRef& type);
+    void expandIvars(HIRConstGeneric& value);
     void expandIvarsParams(HIRPathParams& params);
 
     // Helpers

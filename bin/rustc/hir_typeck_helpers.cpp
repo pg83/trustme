@@ -597,6 +597,28 @@ void HMTypeInferrence::expandIvarsParams(HIRPathParams& params) {
     for (auto& arg : params.types) {
         expandIvars(arg);
     }
+    for (auto& value : params.values) {
+        expandIvars(value);
+    }
+}
+
+void HMTypeInferrence::expandIvars(HIRConstGeneric& value) {
+    if (value.is_Infer()) {
+        const auto& resolved = getValue(value);
+        if (resolved != value) {
+            value = resolved.clone();
+            expandIvars(value);
+        }
+        return;
+    }
+
+    if (auto* unevaluated = value.opt_Unevaluated()) {
+        if ((*unevaluated)->selfType) {
+            expandIvars((*unevaluated)->selfType);
+        }
+        expandIvarsParams((*unevaluated)->paramsImpl);
+        expandIvarsParams((*unevaluated)->paramsItem);
+    }
 }
 
 void HMTypeInferrence::expandIvarsTraitPath(HIRTraitPath& path) {
