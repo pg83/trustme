@@ -53,6 +53,33 @@ public:
 };
 STATIC_MACRO("pattern_type", CPatternTypeExpander);
 
+class CIterExpander: public ExpandProcMacro {
+public:
+    ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
+        Token tok;
+        auto lex = TTStream(sp, ParseState(), tt);
+        lex.parseState().crate = &crate;
+        lex.parseState().wb = &wb;
+        lex.parseState().module = &mod;
+
+        auto node = ParseExpr0(lex);
+        GET_CHECK_TOK(tok, lex, TOK_EOF);
+
+        auto* closure = cast<ASTExprNodeClosure>(node.get());
+        if (!closure || closure->isPinned || cast<ASTExprNodeAsyncBlock>(closure->mCode.get())) {
+            ERROR(sp, E0000, "iter! requires a plain closure");
+        }
+
+        auto* generator = new ASTExprNodeGeneratorBlock(mv$(closure->mCode), closure->returnType, true, true);
+        generator->setSpan(sp);
+        closure->mCode = ASTExprNodeP(generator);
+        closure->returnType = mkType(*crate.pool, sp);
+
+        return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
+    }
+};
+STATIC_MACRO("iter", CIterExpander);
+
 class CLlvmAsmExpander: public ExpandProcMacro {
 public:
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {

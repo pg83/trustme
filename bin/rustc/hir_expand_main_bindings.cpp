@@ -860,7 +860,7 @@ namespace {
             auto ent = std::move(closureStack.back().as_Coroutine());
             closureStack.pop_back();
 
-            applyCoroutine(node.span(), node.isMove, node.avuCache, ent.usedVariables);
+            applyCoroutine(node.span(), node.isMove, node.isCoroutineClosureBody, node.avuCache, ent.usedVariables);
         }
 
         void visit(HIRExprNodeGeneratorWrapper& node) override {
@@ -880,7 +880,7 @@ namespace {
             auto scope = std::move(closureStack.back().as_Coroutine());
             closureStack.pop_back();
 
-            applyCoroutine(node.span(), node.isMove, node.avuCache, scope.usedVariables);
+            applyCoroutine(node.span(), node.isMove, false, node.avuCache, scope.usedVariables);
         }
 
     private:
@@ -1307,11 +1307,16 @@ namespace {
             }
         }
 
-        void applyCoroutine(const Span& sp, bool isMove, HIRExprNodeGenerator::AvuCache& avuCache, std::map<unsigned, CoroutineScope::Var>& usedVariables) {
-            // If this closure is a move closure, mutate `captured_vars` such that all captures are tagged with ValueUsage::Move
+        void applyCoroutine(const Span& sp, bool isMove, bool isCoroutineClosureBody, HIRExprNodeGenerator::AvuCache& avuCache, std::map<unsigned, CoroutineScope::Var>& usedVariables) {
+            // A move coroutine normally owns all captures. A coroutine-closure instead owns
+            // its arguments while a by-reference call captures through the parent closure.
             if (isMove) {
+                auto* parentClosure = !closureStack.empty() ? closureStack.back().opt_Closure() : nullptr;
                 for (auto& cap : usedVariables) {
-                    if (cap.second.definedStack.empty()) {
+                    if (cap.second.definedStack.empty()
+                        && (!isCoroutineClosureBody || !parentClosure
+                            || parentClosure->node.isMove || parentClosure->node.isUse
+                            || ::std::binary_search(parentClosure->localVars.begin(), parentClosure->localVars.end(), cap.first))) {
                         cap.second.usage = HIRValueUsage::Move;
                     }
                 }

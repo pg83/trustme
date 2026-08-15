@@ -1281,7 +1281,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
         if (tok.fragPath().isTrivial() && tok.fragPath().asTrivial() == "gen") {
             // Generators!
             bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
-            return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), isMove);
+            return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), isMove, false);
         }
         PUTBACK(tok, lex);
     }

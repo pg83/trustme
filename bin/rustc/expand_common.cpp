@@ -989,6 +989,7 @@ struct CExpandExpr: public ASTNodeVisitor {
     }
 
     void visit(ASTExprNodeGeneratorBlock& node) override {
+        ExpandType(this->expandState, this->curMod(), node.returnType);
         this->visitNodelete(node, node.inner);
     }
 

@@ -3028,10 +3028,14 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
     }
 
     virtual void visit(ASTExprNodeGeneratorBlock& v) override {
-        // TODO: Wrap with something that provides an impl of Iterator
-        // - `::core::iter::from_coroutine`
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.mCrate->types.infer(), mCtx.mCrate->types.infer(), mCtx.mCrate->types.infer(), lowerIsolated(v.inner), v.isMove, false));
+        auto origHasYield = mHasYield;
+        mHasYield = false;
+        auto inner = lowerIsolated(v.inner);
+        mHasYield = origHasYield;
+
+        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), mCtx.mCrate->types.infer(), mCtx.mCrate->types.infer(), mv$(inner), v.isMove, false, v.isCoroutineClosureBody));
         mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallPath>(v.span(), HIRSimplePath(mCtx.mCoreCrate, {"iter", "sources", "from_coroutine", "from_coroutine"}), makeVec1(mv$(mRv))));
+        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallMethod>(v.span(), mv$(mRv), RcString::newInterned("fuse"), HIRPathParams(), ::std::vector<HIRExprNodeP>()));
     }
 
     virtual void visit(ASTExprNodeTry& v) override {
@@ -3659,7 +3663,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             if (!args.empty()) {
                 ERROR(v.span(), E0000, "Generator closures don't take arguments.");
             }
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), mCtx.mCrate->types.unit(), mCtx.mCrate->types.infer(), mv$(inner), v.isMove, v.isPinned));
+            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), mCtx.mCrate->types.unit(), mCtx.mCrate->types.infer(), mv$(inner), v.isMove, v.isPinned, false));
         } else {
             if (v.isPinned) {
                 ERROR(v.span(), E0000, "Invalid use of `static` on non-yielding closure");

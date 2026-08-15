@@ -1046,7 +1046,7 @@ TU_ARMA(Alias, ee) {
         {
         }
 
-        HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned)
+        HIRExprNodeGenerator::HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody)
             : HIRExprNode(mv$(sp))
             , returnType(::std::move(rv))
             , resumeTy(resumeTy)
@@ -1054,6 +1054,7 @@ TU_ARMA(Alias, ee) {
             , mCode(::std::move(code))
             , isMove(isMove)
             , isPinned(isPinned)
+            , isCoroutineClosureBody(isCoroutineClosureBody)
         {
         }
 

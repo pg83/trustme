@@ -43,9 +43,9 @@ until this file is exhausted.
 These are semantic areas. A shared diagnostic location is not sufficient proof
 of a shared root cause; split a row whenever minimal reproducers diverge.
 
-1. Macro and attribute expansion: 13 unresolved macro invocations and 13
-   unsupported derive applications. The largest concrete macro families are
-   `iter` (5) and `concat_bytes` (3); the derive failures contain 10
+1. Macro and attribute expansion: 7 unresolved macro invocations and 13
+   unsupported derive applications. The largest remaining concrete macro family
+   is `concat_bytes` (3); the derive failures contain 10
    `CoercePointee` and 2 `UnsizedConstParamTy` cases.
 2. Opaque types (`TAIT`, `RPIT`, `RPITIT`, and async return types): 22
    opaque-bearing result-type relation failures at
@@ -89,14 +89,14 @@ Four uncaught exceptions and five explicit MIR TODOs are included in the 141.
 
 ## Accepted Rust rejected by the front end
 
-The 441 unfinished ordinary compiler rejections and one pathless-`--extern`
+The 435 unfinished ordinary compiler rejections and one pathless-`--extern`
 driver rejection split as follows:
 
 | area | tests | largest stable groups |
 |---|---:|---|
 | parser | 168 | 89 at `parse_parseerror.cpp:63`, 57 at line 56, 19 at line 68, 3 in `parse_common.cpp` |
 | type checking, HIR lowering, and resolution | 209 | result relation 42 (22 opaque-bearing, 20 other) |
-| macro and attribute expansion | 58 | unknown macro 13, missing derive 13 |
+| macro and attribute expansion | 52 | unknown macro 7, missing derive 13 |
 | MIR/CTFE rejection | 6 | 4 in constant evaluation, 2 in MIR lowering |
 | command-line driver | 1 | pathless `--extern` |
 

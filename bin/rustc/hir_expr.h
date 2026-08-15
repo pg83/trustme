@@ -747,6 +747,8 @@ struct HIRExprNodeGenerator: public HIRExprNode {
     HIRExprNodeP mCode;
     bool isMove;
     bool isPinned;
+    // Move parent locals, but capture parent upvars through the parent closure.
+    bool isCoroutineClosureBody;
 
     // AnnotateValueUsage cache/information
     struct AvuCache {
@@ -763,7 +765,7 @@ struct HIRExprNodeGenerator: public HIRExprNode {
     // State data type (needed for initialising)
     HIRTypeRef stateDataType;
 
-    HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned);
+    HIRExprNodeGenerator(Span sp, HIRTypeRef rv, HIRTypeRef resumeTy, HIRTypeRef yieldTy, HIRExprNodeP code, bool isMove, bool isPinned, bool isCoroutineClosureBody);
 
     static constexpr unsigned int kind = 37;
     unsigned int nodeKind() const override;

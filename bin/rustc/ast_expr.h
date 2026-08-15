@@ -95,9 +95,12 @@ struct ASTExprNodeAsyncBlock: public ASTExprNode {
 
 struct ASTExprNodeGeneratorBlock: public ASTExprNode {
     ASTExprNodeP inner;
+    ASTType* returnType;
     bool isMove;
+    // The inner coroutine synthesized for a coroutine-closure (`iter!`).
+    bool isCoroutineClosureBody;
 
-    ASTExprNodeGeneratorBlock(ASTExprNodeP inner, bool isMove);
+    ASTExprNodeGeneratorBlock(ASTExprNodeP inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody);
 
     static constexpr unsigned int kind = 3;
     unsigned int nodeKind() const override;
