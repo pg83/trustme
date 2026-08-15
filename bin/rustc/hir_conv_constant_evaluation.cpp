@@ -4679,6 +4679,12 @@ namespace {
                     }
                     case HIRVisitor::PathContext::TYPE:
                     case HIRVisitor::PathContext::TRAIT: {
+                        if (const auto* e = p.mData.opt_UfcsKnown()) {
+                            const auto& trait = crate.getTraitByPath(sp, e->trait.mPath);
+                            const auto it = trait.types.find(e->item);
+                            ASSERT_BUG(sp, it != trait.types.end(), "Trait " << e->trait.mPath << " has no associated type " << e->item);
+                            return it->second.generics;
+                        }
                         BUG(sp, "type - " << p);
                         break;
                     }
