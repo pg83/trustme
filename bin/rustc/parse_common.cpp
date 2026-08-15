@@ -4133,7 +4133,7 @@ ASTUseItem ParseUse(TokenStream& lex) {
         ParseUseRoot(lex, entries);
     }
 
-    return ASTUseItem{lex.endSpan(spanStart), mv$(entries)};
+    return ASTUseItem{lex.endSpan(spanStart), false, mv$(entries)};
 }
 
 ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName) {

@@ -3430,7 +3430,7 @@ enum class IndexName {
     Macro,
 };
 
-void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis);
+void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis, bool fromPrelude);
 
 ::std::ostream& operator<<(::std::ostream& os, const IndexName& loc) {
     switch (loc) {
@@ -3473,7 +3473,7 @@ namespace {
     }
 } // namespace
 
-void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true) {
+void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false) {
     ASSERT_BUG(sp, ir.mBindings.hasBinding(), "Adding item with no binding - " << ir);
     auto& list = getModIndex(mod, location);
 
@@ -3494,6 +3494,7 @@ void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcStrin
         auto& e = list.at(name);
         if (e.path == ir) {
             // Ignore, re-import of the same thing
+            e.fromPrelude = e.fromPrelude && fromPrelude;
 
             // Update the visibility, if this new visibility adds anything
             if (!e.vis.contains(vis)) {
@@ -3507,18 +3508,18 @@ void _add_item(const Span& sp, ASTModule& mod, IndexName location, const RcStrin
         }
     } else {
         DEBUG("### " << (wasImport ? "Import" : "Add") << " " << location << " item " << mod.path() << " :: " << name << " = " << ir << vis);
-        auto rec = list.insert(::std::make_pair(name, ASTModule::IndexEnt{wasImport, mv$(vis), mv$(ir)}));
+        auto rec = list.insert(::std::make_pair(name, ASTModule::IndexEnt{wasImport, fromPrelude, mv$(vis), mv$(ir)}));
         assert(rec.second);
     }
 }
 
-void _add_item_type(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true) {
-    _add_item(sp, mod, IndexName::Namespace, name, vis, ASTPath(ir), errorOnCollision);
-    _add_item(sp, mod, IndexName::Type, name, vis, ::std::move(ir), errorOnCollision);
+void _add_item_type(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false) {
+    _add_item(sp, mod, IndexName::Namespace, name, vis, ASTPath(ir), errorOnCollision, fromPrelude);
+    _add_item(sp, mod, IndexName::Type, name, vis, ::std::move(ir), errorOnCollision, fromPrelude);
 }
 
-void _add_item_value(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true) {
-    _add_item(sp, mod, IndexName::Value, name, vis, mv$(ir), errorOnCollision);
+void _add_item_value(const Span& sp, ASTModule& mod, const RcString& name, const ASTVisibility& vis, ASTPath ir, bool errorOnCollision = true, bool fromPrelude = false) {
+    _add_item(sp, mod, IndexName::Value, name, vis, mv$(ir), errorOnCollision, fromPrelude);
 }
 
 void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
@@ -3723,7 +3724,8 @@ void ResolveIndexModuleWildcardGlobInHirMod(
     /*const AST::ExternCrate& hcrate,*/ const HIRModule& hmod,
     const ASTPath& path,
     const ASTVisibility& vis,
-    ASTAbsolutePath modAp
+    ASTAbsolutePath modAp,
+    bool fromPrelude
 ) {
     TRACE_FUNCTION_F(dstMod.path() << " <= " << modAp);
     for (const auto& it : hmod.modItems) {
@@ -3742,7 +3744,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                 // Import of the crate root
                 if (spath.components().size() == 0) {
                     pb.binding = ASTPathBindingType::make_Module({nullptr, {nullptr, hmod}});
-                    _add_item(sp, dstMod, IndexName::Namespace, it.first, vis, ASTPath(pb), false);
+                    _add_item(sp, dstMod, IndexName::Namespace, it.first, vis, ASTPath(pb), false, fromPrelude);
                     continue;
                 }
                 for (unsigned int i = 0; i < spath.components().size() - 1; i++) {
@@ -3750,7 +3752,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     // Only support enums on the penultimate component
                     if (i == spath.components().size() - 2 && hit->ent.is_Enum()) {
                         pb.binding = ASTPathBindingType::make_EnumVar({nullptr, 0});
-                        _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false);
+                        _add_item_type(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude);
                         hmod = nullptr;
                         break;
                     }
@@ -3794,7 +3796,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     pb.binding = ASTPathBindingType::make_TypeAlias({nullptr});
                 }
             }
-            _add_item_type( sp, dstMod, it.first, vis, mv$(pb), false );
+            _add_item_type( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude );
         }
     }
     for (const auto& it : hmod.valueItems) {
@@ -3816,7 +3818,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                         auto idx = hit->ent.as_Enum().findVariant(spath.components().back());
                         ASSERT_BUG(sp, idx != SIZE_MAX, spath);
                         pb.binding = ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned>(idx)});
-                        _add_item_value(sp, dstMod, it.first, vis, mv$(pb), false);
+                        _add_item_value(sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude);
                         hmod = nullptr;
                         break;
                     }
@@ -3852,7 +3854,7 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     pb.binding = ASTPathBindingValue::make_Function({nullptr});
                 }
             }
-            _add_item_value( sp, dstMod, it.first, vis, mv$(pb), false );
+            _add_item_value( sp, dstMod, it.first, vis, mv$(pb), false, fromPrelude );
         }
     }
     for (const auto& it : hmod.macroItems) {
@@ -3878,12 +3880,12 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     pb.binding = ASTPathBindingMacro::make_MacroRules({nullptr, &*me});
                 }
             }
-            _add_item(sp, dstMod, IndexName::Macro, it.first, vis, mv$(pb), false );
+            _add_item(sp, dstMod, IndexName::Macro, it.first, vis, mv$(pb), false, fromPrelude );
         }
     }
 }
 
-void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const ASTModule& srcMod, const ASTVisibility& dstVis) {
+void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const ASTModule& srcMod, const ASTVisibility& dstVis, bool fromPrelude) {
     static Span sp;
     TRACE_FUNCTION_F(dstMod.path() << " <= " << srcMod.path());
     static ::std::set<const ASTModule*> stack;
@@ -3893,29 +3895,32 @@ void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const 
     }
 
     for (const auto& vi : srcMod.namespaceItems) {
-        if (vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Namespace, vi.first, dstVis, vi.second.path, false);
+        if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
+            _add_item(sp, dstMod, IndexName::Namespace, vi.first, dstVis, vi.second.path, false, fromPrelude);
         }
     }
     for (const auto& vi : srcMod.typeItems) {
-        if (vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Type, vi.first, dstVis, vi.second.path, false);
+        if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
+            _add_item(sp, dstMod, IndexName::Type, vi.first, dstVis, vi.second.path, false, fromPrelude);
         }
     }
     for (const auto& vi : srcMod.valueItems) {
-        if (vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Value, vi.first, dstVis, vi.second.path, false);
+        if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
+            _add_item(sp, dstMod, IndexName::Value, vi.first, dstVis, vi.second.path, false, fromPrelude);
         }
     }
     for (const auto& vi : srcMod.macroItems) {
-        if (vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
-            _add_item(sp, dstMod, IndexName::Macro, vi.first, dstVis, vi.second.path, false);
+        if (!vi.second.fromPrelude && vi.second.vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
+            _add_item(sp, dstMod, IndexName::Macro, vi.first, dstVis, vi.second.path, false, fromPrelude);
         }
     }
 
     if (srcMod.indexPopulated != 2) {
         for (const auto& i : srcMod.mItems) {
             if (!i->data.is_Use()) {
+                continue;
+            }
+            if (i->data.as_Use().isPrelude) {
                 continue;
             }
             if (!i->vis.isVisible(dstMod.path() /*, src_mod.path()*/)) {
@@ -3925,7 +3930,7 @@ void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const 
                 if (e.name != "") {
                     continue;
                 }
-                ResolveIndexModuleWildcardUseStmt(crate, dstMod, e, dstVis);
+                ResolveIndexModuleWildcardUseStmt(crate, dstMod, e, dstVis, fromPrelude);
             }
         }
     }
@@ -3933,22 +3938,22 @@ void ResolveIndexModuleWildcardSubmod(ASTCrate& crate, ASTModule& dstMod, const 
     stack.erase(&srcMod);
 }
 
-void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis) {
+void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const ASTUseItem::Ent& iData, const ASTVisibility& vis, bool fromPrelude) {
     const auto& sp = iData.sp;
     const auto& b = iData.path.mBindings.type;
 
     if (const auto* e = b.binding.opt_Crate()) {
         DEBUG("Glob crate " << iData.path);
         const auto& hmod = e->crate_->hir->mRootModule;
-        ResolveIndexModuleWildcardGlobInHirMod(sp, crate, dstMod, hmod, iData.path, vis, b.path);
+        ResolveIndexModuleWildcardGlobInHirMod(sp, crate, dstMod, hmod, iData.path, vis, b.path, fromPrelude);
     } else if (const auto* e = b.binding.opt_Module()) {
         DEBUG("Glob mod " << iData.path);
         if (!e->module_) {
             ASSERT_BUG(sp, e->hir.mod, "Glob import where HIR module pointer not set - " << iData.path);
             const auto& hmod = *e->hir.mod;
-            ResolveIndexModuleWildcardGlobInHirMod(sp, crate, dstMod, hmod, iData.path, vis, b.path);
+            ResolveIndexModuleWildcardGlobInHirMod(sp, crate, dstMod, hmod, iData.path, vis, b.path, fromPrelude);
         } else {
-            ResolveIndexModuleWildcardSubmod(crate, dstMod, *e->module_, vis);
+            ResolveIndexModuleWildcardSubmod(crate, dstMod, *e->module_, vis, fromPrelude);
         }
     } else if (const auto* ep = b.binding.opt_Enum()) {
         const auto& e = *ep;
@@ -3961,12 +3966,12 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
                     ASTPathBinding<ASTPathBindingType> pb;
                     pb.path = b.path + ev.mName;
                     pb.binding = ASTPathBindingType::make_EnumVar({e.enum_, idx});
-                    _add_item_type(sp, dstMod, ev.mName, vis, mv$(pb), false);
+                    _add_item_type(sp, dstMod, ev.mName, vis, mv$(pb), false, fromPrelude);
                 } else {
                     ASTPathBinding<ASTPathBindingValue> pb;
                     pb.path = b.path + ev.mName;
                     pb.binding = ASTPathBindingValue::make_EnumVar({e.enum_, idx});
-                    _add_item_value(sp, dstMod, ev.mName, vis, mv$(pb), false);
+                    _add_item_value(sp, dstMod, ev.mName, vis, mv$(pb), false, fromPrelude);
                 }
 
                 idx += 1;
@@ -3980,7 +3985,7 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
                     ASTPathBinding<ASTPathBindingValue> pb;
                     pb.path = b.path + ev.name;
                     pb.binding = ASTPathBindingValue::make_EnumVar({nullptr, idx, e.hir});
-                    _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false);
+                    _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude);
 
                     idx += 1;
                 }
@@ -3991,12 +3996,12 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
                         ASTPathBinding<ASTPathBindingType> pb;
                         pb.path = b.path + ev.name;
                         pb.binding = ASTPathBindingType::make_EnumVar({nullptr, idx, e.hir});
-                        _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false);
+                        _add_item_type(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude);
                     } else {
                         ASTPathBinding<ASTPathBindingValue> pb;
                         pb.path = b.path + ev.name;
                         pb.binding = ASTPathBindingValue::make_EnumVar({nullptr, idx, e.hir});
-                        _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false);
+                        _add_item_value(sp, dstMod, ev.name, vis, mv$(pb), false, fromPrelude);
                     }
 
                     idx += 1;
@@ -4025,7 +4030,7 @@ void ResolveIndexModuleWildcard(ASTCrate& crate, ASTModule& mod) {
             if (e.name != "") {
                 continue;
             }
-            ResolveIndexModuleWildcardUseStmt(crate, mod, e, i->vis);
+            ResolveIndexModuleWildcardUseStmt(crate, mod, e, i->vis, i->data.as_Use().isPrelude);
         }
     }
 
@@ -4829,6 +4834,9 @@ ASTPath::Bindings ResolveUseGetBindingMod(
             continue;
         }
         const auto& impData = imp->data.as_Use();
+        if (impData.isPrelude && mod.path() != sourceModPath) {
+            continue;
+        }
         for (const auto& impE : impData.entries) {
             const Span& sp2 = impE.sp;
             if (impE.name == desItemName) {
@@ -4866,6 +4874,9 @@ ASTPath::Bindings ResolveUseGetBindingMod(
             continue;
         }
         const auto& impData = imp->data.as_Use();
+        if (impData.isPrelude && mod.path() != sourceModPath) {
+            continue;
+        }
         for (const auto& impE : impData.entries) {
             const Span& sp2 = impE.sp;
             if (impE.name != "") {

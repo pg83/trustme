@@ -396,7 +396,7 @@ ASTUseItem ASTUseItem::clone() const {
     for (const auto& e : this->entries) {
         entries.push_back({e.sp, e.path, e.name});
     }
-    return ASTUseItem{this->sp, mv$(entries)};
+    return ASTUseItem{this->sp, this->isPrelude, mv$(entries)};
 }
 
 ASTExternBlock::ASTExternBlock(::std::string abi)

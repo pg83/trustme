@@ -1973,7 +1973,7 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
         if (es.crate.preludePath != ASTPath()) {
             if (mod.insertPrelude && !mod.isAnon()) {
                 DEBUG("> Adding custom prelude " << es.crate.preludePath);
-                mod.addItem(Span(), ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, mod.path()), "", ASTUseItem{Span(), ::makeVec1(ASTUseItem::Ent{Span(), es.crate.preludePath, ""})}, {});
+                mod.addItem(Span(), ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, mod.path()), "", ASTUseItem{Span(), true, ::makeVec1(ASTUseItem::Ent{Span(), es.crate.preludePath, ""})}, {});
             } else {
                 DEBUG("> Not inserting custom prelude (anon or disabled)");
             }

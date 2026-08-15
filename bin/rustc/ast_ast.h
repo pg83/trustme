@@ -645,6 +645,7 @@ private:
 
 struct ASTUseItem {
     Span sp; // Span covering the entire `use foo;`
+    bool isPrelude = false; // Synthetic implicit prelude import
 
     struct Ent {
         Span sp; // Span covering just the path (final component)
@@ -745,6 +746,7 @@ public:
 
     struct IndexEnt {
         bool isImport; // Set if this item has a path that isn't `mod->path() + name`
+        bool fromPrelude; // Prelude names are local defaults, not module exports
         ASTVisibility vis;
         ASTPath path;
     };
