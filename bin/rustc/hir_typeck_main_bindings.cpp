@@ -603,6 +603,7 @@ namespace {
 
                     auto fcnParams = traitFcn.mParams.makeNopParams(crate.types, 1);
                     MonomorphStatePtr ms{crate.types, impl.mType, &impl.traitArgs, &fcnParams};
+                    ms.setConstevalState(mResolve.board(), HIRItemPath(traitPath));
                     HIRTypeRef tmp;
                     auto maybeMonomorph = [&](const HIRTypeData* ty) -> const HIRTypeData* {
                         if (monomorphiseTypeNeeded(ty)) {

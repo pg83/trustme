@@ -339,6 +339,8 @@ public:
 };
 
 struct HIRConstGenericUnevaluated {
+    /// `Self` captured by the expression, separate from impl parameters.
+    HIRTypeRef selfType = nullptr;
     /// Impl-level parameters to the expression
     HIRPathParams paramsImpl;
     HIRPathParams paramsItem;

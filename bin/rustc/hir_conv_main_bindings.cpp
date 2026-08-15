@@ -131,6 +131,7 @@ namespace {
 
         unsigned inExpr;
         bool inImplTraitBinding = false;
+        HIRTypeRef selfType = nullptr;
 
         HIRItemPath* fcnPath = nullptr;
         HIRFunction* fcnPtr = nullptr;
@@ -275,6 +276,7 @@ namespace {
         void visitConstgeneric(HIRConstGeneric& value) override {
             HIRVisitor::visitConstgeneric(value);
             if (auto* unevaluated = value.opt_Unevaluated()) {
+                (*unevaluated)->selfType = selfType;
                 if (ms.mImplGenerics) {
                     (*unevaluated)->paramsImpl = ms.mImplGenerics->makeNopParams(crate.types, 0);
                 }
@@ -482,6 +484,8 @@ namespace {
         void visitTypeImpl(HIRTypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.mType << " - from " << impl.srcModule);
             auto _ = this->ms.setImplGenerics(impl.mParams);
+            const auto oldSelfType = selfType;
+            selfType = impl.mType;
 
             auto modIp = HIRItemPath(impl.srcModule);
             const auto* mod = (impl.srcModule != HIRSimplePath() ? &this->ms.crate.getModByPath(Span(), impl.srcModule) : nullptr);
@@ -494,6 +498,7 @@ namespace {
             if (mod) {
                 ms.popTraits(*mod);
             }
+            selfType = oldSelfType;
         }
 
         void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override {
@@ -507,6 +512,8 @@ namespace {
             auto _0 = this->ms.setCurrentTraitImpl(impl);
             auto _1 = this->ms.setCurrentTrait(traitGpath);
             auto _ = this->ms.setImplGenerics(impl.mParams);
+            const auto oldSelfType = selfType;
+            selfType = impl.mType;
 
             auto modIp = HIRItemPath(impl.srcModule);
             const auto* mod = (impl.srcModule != HIRSimplePath() ? &this->ms.crate.getModByPath(Span(), impl.srcModule) : nullptr);
@@ -521,11 +528,14 @@ namespace {
             if (mod) {
                 ms.popTraits(*mod);
             }
+            selfType = oldSelfType;
         }
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override {
             TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.mType << " { }");
             auto _ = this->ms.setImplGenerics(impl.mParams);
+            const auto oldSelfType = selfType;
+            selfType = impl.mType;
 
             auto modIp = HIRItemPath(impl.srcModule);
             const auto* mod = (impl.srcModule != HIRSimplePath() ? &this->ms.crate.getModByPath(Span(), impl.srcModule) : nullptr);
@@ -538,11 +548,15 @@ namespace {
             if (mod) {
                 ms.popTraits(*mod);
             }
+            selfType = oldSelfType;
         }
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
             auto _ = this->ms.setImplGenerics(item.mParams);
+            const auto oldSelfType = selfType;
+            selfType = crate.types.self();
             HIRVisitor::visitTrait(p, item);
+            selfType = oldSelfType;
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {

@@ -104,6 +104,7 @@ HIRConstGenericUnevaluated::HIRConstGenericUnevaluated(HIRExprPtr ep)
 
 HIRConstGenericUnevaluated HIRConstGenericUnevaluated::clone() const {
     HIRConstGenericUnevaluated rv;
+    rv.selfType = selfType;
     rv.paramsImpl = paramsImpl.clone();
     rv.paramsItem = paramsItem.clone();
     rv.expr = expr;
@@ -112,6 +113,7 @@ HIRConstGenericUnevaluated HIRConstGenericUnevaluated::clone() const {
 
 HIRConstGenericUnevaluated HIRConstGenericUnevaluated::monomorph(const Span& sp, const Monomorphiser& ms, bool allowInfer /*=true*/) const {
     HIRConstGenericUnevaluated rv;
+    rv.selfType = selfType ? ms.monomorphType(sp, selfType, allowInfer) : nullptr;
     rv.paramsImpl = ms.monomorphPathParams(sp, paramsImpl, allowInfer);
     rv.paramsItem = ms.monomorphPathParams(sp, paramsItem, allowInfer);
     rv.expr = this->expr;
@@ -209,7 +211,7 @@ namespace {
 }
 
 bool HIRConstGenericUnevaluated::equivalent(const HIRConstGenericUnevaluated& x) const {
-    return constExprNodesEqual(*this, **this->expr, x, **x.expr);
+    return selfType == x.selfType && constExprNodesEqual(*this, **this->expr, x, **x.expr);
 }
 
 Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) const {
@@ -235,6 +237,9 @@ Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) co
         auto vX = FMT(x);
         return ::ord(vT, vX);
     }
+    if (auto cmp = ::ord(this->selfType, x.selfType)) {
+        return cmp;
+    }
     if (auto cmp = this->paramsImpl.ord(x.paramsImpl)) {
         return cmp;
     }
@@ -246,6 +251,9 @@ Ordering HIRConstGenericUnevaluated::ord(const HIRConstGenericUnevaluated& x) co
 
 void HIRConstGenericUnevaluated::fmt(::std::ostream& os) const {
     os << "{";
+    if (this->selfType) {
+        os << "S=" << this->selfType;
+    }
     os << "0=" << this->paramsImpl;
     os << "1=" << this->paramsItem;
     os << "}";

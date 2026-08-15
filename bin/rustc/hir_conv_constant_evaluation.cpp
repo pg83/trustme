@@ -88,11 +88,24 @@ namespace {
             if (auto* unevaluated = value.opt_Unevaluated()) {
                 // The expression refers through these captured parameter lists.
                 // Its own HIR bindings are not parameters of the current state.
+                if ((*unevaluated)->selfType) {
+                    visitType((*unevaluated)->selfType);
+                }
                 visitPathParams((*unevaluated)->paramsImpl);
                 visitPathParams((*unevaluated)->paramsItem);
             }
         }
     };
+
+    bool typeCanMonomorph(HIRTypeRef type, const MonomorphState& ms) {
+        if (!type) {
+            return true;
+        }
+        auto copy = type;
+        MonomorphAvailability visitor(ms);
+        visitor.visitType(copy);
+        return visitor.available;
+    }
 
     bool pathParamsCanMonomorph(const HIRPathParams& params, const MonomorphState& ms) {
         auto copy = params.clone();
@@ -118,12 +131,21 @@ namespace {
         return true;
     }
 
+    bool typeIsConcrete(HIRTypeRef type) {
+        return !type
+            || (!monomorphiseTypeNeeded(type)
+                && !visitTyWith(type, [](const HIRTypeData* inner) {
+                    return inner->is_Infer();
+                }));
+    }
+
     bool constGenericIsConcrete(const HIRConstGeneric& value) {
         if (value.is_Evaluated()) {
             return true;
         }
         if (const auto* unevaluated = value.opt_Unevaluated()) {
-            return pathParamsAreConcrete((*unevaluated)->paramsImpl)
+            return typeIsConcrete((*unevaluated)->selfType)
+                && pathParamsAreConcrete((*unevaluated)->paramsImpl)
                 && pathParamsAreConcrete((*unevaluated)->paramsItem);
         }
         return false;
@@ -154,6 +176,7 @@ namespace {
         eval.resolve.setBothGenericsRaw(state.mImplGenerics, state.mItemGenerics);
 
         MonomorphState ms(crate.types);
+        ms.selfTy = value.selfType;
         ms.ppImpl = &value.paramsImpl;
         ms.ppMethod = &value.paramsItem;
         return eval.evaluateConstant(HIRItemPath(state.modPath, name.c_str()), expr, type, std::move(ms));
@@ -2023,17 +2046,20 @@ public:
                 throw Defer{};
             }
             TU_ARMA(Unevaluated, ve) {
-                if (!pathParamsCanMonomorph(ve->paramsImpl, ms)
+                if (!typeCanMonomorph(ve->selfType, ms)
+                    || !pathParamsCanMonomorph(ve->paramsImpl, ms)
                     || !pathParamsCanMonomorph(ve->paramsItem, ms)) {
                     throw Defer{};
                 }
                 auto value = ve->monomorph(state.sp, ms, false);
-                if (!pathParamsAreConcrete(value.paramsImpl)
+                if (!typeIsConcrete(value.selfType)
+                    || !pathParamsAreConcrete(value.paramsImpl)
                     || !pathParamsAreConcrete(value.paramsItem)) {
                     throw Defer{};
                 }
                 const auto& expr = *value.expr;
                 MonomorphState valueMs(rootResolve.crate.types);
+                valueMs.selfTy = value.selfType;
                 valueMs.ppImpl = &value.paramsImpl;
                 valueMs.ppMethod = &value.paramsItem;
                 auto type = valueMs.monomorphType(state.sp, expr->resType);
@@ -4374,7 +4400,7 @@ EncodedLiteral HIREvaluator::evaluateConstant(const HIRItemPath& ip, const HIREx
         // Might want to have a fully-populated MonomorphState for expanding inside impl blocks
         // HACK: Generate a roughly-correct one
         const auto& topIp = ip.getTopIp();
-        if (topIp.trait && !topIp.ty) {
+        if (topIp.trait && !topIp.ty && !ms.selfTy) {
             ms.selfTy = resolve.hirCrate().types.self();
         }
 
@@ -5105,6 +5131,7 @@ void ConvertHIRConstantEvaluateConstGeneric(const Span& sp, const WireBoard& wb,
     if (const auto* value = cg.opt_Unevaluated()) {
         const auto& expr = *(*value)->expr;
         MonomorphState ms(crate.types);
+        ms.selfTy = (*value)->selfType;
         ms.ppImpl = &(*value)->paramsImpl;
         ms.ppMethod = &(*value)->paramsItem;
         auto type = ms.monomorphType(sp, expr->resType);
@@ -5144,6 +5171,12 @@ namespace {
         }
         return false;
     }
+
+    bool typeContainsIvars(HIRTypeRef type) {
+        return type && visitTyWith(type, [](const HIRTypeData* inner) {
+            return inner->is_Infer();
+        });
+    }
 }
 
 void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb, const HIRCrate& crate, const HIRGenericParams* paramsDef, HIRPathParams& params) {
@@ -5156,7 +5189,9 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
             try {
                 // TODO: if there's an ivar in the param list, then throw defer
                 // - Caller should ensure that known ivars are expanded.
-                if (paramsContainIvars(ue.paramsImpl) || paramsContainIvars(ue.paramsItem)) {
+                if (typeContainsIvars(ue.selfType)
+                    || paramsContainIvars(ue.paramsImpl)
+                    || paramsContainIvars(ue.paramsItem)) {
                     throw Defer();
                 }
 

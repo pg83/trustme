@@ -512,6 +512,9 @@ void HIRVisitor::visitTypeData(HIRTypeData& data) {
 
 void HIRVisitor::visitConstgeneric(HIRConstGeneric& v) {
     if (auto* unevaluated = v.opt_Unevaluated()) {
+        if ((*unevaluated)->selfType) {
+            this->visitType((*unevaluated)->selfType);
+        }
         this->visitPathParams((*unevaluated)->paramsImpl);
         this->visitPathParams((*unevaluated)->paramsItem);
         this->visitExpr(*(*unevaluated)->expr);

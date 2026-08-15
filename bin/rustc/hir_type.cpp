@@ -492,7 +492,7 @@ namespace {
             TU_ARMA(Generic, ae, be) return exactGenericRefEqual(ae, be);
             TU_ARMA(Evaluated, ae, be) return *ae == *be;
             TU_ARMA(Unevaluated, ae, be) {
-                return ae->expr.get() == be->expr.get() && exactPathParamsEqual(ae->paramsImpl, be->paramsImpl) && exactPathParamsEqual(ae->paramsItem, be->paramsItem);
+                return ae->expr.get() == be->expr.get() && ae->selfType == be->selfType && exactPathParamsEqual(ae->paramsImpl, be->paramsImpl) && exactPathParamsEqual(ae->paramsItem, be->paramsItem);
             }
         }
         throw "";
@@ -880,6 +880,7 @@ namespace {
             }
             TU_ARMA(Unevaluated, e) {
                 h = hashMix(h, reinterpret_cast<uintptr_t>(e->expr.get()));
+                h = hashMix(h, hashTypeRef(e->selfType));
                 h = hashMix(h, hashPathParams(e->paramsImpl));
                 h = hashMix(h, hashPathParams(e->paramsItem));
             }

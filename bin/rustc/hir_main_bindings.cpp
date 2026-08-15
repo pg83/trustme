@@ -1293,9 +1293,11 @@ HIRTrait HirDeserialiser::deserialiseTrait() {
 }
 
 HIRConstGenericUnevaluated HirDeserialiser::deserialiseConstgenericUnevaluated() {
+    auto selfType = in.readBool() ? deserialiseType() : nullptr;
     auto pI = deserialisePathparams();
     auto pM = deserialisePathparams();
     auto rv = HIRConstGenericUnevaluated(deserialiseExprptr());
+    rv.selfType = selfType;
     rv.paramsImpl = std::move(pI);
     rv.paramsItem = std::move(pM);
     return rv;
@@ -3218,6 +3220,10 @@ public:
 
     void serialise(const HIRConstGenericUnevaluated& v) {
         ASSERT_BUG(v.expr->span(), v.expr->mir, "Encountered non-translated value in ConstGeneric: " << v);
+        out.writeBool(v.selfType != nullptr);
+        if (v.selfType) {
+            serialiseType(v.selfType);
+        }
         serialisePathparams(v.paramsImpl);
         serialisePathparams(v.paramsItem);
         serialise(*v.expr);

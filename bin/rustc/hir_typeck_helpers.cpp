@@ -2337,7 +2337,9 @@ TU_ARMA(Alias, ee) {
                     return infer->index == ~0u;
                 }
                 if (const auto* unevaluated = value.opt_Unevaluated()) {
-                    return paramsHaveUnassignedInfer((*unevaluated)->paramsImpl) || paramsHaveUnassignedInfer((*unevaluated)->paramsItem);
+                    return ((*unevaluated)->selfType && typeHasUnassignedInfer((*unevaluated)->selfType))
+                        || paramsHaveUnassignedInfer((*unevaluated)->paramsImpl)
+                        || paramsHaveUnassignedInfer((*unevaluated)->paramsItem);
                 }
                 return false;
             }

@@ -2491,8 +2491,8 @@ namespace {
         }
 
         bool equatePath(const HIRConstGenericUnevaluated& leftValue, const HIRPath& left, const HIRConstGenericUnevaluated& rightValue, const HIRPath& right) const {
-            MonomorphStatePtr leftMonomorph(context.crate.types, nullptr, &leftValue.paramsImpl, &leftValue.paramsItem);
-            MonomorphStatePtr rightMonomorph(context.crate.types, nullptr, &rightValue.paramsImpl, &rightValue.paramsItem);
+            MonomorphStatePtr leftMonomorph(context.crate.types, leftValue.selfType, &leftValue.paramsImpl, &leftValue.paramsItem);
+            MonomorphStatePtr rightMonomorph(context.crate.types, rightValue.selfType, &rightValue.paramsImpl, &rightValue.paramsItem);
             const auto leftPath = leftMonomorph.monomorphPath(sp, left);
             const auto rightPath = rightMonomorph.monomorphPath(sp, right);
             return leftPath == rightPath || leftPath.equalsIgnoringRegions(rightPath);
