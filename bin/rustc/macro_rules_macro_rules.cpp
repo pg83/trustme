@@ -11,6 +11,7 @@
 #include "parse_parseerror.h"
 #include "macro_rules_pattern_checks.h"
 #include "parse_interpolated_fragment.h"
+#include "wire_board.h"
 
 #include <limits.h>
 
@@ -3208,6 +3209,171 @@ struct ContentLoopVariableUse {
     }
 };
 
+void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpansionEnt>& contents) {
+    const auto isInterpolatedFragment = [](eTokenType type) {
+        switch (type) {
+            case TOK_INTERPOLATED_PATH:
+            case TOK_INTERPOLATED_TYPE:
+            case TOK_INTERPOLATED_PATTERN:
+            case TOK_INTERPOLATED_EXPR:
+            case TOK_INTERPOLATED_STMT:
+            case TOK_INTERPOLATED_STMT_ITEM:
+            case TOK_INTERPOLATED_BLOCK:
+            case TOK_INTERPOLATED_META:
+            case TOK_INTERPOLATED_ITEM:
+            case TOK_INTERPOLATED_VIS:
+                return true;
+            default:
+                return false;
+        }
+    };
+
+    struct Emitter {
+        const WireBoard& wb;
+        ::std::vector<MacroExpansionEnt> out;
+
+        void emitFromString(const ::std::string& s) {
+            ::std::istringstream iss{s};
+            Lexer lex{*wb.pool, iss, ASTEdition::Rust2021, {}};
+            for (;;) {
+                auto tok = lex.getToken();
+                if (tok == TOK_EOF) {
+                    break;
+                }
+                out.push_back(::std::move(tok));
+            }
+        }
+
+        void emitPath(const ASTPath& path) {
+            if (const auto* e = path.cls.opt_Local()) {
+                out.push_back(Token(TOK_IDENT, e->name));
+                return;
+            }
+            if (const auto* e = path.cls.opt_Relative()) {
+                bool simple = true;
+                for (const auto& node : e->nodes) {
+                    simple &= node.args().isEmpty();
+                }
+                if (simple) {
+                    for (const auto& node : e->nodes) {
+                        if (&node != &e->nodes.front()) {
+                            out.push_back(Token(TOK_DOUBLE_COLON));
+                        }
+                        out.push_back(Token(TOK_IDENT, Ident(e->hygiene, node.name())));
+                    }
+                    return;
+                }
+            }
+            ::std::stringstream ss;
+            path.printPretty(ss, false);
+            emitFromString(ss.str());
+        }
+
+        void emitTokenTree(TokenTree& tt) {
+            if (tt.isToken()) {
+                emitToken(tt.tok());
+            } else {
+                for (size_t i = 0; i < tt.size(); i++) {
+                    emitTokenTree(tt[i]);
+                }
+            }
+        }
+
+        void emitAst(const ASTExprNode& node) {
+            if (const auto* e = cast<const ASTExprNodeInteger>(&node)) {
+                out.push_back(Token(e->mValue, e->datatype));
+            } else if (const auto* e = cast<const ASTExprNodeBool>(&node)) {
+                out.push_back(Token(e->mValue ? TOK_RWORD_TRUE : TOK_RWORD_FALSE));
+            } else if (const auto* e = cast<const ASTExprNodeNamedValue>(&node)) {
+                emitPath(e->mPath);
+            } else if (const auto* e = cast<const ASTExprNodeMacro>(&node)) {
+                emitPath(e->mPath);
+                out.push_back(Token(TOK_EXCLAM));
+                if (e->ident != "") {
+                    out.push_back(Token(TOK_IDENT, e->ident));
+                }
+                out.push_back(Token(e->isBraced ? TOK_BRACE_OPEN : TOK_PAREN_OPEN));
+                auto tokens = e->tokens.clone();
+                emitTokenTree(tokens);
+                out.push_back(Token(e->isBraced ? TOK_BRACE_CLOSE : TOK_PAREN_CLOSE));
+            } else {
+                throw ::std::runtime_error(FMT("Unknown node type: " << typeid(node).name()));
+            }
+        }
+
+        void emitType(ASTType*& type) {
+            TU_MATCH_HDRA((type->mData), {)
+            default:
+                TODO(Span(), "Convert interpolated macro fragment: " << type);
+            TU_ARMA(Path, p) {
+                    emitPath(*p);
+                }
+            }
+        }
+
+        void emitToken(Token& tok) {
+            switch (tok.type()) {
+                case TOK_INTERPOLATED_PATH:
+                case TOK_INTERPOLATED_PATTERN:
+                case TOK_INTERPOLATED_STMT:
+                case TOK_INTERPOLATED_STMT_ITEM:
+                case TOK_INTERPOLATED_BLOCK:
+                case TOK_INTERPOLATED_ITEM:
+                case TOK_INTERPOLATED_VIS:
+                    TODO(Span(), "Convert interpolated macro fragment: " << tok);
+                case TOK_INTERPOLATED_TYPE:
+                    emitType(tok.fragType());
+                    break;
+                case TOK_INTERPOLATED_META: {
+                    auto& meta = tok.fragMeta();
+                    for (const auto& e : meta.name().elems) {
+                        if (&e != &meta.name().elems.front()) {
+                            out.push_back(Token(TOK_DOUBLE_COLON));
+                        }
+                        out.push_back(Token(TOK_IDENT, e));
+                    }
+                    emitTokenTree(meta.dataMut());
+                    break;
+                }
+                case TOK_INTERPOLATED_EXPR:
+                    try {
+                        emitAst(tok.fragNode());
+                    } catch (const ::std::exception& e) {
+                        TODO(Span(), "Convert interpolated macro fragment: " << tok << " - " << e.what());
+                    }
+                    break;
+                default:
+                    out.push_back(::std::move(tok));
+                    break;
+            }
+        }
+    };
+
+    for (auto it = contents.begin(); it != contents.end();) {
+        if (auto* loop = it->opt_Loop()) {
+            MacroRulesNormaliseFragments(wb, loop->entries);
+            ++it;
+            continue;
+        }
+        auto* tok = it->opt_Token();
+        if (!tok || !isInterpolatedFragment(tok->type())) {
+            ++it;
+            continue;
+        }
+
+        Emitter emitter{wb};
+        emitter.emitToken(*tok);
+        ASSERT_BUG(Span(), !emitter.out.empty(), "Interpolated macro fragment emitted no tokens");
+        const auto replacementCount = emitter.out.size();
+        *it = ::std::move(emitter.out.front());
+        ++it;
+        if (replacementCount > 1) {
+            it = contents.insert(it, ::std::make_move_iterator(emitter.out.begin() + 1), ::std::make_move_iterator(emitter.out.end()));
+            it += replacementCount - 1;
+        }
+    }
+}
+
 /// Parse the contents (replacement) of a macro_rules! arm
 ::std::vector<MacroExpansionEnt> ParseMacroRulesCont(TokenStream& lex, enum eTokenType open, enum eTokenType close, const RuleParseState& state, unsigned loopDepth = 0, ::std::map<unsigned int, ContentLoopVariableUse>* varUsagePtr = nullptr) {
     TRACE_FUNCTION;
@@ -3507,6 +3673,8 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
             throw ParseErrorUnexpected(lex, tok);
     }
     rule.contents = ParseMacroRulesCont(lex, tok.type(), close, state);
+    ASSERT_BUG(lex.pointSpan(), lex.parseState().wb, "Macro parser has no WireBoard");
+    MacroRulesNormaliseFragments(*lex.parseState().wb, rule.contents);
 
     DEBUG("Rule - [" << rule.pattern << "] => " << rule.contents << "");
 
@@ -3590,6 +3758,8 @@ MacroRulesPtr ParseMacroRulesSingleArm(TokenStream& lex) {
     GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
     // TODO: Pass a flag that annotates all idents with the current module?
     auto body = ParseMacroRulesCont(lex, TOK_BRACE_OPEN, TOK_BRACE_CLOSE, state);
+    ASSERT_BUG(lex.pointSpan(), lex.parseState().wb, "Macro parser has no WireBoard");
+    MacroRulesNormaliseFragments(*lex.parseState().wb, body);
 
     auto rv = makeMrPtr(lex);
     rv->rules.push_back(ParseMacroRulesMakeArm(patSpan, ::std::move(armPat), ::std::move(body)));

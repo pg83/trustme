@@ -34,6 +34,7 @@ TAGGED_UNION(
     })
 );
 extern ::std::ostream& operator<<(::std::ostream& os, const MacroExpansionEnt& x);
+extern void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpansionEnt>& contents);
 static const unsigned int NAMEDVALUE_VALMASK = ((1 << 30) - 1);
 static const unsigned int NAMEDVALUE_TY_MAGIC = 1 << 30;
 static const unsigned int NAMEDVALUE_MAGIC_CRATE = NAMEDVALUE_TY_MAGIC | 0;
