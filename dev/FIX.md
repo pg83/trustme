@@ -68,6 +68,12 @@ and a long tail of one- and two-test spellings. Grouping by test directory finds
 grouping by token: that is how the six associated-const equality bounds turned
 out to be one syntax rule.
 
+The two `issue-65041-empty-vis-matcher` tests are a trap: accepting a
+visibility on an enum variant or trait item lets them parse further and then
+crash inside the macro engine, on a `$vis` fragment that expanded to nothing.
+The clean parse error they give today is the better failure until that is
+fixed.
+
 ## P1: internal compiler failures
 
 There are 89 compiler-internal failures in 70 stable signatures.
