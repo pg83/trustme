@@ -6484,21 +6484,21 @@ namespace {
                         case HIRCoreType::I32:
                             of << "(";
                             emitParam(e.args.at(0));
-                            of << " < 0 ? -0x8000000l : 0x7FFFFFFFl)";
+                            of << " < 0 ? (-0x7FFFFFFFl - 1) : 0x7FFFFFFFl)";
                             break;
                         case HIRCoreType::I64:
                             of << "(";
                             emitParam(e.args.at(0));
-                            of << " < 0 ? -0x8000000"
-                                  "00000000ll : 0x7FFFFFFF"
+                            of << " < 0 ? (-0x7FFFFFFF"
+                                  "FFFFFFFFll - 1) : 0x7FFFFFFF"
                                   "FFFFFFFFll)";
                             break;
                         case HIRCoreType::I128:
                             if (options.emulatedI128) {
                                 of << "( (int64_t)(";
                                 emitParam(e.args.at(0));
-                                of << ".hi) < 0 ? make128s_raw(-0x8000000"
-                                      "00000000ll, 0) : make128s_raw(0x7FFFFFFF"
+                                of << ".hi) < 0 ? make128s_raw(-0x7FFFFFFF"
+                                      "FFFFFFFFll - 1, 0) : make128s_raw(0x7FFFFFFF"
                                       "FFFFFFFFll, -1))";
                             } else {
                                 of << "(";
@@ -6576,21 +6576,21 @@ namespace {
                         case HIRCoreType::I32:
                             of << "(";
                             emitParam(e.args.at(0));
-                            of << " < 0 ? -0x8000000l : 0x7FFFFFFFl)";
+                            of << " < 0 ? (-0x7FFFFFFFl - 1) : 0x7FFFFFFFl)";
                             break;
                         case HIRCoreType::I64:
                             of << "(";
                             emitParam(e.args.at(0));
-                            of << " < 0 ? -0x8000000"
-                                  "00000000ll : 0x7FFFFFFF"
+                            of << " < 0 ? (-0x7FFFFFFF"
+                                  "FFFFFFFFll - 1) : 0x7FFFFFFF"
                                   "FFFFFFFFll)";
                             break;
                         case HIRCoreType::I128:
                             if (options.emulatedI128) {
                                 of << "( (int64_t)(";
                                 emitParam(e.args.at(0));
-                                of << ".hi) < 0 ? make128s_raw(-0x8000000"
-                                      "00000000ll, 0) : make128s_raw(0x7FFFFFFF"
+                                of << ".hi) < 0 ? make128s_raw(-0x7FFFFFFF"
+                                      "FFFFFFFFll - 1, 0) : make128s_raw(0x7FFFFFFF"
                                       "FFFFFFFFll, -1))";
                             } else {
                                 of << "(";
