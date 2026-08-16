@@ -2881,7 +2881,36 @@ void ParseTypeBound(TokenStream& lex, ASTGenericParams& ret, ASTType* checkedTyp
             auto thisOuterHrbs = (lex.lookahead(0) == TOK_PLUS ? ASTHigherRankedBounds(outerHrbs) : mv$(outerHrbs));
             ret.addBound(ASTGenericBound::make_IsTrait({lex.endSpan(ps), mv$(thisOuterHrbs), checkedType->clone(), mv$(innerHrls), mv$(traitPath), constness}));
         }
-    } while (lex.getTokenIf(TOK_PLUS));
+    } while ([&]() {
+        // The lexer maximally tokenizes `+=`, which in a bound list is the `+`
+        // separator followed by a default's `=`.
+        if (lex.getTokenIf(TOK_PLUS_EQUAL)) {
+            // The `+` ends the list and the `=` starts a default.
+            lex.putback(Token(TOK_EQUAL));
+            return false;
+        }
+        if (!lex.getTokenIf(TOK_PLUS)) {
+            return false;
+        }
+        // A trailing `+` is allowed: `Box<dyn Debug+>`.
+        switch (lex.lookahead(0)) {
+            case TOK_GT:
+            case TOK_DOUBLE_GT:
+            case TOK_GTE:
+            case TOK_DOUBLE_GT_EQUAL:
+            case TOK_EQUAL:
+            case TOK_COMMA:
+            case TOK_SEMICOLON:
+            case TOK_BRACE_OPEN:
+            case TOK_PAREN_CLOSE:
+            case TOK_SQUARE_CLOSE:
+            case TOK_RWORD_WHERE:
+            case TOK_EOF:
+                return false;
+            default:
+                return true;
+        }
+    }());
 }
 
 /// Parse type parameters within '<' and '>' (definition)
@@ -5459,7 +5488,26 @@ ASTType* ParseTypeTraitObject(TokenStream& lex, ASTHigherRankedBounds hrbs) {
         if (!lex.getTokenIf(TOK_PLUS)) {
             break;
         }
+        // A trailing `+` is allowed: `Box<dyn Debug+>`.
+        switch (lex.lookahead(0)) {
+            case TOK_GT:
+            case TOK_DOUBLE_GT:
+            case TOK_GTE:
+            case TOK_DOUBLE_GT_EQUAL:
+            case TOK_COMMA:
+            case TOK_SEMICOLON:
+            case TOK_EQUAL:
+            case TOK_BRACE_OPEN:
+            case TOK_PAREN_CLOSE:
+            case TOK_SQUARE_CLOSE:
+            case TOK_RWORD_WHERE:
+            case TOK_EOF:
+                goto boundsDone;
+            default:
+                break;
+        }
     }
+boundsDone:
 
     if (lifetimes.empty()) {
         lifetimes.push_back(ASTLifetimeRef());
