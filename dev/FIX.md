@@ -34,14 +34,14 @@ environment. The authoritative rerun data is in
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 579 |
-| fixed, or no longer reproducing, since the gate | 52 |
+| still failing on the current tree | 572 |
+| fixed, or no longer reproducing, since the gate | 59 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 296 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 101 |
-| wrong runtime behaviour, panic, abort, or output | 83 |
+| wrong runtime behaviour, panic, abort, or output | 76 |
 | missing rejection or diagnostic | 57 |
 | generated C++ or link failure | 33 |
 | stable timeout | 9 |
@@ -97,18 +97,20 @@ assertion `[T; Generic(N)]`, reached by the two
 
 ## P1: runtime semantics
 
-Eighty-three programs build but execute incorrectly:
+Seventy-six programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 76 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 69 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
 | compiled, exited 1 | 1 | |
 
-The repeated high-yield areas inside the panic set are formatting and
-type-name behaviour, enum/DST/layout, drop order, and coroutine layout. The
+The repeated high-yield areas inside the panic set are type-name behaviour,
+enum/DST/layout, drop order, and coroutine layout. Of the formatting ones,
+`fmt::num::test_format_debug_hex` and `test_format_int_exp_precision` survive
+the precision fix. The
 128-bit ones left are `intrinsics::carrying_mul_add_fallback` for u128 and
 i128, which is arithmetic rather than layout. Minimise representatives before treating nearby
 assertions as one root cause.
