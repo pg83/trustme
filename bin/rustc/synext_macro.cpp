@@ -297,6 +297,22 @@ namespace {
         ERROR(sp, E0000, "Unknown architecture for asm!");
     }
 
+    /// Registers the target reserves: naming one as an operand is an error,
+    /// not a clobber.
+    const char* x86ReservedRegister(const std::string& name) {
+        static const std::pair<const char*, const char*> reserved[] = {
+            {"bp", "the frame pointer"}, {"ebp", "the frame pointer"}, {"rbp", "the frame pointer"},
+            {"sp", "the stack pointer"}, {"esp", "the stack pointer"}, {"rsp", "the stack pointer"},
+            {"ip", "the instruction pointer"}, {"eip", "the instruction pointer"}, {"rip", "the instruction pointer"},
+        };
+        for (const auto& entry : reserved) {
+            if (name == entry.first) {
+                return entry.second;
+            }
+        }
+        return nullptr;
+    }
+
     std::string canonicalX86Register(const std::string& name, bool is64Bit) {
         static const std::pair<const char*, const char*> aliases[] = {
             {"al", "rax"}, {"ah", "rax"}, {"ax", "rax"}, {"eax", "rax"}, {"rax", "rax"},
@@ -592,6 +608,57 @@ public:
         }
         CHECK_TOK(tok, TOK_EOF);
 
+        // - A positional operand may not follow one that has to be named to be
+        //   referenced.
+        {
+            bool seenNonPositional = false;
+            for (size_t i = 0; i < params.size(); i++) {
+                const AsmRegisterSpec* spec = nullptr;
+                if (const auto* e = params[i].opt_Reg()) {
+                    spec = &e->spec;
+                } else if (const auto* e = params[i].opt_RegSingle()) {
+                    spec = &e->spec;
+                }
+                const bool positional = (names[i] == RcString()) && !(spec && spec->is_Explicit());
+                if (!positional) {
+                    seenNonPositional = true;
+                } else if (seenNonPositional) {
+                    ERROR(sp, E0000, "positional arguments cannot follow named arguments or explicit register arguments");
+                }
+            }
+        }
+
+        // - Explicit registers must be distinct, and must not name a register
+        //   the target reserves.
+        {
+            const auto& arch = TargetGetCurSpec(wb).arch.name;
+            const bool isX86 = arch == "x86" || arch == "x86_64";
+            const bool is64Bit = arch == "x86_64";
+            std::map<std::string, std::string> seen;
+            for (const auto& param : params) {
+                const AsmRegisterSpec* spec = nullptr;
+                if (const auto* e = param.opt_Reg()) {
+                    spec = &e->spec;
+                } else if (const auto* e = param.opt_RegSingle()) {
+                    spec = &e->spec;
+                }
+                if (!spec || !spec->is_Explicit()) {
+                    continue;
+                }
+                const auto& name = spec->as_Explicit();
+                if (isX86) {
+                    if (const char* what = x86ReservedRegister(name)) {
+                        ERROR(sp, E0000, "invalid register `" << name << "`: " << what << " cannot be used as an operand for inline asm");
+                    }
+                }
+                const auto canonical = isX86 ? canonicalX86Register(name, is64Bit) : name;
+                auto inserted = seen.insert(std::make_pair(canonical, name));
+                if (!inserted.second) {
+                    ERROR(sp, E0000, "register `" << name << "` conflicts with register `" << inserted.first->second << "`");
+                }
+            }
+        }
+
         bool hasLabel = false;
         bool hasOutputValue = false;
         for (const auto& param : params) {
@@ -625,6 +692,10 @@ public:
                 }
                 if (spec && spec->is_Explicit()) {
                     explicitOutputs.insert(isX86 ? canonicalX86Register(spec->as_Explicit(), is64Bit) : spec->as_Explicit());
+                } else if (spec) {
+                    // A register-class output could land on a register the ABI
+                    // clobbers, so the operand has to name its register.
+                    ERROR(sp, E0000, "asm with `clobber_abi` must specify explicit registers for outputs");
                 }
             }
 
@@ -647,6 +718,9 @@ public:
         }
         if (options.pure && !(options.nomem || options.readonly)) {
             ERROR(sp, E0000, "asm! marked `pure` without `nomem` or `readonly`");
+        }
+        if (options.noreturn && hasOutputValue) {
+            ERROR(sp, E0000, "asm outputs are not allowed with the `noreturn` option");
         }
         //}
         //}
@@ -740,6 +814,41 @@ public:
             lines.push_back(std::move(line));
         }
 
+        // - Every operand has to be referenced by the template, unless it names
+        //   an explicit register (which the assembly can use directly).
+        {
+            std::set<unsigned> referenced;
+            for (const auto& line : lines) {
+                for (const auto& frag : line.frags) {
+                    referenced.insert(frag.index);
+                }
+            }
+            unsigned unused = 0;
+            for (size_t i = 0; i < params.size(); i++) {
+                if (referenced.count(static_cast<unsigned>(i))) {
+                    continue;
+                }
+                const AsmRegisterSpec* spec = nullptr;
+                if (const auto* e = params[i].opt_Reg()) {
+                    spec = &e->spec;
+                } else if (const auto* e = params[i].opt_RegSingle()) {
+                    spec = &e->spec;
+                }
+                if (spec && spec->is_Explicit()) {
+                    continue;
+                }
+                if (params[i].is_Label()) {
+                    continue;
+                }
+                unused += 1;
+            }
+            if (unused == 1) {
+                ERROR(sp, E0000, "unused asm argument");
+            } else if (unused > 1) {
+                ERROR(sp, E0000, "multiple unused asm arguments");
+            }
+        }
+
         // - Sanity-check register modifiers
         for (const auto& line : lines) {
             for (const auto& frag : line.frags) {
@@ -767,6 +876,21 @@ public:
         auto* nodeAp = cast<ASTExprNodeAsm2>(node.get());
         ASSERT_BUG(sp, nodeAp, "");
         auto& nodeA = *nodeAp;
+
+        // `global_asm!` is not a call: only the syntax options apply to it.
+        {
+            const auto& o = nodeA.options;
+            const char* bad = o.pure ? "pure"
+                : o.nomem ? "nomem"
+                : o.readonly ? "readonly"
+                : o.preservesFlags ? "preserves_flags"
+                : o.noreturn ? "noreturn"
+                : o.nostack ? "nostack"
+                : nullptr;
+            if (bad) {
+                ERROR(sp, E0000, "the `" << bad << "` option cannot be used with `global_asm!`");
+            }
+        }
 
         auto globalAsm = ASTGlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
         globalAsm.operands.reserve(nodeA.params.size());
