@@ -1155,33 +1155,51 @@ public:
         return "Debug";
     }
 
+    // The derived code calls the formatter helpers by path rather than as
+    // methods. A method call is resolved against whatever is in scope, so a
+    // user trait with a `field`, `finish` or `debug_struct` method on a blanket
+    // impl would capture the call.
+    static ASTExprNodeP callPath(ASTPath path, const char* method, ::std::vector<ASTExprNodeP> args) {
+        return NEWNODE(CallPath, path + RcString::newInterned(method), mv$(args));
+    }
+
+    static ASTExprNodeP builderRef() {
+        return NEWNODE(UniOp, ASTExprNodeUniOp::REFMUT, NEWNODE(NamedValue, ASTPath(RcString::newInterned("s"))));
+    }
+
+    static ASTPattern builderPattern(const Span& sp) {
+        return ASTPattern(ASTPattern::TagBind(), sp, RcString::newInterned("s"), ASTPatternBinding::Type::MOVE, /*isMut=*/true);
+    }
+
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         ::std::string name = type->path().nodes().back().name().c_str();
+        const ASTPath pathFormatter = getPath(opts.coreName, "fmt", "Formatter");
+        const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
+        const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
 
         // Generate code for Debug
         ASTExprNodeP node;
         TU_MATCH_HDRA((str.data), {)
         TU_ARMA(Unit, e) {
-                node = NEWNODE(NamedValue, ASTPath(rcstringF));
-                node = NEWNODE(CallMethod, mv$(node), ASTPathNode(rcstringWriteStr, {}), vec$(NEWNODE(String, name)));
+                node = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, name)));
             }
             TU_ARMA(Struct, e) {
-                node = NEWNODE(NamedValue, ASTPath(rcstringF));
                 std::vector<ASTExprNodeBlock::Line> nodes;
-                nodes.push_back({true, NEWNODE(LetBinding, ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mkType(*type->pool, sp), NEWNODE(CallMethod, mv$(node), ASTPathNode(RcString::newInterned("debug_struct"), {}), vec$(NEWNODE(String, name))))});
+                nodes.push_back({true, NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_struct", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, name))))});
                 for (const auto& fld : e.ents) {
-                    nodes.push_back({true, NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringS)), ASTPathNode(rcstringField, {}), vec$(NEWNODE(String, fld.name.c_str()), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)), fld.name)))))});
+                    nodes.push_back({true, callPath(pathDebugStruct, "field", vec$(builderRef(), NEWNODE(String, fld.name.c_str()), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)), fld.name)))))});
                 }
-                nodes.push_back({false, NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringS)), ASTPathNode(rcstringFinish, {}), {})});
+                nodes.push_back({false, callPath(pathDebugStruct, "finish", vec$(builderRef()))});
                 node = NEWNODE(Block, mv$(nodes));
             }
             TU_ARMA(Tuple, e) {
-                node = NEWNODE(NamedValue, ASTPath(rcstringF));
-                node = NEWNODE(CallMethod, mv$(node), ASTPathNode(RcString::newInterned("debug_tuple"), {}), vec$(NEWNODE(String, name)));
+                std::vector<ASTExprNodeBlock::Line> nodes;
+                nodes.push_back({true, NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_tuple", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, name))))});
                 for (unsigned int idx = 0; idx < e.ents.size(); idx++) {
-                    node = NEWNODE(CallMethod, mv$(node), ASTPathNode(rcstringField, {}), vec$(NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)), RcString::newInterned(FMT(idx)))))));
+                    nodes.push_back({true, callPath(pathDebugTuple, "field", vec$(builderRef(), NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(UniOp, ASTExprNodeUniOp::REF, NEWNODE(Field, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)), RcString::newInterned(FMT(idx)))))))});
                 }
-                node = NEWNODE(CallMethod, mv$(node), ASTPathNode(rcstringFinish, {}), {});
+                nodes.push_back({false, callPath(pathDebugTuple, "finish", vec$(builderRef()))});
+                node = NEWNODE(Block, mv$(nodes));
             }
         }
 
@@ -1191,6 +1209,9 @@ public:
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         ASTPath basePath = *type->data.as_Path();
         basePath.nodes().back() = basePath.nodes().back().name();
+        const ASTPath pathFormatter = getPath(opts.coreName, "fmt", "Formatter");
+        const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
+        const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
 
         ::std::vector<ASTExprNodeMatchArm> arms;
         for (const auto& v : enm.variants()) {
@@ -1201,32 +1222,30 @@ public:
 
             TU_MATCH_HDRA( (v.data), {)
             TU_ARMA(Unit, e) {
-                    code = NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringF)), ASTPathNode(rcstringWriteStr, {}), vec$(NEWNODE(String, v.name.c_str())));
+                    code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())));
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
                 }
                 TU_ARMA(Tuple, e) {
                     ::std::vector<ASTPattern> patsA;
                     auto block = newBlock(sp);
-                    block->pushStmt(NEWNODE(LetBinding, ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mkType(*type->pool, sp), NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringF)), ASTPathNode(RcString::newInterned("debug_tuple"), {}), vec$(NEWNODE(String, v.name.c_str())))));
+                    block->pushStmt(NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_tuple", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())))));
 
-                    auto sEnt = NEWNODE(NamedValue, ASTPath(rcstringS));
                     makeRefpatA(sp, *block, patsA, e.items, [&](size_t idx, auto a) {
-                        return NEWNODE(CallMethod, sEnt->clone(), ASTPathNode(rcstringField, {}), vec$(mv$(a)));
+                        return callPath(pathDebugTuple, "field", vec$(builderRef(), mv$(a)));
                     });
-                    block->pushTailExpr(NEWNODE(CallMethod, mv$(sEnt), ASTPathNode(rcstringFinish, {}), {}));
+                    block->pushTailExpr(callPath(pathDebugTuple, "finish", vec$(builderRef())));
                     code = mkExprnodep(block.release());
                     patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, mv$(patsA));
                 }
                 TU_ARMA(Struct, e) {
                     ::std::vector<ASTStructPatternEntry> patsA;
                     auto block = newBlock(sp);
-                    block->pushStmt(NEWNODE(LetBinding, ASTPattern(ASTPattern::TagBind(), sp, rcstringS), mkType(*type->pool, sp), NEWNODE(CallMethod, NEWNODE(NamedValue, ASTPath(rcstringF)), ASTPathNode(RcString::newInterned("debug_struct"), {}), vec$(NEWNODE(String, v.name.c_str())))));
+                    block->pushStmt(NEWNODE(LetBinding, builderPattern(sp), mkType(*type->pool, sp), callPath(pathFormatter, "debug_struct", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())))));
 
-                    auto sEnt = NEWNODE(NamedValue, ASTPath(rcstringS));
                     makeRefpatA(sp, *block, patsA, e.fields, [&](size_t idx, auto a) {
-                        return NEWNODE(CallMethod, sEnt->clone(), ASTPathNode(rcstringField, {}), vec$(NEWNODE(String, e.fields[idx].name.c_str()), mv$(a)));
+                        return callPath(pathDebugStruct, "field", vec$(builderRef(), NEWNODE(String, e.fields[idx].name.c_str()), mv$(a)));
                     });
-                    block->pushTailExpr(NEWNODE(CallMethod, mv$(sEnt), ASTPathNode(rcstringFinish, {}), {}));
+                    block->pushTailExpr(callPath(pathDebugStruct, "finish", vec$(builderRef())));
 
                     code = mkExprnodep(block.release());
                     patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, mv$(patsA), true);
