@@ -2944,6 +2944,11 @@ void ParseTypeBound(TokenStream& lex, ASTGenericParams& ret, ASTType* checkedTyp
             auto hrbs = ParseHRBOpt(lex);
             (void)hrbs; // The only valid ?Trait is Sized, which doesn't have any generics
             ret.addBound(ASTGenericBound::make_MaybeTrait({checkedType->clone(), ParsePath(lex, PATH_GENERIC_TYPE)}));
+        } else if (lex.getTokenIf(TOK_EXCLAM)) {
+            // `T: !Trait` states that the trait is *not* implemented. Nothing
+            // downstream acts on that, and as a requirement it is vacuous, so
+            // the bound is parsed and dropped.
+            ParsePath(lex, PATH_GENERIC_TYPE);
         } else {
             auto constness = ParseBoundConstness(lex);
             ASTHigherRankedBounds innerHrls;
@@ -3565,6 +3570,13 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
                 GET_TOK(tok, lex);
             }
 
+            // A where clause is allowed on either side of the default, as it is
+            // on an impl's associated type.
+            if (tok.type() == TOK_RWORD_WHERE) {
+                ParseWhereClause(lex, typeParams);
+                GET_TOK(tok, lex);
+            }
+
             ASTType* defaultType = mkType(lex.typePool(), lex.pointSpan());
             if (tok.type() == TOK_EQUAL) {
                 defaultType = ParseType(lex);
@@ -3633,6 +3645,12 @@ ASTTrait ParseTraitDef(TokenStream& lex, const ASTAttributeList& metaItems, ASTG
                 break;
             } else {
                 PUTBACK(tok, lex);
+                if (lex.getTokenIf(TOK_EXCLAM)) {
+                    // `trait A: !B {}` states that `B` is not implemented, which
+                    // is not a requirement on the implementor.
+                    ParsePath(lex, PATH_GENERIC_TYPE);
+                    continue;
+                }
                 auto constness = ParseBoundConstness(lex);
                 auto hrbs = ParseHRBOpt(lex);
                 auto postHrbConstness = ParseBoundConstness(lex);
