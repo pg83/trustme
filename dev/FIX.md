@@ -35,14 +35,14 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 467 |
-| fixed, or no longer reproducing, since the gate | 164 |
+| still failing on the current tree | 466 |
+| fixed, or no longer reproducing, since the gate | 165 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 211 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 91 |
-| wrong runtime behaviour, panic, abort, or output | 69 |
+| wrong runtime behaviour, panic, abort, or output | 68 |
 | missing rejection or diagnostic | 58 |
 | generated C++ or link failure | 28 |
 | stable timeout | 10 |
@@ -109,11 +109,11 @@ declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 
-Sixty-nine programs build but execute incorrectly:
+Sixty-eight programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 63 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 62 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
@@ -198,6 +198,10 @@ For every compiler fix:
 5. Remove completed rows from this file instead of commenting them out.
 6. Decrement a baseline node only once; a latent failure exposed after an
    earlier root disappears is not an additional old-gate node.
+
+A generic type that derives `Copy` and `Clone` still clones field by field:
+`*self` needs `Self: Copy`, which the bounds a derived `Clone` adds do not
+give, and emitting it breaks the standard library.
 
 `resvg` is outside this file: its node is wrapped in the 60-second
 `TEST_TIMEOUT` (`build.py`), which no from-source project build can meet, so it
