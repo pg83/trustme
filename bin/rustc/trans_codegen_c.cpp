@@ -4317,7 +4317,15 @@ namespace {
                     for (size_t j = 0; j < nArms; j++) {
                         // Handle signed values
                         if (is_signed) {
-                            of << indent << "case " << S128(e.values[j]).truncateI64() << "ll: ";
+                            const auto value = S128(e.values[j]).truncateI64();
+                            // `-9223372036854775808ll` is a negated positive literal
+                            // that does not fit in `long long`; write it as a
+                            // subtraction so the constant stays in range.
+                            if (value == INT64_MIN) {
+                                of << indent << "case (-9223372036854775807ll - 1): ";
+                            } else {
+                                of << indent << "case " << value << "ll: ";
+                            }
                         } else {
                             of << indent << "case " << e.values[j].truncateU64() << "ull: ";
                         }
