@@ -1454,6 +1454,11 @@ namespace {
     /// Returns a list of fragments, and the remaining free text after the last format sequence
     ::std::tuple<::std::vector<FmtFrag>, ::std::string> parseFormatString(const Span& sp, const ::std::string& formatString, ::std::map<RcString, unsigned int>& named, unsigned int nFree, std::vector<TokenTree>& namedArgs, const Ident::Hygiene& hygiene) {
         unsigned int nextFree = 0;
+        // A named argument can also be reached by position: `{}` counts through the
+        // arguments in source order, and named ones come last. Only the arguments
+        // actually written at the call site count -- the implicit captures that
+        // `getNamed` appends below are not addressable that way.
+        const unsigned int nPositional = nFree + static_cast<unsigned>(namedArgs.size());
 
         ::std::vector<FmtFrag> frags;
         ::std::string curLiteral;
@@ -1496,6 +1501,11 @@ namespace {
                     curLiteral += '{';
                     continue;
                 }
+                // `{ }` names the next argument just like `{}` does: the space is
+                // padding in the format string, not part of the argument name.
+                while (*s == ' ') {
+                    s++;
+                }
 
                 // Debugging: A view of the formatting fragment
                 const char* s2 = s;
@@ -1518,7 +1528,7 @@ namespace {
                             argIdx += *s - '0';
                             s++;
                         } while (isdigit(*s));
-                        if (argIdx >= nFree) {
+                        if (argIdx >= nPositional) {
                             ERROR(sp, E0000, "Positional argument " << argIdx << " out of range in \"" << formatString << "\"");
                         }
                         index = argIdx;
@@ -1600,7 +1610,7 @@ namespace {
                             s++;
                         } else {
                         }
-                    } else if (::std::isalpha(*s)) {
+                    } else if (::std::isalpha(*s) || *s == '_') {
                         // Parse an ident and if the next character is $, convert to named
                         // - Otherwise keep the ident around for the formatter
 
@@ -1625,8 +1635,8 @@ namespace {
                         // '*' - Use next argument
                         if (*s == '*') {
                             args.precIsArg = true;
-                            if (nextFree == nFree) {
-                                ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nFree + 1);
+                            if (nextFree == nPositional) {
+                                ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nPositional + 1);
                             }
                             args.prec = nextFree;
                             nextFree++;
@@ -1644,7 +1654,7 @@ namespace {
                                 s++;
                             } else {
                             }
-                        } else if (::std::isalpha(*s)) {
+                        } else if (::std::isalpha(*s) || *s == '_') {
                             // Parse an ident and if the next character is $, convert to named
                             // - Otherwise keep the ident around for the formatter
 
@@ -1733,8 +1743,8 @@ namespace {
 
                 // Set index if unspecified
                 if (index == ~0u) {
-                    if (nextFree == nFree) {
-                        ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nFree + 1);
+                    if (nextFree == nPositional) {
+                        ERROR(sp, E0000, "Not enough arguments passed, expected at least " << nPositional + 1);
                     }
                     index = nextFree;
                     nextFree++;
