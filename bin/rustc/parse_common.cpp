@@ -3084,7 +3084,9 @@ void ParseWhereClause(TokenStream& lex, ASTGenericParams& params) {
     Token tok;
 
     do {
-        if (lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON) {
+        // An empty clause: `type Assoc where = ();` and `where {` both end here
+        // with no predicate written.
+        if (lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_SEMICOLON || lex.lookahead(0) == TOK_EQUAL) {
             break;
         }
 
