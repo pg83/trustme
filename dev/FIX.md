@@ -4,7 +4,7 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-Snapshot: 2026-08-16, commit `43a8276c9`. The numbers below come from rerunning
+Snapshot: 2026-08-17, commit `d6cadc979`. The numbers below come from rerunning
 every node that failed the last full gate, not from a fresh gate. The gate
 itself ran at commit `79582dd3f` in the clang Nix environment on all 78
 available cores:
@@ -27,36 +27,36 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 
 All 631 failed nodes were then rerun independently inside the same clang Nix
 environment. The authoritative rerun data is in
-`/tmp/trustme-reclass-20260816d`; classified records are in
-`/tmp/trustme-classification-20260816d`. Both were regenerated after the
+`/tmp/trustme-reclass-20260817`; classified records are in
+`/tmp/trustme-classification-20260817`. Both were regenerated after the
 fixes recorded below, so these counts are measured, not decremented by hand.
 
 | result | tests |
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 448 |
-| fixed, or no longer reproducing, since the gate | 183 |
+| still failing on the current tree | 441 |
+| fixed, or no longer reproducing, since the gate | 190 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 199 |
+| accepted Rust rejected by the compiler or driver | 197 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
-| wrong runtime behaviour, panic, abort, or output | 64 |
+| wrong runtime behaviour, panic, abort, or output | 62 |
 | missing rejection or diagnostic | 58 |
-| generated C++ or link failure | 28 |
-| stable timeout | 10 |
+| generated C++ or link failure | 26 |
+| stable timeout | 9 |
 
 ## P0: accepted Rust rejected by the front end
 
-All 199 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 197 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | parser | 74 | 71 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
-| type checking, HIR lowering, and resolution | 109 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6694`, `:6696`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
-| macro and attribute expansion | 7 | macro parsing/formatting 3; attributes 4 |
+| type checking, HIR lowering, and resolution | 107 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
+| macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 3 | missing external crate path 1; pathless `--extern` 1; enum repr 1 |
 
@@ -81,39 +81,38 @@ fixed.
 
 ## P1: internal compiler failures
 
-There are 89 compiler-internal failures in 71 stable signatures.
+There are 89 compiler-internal failures in 72 stable signatures.
 
 | compiler area | tests |
 |---|---:|
 | type checker | 20 |
 | HIR lowering and conversion | 12 |
-| MIR lowering, CTFE MIR, and optimisation | 10 |
-| parser and macro expansion | 10 |
+| parser and macro expansion | 11 |
+| MIR lowering, CTFE MIR, and optimisation | 11 |
 | translation and code generation | 9 |
-| unattributed (assert or signal with no backtrace) | 7 |
 | name resolution | 4 |
-| routed by a bare `ERROR`/`TODO` line with no file attribution | 17 |
+| routed by a bare `ERROR`/`TODO`/signal line with no file attribution | 22 |
 
 The multi-test signatures are:
 
 | signature | tests |
 |---|---:|
 | `ASSERT` with no backtrace | 5 |
-| `BUG hir_conv_constant_evaluation.cpp:4621` | 3 |
+| `BUG hir_conv_constant_evaluation.cpp:4627` | 3 |
 | twelve other two-test signatures | 24 |
-| fifty-seven one-test signatures | 57 |
+| fifty-nine one-test signatures | 59 |
 
-`BUG hir_conv_constant_evaluation.cpp:4621` is the polymorphic-constant
+`BUG hir_conv_constant_evaluation.cpp:4627` is the polymorphic-constant
 assertion `[T; Generic(N)]`: the three `generic_const_parameter_types` tests
 declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 
-Sixty-four programs build but execute incorrectly:
+Sixty-two programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 58 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 56 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
@@ -154,7 +153,7 @@ The three `diagnostics` survivors need what `unused_must_use` did not bring:
 
 ## P2: generated code and linking
 
-Twenty-two tests emit C++ rejected by clang:
+Twenty tests emit C++ rejected by clang:
 
 | generated-code family | tests |
 |---|---:|
@@ -170,7 +169,7 @@ to intentional native test symbols, and one exercises native-link directives.
 
 ## P3: performance and flakes
 
-Ten nodes still time out in isolated reruns:
+Nine nodes still time out in isolated reruns:
 
 - Exercism `palindrome-products`;
 - `enum-discriminant/discriminant_value.rs`;
@@ -182,7 +181,7 @@ Ten nodes still time out in isolated reruns:
 - `deriving/issue-58319.rs`;
 - RustSmith seed 7.
 
-One hundred and twenty-nine of the gate's failures pass when rerun on the
+One hundred and ninety of the gate's failures pass when rerun on the
 current tree. Most are the fixes recorded above; the rest were parallel-only,
 RustSmith seed 36 among them.
 
