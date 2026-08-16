@@ -539,6 +539,8 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
             }
             TU_ARMA(AssociatedTyEqual, ty) {
             }
+            TU_ARMA(AssociatedValueEqual, ty) {
+            }
             TU_ARMA(AssociatedTyBound, ty) {
             }
         }
@@ -563,6 +565,14 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
                 if (!allowAssoc) {
                     BUG(sp, "Encountered path parameters with associated type bounds where they are not allowed");
                 }
+            }
+            TU_ARMA(AssociatedValueEqual, ty) {
+                if (!allowAssoc) {
+                    BUG(sp, "Encountered path parameters with associated type bounds where they are not allowed");
+                }
+                // TODO: `Trait<K = 0>` constrains an associated const. The
+                // equality is parsed and dropped: nothing checks it yet, so a
+                // program that violates it is accepted.
             }
             TU_ARMA(AssociatedTyBound, ty) {
                 if (!allowAssoc) {

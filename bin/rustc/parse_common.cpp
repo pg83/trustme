@@ -1947,7 +1947,25 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
                     auto n = std::move(p.cls.as_Relative().nodes[0]);
                     rv.entries.pop_back();
                     if (lex.getTokenIf(TOK_EQUAL)) {
-                        rv.entries.push_back(::std::make_pair(mv$(n), ParseType(lex, false)));
+                        // `Trait<K = 0>` binds an associated *const*: the value
+                        // is an expression, not a type.
+                        switch (lex.lookahead(0)) {
+                            case TOK_RWORD_TRUE:
+                            case TOK_RWORD_FALSE:
+                            case TOK_DASH:
+                            case TOK_INTEGER:
+                            case TOK_FLOAT:
+                            case TOK_STRING:
+                            case TOK_CSTRING:
+                            case TOK_BYTESTRING:
+                            case TOK_INTERPOLATED_EXPR:
+                            case TOK_BRACE_OPEN:
+                                rv.entries.push_back(::std::make_pair(mv$(n), ParseExpr13(lex)));
+                                break;
+                            default:
+                                rv.entries.push_back(::std::make_pair(mv$(n), ParseType(lex, false)));
+                                break;
+                        }
                     } else if (lex.getTokenIf(TOK_COLON)) {
                         std::vector<TypeTraitPath> traits;
                         // TODO: Trait list instead of duplicating the name

@@ -125,6 +125,9 @@ ASTPathParamEnt ASTPathParamEnt::clone() const {
         TU_ARMA(AssociatedTyEqual, v) {
             return ::std::make_pair(v.first, v.second->clone());
         }
+        TU_ARMA(AssociatedValueEqual, v) {
+            return ::std::make_pair(v.first, v.second->clone());
+        }
         TU_ARMA(AssociatedTyBound, v) {
             return ::std::make_pair(v.first, v.second);
         }
@@ -152,6 +155,10 @@ Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
         }
         TU_ARMA(AssociatedTyEqual, v1, v2) {
             return ::ord(v1, v2);
+        }
+        TU_ARMA(AssociatedValueEqual, v1, v2) {
+            ORD(v1.first, v2.first);
+            return OrdEqual;
         }
         TU_ARMA(AssociatedTyBound, v1, v2) {
             ORD(v1.first, v2.first);
@@ -181,6 +188,9 @@ void ASTPathParamEnt::fmt(::std::ostream& os) const {
         }
         TU_ARMA(AssociatedTyEqual, v) {
             os << v.first << "=" << v.second;
+        }
+        TU_ARMA(AssociatedValueEqual, v) {
+            os << v.first << "=" << *v.second;
         }
         TU_ARMA(AssociatedTyBound, v) {
             os << v.first << ": ";
