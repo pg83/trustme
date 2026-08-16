@@ -3845,7 +3845,7 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
     return ASTAttribute(lex.endSpan(ps), name, mv$(attrData));
 }
 
-ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = false) {
+ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = false, bool isDefault = false) {
     TRACE_FUNCTION;
     Token tok;
     auto ps = lex.startSpan();
@@ -3923,6 +3923,14 @@ ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = fal
         ParseImplItem(lex, impl);
     }
     GET_CHECK_TOK(tok, lex, TOK_BRACE_CLOSE);
+
+    // `default impl` marks every item in the block, the same as writing
+    // `default` on each of them.
+    if (isDefault) {
+        for (auto& item : impl.items()) {
+            item.isSpecialisable = true;
+        }
+    }
 
     return ASTItem::make_Impl(mv$(impl));
 }
@@ -4884,6 +4892,14 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 auto tr = ParseTraitDef(lex, metaItems, ParseGenericParamsOpt(lex));
                 tr.setIsMarker();
                 itemData = ASTItem(::std::move(tr));
+            }
+            // `default impl`, and `default unsafe impl`: specialisation applied
+            // to every item in the block at once.
+            else if (tok.ident().name == "default" && (lex.lookahead(0) == TOK_RWORD_IMPL || (lex.lookahead(0) == TOK_RWORD_UNSAFE && lex.lookahead(1) == TOK_RWORD_IMPL))) {
+                const bool implIsUnsafe = lex.getTokenIf(TOK_RWORD_UNSAFE);
+                GET_CHECK_TOK(tok, lex, TOK_RWORD_IMPL);
+                auto impl = ParseImpl(lex, metaItems, implIsUnsafe, /*isDefault=*/true);
+                return ASTNamed<ASTItem>{Span(), std::move(metaItems), ASTVisibility::makeGlobal(), "", std::move(impl)};
             } else if (tok.ident().name == "reuse") {
                 itemData = ASTItem(ParseDelegationFunction(lex, itemName));
             } else {
