@@ -2482,10 +2482,15 @@ Token MacroExpander::realGetToken() {
                             } else {
                                 tok = canSteal ? Token(Token::TagTakeIP(), mv$(*frag)) : Token(*frag);
                             }
-                            if (tok != TOK_IDENT) {
+                            // A string literal contributes its contents, the
+                            // same as a literal spelled in the `concat`.
+                            if (tok == TOK_STRING) {
+                                newIdent += tok.str();
+                            } else if (tok == TOK_IDENT) {
+                                newIdent += tok.ident().name.c_str();
+                            } else {
                                 ERROR(this->pointSpan(), E0000, "concat with non-ident: " << tok);
                             }
-                            newIdent += tok.ident().name.c_str();
                         }
                         TU_ARMA(Ident, v) {
                             newIdent += v.name.c_str();
@@ -3571,6 +3576,11 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                                     ents.push_back(MacroExpansionConcatEnt(ns->idx));
                                 }
                             }
+                        } else if (lex.lookahead(0) == TOK_STRING) {
+                            // `${concat(a, "b")}` — a string literal names its
+                            // own contents.
+                            GET_CHECK_TOK(tok, lex, TOK_STRING);
+                            ents.push_back(MacroExpansionConcatEnt(Ident(RcString::newInterned(tok.str()))));
                         } else {
                             GET_CHECK_TOK(tok, lex, TOK_IDENT);
                             ents.push_back(MacroExpansionConcatEnt(tok.ident()));
