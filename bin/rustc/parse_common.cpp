@@ -267,6 +267,31 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
 /// Handles:
 /// - Block-level constructs (with lifetime annotations)
 /// - use/extern/const/let
+/// An ABI may arrive as a `$abi:literal` fragment rather than a bare string.
+/// Unwrap it so the callers see the string they expect.
+static void normaliseAbiFragment(TokenStream& lex) {
+    if (lex.lookahead(0) != TOK_INTERPOLATED_EXPR) {
+        return;
+    }
+    auto tok = lex.getToken();
+    auto node = tok.takeFragNode();
+    if (const auto* s = cast<const ASTExprNodeString>(&*node)) {
+        lex.putback(Token(TOK_STRING, ::std::string(s->value), Ident::Hygiene()));
+        return;
+    }
+    throw ParseErrorUnexpected(lex, tok, TOK_STRING);
+}
+
+/// Returns false (consuming nothing) when no ABI is present.
+static bool getAbiStringOpt(TokenStream& lex, ::std::string& out) {
+    normaliseAbiFragment(lex);
+    if (lex.lookahead(0) == TOK_STRING) {
+        out = lex.getToken().str();
+        return true;
+    }
+    return false;
+}
+
 ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
     TRACE_FUNCTION;
     Token tok;
@@ -4533,6 +4558,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             break;
 
         case TOK_RWORD_EXTERN:
+            normaliseAbiFragment(lex);
             switch (GET_TOK(tok, lex)) {
                 // `extern "<ABI>" fn ...`
                 // `extern "<ABI>" { ...`
@@ -4649,7 +4675,9 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 case TOK_RWORD_UNSAFE: {
                     auto abi = ::std::string(ABI_RUST);
                     if (lex.getTokenIf(TOK_RWORD_EXTERN)) {
-                        abi = lex.lookahead(0) == TOK_STRING ? lex.getToken().str() : "C";
+                        if (!getAbiStringOpt(lex, abi)) {
+                            abi = "C";
+                        }
                     }
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                     auto definitionSpan = lex.tokenStartSpan(tok);
@@ -4665,7 +4693,9 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     }
                     auto abi = ::std::string(ABI_RUST);
                     if (lex.getTokenIf(TOK_RWORD_EXTERN)) {
-                        abi = lex.lookahead(0) == TOK_STRING ? lex.getToken().str() : "C";
+                        if (!getAbiStringOpt(lex, abi)) {
+                            abi = "C";
+                        }
                     }
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                     auto definitionSpan = lex.tokenStartSpan(tok);
@@ -4675,7 +4705,8 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     break;
                 }
                 case TOK_RWORD_EXTERN: {
-                    auto abi = lex.lookahead(0) == TOK_STRING ? lex.getToken().str() : "C";
+                    ::std::string abi = "C";
+                    getAbiStringOpt(lex, abi);
                     GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
                     auto definitionSpan = lex.tokenStartSpan(tok);
                     GET_CHECK_TOK(tok, lex, TOK_IDENT);
@@ -4730,11 +4761,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 // `unsafe extern fn`
                 case TOK_RWORD_EXTERN: {
                     ::std::string abi = "C";
-                    if (GET_TOK(tok, lex) == TOK_STRING) {
-                        abi = mv$(tok.str());
-                    } else {
-                        PUTBACK(tok, lex);
-                    }
+                    getAbiStringOpt(lex, abi);
                     if (lex.getTokenIf(TOK_BRACE_OPEN)) {
                         itemName = "";
                         itemData = ASTItem(ParseExternBlock(lex, "C", metaItems));
@@ -5375,15 +5402,16 @@ ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
     }
     // `exern`
     if (tok.type() == TOK_RWORD_EXTERN) {
-        if (GET_TOK(tok, lex) == TOK_STRING) {
-            abi = tok.str();
+        ::std::string fragAbi;
+        if (getAbiStringOpt(lex, fragAbi)) {
+            abi = fragAbi;
             if (abi == "") {
                 ERROR(lex.pointSpan(), E0000, "Empty ABI");
             }
-            GET_TOK(tok, lex);
         } else {
             abi = "C";
         }
+        GET_TOK(tok, lex);
     }
     // `fn`
     CHECK_TOK(tok, TOK_RWORD_FN);
