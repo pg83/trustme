@@ -2921,7 +2921,20 @@ void ParseTypeBound(TokenStream& lex, ASTGenericParams& ret, ASTType* checkedTyp
         isFirst = false;
 
         if (lex.getTokenIf(TOK_LIFETIME, tok)) {
-            ret.addBound(ASTGenericBound::make_TypeLifetime({checkedType->clone(), getLifetimeRef(lex, mv$(tok))}));
+            auto lft = getLifetimeRef(lex, mv$(tok));
+            // `for<'a> T: 'a` quantifies the outlives bound over a lifetime that
+            // exists only inside the predicate. There is nowhere to record the
+            // binder on an outlives bound, and nothing in this compiler checks
+            // regions, so the predicate is dropped rather than left dangling.
+            bool boundByOuterHrb = false;
+            for (const auto& l : outerHrbs.lifetimes) {
+                if (l.name().name == lft.name().name) {
+                    boundByOuterHrb = true;
+                }
+            }
+            if (!boundByOuterHrb) {
+                ret.addBound(ASTGenericBound::make_TypeLifetime({checkedType->clone(), mv$(lft)}));
+            }
         } else if (lex.getTokenIf(TOK_QMARK)) {
             auto hrbs = ParseHRBOpt(lex);
             (void)hrbs; // The only valid ?Trait is Sized, which doesn't have any generics
