@@ -1405,6 +1405,24 @@ FloatValue Lexer::parseFloat(U128 whole) {
         }
 
         ch = this->getc();
+        if (ch == '.') {
+            // `0.0 ..= 1.0` is a range, not the start of a tuple-index chain.
+            switch (this->getc().v) {
+                case '.':
+                    nextTokens.push_back(TOK_TRIPLE_DOT);
+                    break;
+                case '=':
+                    nextTokens.push_back(TOK_DOUBLE_DOT_EQUAL);
+                    break;
+                default:
+                    this->ungetc();
+                    nextTokens.push_back(TOK_DOUBLE_DOT);
+                    break;
+            }
+            nextTokens.push_back(Token::makeFloat(parseFloatValue(sbuf.c_str()), CORETYPE_ANY));
+
+            return std::numeric_limits<double>::quiet_NaN();
+        }
         while (ch.isspace()) {
             ch = this->getc();
         }
