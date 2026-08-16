@@ -34,15 +34,15 @@ environment. The authoritative rerun data is in
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 591 |
-| fixed, or no longer reproducing, since the gate | 40 |
+| still failing on the current tree | 589 |
+| fixed, or no longer reproducing, since the gate | 42 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 296 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 101 |
 | wrong runtime behaviour, panic, abort, or output | 90 |
-| missing rejection or diagnostic | 62 |
+| missing rejection or diagnostic | 60 |
 | generated C++ or link failure | 33 |
 | stable timeout | 9 |
 
@@ -114,7 +114,7 @@ assertions as one root cause.
 
 ## P2: missing language checks
 
-Sixty-two negative tests compile successfully: 49 Rust Reference cases and
+Sixty negative tests compile successfully: 47 Rust Reference cases and
 13 Nomicon cases. The largest source areas are:
 
 | language area | tests |
@@ -122,7 +122,7 @@ Sixty-two negative tests compile successfully: 49 Rust Reference cases and
 | diagnostic attributes | 3 |
 | name resolution | 7 |
 | destructor restrictions | 7 |
-| trait items | 4 |
+| trait items | 2 |
 | const evaluation | 3 |
 | subtyping | 3 |
 | trait bounds | 3 |
