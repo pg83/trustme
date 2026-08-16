@@ -500,6 +500,8 @@ struct ASTExprNodeClosure: public ASTExprNode {
     bool isUse;    //< The closure copies, clones, or moves each captured value
     bool isPinned; //< The closure cannot be moved (this is for generators)
     bool trackCaller;
+    /// `for<'a> |x: &'a u8| ...` — lifetimes bound by the closure itself
+    ASTHigherRankedBounds hrbs;
 
     ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNodeP code, bool isMove, bool isUse, bool isPinned, bool trackCaller = false)
         : args(::std::move(args))

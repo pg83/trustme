@@ -40,6 +40,8 @@ ASTExprNodeP ParseExpr3(TokenStream& lex);
 ASTExprNodeP ParseIfStmt(TokenStream& lex);
 ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime);
 ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime);
+ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
+static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
 ASTExprNodeP ParseExprMatch(TokenStream& lex);
 ASTExprNodeP ParseExpr1(TokenStream& lex);
 ASTExprNodeP ParseExprFC(TokenStream& lex);
@@ -381,7 +383,14 @@ ASTExprNodeP ParseExprBlockLine(TokenStream& lex, bool* addSilence) {
                 ret = ParseWhileStmt(lex, Ident(""));
                 break;
             case TOK_RWORD_FOR:
-                ret = ParseForStmt(lex, Ident(""));
+                // `for<'a> |x| ...` is a closure with a lifetime binder, not a
+                // loop; only the closure can have `<` here.
+                if (lex.lookahead(0) == TOK_LT) {
+                    PUTBACK(tok, lex);
+                    ret = ParseExprValClosureBinder(lex);
+                } else {
+                    ret = ParseForStmt(lex, Ident(""));
+                }
                 break;
             case TOK_RWORD_IF:
                 ret = ParseIfStmt(lex);
@@ -1233,7 +1242,15 @@ ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
     return NEWNODE(ASTExprNodeStructLiteral, path, ::std::move(baseVal), ::std::move(items));
 }
 
-ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync = false) {
+/// `for<'a> |x| ...` and `for<'a> async || ...`: a closure whose lifetimes it
+/// binds itself. The caller has put `for` back.
+static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex) {
+    auto hrbs = ParseHRBOpt(lex);
+    const bool isAsync = lex.getTokenIf(TOK_RWORD_ASYNC);
+    return ParseExprValClosure(lex, isAsync, ::std::move(hrbs));
+}
+
+ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs) {
     TRACE_FUNCTION;
     Token tok;
 
@@ -1293,7 +1310,15 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync = false) {
         code = NEWNODE(ASTExprNodeAsyncBlock, ::std::move(code), isMove);
     }
 
-    return NEWNODE(ASTExprNodeClosure, ::std::move(args), ::std::move(rt), ::std::move(code), isMove, isUse, isImmovable);
+    if (isAsync) {
+        // `async || -> T { .. }` annotates what the future resolves to, not the
+        // closure's own return type, which is the future itself. Nothing here
+        // can carry that yet, so the annotation is dropped and the body infers.
+        rt = mkType(lex.typePool(), lex.pointSpan());
+    }
+    auto rv = NEWNODE(ASTExprNodeClosure, ::std::move(args), ::std::move(rt), ::std::move(code), isMove, isUse, isImmovable);
+    static_cast<ASTExprNodeClosure&>(*rv).hrbs = ::std::move(hrbs);
+    return rv;
 }
 
 ASTExprNodeP ParseExprValInner(TokenStream& lex) {
@@ -1339,6 +1364,12 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
         case TOK_RWORD_WHILE:
             return ParseWhileStmt(lex, Ident(""));
         case TOK_RWORD_FOR:
+            // `for<'a> |x| ...` binds lifetimes for a closure. A `for` loop
+            // never has `<` here, so the two are told apart by that token.
+            if (lex.lookahead(0) == TOK_LT) {
+                PUTBACK(tok, lex);
+                return ParseExprValClosureBinder(lex);
+            }
             return ParseForStmt(lex, Ident(""));
         case TOK_RWORD_TRY: // Only emitted in 2018
             return ParseExprTry(lex);
@@ -1518,7 +1549,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
         case TOK_PIPE:
         case TOK_DOUBLE_PIPE:
             PUTBACK(tok, lex);
-            return ParseExprValClosure(lex);
+            return ParseExprValClosure(lex, false);
 
         case TOK_UNDERSCORE:
             return NEWNODE(ASTExprNodeWildcardPattern);

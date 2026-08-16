@@ -2356,6 +2356,9 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
         void visit(ASTExprNodeClosure& node) override {
             DEBUG("ExprNode_Closure");
 
+            // A closure's own lifetime binder scopes over its signature and body.
+            this->context.push(node.hrbs);
+
             ResolveAbsoluteType(this->context, node.returnType);
 
             this->context.pushBlock();
@@ -2369,6 +2372,7 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
             node.code->visit(*this);
 
             this->context.popBlock();
+            this->context.pop(node.hrbs);
         }
     } exprIter(context);
 
