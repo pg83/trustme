@@ -425,8 +425,18 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
 
     TRACE_FUNCTION_F("Searching for macro " << path);
 
-    // Find the macro
-    auto mac = ExpandLookupMacro(miSpan, wb, crate, modstack, path);
+    // Find the macro. `macro_rules! NAME { ... }` is always a definition, even
+    // where a user macro named `macro_rules` is in scope -- only the identifier
+    // tells the two apart.
+    MacroRef mac;
+    if (inputIdent != "" && path.isTrivial() && path.asTrivial() == "macro_rules") {
+        if (auto* pm = ExpandFindProcMacro(path.asTrivial())) {
+            mac = MacroRef(pm);
+        }
+    }
+    if (mac.is_None()) {
+        mac = ExpandLookupMacro(miSpan, wb, crate, modstack, path);
+    }
     if (mac.is_MacroRules()) {
         // TODO: If `mr_ptr` is tagged with #[rustc_builtin_macro], look for a matching entry in `g_macros`
     }
@@ -2552,6 +2562,13 @@ void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std:
                 // macro_rules body is a placeholder and must never enter the
                 // ordinary macro namespace or shadow the builtin expander.
                 if (i.attrs.get("rustc_builtin_macro")) {
+                    continue;
+                }
+                // `macro_rules! {}` names no macro, so it is a call to a
+                // user-defined macro that happens to be called `macro_rules`,
+                // not a definition. It needs the ordinary pass, which searches
+                // the enclosing modules before the builtin.
+                if (mi->inputIdent() == "") {
                     continue;
                 }
                 auto miOwned = mv$(*mi);
