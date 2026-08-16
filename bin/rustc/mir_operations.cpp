@@ -4925,9 +4925,12 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             const auto& srcTy = state.getLvalueType(tmp, se.val);
                             const HIREnum& enm = *srcTy->as_Path().binding.as_Enum();
                             MIR_ASSERT(state, enm.isValue(), "Casting non-value enum to value");
-                            auto v = enm.getValue(variantIdx);
 
+                            // Ask for the layout first: that is what forces the
+                            // discriminants to be evaluated, and reading a
+                            // variant's value before then gives zero.
                             const auto* repr = TargetGetTypeRepr(state.sp, state.resolve, srcTy);
+                            auto v = enm.getValue(variantIdx);
                             MIR_ASSERT(state, repr && repr->variants.is_Values(), "Value enum without values repr - " << srcTy);
                             const auto& values = repr->variants.as_Values();
                             const auto& tagTy = TargetGetInnerType(state.sp, state.resolve, *repr, values.field.index, values.field.subFields);
