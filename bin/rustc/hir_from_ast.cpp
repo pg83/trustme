@@ -3477,6 +3477,28 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 if (0) {
                     case ASTExprNodeUniOp::NEGATE:
                         op = HIRExprNodeUniOp::Op::Negate;
+                        // `-0x8000_0000_0000_0000_0000_0000_0000_0000i128` is the
+                        // minimum value, whose magnitude has no positive
+                        // counterpart. Negating it at run time traps, so fold it
+                        // into the literal -- the two's-complement pattern of the
+                        // minimum is that magnitude.
+                        if (const auto* lit = cast<ASTExprNodeInteger>(v.value.get())) {
+                            unsigned bits = 0;
+                            HIRCoreType type = HIRCoreType::I32;
+                            switch (lit->datatype) {
+                                case CORETYPE_I8: bits = 8; type = HIRCoreType::I8; break;
+                                case CORETYPE_I16: bits = 16; type = HIRCoreType::I16; break;
+                                case CORETYPE_I32: bits = 32; type = HIRCoreType::I32; break;
+                                case CORETYPE_I64: bits = 64; type = HIRCoreType::I64; break;
+                                case CORETYPE_I128: bits = 128; type = HIRCoreType::I128; break;
+                                case CORETYPE_INT: bits = 64; type = HIRCoreType::Isize; break;
+                                default: break;
+                            }
+                            if (bits != 0 && lit->value == (U128(1) << (bits - 1))) {
+                                rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Integer({type, lit->value})));
+                                break;
+                            }
+                        }
                 }
                 rv.reset(ctx.crate->pool->make<HIRExprNodeUniOp>(v.span(), op, lower(v.value)));
                 break;
