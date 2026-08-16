@@ -35,12 +35,12 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 518 |
-| fixed, or no longer reproducing, since the gate | 113 |
+| still failing on the current tree | 515 |
+| fixed, or no longer reproducing, since the gate | 116 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 255 |
+| accepted Rust rejected by the compiler or driver | 252 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
 | wrong runtime behaviour, panic, abort, or output | 74 |
 | missing rejection or diagnostic | 57 |
@@ -49,14 +49,14 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 
 ## P0: accepted Rust rejected by the front end
 
-All 255 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 252 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | parser | 98 | 95 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
 | type checking, HIR lowering, and resolution | 123 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6694`, `:6696`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 15 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
-| macro and attribute expansion | 27 | macro parsing/formatting 6; attributes 8; AST expansion 8; other expansion 5 |
+| macro and attribute expansion | 24 | macro parsing/formatting 6; attributes 5; AST expansion 8; other expansion 5 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; pathless `--extern` 1 |
 
