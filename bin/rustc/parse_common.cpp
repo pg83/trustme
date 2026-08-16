@@ -1356,6 +1356,12 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRanked
                 break;
             }
         }
+        // `|_||x, y| x + y`: the lexer joins the `|` that closes this parameter
+        // list with the `|` that opens the returned closure's.
+        if (tok.type() == TOK_DOUBLE_PIPE) {
+            lex.putback(Token(TOK_PIPE));
+            tok = Token(TOK_PIPE);
+        }
         CHECK_TOK(tok, TOK_PIPE);
     } else {
         throw ParseErrorUnexpected(lex, tok, {TOK_PIPE, TOK_DOUBLE_PIPE, TOK_RWORD_MOVE, TOK_RWORD_USE, TOK_RWORD_STATIC});
@@ -2193,6 +2199,17 @@ ASTPattern ParsePattern1(TokenStream& lex, AllowOrPattern allowOr) {
         isMut = true;
         expectBind = true;
         GET_TOK(tok, lex);
+        // `let mut ref x` binds a reference through a mutable slot, so both
+        // markers may appear, in either order.
+        if (tok.type() == TOK_RWORD_REF) {
+            GET_TOK(tok, lex);
+            if (tok.type() == TOK_RWORD_MUT) {
+                bindType = ASTPatternBinding::Type::MUTREF;
+                GET_TOK(tok, lex);
+            } else {
+                bindType = ASTPatternBinding::Type::REF;
+            }
+        }
     } else {
         // Fall through
     }
