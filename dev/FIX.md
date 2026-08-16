@@ -35,12 +35,12 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 427 |
-| fixed, or no longer reproducing, since the gate | 204 |
+| still failing on the current tree | 426 |
+| fixed, or no longer reproducing, since the gate | 205 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 183 |
+| accepted Rust rejected by the compiler or driver | 182 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
 | wrong runtime behaviour, panic, abort, or output | 62 |
 | missing rejection or diagnostic | 58 |
@@ -49,18 +49,18 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 
 ## P0: accepted Rust rejected by the front end
 
-All 183 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 182 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| parser | 60 | 57 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
+| parser | 59 | 56 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
 | type checking, HIR lowering, and resolution | 107 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 3 | missing external crate path 1; pathless `--extern` 1; enum repr 1 |
 
-The 57 parser failures must be regrouped by syntax family before changing the
+The 56 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are `gen` blocks and functions (8),
 unsafe binders (5), never patterns (3), and a long tail of one- and two-test spellings. Grouping by test directory finds them faster than
@@ -74,10 +74,10 @@ expected. The parse error is the better failure until an alias can expand
 to another alias.
 
 The two `issue-65041-empty-vis-matcher` tests are a trap: accepting a
-visibility on an enum variant or trait item lets them parse further and then
-crash inside the macro engine, on a `$vis` fragment that expanded to nothing.
-The clean parse error they give today is the better failure until that is
-fixed.
+visibility on an *enum variant* lets them parse further and then crash inside
+the macro engine, on a `$vis` fragment that expanded to nothing. The clean
+parse error they give today is the better failure until that is fixed. A trait
+item is not affected -- it takes a `$vis` fragment now.
 
 ## P1: internal compiler failures
 
