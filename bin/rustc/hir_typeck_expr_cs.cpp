@@ -8223,6 +8223,14 @@ namespace {
             // - Slight hack to speed up flow-down inference
             if (possibleTys.size() == 1 && possibleTys[0].isSource() && !ivarEnt.forceNoFrom) {
                 const auto* tyP = possibleTys[0].ty;
+                // Never-type fallback: `!` coerces to every type, so before
+                // edition 2024 an ivar whose only source is a diverging
+                // expression settles on `()`, not on `!`. From 2024 on `!` is
+                // itself the fallback.
+                if ((tyP)->is_Diverge() && context.crate.edition < ASTEdition::Rust2024) {
+                    DEBUG("Only source is `!`, never-type fallback to `()`");
+                    tyP = context.crate.types.unit();
+                }
                 if (possibleTys[0].isUnsize()) {
                     HIRTypeRef tmpTy;
 
@@ -8764,6 +8772,17 @@ namespace {
             DEBUG("possible_tys = {" << possibleTys << "} (" << nSrcIvars << " src ivars, " << nDstIvars << " dst ivars, possibly_diverge=" << possiblyDiverge << ")");
 
             if (nSrcIvars == 0 && /*n_dst_ivars == 0 &&*/ possibleTys.empty() && possiblyDiverge && fallbackTy == IvarPossFallbackType::IgnoreWeakDisable) {
+                // Never-type fallback: before edition 2024 a variable that only
+                // ever saw diverging expressions becomes `()`, not `!`. Picking
+                // `!` leaves its pending bounds unsatisfiable (`Default for !`).
+                if (context.crate.edition < ASTEdition::Rust2024) {
+                    auto unit = context.crate.types.unit();
+                    if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, unit)) {
+                        DEBUG("Possibly `!` and no other options - never-type fallback to `()`");
+                        context.equateTypes(sp, tyL, unit);
+                        return true;
+                    }
+                }
                 auto t = context.crate.types.diverge();
                 if (!checkIvarPossFailsBounds(sp, context, boundRefs, tyL, t)) {
                     DEBUG("Possibly `!` and no other options - setting");
@@ -10013,6 +10032,42 @@ class ExprVisitorEnum: public HIRExprVisitor {
     // TEMP: List of in-scope traits for buildup
     tTraitList traits;
 
+    /// A statement whose type nothing constrained defaults to `()` at fallback.
+    struct RevisitDefaultUnit: public Context::Revisitor {
+        HIRExprNode* node;
+
+        RevisitDefaultUnit(HIRExprNode* node)
+            : node(node)
+        {
+        }
+
+        const Span& span(void) const {
+            return node->span();
+        }
+
+        void fmt(std::ostream& os) const {
+            os << "RevisitDefaultUnit(" << node << ": " << node->resType << ")";
+        }
+
+        bool revisit(Context& context, bool isFallback) {
+            DEBUG("is_fallback=" << isFallback);
+            const auto& ty = context.getType(node->resType);
+            if (const auto* i = ty->opt_Infer()) {
+                if (i->tyClass != HIRInferClass::None) {
+                    // Bounded ivar, remove this rule.
+                    return true;
+                }
+                if (isFallback) {
+                    context.equateTypes(node->span(), ty, context.crate.types.unit());
+                    return true;
+                }
+                return false;
+            } else {
+                return true;
+            }
+        }
+    };
+
 public:
     ExprVisitorEnum(Context& context, tTraitList baseTraits, const HIRTypeData* retType)
         : context(context)
@@ -10040,42 +10095,6 @@ public:
                 if (this->nodeDiverges(*snp)) {
                     diverges = true;
                 } else {
-                    struct RevisitDefaultUnit: public Context::Revisitor {
-                        HIRExprNode* node;
-
-                        RevisitDefaultUnit(HIRExprNode* node)
-                            : node(node)
-                        {
-                        }
-
-                        const Span& span(void) const {
-                            return node->span();
-                        }
-
-                        void fmt(std::ostream& os) const {
-                            os << "RevisitDefaultUnit(" << node << ": " << node->resType << ")";
-                        }
-
-                        bool revisit(Context& context, bool isFallback) {
-                            DEBUG("is_fallback=" << isFallback);
-                            const auto& ty = context.getType(node->resType);
-                            if (const auto* i = ty->opt_Infer()) {
-                                if (i->tyClass != HIRInferClass::None) {
-                                    // Bounded ivar, remove this rule.
-                                    return true;
-                                }
-                                if (isFallback) {
-                                    context.equateTypes(node->span(), ty, context.crate.types.unit());
-                                    return true;
-                                }
-                                //context.possible_equate_ivar_bounds(node->span(), i->index, make_vec2(ty.clone(),
-                                return false;
-                            } else {
-                                return true;
-                            }
-                        }
-                    };
-
                     this->context.addRevisitAdv(std::make_unique<RevisitDefaultUnit>(&*snp));
                 }
             }
@@ -10118,7 +10137,22 @@ public:
                 this->context.addRevisit(node);
             } else if (diverges) {
                 DEBUG("Block diverges, yield !");
-                this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+                // `!` coerces to any type, so pinning the block's result to it
+                // would leak divergence into whatever the block feeds — a match
+                // arm shares its ivar with the match. Before edition 2024,
+                // where the fallback is `()`, record it as a coercion source
+                // instead and let that fallback settle the ivar. From 2024 on
+                // the fallback is `!` itself, so pin it directly.
+                const auto* blockInfer = this->context.crate.edition < ASTEdition::Rust2024
+                    ? this->context.getType(node.resType)->opt_Infer()
+                    : nullptr;
+                if (const auto* i = blockInfer) {
+                    this->context.possibleEquateIvar(node.span(), i->index, this->context.crate.types.diverge(),
+                        Context::PossibleTypeSource::CoerceFrom);
+                    this->context.addRevisitAdv(std::make_unique<RevisitDefaultUnit>(&node));
+                } else {
+                    this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
+                }
             } else {
                 DEBUG("Block doesn't diverge but doesn't yield a value, yield ()");
                 this->context.equateTypes(node.span(), node.resType, this->context.crate.types.unit());
