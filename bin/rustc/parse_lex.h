@@ -81,7 +81,8 @@ private:
     Token getTokenInt();
 
     signed int getSymbol();
-    Token getTokenIntRawString(bool isByte);
+    /// @param kind TOK_STRING, TOK_BYTESTRING or TOK_CSTRING
+    Token getTokenIntRawString(eTokenType kind);
     Token getTokenIntIdentifier(Codepoint ch, Codepoint ch2 = '\0', bool parseReservedWord = true);
     Token withLiteralSuffix(Token tok);
     enum class NumMode {

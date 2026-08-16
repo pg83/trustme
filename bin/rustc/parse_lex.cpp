@@ -848,7 +848,7 @@ Token Lexer::getTokenInt() {
                 }
 
                 if (ch == 'r') {
-                    return this->getTokenIntRawString(isByte);
+                    return this->getTokenIntRawString(isByte ? TOK_BYTESTRING : TOK_STRING);
                 } else {
                     assert(isByte);
 
@@ -1107,8 +1107,9 @@ Token Lexer::getTokenInt() {
     throw "Fell off the end of getTokenInt";
 }
 
-Token Lexer::getTokenIntRawString(bool isByte) {
-    // Raw string (possibly byte)
+Token Lexer::getTokenIntRawString(eTokenType kind) {
+    // Raw string (possibly a byte or C string)
+    const bool isByte = (kind == TOK_BYTESTRING);
     Codepoint ch = this->getc();
     unsigned int hashes = 0;
     while (ch == '#') {
@@ -1121,6 +1122,8 @@ Token Lexer::getTokenIntRawString(bool isByte) {
             this->ungetc(); // Unget the not '"'
             if (isByte) {
                 return this->getTokenIntIdentifier('b', 'r');
+            } else if (kind == TOK_CSTRING) {
+                return this->getTokenIntIdentifier('c', 'r');
             } else {
                 return this->getTokenIntIdentifier('r');
             }
@@ -1172,7 +1175,7 @@ Token Lexer::getTokenIntRawString(bool isByte) {
             }
         }
     }
-    return this->withLiteralSuffix(Token(isByte ? TOK_BYTESTRING : TOK_STRING, mv$(val), realGetHygiene()));
+    return this->withLiteralSuffix(Token(kind, mv$(val), realGetHygiene()));
 }
 
 Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool parseReservedWord) {
@@ -1184,6 +1187,11 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
     while (issym(ch)) {
         str += ch;
         ch = this->getc();
+    }
+    // Raw C string literal: `cr"..."` or `cr#"..."#`
+    if (str == "cr" && (ch == '\"' || ch == '#')) {
+        this->ungetc();
+        return this->getTokenIntRawString(TOK_CSTRING);
     }
     if (ch == '\"') {
         // C String literal
