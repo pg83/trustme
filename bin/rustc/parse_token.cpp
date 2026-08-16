@@ -200,7 +200,7 @@ Token::Token(const Token& t)
     , hygiene_(t.hygiene_)
     , isDocComment_(t.isDocComment_)
 {
-    assert(t.data.tag() != Data::TAGDEAD);
+    assert(t.data_.tag() != Data::TAGDEAD);
     TU_MATCH_HDRA( (t.data_), {)
     TU_ARMA(None, e) {
         }
@@ -261,7 +261,7 @@ Token Token::clone() const {
                  default:
                      BUG(Span(Span(), pos), "Fragment with invalid token type (" << *this << ")");
                      break;
-             } assert(rv.data.is_Fragment());))
+             } assert(rv.data_.is_Fragment());))
     return rv;
 }
 
