@@ -35,11 +35,11 @@ environment. The authoritative rerun data is in
 | failed in the full gate | 631 |
 | failures reproduced independently | 630 |
 | parallel-only flakes | 1 |
-| unfinished after focused fixes | 605 |
+| unfinished after focused fixes | 603 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 297 |
+| accepted Rust rejected by the compiler or driver | 295 |
 | wrong runtime behaviour, panic, abort, signal, or output | 96 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 93 |
 | missing rejection or diagnostic | 76 |
@@ -49,12 +49,12 @@ environment. The authoritative rerun data is in
 
 ## P0: accepted Rust rejected by the front end
 
-All 297 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 295 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 121 | trait/impl selection 29; unresolved type/value names 18; `_` const arguments in paths 4; receiver/Deref lowering 2 |
+| type checking, HIR lowering, and resolution | 119 | trait/impl selection 29; unresolved type/value names 18; receiver/Deref lowering 2; polymorphic constants in MIR 2 |
 | parser | 137 | 134 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 slice-pattern/parser-common failures |
 | macro and attribute expansion | 31 | macro parsing/formatting 10; attributes 9; AST expansion 8; other expansion 4 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
