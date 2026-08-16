@@ -34,13 +34,13 @@ environment. The authoritative rerun data is in
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 563 |
-| fixed, or no longer reproducing, since the gate | 68 |
+| still failing on the current tree | 561 |
+| fixed, or no longer reproducing, since the gate | 70 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 296 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 94 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 92 |
 | wrong runtime behaviour, panic, abort, or output | 74 |
 | missing rejection or diagnostic | 57 |
 | generated C++ or link failure | 33 |
@@ -67,7 +67,7 @@ one- and two-test spellings.
 
 ## P1: internal compiler failures
 
-There are 94 compiler-internal failures in 74 stable signatures.
+There are 92 compiler-internal failures in 73 stable signatures.
 
 | compiler area | tests |
 |---|---:|
