@@ -1307,6 +1307,8 @@ namespace {
         bool widthIsArg = false;
         unsigned int width = 0;
 
+        /// `{:.0}` is a precision of zero, not an omitted precision.
+        bool precSet = false;
         bool precIsArg = false;
         unsigned int prec = 0;
 
@@ -1325,6 +1327,7 @@ namespace {
             CMP(zeroPad);
             CMP(widthIsArg);
             CMP(width);
+            CMP(precSet);
             CMP(precIsArg);
             CMP(prec);
             return false;
@@ -1618,6 +1621,7 @@ namespace {
                     // Precision
                     if (*s == '.') {
                         s++;
+                        args.precSet = true;
                         // '*' - Use next argument
                         if (*s == '*') {
                             args.precIsArg = true;
@@ -2037,7 +2041,7 @@ namespace {
                         if (frag.args.widthIsArg || frag.args.width != 0) {
                             flags |= 1 << 27;
                         }
-                        if (frag.args.precIsArg || frag.args.prec != 0) {
+                        if (frag.args.precSet) {
                             flags |= 1 << 28;
                         }
 
@@ -2068,7 +2072,7 @@ namespace {
                         };
 
                         pushToks(toks, ident("precision"), TOK_COLON);
-                        if (frag.args.precIsArg || frag.args.prec != 0) {
+                        if (frag.args.precSet) {
                             pushPathCount("Is");
                             pushToks(toks, TOK_PAREN_OPEN);
                             if (frag.args.precIsArg) {
