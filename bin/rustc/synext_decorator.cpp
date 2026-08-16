@@ -1969,6 +1969,39 @@ public:
         return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), mkExprnodep(block.release()));
     }
 
+    /// The type of an enum's discriminant: whatever `#[repr]` names, or `isize`.
+    static eCoreType discriminantCoreType(const ASTEnum& enm) {
+        switch (enm.markings.repr) {
+            case ASTEnum::Markings::Repr::Rust:
+                return CORETYPE_INT;
+            case ASTEnum::Markings::Repr::U8:
+                return CORETYPE_U8;
+            case ASTEnum::Markings::Repr::U16:
+                return CORETYPE_U16;
+            case ASTEnum::Markings::Repr::U32:
+                return CORETYPE_U32;
+            case ASTEnum::Markings::Repr::U64:
+                return CORETYPE_U64;
+            case ASTEnum::Markings::Repr::U128:
+                return CORETYPE_U128;
+            case ASTEnum::Markings::Repr::Usize:
+                return CORETYPE_UINT;
+            case ASTEnum::Markings::Repr::I8:
+                return CORETYPE_I8;
+            case ASTEnum::Markings::Repr::I16:
+                return CORETYPE_I16;
+            case ASTEnum::Markings::Repr::I32:
+                return CORETYPE_I32;
+            case ASTEnum::Markings::Repr::I64:
+                return CORETYPE_I64;
+            case ASTEnum::Markings::Repr::I128:
+                return CORETYPE_I128;
+            case ASTEnum::Markings::Repr::Isize:
+                return CORETYPE_INT;
+        }
+        return CORETYPE_INT;
+    }
+
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
         ASTPath basePath = *type->data.as_Path();
         basePath.nodes().back().args() = ASTPathParams();
@@ -1979,7 +2012,9 @@ public:
             ASTPattern patA;
 
             auto varPath = basePath + v.name;
-            auto varIdxHash = enm.variants().size() > 1 ? this->hashValRef(opts.coreName, NEWNODE(Integer, U128(varIdx), CORETYPE_UINT)) : NEWNODE(Tuple, {});
+            // The discriminant is hashed at its own width: an `#[repr(u8)]` enum
+            // writes one byte, not a whole `isize`.
+            auto varIdxHash = enm.variants().size() > 1 ? this->hashValRef(opts.coreName, NEWNODE(Integer, U128(varIdx), discriminantCoreType(enm))) : NEWNODE(Tuple, {});
 
             auto block = newBlock(sp);
             block->pushStmt(mv$(varIdxHash));
