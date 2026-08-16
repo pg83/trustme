@@ -1066,6 +1066,11 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
                     }
                 }
 
+                // `[T; _]` is an inferred length, the same placeholder the
+                // expression form uses.
+                if (cast<const ASTExprNodeWildcardPattern>(&*e.size)) {
+                    return crate->types.array(inner, HIRConstGeneric::make_Infer({}));
+                }
                 return crate->types.array(inner, HIRConstGeneric::make_Unevaluated(std::make_unique<HIRConstGenericUnevaluated>(LowerHIRExpr(e.size))));
             } else {
                 return crate->types.array(inner, HIRConstGeneric::make_Infer({}));
@@ -3748,6 +3753,16 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
 
     virtual void visit(ASTExprNodeArray& v) override {
         if (v.size) {
+            // `[val; _]` takes its length from the expected type: the `_` is a
+            // const-argument placeholder, not an expression.
+            if (cast<const ASTExprNodeWildcardPattern>(&*v.size)) {
+                rv.reset(ctx.crate->pool->make<HIRExprNodeArraySized>(
+                    v.span(),
+                    lower(v.values.at(0)),
+                    HIRArraySize(HIRConstGeneric::make_Infer({}))
+                ));
+                return;
+            }
             rv.reset(ctx.crate->pool->make<HIRExprNodeArraySized>(
                 v.span(),
                 lower(v.values.at(0)),

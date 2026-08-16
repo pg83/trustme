@@ -1820,6 +1820,18 @@ namespace {
                 // All good
             }
         }
+        void visit(HIRExprNodeArraySized& node) override {
+            HIRExprVisitorDef::visit(node);
+            // An inferred `[val; _]` length only exists in the ivar table:
+            // write it back so MIR lowering and codegen see a concrete size.
+            if (node.size.is_Unevaluated() && node.size.as_Unevaluated().is_Infer()) {
+                const auto& count = ivars.getValue(node.size.as_Unevaluated());
+                if (count.is_Evaluated()) {
+                    node.size = HIRArraySize::make_Known(count.as_Evaluated()->readUsize(0));
+                }
+            }
+        }
+
     }; // class ExprVisitor_Apply
 
     class ExprVisitorPrint: public HIRExprVisitor {
@@ -11389,6 +11401,12 @@ public:
         TRACE_FUNCTION_F(&node << " [...; " << node.size << "]");
         node.diverges = false;
         this->context.addIvars(node.val->resType);
+
+        // `[val; _]` arrives with an unassigned placeholder: give it an ivar
+        // before it is cloned into the (interned, immutable) array type.
+        if (node.size.is_Unevaluated()) {
+            this->context.ivars.addIvars(node.size.as_Unevaluated());
+        }
 
         // Create result type (can't be known until after const expansion)
         // - Should it be created in const expansion?

@@ -688,6 +688,7 @@ struct HIRExprNodeArraySized: public HIRExprNode {
     HIRArraySize size;
 
     HIRExprNodeArraySized(Span sp, HIRExprNodeP val, HIRExprPtr size);
+    HIRExprNodeArraySized(Span sp, HIRExprNodeP val, HIRArraySize size);
 
     static constexpr unsigned int kind = 35;
     unsigned int nodeKind() const override;

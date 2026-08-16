@@ -1041,6 +1041,13 @@ TU_ARMA(Alias, ee) {
         {
         }
 
+        HIRExprNodeArraySized::HIRExprNodeArraySized(Span sp, HIRExprNodeP val, HIRArraySize size)
+            : HIRExprNode(mv$(sp))
+            , val(mv$(val))
+            , size(mv$(size))
+        {
+        }
+
         HIRExprNodeClosure::HIRExprNodeClosure(Span sp, argsT args, HIRTypeRef rv, HIRExprNodeP code, bool isMove, bool isUse)
             : HIRExprNode(mv$(sp))
             , args(::std::move(args))
