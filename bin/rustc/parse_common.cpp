@@ -76,7 +76,15 @@ ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty /*=B
 
     if (LOOK_AHEAD(lex) == TOK_INTERPOLATED_BLOCK) {
         GET_TOK(tok, lex);
-        return tok.takeFragNode();
+        auto node = tok.takeFragNode();
+        // The fragment is a bare block; a `const`/`unsafe` written before it
+        // applies to it, as it would to a block written out in full.
+        if (ty != ASTExprNodeBlock::Type::Bare) {
+            if (auto* b = cast<ASTExprNodeBlock>(node.get())) {
+                b->blockType = ty;
+            }
+        }
+        return node;
     }
 
     GET_CHECK_TOK(tok, lex, TOK_BRACE_OPEN);
@@ -221,9 +229,9 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
                 return ASTExprNodeP();
             }
             break;
-        // 'const' - Check if the next token isn't a `{`, if so it's an item. Otherwise, fall through
+        // 'const' - Check if the next token isn't a block, if so it's an item. Otherwise, fall through
         case TOK_RWORD_CONST:
-            if (LOOK_AHEAD(lex) != TOK_BRACE_OPEN) {
+            if (LOOK_AHEAD(lex) != TOK_BRACE_OPEN && LOOK_AHEAD(lex) != TOK_INTERPOLATED_BLOCK) {
                 PUTBACK(tok, lex);
                 if (!localMod) {
                     localMod = lex.parseState().getCurrentMod().addAnon();

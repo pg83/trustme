@@ -115,6 +115,20 @@ class CHandlerRepr: public ExpandDecorator {
         return AttrStage::Pre;
     }
 
+    /// The name of one representation. `#[repr($t)]` with a `ty` fragment names
+    /// it through an interpolated type, which is a plain path.
+    static RcString getReprName(TokenStream& lex) {
+        Token tok;
+        if (lex.getTokenIf(TOK_INTERPOLATED_TYPE, tok)) {
+            const auto* ty = tok.fragType();
+            if (ty && ty->isPath() && ty->path().nodes().size() == 1) {
+                return ty->path().nodes().back().name();
+            }
+            ERROR(lex.pointSpan(), E0000, "#[repr(...)] with a type that does not name a representation");
+        }
+        return lex.getTokenCheck(TOK_IDENT).ident().name;
+    }
+
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_None()) {
         }
@@ -129,7 +143,7 @@ class CHandlerRepr: public ExpandDecorator {
                 return;
             }
             do {
-                auto reprType = lex.getTokenCheck(TOK_IDENT).ident().name;
+                auto reprType = getReprName(lex);
                 if (reprType == "C") {
                     switch (s->markings.repr) {
                         case ASTStruct::Markings::Repr::Rust:
@@ -201,7 +215,7 @@ class CHandlerRepr: public ExpandDecorator {
                     ASSERT_BUG(lex.pointSpan(), e->markings.repr == ASTEnum::Markings::Repr::Rust, "Multiple enum reprs set");
                     e->markings.repr = r;
                 };
-                auto reprStr = lex.getTokenCheck(TOK_IDENT).ident().name;
+                auto reprStr = getReprName(lex);
                 if (reprStr == "C") {
                     // Repeated is OK
                     e->markings.isReprC = true;
@@ -257,7 +271,7 @@ class CHandlerRepr: public ExpandDecorator {
             lex.getTokenCheck(TOK_PAREN_OPEN);
 
             do {
-                auto reprStr = lex.getTokenCheck(TOK_IDENT).ident().name;
+                auto reprStr = getReprName(lex);
                 if (reprStr == "C") {
                     e->markings.repr = ASTUnion::Markings::Repr::C;
                 } else if (reprStr == "transparent") {
@@ -2526,6 +2540,16 @@ namespace {
                 ASSERT_BUG(lex.pointSpan(), ty->isPath(), "TODO: No path :ty in derive, " << ty);
                 ASSERT_BUG(lex.pointSpan(), ty->data.as_Path(), "" << ty);
                 rv.push_back(*ty->data.as_Path());
+            } else if (lex.getTokenIf(TOK_INTERPOLATED_META, tok)) {
+                // `#[derive($i)]` with a `meta` fragment: the meta item is a
+                // bare path naming the trait to derive.
+                const auto& mi = tok.fragMeta();
+                ASSERT_BUG(lex.pointSpan(), !mi.name().elems.empty(), "Empty meta item in derive");
+                auto item = ASTPath::newRelative({}, {});
+                for (const auto& e : mi.name().elems) {
+                    item += ASTPathNode(e);
+                }
+                rv.push_back(std::move(item));
             } else {
                 auto item = ASTPath::newRelative({}, {});
                 do {
