@@ -44,7 +44,7 @@ std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStruc
 RcString getOptionalIdent(TokenStream& lex);
 ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
 static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
-ASTExprNodeP ParseExprMatch(TokenStream& lex);
+ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee = ASTExprNodeP());
 ASTExprNodeP ParseExpr1(TokenStream& lex);
 ASTExprNodeP ParseExprFC(TokenStream& lex);
 ASTExprNodeP ParseExprMacro(TokenStream& lex, ASTPath tok, Span pathSpan);
@@ -632,15 +632,16 @@ ASTExprNodeP ParseIfStmt(TokenStream& lex) {
 }
 
 /// "match" block
-ASTExprNodeP ParseExprMatch(TokenStream& lex) {
+ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee) {
     TRACE_FUNCTION;
     Token tok;
     ASTAttributeList nodeAttrs;
 
     CLEAR_PARSE_FLAGS_EXPR(lex);
-    // 1. Get expression
-    ASTExprNodeP switchVal;
-    {
+    // 1. Get expression -- unless the postfix form already has it, as in
+    // `value.match { ... }`.
+    ASTExprNodeP switchVal = ::std::move(scrutinee);
+    if (!switchVal) {
         SET_PARSE_FLAG(lex, disallowStructLiteral);
         switchVal = ParseExpr1(lex);
     }
@@ -1190,6 +1191,10 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                     }
                     case TOK_RWORD_AWAIT:
                         val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::AWait, ::std::move(val));
+                        break;
+                    // Postfix match: `value.match { ... }` is `match value { ... }`.
+                    case TOK_RWORD_MATCH:
+                        val = ParseExprMatch(lex, ::std::move(val));
                         break;
                     case TOK_RWORD_USE:
                         val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::USE, ::std::move(val));
