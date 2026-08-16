@@ -1011,8 +1011,11 @@ ASTExprNodeP ParseExpr1a(TokenStream& lex) {
         }
     }
     assert(tok.type() == TOK_DOUBLE_DOT);
-    // If the next token is part of a value, parse that value
-    if (ParseIsTokValue(LOOK_AHEAD(lex))) {
+    // If the next token is part of a value, parse that value.
+    // A `{` starts one only where a block may appear: in `for _ in 0..n {}` it
+    // is the loop body, but in `(1..{ 2 })` it is the range's end.
+    const bool braceIsValue = LOOK_AHEAD(lex) == TOK_BRACE_OPEN && !lex.parseState().disallowStructLiteral;
+    if (ParseIsTokValue(LOOK_AHEAD(lex)) || braceIsValue) {
         right = ParseIsRangeSeparator(LOOK_AHEAD(lex)) ? ParseExpr1a(lex) : next(lex);
     } else {
         // Otherwise, leave `right` as nullptr
@@ -3921,6 +3924,7 @@ ASTAttribute ParseMetaItem(TokenStream& lex) {
         } break;
         case TOK_PAREN_OPEN:
         case TOK_SQUARE_OPEN: // 1.74 - openssl v0.10.57
+        case TOK_BRACE_OPEN: // An attribute's arguments may use any delimiter.
             PUTBACK(tok, lex);
             attrData = ParseTT(lex, false);
             break;
