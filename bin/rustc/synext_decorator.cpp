@@ -640,6 +640,20 @@ class CHandlerUnsafe: public ExpandDecorator {
                 } else {
                     ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
                 }
+            } else if (ident == "export_name") {
+                lex.getTokenCheck(TOK_EQUAL);
+                auto s = lex.getTokenCheck(TOK_STRING).str();
+
+                DEBUG("#[unsafe(export_name)] " << name << " as `" << s << "`");
+                // The last name given wins, as it does in rustc: `#[unsafe(no_mangle)]`
+                // alongside this one is a lint, not an error.
+                if (auto* e = i.opt_Function()) {
+                    e->markings.linkName = s;
+                } else if (auto* e = i.opt_Static()) {
+                    e->markings.linkName = s;
+                } else {
+                    ERROR(sp, E0000, "#[unsafe(" << ident << ")] on bad item: " << i.tagStr());
+                }
             } else if (ident == "link_section") {
                 lex.getTokenCheck(TOK_EQUAL);
                 auto s = lex.getTokenCheck(TOK_STRING).str();

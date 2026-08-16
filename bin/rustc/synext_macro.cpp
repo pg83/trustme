@@ -1640,6 +1640,7 @@ namespace {
                             }
                             args.prec = nextFree;
                             nextFree++;
+                            s++;
                         } else if (::std::isdigit(*s)) {
                             unsigned int val = 0;
                             while (::std::isdigit(*s)) {
