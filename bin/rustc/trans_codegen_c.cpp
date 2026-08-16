@@ -4111,7 +4111,10 @@ namespace {
                     const auto& slotTy = emitEnumPath(repr, e.field);
                     MIR_ASSERT(localMirRes, slotTy->is_Pointer() || slotTy->is_Function() || slotTy->is_Borrow() || slotTy->is_Primitive(), "Invalid niche type: " << slotTy << " in " << ty);
                     if (typeIsEmulatedI128(slotTy)) {
-                        of << ".lo == 0 && ";
+                        // The niche is "the whole value is zero", so both
+                        // halves have to be tested, either one being set makes
+                        // it the non-zero variant.
+                        of << ".lo != 0 || ";
                         emitLvalue(val);
                         emitEnumPath(repr, e.field);
                         of << ".hi";
