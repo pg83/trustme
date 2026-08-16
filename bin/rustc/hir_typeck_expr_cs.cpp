@@ -6290,7 +6290,7 @@ namespace {
                 return true;
             }
 
-            auto output = impl.getType(context.crate.types, v.name.c_str(), {});
+            auto output = impl.getType(context.crate.types, v.name.c_str(), v.atyPp);
             if (output == HIRTypeRef()) {
                 return false;
             }
@@ -6507,8 +6507,9 @@ namespace {
                     DEBUG("[check_associated] - use current trait impl as overload assumption");
                 }
                 if (v.name != "") {
-                    // TODO: Are params needed for these ATY bounds?
-                    auto outTyO = impl.getType(context.crate.types, v.name.c_str(), {});
+                    // A generic associated type is substituted with the
+                    // arguments the projection gave it (`Self::Bar<T>`).
+                    auto outTyO = impl.getType(context.crate.types, v.name.c_str(), v.atyPp);
                     if (outTyO == HIRTypeRef()) {
                         outTyO = context.crate.types.path(HIRPath(v.implTy, HIRGenericPath(v.trait, v.params.clone()), v.name, v.atyPp.clone()), {});
                     }
@@ -6607,7 +6608,7 @@ namespace {
 
                             // Edge case: Might be just outright identical
                             if (possibleImpl.implTy == implTy && possibleImpl.params == implParams) {
-                                auto t1 = v.name == "" ? HIRTypeRef() : possibleImpl.implRef.getType(context.crate.types, v.name.c_str(), {});
+                                auto t1 = v.name == "" ? HIRTypeRef() : possibleImpl.implRef.getType(context.crate.types, v.name.c_str(), v.atyPp);
                                 auto t2 = v.name == "" ? HIRTypeRef() : impl.getType(context.crate.types, v.name.c_str(), {});
                                 if (v.name == "" || t1 == t2 || t2 == HIRTypeRef()) {
                                     DEBUG("[check_associated] HACK: Same type and params, and ATY matches or this impl doesn't have it");
