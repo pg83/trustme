@@ -2592,7 +2592,10 @@ namespace {
 
             TRACE_FUNCTION_F(p);
             of << "// PROTO extern \"" << item.abi << "\" " << p << "\n";
-            if (item.linkage.name != "") {
+            // `main` is not renameable: C++ fixes its signature, and a Rust
+            // `extern "C" fn main(c_int, *const *const c_char)` does not match.
+            // It gets a shim after its body instead.
+            if (item.linkage.name != "" && item.linkage.name != "main") {
                 // If this function is implementing an external ABI, just rename it.
                 of << "#define " << TransMangle(p) << " " << item.linkage.name << "\n";
             }
@@ -2749,9 +2752,37 @@ namespace {
                 of << "}\n";
             }
             of << "}\n";
+            if (item.linkage.name == "main") {
+                emitCMainShim(p, item, params, retType);
+            }
             of.flush();
             currentFunctionTracksCaller = false;
             mirRes = nullptr;
+        }
+
+        /// A `#[no_mangle] extern "C" fn main` in a `#![no_main]` crate is the
+        /// program's entry point, but C++ dictates `main`'s signature. Emit the
+        /// Rust function under its own name and call it from a real `main`.
+        void emitCMainShim(const HIRPath& p, const HIRFunction& item, const TransParams& params, const HIRTypeData* retType) {
+            MIR_ASSERT(*mirRes, item.args.size() == 0 || item.args.size() == 2, "`main` takes no arguments or (argc, argv), got " << item.args.size());
+            of << "int main(int argc, char** argv) {\n\t";
+            const bool returnsValue = retType != crate.types.unit();
+            if (returnsValue) {
+                of << "return (int)";
+            }
+            of << TransMangle(p) << "(";
+            if (item.args.size() == 2) {
+                of << "(";
+                emitCtype(params.monomorph(resolve_, item.args[0].second));
+                of << ")argc, (";
+                emitCtype(params.monomorph(resolve_, item.args[1].second));
+                of << ")argv";
+            }
+            of << ");\n";
+            if (!returnsValue) {
+                of << "\treturn 0;\n";
+            }
+            of << "}\n";
         }
 
         void emitOperationWithUnwind(const MIRUnwindAction& action, unsigned indentLevel, ::std::function<void(unsigned)> emitOperation) {
