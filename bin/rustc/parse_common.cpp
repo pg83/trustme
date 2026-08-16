@@ -3640,10 +3640,12 @@ ASTEnum ParseEnumDef(TokenStream& lex, const ASTAttributeList& metaItems) {
     ASTGenericParams params;
     if (tok.type() == TOK_LT) {
         params = ParseGenericParams(lex);
-        if (GET_TOK(tok, lex) == TOK_RWORD_WHERE) {
-            ParseWhereClause(lex, params);
-            tok = lex.getToken();
-        }
+        tok = lex.getToken();
+    }
+    // As with a struct, the where clause does not need generic parameters.
+    if (tok.type() == TOK_RWORD_WHERE) {
+        ParseWhereClause(lex, params);
+        tok = lex.getToken();
     }
 
     // Body
@@ -3721,10 +3723,13 @@ ASTUnion ParseUnion(TokenStream& lex, ASTAttributeList& metaItems) {
     ASTGenericParams params;
     if (GET_TOK(tok, lex) == TOK_LT) {
         params = ParseGenericParams(lex);
-        if (GET_TOK(tok, lex) == TOK_RWORD_WHERE) {
-            ParseWhereClause(lex, params);
-            tok = lex.getToken();
-        }
+        tok = lex.getToken();
+    }
+    // A where clause needs no generic parameters to bind: `union U where [u8]: Copy`
+    // is a trivial bound on a concrete type.
+    if (tok.type() == TOK_RWORD_WHERE) {
+        ParseWhereClause(lex, params);
+        tok = lex.getToken();
     }
 
     ::std::vector<ASTStructItem> variants;
