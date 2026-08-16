@@ -70,8 +70,8 @@ out to be one syntax rule.
 `trait S = ?Sized;` is a trap of the same kind: parsing the relaxed bound
 gets past the parser and then asserts in `hir_conv_main_bindings.cpp:1539`,
 because an alias that names no trait is not expandable where a trait is
-expected. The parse error is the better failure until aliases of aliases
-are.
+expected. The parse error is the better failure until an alias can expand
+to another alias.
 
 The two `issue-65041-empty-vis-matcher` tests are a trap: accepting a
 visibility on an enum variant or trait item lets them parse further and then
