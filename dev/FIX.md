@@ -35,14 +35,14 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 471 |
-| fixed, or no longer reproducing, since the gate | 160 |
+| still failing on the current tree | 469 |
+| fixed, or no longer reproducing, since the gate | 162 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 211 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 91 |
-| wrong runtime behaviour, panic, abort, or output | 73 |
+| wrong runtime behaviour, panic, abort, or output | 71 |
 | missing rejection or diagnostic | 58 |
 | generated C++ or link failure | 28 |
 | stable timeout | 10 |
@@ -109,19 +109,19 @@ declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 
-Seventy-three programs build but execute incorrectly:
+Seventy-one programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 67 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 65 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
 
 The repeated high-yield areas inside the panic set are enum/DST/layout, drop
-order, and coroutine layout. The two type-name tests are blocked on the crate
-name of a root binary, which reads as `bin#` rather than the file name, not on
-how the type itself prints. Of the formatting ones,
+order, and coroutine layout. `issue-61894` is the type name of a function item,
+which still prints as `fn{::"bin#"::#0::f}` -- the path of a function inside an
+impl is not reconstructed. Of the formatting ones,
 `fmt::num::test_format_debug_hex` and `test_format_int_exp_precision` survive
 the precision fix. The
 128-bit ones left are `intrinsics::carrying_mul_add_fallback` for u128 and
