@@ -3922,8 +3922,14 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
         if (lex.getTokenIf(TOK_RWORD_WHERE)) {
             ParseWhereClause(lex, params);
         }
-        GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-        auto val = ParseExpr(lex);
+        // An impl const needs a value, but the grammar allows it to be
+        // omitted — and an item stripped by `cfg` never reaches the check that
+        // says so.
+        // TODO: reject a valueless impl const that survives cfg.
+        ASTExpr val;
+        if (lex.getTokenIf(TOK_EQUAL)) {
+            val = ParseExpr(lex);
+        }
         if (lex.getTokenIf(TOK_RWORD_WHERE)) {
             ParseWhereClause(lex, params);
         }

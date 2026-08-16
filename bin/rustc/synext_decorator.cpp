@@ -123,6 +123,11 @@ class CHandlerRepr: public ExpandDecorator {
             TTStream lex(sp, ParseState(), mi.data());
             lex.parseState().wb = &wb;
             lex.getTokenCheck(TOK_PAREN_OPEN);
+            // `#[repr()]` names no representation at all, which is allowed.
+            if (lex.lookahead(0) == TOK_PAREN_CLOSE) {
+                lex.getTokenCheck(TOK_PAREN_CLOSE);
+                return;
+            }
             do {
                 auto reprType = lex.getTokenCheck(TOK_IDENT).ident().name;
                 if (reprType == "C") {
