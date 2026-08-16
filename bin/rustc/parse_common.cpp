@@ -40,6 +40,7 @@ ASTExprNodeP ParseExpr3(TokenStream& lex);
 ASTExprNodeP ParseIfStmt(TokenStream& lex);
 ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime);
 ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime);
+RcString getOptionalIdent(TokenStream& lex);
 ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
 static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
 ASTExprNodeP ParseExprMatch(TokenStream& lex);
@@ -3448,8 +3449,8 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
             break;
         }
         case TOK_RWORD_CONST: {
-            GET_CHECK_TOK(tok, lex, TOK_IDENT);
-            name = tok.ident().name;
+            // `const _: () = ();` is allowed here, as at item level.
+            name = getOptionalIdent(lex);
             auto params = ParseGenericParamsOpt(lex);
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             auto ty = ParseType(lex);
@@ -3984,9 +3985,7 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
 
     ParseFunctionQualifiers(lex, tok, fnFlags, abi);
     if (tok.type() == TOK_RWORD_CONST) {
-        GET_TOK(tok, lex);
-        CHECK_TOK(tok, TOK_IDENT);
-        auto name = tok.ident().name;
+        auto name = getOptionalIdent(lex);
         auto params = ParseGenericParamsOpt(lex);
         GET_CHECK_TOK(tok, lex, TOK_COLON);
         auto ty = ParseType(lex);
