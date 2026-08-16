@@ -3165,19 +3165,20 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
                 GET_TOK(tok, lex);
                 break;
             }
+            // `...` need not come last: rustc parses arguments after it and
+            // rejects them later. Falling through to the loop condition lets a
+            // following `,` continue the list.
             if (LOOK_AHEAD(lex) == TOK_TRIPLE_DOT) {
                 GET_TOK(tok, lex);
                 isVariadic = true;
-                GET_TOK(tok, lex);
-                break;
+                continue;
             }
             if ((lex.lookahead(0) == TOK_IDENT || lex.lookahead(0) == TOK_UNDERSCORE) && lex.lookahead(1) == TOK_COLON && lex.lookahead(2) == TOK_TRIPLE_DOT) {
                 GET_TOK(tok, lex);
                 GET_TOK(tok, lex);
                 GET_TOK(tok, lex);
                 isVariadic = true;
-                GET_TOK(tok, lex);
-                break;
+                continue;
             }
             args.push_back(ParseFunctionArg(lex, !canBePrototype));
         } while (GET_TOK(tok, lex) == TOK_COMMA);
