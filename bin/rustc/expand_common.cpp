@@ -1191,8 +1191,39 @@ struct CExpandExpr: public ASTNodeVisitor {
                     invalid(v);
                 }
 
+                // `..` in a destructuring position parses as a range with no
+                // bounds, which is how the tuple, slice and tuple-struct forms
+                // all spell "the rest".
+                static bool isRest(ASTExprNodeP& ep) {
+                    if (const auto* e = cast<ASTExprNodeBinOp>(ep.get())) {
+                        return e->type == ASTExprNodeBinOp::RANGE && !e->left && !e->right && !e->parenthesised;
+                    }
+                    return false;
+                }
+
+                ASTPattern::TuplePat lowerTuplePat(const Span& sp, ::std::vector<ASTExprNodeP>& values) {
+                    bool isSplit = false;
+                    ::std::vector<ASTPattern> start;
+                    ::std::vector<ASTPattern> end;
+                    for (auto& m : values) {
+                        if (isRest(m)) {
+                            ASSERT_BUG(sp, !isSplit, "Multiple `..` in tuple pattern?");
+                            isSplit = true;
+                            start = std::move(end);
+                            continue;
+                        }
+                        end.push_back(lower(m));
+                    }
+                    if (!isSplit) {
+                        return ASTPattern::TuplePat{std::move(end), false, {}};
+                    }
+                    return ASTPattern::TuplePat{std::move(start), true, std::move(end)};
+                }
+
                 void visit(ASTExprNodeCallPath& v) override {
-                    invalid(v);
+                    // `TupleStruct(a, b) = value` destructures through the
+                    // tuple-struct (or enum variant) of that name.
+                    pat(ASTPattern(ASTPattern::TagNamedTuple(), v.span(), v.path, lowerTuplePat(v.span(), v.args)));
                 }
 
                 void visit(ASTExprNodeCallMethod& v) override {
@@ -1279,34 +1310,28 @@ struct CExpandExpr: public ASTNodeVisitor {
                     if (v.size) {
                         TODO(v.span(), "Sized Array literal in destructured assignment");
                     } else {
-                        std::vector<ASTPattern> subpats;
+                        bool isSplit = false;
+                        std::vector<ASTPattern> leading;
+                        std::vector<ASTPattern> trailing;
                         for (auto& m : v.values) {
-                            subpats.push_back(lower(m));
+                            if (isRest(m)) {
+                                ASSERT_BUG(v.span(), !isSplit, "Multiple `..` in slice pattern?");
+                                isSplit = true;
+                                leading = std::move(trailing);
+                                continue;
+                            }
+                            trailing.push_back(lower(m));
                         }
-                        pat(ASTPattern(v.span(), ASTPattern::Data::make_Slice({std::move(subpats)})));
+                        if (isSplit) {
+                            pat(ASTPattern(v.span(), ASTPattern::Data::make_SplitSlice({std::move(leading), ASTPatternBinding(), std::move(trailing)})));
+                        } else {
+                            pat(ASTPattern(v.span(), ASTPattern::Data::make_Slice({std::move(trailing)})));
+                        }
                     }
                 }
 
                 void visit(ASTExprNodeTuple& v) override {
-                    bool isSplit = false;
-                    std::vector<ASTPattern> subpatsStart;
-                    std::vector<ASTPattern> subpats;
-                    for (auto& m : v.values) {
-                        if (const auto* e = cast<ASTExprNodeBinOp>(m.get())) {
-                            if (e->type == ASTExprNodeBinOp::RANGE && !e->left && !e->right) {
-                                ASSERT_BUG(v.span(), !isSplit, "Multiple `..` in tuple pattern?");
-                                isSplit = true;
-                                subpatsStart = std::move(subpats);
-                                continue;
-                            }
-                        }
-                        subpats.push_back(lower(m));
-                    }
-                    if (isSplit) {
-                        pat(ASTPattern(ASTPattern::TagTuple(), v.span(), ASTPattern::TuplePat{std::move(subpatsStart), true, std::move(subpats)}));
-                    } else {
-                        pat(ASTPattern(ASTPattern::TagTuple(), v.span(), std::move(subpats)));
-                    }
+                    pat(ASTPattern(ASTPattern::TagTuple(), v.span(), lowerTuplePat(v.span(), v.values)));
                 }
 
                 // Just emit as if it's a slot, `UnitStruct = Foo` isn't valid
@@ -1335,6 +1360,12 @@ struct CExpandExpr: public ASTNodeVisitor {
                 }
 
                 void visit(ASTExprNodeBinOp& v) override {
+                    // `(..) = value` -- the parens are not a tuple, so the whole
+                    // left side is the bare rest pattern.
+                    if (v.type == ASTExprNodeBinOp::RANGE && !v.left && !v.right) {
+                        pat(ASTPattern(ASTPattern::TagTuple(), v.span(), ASTPattern::TuplePat{{}, true, {}}));
+                        return;
+                    }
                     invalid(v);
                 }
 

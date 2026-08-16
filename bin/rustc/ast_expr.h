@@ -703,6 +703,10 @@ struct ASTExprNodeBinOp: public ASTExprNode {
     Type type;
     ASTExprNodeP left;
     ASTExprNodeP right;
+    /// Set on a bound-less `RANGE` that was written as `(..)`. Parentheses are
+    /// otherwise dropped, but a destructuring assignment needs them: `(..)` is a
+    /// sub-pattern where a bare `..` is the enclosing pattern's rest.
+    bool parenthesised = false;
 
     ASTExprNodeBinOp(Type type, ASTExprNodeP left, ASTExprNodeP right);
 

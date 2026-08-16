@@ -1648,6 +1648,13 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                     rv = NEWNODE(ASTExprNodeTuple, ::std::move(ents));
                 }
                 CHECK_TOK(tok, TOK_PAREN_CLOSE);
+                // Remember the parentheses around a bound-less `..`; a
+                // destructuring assignment reads `(..)` and `..` differently.
+                if (auto* e = cast<ASTExprNodeBinOp>(rv.get())) {
+                    if (e->type == ASTExprNodeBinOp::RANGE && !e->left && !e->right) {
+                        e->parenthesised = true;
+                    }
+                }
                 return rv;
             }
         case TOK_SQUARE_OPEN:

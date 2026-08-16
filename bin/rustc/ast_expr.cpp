@@ -961,7 +961,11 @@ NODE(
         }
         os << " " << *right << ")";
     },
-    { return NEWNODE(ASTExprNodeBinOp, type, OPT_CLONE(left), OPT_CLONE(right)); }
+    {
+        auto rv = NEWNODE(ASTExprNodeBinOp, type, OPT_CLONE(left), OPT_CLONE(right));
+        static_cast<ASTExprNodeBinOp&>(*rv).parenthesised = parenthesised;
+        return rv;
+    }
 )
 
 NODE(
