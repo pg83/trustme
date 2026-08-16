@@ -2728,6 +2728,20 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                             throw ParseErrorUnexpected(lex, tok);
                     }
                     while (lex.getTokenIf(TOK_DOUBLE_COLON)) {
+                        // `pub(in self::super::super)` walks up from wherever
+                        // the path started, so `super` can follow the head.
+                        if (lex.getTokenIf(TOK_RWORD_SUPER)) {
+                            if (path.nodes.empty()) {
+                                ERROR(lex.pointSpan(), E0000, "Too many `super` components in a visibility path");
+                            }
+                            path.nodes.pop_back();
+                            if (astPath.cls.is_Super()) {
+                                astPath.cls.as_Super().count += 1;
+                            } else {
+                                astPath = ASTPath::newSuper(1, {});
+                            }
+                            continue;
+                        }
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
                         path.nodes.push_back(tok.ident().name);
                         astPath.nodes().push_back(tok.ident().name);
