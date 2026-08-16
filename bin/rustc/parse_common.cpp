@@ -3634,7 +3634,8 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
             name = tok.ident().name;
             // Self allowed, prototype-form allowed (optional names and no code)
             auto fcn = ParseFunctionDef(lex, std::move(definitionSpan), /*allow_self*/ true, /*can_be_proto*/ true, std::move(abi), fnFlags);
-            if (lex.lookahead(0) == TOK_BRACE_OPEN) {
+            // A default body may be written out or come from a `block` fragment.
+            if (lex.lookahead(0) == TOK_BRACE_OPEN || lex.lookahead(0) == TOK_INTERPOLATED_BLOCK) {
                 // Enter a new hygine scope for the function body. (TODO: Should this be in Parse_ExprBlock?)
                 lex.pushHygine();
                 fcn.setCode(ParseExprBlock(lex));
@@ -3642,7 +3643,8 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
             } else if (lex.getTokenIf(TOK_SEMICOLON)) {
                 // Accept it
             } else {
-                throw ParseErrorUnexpected(lex, tok);
+                GET_TOK(tok, lex);
+                throw ParseErrorUnexpected(lex, tok, {TOK_BRACE_OPEN, TOK_INTERPOLATED_BLOCK, TOK_SEMICOLON});
             }
             rv = ::std::move(fcn);
             break;
