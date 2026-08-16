@@ -16,7 +16,7 @@ public:
 
 private:
     typedef std::vector<::std::unique_ptr<itemT>> innerT;
-    innerT mData;
+    innerT data_;
     Cmp cmp;
 
 public:
@@ -104,35 +104,35 @@ public:
     };
 
     size_t size() const {
-        return mData.size();
+        return data_.size();
     }
 
     iterator begin() {
-        return iterator(mData.begin());
+        return iterator(data_.begin());
     }
 
     const_iterator begin() const {
-        return const_iterator(mData.begin());
+        return const_iterator(data_.begin());
     }
 
     iterator end() {
-        return iterator(mData.end());
+        return iterator(data_.end());
     }
 
     const_iterator end() const {
-        return const_iterator(mData.end());
+        return const_iterator(data_.end());
     }
 
     template <typename K2>
     iterator lower_bound(const K2& k) {
-        return iterator(std::lower_bound(mData.begin(), mData.end(), k, [&](const ::std::unique_ptr<itemT>& kv, const K2& k) {
+        return iterator(std::lower_bound(data_.begin(), data_.end(), k, [&](const ::std::unique_ptr<itemT>& kv, const K2& k) {
             return cmp(kv->first, k);
         }));
     }
 
     template <typename K2>
     iterator upper_bound(const K2& k) {
-        return iterator(std::upper_bound(mData.begin(), mData.end(), k, [&](const K2& k, const ::std::unique_ptr<itemT>& kv) {
+        return iterator(std::upper_bound(data_.begin(), data_.end(), k, [&](const K2& k, const ::std::unique_ptr<itemT>& kv) {
             return cmp(k, kv->first);
         }));
     }
@@ -145,7 +145,7 @@ public:
     /// Lower bound: First item in the map not less than the provided key (equal, or first after)
     template <typename K2>
     const_iterator lower_bound(const K2& k) const {
-        return const_iterator(std::lower_bound(mData.begin(), mData.end(), k, [&](const ::std::unique_ptr<itemT>& kv, const K2& k) {
+        return const_iterator(std::lower_bound(data_.begin(), data_.end(), k, [&](const ::std::unique_ptr<itemT>& kv, const K2& k) {
             return cmp(kv->first, k);
         }));
     }
@@ -153,7 +153,7 @@ public:
     /// Upper bound: First item in the map after the provided key
     template <typename K2>
     const_iterator upper_bound(const K2& k) const {
-        return const_iterator(std::upper_bound(mData.begin(), mData.end(), k, [&](const K2& k, const ::std::unique_ptr<itemT>& kv) {
+        return const_iterator(std::upper_bound(data_.begin(), data_.end(), k, [&](const K2& k, const ::std::unique_ptr<itemT>& kv) {
             return cmp(k, kv->first);
         }));
     }
@@ -185,9 +185,9 @@ public:
     std::pair<iterator, bool> insert(itemT kv) {
         auto its = this->equal_range(kv.first);
         if (its.first == its.second) {
-            size_t i = its.first.inner - mData.begin();
-            mData.insert(its.first.inner, std::make_unique<itemT>(std::move(kv)));
-            return std::make_pair(iterator(mData.begin() + i), true);
+            size_t i = its.first.inner - data_.begin();
+            data_.insert(its.first.inner, std::make_unique<itemT>(std::move(kv)));
+            return std::make_pair(iterator(data_.begin() + i), true);
         } else {
             assert(its.first + 1 == its.second);
             return std::make_pair(its.first, false);
@@ -197,9 +197,9 @@ public:
     V& operator[](K k) {
         auto its = equal_range(k);
         if (its.first == its.second) {
-            size_t i = its.first.inner - mData.begin();
-            mData.insert(its.first.inner, std::make_unique<itemT>(std::make_pair(std::move(k), V())));
-            return mData[i]->second;
+            size_t i = its.first.inner - data_.begin();
+            data_.insert(its.first.inner, std::make_unique<itemT>(std::make_pair(std::move(k), V())));
+            return data_[i]->second;
         } else {
             assert(its.first.inner + 1 == its.second.inner);
             return its.first->second;
@@ -207,6 +207,6 @@ public:
     }
 
     void clear() {
-        mData.clear();
+        data_.clear();
     }
 };

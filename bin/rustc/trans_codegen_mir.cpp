@@ -259,7 +259,7 @@ namespace {
         static Span sp;
 
         const HIRCrate& crate;
-        ::StaticTraitResolve mResolve;
+        ::StaticTraitResolve resolve_;
 
         ::std::string outfilePath;
         ::std::ofstream of;
@@ -268,7 +268,7 @@ namespace {
     public:
         CodeGeneratorMonoMir(const WireBoard& wb, const HIRCrate& crate, const ::std::string& outfile)
             : crate(crate)
-            , mResolve(wb)
+            , resolve_(wb)
             , outfilePath(outfile)
             , of(outfilePath + ".mir")
         {
@@ -281,10 +281,10 @@ namespace {
             if (outTy == CodegenOutput::Executable) {
                 if (!crate.noMain) {
                     of << "fn main#(isize, *const *const i8): isize {\n";
-                    auto cStartPath = mResolve.hirCrate().getLangItemPathOpt("mrustc-start");
+                    auto cStartPath = resolve_.hirCrate().getLangItemPathOpt("mrustc-start");
                     if (cStartPath == HIRSimplePath()) {
-                        auto mainPath = mResolve.hirCrate().getLangItemPath(Span(), "mrustc-main");
-                        const auto& startPath = mResolve.hirCrate().getLangItemPathOpt("start");
+                        auto mainPath = resolve_.hirCrate().getLangItemPath(Span(), "mrustc-main");
+                        const auto& startPath = resolve_.hirCrate().getLangItemPathOpt("start");
                         if (crate.isNoCore && startPath == HIRSimplePath()) {
                             const auto& mainFcn = crate.getFunctionByPath(Span(), mainPath);
                             of << "\tlet direct_main_result: " << fmt(mainFcn.returnType) << ";\n";
@@ -294,7 +294,7 @@ namespace {
                             of << "\tlet m: fn();\n";
                             of << "\t0: {\n";
                             of << "\t\tASSIGN m = ADDROF " << fmt(HIRGenericPath(mainPath)) << ";\n";
-                            of << "\t\tCALL RETURN = " << fmt(HIRGenericPath(mResolve.hirCrate().getLangItemPath(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
+                            of << "\t\tCALL RETURN = " << fmt(HIRGenericPath(resolve_.hirCrate().getLangItemPath(Span(), "start"))) << "(m, arg0, arg1) goto 1 else 1\n";
                         }
                     } else {
                         of << "\t0: {\n";
@@ -340,16 +340,16 @@ namespace {
             TRACE_FUNCTION_F(ty);
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "type " << ty;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, FMT_CB(ss, ss << "type " << ty;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
             if (const auto* te = ty->opt_Tuple()) {
                 if (te->size() > 0) {
-                    const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
+                    const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
                     MIR_ASSERT(*mirRes, repr, "No repr for tuple " << ty);
 
-                    bool hasDropGlue = mResolve.typeNeedsDropGlue(sp, ty);
+                    bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
                     auto dropGluePath = HIRPath(ty, "#drop_glue");
 
                     of << "type " << fmt(ty) << " {\n";
@@ -386,7 +386,7 @@ namespace {
                                 const auto& path = ty->as_Path().path.mData.as_Generic();
                                 const auto& str = *ty->as_Path().binding.as_Struct();
                                 auto monomorph = [&](const auto& tpl) {
-                                    return mResolve.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.mParams, nullptr));
+                                    return resolve_.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.mParams, nullptr));
                                 };
                                 TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");), (Tuple, return metadataType(monomorph(se.back().ent));), (Named, return metadataType(monomorph(se.back().ty));))
                                 //MIR_TODO(*m_mir_res, "Determine DST type when ::Possible - " << ty);
@@ -416,7 +416,7 @@ namespace {
         void emitStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "struct " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, FMT_CB(ss, ss << "struct " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -452,14 +452,14 @@ namespace {
             };
 
             // Generate the drop glue (and determine if there is any)
-            bool hasDropGlue = mResolve.typeNeedsDropGlue(sp, ty);
+            bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
 
-            const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
             MIR_ASSERT(*mirRes, repr, "No repr for struct " << ty);
             of << "type " << TransMangle(p) << " {\n";
             of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
             if (repr->size == SIZE_MAX) {
-                of << "\tDSTMETA " << H::getMetadataType(sp, mResolve, *repr) << ";\n";
+                of << "\tDSTMETA " << H::getMetadataType(sp, resolve_, *repr) << ";\n";
             }
             if (hasDropGlue) {
                 of << "\tDROP " << fmt(dropGluePath) << ";\n";
@@ -478,7 +478,7 @@ namespace {
             HIRTypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &varPath.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
-                return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
+                return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
             };
 
             auto enumPath = varPath.clone();
@@ -515,7 +515,7 @@ namespace {
             HIRTypeRef tmp;
             MonomorphStatePtr ms(crate.types, nullptr, &p.mParams, nullptr);
             auto monomorph = [&](const auto& x) {
-                return mResolve.monomorphExpandOpt(sp, tmp, x, ms);
+                return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
             };
             // Create constructor function
             const auto& e = item.mData.as_Tuple();
@@ -545,17 +545,17 @@ namespace {
         void emitUnion(const Span& sp, const HIRGenericPath& p, const HIRUnion& item) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "union " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, FMT_CB(ss, ss << "union " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
             HIRTypeRef ty = crate.types.path(p.clone(), &item);
 
-            bool hasDropGlue = mResolve.typeNeedsDropGlue(sp, ty);
+            bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
             auto dropGluePath = HIRPath(ty, "#drop_glue");
 
-            const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
             MIR_ASSERT(*mirRes, repr, "No repr for union " << ty);
             of << "type " << fmt(p) << " {\n";
             of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
@@ -571,7 +571,7 @@ namespace {
         void emitEnum(const Span& sp, const HIRGenericPath& p, const HIREnum& item) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "enum " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, FMT_CB(ss, ss << "enum " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
@@ -579,10 +579,10 @@ namespace {
             HIRTypeRef ty = crate.types.path(p.clone(), &item);
 
             // Generate the drop glue (and determine if there is any)
-            bool hasDropGlue = mResolve.typeNeedsDropGlue(sp, ty);
+            bool hasDropGlue = resolve_.typeNeedsDropGlue(sp, ty);
             auto dropGluePath = HIRPath(ty, "#drop_glue");
 
-            const auto* repr = TargetGetTypeRepr(sp, mResolve, ty);
+            const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
             MIR_ASSERT(*mirRes, repr, "No repr for enum " << ty);
             of << "type " << fmt(p) << " {\n";
             of << "\tSIZE " << repr->size << ", ALIGN " << repr->align << ";\n";
@@ -687,13 +687,13 @@ namespace {
         void emitStaticLocal(const HIRPath& p, const HIRStatic& item, const TransParams& params, const EncodedLiteral& encoded) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "static " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, FMT_CB(ss, ss << "static " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
 
-            auto type = params.monomorph(mResolve, item.mType);
+            auto type = params.monomorph(resolve_, item.mType);
 
             of << "static " << fmt(p) << ": " << fmt(type) << " = \"";
             for (auto b : encoded.bytes) {
@@ -719,7 +719,7 @@ namespace {
         void emitFunctionExt(const HIRPath& p, const HIRFunction& item, const TransParams& params) override {
             MIRFunction emptyFcn;
             MIRTypeResolve topMirRes {
-                sp, mResolve, FMT_CB(ss, ss << "extern fn " << p;), HIRTypeRef(), {}, emptyFcn
+                sp, resolve_, FMT_CB(ss, ss << "extern fn " << p;), HIRTypeRef(), {}, emptyFcn
             };
             mirRes = &topMirRes;
             TRACE_FUNCTION_F(p);
@@ -735,7 +735,7 @@ namespace {
                     if (i != 0) {
                         of << ", ";
                     }
-                    of << fmt(params.monomorph(mResolve, item.mArgs[i].second));
+                    of << fmt(params.monomorph(resolve_, item.mArgs[i].second));
                 }
                 of << "): " << fmt(retType) << " = \"" << item.linkage.name << "\":\"" << item.mAbi << "\";\n";
             }
@@ -748,14 +748,14 @@ namespace {
 
             MIRTypeResolve::argsT argTypes;
             for (const auto& ent : item.mArgs) {
-                argTypes.push_back(::std::make_pair(HIRPattern{}, params.monomorph(mResolve, ent.second)));
+                argTypes.push_back(::std::make_pair(HIRPattern{}, params.monomorph(resolve_, ent.second)));
             }
 
             HIRTypeRef retTypeTmp;
             const auto& retType = monomorphiseFcnReturn(retTypeTmp, item, params);
 
             MIRTypeResolve localMirRes {
-                sp, mResolve, FMT_CB(ss, ss << p;), retType, argTypes, *code
+                sp, resolve_, FMT_CB(ss, ss << p;), retType, argTypes, *code
             };
             mirRes = &localMirRes;
 
@@ -766,7 +766,7 @@ namespace {
                 if (i != 0) {
                     of << ", ";
                 }
-                of << fmt(params.monomorph(mResolve, item.mArgs[i].second));
+                of << fmt(params.monomorph(resolve_, item.mArgs[i].second));
             }
             of << "): " << fmt(retType);
             if (item.linkage.name != "") {
@@ -1235,7 +1235,7 @@ namespace {
                 } else {
                     tmp = params.monomorphType(Span(), item.returnType);
                 }
-                mResolve.expandAssociatedTypes(Span(), tmp);
+                resolve_.expandAssociatedTypes(Span(), tmp);
                 return tmp;
             } else {
                 return item.returnType;

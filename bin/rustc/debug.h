@@ -89,15 +89,15 @@ public:
 };
 
 class TraceLog {
-    const char* mTag;
+    const char* tag_;
 
 public:
     template<typename Info>
     TraceLog(const char* tag, Info&& infoCb)
-        : mTag(tag)
+        : tag_(tag)
     {
-        if (mTag) {
-            auto& os = debugOutput(gDebugIndentLevel, mTag);
+        if (tag_) {
+            auto& os = debugOutput(gDebugIndentLevel, tag_);
             os << ">> (";
             infoCb(os);
             os << ")" << ::std::endl;
@@ -112,17 +112,17 @@ public:
 
 template<typename Ret>
 class TraceLogRet {
-    const char* mTag;
+    const char* tag_;
     Ret ret;
 
 public:
     template<typename Info>
     TraceLogRet(const char* tag, Info&& infoCb, Ret&& ret)
-        : mTag(tag)
+        : tag_(tag)
         , ret(::std::forward<Ret>(ret))
     {
-        if (mTag) {
-            auto& os = debugOutput(gDebugIndentLevel, mTag);
+        if (tag_) {
+            auto& os = debugOutput(gDebugIndentLevel, tag_);
             os << ">> (";
             infoCb(os);
             os << ")" << ::std::endl;
@@ -131,9 +131,9 @@ public:
     }
 
     ~TraceLogRet() {
-        if (mTag) {
+        if (tag_) {
             UNINDENT();
-            auto& os = debugOutput(gDebugIndentLevel, mTag);
+            auto& os = debugOutput(gDebugIndentLevel, tag_);
             os << "<< (";
             ret(os);
             os << ")" << ::std::endl;

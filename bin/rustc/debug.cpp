@@ -29,10 +29,10 @@ bool debugEnabledUpdate() {
 }
 
 DebugTimedPhase::DebugTimedPhase(const char* name)
-    : mName(name)
+    : name_(name)
 {
-    ::std::cout << mName << ": V V V" << ::std::endl;
-    gCurPhase = mName;
+    ::std::cout << name_ << ": V V V" << ::std::endl;
+    gCurPhase = name_;
     gDebugEnabled = debugEnabledUpdate();
     start = clock();
 }
@@ -44,7 +44,7 @@ DebugTimedPhase::~DebugTimedPhase() {
 
     // TODO: Show wall time too?
     ::std::cout << "(" << ::std::fixed << ::std::setprecision(2) << static_cast<double>(end - start) / static_cast<double>(CLOCKS_PER_SEC) << " s) ";
-    ::std::cout << mName << ": DONE";
+    ::std::cout << name_ << ": DONE";
     ::std::cout << ::std::endl;
 }
 
@@ -163,17 +163,17 @@ extern void debugInitPhases(const char* envVarName, std::initializer_list<const 
 NullSink::NullSink() {
 }
 TraceLog::TraceLog(const char* tag)
-    : mTag(tag) {
-    if (mTag) {
-        auto& os = debugOutput(gDebugIndentLevel, mTag);
+    : tag_(tag) {
+    if (tag_) {
+        auto& os = debugOutput(gDebugIndentLevel, tag_);
         os << ">>" << ::std::endl;
         INDENT();
     }
 }
 TraceLog::~TraceLog() {
-    if (mTag) {
+    if (tag_) {
         UNINDENT();
-        auto& os = debugOutput(gDebugIndentLevel, mTag);
+        auto& os = debugOutput(gDebugIndentLevel, tag_);
         os << "<< ()" << ::std::endl;
     }
 }

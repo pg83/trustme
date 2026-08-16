@@ -12,8 +12,8 @@ public:
     static const uint16_t BINDING_UNBOUND = 0xFFFC;
 
 private:
-    Ident mName;
-    uint16_t mBinding;
+    Ident name_;
+    uint16_t binding_;
 
     ASTLifetimeRef(Ident name, uint32_t binding);
 
@@ -33,23 +33,23 @@ public:
     void setBinding(uint16_t b);
 
     bool isUnbound() const {
-        return mBinding == BINDING_UNBOUND;
+        return binding_ == BINDING_UNBOUND;
     }
 
     bool isInfer() const {
-        return mBinding == BINDING_INFER;
+        return binding_ == BINDING_INFER;
     }
 
     const Ident& name() const {
-        return mName;
+        return name_;
     }
 
     uint16_t binding() const {
-        return mBinding;
+        return binding_;
     }
 
     Ordering ord(const ASTLifetimeRef& x) const {
-        return ::ord(mName.name, x.mName.name);
+        return ::ord(name_.name, x.name_.name);
     }
 
     bool operator==(const ASTLifetimeRef& x) const {

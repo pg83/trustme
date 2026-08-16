@@ -834,8 +834,8 @@ HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathCl
 
 namespace {
     class TraitObjectLowering {
-        AST2HIR& mCtx;
-        const Span& mSpan;
+        AST2HIR& ctx_;
+        const Span& span_;
         HIRTypeData::Data_TraitObject& out;
         ::std::unordered_set<const void*> activeAliases;
 
@@ -846,14 +846,14 @@ namespace {
         void addTrait(HIRTraitPath trait, bool isMarker) {
             if (isMarker) {
                 if (!trait.typeBounds.empty() || !trait.traitBounds.empty()) {
-                    ERROR(mSpan, E0000, "Associated type bounds on auto trait " << trait.mPath);
+                    ERROR(span_, E0000, "Associated type bounds on auto trait " << trait.mPath);
                 }
                 out.markers.push_back(mv$(trait.mPath));
                 return;
             }
 
             if (hasPrincipal()) {
-                ERROR(mSpan, E0000, "Multiple data traits in trait object: " << out.mTrait.mPath << " and " << trait.mPath);
+                ERROR(span_, E0000, "Multiple data traits in trait object: " << out.mTrait.mPath << " and " << trait.mPath);
             }
             out.mTrait = mv$(trait);
         }
@@ -861,7 +861,7 @@ namespace {
         void applyAliasBounds(HIRTraitPath& aliasPath, bool hadPrincipal) {
             const bool addedPrincipal = !hadPrincipal && hasPrincipal();
             if ((!aliasPath.typeBounds.empty() || !aliasPath.traitBounds.empty()) && !addedPrincipal) {
-                ERROR(mSpan, E0000, "Associated type bounds on trait alias without a data trait: " << aliasPath.mPath);
+                ERROR(span_, E0000, "Associated type bounds on trait alias without a data trait: " << aliasPath.mPath);
             }
             if (addedPrincipal) {
                 for (auto& bound : aliasPath.typeBounds) {
@@ -884,50 +884,50 @@ namespace {
 
         ActiveAlias enterAlias(const void* key, const HIRGenericPath& path) {
             if (!activeAliases.insert(key).second) {
-                ERROR(mSpan, E0000, "Recursive trait alias in trait object: " << path);
+                ERROR(span_, E0000, "Recursive trait alias in trait object: " << path);
             }
             return ActiveAlias{activeAliases, key};
         }
 
         void addAstPath(HIRTraitPath path, const ASTPathBindingType& binding) {
             if (const auto* trait = binding.opt_Trait()) {
-                ASSERT_BUG(mSpan, trait->trait_ || trait->hir, "Null trait binding for " << path.mPath);
+                ASSERT_BUG(span_, trait->trait_ || trait->hir, "Null trait binding for " << path.mPath);
                 addTrait(mv$(path), trait->trait_ ? trait->trait_->isMarker() : trait->hir->mIsMarker);
             } else if (const auto* alias = binding.opt_TraitAlias()) {
                 expandAstAlias(mv$(path), *alias);
             } else {
-                BUG(mSpan, "Not a trait or trait alias: " << path.mPath << " (" << binding.tagStr() << ")");
+                BUG(span_, "Not a trait or trait alias: " << path.mPath << " (" << binding.tagStr() << ")");
             }
         }
 
         void addHirPath(HIRTraitPath path) {
-            const auto& item = mCtx.mCrate->getTypeitemByPath(mSpan, path.mPath.mPath);
+            const auto& item = ctx_.mCrate->getTypeitemByPath(span_, path.mPath.mPath);
             if (const auto* trait = item.opt_Trait()) {
                 addTrait(mv$(path), trait->mIsMarker);
             } else if (const auto* alias = item.opt_TraitAlias()) {
                 expandHirAlias(mv$(path), *alias);
             } else {
-                BUG(mSpan, "Trait alias expanded to non-trait path " << path.mPath << " (" << item.tagStr() << ")");
+                BUG(span_, "Trait alias expanded to non-trait path " << path.mPath << " (" << item.tagStr() << ")");
             }
         }
 
         void expandAstAlias(HIRTraitPath aliasPath, const ASTPathBindingType::Data_TraitAlias& binding) {
             const void* key = binding.trait_ ? static_cast<const void*>(binding.trait_) : static_cast<const void*>(binding.hir);
-            ASSERT_BUG(mSpan, key, "Null trait alias binding for " << aliasPath.mPath);
+            ASSERT_BUG(span_, key, "Null trait alias binding for " << aliasPath.mPath);
             auto active = enterAlias(key, aliasPath.mPath);
             const bool hadPrincipal = hasPrincipal();
 
             if (binding.trait_) {
                 bool traitRequiresSized = false;
-                auto paramsDef = mCtx.LowerHIRGenericParams(binding.trait_->params, &traitRequiresSized);
-                auto params = ConvertHIRCompleteAliasParams(mCtx.mCrate->types, mSpan, paramsDef, aliasPath.mPath, false);
-                auto monomorph = MonomorphStatePtr(mCtx.mCrate->types, nullptr, &params, nullptr);
+                auto paramsDef = ctx_.LowerHIRGenericParams(binding.trait_->params, &traitRequiresSized);
+                auto params = ConvertHIRCompleteAliasParams(ctx_.mCrate->types, span_, paramsDef, aliasPath.mPath, false);
+                auto monomorph = MonomorphStatePtr(ctx_.mCrate->types, nullptr, &params, nullptr);
                 for (const auto& bound : binding.trait_->traits) {
-                    auto trait = mCtx.LowerHIRTraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs, false, bound.ent.constness);
-                    addAstPath(monomorph.monomorphTraitpath(mSpan, trait, false), bound.ent.path->mBindings.type.binding);
+                    auto trait = ctx_.LowerHIRTraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs, false, bound.ent.constness);
+                    addAstPath(monomorph.monomorphTraitpath(span_, trait, false), bound.ent.path->mBindings.type.binding);
                 }
             } else {
-                ASSERT_BUG(mSpan, binding.hir, "Null trait alias binding for " << aliasPath.mPath);
+                ASSERT_BUG(span_, binding.hir, "Null trait alias binding for " << aliasPath.mPath);
                 expandHirAliasContents(aliasPath, *binding.hir);
             }
 
@@ -935,11 +935,11 @@ namespace {
         }
 
         void expandHirAliasContents(const HIRTraitPath& aliasPath, const HIRTraitAlias& alias) {
-            auto params = ConvertHIRCompleteAliasParams(mCtx.mCrate->types, mSpan, alias.mParams, aliasPath.mPath, false);
-            auto monomorph = MonomorphStatePtr(mCtx.mCrate->types, nullptr, &params, nullptr);
+            auto params = ConvertHIRCompleteAliasParams(ctx_.mCrate->types, span_, alias.mParams, aliasPath.mPath, false);
+            auto monomorph = MonomorphStatePtr(ctx_.mCrate->types, nullptr, &params, nullptr);
             for (const auto& bound : alias.traits) {
                 auto trait = bound.clone();
-                addHirPath(monomorph.monomorphTraitpath(mSpan, trait, false));
+                addHirPath(monomorph.monomorphTraitpath(span_, trait, false));
             }
         }
 
@@ -952,14 +952,14 @@ namespace {
 
     public:
         TraitObjectLowering(AST2HIR& ctx, const Span& span, HIRTypeData::Data_TraitObject& out)
-            : mCtx(ctx)
-            , mSpan(span)
+            : ctx_(ctx)
+            , span_(span)
             , out(out)
         {
         }
 
         void add(const ::TypeTraitPath& bound) {
-            auto path = mCtx.LowerHIRTraitPath(mSpan, *bound.path, bound.hrbs, false, bound.constness);
+            auto path = ctx_.LowerHIRTraitPath(span_, *bound.path, bound.hrbs, false, bound.constness);
             addAstPath(mv$(path), bound.path->mBindings.type.binding);
         }
     };
@@ -1566,7 +1566,7 @@ HIRUnion AST2HIR::LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAt
         variants.push_back(HIRStructField{field.mName, getVis(field.vis), LowerHIRType(field.mType), {}});
     }
 
-    return HIRUnion{LowerHIRGenericParams(f.mParams, nullptr), repr, mv$(variants)};
+    return HIRUnion{LowerHIRGenericParams(f.params_, nullptr), repr, mv$(variants)};
 }
 
 namespace {
@@ -2643,7 +2643,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
     {
         TRACE_FUNCTION_FR("macros", "macros");
         ::std::vector<ASTModule*> mods;
-        mods.push_back(&crate.mRootModule);
+        mods.push_back(&crate.rootModule_);
         do {
             auto& mod = *mods.back();
             mods.pop_back();
@@ -2651,7 +2651,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
             for (/*const*/ auto& mac : mod.macros()) {
                 if (mac.data->exported) {
                     HIRMacroItem mi;
-                    if (&mod == &crate.mRootModule) {
+                    if (&mod == &crate.rootModule_) {
                         mi = mv$(mac.data);
                     } else {
                         assert(mac.data);
@@ -2689,7 +2689,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
             }
         } while (mods.size() > 0);
 
-        for (const auto& mac : crate.mRootModule.macroImports) {
+        for (const auto& mac : crate.rootModule_.macroImports) {
             if (mac.isPub || (mac.ref.is_MacroRules() && mac.ref.as_MacroRules()->exported)) {
                 // Add to the re-export list
                 auto path = HIRSimplePath(mac.path.crate == "" ? mCrateName : mac.path.crate, mac.path.nodes);
@@ -2703,7 +2703,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
             }
         }
 
-        for (const auto& i : crate.mRootModule.macroItems) {
+        for (const auto& i : crate.rootModule_.macroItems) {
             if (i.second.vis.isGlobal()) {
                 rv.exportedMacroNames.push_back(i.first);
             }
@@ -2771,7 +2771,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
     pathPointeeSized = rv.getLangItemPathOpt("pointee_sized");
     pathMetadataSized = rv.getLangItemPathOpt("metadata_sized");
 
-    rv.mRootModule = LowerHIRModule(crate.mRootModule, HIRItemPath(rv.crateName));
+    rv.mRootModule = LowerHIRModule(crate.rootModule_, HIRItemPath(rv.crateName));
     for (auto& e : macros) {
         if (e.second.is_MacroRules()) {
             ASSERT_BUG(Span(), !e.second.as_MacroRules()->rules.empty(), "Empty macro? - " << e.first);
@@ -2779,7 +2779,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
         rv.mRootModule.macroItems.insert(::std::make_pair(e.first, rv.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{HIRPublicity::newGlobal(), mv$(e.second)})));
     }
 
-    LowerHIRModuleImpls(crate.mRootModule, rv);
+    LowerHIRModuleImpls(crate.rootModule_, rv);
 
     // Set all pointers in the HIR to the correct (now fixed) locations
 

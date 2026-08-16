@@ -227,7 +227,7 @@ namespace {
 
         e.data->exported = true;
         DEBUG("- Export macro " << name << "!");
-        crate.mRootModule.macros().push_back(mv$(e));
+        crate.rootModule_.macros().push_back(mv$(e));
     }
 }
 
@@ -260,7 +260,7 @@ class CMacroExportHandler: public ExpandDecorator {
             const auto& name = p.nodes.front().name();
             mod.macroImports.push_back(ASTModule::MacroImport{true, u->entries.front().name, ASTAbsolutePath(p.crate, {name}), {}});
 
-            crate.mRootModule.addItem(sp, ASTVisibility::makeGlobal(), name, i.clone(), {});
+            crate.rootModule_.addItem(sp, ASTVisibility::makeGlobal(), name, i.clone(), {});
         } else if (i.is_MacroInv()) {
             const auto& mac = i.as_MacroInv();
             if (!(mac.path().isTrivial() && mac.path().asTrivial() == "macro_rules")) {

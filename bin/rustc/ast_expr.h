@@ -15,8 +15,8 @@ class ASTPattern;
 class ASTNodeVisitor;
 
 class ASTExprNode {
-    ASTAttributeList mAttrs;
-    Span mSpan;
+    ASTAttributeList attrs_;
+    Span span_;
 
 public:
     virtual ~ASTExprNode() = 0;
@@ -27,17 +27,17 @@ public:
     virtual unsigned int nodeKind() const = 0;
 
     void setSpan(Span s) {
-        mSpan = ::std::move(s);
+        span_ = ::std::move(s);
     }
 
     const Span& span() const {
-        return mSpan;
+        return span_;
     }
 
     void setAttrs(ASTAttributeList&& mi);
 
     ASTAttributeList& attrs() {
-        return mAttrs;
+        return attrs_;
     }
 };
 

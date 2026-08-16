@@ -142,7 +142,7 @@ namespace {
                                             *outPath = ASTAbsolutePath(c.name, {});
                                         }
                                         if (c.name == "") {
-                                            return getModuleAst(crate.mRootModule, path, 1, ignoreLast, outPath);
+                                            return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
                                         }
                                         ASSERT_BUG(sp, crate.externCrates.count(c.name) > 0, "Unable to find crate `" << c.name << "`");
                                         return getModuleHir(crate.externCrates.at(c.name).hir->mRootModule, path, 1, ignoreLast, outPath);
@@ -194,7 +194,7 @@ namespace {
                         if (ecIt != settings.implicitCrates.end()) {
                             if (ecIt->second == "") {
                                 // This crate!
-                                return getModuleAst(crate.mRootModule, path, 1, ignoreLast, outPath);
+                                return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
                             } else {
                                 ASSERT_BUG(sp, crate.externCrates.count(ecIt->second), "Crate \"" << ecIt->second << "\" not loaded (for \"" << ecIt->first << "\")");
                                 const auto& ec = crate.externCrates.at(ecIt->second);
@@ -237,13 +237,13 @@ namespace {
                     DEBUG("Absolute " << path);
                     if (e.crate == "" || e.crate == crate.crateNameReal) {
                         DEBUG("Current crate");
-                        return getModuleAst(crate.mRootModule, path, 0, ignoreLast, outPath);
+                        return getModuleAst(crate.rootModule_, path, 0, ignoreLast, outPath);
                     }
                     // 2018 `::cratename::` paths
                     else if (e.crate.c_str()[0] == '=') {
                         const char* n = e.crate.c_str() + 1;
                         if (n == crate.crateNameSet) {
-                            return getModuleAst(crate.mRootModule, path, 0, ignoreLast, outPath);
+                            return getModuleAst(crate.rootModule_, path, 0, ignoreLast, outPath);
                         }
                         auto ecIt = settings.implicitCrates.find(n);
                         if (ecIt == settings.implicitCrates.end()) {
@@ -302,7 +302,7 @@ namespace {
                                 *outPath = ASTAbsolutePath(i->name, {});
                             }
                             if (i->name == "") {
-                                return getModuleAst(crate.mRootModule, path, idx + 1, ignoreLast, outPath);
+                                return getModuleAst(crate.rootModule_, path, idx + 1, ignoreLast, outPath);
                             } else {
                                 ASSERT_BUG(sp, crate.externCrates.count(i->name) != 0, "Cannot find crate `" << i->name << "`");
                                 return getModuleHir(crate.externCrates.at(i->name).hir->mRootModule, path, idx + 1, ignoreLast, outPath);
@@ -383,7 +383,7 @@ namespace {
         }
 
         const ASTModule& getModByTruePath(const std::vector<ASTPathNode>& baseNodes, size_t len) {
-            const ASTModule* mod = &crate.mRootModule;
+            const ASTModule* mod = &crate.rootModule_;
             for (size_t i = 0; i < len; i++) {
                 const auto& tgtName = baseNodes[i].name();
                 if (tgtName.c_str()[0] == '#') {
@@ -679,7 +679,7 @@ namespace {
             }
             if (mod.isAnon()) {
                 DEBUG("Recurse to parent");
-                const ASTModule* m = &crate.mRootModule;
+                const ASTModule* m = &crate.rootModule_;
                 for (size_t i = 0; i < mod.path().nodes.size() - 1; i++) {
                     auto& tgtName = mod.path().nodes[i];
                     if (tgtName.c_str()[0] == '#') {

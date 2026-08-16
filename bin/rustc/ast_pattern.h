@@ -114,9 +114,9 @@ public:
     );
 
 private:
-    Span mSpan;
-    std::vector<ASTPatternBinding> mBindings;
-    Data mData;
+    Span span_;
+    std::vector<ASTPatternBinding> bindings_;
+    Data data_;
 
 public:
     virtual ~ASTPattern();
@@ -174,34 +174,34 @@ public:
     ASTPattern(TagStruct, Span sp, ASTPath path, ::std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive);
 
     const Span& span() const {
-        return mSpan;
+        return span_;
     }
 
     ASTPattern clone() const;
 
     // Accessors
     std::vector<ASTPatternBinding>& bindings() {
-        return mBindings;
+        return bindings_;
     }
 
     const std::vector<ASTPatternBinding>& bindings() const {
-        return mBindings;
+        return bindings_;
     }
 
     Data& data() {
-        return mData;
+        return data_;
     }
 
     const Data& data() const {
-        return mData;
+        return data_;
     }
 
     ASTPath& path() {
-        return mData.as_StructTuple().path;
+        return data_.as_StructTuple().path;
     }
 
     const ASTPath& path() const {
-        return mData.as_StructTuple().path;
+        return data_.as_StructTuple().path;
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTPattern& pat);

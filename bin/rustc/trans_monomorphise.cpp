@@ -10,13 +10,13 @@
 
 namespace {
     class Cloner: public MIRCloner {
-        const ::StaticTraitResolve& mResolve;
+        const ::StaticTraitResolve& resolve_;
         const TransParams& params;
 
     public:
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, const TransParams& params)
             : MIRCloner(sp, resolve.hirCrate().types)
-            , mResolve(resolve)
+            , resolve_(resolve)
             , params(params)
         {
         }
@@ -24,11 +24,11 @@ namespace {
         const HIRTypeData* valueGenericType(HIRGenericRef g) const override {
             switch (g.group()) {
                 case 0:
-                    ASSERT_BUG(sp, g.idx() < mResolve.implGenerics().values.size(), "Value generic " << g << " out of bounds in impl: " << mResolve.implGenerics().values.size());
-                    return mResolve.implGenerics().values.at(g.idx()).mType;
+                    ASSERT_BUG(sp, g.idx() < resolve_.implGenerics().values.size(), "Value generic " << g << " out of bounds in impl: " << resolve_.implGenerics().values.size());
+                    return resolve_.implGenerics().values.at(g.idx()).mType;
                 case 1:
-                    ASSERT_BUG(sp, g.idx() < mResolve.itemGenerics().values.size(), "Value generic " << g << " out of bounds in fcn: " << mResolve.itemGenerics().values.size());
-                    return mResolve.itemGenerics().values.at(g.idx()).mType;
+                    ASSERT_BUG(sp, g.idx() < resolve_.itemGenerics().values.size(), "Value generic " << g << " out of bounds in fcn: " << resolve_.itemGenerics().values.size());
+                    return resolve_.itemGenerics().values.at(g.idx()).mType;
                 default:
                     BUG(Span(), "");
             }
@@ -39,7 +39,7 @@ namespace {
         }
 
         const StaticTraitResolve* resolve() const override {
-            return &mResolve;
+            return &resolve_;
         }
     };
 }

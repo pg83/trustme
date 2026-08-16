@@ -41,27 +41,27 @@ class ParameterMappings {
 
     loopCountsT loopCounts;
 
-    ::std::vector<CapturedVar> mMappings;
-    unsigned mLayerCount;
+    ::std::vector<CapturedVar> mappings_;
+    unsigned layerCount_;
 
 public:
     ParameterMappings()
-        : mLayerCount(0)
+        : layerCount_(0)
     {
     }
 
     ParameterMappings(ParameterMappings&&) = default;
 
     const ::std::vector<CapturedVar>& mappings() const {
-        return mMappings;
+        return mappings_;
     }
 
     void dump() const {
-        DEBUG("m_mappings = {" << mMappings << "}");
+        DEBUG("m_mappings = {" << mappings_ << "}");
     }
 
     size_t layerCount() const {
-        return mLayerCount + 1;
+        return layerCount_ + 1;
     }
 
     void setLoopCounts(loopCountsT loopCounts) {
@@ -109,7 +109,7 @@ private:
 
 class MacroPatternStream {
     const ::std::vector<SimplePatEnt>& simpleEnts;
-    size_t mCurPos;
+    size_t curPos_;
 
     bool lastWasCond;
     bool conditionMet;
@@ -131,7 +131,7 @@ class MacroPatternStream {
 public:
     MacroPatternStream(const ::std::vector<SimplePatEnt>& ents, const ::std::vector<bool>* conditionReplay = nullptr)
         : simpleEnts(ents)
-        , mCurPos(0)
+        , curPos_(0)
         , lastWasCond(false)
         , conditionReplay(conditionReplay)
         , conditionReplayPos(0)
@@ -139,7 +139,7 @@ public:
     }
 
     size_t curPos() const {
-        return mCurPos;
+        return curPos_;
     }
 
     /// Get the next pattern entry
@@ -180,10 +180,10 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
 
 void ParameterMappings::insert(unsigned int nameIndex, const ::std::vector<unsigned int>& iterations, InterpolatedFragment data) {
     DEBUG("index=" << nameIndex << ", iterations=[" << iterations << "], data=" << data);
-    if (nameIndex >= mMappings.size()) {
-        mMappings.resize(nameIndex + 1);
+    if (nameIndex >= mappings_.size()) {
+        mappings_.resize(nameIndex + 1);
     }
-    auto* layer = &mMappings[nameIndex].topLayer;
+    auto* layer = &mappings_[nameIndex].topLayer;
     if (iterations.size() > 0) {
         for (unsigned int i = 0; i < iterations.size() - 1; i++) {
             auto iter = iterations[i];
@@ -216,7 +216,7 @@ void ParameterMappings::insert(unsigned int nameIndex, const ::std::vector<unsig
 
 ParameterMappings::CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
     DEBUG("(iterations=[" << iterations << "], name_idx=" << nameIdx << ")");
-    auto& e = mMappings.at(nameIdx);
+    auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
 
     // - If the top layer is a 1-sized set of values, unconditionally return it
@@ -264,7 +264,7 @@ unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vect
 
 unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) const {
     DEBUG("(iterations=[" << iterations << "], name_idx=" << nameIdx << ")");
-    auto& e = mMappings.at(nameIdx);
+    auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
 
     // - If the top layer is a 1-sized set of values, unconditionally return it
@@ -330,22 +330,22 @@ const SimplePatEnt& MacroPatternStream::next() {
         }
         lastWasCond = false;
         // End of list? return End entry
-        if (mCurPos == simpleEnts.size()) {
+        if (curPos_ == simpleEnts.size()) {
             static SimplePatEnt END = SimplePatEnt::make_End({});
             return END;
         }
-        const auto& curEnt = simpleEnts[mCurPos];
+        const auto& curEnt = simpleEnts[curPos_];
         // If replaying, and this is a conditional
         if (conditionReplay && curEnt.is_If()) {
             // Skip the conditional (following its target or just skipping over)
             if ((*conditionReplay)[conditionReplayPos++]) {
-                mCurPos = curEnt.as_If().jumpTarget;
+                curPos_ = curEnt.as_If().jumpTarget;
             } else {
-                mCurPos += 1;
+                curPos_ += 1;
             }
             continue;
         }
-        mCurPos += 1;
+        curPos_ += 1;
         TU_MATCH_HDRA( (curEnt), {)
         default:
             if( curEnt.is_If() )
@@ -357,7 +357,7 @@ const SimplePatEnt& MacroPatternStream::next() {
             TU_ARMA(End, _e)
             BUG(Span(), "Unexpected End");
             TU_ARMA(Jump, e)
-            mCurPos = e.jumpTarget;
+            curPos_ = e.jumpTarget;
             TU_ARMA(LoopStart, e) {
                 currentLoops.push_back(e.index);
                 loopIterations.push_back(0);
@@ -383,14 +383,14 @@ const SimplePatEnt& MacroPatternStream::next() {
 }
 
 void MacroPatternStream::ifSucceeded() {
-    assert(mCurPos > 0);
-    assert(mCurPos <= simpleEnts.size());
+    assert(curPos_ > 0);
+    assert(curPos_ <= simpleEnts.size());
     assert(lastWasCond);
-    const auto& ent = simpleEnts[mCurPos - 1];
+    const auto& ent = simpleEnts[curPos_ - 1];
     ASSERT_BUG(Span(), ent.is_If(), "Expected If when calling `if_succeeded`, got " << ent);
     const auto& e = ent.as_If();
     ASSERT_BUG(Span(), e.jumpTarget < simpleEnts.size(), "Jump target " << e.jumpTarget << " out of range " << simpleEnts.size());
-    mCurPos = e.jumpTarget;
+    curPos_ = e.jumpTarget;
     conditionMet = true;
 }
 
@@ -398,7 +398,7 @@ void MacroPatternStream::ifSucceeded() {
 /// State for MacroExpander and Macro_InvokeRules_CountSubstUses
 class MacroExpandState {
     const ::std::vector<MacroExpansionEnt>& rootContents;
-    const ParameterMappings& mMappings;
+    const ParameterMappings& mappings_;
 
     struct tOffset {
         unsigned readPos;
@@ -408,7 +408,7 @@ class MacroExpandState {
 
     /// Layer states : Index and Iteration
     ::std::vector<tOffset> offsets;
-    ::std::vector<unsigned int> mIterations;
+    ::std::vector<unsigned int> iterations_;
 
     /// Cached pointer to the current layer
     const ::std::vector<MacroExpansionEnt>* curEnts; // For faster lookup.
@@ -416,7 +416,7 @@ class MacroExpandState {
 public:
     MacroExpandState(const ::std::vector<MacroExpansionEnt>& contents, const ParameterMappings& mappings)
         : rootContents(contents)
-        , mMappings(mappings)
+        , mappings_(mappings)
         , offsets({{0, 0, 0}})
         , curEnts(&rootContents)
     {
@@ -427,7 +427,7 @@ public:
     const MacroExpansionEnt* nextEnt();
 
     const ::std::vector<unsigned int> iterations() const {
-        return mIterations;
+        return iterations_;
     }
 
     unsigned int topPos() const {
@@ -453,14 +453,14 @@ class MacroExpander: public TokenStream {
     Span invocationSpan;
     ASTEdition invocationEdition;
 
-    ParameterMappings mMappings;
+    ParameterMappings mappings_;
     MacroExpandState state;
 
     Token nextToken; // used for inserting a single token into the stream
     ::std::unique_ptr<TTStreamO> ttstream;
     ASTEdition sourceEdition;
     bool isMacroItem;
-    Ident::Hygiene mHygiene;
+    Ident::Hygiene hygiene_;
     Ident::Hygiene lastHygiene;
 
 public:
@@ -476,12 +476,12 @@ public:
         , crateName(mv$(crateName))
         , invocationSpan(sp)
         , invocationEdition(edition)
-        , mMappings(mv$(mappings))
-        , state(contents, mMappings)
+        , mappings_(mv$(mappings))
+        , state(contents, mappings_)
         , sourceEdition(sourceEdition)
         , isMacroItem(isMacroItem)
-        , mHygiene(Ident::Hygiene::newScopeChained(pool, parentHygiene, definitionId))
-        , lastHygiene(mHygiene)
+        , hygiene_(Ident::Hygiene::newScopeChained(pool, parentHygiene, definitionId))
+        , lastHygiene(hygiene_)
     {
     }
 
@@ -2362,7 +2362,7 @@ Ident::Hygiene MacroExpander::realGetHygiene() const {
 }
 
 Token MacroExpander::realGetToken() {
-    lastHygiene = mHygiene;
+    lastHygiene = hygiene_;
     // Use m_next_token first
     if (nextToken.type() != TOK_NULL) {
         DEBUG("[" << logIndex << "] m_next_token = " << nextToken);
@@ -2387,7 +2387,7 @@ Token MacroExpander::realGetToken() {
                     case TOK_IDENT:
                     case TOK_LIFETIME: {
                         auto ident = e.ident();
-                        ident.hygiene = ident.hygiene.withTailScope(mPool, mHygiene, isMacroItem);
+                        ident.hygiene = ident.hygiene.withTailScope(mPool, hygiene_, isMacroItem);
                         lastHygiene = ident.hygiene;
                         auto rv = Token(e.type(), std::move(ident));
                         DEBUG("[" << logIndex << "] Updated hygine: " << rv);
@@ -2397,7 +2397,7 @@ Token MacroExpander::realGetToken() {
                     case TOK_BYTESTRING:
                     case TOK_STRING: {
                         auto h = e.strHygiene();
-                        h = h.withTailScope(mPool, mHygiene, isMacroItem);
+                        h = h.withTailScope(mPool, hygiene_, isMacroItem);
                         lastHygiene = h;
                         auto rv = Token(e.type(), e.str(), std::move(h));
                         DEBUG("[" << logIndex << "] Updated hygine: " << rv);
@@ -2413,12 +2413,12 @@ Token MacroExpander::realGetToken() {
                     default:
                         BUG(this->pointSpan(), "Unknown macro metavar - 0x" << std::hex << e);
                     case NAMEDVALUE_TY_COUNT: { // `${count(VarName)}`
-                        auto count = mMappings.getVariableCount(this->pointSpan(), state.iterations(), e & NAMEDVALUE_VALMASK);
+                        auto count = mappings_.getVariableCount(this->pointSpan(), state.iterations(), e & NAMEDVALUE_VALMASK);
                         return Token(U128(count), CORETYPE_ANY);
                         break;
                     }
                     case NAMEDVALUE_TY_IGNORE: { // `${ignore(VarName)}`
-                        auto* frag = mMappings.get(this->pointSpan(), state.iterations(), e & NAMEDVALUE_VALMASK);
+                        auto* frag = mappings_.get(this->pointSpan(), state.iterations(), e & NAMEDVALUE_VALMASK);
                         ASSERT_BUG(this->pointSpan(), frag, "Cannot find '" << (e & NAMEDVALUE_VALMASK) << "' for " << state.iterations());
                         // - Ignore
                         break;
@@ -2445,10 +2445,10 @@ Token MacroExpander::realGetToken() {
                         }
                         break;
                     case 0: {
-                        auto* frag = mMappings.get(this->pointSpan(), state.iterations(), e);
+                        auto* frag = mappings_.get(this->pointSpan(), state.iterations(), e);
                         ASSERT_BUG(this->pointSpan(), frag, "Cannot find '" << e << "' for " << state.iterations());
 
-                        bool canSteal = (mMappings.decCount(this->pointSpan(), state.iterations(), e) == false);
+                        bool canSteal = (mappings_.decCount(this->pointSpan(), state.iterations(), e) == false);
                         DEBUG("[" << logIndex << "] Insert replacement #" << e << " = " << *frag);
                         if (frag->mType == InterpolatedFragment::TT) {
                             auto resTt = canSteal ? mv$(frag->asTt()) : frag->asTt().clone();
@@ -2470,8 +2470,8 @@ Token MacroExpander::realGetToken() {
                 for (const auto& ent : e) {
                 TU_MATCH_HDRA( (ent), { )
                 TU_ARMA(Named, v) {
-                            bool canSteal = (mMappings.decCount(this->pointSpan(), state.iterations(), v) == false);
-                            auto* frag = mMappings.get(this->pointSpan(), state.iterations(), v);
+                            bool canSteal = (mappings_.decCount(this->pointSpan(), state.iterations(), v) == false);
+                            auto* frag = mappings_.get(this->pointSpan(), state.iterations(), v);
                             ASSERT_BUG(this->pointSpan(), frag, "Cannot find '" << v << "' for " << state.iterations());
                             Token tok;
                             if (frag->mType == InterpolatedFragment::TT) {
@@ -2530,13 +2530,13 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                 }
                 TU_ARMA(Loop, e) {
                     assert(!e.controllingInputLoops.empty());
-                    unsigned int numRepeats = mMappings.getLoopRepeats(Span(), mIterations, *e.controllingInputLoops.begin());
+                    unsigned int numRepeats = mappings_.getLoopRepeats(Span(), iterations_, *e.controllingInputLoops.begin());
                     for (auto loopIdent : e.controllingInputLoops) {
                         if (loopIdent == *e.controllingInputLoops.begin()) {
                             continue;
                         }
 
-                        unsigned int thisRepeats = mMappings.getLoopRepeats(Span(), mIterations, loopIdent);
+                        unsigned int thisRepeats = mappings_.getLoopRepeats(Span(), iterations_, loopIdent);
                         if (thisRepeats != numRepeats) {
                             // TODO: Get the variables involved, or the pattern+output spans
                             ERROR(Span(), E0000, "Mismatch in loop iterations: " << thisRepeats << " != " << numRepeats);
@@ -2546,7 +2546,7 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                     // 2. If it's going to repeat, start the loop
                     if (numRepeats > 0) {
                         offsets.push_back({0, 0, numRepeats});
-                        mIterations.push_back(0);
+                        iterations_.push_back(0);
                         curEnts = getCurLayer();
                     }
                 }
@@ -2554,11 +2554,11 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
             // Fall through for loop
         } else if (layer > 0) {
             // - Otherwise, restart/end loop and fall through
-            DEBUG("layer = " << layer << ", m_iterations = " << mIterations);
+            DEBUG("layer = " << layer << ", m_iterations = " << iterations_);
             auto& curOfs = offsets.back();
             DEBUG("Layer #" << layer << " Cur: " << curOfs.loopIndex << ", Max: " << curOfs.maxIndex);
             if (curOfs.loopIndex + 1 < curOfs.maxIndex) {
-                mIterations.back()++;
+                iterations_.back()++;
 
                 DEBUG("Restart layer");
                 curOfs.readPos = 0;
@@ -2574,7 +2574,7 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
                 DEBUG("Terminate layer");
                 // Terminate loop, fall through to lower layers
                 offsets.pop_back();
-                mIterations.pop_back();
+                iterations_.pop_back();
                 // - Special case: End of macro, avoid issues
                 if (offsets.size() == 0) {
                     break;

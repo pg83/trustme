@@ -17,7 +17,7 @@
 class FsPath {
     static const char SEP = '/';
 
-    ::std::string mStr;
+    ::std::string str_;
 
 public:
     FsPath();
@@ -27,19 +27,19 @@ public:
     FsPath(const char* s);
 
     bool isValid() const {
-        return mStr != "";
+        return str_ != "";
     }
 
     bool isAbsolute() const {
-        return mStr != "" && mStr[0] == '/';
+        return str_ != "" && str_[0] == '/';
     }
 
     bool operator==(const FsPath& p) const {
-        return mStr == p.mStr;
+        return str_ == p.str_;
     }
 
     bool operator!=(const FsPath& p) const {
-        return mStr != p.mStr;
+        return str_ != p.str_;
     }
 
     FsPath& operator/=(const FsPath& p);
@@ -65,11 +65,11 @@ public:
     ::std::string basename() const;
 
     const ::std::string& str() const {
-        return mStr;
+        return str_;
     }
 
     operator ::std::string() const {
-        return mStr;
+        return str_;
     }
 
     class ComponentsIter {
@@ -83,7 +83,7 @@ public:
 
     public:
         ::std::string_view operator*() const {
-            return ::std::string_view(p.mStr.c_str() + pos, end - pos);
+            return ::std::string_view(p.str_.c_str() + pos, end - pos);
         }
 
         void operator++();
@@ -98,13 +98,13 @@ public:
     }
 
     ComponentsIter end() const {
-        return ComponentsIter(*this, mStr.size());
+        return ComponentsIter(*this, str_.size());
     }
 
     FsPath normalise() const;
 
 
     friend ::std::ostream& operator<<(::std::ostream& os, const FsPath& p) {
-        return os << p.mStr;
+        return os << p.str_;
     }
 };

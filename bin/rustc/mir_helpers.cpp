@@ -9,7 +9,7 @@
 
 void MIRTypeResolve::fmtPos(::std::ostream& os, bool includePath /*=false*/) const {
     if (includePath) {
-        os << this->mPath << " ";
+        os << this->path_ << " ";
     }
     os << "BB" << this->bbIdx << "/";
     if (this->stmtIdx == STMT_TERM) {
@@ -641,14 +641,14 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
         ::std::vector<unsigned int> bbHistory;
         size_t lastReadOfs; // Statement index
-        bool mIsBorrowed;
+        bool isBorrowed_;
 
         State(const ::std::vector<size_t>& blockOffsets, ValueLifetime& vl, size_t initBbIdx, size_t initStmtIdx)
             : blockOffsets(blockOffsets)
             , outVl(vl)
             , bbHistory()
             , lastReadOfs(initStmtIdx)
-            , mIsBorrowed(false)
+            , isBorrowed_(false)
         {
             bbHistory.push_back(initBbIdx);
         }
@@ -658,44 +658,44 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             , outVl(x.outVl)
             , bbHistory(mv$(x.bbHistory))
             , lastReadOfs(x.lastReadOfs)
-            , mIsBorrowed(x.mIsBorrowed)
+            , isBorrowed_(x.isBorrowed_)
         {
         }
 
         State& operator=(State&& x) {
             this->bbHistory = mv$(x.bbHistory);
             this->lastReadOfs = x.lastReadOfs;
-            this->mIsBorrowed = x.mIsBorrowed;
+            this->isBorrowed_ = x.isBorrowed_;
             return *this;
         }
 
         State clone() const {
             State rv{blockOffsets, outVl, 0, lastReadOfs};
             rv.bbHistory = bbHistory;
-            rv.mIsBorrowed = mIsBorrowed;
+            rv.isBorrowed_ = isBorrowed_;
             return rv;
         }
 
         // Returns true if the variable has been borrowed
         bool isBorrowed() const {
-            return this->mIsBorrowed;
+            return this->isBorrowed_;
         }
 
         void markBorrowed(size_t stmtIdx) {
-            if (!mIsBorrowed) {
-                mIsBorrowed = false;
+            if (!isBorrowed_) {
+                isBorrowed_ = false;
                 this->fillTo(stmtIdx);
             }
-            mIsBorrowed = true;
+            isBorrowed_ = true;
         }
 
         void markRead(size_t stmtIdx) {
-            if (!mIsBorrowed) {
+            if (!isBorrowed_) {
                 this->fillTo(stmtIdx);
             } else {
-                mIsBorrowed = false;
+                isBorrowed_ = false;
                 this->fillTo(stmtIdx);
-                mIsBorrowed = true;
+                isBorrowed_ = true;
             }
         }
 
@@ -705,17 +705,17 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         }
 
         void finalise(size_t stmtIdx) {
-            if (mIsBorrowed) {
-                mIsBorrowed = false;
+            if (isBorrowed_) {
+                isBorrowed_ = false;
                 this->fillTo(stmtIdx);
-                mIsBorrowed = true;
+                isBorrowed_ = true;
             }
         }
 
     private:
         void fillTo(size_t stmtIdx) {
             TRACE_FUNCTION_F(FMT_CB(ss, this->fmt(ss);));
-            assert(!mIsBorrowed);
+            assert(!isBorrowed_);
             assert(bbHistory.size() > 0);
             if (bbHistory.size() == 1) {
                 // only one block
@@ -1542,7 +1542,7 @@ MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resol
     : sp(sp)
     , mResolve(resolve)
     , crate(resolve.hirCrate())
-    , mPath(path)
+    , path_(path)
     , retType(retType)
     , mArgs(args)
     , fcn(fcn)
@@ -1550,7 +1550,7 @@ MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resol
     , monomorphedLocals(nullptr)
 {
     if (crate.mLangItems.count("owned_box") > 0) {
-        mLangBox = &crate.mLangItems.at("owned_box");
+        langBox_ = &crate.mLangItems.at("owned_box");
     }
 }
 

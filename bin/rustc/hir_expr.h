@@ -31,7 +31,7 @@ class HIRExprVisitor;
 
 class HIRExprNode {
 public:
-    Span mSpan;
+    Span span_;
     HIRTypeRef resType; // TODO: Replace this with an index into an ivar table
     //unsigned m_res_type_idx;
     // Evaluation of this expression cannot complete normally.  This is
@@ -40,7 +40,7 @@ public:
     HIRValueUsage usage = HIRValueUsage::Unknown;
 
     const Span& span() const {
-        return mSpan;
+        return span_;
     }
 
     virtual void visit(HIRExprVisitor& v) = 0;

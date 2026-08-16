@@ -66,7 +66,7 @@ public:
     const HIRCrate& crate;
 
 private:
-    ::FmtLambda mPath;
+    ::FmtLambda path_;
 
 public:
     const HIRTypeData* retType;
@@ -78,7 +78,7 @@ public:
     const ::std::vector<HIRTypeRef>* monomorphedLocals;
 
 private:
-    const HIRSimplePath* mLangBox = nullptr;
+    const HIRSimplePath* langBox_ = nullptr;
 
     unsigned int bbIdx = 0;
     unsigned int stmtIdx = 0;

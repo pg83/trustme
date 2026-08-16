@@ -72,7 +72,7 @@ public:
 };
 
 class ASTExpr {
-    ::std::shared_ptr<ASTExprNode> mNode;
+    ::std::shared_ptr<ASTExprNode> node_;
 
 public:
     ASTExpr(ASTExprNodeP node);
@@ -84,7 +84,7 @@ public:
     }
 
     bool isValid() const {
-        return mNode.get() != nullptr;
+        return node_.get() != nullptr;
     }
 
     const ASTExprNode& node() const;

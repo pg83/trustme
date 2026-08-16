@@ -2319,7 +2319,7 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                 }
             }
             TU_ARMA(Union, e) {
-                ExpandGenericParams(es, mod, e.mParams);
+                ExpandGenericParams(es, mod, e.params_);
                 for (auto it = e.mVariants.begin(); it != e.mVariants.end();) {
                     auto& si = *it;
                     ExpandAttrsCfgAttr(*es.wb.settings, si.mAttrs);
@@ -2554,7 +2554,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
         DEBUG("Macro: " << e.first);
     }
 
-    ExpandState es{wb, crate, LList<const ASTModule*>(nullptr, &crate.mRootModule), ExpandMode::FirstPass};
+    ExpandState es{wb, crate, LList<const ASTModule*>(nullptr, &crate.rootModule_), ExpandMode::FirstPass};
 
     // 1. Crate attributes
     ExpandAttrsCfgAttr(*es.wb.settings, crate.mAttrs);
@@ -2565,8 +2565,8 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     // TODO: Crate name and type
 
     std::vector<std::unique_ptr<ASTNamed<ASTItem>>> newRootItems;
-    Expand_Mod_Early(wb, crate, crate.mRootModule, newRootItems);
-    crate.mRootModule.mItems.insert(crate.mRootModule.mItems.begin(), std::make_move_iterator(newRootItems.begin()), std::make_move_iterator(newRootItems.end()));
+    Expand_Mod_Early(wb, crate, crate.rootModule_, newRootItems);
+    crate.rootModule_.mItems.insert(crate.rootModule_.mItems.begin(), std::make_move_iterator(newRootItems.begin()), std::make_move_iterator(newRootItems.end()));
 
     // Insert magic for libstd/libcore
     // NOTE: The actual crates are loaded in "LoadCrates" using magic in AST::Crate::load_externs
@@ -2606,9 +2606,9 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
         attrs.push_back(ASTAttribute(Span(), mv$(name), {}));
         // NOTE: For `macro_use` we want to import this first, but for item lookup, we want it to be last.
         // - Solution, add to the end - but pre-visit the attributes
-        crate.mRootModule.mItems.push_back(box$(ASTNamed<ASTItem>(Span(), mv$(attrs), ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, ASTAbsolutePath()), stdCrateShortname, ASTItem::make_Crate({stdCrateName}))));
-        auto& i = *crate.mRootModule.mItems.back();
-        ExpandAttrs(es, i.attrs, AttrStage::Post, ASTAbsolutePath(), crate.mRootModule, 0, i.vis, i.data);
+        crate.rootModule_.mItems.push_back(box$(ASTNamed<ASTItem>(Span(), mv$(attrs), ASTVisibility::makeRestricted(ASTVisibility::Ty::Private, ASTAbsolutePath()), stdCrateShortname, ASTItem::make_Crate({stdCrateName}))));
+        auto& i = *crate.rootModule_.mItems.back();
+        ExpandAttrs(es, i.attrs, AttrStage::Post, ASTAbsolutePath(), crate.rootModule_, 0, i.vis, i.data);
     }
 
     // 2. Module attributes
@@ -2622,24 +2622,24 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
     // 3. Module tree
     // Loop until no more expansions happen
     // - Combine this with allowing macros to fail to expand, to be caught with a final pass
-    ExpandMod(es, ASTAbsolutePath(), crate.mRootModule);
+    ExpandMod(es, ASTAbsolutePath(), crate.rootModule_);
     DEBUG("(first) es.change = " << es.change << ", es.has_missing=" << es.hasMissing << " (" << &es << ")");
     if (es.hasMissing) {
         for (size_t nIters = 0; nIters < 5 && es.change && es.hasMissing; nIters++) {
             es.mode = ExpandMode::Iterate;
             es.change = false;
             es.hasMissing = false;
-            ExpandMod(es, ASTAbsolutePath(), crate.mRootModule);
+            ExpandMod(es, ASTAbsolutePath(), crate.rootModule_);
             DEBUG("?(Iter) es.change = " << es.change << ", es.has_missing=" << es.hasMissing);
         }
         es.hasMissing = false;
     }
     es.mode = ExpandMode::Final;
-    ExpandMod(es, ASTAbsolutePath(), crate.mRootModule);
+    ExpandMod(es, ASTAbsolutePath(), crate.rootModule_);
     ASSERT_BUG(Span(), !es.hasMissing, "Expand too too many attempts");
 
     // Post-process
-    ExpandModIndexAnon(crate, crate.mRootModule);
+    ExpandModIndexAnon(crate, crate.rootModule_);
 
     // Extract exported macros
 
@@ -2647,7 +2647,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
         auto& exportedMacros = crate.exportedMacros;
 
         ::std::vector<ASTModule*> mods;
-        mods.push_back(&crate.mRootModule);
+        mods.push_back(&crate.rootModule_);
         do {
             auto& mod = *mods.back();
             mods.pop_back();
@@ -2672,7 +2672,7 @@ void Expand(const WireBoard& wb, ASTCrate& crate) {
 
         // - Exported macros imported by the root (is this needed?)
         // - Re-exported macros (ignore proc macros for now?)
-        for (const auto& mac : crate.mRootModule.macroImports) {
+        for (const auto& mac : crate.rootModule_.macroImports) {
             if (mac.isPub) {
                 if (!mac.ref.is_MacroRules()) {
                     continue;

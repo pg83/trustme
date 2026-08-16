@@ -2156,23 +2156,23 @@ namespace {
 
     class MarkingsVisitor: public HIRVisitor {
         const HIRCrate& crate;
-        const HIRSimplePath& mLangUnsize;
-        const HIRSimplePath& mLangCoerceUnsized;
-        const HIRSimplePath& mLangCopy;
-        const HIRSimplePath& mLangDeref;
-        const HIRSimplePath& mLangDrop;
-        const HIRSimplePath& mLangPhantomData;
+        const HIRSimplePath& langUnsize_;
+        const HIRSimplePath& langCoerceUnsized_;
+        const HIRSimplePath& langCopy_;
+        const HIRSimplePath& langDeref_;
+        const HIRSimplePath& langDrop_;
+        const HIRSimplePath& langPhantomData_;
 
     public:
         MarkingsVisitor(const HIRCrate& crate)
             : HIRVisitor(nullptr, crate.types)
             , crate(crate)
-            , mLangUnsize(crate.getLangItemPathOpt("unsize"))
-            , mLangCoerceUnsized(crate.getLangItemPathOpt("coerce_unsized"))
-            , mLangCopy(crate.getLangItemPathOpt("copy"))
-            , mLangDeref(crate.getLangItemPathOpt("deref"))
-            , mLangDrop(crate.getLangItemPathOpt("drop"))
-            , mLangPhantomData(crate.getLangItemPathOpt("phantom_data"))
+            , langUnsize_(crate.getLangItemPathOpt("unsize"))
+            , langCoerceUnsized_(crate.getLangItemPathOpt("coerce_unsized"))
+            , langCopy_(crate.getLangItemPathOpt("copy"))
+            , langDeref_(crate.getLangItemPathOpt("deref"))
+            , langDrop_(crate.getLangItemPathOpt("drop"))
+            , langPhantomData_(crate.getLangItemPathOpt("phantom_data"))
         {
         }
 
@@ -2283,13 +2283,13 @@ namespace {
                 const HIRTraitMarkings* markingsPtr = te.binding.getTraitMarkings();
                 if (markingsPtr) {
                     HIRTraitMarkings& markings = *const_cast<HIRTraitMarkings*>(markingsPtr);
-                    if (traitPath == mLangUnsize) {
+                    if (traitPath == langUnsize_) {
                         DEBUG("Type " << impl.mType << " can Unsize");
                         ERROR(sp, E0000, "Unsize shouldn't be manually implemented");
-                    } else if (traitPath == mLangDrop) {
+                    } else if (traitPath == langDrop_) {
                         // TODO: Check that there's only one impl, and that it covers the same set as the type.
                         markings.hasDropImpl = true;
-                    } else if (traitPath == mLangCoerceUnsized) {
+                    } else if (traitPath == langCoerceUnsized_) {
                         auto& structMarkings = const_cast<HIRStruct*>(te.binding.as_Struct())->structMarkings;
                         if (structMarkings.coerceUnsizedIndex != ~0u) {
                             ERROR(sp, E0000, "CoerceUnsized can only be implemented once per struct");
@@ -2332,7 +2332,7 @@ namespace {
                             TU_ARMA(Tuple, se) {
                                 for (unsigned int i = 0; i < se.size(); i++) {
                                     // If the data is PhantomData, ignore it.
-                                    if (TU_TEST2((*se[i].ent), Path, .path.mData, Generic, .mPath == mLangPhantomData)) {
+                                    if (TU_TEST2((*se[i].ent), Path, .path.mData, Generic, .mPath == langPhantomData_)) {
                                         continue;
                                     }
                                     if (monomorphiseTypeNeeded(se[i].ent)) {
@@ -2350,7 +2350,7 @@ namespace {
                             TU_ARMA(Named, se) {
                                 for (unsigned int i = 0; i < se.size(); i++) {
                                     // If the data is PhantomData, ignore it.
-                                    if (TU_TEST2((*se[i].ty), Path, .path.mData, Generic, .mPath == mLangPhantomData)) {
+                                    if (TU_TEST2((*se[i].ty), Path, .path.mData, Generic, .mPath == langPhantomData_)) {
                                         continue;
                                     }
                                     if (monomorphiseTypeNeeded(se[i].ty)) {
@@ -2369,10 +2369,10 @@ namespace {
                     if( field == ~0u )
                         ERROR(sp, E0000, "CoerceUnsized requires a field to differ between source and destination");
                     structMarkings.coerceUnsizedIndex = field;
-                    } else if (traitPath == mLangDeref) {
+                    } else if (traitPath == langDeref_) {
                         DEBUG("Type " << impl.mType << " can Deref");
                         markings.hasADeref = true;
-                    } else if (traitPath == mLangCopy) {
+                    } else if (traitPath == langCopy_) {
                         DEBUG("Type " << impl.mType << " has a Copy impl");
                         markings.isCopy = true;
                     }
@@ -2497,17 +2497,17 @@ void expandTraitImplTypeDefaults(const HIRCrate& crate, const HIRSimplePath& tra
 
 class UfcsVisitor: public HIRVisitor {
     const HIRCrate& crate;
-    bool mVisitExprs;
+    bool visitExprs_;
     bool runEat;
 
     typedef ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> tTraitImports;
     tTraitImports traits;
 
-    StaticTraitResolve mResolve;
-    bool mInTraitDef = false;
-    const HIRTypeData* mCurrentType = nullptr;
+    StaticTraitResolve resolve_;
+    bool inTraitDef_ = false;
+    const HIRTypeData* currentType_ = nullptr;
     const HIRTrait* currentTrait = nullptr;
-    const HIRItemPath* mCurrentTraitPath = nullptr;
+    const HIRItemPath* currentTraitPath_ = nullptr;
     bool inExpr = false;
     HIRSimplePath curModPath;
 
@@ -2515,10 +2515,10 @@ public:
     UfcsVisitor(const WireBoard& wb, bool visitExprs)
         : HIRVisitor(nullptr, wb.crate->types)
         , crate(*wb.crate)
-        , mVisitExprs(visitExprs)
+        , visitExprs_(visitExprs)
         , runEat(visitExprs)
         , // Defaults to running when doing second-pass
-        mResolve(wb)
+        resolve_(wb)
     {
     }
 
@@ -2583,75 +2583,75 @@ public:
         }
 
         // Re-populate the resolve index, as the above has changed them
-        mResolve.prepIndexes(Span());
+        resolve_.prepIndexes(Span());
     }
 
     void visitUnion(HIRItemPath p, HIRUnion& item) override {
-        auto _ = mResolve.setImplGenerics(MetadataType::None, item.mParams);
+        auto _ = resolve_.setImplGenerics(MetadataType::None, item.mParams);
         auto ty = crate.types.path(HIRGenericPath(p.getSimplePath()), &item);
-        mCurrentType = ty;
+        currentType_ = ty;
         HIRVisitor::visitUnion(p, item);
-        mCurrentType = nullptr;
+        currentType_ = nullptr;
     }
 
     void visitStruct(HIRItemPath p, HIRStruct& item) override {
-        auto _ = mResolve.setImplGenerics(item.structMarkings.dstType, item.mParams);
+        auto _ = resolve_.setImplGenerics(item.structMarkings.dstType, item.mParams);
         auto ty = crate.types.path(HIRGenericPath(p.getSimplePath()), &item);
-        mCurrentType = ty;
+        currentType_ = ty;
         HIRVisitor::visitStruct(p, item);
-        mCurrentType = nullptr;
+        currentType_ = nullptr;
     }
 
     void visitEnum(HIRItemPath p, HIREnum& item) override {
-        auto _ = mResolve.setImplGenerics(MetadataType::None, item.mParams);
+        auto _ = resolve_.setImplGenerics(MetadataType::None, item.mParams);
         auto ty = crate.types.path(HIRGenericPath(p.getSimplePath()), &item);
-        mCurrentType = ty;
+        currentType_ = ty;
         HIRVisitor::visitEnum(p, item);
-        mCurrentType = nullptr;
+        currentType_ = nullptr;
     }
 
     void visitFunction(HIRItemPath p, HIRFunction& item) override {
-        auto _ = mResolve.setItemGenerics(item.mParams);
+        auto _ = resolve_.setItemGenerics(item.mParams);
         HIRVisitor::visitFunction(p, item);
     }
 
     void visitConstant(HIRItemPath p, HIRConstant& item) override {
-        auto _ = mResolve.setItemGenerics(item.mParams);
+        auto _ = resolve_.setItemGenerics(item.mParams);
         HIRVisitor::visitConstant(p, item);
     }
 
     void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override {
         // NOTE: Disabled, because generics in type aliases are never checked
         // Re-enabled to resolve a UFCS properly (1.90.0 libcore)
-        auto _ = mResolve.setImplGenerics(MetadataType::Unknown, item.mParams);
+        auto _ = resolve_.setImplGenerics(MetadataType::Unknown, item.mParams);
         HIRVisitor::visitTypeAlias(p, item);
     }
 
     void visitTrait(HIRItemPath p, HIRTrait& trait) override {
-        mInTraitDef = true;
+        inTraitDef_ = true;
         currentTrait = &trait;
-        mCurrentTraitPath = &p;
-        auto _ = mResolve.setImplGenerics(MetadataType::TraitObject, trait.mParams);
+        currentTraitPath_ = &p;
+        auto _ = resolve_.setImplGenerics(MetadataType::TraitObject, trait.mParams);
         HIRVisitor::visitTrait(p, trait);
         currentTrait = nullptr;
-        mInTraitDef = false;
+        inTraitDef_ = false;
     }
 
     void visitTypeImpl(HIRTypeImpl& impl) override {
         TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << impl.mType << " (mod=" << impl.srcModule << ")");
         auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
-        auto _g = mResolve.setImplGenerics(MetadataType::Unknown, impl.mParams);
-        mCurrentType = impl.mType;
+        auto _g = resolve_.setImplGenerics(MetadataType::Unknown, impl.mParams);
+        currentType_ = impl.mType;
 
         this->visitType(impl.mType);
-        mResolve.updateImplSelfMetadata(impl.mType);
+        resolve_.updateImplSelfMetadata(impl.mType);
 
         HIRVisitor::visitTypeImpl(impl);
-        mCurrentType = nullptr;
+        currentType_ = nullptr;
     }
 
     void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override {
-        auto _ = mResolve.setItemGenerics(item.mParams);
+        auto _ = resolve_.setItemGenerics(item.mParams);
         HIRVisitor::visitInherentType(p, item);
     }
 
@@ -2659,46 +2659,46 @@ public:
         HIRItemPath p(impl.mType, traitPath, impl.traitArgs);
         TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << " (mod=" << impl.srcModule << ")");
         auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
-        auto _g = mResolve.setImplGenerics(impl.mType, impl.mParams);
+        auto _g = resolve_.setImplGenerics(impl.mType, impl.mParams);
 
         // TODO: Push a bound that `Self: ThisTrait`
-        mCurrentType = impl.mType;
+        currentType_ = impl.mType;
         currentTrait = &crate.getTraitByPath(Span(), traitPath);
-        mCurrentTraitPath = &p;
+        currentTraitPath_ = &p;
 
         // The implemented trait is always in scope
         traits.push_back(::std::make_pair(&traitPath, currentTrait));
 
         this->visitType(impl.mType);
-        mResolve.updateImplSelfMetadata(impl.mType);
+        resolve_.updateImplSelfMetadata(impl.mType);
 
         HIRVisitor::visitMarkerImpl(traitPath, impl);
         traits.pop_back();
 
         currentTrait = nullptr;
-        mCurrentType = nullptr;
+        currentType_ = nullptr;
     }
 
     void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
         HIRItemPath p(impl.mType, traitPath, impl.traitArgs);
         TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << " (mod=" << impl.srcModule << ")");
         auto _t = this->pushModTraits(impl.srcModule, this->crate.getModByPath(Span(), impl.srcModule));
-        auto _g = mResolve.setImplGenerics(MetadataType::Unknown, impl.mParams);
+        auto _g = resolve_.setImplGenerics(MetadataType::Unknown, impl.mParams);
 
         expandTraitImplTypeDefaults(crate, traitPath, impl);
 
-        mCurrentType = impl.mType;
+        currentType_ = impl.mType;
         currentTrait = &crate.getTraitByPath(Span(), traitPath);
-        mCurrentTraitPath = &p;
+        currentTraitPath_ = &p;
         traits.push_back(::std::make_pair(&traitPath, currentTrait));
 
         this->visitType(impl.mType);
-        mResolve.updateImplSelfMetadata(impl.mType);
+        resolve_.updateImplSelfMetadata(impl.mType);
 
         // TODO: Handle resolution of all items in m_resolve.m_type_equalities
         // - params might reference each other, so `set_item_generics` has to have been called
         // - But `m_type_equalities` can end up with non-resolved UFCS paths
-        mResolve.forEachTypeEquality([&](HIRTypeRef& ty) {
+        resolve_.forEachTypeEquality([&](HIRTypeRef& ty) {
             visitType(ty);
         });
 
@@ -2707,7 +2707,7 @@ public:
         traits.pop_back();
 
         currentTrait = nullptr;
-        mCurrentType = nullptr;
+        currentType_ = nullptr;
     }
 
     void visitExpr(HIRExprPtr& expr) override {
@@ -2775,7 +2775,7 @@ public:
 
                 // If this is pointing at a constant/static/associated constant, change to CallValue
                 MonomorphState discard(upperVisitor.crate.types);
-                auto v = upperVisitor.mResolve.getValue(node.span(), node.mPath, discard, true);
+                auto v = upperVisitor.resolve_.getValue(node.span(), node.mPath, discard, true);
                 if (v.is_Constant() || v.is_Static()) {
                     auto* valueNode = upperVisitor.crate.pool->make<HIRExprNodePathValue>(sp, std::move(node.mPath), v.is_Constant() ? HIRExprNodePathValue::Target::CONSTANT : v.is_Static() ? HIRExprNodePathValue::Target::STATIC : HIRExprNodePathValue::Target::UNKNOWN);
                     valueNode->resType = upperVisitor.crate.types.infer();
@@ -2854,7 +2854,7 @@ public:
             }
         };
 
-        if (mVisitExprs && expr.get() != nullptr) {
+        if (visitExprs_ && expr.get() != nullptr) {
             auto savedInExpr = inExpr;
             inExpr = true;
             ExprVisitor v{*this};
@@ -2987,7 +2987,7 @@ public:
 
         // TODO: This is VERY arbitary and possibly nowhere near what rustc does.
         // NOTE: `nullptr` passed for param count, as defaults are not yet expanded
-        this->mResolve.findImpl(sp, traitPath.mPath, nullptr, type, [&](const auto& impl, bool fuzzy) -> bool {
+        this->resolve_.findImpl(sp, traitPath.mPath, nullptr, type, [&](const auto& impl, bool fuzzy) -> bool {
             auto pp = impl.getTraitParams(crate.types);
             // Replace all placeholder parameters (group 2) with ivars (empty types)
             struct KillPlaceholders: public Monomorphiser {
@@ -3187,7 +3187,7 @@ public:
             if (ty->is_Path()) {
                 stack.push_back(ty);
             }
-            while (mResolve.expandAssociatedTypesSingle(sp, ty)) {
+            while (resolve_.expandAssociatedTypesSingle(sp, ty)) {
                 if (::std::find(stack.begin(), stack.end(), ty) != stack.end()) {
                     ::std::sort(stack.begin(), stack.end());
                     DEBUG("Loop detected, picking " << ty);
@@ -3215,10 +3215,10 @@ public:
     }
 
     void visitConstgeneric(HIRConstGeneric& val) override {
-        auto savedVisitExprs = mVisitExprs;
-        mVisitExprs = true;
+        auto savedVisitExprs = visitExprs_;
+        visitExprs_ = true;
         HIRVisitor::visitConstgeneric(val);
-        mVisitExprs = savedVisitExprs;
+        visitExprs_ = savedVisitExprs;
     }
 
     void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override {
@@ -3227,7 +3227,7 @@ public:
         if (auto* pe = p.mData.opt_UfcsKnown()) {
             // If the trait has missing type argumenst, replace them with the defaults
             auto& tp = pe->trait;
-            const auto& trait = mResolve.hirCrate().getTraitByPath(sp, tp.mPath);
+            const auto& trait = resolve_.hirCrate().getTraitByPath(sp, tp.mPath);
 
             if (tp.mParams.types.size() < trait.mParams.types.size()) {
                 //TODO(sp, "Defaults in UfcsKnown - " << p << " - " << tp.m_params << " vs " << trait.m_params.fmt_args());
@@ -3248,18 +3248,18 @@ public:
             // - NOTE: Could be in an inherent block, where there's no trait
             if (/*m_current_type &&*/ currentTrait && e.type == crate.types.self()) {
                 HIRGenericPath traitPath;
-                if (mCurrentTraitPath->traitPath()) {
-                    traitPath = HIRGenericPath(*mCurrentTraitPath->traitPath());
-                    traitPath.mParams = mCurrentTraitPath->traitArgs()->clone();
+                if (currentTraitPath_->traitPath()) {
+                    traitPath = HIRGenericPath(*currentTraitPath_->traitPath());
+                    traitPath.mParams = currentTraitPath_->traitArgs()->clone();
                 } else {
-                    traitPath = HIRGenericPath(mCurrentTraitPath->getSimplePath());
+                    traitPath = HIRGenericPath(currentTraitPath_->getSimplePath());
                     traitPath.mParams = currentTrait->mParams.makeNopParams(crate.types, 0);
                 }
                 if (locateInTraitAndSet(pc, traitPath, *currentTrait, p.mData)) {
                     assert(!p.mData.is_UfcsUnknown());
                     // Success!
                     // - If in an expression (and not in a `trait` provided impl), clear the params
-                    if (inExpr && !mInTraitDef) {
+                    if (inExpr && !inTraitDef_) {
                         for (auto& t : p.mData.as_UfcsKnown().trait.mParams.types) {
                             t = crate.types.infer();
                         }
@@ -3272,22 +3272,22 @@ public:
 
             // NOTE: Replace `Self` now
             // - Now that the only `Self`-specific logic is done, replace so the lookup code works.
-            if (mCurrentType) {
+            if (currentType_) {
                 rewritePathTysWith(crate.types, p, [&](HIRTypeRef& t, HIRTypeData& data) -> bool {
                     if (data.is_Generic() && data.as_Generic().binding == GENERICSelf) {
-                        t = mCurrentType;
+                        t = currentType_;
                     }
                     return false;
                 });
             }
 
             // Search for matching impls in current generic blocks
-            if (mResolve.itemGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *mResolve.itemGenericsPtr(), p.mData)) {
+            if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.itemGenericsPtr(), p.mData)) {
                 DEBUG("Found in item params, p = " << p);
                 assert(!p.mData.is_UfcsUnknown());
                 return;
             }
-            if (mResolve.implGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *mResolve.implGenericsPtr(), p.mData)) {
+            if (resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(pc, e.type, *resolve_.implGenericsPtr(), p.mData)) {
                 DEBUG("Found in impl params, p = " << p);
                 assert(!p.mData.is_UfcsUnknown());
                 return;
@@ -3315,13 +3315,13 @@ public:
 
             // If the type is the impl type, look for items AFTER generic lookup
             // TODO: Should this look up in-scope traits instead of hard-coding this hack?
-            if (mCurrentType && currentTrait && e.type == mCurrentType) {
+            if (currentType_ && currentTrait && e.type == currentType_) {
                 HIRGenericPath traitPath;
-                if (mCurrentTraitPath->traitPath()) {
-                    traitPath = HIRGenericPath(*mCurrentTraitPath->traitPath());
-                    traitPath.mParams = mCurrentTraitPath->traitArgs()->clone();
+                if (currentTraitPath_->traitPath()) {
+                    traitPath = HIRGenericPath(*currentTraitPath_->traitPath());
+                    traitPath.mParams = currentTraitPath_->traitArgs()->clone();
                 } else {
-                    traitPath = HIRGenericPath(mCurrentTraitPath->getSimplePath());
+                    traitPath = HIRGenericPath(currentTraitPath_->getSimplePath());
                     traitPath.mParams = currentTrait->mParams.makeNopParams(crate.types, 0);
                 }
 
@@ -3502,7 +3502,7 @@ public:
                     // trait-associated constant.  Keep the trait declaration here instead of
                     // committing to the first fuzzy impl before expression type checking.
                     MonomorphState params(crate.types);
-                    auto value = mResolve.getValue(sp, ve.path, params, /*signatureOnly=*/true);
+                    auto value = resolve_.getValue(sp, ve.path, params, /*signatureOnly=*/true);
                     if (const auto* constant = value.opt_Constant()) {
                         ve.binding = *constant;
                     } else {

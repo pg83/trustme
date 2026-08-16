@@ -196,18 +196,18 @@ void ASTPathParamEnt::fmt(::std::ostream& os) const {
 
 // --- AST::PathNode
 ASTPathNode::ASTPathNode(RcString name, ASTPathParams args)
-    : mName(mv$(name))
-    , mParams(mv$(args))
+    : name_(mv$(name))
+    , params_(mv$(args))
 {
 }
 
 Ordering ASTPathNode::ord(const ASTPathNode& x) const {
     Ordering rv;
-    rv = ::ord(mName, x.mName);
+    rv = ::ord(name_, x.name_);
     if (rv != OrdEqual) {
         return rv;
     }
-    rv = mParams.ord(x.mParams);
+    rv = params_.ord(x.params_);
     if (rv != OrdEqual) {
         return rv;
     }
@@ -215,12 +215,12 @@ Ordering ASTPathNode::ord(const ASTPathNode& x) const {
 }
 
 void ASTPathNode::printPretty(::std::ostream& os, bool isTypeContext) const {
-    os << mName;
-    if (!mParams.isEmpty()) {
+    os << name_;
+    if (!params_.isEmpty()) {
         if (!isTypeContext) {
             os << "::";
         }
-        os << mParams;
+        os << params_;
     }
 }
 

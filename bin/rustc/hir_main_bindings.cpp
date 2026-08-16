@@ -3170,8 +3170,8 @@ public:
     }
 
     void serialise(const ::Token& tok) {
-        out.writeTag(tok.mType);
-        serialise(tok.mData);
+        out.writeTag(tok.type_);
+        serialise(tok.data_);
         // TODO: Position information.
     }
 

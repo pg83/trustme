@@ -6,11 +6,11 @@
 void TraitResolveCommon::prepIndexes(const Span& sp) {
     TRACE_FUNCTION_F("");
 
-    if (mImplGenerics) {
-        DEBUG("m_impl_generics = " << mImplGenerics->fmtArgs() << mImplGenerics->fmtBounds());
+    if (implGenerics_) {
+        DEBUG("m_impl_generics = " << implGenerics_->fmtArgs() << implGenerics_->fmtBounds());
     }
-    if (mItemGenerics) {
-        DEBUG("m_item_generics = " << mItemGenerics->fmtArgs() << mItemGenerics->fmtBounds());
+    if (itemGenerics_) {
+        DEBUG("m_item_generics = " << itemGenerics_->fmtArgs() << itemGenerics_->fmtBounds());
     }
 
     typeEqualities.clear();
@@ -140,21 +140,21 @@ const HIRTypeData* TraitResolveCommon::getConstParamType(const Span& sp, unsigne
     const HIRGenericParams* p;
     switch (binding >> 8) {
         case 0: // impl level
-            p = mImplGenerics;
+            p = implGenerics_;
             break;
         case 1: // method level
-            p = mItemGenerics;
+            p = itemGenerics_;
             break;
         default:
             TODO(sp, "Typecheck const generics - look up the type");
     }
     auto slot = binding & 0xFF;
     if (!p) {
-        if (mImplGenerics) {
-            DEBUG("Impl: " << mImplGenerics->fmtArgs());
+        if (implGenerics_) {
+            DEBUG("Impl: " << implGenerics_->fmtArgs());
         }
-        if (mItemGenerics) {
-            DEBUG("Item: " << mItemGenerics->fmtArgs());
+        if (itemGenerics_) {
+            DEBUG("Item: " << itemGenerics_->fmtArgs());
         }
     }
     ASSERT_BUG(sp, p, "No generic list for " << (binding >> 8) << ":" << slot);
@@ -184,24 +184,24 @@ Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refSpT& b)
 TraitResolveCommon::TraitResolveCommon(const WireBoard& wb)
     : wb(wb)
     , crate(*wb.crate)
-    , mImplGenerics(nullptr)
-    , mItemGenerics(nullptr)
+    , implGenerics_(nullptr)
+    , itemGenerics_(nullptr)
 {
 }
 
 const HIRGenericParams& TraitResolveCommon::implGenerics() const {
     static HIRGenericParams empty;
-    return mImplGenerics ? *mImplGenerics : empty;
+    return implGenerics_ ? *implGenerics_ : empty;
 }
 
 const HIRGenericParams& TraitResolveCommon::itemGenerics() const {
     static HIRGenericParams empty;
-    return mItemGenerics ? *mItemGenerics : empty;
+    return itemGenerics_ ? *itemGenerics_ : empty;
 }
 
 /// Iterate over in-scope bounds (function then type)
 bool TraitResolveCommon::iterateBounds(::std::function<bool(const HIRGenericBound&)> cb) const {
-    const HIRGenericParams* v[2] = {mItemGenerics, mImplGenerics};
+    const HIRGenericParams* v[2] = {itemGenerics_, implGenerics_};
     for (auto p : v) {
         if (!p) {
             continue;

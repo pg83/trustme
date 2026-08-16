@@ -74,10 +74,10 @@
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTPattern& pat) {
-    for (const auto& pb : pat.mBindings) {
+    for (const auto& pb : pat.bindings_) {
         os << pb << " @ ";
     }
-    TU_MATCH_HDRA( (pat.mData), {)
+    TU_MATCH_HDRA( (pat.data_), {)
     TU_ARMA(MaybeBind, ent) {
             os << ent.name << "?";
         }
@@ -168,16 +168,16 @@ ASTPattern::~ASTPattern() {
 }
 
 ASTPattern::ASTPattern(TagStruct, Span sp, ASTPath path, ::std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive)
-    : mSpan(mv$(sp))
-    , mData(Data::make_Struct({::std::move(path), ::std::move(subPatterns), isExhaustive}))
+    : span_(mv$(sp))
+    , data_(Data::make_Struct({::std::move(path), ::std::move(subPatterns), isExhaustive}))
 {
 }
 
 ASTPattern ASTPattern::clone() const {
     ASTPattern rv;
-    rv.mSpan = mSpan;
-    for (const auto& pb : mBindings) {
-        rv.mBindings.push_back(pb);
+    rv.span_ = span_;
+    for (const auto& pb : bindings_) {
+        rv.bindings_.push_back(pb);
     }
 
     struct H {
@@ -204,52 +204,52 @@ ASTPattern ASTPattern::clone() const {
         }
     };
 
-    TU_MATCH_HDRA( (mData), {)
+    TU_MATCH_HDRA( (data_), {)
     TU_ARMA(Any, e) {
-            rv.mData = Data::make_Any(e);
+            rv.data_ = Data::make_Any(e);
         }
         TU_ARMA(MaybeBind, e) {
-            rv.mData = Data::make_MaybeBind(e);
+            rv.data_ = Data::make_MaybeBind(e);
         }
         TU_ARMA(Macro, e) {
-            rv.mData = Data::make_Macro({::std::make_unique<ASTMacroInvocation>(e.inv->clone())});
+            rv.data_ = Data::make_Macro({::std::make_unique<ASTMacroInvocation>(e.inv->clone())});
         }
         TU_ARMA(Box, e) {
-            rv.mData = Data::make_Box({H::cloneSp(e.sub)});
+            rv.data_ = Data::make_Box({H::cloneSp(e.sub)});
         }
         TU_ARMA(Deref, e) {
-            rv.mData = Data::make_Deref({H::cloneSp(e.sub)});
+            rv.data_ = Data::make_Deref({H::cloneSp(e.sub)});
         }
         TU_ARMA(Ref, e) {
-            rv.mData = Data::make_Ref({e.mut, H::cloneSp(e.sub)});
+            rv.data_ = Data::make_Ref({e.mut, H::cloneSp(e.sub)});
         }
         TU_ARMA(Value, e) {
-            rv.mData = Data::make_Value({H::cloneVal(e.start), H::cloneVal(e.end)});
+            rv.data_ = Data::make_Value({H::cloneVal(e.start), H::cloneVal(e.end)});
         }
         TU_ARMA(ValueLeftInc, e) {
-            rv.mData = Data::make_ValueLeftInc({H::cloneVal(e.start), H::cloneVal(e.end)});
+            rv.data_ = Data::make_ValueLeftInc({H::cloneVal(e.start), H::cloneVal(e.end)});
         }
         TU_ARMA(Tuple, e) {
-            rv.mData = Data::make_Tuple(H::cloneTup(e));
+            rv.data_ = Data::make_Tuple(H::cloneTup(e));
         }
         TU_ARMA(StructTuple, e) {
-            rv.mData = Data::make_StructTuple({ASTPath(e.path), H::cloneTup(e.tupPat)});
+            rv.data_ = Data::make_StructTuple({ASTPath(e.path), H::cloneTup(e.tupPat)});
         }
         TU_ARMA(Struct, e) {
             ::std::vector<ASTStructPatternEntry> sps;
             for (const auto& sp : e.subPatterns) {
                 sps.push_back(ASTStructPatternEntry{sp.attrs.clone(), sp.name, sp.pat.clone()});
             }
-            rv.mData = Data::make_Struct({ASTPath(e.path), mv$(sps)});
+            rv.data_ = Data::make_Struct({ASTPath(e.path), mv$(sps)});
         }
         TU_ARMA(Slice, e) {
-            rv.mData = Data::make_Slice({H::cloneList(e.subPats)});
+            rv.data_ = Data::make_Slice({H::cloneList(e.subPats)});
         }
         TU_ARMA(SplitSlice, e) {
-            rv.mData = Data::make_SplitSlice({H::cloneList(e.leading), e.extraBind, H::cloneList(e.trailing)});
+            rv.data_ = Data::make_SplitSlice({H::cloneList(e.leading), e.extraBind, H::cloneList(e.trailing)});
         }
         TU_ARMA(Or, e) {
-            rv.mData = Data::make_Or(H::cloneList(e));
+            rv.data_ = Data::make_Or(H::cloneList(e));
         }
     }
 
@@ -276,74 +276,74 @@ ASTPattern::ASTPattern() {
 }
 
 ASTPattern::ASTPattern(Span sp, Data dat)
-    : mSpan(mv$(sp))
-    , mData(mv$(dat))
+    : span_(mv$(sp))
+    , data_(mv$(dat))
 {
 }
 
 ASTPattern::ASTPattern(TagMaybeBind, Span sp, Ident name)
-    : mSpan(mv$(sp))
-    , mData(Data::make_MaybeBind({mv$(name)}))
+    : span_(mv$(sp))
+    , data_(Data::make_MaybeBind({mv$(name)}))
 {
 }
 
 ASTPattern::ASTPattern(TagMacro, Span sp, unique_ptr<ASTMacroInvocation> inv)
-    : mSpan(mv$(sp))
-    , mData(Data::make_Macro({mv$(inv)}))
+    : span_(mv$(sp))
+    , data_(Data::make_Macro({mv$(inv)}))
 {
 }
 
 ASTPattern::ASTPattern(TagBind, Span sp, Ident name, ASTPatternBinding::Type ty, bool isMut)
-    : mSpan(mv$(sp))
+    : span_(mv$(sp))
 {
-    mBindings.push_back(ASTPatternBinding(mv$(name), ty, isMut));
+    bindings_.push_back(ASTPatternBinding(mv$(name), ty, isMut));
 }
 
 ASTPattern::ASTPattern(TagBox, Span sp, ASTPattern sub)
-    : mSpan(mv$(sp))
-    , mData(Data::make_Box({unique_ptr<ASTPattern>(new ASTPattern(mv$(sub)))}))
+    : span_(mv$(sp))
+    , data_(Data::make_Box({unique_ptr<ASTPattern>(new ASTPattern(mv$(sub)))}))
 {
 }
 
 ASTPattern::ASTPattern(TagDeref, Span sp, ASTPattern sub)
-    : mSpan(mv$(sp))
-    , mData(Data::make_Deref({unique_ptr<ASTPattern>(new ASTPattern(mv$(sub)))}))
+    : span_(mv$(sp))
+    , data_(Data::make_Deref({unique_ptr<ASTPattern>(new ASTPattern(mv$(sub)))}))
 {
 }
 
 ASTPattern::ASTPattern(TagValue, Span sp, Value val, Value end)
-    : mSpan(mv$(sp))
-    , mData(Data::make_Value({::std::move(val), ::std::move(end)}))
+    : span_(mv$(sp))
+    , data_(Data::make_Value({::std::move(val), ::std::move(end)}))
 {
 }
 
 ASTPattern::ASTPattern(TagReference, Span sp, bool isMutable, ASTPattern subPattern)
-    : mSpan(mv$(sp))
-    , mData(Data::make_Ref(/*Data::Data_Ref */ {isMutable, unique_ptr<ASTPattern>(new ASTPattern(::std::move(subPattern)))}))
+    : span_(mv$(sp))
+    , data_(Data::make_Ref(/*Data::Data_Ref */ {isMutable, unique_ptr<ASTPattern>(new ASTPattern(::std::move(subPattern)))}))
 {
 }
 
 ASTPattern::ASTPattern(TagTuple, Span sp, ::std::vector<ASTPattern> pats)
-    : mSpan(mv$(sp))
-    , mData(Data::make_Tuple(TuplePat{mv$(pats), false, {}}))
+    : span_(mv$(sp))
+    , data_(Data::make_Tuple(TuplePat{mv$(pats), false, {}}))
 {
 }
 
 ASTPattern::ASTPattern(TagTuple, Span sp, TuplePat pat)
-    : mSpan(mv$(sp))
-    , mData(Data::make_Tuple(mv$(pat)))
+    : span_(mv$(sp))
+    , data_(Data::make_Tuple(mv$(pat)))
 {
 }
 
 ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, ::std::vector<ASTPattern> pats)
-    : mSpan(mv$(sp))
-    , mData(Data::make_StructTuple({mv$(path), TuplePat{mv$(pats), false, {}}}))
+    : span_(mv$(sp))
+    , data_(Data::make_StructTuple({mv$(path), TuplePat{mv$(pats), false, {}}}))
 {
 }
 
 ASTPattern::ASTPattern(TagNamedTuple, Span sp, ASTPath path, TuplePat pat)
-    : mSpan(mv$(sp))
-    , mData(Data::make_StructTuple({::std::move(path), ::std::move(pat)}))
+    : span_(mv$(sp))
+    , data_(Data::make_StructTuple({::std::move(path), ::std::move(pat)}))
 {
 }
 namespace {

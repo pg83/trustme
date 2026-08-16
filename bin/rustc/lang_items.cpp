@@ -6,136 +6,136 @@
 
 namespace {
     class LangItemsImpl final: public LangItems {
-        HIRSimplePath mCopy;
-        HIRSimplePath mClone;
-        HIRSimplePath mDrop;
-        HIRSimplePath mSized;
-        HIRSimplePath mUnsize;
-        HIRSimplePath mFn;
-        HIRSimplePath mFnMut;
-        HIRSimplePath mFnOnce;
-        HIRSimplePath mAsyncFn;
-        HIRSimplePath mAsyncFnMut;
-        HIRSimplePath mAsyncFnOnce;
-        HIRSimplePath mBox;
-        HIRSimplePath mPhantomData;
-        HIRSimplePath mGenerator;
-        HIRSimplePath mDiscriminantKind;
-        HIRSimplePath mPointee;
-        HIRSimplePath mDynMetadata;
-        HIRSimplePath mPointeeSized;
-        HIRSimplePath mMetaSized;
-        HIRSimplePath mDestruct;
-        HIRSimplePath mFuture;
+        HIRSimplePath copy_;
+        HIRSimplePath clone_;
+        HIRSimplePath drop_;
+        HIRSimplePath sized_;
+        HIRSimplePath unsize_;
+        HIRSimplePath fn_;
+        HIRSimplePath fnMut_;
+        HIRSimplePath fnOnce_;
+        HIRSimplePath asyncFn_;
+        HIRSimplePath asyncFnMut_;
+        HIRSimplePath asyncFnOnce_;
+        HIRSimplePath box_;
+        HIRSimplePath phantomData_;
+        HIRSimplePath generator_;
+        HIRSimplePath discriminantKind_;
+        HIRSimplePath pointee_;
+        HIRSimplePath dynMetadata_;
+        HIRSimplePath pointeeSized_;
+        HIRSimplePath metaSized_;
+        HIRSimplePath destruct_;
+        HIRSimplePath future_;
 
     public:
         explicit LangItemsImpl(const HIRCrate& crate)
-            : mCopy(crate.getLangItemPathOpt("copy"))
-            , mClone(crate.getLangItemPathOpt("clone"))
-            , mDrop(crate.getLangItemPathOpt("drop"))
-            , mSized(crate.getLangItemPathOpt("sized"))
-            , mUnsize(crate.getLangItemPathOpt("unsize"))
-            , mFn(crate.getLangItemPathOpt("fn"))
-            , mFnMut(crate.getLangItemPathOpt("fn_mut"))
-            , mFnOnce(crate.getLangItemPathOpt("fn_once"))
-            , mAsyncFn(crate.getLangItemPathOpt("async_fn"))
-            , mAsyncFnMut(crate.getLangItemPathOpt("async_fn_mut"))
-            , mAsyncFnOnce(crate.getLangItemPathOpt("async_fn_once"))
-            , mBox(crate.getLangItemPathOpt("owned_box"))
-            , mPhantomData(crate.getLangItemPathOpt("phantom_data"))
-            , mGenerator(crate.getLangItemPathOpt("coroutine"))
-            , mDiscriminantKind(crate.getLangItemPathOpt("discriminant_kind"))
-            , mPointee(crate.getLangItemPathOpt("pointee_trait"))
-            , mDynMetadata(crate.getLangItemPathOpt("dyn_metadata"))
-            , mPointeeSized(crate.getLangItemPathOpt("pointee_sized"))
-            , mMetaSized(crate.getLangItemPathOpt("meta_sized"))
-            , mDestruct(crate.getLangItemPathOpt("destruct"))
-            , mFuture(crate.getLangItemPathOpt("future_trait"))
+            : copy_(crate.getLangItemPathOpt("copy"))
+            , clone_(crate.getLangItemPathOpt("clone"))
+            , drop_(crate.getLangItemPathOpt("drop"))
+            , sized_(crate.getLangItemPathOpt("sized"))
+            , unsize_(crate.getLangItemPathOpt("unsize"))
+            , fn_(crate.getLangItemPathOpt("fn"))
+            , fnMut_(crate.getLangItemPathOpt("fn_mut"))
+            , fnOnce_(crate.getLangItemPathOpt("fn_once"))
+            , asyncFn_(crate.getLangItemPathOpt("async_fn"))
+            , asyncFnMut_(crate.getLangItemPathOpt("async_fn_mut"))
+            , asyncFnOnce_(crate.getLangItemPathOpt("async_fn_once"))
+            , box_(crate.getLangItemPathOpt("owned_box"))
+            , phantomData_(crate.getLangItemPathOpt("phantom_data"))
+            , generator_(crate.getLangItemPathOpt("coroutine"))
+            , discriminantKind_(crate.getLangItemPathOpt("discriminant_kind"))
+            , pointee_(crate.getLangItemPathOpt("pointee_trait"))
+            , dynMetadata_(crate.getLangItemPathOpt("dyn_metadata"))
+            , pointeeSized_(crate.getLangItemPathOpt("pointee_sized"))
+            , metaSized_(crate.getLangItemPathOpt("meta_sized"))
+            , destruct_(crate.getLangItemPathOpt("destruct"))
+            , future_(crate.getLangItemPathOpt("future_trait"))
         {
         }
 
         const HIRSimplePath& copy() const override {
-            return mCopy;
+            return copy_;
         }
 
         const HIRSimplePath& clone() const override {
-            return mClone;
+            return clone_;
         }
 
         const HIRSimplePath& drop() const override {
-            return mDrop;
+            return drop_;
         }
 
         const HIRSimplePath& sized() const override {
-            return mSized;
+            return sized_;
         }
 
         const HIRSimplePath& unsize() const override {
-            return mUnsize;
+            return unsize_;
         }
 
         const HIRSimplePath& fn() const override {
-            return mFn;
+            return fn_;
         }
 
         const HIRSimplePath& fnMut() const override {
-            return mFnMut;
+            return fnMut_;
         }
 
         const HIRSimplePath& fnOnce() const override {
-            return mFnOnce;
+            return fnOnce_;
         }
 
         const HIRSimplePath& asyncFn() const override {
-            return mAsyncFn;
+            return asyncFn_;
         }
 
         const HIRSimplePath& asyncFnMut() const override {
-            return mAsyncFnMut;
+            return asyncFnMut_;
         }
 
         const HIRSimplePath& asyncFnOnce() const override {
-            return mAsyncFnOnce;
+            return asyncFnOnce_;
         }
 
         const HIRSimplePath& box() const override {
-            return mBox;
+            return box_;
         }
 
         const HIRSimplePath& phantomData() const override {
-            return mPhantomData;
+            return phantomData_;
         }
 
         const HIRSimplePath& generator() const override {
-            return mGenerator;
+            return generator_;
         }
 
         const HIRSimplePath& discriminantKind() const override {
-            return mDiscriminantKind;
+            return discriminantKind_;
         }
 
         const HIRSimplePath& pointee() const override {
-            return mPointee;
+            return pointee_;
         }
 
         const HIRSimplePath& dynMetadata() const override {
-            return mDynMetadata;
+            return dynMetadata_;
         }
 
         const HIRSimplePath& pointeeSized() const override {
-            return mPointeeSized;
+            return pointeeSized_;
         }
 
         const HIRSimplePath& metaSized() const override {
-            return mMetaSized;
+            return metaSized_;
         }
 
         const HIRSimplePath& destruct() const override {
-            return mDestruct;
+            return destruct_;
         }
 
         const HIRSimplePath& future() const override {
-            return mFuture;
+            return future_;
         }
     };
 }

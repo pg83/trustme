@@ -1,22 +1,22 @@
 #include "ast_item.h"
 
 ASTVisibility::ASTVisibility()
-    : mTy(Ty::Pub)
+    : ty_(Ty::Pub)
 {
 }
 
 ASTVisibility ASTVisibility::makeBarePrivate() {
     ASTVisibility rv;
-    rv.mTy = Ty::Private;
+    rv.ty_ = Ty::Private;
     return rv;
 }
 
 const ASTPath& ASTVisibility::inPath() const {
-    assert(mInPath);
-    return *mInPath;
+    assert(inPath_);
+    return *inPath_;
 }
 
 const ASTAbsolutePath& ASTVisibility::visPath() const {
-    assert(mVisPath);
-    return *mVisPath;
+    assert(visPath_);
+    return *visPath_;
 }

@@ -8,7 +8,7 @@
 extern void debugInitPhases(const char* envVarName, std::initializer_list<const char*> il);
 
 class DebugTimedPhase {
-    const char* mName;
+    const char* name_;
     clock_t start;
 
 public:

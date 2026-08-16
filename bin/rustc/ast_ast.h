@@ -68,10 +68,10 @@ struct ASTTupleItem {
 class ASTTypeAlias {
 public:
     /// Normal generic parameter definitions
-    ASTGenericParams mParams;
+    ASTGenericParams params_;
     /// Holds bounds on this type, all bounds encoded as `Self: ...`
     ASTGenericParams selfBounds;
-    ASTType* mType;
+    ASTType* type_;
 
     //TypeAlias() {}
     ASTTypeAlias(ASTGenericParams params, ASTType* type);
@@ -79,19 +79,19 @@ public:
     static ASTTypeAlias newAssociatedType(ASTGenericParams params, ASTGenericParams typeBounds, ASTType* defaultType);
 
     const ASTGenericParams& params() const {
-        return mParams;
+        return params_;
     }
 
     ASTGenericParams& params() {
-        return mParams;
+        return params_;
     }
 
     ASTType* type() const {
-        return mType;
+        return type_;
     }
 
     ASTType*& type() {
-        return mType;
+        return type_;
     }
 
     ASTTypeAlias clone() const;
@@ -126,9 +126,9 @@ public:
 
 private:
     Class cls;
-    ASTGenericParams mParams;
-    ASTType* mType;
-    ASTExpr mValue;
+    ASTGenericParams params_;
+    ASTType* type_;
+    ASTExpr value_;
 
 public:
     struct Markings {
@@ -144,27 +144,27 @@ public:
     }
 
     const ASTGenericParams& params() const {
-        return mParams;
+        return params_;
     }
 
     ASTGenericParams& params() {
-        return mParams;
+        return params_;
     }
 
     ASTType* type() const {
-        return mType;
+        return type_;
     }
 
     const ASTExpr& value() const {
-        return mValue;
+        return value_;
     }
 
     ASTType*& type() {
-        return mType;
+        return type_;
     }
 
     ASTExpr& value() {
-        return mValue;
+        return value_;
     }
 
     ASTStatic clone() const;
@@ -211,16 +211,16 @@ public:
     };
 
 private:
-    Span mSpan;
-    ASTGenericParams mParams;
-    ASTExpr mCode;
-    ASTType* mRettype;
-    Arglist mArgs;
-    bool mIsVariadic; // extern only
+    Span span_;
+    ASTGenericParams params_;
+    ASTExpr code_;
+    ASTType* rettype_;
+    Arglist args_;
+    bool isVariadic_; // extern only
 
-    ::std::string mAbi;
+    ::std::string abi_;
     Flags flags;
-    ::std::unique_ptr<Delegation> mDelegation;
+    ::std::unique_ptr<Delegation> delegation_;
 
 public:
     struct Markings {
@@ -251,19 +251,19 @@ public:
     ASTFunction(Span sp, ASTType* retType, Arglist args);
 
     void setCode(ASTExpr code) {
-        mCode = ::std::move(code);
+        code_ = ::std::move(code);
     }
 
     const Span& sp() const {
-        return mSpan;
+        return span_;
     }
 
     const ::std::string& abi() const {
-        return mAbi;
+        return abi_;
     };
 
     void setAbi(std::string s) {
-        mAbi = std::move(s);
+        abi_ = std::move(s);
     }
 
     bool isConst() const {
@@ -279,68 +279,68 @@ public:
     }
 
     const ASTGenericParams& params() const {
-        return mParams;
+        return params_;
     }
 
     ASTGenericParams& params() {
-        return mParams;
+        return params_;
     }
 
     const ASTExpr& code() const {
-        return mCode;
+        return code_;
     }
 
     ASTExpr& code() {
-        return mCode;
+        return code_;
     }
 
     ASTType* rettype() const {
-        return mRettype;
+        return rettype_;
     }
 
     ASTType*& rettype() {
-        return mRettype;
+        return rettype_;
     }
 
     const Arglist& args() const {
-        return mArgs;
+        return args_;
     }
 
     Arglist& args() {
-        return mArgs;
+        return args_;
     }
 
     bool isVariadic() const {
-        return mIsVariadic;
+        return isVariadic_;
     }
 
     const Delegation* delegation() const {
-        return mDelegation.get();
+        return delegation_.get();
     }
 
     Delegation* delegation() {
-        return mDelegation.get();
+        return delegation_.get();
     }
 
     void setDelegation(Delegation delegation) {
-        mDelegation = ::std::make_unique<Delegation>(::std::move(delegation));
+        delegation_ = ::std::make_unique<Delegation>(::std::move(delegation));
     }
 
     ::std::unique_ptr<Delegation> takeDelegation() {
-        return ::std::move(mDelegation);
+        return ::std::move(delegation_);
     }
 
     ASTFunction clone() const;
 };
 
 class ASTTrait {
-    ASTGenericParams mParams;
-    ::std::vector<Spanned<TypeTraitPath>> mSupertraits;
-    ::std::vector<Spanned<ASTLifetimeRef>> mLifetimes;
+    ASTGenericParams params_;
+    ::std::vector<Spanned<TypeTraitPath>> supertraits_;
+    ::std::vector<Spanned<ASTLifetimeRef>> lifetimes_;
 
-    bool mIsMarker;
-    bool mIsUnsafe;
-    ASTNamedList<ASTItem> mItems;
+    bool isMarker_;
+    bool isUnsafe_;
+    ASTNamedList<ASTItem> items_;
 
 public:
     ASTTrait();
@@ -350,35 +350,35 @@ public:
     ASTTrait& operator=(ASTTrait&&);
 
     const ASTGenericParams& params() const {
-        return mParams;
+        return params_;
     }
 
     ASTGenericParams& params() {
-        return mParams;
+        return params_;
     }
 
     const ::std::vector<Spanned<TypeTraitPath>>& supertraits() const {
-        return mSupertraits;
+        return supertraits_;
     }
 
     ::std::vector<Spanned<TypeTraitPath>>& supertraits() {
-        return mSupertraits;
+        return supertraits_;
     }
 
     const ::std::vector<Spanned<ASTLifetimeRef>>& lifetimes() const {
-        return mLifetimes;
+        return lifetimes_;
     }
 
     ::std::vector<Spanned<ASTLifetimeRef>>& lifetimes() {
-        return mLifetimes;
+        return lifetimes_;
     }
 
     const ASTNamedList<ASTItem>& items() const {
-        return mItems;
+        return items_;
     }
 
     ASTNamedList<ASTItem>& items() {
-        return mItems;
+        return items_;
     }
 
     void addType(Span sp, RcString name, ASTAttributeList attrs, ASTType* type);
@@ -389,11 +389,11 @@ public:
     bool isMarker() const;
 
     void setIsUnsafe() {
-        mIsUnsafe = true;
+        isUnsafe_ = true;
     }
 
     bool isUnsafe() const {
-        return mIsUnsafe;
+        return isUnsafe_;
     }
 
     bool hasNamedItem(const RcString& name, bool& outIsFcn) const;
@@ -422,8 +422,8 @@ struct ASTEnumVariant {
 };
 
 class ASTEnum {
-    ASTGenericParams mParams;
-    ::std::vector<ASTEnumVariant> mVariants;
+    ASTGenericParams params_;
+    ::std::vector<ASTEnumVariant> variants_;
 
 public:
     struct Markings {
@@ -451,19 +451,19 @@ public:
     ASTEnum(ASTGenericParams params, ::std::vector<ASTEnumVariant> variants);
 
     const ASTGenericParams& params() const {
-        return mParams;
+        return params_;
     }
 
     ASTGenericParams& params() {
-        return mParams;
+        return params_;
     }
 
     const ::std::vector<ASTEnumVariant>& variants() const {
-        return mVariants;
+        return variants_;
     }
 
     ::std::vector<ASTEnumVariant>& variants() {
-        return mVariants;
+        return variants_;
     }
 
     ASTEnum clone() const;
@@ -472,7 +472,7 @@ public:
 TAGGED_UNION_EX(ASTStructData, (), Struct, ((Unit, struct {}), (Tuple, struct { ::std::vector<ASTTupleItem> ents; }), (Struct, struct { ::std::vector<ASTStructItem> ents; })), (), (), (public:));
 
 class ASTStruct {
-    ASTGenericParams mParams;
+    ASTGenericParams params_;
 
 public:
     ASTStructData mData;
@@ -506,11 +506,11 @@ public:
     ASTStruct(ASTGenericParams params, ::std::vector<ASTTupleItem> fields);
 
     const ASTGenericParams& params() const {
-        return mParams;
+        return params_;
     }
 
     ASTGenericParams& params() {
-        return mParams;
+        return params_;
     }
 
     ASTStruct clone() const;
@@ -518,7 +518,7 @@ public:
 
 class ASTUnion {
 public:
-    ASTGenericParams mParams;
+    ASTGenericParams params_;
     ::std::vector<ASTStructItem> mVariants;
 
     struct Markings {
@@ -532,22 +532,22 @@ public:
     ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields);
 
     const ASTGenericParams& params() const {
-        return mParams;
+        return params_;
     }
 
     ASTGenericParams& params() {
-        return mParams;
+        return params_;
     }
 
     ASTUnion clone() const;
 };
 
 class ASTImplDef {
-    bool mIsUnsafe;
-    bool mIsConst;
-    ASTGenericParams mParams;
-    Spanned<ASTPath> mTrait;
-    ASTType* mType;
+    bool isUnsafe_;
+    bool isConst_;
+    ASTGenericParams params_;
+    Spanned<ASTPath> trait_;
+    ASTType* type_;
 
 public:
     ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTType* implType);
@@ -556,43 +556,43 @@ public:
     ASTImplDef& operator=(ASTImplDef&&) = default;
 
     void setIsUnsafe() {
-        mIsUnsafe = true;
+        isUnsafe_ = true;
     }
 
     bool isUnsafe() const {
-        return mIsUnsafe;
+        return isUnsafe_;
     }
 
     void setIsConst() {
-        mIsConst = true;
+        isConst_ = true;
     }
 
     bool isConst() const {
-        return mIsConst;
+        return isConst_;
     }
 
     const ASTGenericParams& params() const {
-        return mParams;
+        return params_;
     }
 
     ASTGenericParams& params() {
-        return mParams;
+        return params_;
     }
 
     const Spanned<ASTPath>& trait() const {
-        return mTrait;
+        return trait_;
     }
 
     Spanned<ASTPath>& trait() {
-        return mTrait;
+        return trait_;
     }
 
     ASTType* type() const {
-        return mType;
+        return type_;
     }
 
     ASTType*& type() {
-        return mType;
+        return type_;
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTImplDef& impl);
@@ -611,9 +611,9 @@ public:
     };
 
 private:
-    ASTImplDef mDef;
+    ASTImplDef def_;
 
-    ::std::vector<ImplItem> mItems;
+    ::std::vector<ImplItem> items_;
     //NamedList<ASTType*>   m_types;
     //NamedList<Function>  m_functions;
     //NamedList<Static>    m_statics;
@@ -630,19 +630,19 @@ public:
     void addMacroInvocation(ASTMacroInvocation inv);
 
     const ASTImplDef& def() const {
-        return mDef;
+        return def_;
     }
 
     ASTImplDef& def() {
-        return mDef;
+        return def_;
     }
 
     const ::std::vector<ImplItem>& items() const {
-        return mItems;
+        return items_;
     }
 
     ::std::vector<ImplItem>& items() {
-        return mItems;
+        return items_;
     }
 
     bool hasNamedItem(const RcString& name) const;
@@ -669,8 +669,8 @@ struct ASTUseItem {
 };
 
 class ASTExternBlock {
-    ::std::string mAbi;
-    ::std::vector<ASTNamed<ASTItem>> mItems;
+    ::std::string abi_;
+    ::std::vector<ASTNamed<ASTItem>> items_;
 
 public:
     struct Link {
@@ -685,18 +685,18 @@ public:
     ASTExternBlock& operator=(ASTExternBlock&&);
 
     const ::std::string& abi() const {
-        return mAbi;
+        return abi_;
     }
 
     void addItem(ASTNamed<ASTItem> namedItem);
 
     // NOTE: Only Function and Static are valid.
     ::std::vector<ASTNamed<ASTItem>>& items() {
-        return mItems;
+        return items_;
     }
 
     const ::std::vector<ASTNamed<ASTItem>>& items() const {
-        return mItems;
+        return items_;
     }
 
     ASTExternBlock clone() const;
@@ -731,7 +731,7 @@ private:
     // --- Runtime caches and state ---
     ::std::vector<::std::shared_ptr<ASTModule>> anonModules;
 
-    ::std::vector<ASTNamed<MacroRulesPtr>> mMacros;
+    ::std::vector<ASTNamed<MacroRulesPtr>> macros_;
 
 public:
     struct FileInfo {
@@ -829,11 +829,11 @@ public:
     }
 
     ASTNamedList<MacroRulesPtr>& macros() {
-        return mMacros;
+        return macros_;
     }
 
     const ASTNamedList<MacroRulesPtr>& macros() const {
-        return mMacros;
+        return macros_;
     }
 };
 

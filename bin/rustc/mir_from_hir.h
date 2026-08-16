@@ -187,15 +187,15 @@ class MirBuilder {
     friend class ScopeHandle;
 
     const Span& rootSpan;
-    const StaticTraitResolve& mResolve;
+    const StaticTraitResolve& resolve_;
     const HIRTypeData* retTy;
-    const HIRFunction::argsT& mArgs;
+    const HIRFunction::argsT& args_;
     MIRFunction& output;
 
-    const HIRSimplePath* mLangBox;
+    const HIRSimplePath* langBox_;
 
     unsigned int currentBlock;
-    bool mBlockActive;
+    bool blockActive_;
     bool buildingCleanup = false;
     const MIRLValue* unwindConsumedValue = nullptr;
 
@@ -233,7 +233,7 @@ class MirBuilder {
 
     ::std::vector<ScopeDef> scopes;
     ::std::vector<unsigned int> scopeStack;
-    ScopeHandle mFcnScope;
+    ScopeHandle fcnScope_;
 
     typedef std::pair<HIRPatternBinding::Type, MIRLValue> varAliasT;
     ::std::vector<varAliasT> variableAliases;
@@ -253,15 +253,15 @@ public:
     void finalCleanup();
 
     const HIRSimplePath* langBox() const {
-        return mLangBox;
+        return langBox_;
     }
 
     const HIRCrate& crate() const {
-        return mResolve.hirCrate();
+        return resolve_.hirCrate();
     }
 
     const StaticTraitResolve& resolve() const {
-        return mResolve;
+        return resolve_;
     }
 
     /// Check if the passed type is Box<T> and returns a pointer to the T type if so, otherwise nullptr
@@ -348,7 +348,7 @@ public:
 
     // - Block management
     bool blockActive() const {
-        return mBlockActive;
+        return blockActive_;
     }
 
     // Mark a value as initialised (used for Call, because it has to be done after the panic block is populated)
@@ -436,7 +436,7 @@ public:
     void unfreezeScope(const Span& sp, const ScopeHandle&);
 
     const ScopeHandle& fcnScope() const {
-        return mFcnScope;
+        return fcnScope_;
     }
 
     /// Schedule a local's value drop in the current variable scope.

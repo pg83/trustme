@@ -1,8 +1,8 @@
 #include "ast_lifetime_ref.h"
 
 ASTLifetimeRef::ASTLifetimeRef(Ident name, uint32_t binding)
-    : mName(::std::move(name))
-    , mBinding(binding)
+    : name_(::std::move(name))
+    , binding_(binding)
 {
 }
 
@@ -17,6 +17,6 @@ ASTLifetimeRef::ASTLifetimeRef(Ident name)
 }
 
 void ASTLifetimeRef::setBinding(uint16_t b) {
-    assert(mBinding == BINDING_UNBOUND);
-    mBinding = b;
+    assert(binding_ == BINDING_UNBOUND);
+    binding_ = b;
 }

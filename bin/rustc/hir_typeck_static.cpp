@@ -37,28 +37,28 @@ namespace {
 class StaticTraitResolve::NextSolverBridge {
     HMTypeInferrence ivars;
     HIRSimplePath visibility;
-    TraitResolution mResolve;
+    TraitResolution resolve_;
 
 public:
     explicit NextSolverBridge(const WireBoard& wb)
         : ivars(wb.crate->types)
         , visibility(wb.crate->crateName, {})
-        , mResolve(ivars, wb, nullptr, nullptr, visibility, nullptr)
+        , resolve_(ivars, wb, nullptr, nullptr, visibility, nullptr)
     {
     }
 
     bool findImpl(const Span& sp, const HIRGenericParams* implGenerics, const HIRGenericParams* itemGenerics, const HIRSimplePath& trait, const HIRPathParams* params, const HIRTypeData* type, StaticTraitResolve::tCbFindImpl callback) {
-        mResolve.setGenericContext(implGenerics, itemGenerics);
+        resolve_.setGenericContext(implGenerics, itemGenerics);
 
         HIRPathParams inferredParams;
         if (!params) {
-            const auto& traitDef = mResolve.hirCrate().getTraitByPath(sp, trait);
+            const auto& traitDef = resolve_.hirCrate().getTraitByPath(sp, trait);
             // This resolver owns m_ivars, so its inference indexes must not
             // escape into HIR and be mistaken for indexes in expression typeck.
             const auto placeholderName = RcString::newInterned(FMT("static_find_impl_" << &inferredParams));
             inferredParams.types.reserve(traitDef.mParams.types.size());
             for (size_t i = 0; i < traitDef.mParams.types.size(); i++) {
-                inferredParams.types.push_back(mResolve.hirCrate().types.generic(placeholderName, GENERICPlaceholder * 256 + i));
+                inferredParams.types.push_back(resolve_.hirCrate().types.generic(placeholderName, GENERICPlaceholder * 256 + i));
             }
             inferredParams.values.reserve(traitDef.mParams.values.size());
             for (size_t i = 0; i < traitDef.mParams.values.size(); i++) {
@@ -67,7 +67,7 @@ public:
             params = &inferredParams;
         }
 
-        return mResolve.findTraitImplsNext(sp, trait, *params, type, [&](ImplRef impl, HIRCompare match) {
+        return resolve_.findTraitImplsNext(sp, trait, *params, type, [&](ImplRef impl, HIRCompare match) {
             return callback(::std::move(impl), match != HIRCompare::Equal);
         }, "");
     }
@@ -82,7 +82,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             ASSERT_BUG(sp, crate.pool, "next-solver requires the crate object pool");
             nextSolver = crate.pool->make<NextSolverBridge>(this->wb);
         }
-        return nextSolver->findImpl(sp, mImplGenerics, mItemGenerics, traitPath, traitParams, type, ::std::move(foundCb));
+        return nextSolver->findImpl(sp, implGenerics_, itemGenerics_, traitPath, traitParams, type, ::std::move(foundCb));
     }
 
     static HIRPathParams nullParams;
@@ -3078,22 +3078,22 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
                 return MetadataType::None;
             }
             if (e.binding == 0xFFFF) {
-                ASSERT_BUG(sp, mImplGenerics, "Use of `Self` with no self type (no impl generics)");
+                ASSERT_BUG(sp, implGenerics_, "Use of `Self` with no self type (no impl generics)");
                 return selfMetadata;
             } else if ((e.binding >> 8) == 0) {
                 auto idx = e.binding & 0xFF;
-                ASSERT_BUG(sp, mImplGenerics, "Encountered generic " << ty << " without impl generics available");
-                ASSERT_BUG(sp, idx < mImplGenerics->types.size(), "Encountered generic " << ty << " out of range of impl generic spec");
-                if (mImplGenerics->types[idx].isSized) {
+                ASSERT_BUG(sp, implGenerics_, "Encountered generic " << ty << " without impl generics available");
+                ASSERT_BUG(sp, idx < implGenerics_->types.size(), "Encountered generic " << ty << " out of range of impl generic spec");
+                if (implGenerics_->types[idx].isSized) {
                     return MetadataType::None;
                 } else {
                     return MetadataType::Unknown;
                 }
             } else if ((e.binding >> 8) == 1) {
                 auto idx = e.binding & 0xFF;
-                ASSERT_BUG(sp, mItemGenerics, "Encountered generic " << ty << " without item generics available");
-                ASSERT_BUG(sp, idx < mItemGenerics->types.size(), "Encountered generic " << ty << " out of range of item generic spec");
-                if (mItemGenerics->types[idx].isSized) {
+                ASSERT_BUG(sp, itemGenerics_, "Encountered generic " << ty << " without item generics available");
+                ASSERT_BUG(sp, idx < itemGenerics_->types.size(), "Encountered generic " << ty << " out of range of item generic spec");
+                if (itemGenerics_->types[idx].isSized) {
                     return MetadataType::None;
                 } else {
                     return MetadataType::Unknown;
@@ -3681,66 +3681,66 @@ NullOnDrop<const HIRGenericParams> StaticTraitResolve::setImplGenerics(HIRStruct
             break;
     }
     setImplGenericsRaw(mt, gps);
-    return NullOnDrop<const HIRGenericParams>(mImplGenerics);
+    return NullOnDrop<const HIRGenericParams>(implGenerics_);
 }
 
 NullOnDrop<const HIRGenericParams> StaticTraitResolve::setImplGenerics(MetadataType selfMetaType, const HIRGenericParams& gps) {
     setImplGenericsRaw(selfMetaType, gps);
-    return NullOnDrop<const HIRGenericParams>(mImplGenerics);
+    return NullOnDrop<const HIRGenericParams>(implGenerics_);
 }
 
 NullOnDrop<const HIRGenericParams> StaticTraitResolve::setImplGenerics(const HIRTypeData* selfTy, const HIRGenericParams& gps) {
     setImplGenericsRaw(MetadataType::Unknown, gps);
     selfMetadata = metadataType(Span(), selfTy);
-    return NullOnDrop<const HIRGenericParams>(mImplGenerics);
+    return NullOnDrop<const HIRGenericParams>(implGenerics_);
 }
 
 void StaticTraitResolve::updateImplSelfMetadata(const HIRTypeData* selfTy) {
-    assert(mImplGenerics);
+    assert(implGenerics_);
     selfMetadata = metadataType(Span(), selfTy);
 }
 
 NullOnDrop<const HIRGenericParams> StaticTraitResolve::setItemGenerics(const HIRGenericParams& gps) {
     setItemGenericsRaw(gps);
-    return NullOnDrop<const HIRGenericParams>(mItemGenerics);
+    return NullOnDrop<const HIRGenericParams>(itemGenerics_);
 }
 
 void StaticTraitResolve::setImplGenericsRaw(MetadataType selfMetaType, const HIRGenericParams& gps) {
-    assert(!mImplGenerics);
+    assert(!implGenerics_);
     selfMetadata = selfMetaType;
-    mImplGenerics = &gps;
+    implGenerics_ = &gps;
     prepIndexes();
 }
 
 void StaticTraitResolve::clearImplGenerics() {
     selfMetadata = MetadataType::Unknown;
-    mImplGenerics = nullptr;
+    implGenerics_ = nullptr;
     prepIndexes();
 }
 
 void StaticTraitResolve::setItemGenericsRaw(const HIRGenericParams& gps) {
-    assert(!mItemGenerics);
-    mItemGenerics = &gps;
+    assert(!itemGenerics_);
+    itemGenerics_ = &gps;
     prepIndexes();
 }
 
 void StaticTraitResolve::clearItemGenerics() {
-    mItemGenerics = nullptr;
+    itemGenerics_ = nullptr;
     prepIndexes();
 }
 
 void StaticTraitResolve::setBothGenericsRaw(const HIRGenericParams* gpsImpl, const HIRGenericParams* gpsFcn) {
-    assert(!mImplGenerics);
-    assert(!mItemGenerics);
-    mImplGenerics = gpsImpl;
-    mItemGenerics = gpsFcn;
+    assert(!implGenerics_);
+    assert(!itemGenerics_);
+    implGenerics_ = gpsImpl;
+    itemGenerics_ = gpsFcn;
     prepIndexes();
 }
 
 void StaticTraitResolve::clearBothGenerics() {
     selfMetadata = MetadataType::Unknown;
-    mImplGenerics = nullptr;
-    mItemGenerics = nullptr;
+    implGenerics_ = nullptr;
+    itemGenerics_ = nullptr;
     prepIndexes();
 }
 

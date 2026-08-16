@@ -244,8 +244,8 @@ struct ASTPathParams {
 };
 
 class ASTPathNode {
-    RcString mName;
-    ASTPathParams mParams;
+    RcString name_;
+    ASTPathParams params_;
 
 public:
     ASTPathNode();
@@ -253,15 +253,15 @@ public:
     ASTPathNode(RcString name, ASTPathParams args = {});
 
     const RcString& name() const {
-        return mName;
+        return name_;
     }
 
     const ASTPathParams& args() const {
-        return mParams;
+        return params_;
     }
 
     ASTPathParams& args() {
-        return mParams;
+        return params_;
     }
 
     Ordering ord(const ASTPathNode& x) const;

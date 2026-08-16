@@ -170,12 +170,12 @@ ASTType* ASTType::clone() const {
             assert(!"Copying a destructed type");
 #define _COPY(VAR)                                                        \
     case TypeData::TAG_##VAR:                                             \
-        return mkType(p, mSpan, TypeData::make_##VAR(mData.as_##VAR())); \
+        return mkType(p, span_, TypeData::make_##VAR(mData.as_##VAR())); \
         break;
 #define _CLONE(VAR, ...)                                       \
     case TypeData::TAG_##VAR: {                                \
         auto& old = mData.as_##VAR();                          \
-        return mkType(p, mSpan, TypeData::make_##VAR(__VA_ARGS__)); \
+        return mkType(p, span_, TypeData::make_##VAR(__VA_ARGS__)); \
     } break;
             _COPY(None)
             _COPY(Any)
@@ -370,28 +370,28 @@ void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const PrettyPrintType& x) {
-    x.mType->print(os, false);
+    x.type_->print(os, false);
     return os;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeRef& x) {
-    if (x.mBinding == ASTLifetimeRef::BINDING_STATIC) {
+    if (x.binding_ == ASTLifetimeRef::BINDING_STATIC) {
         os << "'static";
-    } else if (x.mBinding == ASTLifetimeRef::BINDING_INFER) {
+    } else if (x.binding_ == ASTLifetimeRef::BINDING_INFER) {
         os << "'_";
-    } else if (x.mBinding == ASTLifetimeRef::BINDING_UNSPECIFIED) {
+    } else if (x.binding_ == ASTLifetimeRef::BINDING_UNSPECIFIED) {
         os << "/*'UNSPEC*/";
     } else {
-        os << "'" << x.mName.name;
-        if (x.mBinding != ASTLifetimeRef::BINDING_UNBOUND) {
-            os << "/*" << x.mBinding << "*/";
+        os << "'" << x.name_.name;
+        if (x.binding_ != ASTLifetimeRef::BINDING_UNBOUND) {
+            os << "/*" << x.binding_ << "*/";
         }
     }
     return os;
 }
 
 PrettyPrintType::PrettyPrintType(const ASTType* ty)
-    : mType(ty)
+    : type_(ty)
 {
 }
 

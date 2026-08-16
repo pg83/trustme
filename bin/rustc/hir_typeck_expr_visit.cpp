@@ -105,7 +105,7 @@ namespace {
             if (exp.mir) {
                 return;
             }
-            BUG(exp->mSpan, "Reached expression");
+            BUG(exp->span_, "Reached expression");
         }
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {

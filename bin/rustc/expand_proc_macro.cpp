@@ -166,7 +166,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
     newmod.addItem(Span(), visPrivate, "MACROS", mv$(testsList), {});
 
-    crate.mRootModule.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
+    crate.rootModule_.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
     crate.mLangItems["mrustc-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
 }
 
@@ -1759,10 +1759,10 @@ namespace {
                         this->visitVis(itemVis);
                         pmi.sendRword("type");
                         pmi.sendIdent(i.name.c_str());
-                        this->visitParams(e.mParams);
-                        if (e.mType->isValid()) {
+                        this->visitParams(e.params_);
+                        if (e.type_->isValid()) {
                             pmi.sendSymbol("=");
-                            this->visitType(e.mType);
+                            this->visitType(e.type_);
                         }
                         pmi.sendSymbol(";");
                     }

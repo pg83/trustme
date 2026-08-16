@@ -34,7 +34,7 @@ struct ImplRef {
     );
 
     Data mData;
-    bool mIsAmbiguousIdentity = false;
+    bool isAmbiguousIdentity_ = false;
 
     ImplRef();
 
@@ -49,11 +49,11 @@ struct ImplRef {
     }
 
     bool isAmbiguousIdentity() const {
-        return mIsAmbiguousIdentity;
+        return isAmbiguousIdentity_;
     }
 
     void markAmbiguousIdentity() {
-        mIsAmbiguousIdentity = true;
+        isAmbiguousIdentity_ = true;
     }
 
     HIRBoundConstness boundConstness() const;

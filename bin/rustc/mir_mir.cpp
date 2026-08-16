@@ -54,9 +54,9 @@
 }
 
 void MIRLValue::RefCommon::fmt(::std::ostream& os) const {
-    os << mLv->root;
-    for (size_t i = 0; i < mWrapperCount; i++) {
-        os << mLv->wrappers.at(i);
+    os << lv_->root;
+    for (size_t i = 0; i < wrapperCount_; i++) {
+        os << lv_->wrappers.at(i);
     }
 }
 
@@ -101,17 +101,17 @@ Ordering MIRLValue::ord(const MIRLValue& x) const {
 
 Ordering MIRLValue::RefCommon::ord(const MIRLValue::RefCommon& x) const {
     Ordering rv;
-    rv = mLv->root.ord(x.mLv->root);
+    rv = lv_->root.ord(x.lv_->root);
     if (rv != OrdEqual) {
         return rv;
     }
-    for (size_t i = 0; i < ::std::min(mWrapperCount, x.mWrapperCount); i++) {
-        rv = mLv->wrappers[i].ord(x.mLv->wrappers[i]);
+    for (size_t i = 0; i < ::std::min(wrapperCount_, x.wrapperCount_); i++) {
+        rv = lv_->wrappers[i].ord(x.lv_->wrappers[i]);
         if (rv != OrdEqual) {
             return rv;
         }
     }
-    return (rv = ::ord(mWrapperCount, x.mWrapperCount));
+    return (rv = ::ord(wrapperCount_, x.wrapperCount_));
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const MIRParam& x) {
@@ -1041,25 +1041,25 @@ bool MIRLValue::isEitherSubset(const MIRLValue& other) const {
 }
 
 MIRLValue::RefCommon::RefCommon(const MIRLValue& lv, size_t wrapperCount)
-    : mLv(&lv)
-    , mWrapperCount(wrapperCount)
+    : lv_(&lv)
+    , wrapperCount_(wrapperCount)
 {
     assert(wrapperCount <= lv.wrappers.size());
 }
 
 /// Unwrap one level, returning false if already at the root
 bool MIRLValue::RefCommon::tryUnwrap() {
-    if (mWrapperCount == 0) {
+    if (wrapperCount_ == 0) {
         return false;
     } else {
-        mWrapperCount--;
+        wrapperCount_--;
         return true;
     }
 }
 
 MIRLValue::RefCommon::Tag MIRLValue::RefCommon::tag() const {
-    if (mWrapperCount == 0) {
-        switch (mLv->root.tag()) {
+    if (wrapperCount_ == 0) {
+        switch (lv_->root.tag()) {
             case Storage::TAGDEAD:
                 return TAGDEAD;
             case Storage::TAG_Return:
@@ -1072,7 +1072,7 @@ MIRLValue::RefCommon::Tag MIRLValue::RefCommon::tag() const {
                 return TAG_Static;
         }
     } else {
-        switch (mLv->wrappers[mWrapperCount - 1].tag()) {
+        switch (lv_->wrappers[wrapperCount_ - 1].tag()) {
             case Wrapper::TAGDEAD:
                 return TAGDEAD;
             case Wrapper::TAG_Deref:
@@ -1090,42 +1090,42 @@ MIRLValue::RefCommon::Tag MIRLValue::RefCommon::tag() const {
 
 unsigned MIRLValue::RefCommon::as_Local() const {
     assert(is_Local());
-    return mLv->root.as_Local();
+    return lv_->root.as_Local();
 }
 
 char MIRLValue::RefCommon::as_Return() const {
     assert(is_Return());
-    return mLv->root.as_Return();
+    return lv_->root.as_Return();
 }
 
 unsigned MIRLValue::RefCommon::as_Argument() const {
     assert(is_Argument());
-    return mLv->root.as_Argument();
+    return lv_->root.as_Argument();
 }
 
 const HIRPath& MIRLValue::RefCommon::as_Static() const {
     assert(is_Static());
-    return mLv->root.as_Static();
+    return lv_->root.as_Static();
 }
 
 char MIRLValue::RefCommon::as_Deref() const {
     assert(is_Deref());
-    return mLv->wrappers[mWrapperCount - 1].as_Deref();
+    return lv_->wrappers[wrapperCount_ - 1].as_Deref();
 }
 
 unsigned MIRLValue::RefCommon::as_Field() const {
     assert(is_Field());
-    return mLv->wrappers[mWrapperCount - 1].as_Field();
+    return lv_->wrappers[wrapperCount_ - 1].as_Field();
 }
 
 unsigned MIRLValue::RefCommon::as_Downcast() const {
     assert(is_Downcast());
-    return mLv->wrappers[mWrapperCount - 1].as_Downcast();
+    return lv_->wrappers[wrapperCount_ - 1].as_Downcast();
 }
 
 unsigned MIRLValue::RefCommon::as_Index() const {
     assert(is_Index());
-    return mLv->wrappers[mWrapperCount - 1].as_Index();
+    return lv_->wrappers[wrapperCount_ - 1].as_Index();
 }
 
 MIRLValue::CRef::CRef(const MIRLValue& lv)
@@ -1140,9 +1140,9 @@ MIRLValue::CRef::CRef(const MIRLValue& lv, size_t wc)
 
 /// Unwrap one level
 const MIRLValue::CRef MIRLValue::CRef::innerRef() const {
-    assert(mWrapperCount > 0);
+    assert(wrapperCount_ > 0);
     auto rv = *this;
-    rv.mWrapperCount--;
+    rv.wrapperCount_--;
     return rv;
 }
 
@@ -1152,23 +1152,23 @@ MIRLValue::MRef::MRef(MIRLValue& lv)
 }
 
 MIRLValue::MRef MIRLValue::MRef::innerRef() {
-    assert(mWrapperCount > 0);
+    assert(wrapperCount_ > 0);
     auto rv = *this;
-    rv.mWrapperCount--;
+    rv.wrapperCount_--;
     return rv;
 }
 
 void MIRLValue::MRef::replace(MIRLValue x) {
-    auto& mutLv = const_cast<MIRLValue&>(*mLv);
+    auto& mutLv = const_cast<MIRLValue&>(*lv_);
     // Shortcut: No wrappers on source/destination (just assign the slot/root)
-    if (mWrapperCount == 0 && x.wrappers.empty()) {
+    if (wrapperCount_ == 0 && x.wrappers.empty()) {
         mutLv.root = ::std::move(x.root);
         return;
     }
     // If there's wrappers on this value (assigning over inner portion)
-    if (mWrapperCount < mLv->wrappers.size()) {
+    if (wrapperCount_ < lv_->wrappers.size()) {
         // Add those wrappers to the end of the new value
-        x.wrappers.insert(x.wrappers.end(), mLv->wrappers.begin() + mWrapperCount, mLv->wrappers.end());
+        x.wrappers.insert(x.wrappers.end(), lv_->wrappers.begin() + wrapperCount_, lv_->wrappers.end());
     }
     // Overwrite
     mutLv = ::std::move(x);

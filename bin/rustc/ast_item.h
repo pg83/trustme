@@ -20,9 +20,9 @@ public:
     };
 
 private:
-    ::std::shared_ptr<ASTPath> mInPath;          // Only valid when
-    ::std::shared_ptr<ASTAbsolutePath> mVisPath; // if null, then global
-    Ty mTy;
+    ::std::shared_ptr<ASTPath> inPath_;          // Only valid when
+    ::std::shared_ptr<ASTAbsolutePath> visPath_; // if null, then global
+    Ty ty_;
 
     ASTVisibility();
 
@@ -37,11 +37,11 @@ public:
     friend std::ostream& operator<<(::std::ostream& os, const ASTVisibility& x);
 
     Ty ty() const {
-        return mTy;
+        return ty_;
     }
 
     bool isGlobal() const {
-        return mTy == Ty::Pub;
+        return ty_ == Ty::Pub;
     }
 
     const ASTPath& inPath() const;

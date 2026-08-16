@@ -671,7 +671,7 @@ namespace {
                                         if (const auto* pbe = (**p).mBindings.type.binding.opt_TypeAlias()) {
                                             assert(pbe->alias_);
                                             assert(pbe->alias_->mType->isPath());
-                                            return *pbe->alias_->mType->mData.as_Path();
+                                            return *pbe->alias_->type_->mData.as_Path();
                                         }
                                         return **p;
                                     }
@@ -1511,11 +1511,11 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
     }
 
     if (pathAbs.nodes.empty()) {
-        path.mBindings.type.set(ASTAbsolutePath(pathAbs.crate, {}), ASTPathBindingType::make_Module({&context.crate.mRootModule}));
+        path.mBindings.type.set(ASTAbsolutePath(pathAbs.crate, {}), ASTPathBindingType::make_Module({&context.crate.rootModule_}));
         return;
     }
 
-    const ASTModule* mod = &context.crate.mRootModule;
+    const ASTModule* mod = &context.crate.rootModule_;
     for (unsigned int i = 0; i < pathAbs.nodes.size() - 1; i++) {
         auto& n = pathAbs.nodes[i];
 
@@ -1912,7 +1912,7 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             }
             // HACK: If this is `crate::foo::bar`, and `foo` doesn't exist in the root, but it is an implicit crate, then resolve to that
             // - This handles when a 2015 macro resolves to `::cratename::Bar` in a 2018+ crate
-            else if (e.crate == "" && e.nodes.size() > 1 && context.crate.mRootModule.namespaceItems.count(e.nodes.front().name()) == 0) {
+            else if (e.crate == "" && e.nodes.size() > 1 && context.crate.rootModule_.namespaceItems.count(e.nodes.front().name()) == 0) {
                 auto ecIt = context.settings.implicitCrates.find(e.nodes.front().name().c_str());
                 if (ecIt != context.settings.implicitCrates.end()) {
                     e.crate = ecIt->second;
@@ -2543,7 +2543,7 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTNamedList<ASTItem>& items
                 DEBUG("Type - " << i.name);
                 //ASSERT_BUG( i.span, e.params().m_params.size() == 0, "TODO: Generic Associated Types (Trait)" );
                 itemContext.push(e.params(), GenericSlot::Level::Method, true);
-                ResolveAbsoluteGeneric(itemContext, e.mParams);
+                ResolveAbsoluteGeneric(itemContext, e.params_);
                 ResolveAbsoluteGeneric(itemContext, e.selfBounds);
 
                 ResolveAbsoluteType(itemContext, e.type());
@@ -3198,14 +3198,14 @@ void ResolveAbsoluteStruct(Context& itemContext, ASTStruct& e) {
 }
 
 void ResolveAbsoluteUnion(Context& itemContext, ASTUnion& e) {
-    itemContext.push(e.mParams, GenericSlot::Level::Top, true);
-    ResolveAbsoluteGeneric(itemContext, e.mParams);
+    itemContext.push(e.params_, GenericSlot::Level::Top, true);
+    ResolveAbsoluteGeneric(itemContext, e.params_);
 
     for (auto& field : e.mVariants) {
         ResolveAbsoluteType(itemContext, field.mType);
     }
 
-    itemContext.pop(e.mParams);
+    itemContext.pop(e.params_);
 }
 
 void ResolveAbsoluteTrait(Context& itemContext, ASTTrait& e) {
@@ -3567,7 +3567,7 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
                     ASSERT_BUG(i->span, crate.externCrates.count(e.name) > 0, "Referenced crate '" << e.name << "' isn't loaded for `extern crate`");
                     p.mBindings.type.set(ap, ASTPathBindingType::make_Crate({&crate.externCrates.at(e.name)}));
                 } else {
-                    p.mBindings.type.set(ap, ASTPathBindingType::make_Module({&crate.mRootModule}));
+                    p.mBindings.type.set(ap, ASTPathBindingType::make_Module({&crate.rootModule_}));
                 }
                 _add_item(i->span, mod, IndexName::Namespace, i->name, i->vis, mv$(p));
             }
@@ -4169,7 +4169,7 @@ bool ResolveIndexModuleNormalisePath(const ASTCrate& crate, const Span& sp, ASTP
         return false;
     }
 
-    const ASTModule* mod = &crate.mRootModule;
+    const ASTModule* mod = &crate.rootModule_;
     ASSERT_BUG(sp, info.nodes.size() > 0, "Empty node list in " << path);
     for (unsigned int i = 0; i < info.nodes.size() - 1; i++) {
         const auto& node = info.nodes[i];
@@ -4302,11 +4302,11 @@ void ResolveIndexModuleNormalise(const ASTCrate& crate, const Span& modSpan, AST
 void ResolveIndexModuleExportedMacros(ASTCrate& crate, const Span& modSpan, ASTModule& mod) {
     TRACE_FUNCTION_F("mod = " << mod.path());
 
-    if (&mod != &crate.mRootModule) {
+    if (&mod != &crate.rootModule_) {
         for (const auto& item : mod.macros()) {
             if (item.data->exported) {
                 ASSERT_BUG(item.span, mod.macroItems.count(item.name), "Missing " << item.name << " in " << mod.path());
-                _add_item(item.span, crate.mRootModule, IndexName::Macro, item.name, ASTVisibility::makeGlobal(), mod.macroItems.at(item.name).path);
+                _add_item(item.span, crate.rootModule_, IndexName::Macro, item.name, ASTVisibility::makeGlobal(), mod.macroItems.at(item.name).path);
             }
         }
     }
@@ -4320,15 +4320,15 @@ void ResolveIndexModuleExportedMacros(ASTCrate& crate, const Span& modSpan, ASTM
 
 void ResolveIndex(ASTCrate& crate) {
     // - Index all explicitly named items
-    ResolveIndexModuleBase(crate, crate.mRootModule);
+    ResolveIndexModuleBase(crate, crate.rootModule_);
     // - Index wildcard imports
-    ResolveIndexModuleWildcard(crate, crate.mRootModule);
+    ResolveIndexModuleWildcard(crate, crate.rootModule_);
 
     // Macros marked with `#[macro_export]` actually live in the root
-    ResolveIndexModuleExportedMacros(crate, Span(), crate.mRootModule);
+    ResolveIndexModuleExportedMacros(crate, Span(), crate.rootModule_);
 
     // - Normalise the index (ensuring all paths point directly to the item)
-    ResolveIndexModuleNormalise(crate, Span(), crate.mRootModule);
+    ResolveIndexModuleNormalise(crate, Span(), crate.rootModule_);
 }
 
 enum class Lookup {
@@ -4350,7 +4350,7 @@ ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crat
 ASTPath::Bindings ResolveUseGetBindingExt(const Span& span, const ASTCrate& crate, const ASTPath& path, const ASTExternCrate& ec, unsigned int start);
 
 void ResolveUse(const WireBoard& wb, ASTCrate& crate) {
-    ResolveUseMod(*wb.settings, crate, crate.mRootModule, ASTPath("", {}));
+    ResolveUseMod(*wb.settings, crate, crate.rootModule_, ASTPath("", {}));
 }
 
 // - Convert self::/super:: paths into non-canonical absolute forms
@@ -4402,7 +4402,7 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
             // TODO: Check if the desired item is in this module,
             if (basePath.nodes().size() > 0 && basePath.nodes().back().name().c_str()[0] == '#') {
                 std::vector<const ASTModule*> parentMods;
-                const ASTModule* curMod = &crate.mRootModule;
+                const ASTModule* curMod = &crate.rootModule_;
                 parentMods.push_back(curMod);
                 // Walk the path to create a list of parent modules
                 // - Resets the list every time there's a non-anon module
@@ -4719,7 +4719,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                         ASSERT_BUG(span, crate.externCrates.count(e.name), "Crate '" << e.name << "' not loaded");
                         rv.type.set(ASTAbsolutePath(e.name, {}), ASTPathBindingType::make_Crate({&crate.externCrates.at(e.name)}));
                     } else {
-                        rv.type.set(ASTAbsolutePath(e.name, {}), ASTPathBindingType::make_Module({&crate.mRootModule}));
+                        rv.type.set(ASTAbsolutePath(e.name, {}), ASTPathBindingType::make_Module({&crate.rootModule_}));
                     }
                 }
                 TU_ARMA(Type, e) {
@@ -4820,7 +4820,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
         }
     }
     // TODO: If target is the crate root AND the crate exports macros with `macro_export`
-    if (rv.macro.is_Unbound() && &mod == &crate.mRootModule) {
+    if (rv.macro.is_Unbound() && &mod == &crate.rootModule_) {
         auto it = crate.exportedMacros.find(desItemName);
         if (it != crate.exportedMacros.end()) {
             rv.macro.set(mod.path() + desItemName, ASTPathBindingMacro::make_MacroRules({nullptr, &*it->second}));
@@ -5331,7 +5331,7 @@ ASTPath::Bindings ResolveUseGetBinding(
 
     ASTPath::Bindings rv;
 
-    const ASTModule* mod = &crate.mRootModule;
+    const ASTModule* mod = &crate.rootModule_;
     const auto& nodes = path.nodes();
     if (nodes.size() == 0) {
         // An import of the root.

@@ -2697,7 +2697,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
 
     // TODO: Can this use the code in `monomorphise.cpp`?
     struct Cloner: public MIRCloner {
-        const ::StaticTraitResolve& mResolve;
+        const ::StaticTraitResolve& resolve_;
         const MIRTerminator::Data_Call& te;
         ::std::vector<unsigned> copyArgs; // Local indexes containing copies of Copy args
         ParamsSet params;
@@ -2712,7 +2712,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
 
         Cloner(const Span& sp, const ::StaticTraitResolve& resolve, MIRTerminator::Data_Call& te)
             : MIRCloner(sp, resolve.hirCrate().types)
-            , mResolve(resolve)
+            , resolve_(resolve)
             , te(te)
             , params(resolve.hirCrate().types)
             , copyArgs(te.args.size(), ~0u)
@@ -2753,7 +2753,7 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
         }
 
         const StaticTraitResolve* resolve() const override {
-            return &this->mResolve;
+            return &this->resolve_;
         }
 
         MIRBasicBlock cloneBb(const MIRBasicBlock& src, unsigned srcIdx, unsigned newIdx) const {

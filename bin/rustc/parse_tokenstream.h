@@ -44,7 +44,7 @@ class TokenStream {
 
     bool cacheValid;
     Token cache;
-    Ident::Hygiene mHygiene;
+    Ident::Hygiene hygiene_;
     ASTEdition edition;
 
     struct LookaheadEnt {
@@ -53,9 +53,9 @@ class TokenStream {
         Ident::Hygiene hygiene;
     };
 
-    ::std::vector<LookaheadEnt> mLookahead;
-    ParseState mParseState;
-    bool mMacroExpansionPlaceholder = false;
+    ::std::vector<LookaheadEnt> lookahead_;
+    ParseState parseState_;
+    bool macroExpansionPlaceholder_ = false;
 
 public:
     TokenStream(ParseState ps);
@@ -80,7 +80,7 @@ public:
     virtual void popHygine();
 
     ParseState& parseState() {
-        return mParseState;
+        return parseState_;
     }
 
     void markMacroExpansionPlaceholder();

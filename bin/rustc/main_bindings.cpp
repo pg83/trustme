@@ -139,7 +139,7 @@ void ExpandTestHarness(ASTCrate& crate) {
     newmod.addItem(Span(), visPrivate, "main", mv$(mainFn), {});
     newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
 
-    crate.mRootModule.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
+    crate.rootModule_.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
     crate.mLangItems["mrustc-main"] = ASTAbsolutePath("", {"test#", "main"});
 }
 
@@ -596,7 +596,7 @@ int main(int argc, char* argv[]) {
             };
 
             PathEnumerator pe;
-            pe.visitModule(crate.mRootModule);
+            pe.visitModule(crate.rootModule_);
 
             ::std::ofstream of{params.emitDepfile};
             // TODO: Escape spaces and colons in these paths

@@ -491,7 +491,7 @@ public:
 private:
     unsigned length;
     bool isReadonly;
-    HIRTypeRef mType;
+    HIRTypeRef type_;
     bool isConstHeap;
     bool isLive;
     bool isGlobal;
@@ -502,7 +502,7 @@ private:
     MIREvalAllocation(uint8_t* data, size_t len, const HIRTypeData* ty)
         : length(len)
         , isReadonly(false)
-        , mType(ty)
+        , type_(ty)
         , isConstHeap(false)
         , isLive(true)
         , isGlobal(false)
@@ -669,7 +669,7 @@ public:
     }
 
     const HIRTypeData* getType() const {
-        return mType;
+        return type_;
     }
 
     bool isConstHeapAllocation() const {
@@ -718,13 +718,13 @@ class MIREvalStaticRef final: public IValue {
     friend class MIREvalStaticRefPtr;
 
     stl::ObjPool* pool;
-    HIRPath mPath;
+    HIRPath path_;
     const EncodedLiteral* encoded;
     size_t length;
 
     MIREvalStaticRef(stl::ObjPool* pool, HIRPath p, const EncodedLiteral* lit, size_t len)
         : pool(pool)
-        , mPath(std::move(p))
+        , path_(std::move(p))
         , encoded(lit)
         , length(len)
     {
@@ -733,11 +733,11 @@ class MIREvalStaticRef final: public IValue {
 
 public:
     void fmtIdent(std::ostream& os) const override {
-        os << this->mPath;
+        os << this->path_;
     }
 
     void fmt(::std::ostream& os, size_t ofs, size_t len) const override {
-        os << "[" << mPath << "]";
+        os << "[" << path_ << "]";
         if (encoded) {
             os << EncodedLiteralSlice(*encoded).slice(ofs, len);
         } else {
@@ -820,7 +820,7 @@ public:
     }
 
     const HIRPath& path() const {
-        return mPath;
+        return path_;
     }
 };
 
@@ -4993,12 +4993,12 @@ namespace {
     };
 
     class ExpanderApply: public HIRVisitor {
-        stl::ObjPool& mPool;
+        stl::ObjPool& pool_;
 
     public:
         ExpanderApply(stl::ObjPool& pool, HIRTypeInterner& types)
             : HIRVisitor(nullptr, types)
-            , mPool(pool)
+            , pool_(pool)
         {
         }
 
@@ -5006,7 +5006,7 @@ namespace {
             if (!mod.inlineStatics.empty()) {
                 for (auto& v : mod.inlineStatics) {
                     // ::std::unique_ptr<VisEnt<ValueItem>>
-                    auto* iv = mPool.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(mv$(*v.second))});
+                    auto* iv = pool_.make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newNone(), HIRValueItem::make_Static(mv$(*v.second))});
                     mod.valueItems.insert(::std::make_pair(v.first, iv));
                 }
                 mod.inlineStatics.clear();

@@ -29,16 +29,16 @@ void ASTExprNodeP::reset(ASTExprNode* n) {
 }
 
 const ASTExprNode& ASTExpr::node() const {
-    assert(mNode.get());
-    return *mNode;
+    assert(node_.get());
+    return *node_;
 }
 
 ASTExprNode& ASTExpr::node() {
-    assert(mNode.get());
-    return *mNode;
+    assert(node_.get());
+    return *node_;
 }
 
 ::std::shared_ptr<ASTExprNode> ASTExpr::takeNode() {
-    assert(mNode.get());
-    return ::std::move(mNode);
+    assert(node_.get());
+    return ::std::move(node_);
 }

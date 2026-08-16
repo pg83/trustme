@@ -107,11 +107,11 @@ struct TraitResolveCommon {
     // Nullable views of the current generics context (the non-Ptr overloads
     // below assert they are set).
     const HIRGenericParams* implGenericsPtr() const {
-        return mImplGenerics;
+        return implGenerics_;
     }
 
     const HIRGenericParams* itemGenericsPtr() const {
-        return mItemGenerics;
+        return itemGenerics_;
     }
 
     // Visit each cached type-equality target; the cache itself stays internal.
@@ -130,8 +130,8 @@ struct TraitResolveCommon {
     }
 
 
-    const HIRGenericParams* mImplGenerics;
-    const HIRGenericParams* mItemGenerics;
+    const HIRGenericParams* implGenerics_;
+    const HIRGenericParams* itemGenerics_;
 
     struct CachedEquality {
         HIRTypeRef ty;
@@ -187,7 +187,7 @@ struct TraitResolveCommon {
     TraitResolveCommon(const WireBoard& wb);
 
     bool hasSelf() const {
-        return mImplGenerics ? true : false;
+        return implGenerics_ ? true : false;
     }
 
     const HIRGenericParams& implGenerics() const;

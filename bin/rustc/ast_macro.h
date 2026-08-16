@@ -6,12 +6,12 @@
 #include "parse_tokentree.h"
 
 class ASTMacroInvocation {
-    Span mSpan;
+    Span span_;
 
     ASTPath macroPath;
     RcString ident;
     TokenTree input;
-    bool mIsExpanded = false;
+    bool isExpanded_ = false;
 
 public:
     ASTMacroInvocation(ASTMacroInvocation&&) = default;
@@ -28,7 +28,7 @@ public:
     void clear();
 
     const Span& span() const {
-        return mSpan;
+        return span_;
     }
 
     const ASTPath& path() const {
@@ -36,11 +36,11 @@ public:
     }
 
     bool isExpanded() const {
-        return mIsExpanded;
+        return isExpanded_;
     }
 
     void setExpanded() {
-        mIsExpanded = true;
+        isExpanded_ = true;
     }
 
     const RcString& inputIdent() const {

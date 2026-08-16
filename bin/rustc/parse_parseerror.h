@@ -13,7 +13,7 @@ public:
 };
 
 class ParseErrorUnexpected: public CompileErrorBase {
-    Token mTok;
+    Token tok_;
 
 public:
     ParseErrorUnexpected(const TokenStream& lex, const Token& tok);

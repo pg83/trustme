@@ -130,8 +130,8 @@ void HIRVisitor::visitGlobalAssembly(HIRGlobalAssembly& item) {
 void HIRVisitor::visitTypeImpl(HIRTypeImpl& impl) {
     HIRItemPath p{impl.mType};
     TRACE_FUNCTION_F("impl.m_type=" << impl.mType);
-    if (mResolve) {
-        mResolve->setImplGenericsRaw(MetadataType::Unknown, impl.mParams);
+    if (resolve_) {
+        resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.mParams);
     }
     this->visitParams(impl.mParams);
     this->visitType(impl.mType);
@@ -148,28 +148,28 @@ void HIRVisitor::visitTypeImpl(HIRTypeImpl& impl) {
         DEBUG("type " << ent.first);
         this->visitInherentType(p + ent.first, ent.second.data);
     }
-    if (mResolve) {
-        mResolve->clearImplGenerics();
+    if (resolve_) {
+        resolve_->clearImplGenerics();
     }
 }
 
 void HIRVisitor::visitInherentType(HIRItemPath p, HIRTypeAlias& item) {
     TRACE_FUNCTION_F(p);
-    if (mResolve) {
-        mResolve->setItemGenericsRaw(item.mParams);
+    if (resolve_) {
+        resolve_->setItemGenericsRaw(item.mParams);
     }
     this->visitParams(item.mParams);
     this->visitType(item.mType);
-    if (mResolve) {
-        mResolve->clearItemGenerics();
+    if (resolve_) {
+        resolve_->clearItemGenerics();
     }
 }
 
 void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) {
     HIRItemPath p(impl.mType, traitPath, impl.traitArgs);
     TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType);
-    if (mResolve) {
-        mResolve->setImplGenericsRaw(MetadataType::Unknown, impl.mParams);
+    if (resolve_) {
+        resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.mParams);
     }
     this->visitParams(impl.mParams);
     // Visit trait arguments through GenericPath so path-context checks and rewrites are shared.
@@ -196,50 +196,50 @@ void HIRVisitor::visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& im
         TRACE_FUNCTION_F("type " << ent.first << " = " << ent.second.data);
         this->visitType(ent.second.data);
     }
-    if (mResolve) {
-        mResolve->clearImplGenerics();
+    if (resolve_) {
+        resolve_->clearImplGenerics();
     }
 }
 
 void HIRVisitor::visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) {
-    if (mResolve) {
-        mResolve->setImplGenericsRaw(MetadataType::Unknown, impl.mParams);
+    if (resolve_) {
+        resolve_->setImplGenericsRaw(MetadataType::Unknown, impl.mParams);
     }
     this->visitParams(impl.mParams);
     this->visitPathParams(impl.traitArgs);
     this->visitType(impl.mType);
-    if (mResolve) {
-        mResolve->clearImplGenerics();
+    if (resolve_) {
+        resolve_->clearImplGenerics();
     }
 }
 
 void HIRVisitor::visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) {
-    if (mResolve) {
-        mResolve->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
+    if (resolve_) {
+        resolve_->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
     }
     this->visitParams(item.mParams);
     this->visitType(item.mType);
-    if (mResolve) {
-        mResolve->clearImplGenerics();
+    if (resolve_) {
+        resolve_->clearImplGenerics();
     }
 }
 
 void HIRVisitor::visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) {
-    if (mResolve) {
-        mResolve->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
+    if (resolve_) {
+        resolve_->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
     }
     this->visitParams(item.mParams);
     for (auto& p : item.traits) {
         this->visitTraitPath(p);
     }
-    if (mResolve) {
-        mResolve->clearImplGenerics();
+    if (resolve_) {
+        resolve_->clearImplGenerics();
     }
 }
 
 void HIRVisitor::visitTrait(HIRItemPath p, HIRTrait& item) {
-    if (mResolve) {
-        mResolve->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
+    if (resolve_) {
+        resolve_->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
     }
     auto traitSp = p.getSimplePath();
     auto traitPp = item.mParams.makeNopParams(typeInterner(), 0);
@@ -271,14 +271,14 @@ void HIRVisitor::visitTrait(HIRItemPath p, HIRTrait& item) {
             (Function, DEBUG("method " << i.first); this->visitFunction(itemPath, e);)
         )
     }
-    if (mResolve) {
-        mResolve->clearImplGenerics();
+    if (resolve_) {
+        resolve_->clearImplGenerics();
     }
 }
 
 void HIRVisitor::visitStruct(HIRItemPath p, HIRStruct& item) {
-    if (mResolve) {
-        mResolve->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
+    if (resolve_) {
+        resolve_->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
     }
     this->visitParams(item.mParams);
     TU_MATCH_HDRA( (item.mData), {)
@@ -298,14 +298,14 @@ void HIRVisitor::visitStruct(HIRItemPath p, HIRStruct& item) {
             }
         }
     }
-    if( mResolve ) {
-        mResolve->clearImplGenerics();
+    if( resolve_ ) {
+        resolve_->clearImplGenerics();
     }
 }
 
 void HIRVisitor::visitEnum(HIRItemPath p, HIREnum& item) {
-    if (mResolve) {
-        mResolve->setImplGenericsRaw(MetadataType::None, item.mParams);
+    if (resolve_) {
+        resolve_->setImplGenericsRaw(MetadataType::None, item.mParams);
     }
     this->visitParams(item.mParams);
     TU_MATCH_HDRA( (item.mData), {)
@@ -321,23 +321,23 @@ void HIRVisitor::visitEnum(HIRItemPath p, HIREnum& item) {
             }
         }
     }
-    if( mResolve ) {
-        mResolve->clearImplGenerics();
+    if( resolve_ ) {
+        resolve_->clearImplGenerics();
     }
 }
 
 void HIRVisitor::visitUnion(HIRItemPath p, HIRUnion& item) {
     TRACE_FUNCTION_F(p);
-    if (mResolve) {
-        mResolve->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
+    if (resolve_) {
+        resolve_->setImplGenericsRaw(MetadataType::Unknown, item.mParams);
     }
     this->visitParams(item.mParams);
     for (auto& var : item.mVariants) {
         this->visitType(var.ty);
         assert(!var.defaultValue);
     }
-    if (mResolve) {
-        mResolve->clearImplGenerics();
+    if (resolve_) {
+        resolve_->clearImplGenerics();
     }
 }
 
@@ -351,8 +351,8 @@ void HIRVisitor::visitAssociatedtype(HIRItemPath p, HIRAssociatedType& item) {
 
 void HIRVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
     TRACE_FUNCTION_F(p);
-    if (mResolve) {
-        mResolve->setItemGenericsRaw(item.mParams);
+    if (resolve_) {
+        resolve_->setItemGenericsRaw(item.mParams);
     }
     this->visitParams(item.mParams);
     for (auto& arg : item.mArgs) {
@@ -364,33 +364,33 @@ void HIRVisitor::visitFunction(HIRItemPath p, HIRFunction& item) {
         this->visitType(*item.traitReturnType);
     }
     this->visitExpr(item.mCode);
-    if (mResolve) {
-        mResolve->clearItemGenerics();
+    if (resolve_) {
+        resolve_->clearItemGenerics();
     }
 }
 
 void HIRVisitor::visitStatic(HIRItemPath p, HIRStatic& item) {
     TRACE_FUNCTION_F(p);
-    if (mResolve) {
-        mResolve->setItemGenericsRaw(item.mParams);
+    if (resolve_) {
+        resolve_->setItemGenericsRaw(item.mParams);
     }
     this->visitType(item.mType);
     this->visitExpr(item.mValue);
-    if (mResolve) {
-        mResolve->clearItemGenerics();
+    if (resolve_) {
+        resolve_->clearItemGenerics();
     }
 }
 
 void HIRVisitor::visitConstant(HIRItemPath p, HIRConstant& item) {
     TRACE_FUNCTION_F(p);
-    if (mResolve) {
-        mResolve->setItemGenericsRaw(item.mParams);
+    if (resolve_) {
+        resolve_->setItemGenericsRaw(item.mParams);
     }
     this->visitParams(item.mParams);
     this->visitType(item.mType);
     this->visitExpr(item.mValue);
-    if (mResolve) {
-        mResolve->clearItemGenerics();
+    if (resolve_) {
+        resolve_->clearItemGenerics();
     }
 }
 
@@ -662,7 +662,7 @@ void HIRVisitor::visitExpr(HIRExprPtr& exp) {
 }
 
 HIRVisitor::HIRVisitor(::StaticTraitResolve* resolve, HIRTypeInterner& types)
-    : mResolve(resolve)
+    : resolve_(resolve)
     , types(types)
 {
 }

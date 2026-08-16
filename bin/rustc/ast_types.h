@@ -51,7 +51,7 @@ public:
 };
 
 class PrettyPrintType {
-    const ASTType* mType;
+    const ASTType* type_;
 
 public:
     PrettyPrintType(const ASTType* ty);
@@ -170,18 +170,18 @@ namespace ASTTypeTags {
 /// A pool-allocated type node. `ASTType*` is a pointer to one of these; the node
 /// records the pool it lives in so `clone()` is cheap and self-sufficient.
 struct ASTType {
-    Span mSpan;
+    Span span_;
     TypeData mData;
     stl::ObjPool* pool = nullptr;
 
     ASTType(Span sp, TypeData data, stl::ObjPool* pool)
-        : mSpan(::std::move(sp))
+        : span_(::std::move(sp))
         , mData(::std::move(data))
         , pool(pool) {
     }
 
     const Span& span() const {
-        return mSpan;
+        return span_;
     }
 
     bool isValid() const {

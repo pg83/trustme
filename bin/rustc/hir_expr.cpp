@@ -676,7 +676,7 @@ TU_ARMA(Alias, ee) {
         }
 
         HIRExprNode::HIRExprNode(Span sp)
-            : mSpan(mv$(sp))
+            : span_(mv$(sp))
         {
         }
 

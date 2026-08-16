@@ -70,11 +70,11 @@ class Token {
         (Fragment, void*)
     );
 
-    enum eTokenType mType;
-    Data mData;
+    enum eTokenType type_;
+    Data data_;
     Position pos;
-    Ident::Hygiene mHygiene; // Only for strings, for formatting
-    bool mIsDocComment = false;
+    Ident::Hygiene hygiene_; // Only for strings, for formatting
+    bool isDocComment_ = false;
 
     Token(enum eTokenType t, Data d, Position p);
 
@@ -103,39 +103,39 @@ public:
     Token(TagTakeIP, InterpolatedFragment);
 
     enum eTokenType type() const {
-        return mType;
+        return type_;
     }
 
     bool hasData() const {
-        return !mData.is_None();
+        return !data_.is_None();
     }
 
     const Ident& ident() const {
-        return mData.as_Ident();
+        return data_.as_Ident();
     }
 
     ::std::string& str() {
-        return mData.as_String();
+        return data_.as_String();
     }
 
     const ::std::string& str() const {
-        return mData.as_String();
+        return data_.as_String();
     }
 
     const Ident::Hygiene& strHygiene() const {
-        return mHygiene;
+        return hygiene_;
     }
 
     enum eCoreType datatype() const {
-        TU_MATCH_DEF(Data, (mData), (e), (assert(!"Getting datatype of invalid token type");), (Integer, return e.datatype;), (Float, return e.datatype;)) throw "";
+        TU_MATCH_DEF(Data, (data_), (e), (assert(!"Getting datatype of invalid token type");), (Integer, return e.datatype;), (Float, return e.datatype;)) throw "";
     }
 
     U128 intval() const {
-        return mData.as_Integer().intval;
+        return data_.as_Integer().intval;
     }
 
     FloatValue floatval() const {
-        return mData.as_Float().floatval;
+        return data_.as_Float().floatval;
     }
 
     // TODO: Replace these with a way of getting a InterpolatedFragment&
@@ -180,11 +180,11 @@ public:
     }
 
     void markAsDocComment() {
-        mIsDocComment = true;
+        isDocComment_ = true;
     }
 
     bool isDocComment() const {
-        return mIsDocComment;
+        return isDocComment_;
     }
 
     static bool typeIsRword(enum eTokenType type) {

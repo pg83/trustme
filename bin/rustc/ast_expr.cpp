@@ -21,44 +21,44 @@ const char* ASTExprNodeP::typeName() const {
 }
 
 ASTExpr::ASTExpr(ASTExprNodeP node)
-    : mNode(node.release())
+    : node_(node.release())
 {
 }
 
 ASTExpr::ASTExpr(ASTExprNode* node)
-    : mNode(node)
+    : node_(node)
 {
 }
 
 ASTExpr::ASTExpr()
-    : mNode(nullptr)
+    : node_(nullptr)
 {
 }
 
 void ASTExpr::visitNodes(ASTNodeVisitor& v) {
-    if (mNode) {
-        mNode->visit(v);
+    if (node_) {
+        node_->visit(v);
     }
 }
 
 void ASTExpr::visitNodes(ASTNodeVisitor& v) const {
-    if (mNode) {
+    if (node_) {
         assert(v.isConst());
-        mNode->visit(v);
+        node_->visit(v);
     }
 }
 
 ASTExpr ASTExpr::clone() const {
-    if (mNode) {
-        return ASTExpr(mNode->clone());
+    if (node_) {
+        return ASTExpr(node_->clone());
     } else {
         return ASTExpr();
     }
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTExpr& pat) {
-    if (pat.mNode.get()) {
-        return os << *pat.mNode;
+    if (pat.node_.get()) {
+        return os << *pat.node_;
     } else {
         return os << "/* null */";
     }
@@ -1181,7 +1181,7 @@ NV(ASTExprNodeMacroDefinition, {})
 
 void ASTExprNode::setAttrs(ASTAttributeList&& mi) {
     for (auto& i : mi.mItems) {
-        mAttrs.mItems.push_back(mv$(i));
+        attrs_.mItems.push_back(mv$(i));
     }
     mi.mItems.clear();
 }

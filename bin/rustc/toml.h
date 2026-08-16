@@ -37,7 +37,7 @@ public:
 
 class TomlFile {
     /// Input file stream
-    TomlLexer mLexer;
+    TomlLexer lexer_;
 
     /// Name of the current `[]` block
     ::std::vector<::std::string> currentBlock;
@@ -61,7 +61,7 @@ public:
     TomlKeyValue getNextValue();
 
     const TomlLexer& lexer() const {
-        return mLexer;
+        return lexer_;
     }
 
 private:

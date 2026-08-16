@@ -281,22 +281,22 @@ struct MIRLValue {
     /// Helper class that represents a LValue unwrapped to a certain degree
     class RefCommon {
     protected:
-        const MIRLValue* mLv;
-        size_t mWrapperCount;
+        const MIRLValue* lv_;
+        size_t wrapperCount_;
 
         RefCommon(const MIRLValue& lv, size_t wrapperCount);
 
     public:
         MIRLValue clone() const {
-            return MIRLValue(mLv->root.clone(), ::std::vector<Wrapper>(mLv->wrappers.begin(), mLv->wrappers.begin() + mWrapperCount));
+            return MIRLValue(lv_->root.clone(), ::std::vector<Wrapper>(lv_->wrappers.begin(), lv_->wrappers.begin() + wrapperCount_));
         }
 
         const MIRLValue& lv() const {
-            return *mLv;
+            return *lv_;
         }
 
         size_t wrapperCount() const {
-            return mWrapperCount;
+            return wrapperCount_;
         }
 
         /// Unwrap one level, returning false if already at the root
@@ -317,35 +317,35 @@ struct MIRLValue {
         Tag tag() const;
 
         bool is_Local() const {
-            return mWrapperCount == 0 && mLv->root.is_Local();
+            return wrapperCount_ == 0 && lv_->root.is_Local();
         }
 
         bool is_Return() const {
-            return mWrapperCount == 0 && mLv->root.is_Return();
+            return wrapperCount_ == 0 && lv_->root.is_Return();
         }
 
         bool is_Argument() const {
-            return mWrapperCount == 0 && mLv->root.is_Argument();
+            return wrapperCount_ == 0 && lv_->root.is_Argument();
         }
 
         bool is_Static() const {
-            return mWrapperCount == 0 && mLv->root.is_Static();
+            return wrapperCount_ == 0 && lv_->root.is_Static();
         }
 
         bool is_Deref() const {
-            return mWrapperCount >= 1 && mLv->wrappers[mWrapperCount - 1].is_Deref();
+            return wrapperCount_ >= 1 && lv_->wrappers[wrapperCount_ - 1].is_Deref();
         }
 
         bool is_Field() const {
-            return mWrapperCount >= 1 && mLv->wrappers[mWrapperCount - 1].is_Field();
+            return wrapperCount_ >= 1 && lv_->wrappers[wrapperCount_ - 1].is_Field();
         }
 
         bool is_Downcast() const {
-            return mWrapperCount >= 1 && mLv->wrappers[mWrapperCount - 1].is_Downcast();
+            return wrapperCount_ >= 1 && lv_->wrappers[wrapperCount_ - 1].is_Downcast();
         }
 
         bool is_Index() const {
-            return mWrapperCount >= 1 && mLv->wrappers[mWrapperCount - 1].is_Index();
+            return wrapperCount_ >= 1 && lv_->wrappers[wrapperCount_ - 1].is_Index();
         }
 
         unsigned as_Local() const;
@@ -393,7 +393,7 @@ struct MIRLValue {
         MRef(MIRLValue& lv);
 
         operator CRef() const {
-            return CRef(*mLv, mWrapperCount);
+            return CRef(*lv_, wrapperCount_);
         }
 
         MRef innerRef();

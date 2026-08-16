@@ -1,48 +1,48 @@
 #include "ast_generics.h"
 
 ASTTypeParam::ASTTypeParam(const ASTTypeParam& x)
-    : mAttrs(x.mAttrs)
-    , mSpan(x.mSpan)
-    , mName(x.mName)
-    , mDefaultValue(x.mDefaultValue->clone())
+    : attrs_(x.attrs_)
+    , span_(x.span_)
+    , name_(x.name_)
+    , defaultValue_(x.defaultValue_->clone())
 {
 }
 
 ASTTypeParam::ASTTypeParam(stl::ObjPool& pool, Span sp, ASTAttributeList attrs, RcString name)
-    : mAttrs(::std::move(attrs))
-    , mSpan(::std::move(sp))
-    , mName(::std::move(name))
-    , mDefaultValue(mkType(pool, mSpan))
+    : attrs_(::std::move(attrs))
+    , span_(::std::move(sp))
+    , name_(::std::move(name))
+    , defaultValue_(mkType(pool, span_))
 {
 }
 
 void ASTTypeParam::setDefault(ASTType* type) {
-    assert(mDefaultValue->isWildcard());
-    mDefaultValue = ::std::move(type);
+    assert(defaultValue_->isWildcard());
+    defaultValue_ = ::std::move(type);
 }
 
 ASTLifetimeParam::ASTLifetimeParam(Span sp, ASTAttributeList attrs, Ident name)
-    : mAttrs(::std::move(attrs))
-    , mSpan(::std::move(sp))
-    , mName(::std::move(name))
+    : attrs_(::std::move(attrs))
+    , span_(::std::move(sp))
+    , name_(::std::move(name))
 {
 }
 
 ASTValueParam::ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* type, ASTExpr val)
-    : mAttrs(::std::move(attrs))
-    , mSpan(::std::move(sp))
-    , mName(::std::move(name))
-    , mType(::std::move(type))
-    , mDefaultValue(::std::move(val))
+    : attrs_(::std::move(attrs))
+    , span_(::std::move(sp))
+    , name_(::std::move(name))
+    , type_(::std::move(type))
+    , defaultValue_(::std::move(val))
 {
 }
 
 ASTValueParam::ASTValueParam(const ASTValueParam& x)
-    : mAttrs(x.mAttrs)
-    , mSpan(x.mSpan)
-    , mName(x.mName)
-    , mType(x.mType->clone())
-    , mDefaultValue(x.mDefaultValue ? x.mDefaultValue.clone() : ASTExpr())
+    : attrs_(x.attrs_)
+    , span_(x.span_)
+    , name_(x.name_)
+    , type_(x.type_->clone())
+    , defaultValue_(x.defaultValue_ ? x.defaultValue_.clone() : ASTExpr())
 {
 }
 

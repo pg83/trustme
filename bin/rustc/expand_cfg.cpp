@@ -464,7 +464,7 @@ class CCfgHandler: public ExpandDecorator {
         if (checkCfg(*wb.settings, sp, mi)) {
         } else {
             // Remove all items (can't remove the module)
-            crate.mRootModule.mItems.clear();
+            crate.rootModule_.mItems.clear();
         }
     }
 

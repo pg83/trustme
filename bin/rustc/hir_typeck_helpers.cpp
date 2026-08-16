@@ -22,16 +22,16 @@ namespace {
     // blanket impls visible to the solver without changing the goal's actual
     // type data or inference state.
     class CanonicalizeTraitGoal final: public Monomorphiser {
-        mutable ::std::vector<::std::pair<RcString, RcString>> mPlaceholderNames;
+        mutable ::std::vector<::std::pair<RcString, RcString>> placeholderNames_;
 
         RcString canonicalPlaceholderName(const RcString& name) const {
-            for (const auto& entry : mPlaceholderNames) {
+            for (const auto& entry : placeholderNames_) {
                 if (entry.first == name) {
                     return entry.second;
                 }
             }
-            auto canonical = RcString::newInterned(FMT("#solver-placeholder-" << mPlaceholderNames.size()));
-            mPlaceholderNames.push_back({name, canonical});
+            auto canonical = RcString::newInterned(FMT("#solver-placeholder-" << placeholderNames_.size()));
+            placeholderNames_.push_back({name, canonical});
             return canonical;
         }
 
@@ -50,7 +50,7 @@ namespace {
         }
 
         const ::std::vector<::std::pair<RcString, RcString>>& placeholderNames() const {
-            return mPlaceholderNames;
+            return placeholderNames_;
         }
     };
 
@@ -2249,9 +2249,9 @@ TU_ARMA(Alias, ee) {
                 }
             };
 
-            const TraitResolution& mResolve;
+            const TraitResolution& resolve_;
             const HIRCrate& crate;
-            const Span* mSpan = nullptr;
+            const Span* span_ = nullptr;
             bool coherenceMode = false;
 
             // Frames and candidates have stable pool-backed addresses.  Vectors
@@ -2281,8 +2281,8 @@ TU_ARMA(Alias, ee) {
             };
 
             const Span& span() const {
-                ASSERT_BUG(Span(), mSpan, "next-solver session used outside an evaluation");
-                return *mSpan;
+                ASSERT_BUG(Span(), span_, "next-solver session used outside an evaluation");
+                return *span_;
             }
 
             CanonicalGoal canonicalizeGoal(const HIRPathParams& params, const HIRTypeData* type, const HIRTraitPath::assocListT* associated, CanonicalizeTraitGoal& canonicalizer) const {
@@ -2425,7 +2425,7 @@ TU_ARMA(Alias, ee) {
                     if (infer->index == ~0u) {
                         return true;
                     }
-                    const auto* resolved = mResolve.resolveType(input);
+                    const auto* resolved = resolve_.resolveType(input);
                     return resolved != input && typeHasUnassignedInfer(resolved);
                 }
                 if (const auto* path = input->opt_Path()) {
@@ -2510,11 +2510,11 @@ TU_ARMA(Alias, ee) {
 
             bool selfIsUnresolvedProjectionOverIvar(const HIRTypeData* type) const {
                 const auto* path = type->opt_Path();
-                return path && path->binding.is_Unbound() && path->path.mData.is_UfcsKnown() && mResolve.typeContainsIvars(type);
+                return path && path->binding.is_Unbound() && path->path.mData.is_UfcsKnown() && resolve_.typeContainsIvars(type);
             }
 
             bool typeHasUnknown(const HIRTypeData* input) const {
-                const auto& type = mResolve.resolveType(input);
+                const auto& type = resolve_.resolveType(input);
                 if (type->is_Infer() || type->is_Generic()) {
                     return true;
                 }
@@ -2719,14 +2719,14 @@ TU_ARMA(Alias, ee) {
             }
 
             OrphanVisit orphanVisitType(const HIRTypeData* input, OrphanPerspective perspective) const {
-                const auto& resolved = mResolve.resolveType(input);
+                const auto& resolved = resolve_.resolveType(input);
                 const auto* path = resolved->opt_Path();
                 const bool isAlias = path && (!path->path.mData.is_Generic() || path->binding.is_Unbound() || path->binding.is_Opaque());
                 if (isAlias) {
                     // rustc's orphan checker normalizes aliases lazily.  Keep a
                     // rigid alias if normalization only produces a fresh type
                     // variable; such an alias still carries coverage information.
-                    auto normalized = mResolve.expandAssociatedTypes(span(), resolved);
+                    auto normalized = resolve_.expandAssociatedTypes(span(), resolved);
                     if (!(normalized->is_Infer() && !resolved->is_Infer())) {
                         return orphanVisitResolvedType(normalized, perspective);
                     }
@@ -3040,18 +3040,18 @@ TU_ARMA(Alias, ee) {
                 // ParamEnv predicate shadows builtin and impl candidates in the
                 // next solver.  The legacy lookup flattened these sources into
                 // the same bounded ImplRef, so collect each source independently.
-                mResolve.findTraitImplsMagic(span(), trait, params, type, collect(CandidateSource::Builtin));
-                mResolve.findTraitImplsLegacy(span(), trait, params, type, collect(CandidateSource::Other), false, false, false);
-                mResolve.findTraitImplsBound(span(), trait, params, type, collect(CandidateSource::ParamEnv));
+                resolve_.findTraitImplsMagic(span(), trait, params, type, collect(CandidateSource::Builtin));
+                resolve_.findTraitImplsLegacy(span(), trait, params, type, collect(CandidateSource::Other), false, false, false);
+                resolve_.findTraitImplsBound(span(), trait, params, type, collect(CandidateSource::ParamEnv));
 
-                const auto& resolvedType = mResolve.resolveType(type);
+                const auto& resolvedType = resolve_.resolveType(type);
                 const auto& traitDef = crate.getTraitByPath(span(), trait);
                 if (!traitDef.mIsMarker) {
                     // Assemble impl heads without evaluating their where-clauses.
                     // Those nested goals belong exclusively to evaluate_candidate.
-                    crate.findTraitImpls(trait, resolvedType, mResolve.ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
+                    crate.findTraitImpls(trait, resolvedType, resolve_.ivars.callbackResolveInfer(), [&](const HIRTraitImpl& impl) {
                         HIRPathParams implParams;
-                        const auto match = mResolve.fticCheckParams(span(), trait, &params, resolvedType, impl.mParams, impl.traitArgs, impl.mType, implParams, false);
+                        const auto match = resolve_.fticCheckParams(span(), trait, &params, resolvedType, impl.mParams, impl.traitArgs, impl.mType, implParams, false);
                         if (match != HIRCompare::Unequal) {
                             pushCandidate(frameIndex, ImplRef(::std::move(implParams), traitDef, trait, impl), match, nullptr, {}, false, CandidateSource::TraitImpl);
                         }
@@ -3061,9 +3061,9 @@ TU_ARMA(Alias, ee) {
                     // Explicit positive and negative auto-trait impls are
                     // candidates with polarity.  Only their heads are matched
                     // here; their bounds are nested goals evaluated below.
-                    crate.findAutoTraitImpls(trait, resolvedType, mResolve.ivars.callbackResolveInfer(), [&](const HIRMarkerImpl& impl) {
+                    crate.findAutoTraitImpls(trait, resolvedType, resolve_.ivars.callbackResolveInfer(), [&](const HIRMarkerImpl& impl) {
                         HIRPathParams implParams;
-                        const auto match = mResolve.fticCheckParams(span(), trait, &params, resolvedType, impl.mParams, impl.traitArgs, impl.mType, implParams, false);
+                        const auto match = resolve_.fticCheckParams(span(), trait, &params, resolvedType, impl.mParams, impl.traitArgs, impl.mType, implParams, false);
                         if (match != HIRCompare::Unequal) {
                             auto monomorph = MonomorphStatePtr(crate.types, nullptr, &implParams, nullptr);
                             auto responseType = monomorph.monomorphType(span(), impl.mType, false);
@@ -3075,7 +3075,7 @@ TU_ARMA(Alias, ee) {
 
                     // The structural auto candidate is evaluated recursively in
                     // evaluate_candidate, after explicit polarity is known.
-                    pushCandidate(frameIndex, ImplRef(resolvedType, params.clone(), HIRTraitPath::assocListT()), mResolve.typeContainsIvars(resolvedType) || mResolve.paramsContainIvars(params) ? HIRCompare::Fuzzy : HIRCompare::Equal, nullptr, {}, true, CandidateSource::Builtin);
+                    pushCandidate(frameIndex, ImplRef(resolvedType, params.clone(), HIRTraitPath::assocListT()), resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(params) ? HIRCompare::Fuzzy : HIRCompare::Equal, nullptr, {}, true, CandidateSource::Builtin);
                 }
             }
 
@@ -3099,10 +3099,10 @@ TU_ARMA(Alias, ee) {
                 }
 
                 class BindPlaceholders final: public HIRMatchGenerics {
-                    const Span& mSpan;
+                    const Span& span_;
                     HIRTypeInterner& types;
-                    HIRPathParams& mParams;
-                    ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> mBindings;
+                    HIRPathParams& params_;
+                    ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> bindings_;
 
                     bool isBindable(const HIRTypeData* type) const {
                         if (const auto* generic = type->opt_Generic()) {
@@ -3115,16 +3115,16 @@ TU_ARMA(Alias, ee) {
                     }
 
                     ::std::optional<HIRCompare> bindType(const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) {
-                        for (const auto& binding : mBindings) {
+                        for (const auto& binding : bindings_) {
                             if (binding.first == pattern) {
-                                return binding.second->compareWithPlaceholders(mSpan, value, resolve);
+                                return binding.second->compareWithPlaceholders(span_, value, resolve);
                             }
                         }
                         if (!isBindable(pattern)) {
                             return {};
                         }
                         bool isParameter = false;
-                        for (const auto& parameter : mParams.types) {
+                        for (const auto& parameter : params_.types) {
                             isParameter |= visitTyWith(parameter, [&](const HIRTypeData* inner) {
                                 return inner == pattern;
                             });
@@ -3135,8 +3135,8 @@ TU_ARMA(Alias, ee) {
                         if (pattern == value) {
                             return HIRCompare::Equal;
                         }
-                        for (auto& parameter : mParams.types) {
-                            parameter = cloneTyWith(types, mSpan, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
+                        for (auto& parameter : params_.types) {
+                            parameter = cloneTyWith(types, span_, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
                                 if (input != pattern) {
                                     return false;
                                 }
@@ -3144,7 +3144,7 @@ TU_ARMA(Alias, ee) {
                                 return true;
                             });
                         }
-                        mBindings.push_back({pattern, value});
+                        bindings_.push_back({pattern, value});
                         changed = true;
                         return HIRCompare::Equal;
                     }
@@ -3153,9 +3153,9 @@ TU_ARMA(Alias, ee) {
                     bool changed = false;
 
                     BindPlaceholders(const Span& span, HIRTypeInterner& types, HIRPathParams& params)
-                        : mSpan(span)
+                        : span_(span)
                         , types(types)
-                        , mParams(params)
+                        , params_(params)
                     {
                     }
 
@@ -3171,7 +3171,7 @@ TU_ARMA(Alias, ee) {
                         if (auto result = bindType(pattern, type, resolve)) {
                             return *result;
                         }
-                        return pattern->compareWithPlaceholders(mSpan, type, resolve);
+                        return pattern->compareWithPlaceholders(span_, type, resolve);
                     }
 
                     HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
@@ -3179,7 +3179,7 @@ TU_ARMA(Alias, ee) {
                             return HIRCompare::Equal;
                         }
                         if (generic.group() == GENERICPlaceholder) {
-                            for (auto& parameter : mParams.values) {
+                            for (auto& parameter : params_.values) {
                                 if (parameter.is_Generic() && parameter.as_Generic() == generic) {
                                     parameter = value.clone();
                                     changed = true;
@@ -3226,9 +3226,9 @@ TU_ARMA(Alias, ee) {
                         // form can still legally contain a local UfcsUnknown, and
                         // such a response must remain deferred until that pass
                         // resolves its trait path.
-                        candidateOutput = mResolve.expandAssociatedTypes(span(), ::std::move(candidateOutput));
+                        candidateOutput = resolve_.expandAssociatedTypes(span(), ::std::move(candidateOutput));
                     }
-                    const auto match = (useCandidateResponse ? candidateOutput : requirement.second.type)->matchTestGenericsFuzz(span(), useCandidateResponse ? requirement.second.type : candidateOutput, mResolve.ivars.callbackResolveInfer(), binder);
+                    const auto match = (useCandidateResponse ? candidateOutput : requirement.second.type)->matchTestGenericsFuzz(span(), useCandidateResponse ? requirement.second.type : candidateOutput, resolve_.ivars.callbackResolveInfer(), binder);
                     if (match == HIRCompare::Unequal) {
                         *candidateParams = saved.clone();
                     }
@@ -3255,10 +3255,10 @@ TU_ARMA(Alias, ee) {
                 }
 
                 class BindResponse final: public HIRMatchGenerics {
-                    const Span& mSpan;
+                    const Span& span_;
                     HIRTypeInterner& types;
-                    HIRPathParams& mParams;
-                    ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> mBindings;
+                    HIRPathParams& params_;
+                    ::std::vector<::std::pair<HIRTypeRef, HIRTypeRef>> bindings_;
 
                     bool isBindable(const HIRTypeData* type) const {
                         if (const auto* generic = type->opt_Generic()) {
@@ -3271,16 +3271,16 @@ TU_ARMA(Alias, ee) {
                     }
 
                     ::std::optional<HIRCompare> bindType(const HIRTypeData* pattern, const HIRTypeData* value, tCbResolveType resolve) {
-                        for (const auto& binding : mBindings) {
+                        for (const auto& binding : bindings_) {
                             if (binding.first == pattern) {
-                                return binding.second->compareWithPlaceholders(mSpan, value, resolve);
+                                return binding.second->compareWithPlaceholders(span_, value, resolve);
                             }
                         }
                         if (!isBindable(pattern)) {
                             return {};
                         }
                         bool isParameter = false;
-                        for (const auto& parameter : mParams.types) {
+                        for (const auto& parameter : params_.types) {
                             isParameter |= visitTyWith(parameter, [&](const HIRTypeData* inner) {
                                 return inner == pattern;
                             });
@@ -3291,8 +3291,8 @@ TU_ARMA(Alias, ee) {
                         if (pattern == value) {
                             return HIRCompare::Equal;
                         }
-                        for (auto& parameter : mParams.types) {
-                            parameter = cloneTyWith(types, mSpan, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
+                        for (auto& parameter : params_.types) {
+                            parameter = cloneTyWith(types, span_, parameter, [&](const HIRTypeData* input, HIRTypeRef& output) {
                                 if (input != pattern) {
                                     return false;
                                 }
@@ -3300,7 +3300,7 @@ TU_ARMA(Alias, ee) {
                                 return true;
                             });
                         }
-                        mBindings.push_back({pattern, value});
+                        bindings_.push_back({pattern, value});
                         changed = true;
                         return HIRCompare::Equal;
                     }
@@ -3309,9 +3309,9 @@ TU_ARMA(Alias, ee) {
                     bool changed = false;
 
                     BindResponse(const Span& span, HIRTypeInterner& types, HIRPathParams& params)
-                        : mSpan(span)
+                        : span_(span)
                         , types(types)
-                        , mParams(params)
+                        , params_(params)
                     {
                     }
 
@@ -3327,7 +3327,7 @@ TU_ARMA(Alias, ee) {
                         if (auto result = bindType(pattern, value, resolve)) {
                             return *result;
                         }
-                        return pattern->compareWithPlaceholders(mSpan, value, resolve);
+                        return pattern->compareWithPlaceholders(span_, value, resolve);
                     }
 
                     HIRCompare matchVal(const HIRGenericRef& generic, const HIRConstGeneric& value) override {
@@ -3337,7 +3337,7 @@ TU_ARMA(Alias, ee) {
                         if (generic.group() != GENERICPlaceholder) {
                             return HIRCompare::Fuzzy;
                         }
-                        for (auto& parameter : mParams.values) {
+                        for (auto& parameter : params_.values) {
                             if (parameter.is_Generic() && parameter.as_Generic() == generic) {
                                 parameter = value.clone();
                                 changed = true;
@@ -3349,8 +3349,8 @@ TU_ARMA(Alias, ee) {
                 } binder{span(), crate.types, *candidateParams};
 
                 const auto saved = candidateParams->clone();
-                auto match = nestedType->matchTestGenericsFuzz(span(), response.getImplType(crate.types), mResolve.ivars.callbackResolveInfer(), binder);
-                match &= nestedParams.matchTestGenericsFuzz(span(), response.getTraitParams(crate.types), mResolve.ivars.callbackResolveInfer(), binder);
+                auto match = nestedType->matchTestGenericsFuzz(span(), response.getImplType(crate.types), resolve_.ivars.callbackResolveInfer(), binder);
+                match &= nestedParams.matchTestGenericsFuzz(span(), response.getTraitParams(crate.types), resolve_.ivars.callbackResolveInfer(), binder);
                 if (match == HIRCompare::Unequal) {
                     *candidateParams = saved.clone();
                     return false;
@@ -3407,7 +3407,7 @@ TU_ARMA(Alias, ee) {
                     // The projection response may contain the very caller-owned
                     // inference variable from the requested equality. That is an
                     // exact response, not an ambiguous comparison of two ivars.
-                    const auto cmp = output == aty.type ? HIRCompare::Equal : mResolve.compareTy(span(), output, aty.type);
+                    const auto cmp = output == aty.type ? HIRCompare::Equal : resolve_.compareTy(span(), output, aty.type);
                     if (cmp == HIRCompare::Unequal) {
                         return Certainty::NoSolution;
                     }
@@ -3438,7 +3438,7 @@ TU_ARMA(Alias, ee) {
                     HIRTypeRef tmp;
                     auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe->mParams, nullptr);
                     auto evaluateField = [&](const HIRTypeData* field) {
-                        const auto& fieldType = monomorphiseTypeNeeded(field) ? (tmp = mResolve.expandAssociatedTypes(span(), monomorph.monomorphType(span(), field))) : field;
+                        const auto& fieldType = monomorphiseTypeNeeded(field) ? (tmp = resolve_.expandAssociatedTypes(span(), monomorph.monomorphType(span(), field))) : field;
                         return evaluateInner(fieldType);
                     };
 
@@ -3634,7 +3634,7 @@ TU_ARMA(Alias, ee) {
                             left = ms.monomorphType(span(), equality->type);
                             right = ms.monomorphType(span(), equality->otherType);
                         }
-                        const auto cmp = mResolve.compareTy(span(), left, right);
+                        const auto cmp = resolve_.compareTy(span(), left, right);
                         if (cmp == HIRCompare::Unequal) {
                             return Certainty::NoSolution;
                         }
@@ -3662,9 +3662,9 @@ TU_ARMA(Alias, ee) {
                 // e.g. `<Option::IntoIter<T> as Iterator>::Item: IntoIterator`.
                 // Candidate assembly operates on the normalized goal input, just
                 // as it already does for trait arguments.
-                goalType = mResolve.expandAssociatedTypes(span(), goalType);
+                goalType = resolve_.expandAssociatedTypes(span(), goalType);
                 for (auto& param : goalParams.types) {
-                    param = mResolve.expandAssociatedTypes(span(), ::std::move(param));
+                    param = resolve_.expandAssociatedTypes(span(), ::std::move(param));
                 }
                 if (goalHasUnassignedInfer(goalParams, goalType, associated)) {
                     return Certainty::Ambiguous;
@@ -3677,7 +3677,7 @@ TU_ARMA(Alias, ee) {
                 if (selfIsUnresolvedProjectionOverIvar(goalType)) {
                     return Certainty::Ambiguous;
                 }
-                const auto& resolvedType = mResolve.resolveType(goalType);
+                const auto& resolvedType = resolve_.resolveType(goalType);
                 // Candidate assembly must not use an unconstrained `Self` type to
                 // guide inference.  A concrete associated-type equality does
                 // constrain the goal, however, and may uniquely determine Self.
@@ -3782,7 +3782,7 @@ TU_ARMA(Alias, ee) {
                     }
                     sawAmbiguous |= autoBuiltinResult == Certainty::Ambiguous;
                 }
-                if (sawAmbiguous || mResolve.typeContainsIvars(resolvedType) || mResolve.paramsContainIvars(goalParams) || (coherenceMode && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
+                if (sawAmbiguous || resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams) || (coherenceMode && !traitRefIsKnowable(trait, goalParams, resolvedType))) {
                     return cacheResult(Certainty::Ambiguous);
                 }
                 return cacheResult(Certainty::NoSolution);
@@ -3813,7 +3813,7 @@ TU_ARMA(Alias, ee) {
                 if (!assocType) {
                     return Certainty::Proven;
                 }
-                const auto cmp = mResolve.compareTy(span(), assocType, output);
+                const auto cmp = resolve_.compareTy(span(), assocType, output);
                 if (cmp == HIRCompare::Unequal) {
                     return Certainty::NoSolution;
                 }
@@ -3821,7 +3821,7 @@ TU_ARMA(Alias, ee) {
                 // proven response plus an equality constraint. The caller applies
                 // that constraint from the returned ImplRef; the unassigned
                 // destination alone must not turn a unique response into `Maybe`.
-                if (cmp == HIRCompare::Fuzzy && mResolve.typeContainsIvars(assocType) && !mResolve.typeContainsIvars(output) && !typeHasCandidatePlaceholder(output)) {
+                if (cmp == HIRCompare::Fuzzy && resolve_.typeContainsIvars(assocType) && !resolve_.typeContainsIvars(output) && !typeHasCandidatePlaceholder(output)) {
                     return Certainty::Proven;
                 }
                 return cmp == HIRCompare::Equal ? Certainty::Proven : Certainty::Ambiguous;
@@ -3874,13 +3874,13 @@ TU_ARMA(Alias, ee) {
                     if (lhs == rhs) {
                         return true;
                     }
-                    auto normalizedLhs = mResolve.expandAssociatedTypes(span(), lhs);
-                    auto normalizedRhs = mResolve.expandAssociatedTypes(span(), rhs);
+                    auto normalizedLhs = resolve_.expandAssociatedTypes(span(), lhs);
+                    auto normalizedRhs = resolve_.expandAssociatedTypes(span(), rhs);
                     if (normalizedLhs == HIRTypeRef() || normalizedRhs == HIRTypeRef()) {
                         return normalizedLhs == normalizedRhs;
                     }
-                    const auto* resolvedLhs = mResolve.resolveType(normalizedLhs);
-                    const auto* resolvedRhs = mResolve.resolveType(normalizedRhs);
+                    const auto* resolvedLhs = resolve_.resolveType(normalizedLhs);
+                    const auto* resolvedRhs = resolve_.resolveType(normalizedRhs);
                     return resolvedLhs == resolvedRhs || resolvedLhs->equalsIgnoringRegions(resolvedRhs);
                 };
                 auto paramsEqualAfterNormalization = [&](const HIRPathParams& lhs, const HIRPathParams& rhs) {
@@ -3924,7 +3924,7 @@ TU_ARMA(Alias, ee) {
 
         public:
             NextTraitGoalEvaluator(const TraitResolution& resolve, const HIRCrate& crate)
-                : mResolve(resolve)
+                : resolve_(resolve)
                 , crate(crate)
                 , candidateNodes(crate.pool)
                 , activeGoalNodes(crate.pool)
@@ -3938,13 +3938,13 @@ TU_ARMA(Alias, ee) {
             }
 
             bool evaluateOverlap(const Span& callSpan, const HIRSimplePath& trait, const HIRTraitImpl& left, const HIRTraitImpl& right) {
-                ASSERT_BUG(callSpan, !mSpan, "nested coherence overlap session");
+                ASSERT_BUG(callSpan, !span_, "nested coherence overlap session");
                 ASSERT_BUG(callSpan, !coherenceMode, "coherence mode leaked before overlap probe");
                 ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked before coherence probe");
                 ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked before coherence probe");
                 ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked before coherence probe");
                 clearGoalCache();
-                mSpan = &callSpan;
+                span_ = &callSpan;
                 coherenceMode = true;
 
                 struct SessionGuard {
@@ -3956,20 +3956,20 @@ TU_ARMA(Alias, ee) {
                         self.clearGoalCache();
                         self.frameDepth = 0;
                         self.coherenceMode = false;
-                        self.mSpan = nullptr;
+                        self.span_ = nullptr;
                     }
                 } sessionGuard{*this};
 
                 // Instantiate the first header with fresh inference variables, then
                 // match the second header against it.  This is a unification of two
                 // independently generic impls, not a one-way syntactic ordering.
-                auto leftParams = mResolve.makeFreshImplParams(left.mParams);
+                auto leftParams = resolve_.makeFreshImplParams(left.mParams);
                 auto leftMonomorph = MonomorphStatePtr(crate.types, nullptr, &leftParams, nullptr);
                 auto goalType = leftMonomorph.monomorphType(callSpan, left.mType, true);
                 auto goalParams = leftMonomorph.monomorphPathParams(callSpan, left.traitArgs, true);
 
                 HIRPathParams rightParams;
-                const auto rightMatch = mResolve.fticCheckParams(callSpan, trait, &goalParams, goalType, right.mParams, right.traitArgs, right.mType, rightParams, false);
+                const auto rightMatch = resolve_.fticCheckParams(callSpan, trait, &goalParams, goalType, right.mParams, right.traitArgs, right.mType, rightParams, false);
                 if (rightMatch == HIRCompare::Unequal) {
                     return false;
                 }
@@ -4011,13 +4011,13 @@ TU_ARMA(Alias, ee) {
             }
 
             bool evaluate(const Span& callSpan, const HIRSimplePath& trait, const HIRPathParams& params, const HIRTypeData* type, TraitResolution::tCbTraitImplR callback, const char* assocName, const HIRTypeData* assocType, const HIRPathParams* assocParams) {
-                const bool outermost = mSpan == nullptr;
+                const bool outermost = span_ == nullptr;
                 if (outermost) {
                     ASSERT_BUG(callSpan, goalStack.empty(), "next-solver goal stack leaked between evaluations");
                     ASSERT_BUG(callSpan, activeGoalIndex.empty(), "next-solver active goal index leaked between evaluations");
                     ASSERT_BUG(callSpan, frameDepth == 0, "next-solver candidate frames leaked between evaluations");
                     clearGoalCache();
-                    mSpan = &callSpan;
+                    span_ = &callSpan;
                 }
 
                 struct SessionGuard {
@@ -4030,7 +4030,7 @@ TU_ARMA(Alias, ee) {
                             assert(self.activeGoalIndex.empty());
                             self.clearGoalCache();
                             self.frameDepth = 0;
-                            self.mSpan = nullptr;
+                            self.span_ = nullptr;
                         }
                     }
                 } sessionGuard{*this, outermost};
@@ -4051,14 +4051,14 @@ TU_ARMA(Alias, ee) {
                 if (goalHasUnassignedInfer(goalParams, goalType, nullptr)) {
                     return emitForcedAmbiguity();
                 }
-                goalType = mResolve.expandAssociatedTypes(span(), goalType);
+                goalType = resolve_.expandAssociatedTypes(span(), goalType);
                 for (auto& param : goalParams.types) {
-                    param = mResolve.expandAssociatedTypes(span(), ::std::move(param));
+                    param = resolve_.expandAssociatedTypes(span(), ::std::move(param));
                 }
                 if (selfIsUnresolvedProjectionOverIvar(goalType)) {
                     return emitForcedAmbiguity();
                 }
-                const auto& resolvedType = mResolve.resolveType(goalType);
+                const auto& resolvedType = resolve_.resolveType(goalType);
                 // Match rustc's forced-ambiguity response for a genuinely
                 // unconstrained `Self` type.  A known associated output is an
                 // input constraint and can legitimately select a unique response.
@@ -4085,7 +4085,7 @@ TU_ARMA(Alias, ee) {
                     if (!outermost) {
                         return response;
                     }
-                    InstantiateTraitResponseForCaller instantiator(crate.types, const_cast<HMTypeInferrence&>(mResolve.ivars), canonicalizer.placeholderNames());
+                    InstantiateTraitResponseForCaller instantiator(crate.types, const_cast<HMTypeInferrence&>(resolve_.ivars), canonicalizer.placeholderNames());
                     return monomorphImplRef(response, instantiator);
                 };
                 // Extended callers use an explicit empty associated-item name
@@ -4161,7 +4161,7 @@ TU_ARMA(Alias, ee) {
                 const HIRTypeData* candidateAssocType = assocType;
                 if (candidateAssocType) {
                     if (const auto* erased = candidateAssocType->opt_ErasedType()) {
-                        if (const auto* alias = erased->inner.opt_Alias(); alias && mResolve.isOpaqueAliasDefiningScope(*alias->inner)) {
+                        if (const auto* alias = erased->inner.opt_Alias(); alias && resolve_.isOpaqueAliasDefiningScope(*alias->inner)) {
                             // A defining opaque is an output of alias-relate, not
                             // an input that can reject an otherwise valid impl.
                             // Return the projection response to the caller, which
@@ -4229,7 +4229,7 @@ TU_ARMA(Alias, ee) {
                     // ambiguous goal.  Returning false here would turn e.g.
                     // `<_ as IntoIterator>::IntoIter: Iterator` into NoSolution
                     // and incorrectly discard an enclosing `Zip` candidate.
-                    if (mResolve.typeContainsIvars(resolvedType) || mResolve.paramsContainIvars(goalParams)) {
+                    if (resolve_.typeContainsIvars(resolvedType) || resolve_.paramsContainIvars(goalParams)) {
                         return emitForcedAmbiguity();
                     }
                     return false;
@@ -4307,7 +4307,7 @@ TU_ARMA(Alias, ee) {
                         // coinductive pair recurse without a solver cycle head.
                         // Keeping both responses is conservative: ambiguity is
                         // already sufficient to report that the impls may overlap.
-                        if (coherenceMode || !mResolve.implsOverlap(span(), left, right)) {
+                        if (coherenceMode || !resolve_.implsOverlap(span(), left, right)) {
                             continue;
                         }
                         // A more-specific impl with an ambiguous where-clause
@@ -4369,27 +4369,27 @@ TU_ARMA(Alias, ee) {
 
         TraitResolution::TraitResolution(const HMTypeInferrence& ivars, const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& visPath, const HIRGenericPath* currentTrait)
             : TraitResolveCommon(wb)
-            , mLangDeref(crate.getLangItemPathOpt("deref"))
+            , langDeref_(crate.getLangItemPathOpt("deref"))
             , ivars(ivars)
             , coherenceIvars(crate.types)
             , mVisPath(visPath)
-            , mCurrentTraitPath(currentTrait)
+            , currentTraitPath_(currentTrait)
             , currentTraitPtr(currentTrait ? &crate.getTraitByPath(Span(), currentTrait->mPath) : nullptr)
         {
-            mImplGenerics = implParams;
-            mItemGenerics = itemParams;
+            implGenerics_ = implParams;
+            itemGenerics_ = itemParams;
             prepIndexes(Span());
         }
 
         TraitResolution::~TraitResolution() = default;
 
         void TraitResolution::setGenericContext(const HIRGenericParams* implParams, const HIRGenericParams* itemParams) {
-            if (mImplGenerics == implParams && mItemGenerics == itemParams) {
+            if (implGenerics_ == implParams && itemGenerics_ == itemParams) {
                 return;
             }
             ASSERT_BUG(Span(), eatActiveStack.empty(), "changing trait environment during associated-type expansion");
-            mImplGenerics = implParams;
-            mItemGenerics = itemParams;
+            implGenerics_ = implParams;
+            itemGenerics_ = itemParams;
             eatCache.clear();
             prepIndexes(Span());
         }
@@ -4455,9 +4455,9 @@ TU_ARMA(Alias, ee) {
             coherenceIvars.hasChanged = false;
             if (!coherenceResolve) {
                 ASSERT_BUG(sp, crate.pool, "next-solver coherence requires the crate object pool");
-                coherenceResolve = crate.pool->make<TraitResolution>(coherenceIvars, this->wb, mImplGenerics, mItemGenerics, mVisPath, mCurrentTraitPath);
+                coherenceResolve = crate.pool->make<TraitResolution>(coherenceIvars, this->wb, implGenerics_, itemGenerics_, mVisPath, currentTraitPath_);
             } else {
-                coherenceResolve->setGenericContext(mImplGenerics, mItemGenerics);
+                coherenceResolve->setGenericContext(implGenerics_, itemGenerics_);
             }
             if (!coherenceResolve->nextSolver) {
                 coherenceResolve->nextSolver = crate.pool->make<NextTraitGoalEvaluator>(*coherenceResolve, crate);
@@ -4482,7 +4482,7 @@ TU_ARMA(Alias, ee) {
                         if (normalized != type) {
                             if (normalized->is_ErasedType()) {
                                 StaticTraitResolve staticResolve(wb);
-                                staticResolve.setBothGenericsRaw(mImplGenerics, mItemGenerics);
+                                staticResolve.setBothGenericsRaw(implGenerics_, itemGenerics_);
                                 staticResolve.revealOpaqueTypes(sp, normalized);
                             }
                             if (normalized != type) {
@@ -6648,9 +6648,9 @@ TU_ARMA(Alias, ee) {
         TU_ARMA(Generic, e) {
             switch (e.group()) {
                 case 0:
-                    return this->mImplGenerics->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
+                    return this->implGenerics_->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
                 case 1:
-                    return this->mItemGenerics->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
+                    return this->itemGenerics_->types.at(e.idx()).isSized ? HIRCompare::Equal : HIRCompare::Unequal;
                 default:
                     // Assume sized for anything else?
                     return HIRCompare::Equal;
@@ -7215,10 +7215,10 @@ TU_ARMA(Alias, ee) {
                 bool exact = false;
                 bool ambiguous = false;
 
-                this->findTraitImpls(sp, mLangDeref, HIRPathParams{}, ty, [&](auto impl, auto match) {
+                this->findTraitImpls(sp, langDeref_, HIRPathParams{}, ty, [&](auto impl, auto match) {
                     auto foundTarget = impl.getType(crate.types, "Target", {});
                     if (foundTarget == HIRTypeRef()) {
-                        foundTarget = crate.types.path(HIRPath(ty, mLangDeref, RcString::newInterned("Target")), HIRTypePathBinding::make_Opaque({}));
+                        foundTarget = crate.types.path(HIRPath(ty, langDeref_, RcString::newInterned("Target")), HIRTypePathBinding::make_Opaque({}));
                     } else {
                         this->expandAssociatedTypesInplace(sp, foundTarget, {});
                     }
@@ -7665,10 +7665,10 @@ TU_ARMA(Alias, ee) {
             }
 
             // 2. Search the current trait (if in an impl block)
-            if (mCurrentTraitPath) {
+            if (currentTraitPath_) {
                 HIRGenericPath finalTraitPath;
                 const HIRFunction* fcnPtr;
-                if ((fcnPtr = this->traitContainsMethod(sp, *mCurrentTraitPath, *currentTraitPtr, ty, methodName, finalTraitPath))) {
+                if ((fcnPtr = this->traitContainsMethod(sp, *currentTraitPath_, *currentTraitPtr, ty, methodName, finalTraitPath))) {
                     DEBUG("- Found trait " << finalTraitPath << " (current)");
                     if (auto selfTy = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
                         // If the type is an unbounded ivar, don't check.
@@ -7693,7 +7693,7 @@ TU_ARMA(Alias, ee) {
                                 return true;
                             });
                             if (crateImplFound) {
-                                DEBUG("Found trait impl " << mCurrentTraitPath->mPath << traitParams << " for " << *selfTy << " (" << this->ivars.fmtType(*selfTy) << ")");
+                                DEBUG("Found trait impl " << currentTraitPath_->mPath << traitParams << " for " << *selfTy << " (" << this->ivars.fmtType(*selfTy) << ")");
                                 possibilities.push_back(::std::make_pair(borrowType, HIRPath(*selfTy, HIRGenericPath(finalTraitPath.mPath, mv$(traitParams)), methodName, {})));
                                 DEBUG("++ " << possibilities.back());
                                 return true;

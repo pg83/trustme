@@ -57,7 +57,7 @@ public:
     ::std::set<RcString> features;
 
 public:
-    ASTModule mRootModule;
+    ASTModule rootModule_;
 
     /// Loaded crates in load order
     ::std::vector<RcString> externCratesOrd;
@@ -105,11 +105,11 @@ public:
     ASTCrate(stl::ObjPool* pool, HIRTypeInterner& types);
 
     const ASTModule& rootModule() const {
-        return mRootModule;
+        return rootModule_;
     }
 
     ASTModule& rootModule() {
-        return mRootModule;
+        return rootModule_;
     }
 
     void setCrateName(std::string name);

@@ -9,7 +9,7 @@ public:
     typedef ::std::function<void(const StaticTraitResolve& resolve, const HIRItemPath& ip, HIRExprPtr& expr, const HIRFunction::argsT& args, const HIRTypeData* retType)> cbT;
 
 private:
-    StaticTraitResolve mResolve;
+    StaticTraitResolve resolve_;
     cbT cb;
 
 public:

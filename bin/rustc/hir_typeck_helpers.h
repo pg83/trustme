@@ -149,14 +149,14 @@ private:
 class NextTraitGoalEvaluator;
 
 class TraitResolution: public TraitResolveCommon {
-    const HIRSimplePath& mLangDeref;
+    const HIRSimplePath& langDeref_;
     const HMTypeInferrence& ivars;
 
 public:
     const HIRSimplePath& mVisPath;
 
 private:
-    const HIRGenericPath* mCurrentTraitPath;
+    const HIRGenericPath* currentTraitPath_;
     const HIRTrait* currentTraitPtr;
 
     // A legacy solver invocation only needs this stack while it is actively
@@ -205,7 +205,7 @@ public:
     }
 
     const HIRGenericPath* currentTraitPath() const {
-        return mCurrentTraitPath;
+        return currentTraitPath_;
     }
 
     HIRCompare comparePp(const Span& sp, const HIRPathParams& left, const HIRPathParams& right) const;

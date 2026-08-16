@@ -3517,7 +3517,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
                 /// Remapped locals (indexes into coroutine struct, not just into the state)
                 ///
                 /// From `Pin<&mut self>`, these are appended to `self.pin.*`
-                const ::std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mMappings;
+                const ::std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings_;
                 /// Mapping from drop flag indexes to bit sin the drop flag list
                 const ::std::map<unsigned, unsigned>& dropFlagMapping;
                 /// Index of the drop flags bitset (array of u8) in the state (field 0 of top structure)
@@ -3529,7 +3529,7 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
 
             public:
                 Rewriter(const ::std::map<unsigned, std::vector<MIRLValue::Wrapper>>& mappings, const ::std::map<unsigned, unsigned>& dropFlagMapping, unsigned dropFlagsField)
-                    : mMappings(mappings)
+                    : mappings_(mappings)
                     , dropFlagMapping(dropFlagMapping)
                     , dropFlagsField(dropFlagsField)
                 {
@@ -3537,8 +3537,8 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
 
                 bool visitLvalue(MIRLValue& lv, MIRValUsage u) override {
                     if (lv.root.is_Local()) {
-                        auto it = mMappings.find(lv.root.as_Local());
-                        if (it != mMappings.end()) {
+                        auto it = mappings_.find(lv.root.as_Local());
+                        if (it != mappings_.end()) {
                             lv.root = MIRLValue::Storage::newArgument(0);
                             auto dit = lv.wrappers.begin();
                             dit = lv.wrappers.insert(dit, MIRLValue::Wrapper::newField(0)) + 1; // Pin.ptr
@@ -3549,8 +3549,8 @@ MIRFunctionPointer LowerMIR(const StaticTraitResolve& resolve, const HIRItemPath
                     }
                     for (auto& w : lv.wrappers) {
                         if (w.is_Index()) {
-                            auto it = mMappings.find(w.as_Index());
-                            if (it != mMappings.end()) {
+                            auto it = mappings_.find(w.as_Index());
+                            if (it != mappings_.end()) {
                                 // Allocate a new temporary, assign it before this statement, use that
                                 TODO(Span(), "");
                             }
@@ -7971,17 +7971,17 @@ void MatchGenGrouped::genDispatchSplitslice(const fieldPathT& fieldPath, const P
 // --------------------------------------------------------------------
 MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* retTy, const HIRFunction::argsT& args, MIRFunction& output)
     : rootSpan(sp)
-    , mResolve(resolve)
+    , resolve_(resolve)
     , retTy(retTy)
-    , mArgs(args)
+    , args_(args)
     , output(output)
-    , mLangBox(nullptr)
-    , mBlockActive(false)
+    , langBox_(nullptr)
+    , blockActive_(false)
     , resultValid(false)
-    , mFcnScope(*this, 0)
+    , fcnScope_(*this, 0)
 {
     if (resolve.hirCrate().mLangItems.count("owned_box") > 0) {
-        mLangBox = &resolve.hirCrate().mLangItems.at("owned_box");
+        langBox_ = &resolve.hirCrate().mLangItems.at("owned_box");
     }
 
     setCurBlock(newBbUnlinked());
@@ -7999,7 +7999,7 @@ MirBuilder::MirBuilder(const Span& sp, const StaticTraitResolve& resolve, const 
     firstTempIdx = output.locals.size();
     DEBUG("First temporary will be " << firstTempIdx);
 
-    ifCondLval = this->newTemporary(mResolve.hirCrate().types.primitive(HIRCoreType::Bool));
+    ifCondLval = this->newTemporary(resolve_.hirCrate().types.primitive(HIRCoreType::Bool));
 
     // Determine which variables can be replaced by arguents
     for (size_t i = 0; i < args.size(); i++) {
@@ -8032,7 +8032,7 @@ void MirBuilder::finalCleanup() {
         }
     } else {
         terminateScope(sp, ScopeHandle(*this, 1), /*emit_cleanup=*/false);
-        terminateScope(sp, mv$(mFcnScope), /*emit_cleanup=*/false);
+        terminateScope(sp, mv$(fcnScope_), /*emit_cleanup=*/false);
     }
 
     // Rewrite drop flags
@@ -8081,7 +8081,7 @@ void MirBuilder::finalCleanup() {
 }
 
 const HIRTypeData* MirBuilder::isTypeOwnedBox(const HIRTypeData* ty) const {
-    if (mLangBox) {
+    if (langBox_) {
         if (!ty->is_Path()) {
             return nullptr;
         }
@@ -8092,7 +8092,7 @@ const HIRTypeData* MirBuilder::isTypeOwnedBox(const HIRTypeData* ty) const {
         }
         const auto& pe = te.path.mData.as_Generic();
 
-        if (pe.mPath != *mLangBox) {
+        if (pe.mPath != *langBox_) {
             return nullptr;
         }
         // TODO: Properly assert the size?
@@ -8156,7 +8156,7 @@ void MirBuilder::scheduleRegisteredVariableDrop(unsigned int idx) {
 }
 
 void MirBuilder::scheduleArgumentDrop(unsigned int idx) {
-    DEBUG("SCHEDULE DROP (arg) a" << idx << ": " << mArgs.at(idx).second);
+    DEBUG("SCHEDULE DROP (arg) a" << idx << ": " << args_.at(idx).second);
     for (auto scopeIdx : ::reverse(scopeStack)) {
         auto& scopeDef = scopes.at(scopeIdx);
         TU_MATCH_DEF(
@@ -8377,7 +8377,7 @@ void MirBuilder::setResult(const Span& sp, MIRRValue val) {
 
 void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bool updateDestState /*=true*/) {
     DEBUG(dst << " = " << val);
-    ASSERT_BUG(sp, mBlockActive, "Pushing statement with no active block");
+    ASSERT_BUG(sp, blockActive_, "Pushing statement with no active block");
 
     auto movedParam = [&](const MIRParam& p) {
         if (const auto* e = p.opt_LValue()) {
@@ -8439,7 +8439,7 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
 }
 
 void MirBuilder::pushStmtDrop(const Span& sp, MIRLValue val, unsigned int flag /*=~0u*/) {
-    ASSERT_BUG(sp, mBlockActive, "Pushing statement with no active block");
+    ASSERT_BUG(sp, blockActive_, "Pushing statement with no active block");
 
     if (lvalueIsCopy(sp, val)) {
         // Don't emit a drop for Copy values
@@ -8454,12 +8454,12 @@ void MirBuilder::pushStmtDrop(const Span& sp, MIRLValue val, unsigned int flag /
 }
 
 void MirBuilder::pushStmtDropRaw(const Span& sp, MIRLValue val, unsigned int flag /*=~0u*/) {
-    ASSERT_BUG(sp, mBlockActive, "Pushing statement with no active block");
+    ASSERT_BUG(sp, blockActive_, "Pushing statement with no active block");
     this->pushDropTerminator(sp, MIRDropKind::DEEP, mv$(val), flag);
 }
 
 void MirBuilder::pushStmtDropShallow(const Span& sp, MIRLValue val, unsigned int flag /*=~0u*/) {
-    ASSERT_BUG(sp, mBlockActive, "Pushing statement with no active block");
+    ASSERT_BUG(sp, blockActive_, "Pushing statement with no active block");
 
     // TODO: Ensure that the type is a Box?
 
@@ -8471,7 +8471,7 @@ void MirBuilder::pushStmtDropShallow(const Span& sp, MIRLValue val, unsigned int
 }
 
 void MirBuilder::pushDropTerminator(const Span& sp, MIRDropKind kind, MIRLValue val, unsigned int flag) {
-    ASSERT_BUG(sp, mBlockActive, "Dropping a value with no active block");
+    ASSERT_BUG(sp, blockActive_, "Dropping a value with no active block");
 
     const auto nextBlock = newBbUnlinked();
     auto unwind = buildingCleanup ? MIRUnwindAction::make_Terminate({}) : makeUnwindAction(sp, &val);
@@ -8480,7 +8480,7 @@ void MirBuilder::pushDropTerminator(const Span& sp, MIRDropKind kind, MIRLValue 
 }
 
 void MirBuilder::pushStmtAsm(const Span& sp, MIRStatement::Data_Asm data) {
-    ASSERT_BUG(sp, mBlockActive, "Pushing statement with no active block");
+    ASSERT_BUG(sp, blockActive_, "Pushing statement with no active block");
 
     // 1. Mark outputs as valid
     for (const auto& v : data.outputs) {
@@ -8504,7 +8504,7 @@ void MirBuilder::pushStmtSetDropflagDefault(const Span& sp, unsigned int idx) {
 }
 
 void MirBuilder::pushStmt(const Span& sp, MIRStatement stmt) {
-    ASSERT_BUG(sp, mBlockActive, "Pushing statement with no active block");
+    ASSERT_BUG(sp, blockActive_, "Pushing statement with no active block");
     auto& blk = output.blocks.at(currentBlock);
     DEBUG("BB" << currentBlock << "/" << blk.statements.size() << " = " << stmt);
     blk.statements.push_back(mv$(stmt));
@@ -8744,7 +8744,7 @@ void MirBuilder::insertCloned(const Span& sp, const SavedCode& c, CloneMapper& m
                 }
                 return mapper.updateBbRef(idx);
             }
-        } cloner{sp, mapper, mResolve.hirCrate().types};
+        } cloner{sp, mapper, resolve_.hirCrate().types};
 
         // Allocate new block IDs for all referenced blocks
         for (auto bbIdx : c.blocks) {
@@ -8771,7 +8771,7 @@ void MirBuilder::insertCloned(const Span& sp, const SavedCode& c, CloneMapper& m
 }
 
 void MirBuilder::setCurBlock(unsigned int newBlock) {
-    ASSERT_BUG(Span(), !mBlockActive, "Updating block when previous is active");
+    ASSERT_BUG(Span(), !blockActive_, "Updating block when previous is active");
     ASSERT_BUG(Span(), newBlock < output.blocks.size(), "Invalid block ID being started - " << newBlock);
     ASSERT_BUG(Span(), output.blocks[newBlock].terminator.is_Incomplete(), "Attempting to resume a completed block - BB" << newBlock);
     // Record this new block in the save stack entries
@@ -8783,34 +8783,34 @@ void MirBuilder::setCurBlock(unsigned int newBlock) {
     }
     DEBUG("BB" << newBlock << " START");
     currentBlock = newBlock;
-    mBlockActive = true;
+    blockActive_ = true;
 }
 
 void MirBuilder::endBlock(MIRTerminator term) {
-    if (!mBlockActive) {
+    if (!blockActive_) {
         BUG(Span(), "Terminating block when none active");
     }
     if (auto* call = term.opt_Call(); call && !call->tracksCaller) {
         if (const auto* path = call->fcn.opt_Path()) {
-            MonomorphState params(mResolve.hirCrate().types);
-            auto value = mResolve.getValue(rootSpan, *path, params, /*signatureOnly=*/true);
+            MonomorphState params(resolve_.hirCrate().types);
+            auto value = resolve_.getValue(rootSpan, *path, params, /*signatureOnly=*/true);
             if (const auto* function = value.opt_Function()) {
-                call->tracksCaller = mResolve.hirCrate().functionTracksCaller(rootSpan, *path, **function);
+                call->tracksCaller = resolve_.hirCrate().functionTracksCaller(rootSpan, *path, **function);
             }
         }
     }
     DEBUG("BB" << currentBlock << " END -> " << term);
     output.blocks.at(currentBlock).terminator = mv$(term);
-    mBlockActive = false;
+    blockActive_ = false;
     currentBlock = 0;
 }
 
 MIRBasicBlockId MirBuilder::pauseCurBlock() {
-    if (!mBlockActive) {
+    if (!blockActive_) {
         BUG(Span(), "Pausing block when none active");
     }
     DEBUG("BB" << currentBlock << " PAUSE");
-    mBlockActive = false;
+    blockActive_ = false;
     auto rv = currentBlock;
     currentBlock = 0;
     return rv;
@@ -9696,7 +9696,7 @@ void MirBuilder::endSplitArm(const Span& sp, const ScopeHandle& handle, bool rea
 
     TRACE_FUNCTION_F("end split scope " << handle.idx << " arm " << (sdSplit.arms.size() - 1) << (reachable ? " reachable" : "") << (early ? " early" : ""));
     if (reachable) {
-        ASSERT_BUG(sp, mBlockActive, "Block must be active when ending a reachable split arm");
+        ASSERT_BUG(sp, blockActive_, "Block must be active when ending a reachable split arm");
     }
 
     auto& thisArmState = sdSplit.arms.back();
@@ -9730,7 +9730,7 @@ void MirBuilder::endSplitArm(const Span& sp, const ScopeHandle& handle, bool rea
     }
 
     if (reachable) {
-        assert(mBlockActive);
+        assert(blockActive_);
     }
     if (!early) {
         SplitArm arm;
@@ -9853,10 +9853,10 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
     const HIRTypeData* ty = nullptr;
     auto revealType = [&](const HIRTypeData* input) {
         HIRTypeRef revealed = input;
-        mResolve.revealOpaqueTypes(sp, revealed);
+        resolve_.revealOpaqueTypes(sp, revealed);
         return revealed;
     };
-    TU_MATCHA((val.root), (e), (Return, ty = retTy;), (Argument, ty = mArgs.at(e).second;), (Local, ty = output.locals.at(e);), (Static, TU_MATCHA((e.mData), (pe), (Generic, ASSERT_BUG(sp, pe.mParams.types.empty(), "Path params on static"); const auto& s = mResolve.hirCrate().getStaticByPath(sp, pe.mPath); ty = s.mType;), (UfcsKnown, TODO(sp, "Static - UfcsKnown - " << e);), (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown in Static - " << e);), (UfcsInherent, TODO(sp, "Static - UfcsInherent - " << e);))))
+    TU_MATCHA((val.root), (e), (Return, ty = retTy;), (Argument, ty = args_.at(e).second;), (Local, ty = output.locals.at(e);), (Static, TU_MATCHA((e.mData), (pe), (Generic, ASSERT_BUG(sp, pe.mParams.types.empty(), "Path params on static"); const auto& s = resolve_.hirCrate().getStaticByPath(sp, pe.mPath); ty = s.mType;), (UfcsKnown, TODO(sp, "Static - UfcsKnown - " << e);), (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown in Static - " << e);), (UfcsInherent, TODO(sp, "Static - UfcsInherent - " << e);))))
     assert(ty);
     for (const auto& w : val.wrappers) {
         if (&w == stopWrapper) {
@@ -9867,8 +9867,8 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
         ty = nullptr;
         auto maybeMonomorph = [&](const HIRGenericParams& paramsDef, const HIRPath& p, const HIRTypeData* t) -> const HIRTypeData* {
             if (monomorphiseTypeNeeded(t)) {
-                tmp = MonomorphStatePtr(mResolve.hirCrate().types, nullptr, &p.mData.as_Generic().mParams, nullptr).monomorphType(sp, t);
-                mResolve.expandAssociatedTypes(sp, tmp);
+                tmp = MonomorphStatePtr(resolve_.hirCrate().types, nullptr, &p.mData.as_Generic().mParams, nullptr).monomorphType(sp, t);
+                resolve_.expandAssociatedTypes(sp, tmp);
                 return tmp;
             } else {
                 return t;
@@ -9959,7 +9959,7 @@ bool MirBuilder::lvalueIsCopy(const Span& sp, const MIRLValue& val) const {
     int rv = 0;
     withValType(sp, val, [&](const auto& ty) {
         DEBUG("[lvalue_is_copy] ty=" << ty);
-        rv = (mResolve.typeIsCopy(sp, ty) ? 2 : 1);
+        rv = (resolve_.typeIsCopy(sp, ty) ? 2 : 1);
     });
     ASSERT_BUG(sp, rv != 0, "Type for " << val << " can't be determined");
     return rv == 2;
@@ -10169,7 +10169,7 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                 // A Box dereference is a move path: track its pointee separately so a
                 // later shallow drop deallocates the Box without dropping moved data.
                 bool isBox = false;
-                if (this->mLangBox) {
+                if (this->langBox_) {
                     withValType(sp, lv, [&](const auto& ty) {
                         DEBUG("ty = " << ty);
                         isBox = this->isTypeOwnedBox(ty);
@@ -10234,8 +10234,8 @@ void MirBuilder::emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv
     if (start >= end) {
         return;
     }
-    const auto* usizeTy = mResolve.hirCrate().types.primitive(HIRCoreType::Usize);
-    const auto* boolTy = mResolve.hirCrate().types.primitive(HIRCoreType::Bool);
+    const auto* usizeTy = resolve_.hirCrate().types.primitive(HIRCoreType::Usize);
+    const auto* boolTy = resolve_.hirCrate().types.primitive(HIRCoreType::Bool);
     // Unscoped locals: primitives that outlive scope teardown and need no drops.
     const auto newUnscopedLocal = [&](const HIRTypeData* ty) -> unsigned {
         const auto rv = static_cast<unsigned>(output.locals.size());
@@ -10427,8 +10427,8 @@ MIRLValue MirBuilder::getPtrToDst(const Span& sp, const MIRLValue& lv) const {
 
     if (count == lv.wrappers.size() && lv.root.is_Argument()) {
         const auto argument = lv.root.as_Argument();
-        ASSERT_BUG(sp, argument < mArgs.size(), "Invalid unsized argument - " << lv);
-        ASSERT_BUG(sp, !mResolve.typeIsSized(sp, mArgs[argument].second), "Access of a sized argument as an unsized value - " << lv);
+        ASSERT_BUG(sp, argument < args_.size(), "Invalid unsized argument - " << lv);
+        ASSERT_BUG(sp, !resolve_.typeIsSized(sp, args_[argument].second), "Access of a sized argument as an unsized value - " << lv);
         return count == 0 ? lv.clone() : lv.cloneUnwrapped(count);
     }
 

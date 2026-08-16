@@ -51,10 +51,10 @@ namespace {
 
     class Visitor: public HIRVisitor {
         HIRCrate& crate;
-        StaticTraitResolve mResolve;
+        StaticTraitResolve resolve_;
 
         const HIRTrait* currentTrait = nullptr;
-        const HIRItemPath* mCurrentTraitPath = nullptr;
+        const HIRItemPath* currentTraitPath_ = nullptr;
 
         HIRGenericParams* curParams = nullptr;
         unsigned curParamsLevel = 0;
@@ -71,7 +71,7 @@ namespace {
         Visitor(const WireBoard& wb, HIRCrate& crate)
             : HIRVisitor(nullptr, crate.types)
             , crate(crate)
-            , mResolve(wb)
+            , resolve_(wb)
         {
         }
 
@@ -222,7 +222,7 @@ namespace {
             ty = crate.types.intern(mv$(data));
 
             if (const auto* e = ty->opt_Path()) {
-                TU_MATCH(HIRPath::Data, (e->path.mData), (pe), (Generic, ), (UfcsUnknown, TODO(sp, "Should UfcsKnown be encountered here?");), (UfcsInherent, TRACE_FUNCTION_FR("UfcsInherent - " << ty, ty); mResolve.expandAssociatedTypes(sp, ty);), (UfcsKnown, TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); mResolve.expandAssociatedTypes(sp, ty);))
+                TU_MATCH(HIRPath::Data, (e->path.mData), (pe), (Generic, ), (UfcsUnknown, TODO(sp, "Should UfcsKnown be encountered here?");), (UfcsInherent, TRACE_FUNCTION_FR("UfcsInherent - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);), (UfcsKnown, TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);))
             }
         }
 
@@ -334,9 +334,9 @@ namespace {
         }
 
         HIRGenericPath getCurrentTraitGp() const {
-            assert(mCurrentTraitPath);
+            assert(currentTraitPath_);
             assert(currentTrait);
-            auto traitPath = HIRGenericPath(mCurrentTraitPath->getSimplePath());
+            auto traitPath = HIRGenericPath(currentTraitPath_->getSimplePath());
             for (unsigned int i = 0; i < currentTrait->mParams.types.size(); i++) {
                 traitPath.mParams.types.push_back(crate.types.generic(currentTrait->mParams.types[i].mName, i));
             }
@@ -351,10 +351,10 @@ namespace {
             this->visitPathParams(e.params);
 
             // Search for matching impls in current generic blocks
-            if (mResolve.itemGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.itemGenericsPtr(), p.mData)) {
+            if (resolve_.itemGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *resolve_.itemGenericsPtr(), p.mData)) {
                 return;
             }
-            if (mResolve.implGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *mResolve.implGenericsPtr(), p.mData)) {
+            if (resolve_.implGenericsPtr() != nullptr && locateTraitItemInBounds(sp, pc, e.type, *resolve_.implGenericsPtr(), p.mData)) {
                 return;
             }
 
@@ -491,9 +491,9 @@ namespace {
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
             currentTrait = &item;
-            mCurrentTraitPath = &p;
+            currentTraitPath_ = &p;
 
-            auto _ = mResolve.setImplGenerics(MetadataType::TraitObject, item.mParams);
+            auto _ = resolve_.setImplGenerics(MetadataType::TraitObject, item.mParams);
             auto self = crate.types.self();
             selfTypes.push_back(self);
             HIRVisitor::visitTrait(p, item);
@@ -503,7 +503,7 @@ namespace {
         }
 
         void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override {
-            auto _ = mResolve.setImplGenerics(MetadataType::TraitObject, item.mParams);
+            auto _ = resolve_.setImplGenerics(MetadataType::TraitObject, item.mParams);
             auto self = crate.types.self();
             selfTypes.push_back(self);
             HIRVisitor::visitTraitAlias(p, item);
@@ -511,17 +511,17 @@ namespace {
         }
 
         void visitStruct(HIRItemPath p, HIRStruct& item) override {
-            auto _ = mResolve.setImplGenerics(item.structMarkings.dstType, item.mParams);
+            auto _ = resolve_.setImplGenerics(item.structMarkings.dstType, item.mParams);
             HIRVisitor::visitStruct(p, item);
         }
 
         void visitUnion(HIRItemPath p, HIRUnion& item) override {
-            auto _ = mResolve.setImplGenerics(MetadataType::None, item.mParams);
+            auto _ = resolve_.setImplGenerics(MetadataType::None, item.mParams);
             HIRVisitor::visitUnion(p, item);
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {
-            auto _ = mResolve.setImplGenerics(MetadataType::None, item.mParams);
+            auto _ = resolve_.setImplGenerics(MetadataType::None, item.mParams);
             HIRVisitor::visitEnum(p, item);
         }
 
@@ -541,7 +541,7 @@ namespace {
         }
 
         void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override {
-            auto _ = mResolve.setItemGenerics(item.mParams);
+            auto _ = resolve_.setItemGenerics(item.mParams);
             auto savedParams = std::make_pair(curParams, curParamsLevel);
             curParams = &item.mParams;
             curParamsLevel = 1;
@@ -552,7 +552,7 @@ namespace {
 
         void visitTypeImpl(HIRTypeImpl& impl) override {
             TRACE_FUNCTION_F("impl " << impl.mType);
-            auto _ = mResolve.setImplGenerics(impl.mType, impl.mParams);
+            auto _ = resolve_.setImplGenerics(impl.mType, impl.mParams);
             selfTypes.push_back(impl.mType);
 
             // Pre-visit so lifetime elision can work
@@ -572,7 +572,7 @@ namespace {
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
             static Span sp;
             TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType);
-            auto _ = mResolve.setImplGenerics(impl.mType, impl.mParams);
+            auto _ = resolve_.setImplGenerics(impl.mType, impl.mParams);
             selfTypes.push_back(impl.mType);
 
             // Pre-visit so lifetime elision can work
@@ -590,9 +590,9 @@ namespace {
             // TODO: Check that the type+trait is valid
             // - And fix bad elided liftimes (match annotations if they were elided)
             {
-                const auto& trait = mResolve.hirCrate().getTraitByPath(sp, traitPath);
+                const auto& trait = resolve_.hirCrate().getTraitByPath(sp, traitPath);
                 for (auto& e : impl.methods) {
-                    auto _ = mResolve.setItemGenerics(e.second.data.mParams);
+                    auto _ = resolve_.setItemGenerics(e.second.data.mParams);
 
                     const auto vIt = trait.values.find(e.first);
                     if (vIt == trait.values.end() || !vIt->second.is_Function()) {
@@ -603,12 +603,12 @@ namespace {
 
                     auto fcnParams = traitFcn.mParams.makeNopParams(crate.types, 1);
                     MonomorphStatePtr ms{crate.types, impl.mType, &impl.traitArgs, &fcnParams};
-                    ms.setConstevalState(mResolve.board(), HIRItemPath(traitPath));
+                    ms.setConstevalState(resolve_.board(), HIRItemPath(traitPath));
                     HIRTypeRef tmp;
                     auto maybeMonomorph = [&](const HIRTypeData* ty) -> const HIRTypeData* {
                         if (monomorphiseTypeNeeded(ty)) {
                             tmp = ms.monomorphType(sp, ty);
-                            mResolve.expandAssociatedTypes(sp, tmp);
+                            resolve_.expandAssociatedTypes(sp, tmp);
                             return tmp;
                         } else {
                             return ty;
@@ -776,7 +776,7 @@ namespace {
                     implFcn.returnType = expRetTy;
                     for (size_t i = 0; i < std::min(implFcn.mArgs.size(), traitFcn.mArgs.size()); i++) {
                         DEBUG("ARG" << i << "> " << traitFcn.mArgs[i].second);
-                        implFcn.mArgs[i].second = mResolve.monomorphExpand(sp, traitFcn.mArgs[i].second, ms);
+                        implFcn.mArgs[i].second = resolve_.monomorphExpand(sp, traitFcn.mArgs[i].second, ms);
                     }
                     DEBUG("Updated < " << impl.mType << " as " << traitPath << impl.traitArgs << " >::" << e.first);
 
@@ -820,7 +820,7 @@ namespace {
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override {
             TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.mType << " { }");
-            auto _ = mResolve.setImplGenerics(impl.mType, impl.mParams);
+            auto _ = resolve_.setImplGenerics(impl.mType, impl.mParams);
             selfTypes.push_back(impl.mType);
 
             // Pre-visit so lifetime elision can work
@@ -841,11 +841,11 @@ namespace {
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
             TRACE_FUNCTION_F(p);
 
-            if (mResolve.hirCrate().getLangItemPathOpt("sized").components().empty()) {
+            if (resolve_.hirCrate().getLangItemPathOpt("sized").components().empty()) {
                 ERROR(Span(), E0000, "requires `sized` lang_item");
             }
 
-            auto _ = mResolve.setItemGenerics(item.mParams);
+            auto _ = resolve_.setItemGenerics(item.mParams);
             // NOTE: Superfluous... except that it makes the params valid for the return type.
             visitParams(item.mParams);
 

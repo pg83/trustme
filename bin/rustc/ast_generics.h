@@ -7,11 +7,11 @@
 #include <string>
 
 class ASTTypeParam {
-    ASTAttributeList mAttrs;
-    Span mSpan;
+    ASTAttributeList attrs_;
+    Span span_;
     // TODO: use an Ident?
-    RcString mName;
-    ::ASTType* mDefaultValue;
+    RcString name_;
+    ::ASTType* defaultValue_;
 
 public:
     ASTTypeParam(ASTTypeParam&& x) = default;
@@ -24,32 +24,32 @@ public:
     void setDefault(ASTType* type);
 
     const ASTAttributeList& attrs() const {
-        return mAttrs;
+        return attrs_;
     }
 
     const Span& span() const {
-        return mSpan;
+        return span_;
     }
 
     const RcString& name() const {
-        return mName;
+        return name_;
     }
 
     ASTType* getDefault() const {
-        return mDefaultValue;
+        return defaultValue_;
     }
 
     ASTType*& getDefault() {
-        return mDefaultValue;
+        return defaultValue_;
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTTypeParam& tp);
 };
 
 class ASTLifetimeParam {
-    ASTAttributeList mAttrs;
-    Span mSpan;
-    Ident mName;
+    ASTAttributeList attrs_;
+    Span span_;
+    Ident name_;
 
 public:
     ASTLifetimeParam(Span sp, ASTAttributeList attrs, Ident name);
@@ -59,26 +59,26 @@ public:
     explicit ASTLifetimeParam(const ASTLifetimeParam&) = default;
 
     const ASTAttributeList& attrs() const {
-        return mAttrs;
+        return attrs_;
     }
 
     const Span& span() const {
-        return mSpan;
+        return span_;
     }
 
     const Ident& name() const {
-        return mName;
+        return name_;
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTLifetimeParam& p);
 };
 
 class ASTValueParam {
-    ASTAttributeList mAttrs;
-    Span mSpan;
-    Ident mName;
-    ASTType* mType;
-    ASTExpr mDefaultValue;
+    ASTAttributeList attrs_;
+    Span span_;
+    Ident name_;
+    ASTType* type_;
+    ASTExpr defaultValue_;
 
 public:
     ASTValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* type, ASTExpr val);
@@ -89,31 +89,31 @@ public:
     explicit ASTValueParam(const ASTValueParam& x);
 
     const ASTAttributeList& attrs() const {
-        return mAttrs;
+        return attrs_;
     }
 
     const Span& span() const {
-        return mSpan;
+        return span_;
     }
 
     const Ident& name() const {
-        return mName;
+        return name_;
     }
 
     ASTType* type() const {
-        return mType;
+        return type_;
     }
 
     ASTType*& type() {
-        return mType;
+        return type_;
     }
 
     const ASTExpr& defaultValue() const {
-        return mDefaultValue;
+        return defaultValue_;
     }
 
     ASTExpr& defaultValue() {
-        return mDefaultValue;
+        return defaultValue_;
     }
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTValueParam& p);

@@ -685,7 +685,7 @@ public:
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        auto name = mi.parseEqualsString(wb, crate, crate.mRootModule);
+        auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
         if (name == "rlib" || name == "lib") {
             crate.crateType = ASTCrate::Type::RustLib;
         } else if (name == "dylib" || name == "rdylib") {
@@ -707,7 +707,7 @@ public:
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        auto name = mi.parseEqualsString(wb, crate, crate.mRootModule);
+        auto name = mi.parseEqualsString(wb, crate, crate.rootModule_);
         crate.setCrateName(name);
     }
 };

@@ -1,10 +1,10 @@
 #include "ast_attrs.h"
 
 ASTAttribute::ASTAttribute(Span sp, ASTAttributeName name, TokenTree data)
-    : mSpan(::std::move(sp))
-    , mName(::std::move(name))
-    , mData(::std::move(data))
-    , mIsInert(false)
+    : span_(::std::move(sp))
+    , name_(::std::move(name))
+    , data_(::std::move(data))
+    , isInert_(false)
 {
 }
 

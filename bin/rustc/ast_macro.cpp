@@ -4,7 +4,7 @@ ASTMacroInvocation::ASTMacroInvocation() {
 }
 
 ASTMacroInvocation::ASTMacroInvocation(Span span, ASTPath macro, RcString ident, TokenTree input)
-    : mSpan(mv$(span))
+    : span_(mv$(span))
     , macroPath(mv$(macro))
     , ident(mv$(ident))
     , input(mv$(input))

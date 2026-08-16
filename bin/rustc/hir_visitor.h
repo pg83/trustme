@@ -7,7 +7,7 @@ class StaticTraitResolve;
 
 // TODO: Split into Visitor and ItemVisitor
 class HIRVisitor {
-    StaticTraitResolve* mResolve;
+    StaticTraitResolve* resolve_;
     HIRTypeInterner& types;
 
 public:

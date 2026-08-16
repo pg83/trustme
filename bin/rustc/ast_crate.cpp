@@ -38,7 +38,7 @@ namespace {
 ASTCrate::ASTCrate(stl::ObjPool* pool, HIRTypeInterner& types)
     : pool(pool)
     , types(types)
-    , mRootModule(ASTAbsolutePath())
+    , rootModule_(ASTAbsolutePath())
     , loadStd(LOAD_STD)
 {
 }
@@ -57,7 +57,7 @@ void ASTCrate::loadExterns(Settings& settings) {
             }
         }
     };
-    iterateModule(settings, mRootModule, cb);
+    iterateModule(settings, rootModule_, cb);
 
     // Check for no_std or no_core, and load libstd/libcore
     // - Duplicates some of the logic in "Expand", but also helps keep crate loading separate to most of expand

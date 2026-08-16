@@ -11,7 +11,7 @@ const bool DEBUG_PRINT_TOKENS = false;
 
 TokenStream::TokenStream(ParseState ps)
     : cacheValid(false)
-    , mParseState(ps)
+    , parseState_(ps)
 {
 }
 
@@ -19,15 +19,15 @@ TokenStream::~TokenStream() {
 }
 
 void TokenStream::markMacroExpansionPlaceholder() {
-    mMacroExpansionPlaceholder = true;
+    macroExpansionPlaceholder_ = true;
 }
 
 bool TokenStream::isMacroExpansionPlaceholder() const {
-    return mMacroExpansionPlaceholder;
+    return macroExpansionPlaceholder_;
 }
 
 stl::ObjPool& TokenStream::typePool() const {
-    return *mParseState.wb->pool;
+    return *parseState_.wb->pool;
 }
 
 Token TokenStream::innerGetToken() {
@@ -45,11 +45,11 @@ Token TokenStream::getToken() {
 #endif
         cacheValid = false;
         return mv$(cache);
-    } else if (mLookahead.size()) {
-        Token ret = mv$(mLookahead.front().tok);
-        edition = mLookahead.front().edition;
-        mHygiene = mLookahead.front().hygiene;
-        mLookahead.erase(mLookahead.begin());
+    } else if (lookahead_.size()) {
+        Token ret = mv$(lookahead_.front().tok);
+        edition = lookahead_.front().edition;
+        hygiene_ = lookahead_.front().hygiene;
+        lookahead_.erase(lookahead_.begin());
 #ifdef FULL_TRACE
         DEBUG("<= " << ret << " (lookahead)");
 #endif
@@ -60,7 +60,7 @@ Token TokenStream::getToken() {
     } else {
         Token ret = this->innerGetToken();
         edition = this->realGetEdition();
-        mHygiene = this->realGetHygiene();
+        hygiene_ = this->realGetHygiene();
 #ifdef FULL_TRACE
         DEBUG("<= " << ret << " (new)");
 #endif
@@ -106,19 +106,19 @@ eTokenType TokenStream::lookahead(unsigned int i) {
         throw CompileErrorBugCheck("Excessive lookahead");
     }
 
-    while (i >= mLookahead.size()) {
-        DEBUG("lookahead - read #" << mLookahead.size());
+    while (i >= lookahead_.size()) {
+        DEBUG("lookahead - read #" << lookahead_.size());
         auto tok = this->innerGetToken();
         auto hygiene = this->realGetHygiene();
-        mLookahead.push_back({mv$(tok), this->realGetEdition(), mv$(hygiene)});
+        lookahead_.push_back({mv$(tok), this->realGetEdition(), mv$(hygiene)});
     }
 
-    DEBUG("lookahead(" << i << ") = " << mLookahead[i].tok);
-    return mLookahead[i].tok.type();
+    DEBUG("lookahead(" << i << ") = " << lookahead_[i].tok);
+    return lookahead_[i].tok.type();
 }
 
 Ident::Hygiene TokenStream::getHygiene() const {
-    return mHygiene;
+    return hygiene_;
 }
 
 ProtoSpan TokenStream::startSpan() const {

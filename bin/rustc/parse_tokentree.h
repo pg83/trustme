@@ -9,8 +9,8 @@ enum class ASTEdition;
 
 class TokenTree {
     ASTEdition edition = (ASTEdition)0; // 2015
-    Ident::Hygiene mHygiene;
-    Token mTok;
+    Ident::Hygiene hygiene_;
+    Token tok_;
     ::std::vector<TokenTree> subtrees;
 
 public:
@@ -34,7 +34,7 @@ public:
     TokenTree clone() const;
 
     bool isToken() const {
-        return mTok.type() != TOK_NULL;
+        return tok_.type() != TOK_NULL;
     }
 
     size_t size() const {
@@ -46,15 +46,15 @@ public:
     TokenTree& operator[](unsigned int idx);
 
     const Token& tok() const {
-        return mTok;
+        return tok_;
     }
 
     Token& tok() {
-        return mTok;
+        return tok_;
     }
 
     const Ident::Hygiene& hygiene() const {
-        return mHygiene;
+        return hygiene_;
     }
 
     const ASTEdition& getEdition() const {

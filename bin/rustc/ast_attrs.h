@@ -79,11 +79,11 @@ struct ASTAttributeName {
 // - an associated (string) literal
 
 class ASTAttribute {
-    Span mSpan;
-    ASTAttributeName mName;
-    TokenTree mData;
+    Span span_;
+    ASTAttributeName name_;
+    TokenTree data_;
     /// @brief Indicates that this attribute has been used by a derive, and shouldn't be otherwise resolved
-    mutable bool mIsInert;
+    mutable bool isInert_;
     // TODO: Parse as a TT then expand?
 public:
     ASTAttribute(Span sp, ASTAttributeName name, TokenTree data);
@@ -97,27 +97,27 @@ public:
     void fmt(std::ostream& os) const;
 
     void markInert() const {
-        mIsInert = true;
+        isInert_ = true;
     }
 
     bool isInert() const {
-        return mIsInert;
+        return isInert_;
     }
 
     const Span& span() const {
-        return mSpan;
+        return span_;
     }
 
     const ASTAttributeName& name() const {
-        return mName;
+        return name_;
     }
 
     const TokenTree& data() const {
-        return mData;
+        return data_;
     }
 
     TokenTree& dataMut() {
-        return mData;
+        return data_;
     }
 
     /// Parses the data as a `="string"` and returns the string
