@@ -27,8 +27,9 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 
 All 631 failed nodes were then rerun independently inside the same clang Nix
 environment. The authoritative rerun data is in
-`/tmp/trustme-reclass-20260816-nix`; classified records are in
-`/tmp/trustme-classification-20260816-nix`.
+`/tmp/trustme-reclass-20260816b-nix`; classified records are in
+`/tmp/trustme-classification-20260816b-nix`. Both were regenerated after the
+fixes recorded below, so these counts are measured, not decremented by hand.
 
 | result | tests |
 |---|---:|
@@ -39,22 +40,22 @@ environment. The authoritative rerun data is in
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 296 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 92 |
+| accepted Rust rejected by the compiler or driver | 298 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
 | wrong runtime behaviour, panic, abort, or output | 74 |
 | missing rejection or diagnostic | 57 |
 | generated C++ or link failure | 33 |
-| stable timeout | 9 |
+| stable timeout | 10 |
 
 ## P0: accepted Rust rejected by the front end
 
-All 296 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 298 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | parser | 137 | 134 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
-| type checking, HIR lowering, and resolution | 120 | trait/impl selection 29 (`hir_typeck_expr_cs.cpp:6693`, `:6695`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 15 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
+| type checking, HIR lowering, and resolution | 123 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6694`, `:6696`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 15 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 31 | macro parsing/formatting 10; attributes 8; AST expansion 8; other expansion 5 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; pathless `--extern` 1 |
@@ -67,35 +68,30 @@ one- and two-test spellings.
 
 ## P1: internal compiler failures
 
-There are 92 compiler-internal failures in 73 stable signatures.
+There are 89 compiler-internal failures in 70 stable signatures.
 
 | compiler area | tests |
 |---|---:|
-| type checker | 29 |
-| HIR lowering and conversion | 25 |
+| type checker | 26 |
+| HIR lowering and conversion | 24 |
 | MIR lowering, CTFE MIR, and optimisation | 13 |
-| parser and macro expansion | 12 |
+| parser and macro expansion | 11 |
 | translation and code generation | 10 |
 | unattributed (assert or signal with no backtrace) | 8 |
-| name resolution | 4 |
+| name resolution | 3 |
 
 The multi-test signatures are:
 
 | signature | tests |
 |---|---:|
-| `BUG hir_typeck_common.cpp:704` | 3 |
 | `ASSERT` with no backtrace | 5 |
-| `BUG hir_typeck_static.cpp:3636` | 1 |
-| `BUG hir_conv_constant_evaluation.cpp:4586` | 3 |
-| twelve other shared signatures | 24 |
-| fifty-eight one-test signatures | 58 |
+| `BUG hir_conv_constant_evaluation.cpp:4621` | 3 |
+| twelve other shared signatures | 26 |
+| fifty-five one-test signatures | 55 |
 
-The three left on `hir_typeck_common.cpp:704` substitute into a *type*
-parameter's default, where the same unevaluated-const capture appears.
-
-`BUG hir_conv_constant_evaluation.cpp:4586` is the polymorphic-constant
-assertion `[T; Generic(N)]`, reached by the two
-`generic_const_parameter_types` tests now that `_` const arguments infer.
+`BUG hir_conv_constant_evaluation.cpp:4621` is the polymorphic-constant
+assertion `[T; Generic(N)]`: the three `generic_const_parameter_types` tests
+declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 
