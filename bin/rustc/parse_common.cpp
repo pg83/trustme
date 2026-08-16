@@ -5394,6 +5394,36 @@ ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
             GET_TOK(tok, lex);
             GET_TOK(tok, lex);
         }
+        // A function type has no receiver, but the grammar still lets `self`
+        // appear as a parameter; rustc rejects it after parsing.
+        // TODO: reject a `self` parameter in a function type.
+        {
+            unsigned selfOfs = 0;
+            if (lex.lookahead(selfOfs) == TOK_AMP) {
+                selfOfs += 1;
+                if (lex.lookahead(selfOfs) == TOK_LIFETIME) {
+                    selfOfs += 1;
+                }
+            }
+            if (lex.lookahead(selfOfs) == TOK_RWORD_MUT) {
+                selfOfs += 1;
+            }
+            if (lex.lookahead(selfOfs) == TOK_RWORD_SELF) {
+                for (unsigned i = 0; i <= selfOfs; i++) {
+                    GET_TOK(tok, lex);
+                }
+                if (lex.getTokenIf(TOK_COLON)) {
+                    args.push_back(ParseType(lex));
+                } else {
+                    args.push_back(mkType(lex.typePool(), lex.pointSpan(), RcString::newInterned("Self"), 0xFFFF));
+                }
+                if (GET_TOK(tok, lex) != TOK_COMMA) {
+                    PUTBACK(tok, lex);
+                    break;
+                }
+                continue;
+            }
+        }
         args.push_back(ParseType(lex));
         if (GET_TOK(tok, lex) != TOK_COMMA) {
             PUTBACK(tok, lex);
