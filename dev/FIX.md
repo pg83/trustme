@@ -35,12 +35,12 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 455 |
-| fixed, or no longer reproducing, since the gate | 176 |
+| still failing on the current tree | 453 |
+| fixed, or no longer reproducing, since the gate | 178 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 201 |
+| accepted Rust rejected by the compiler or driver | 199 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 91 |
 | wrong runtime behaviour, panic, abort, or output | 67 |
 | missing rejection or diagnostic | 58 |
@@ -49,18 +49,18 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 
 ## P0: accepted Rust rejected by the front end
 
-All 201 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 199 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| parser | 76 | 73 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
+| parser | 74 | 71 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
 | type checking, HIR lowering, and resolution | 109 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6694`, `:6696`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 7 | macro parsing/formatting 3; attributes 4 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 3 | missing external crate path 1; pathless `--extern` 1; enum repr 1 |
 
-The 73 parser failures must be regrouped by syntax family before changing the
+The 71 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are `gen` blocks and functions (8),
 unsafe binders (5), never patterns (3), and a long tail of one- and two-test spellings. Grouping by test directory finds them faster than
