@@ -1051,6 +1051,12 @@ namespace {
             }
             const HIRTypeData* ty = typ;
 
+            // Nothing inhabits `!`, so an arm matching it never runs and cannot
+            // use the value; type checking lets any pattern stand there.
+            if (ty->is_Diverge()) {
+                return HIRValueUsage::Borrow;
+            }
+
             TU_MATCH_HDRA( (pat.data), {)
             TU_ARMA(Any, pe) {
                     return HIRValueUsage::Borrow;

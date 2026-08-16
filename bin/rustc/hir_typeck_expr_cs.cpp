@@ -3443,6 +3443,13 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     return true;
                 }
 
+                // Nothing inhabits `!`, so an arm matching it is unreachable and
+                // there is no type for a pattern to disagree with. `match return 1
+                // { 2 => 3, _ => panic!() }` is accepted for that reason.
+                if (type->is_Diverge()) {
+                    return true;
+                }
+
                 if (auto* pe = pattern.data.opt_Ref()) {
                     // Require a &-ptr (hard requirement), then visit sub-pattern
                     auto innerTy = context.ivars.newIvarTr();
