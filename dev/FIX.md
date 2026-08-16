@@ -35,8 +35,8 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 476 |
-| fixed, or no longer reproducing, since the gate | 155 |
+| still failing on the current tree | 472 |
+| fixed, or no longer reproducing, since the gate | 159 |
 
 | priority class | tests |
 |---|---:|
@@ -44,7 +44,7 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 91 |
 | wrong runtime behaviour, panic, abort, or output | 73 |
 | missing rejection or diagnostic | 58 |
-| generated C++ or link failure | 33 |
+| generated C++ or link failure | 29 |
 | stable timeout | 10 |
 
 ## P0: accepted Rust rejected by the front end
@@ -154,13 +154,12 @@ The three `diagnostics` survivors need what `unused_must_use` did not bring:
 
 ## P2: generated code and linking
 
-Twenty-seven tests emit C++ rejected by clang:
+Twenty-three tests emit C++ rejected by clang:
 
 | generated-code family | tests |
 |---|---:|
 | incomplete, missing, or wrongly ordered generated types | 10 |
 | invalid aggregate or value assignment | 5 |
-| invalid `main` ABI in `no_std` programs | 4 |
 | enum-discriminant narrowing | 3 |
 | inline assembly lowering | 3 |
 | missing 128-bit intrinsic lowering | 1 |
