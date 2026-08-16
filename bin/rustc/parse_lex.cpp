@@ -465,7 +465,7 @@ void Lexer::checkInitialShebang() {
         }
 
         if (lineComment) {
-            while (!eof && consumed.back() != '\n' && consumed.back() != '\r') {
+            while (!eof && consumed.back() != '\n') {
                 read();
             }
             continue;
@@ -946,11 +946,17 @@ Token Lexer::getTokenInt() {
                         isPdoc = true;
                         ch = this->getc();
                     }
-                    while (ch != '\n' && ch != '\r') {
+                    // A line comment ends at the newline: a bare CR inside one
+                    // is content, not a terminator.
+                    while (ch != '\n') {
                         str += ch;
                         ch = this->getc();
                     }
                     this->ungetc();
+                    // ... but a CRLF's CR is not part of the comment.
+                    if (!str.empty() && str.back() == '\r') {
+                        str.pop_back();
+                    }
                     if (isDoc || isPdoc) {
                         //# [ doc = "commment data" ]
                         nextTokens.push_back(TOK_SQUARE_CLOSE);
