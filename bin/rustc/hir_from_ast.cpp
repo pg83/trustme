@@ -2753,6 +2753,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
         // Use a non-empty crate name that won't conflict with any libraries
         rv.crateName = "bin#";
     }
+    rv.crateNameDisplay = RcString::newInterned(crate.crateNameSet);
     rv.edition = crate.edition;
     rv.isNoCore = crate.loadStd == ASTCrate::LOAD_NONE;
     rv.noMain = crate.noMain;

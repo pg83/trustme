@@ -1,4 +1,5 @@
 #include "mir_helpers.h"
+#include "hir_encoded_literal.h"
 
 #include "hir_hir.h"
 #include "mir_mir.h"
@@ -407,31 +408,61 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vec
 }
 
 std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
-    if (ty->is_Path() && ty->as_Path().path.data.is_Generic()) {
-        auto p = ty->as_Path().path.data.as_Generic().clone();
-        return FMT(p);
-    }
-    if (const auto* te = ty->opt_TraitObject()) {
-        // The type printer decorates a trait object with crate tags and wraps
-        // the bound list in parentheses; `type_name` wants the path as written.
-        auto plainPath = [](const HIRSimplePath& path) {
-            ::std::string rv;
-            const auto& crate = path.crateName();
-            if (crate != "") {
-                // Crate names carry a version tag (`core-0_0_0`) that the name
-                // of the type does not.
+    // The type printer decorates a path with crate tags; `type_name` wants the
+    // path as written.
+    auto plainPath = [this](const HIRSimplePath& path) {
+        ::std::string rv;
+        const auto& crate = path.crateName();
+        if (crate != "") {
+            // An executable's crate name is the placeholder `bin#`, and the
+            // others carry a version tag (`core-0_0_0`) that the name of the
+            // type does not.
+            if (crate == this->crate.crateName && this->crate.crateNameDisplay != "") {
+                rv += this->crate.crateNameDisplay.c_str();
+            } else {
                 ::std::string name(crate.c_str());
                 const auto tag = name.rfind('-');
                 rv += (tag == ::std::string::npos ? name : name.substr(0, tag));
             }
-            for (const auto& comp : path.components()) {
-                if (!rv.empty()) {
-                    rv += "::";
-                }
-                rv += comp.c_str();
+        }
+        for (const auto& comp : path.components()) {
+            if (!rv.empty()) {
+                rv += "::";
             }
-            return rv;
-        };
+            rv += comp.c_str();
+        }
+        return rv;
+    };
+
+    if (ty->is_Path() && ty->as_Path().path.data.is_Generic()) {
+        const auto& gp = ty->as_Path().path.data.as_Generic();
+        ::std::string rv = plainPath(gp.path);
+        ::std::vector<::std::string> args;
+        for (const auto& t : gp.params.types) {
+            args.push_back(this->intrinsicTypeName(t));
+        }
+        // Const generic arguments are part of the name too: `S<3>`. An
+        // evaluated one prints as its encoded bytes otherwise.
+        for (const auto& v : gp.params.values) {
+            if (const auto* e = v.opt_Evaluated()) {
+                args.push_back(FMT(EncodedLiteralSlice(**e).readUint()));
+            } else {
+                args.push_back(FMT(v));
+            }
+        }
+        if (!args.empty()) {
+            rv += "<";
+            for (size_t i = 0; i < args.size(); i++) {
+                if (i > 0) {
+                    rv += ", ";
+                }
+                rv += args[i];
+            }
+            rv += ">";
+        }
+        return rv;
+    }
+    if (const auto* te = ty->opt_TraitObject()) {
 
         ::std::vector<::std::string> bounds;
         if (te->trait.path.path.crateName() != "" || !te->trait.path.path.components().empty()) {

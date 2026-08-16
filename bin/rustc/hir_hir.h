@@ -699,6 +699,9 @@ public:
     // types, so it must not live in process-global storage.
     mutable HIRValueItem intrinsicOffsetof;
     RcString crateName;
+    /// The crate's name as the user wrote it. An executable's `crateName` is the
+    /// placeholder `bin#`, which `type_name` must not show.
+    RcString crateNameDisplay;
     ASTEdition edition;
     // Compile-local crate configuration. This is not serialised because an
     // external crate can never provide this crate's executable entrypoint.
