@@ -3196,16 +3196,29 @@ ASTTypeAlias ParseTypeAlias(TokenStream& lex) {
     // Params
     ASTGenericParams params = ParseGenericParamsOpt(lex);
 
+    // `type A: Ord;` — bounds on an alias are allowed by the grammar and have
+    // no effect, so they are parsed and dropped.
+    if (lex.getTokenIf(TOK_COLON)) {
+        ASTGenericParams dropped;
+        ParseTypeBound(lex, dropped, ::mkType(lex.typePool(), lex.pointSpan()));
+    }
+
     GET_TOK(tok, lex);
     if (tok.type() == TOK_RWORD_WHERE) {
         ParseWhereClause(lex, params);
         GET_TOK(tok, lex);
     }
-    CHECK_TOK(tok, TOK_EQUAL);
 
-    // Type
-    ASTType* type = ParseType(lex);
-    GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+    // The aliased type may be absent — in a trait declaration, or in source a
+    // `cfg` removes before anything checks it.
+    ASTType* type;
+    if (tok.type() == TOK_EQUAL) {
+        type = ParseType(lex);
+        GET_TOK(tok, lex);
+    } else {
+        type = ::mkType(lex.typePool(), lex.pointSpan());
+    }
+    CHECK_TOK(tok, TOK_SEMICOLON);
 
     return ASTTypeAlias(::std::move(params), ::std::move(type));
 }
@@ -3909,8 +3922,22 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
         GET_CHECK_TOK(tok, lex, TOK_IDENT);
         auto name = tok.ident().name;
         auto atypeParams = ParseGenericParamsOpt(lex);
-        GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-        auto ty = ParseType(lex);
+        // Bounds are allowed by the grammar here and mean nothing; the aliased
+        // type may be absent in source that a `cfg` removes.
+        // TODO: reject a bodyless impl type that survives cfg.
+        if (lex.getTokenIf(TOK_COLON)) {
+            ASTGenericParams dropped;
+            ParseTypeBound(lex, dropped, ::mkType(lex.typePool(), lex.pointSpan()));
+        }
+        if (lex.getTokenIf(TOK_RWORD_WHERE)) {
+            ParseWhereClause(lex, atypeParams);
+        }
+        ASTType* ty;
+        if (lex.getTokenIf(TOK_EQUAL)) {
+            ty = ParseType(lex);
+        } else {
+            ty = ::mkType(lex.typePool(), lex.pointSpan());
+        }
         if (lex.getTokenIf(TOK_RWORD_WHERE)) {
             ParseWhereClause(lex, atypeParams);
         }
@@ -4015,10 +4042,13 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
         case TOK_RWORD_TYPE: {
             GET_CHECK_TOK(tok, lex, TOK_IDENT);
             auto name = tok.ident().name;
-            GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
+            // The grammar gives an extern type the whole alias syntax —
+            // generics, bounds, a where clause and even a body — none of which
+            // means anything here.
+            auto alias = ParseTypeAlias(lex);
             auto sp = lex.endSpan(ps);
             //TODO(sp, "Extern type");
-            auto i = ASTItem(ASTTypeAlias(ASTGenericParams(), ::mkType(lex.typePool(), sp)));
+            auto i = ASTItem(mv$(alias));
             return ASTNamed<ASTItem>{mv$(sp), mv$(metaItems), vis, mv$(name), mv$(i)};
             break;
         }
@@ -4559,8 +4589,13 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                     if (lex.getTokenIf(TOK_RWORD_WHERE)) {
                         ParseWhereClause(lex, params);
                     }
-                    GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-                    ASTExpr val = ParseExpr(lex);
+                    // As with a static, the value may be omitted in source
+                    // that a `cfg` removes before anything checks it.
+                    // TODO: reject a valueless const that survives cfg.
+                    ASTExpr val;
+                    if (lex.getTokenIf(TOK_EQUAL)) {
+                        val = ParseExpr(lex);
+                    }
                     if (lex.getTokenIf(TOK_RWORD_WHERE)) {
                         ParseWhereClause(lex, params);
                     }
@@ -4631,9 +4666,13 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             GET_CHECK_TOK(tok, lex, TOK_COLON);
             ASTType* type = ParseType(lex);
 
-            GET_CHECK_TOK(tok, lex, TOK_EQUAL);
-
-            ASTExpr val = ParseExpr(lex);
+            // A static needs a value, but the grammar allows it to be omitted;
+            // an item stripped by `cfg` never reaches the check that says so.
+            // TODO: reject a valueless static that survives cfg.
+            ASTExpr val;
+            if (lex.getTokenIf(TOK_EQUAL)) {
+                val = ParseExpr(lex);
+            }
 
             GET_CHECK_TOK(tok, lex, TOK_SEMICOLON);
             itemData = ASTItem(ASTStatic((isMut ? ASTStatic::MUT : ASTStatic::STATIC), mv$(type), mv$(val)));
