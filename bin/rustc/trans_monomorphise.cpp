@@ -25,10 +25,10 @@ namespace {
             switch (g.group()) {
                 case 0:
                     ASSERT_BUG(sp, g.idx() < resolve_.implGenerics().values.size(), "Value generic " << g << " out of bounds in impl: " << resolve_.implGenerics().values.size());
-                    return resolve_.implGenerics().values.at(g.idx()).mType;
+                    return resolve_.implGenerics().values.at(g.idx()).type;
                 case 1:
                     ASSERT_BUG(sp, g.idx() < resolve_.itemGenerics().values.size(), "Value generic " << g << " out of bounds in fcn: " << resolve_.itemGenerics().values.size());
-                    return resolve_.itemGenerics().values.at(g.idx()).mType;
+                    return resolve_.itemGenerics().values.at(g.idx()).type;
                 default:
                     BUG(Span(), "");
             }
@@ -125,7 +125,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 s.saveLiteral = false;
                 added.push_back(std::make_pair(p, &s));
             }
-            const_cast<HIRModule&>(crate.mRootModule).valueItems.insert(std::make_pair(name, std::move(ent)));
+            const_cast<HIRModule&>(crate.rootModule).valueItems.insert(std::make_pair(name, std::move(ent)));
             return p;
         }
     } nvs{list, crate};
@@ -155,15 +155,15 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             const auto& pp = ent.second->pp;
             const auto& c = *ent.second->ptr;
             TRACE_FUNCTION_FR("CONSTANT " << path, "CONSTANT " << path);
-            auto ty = pp.monomorph(resolve, c.mType);
+            auto ty = pp.monomorph(resolve, c.type);
             auto eval = HIREvaluator{pp.sp, wb, nvs};
-            eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.mParams);
+            eval.resolve.setBothGenericsRaw(pp.gdefImpl, &c.params);
             MonomorphState ms(crate.types);
             ms.selfTy = pp.selfType;
             ms.ppImpl = &pp.ppImpl;
             ms.ppMethod = &pp.ppMethod;
             try {
-                auto newLit = eval.evaluateConstant(path, c.mValue, ::std::move(ty), ::std::move(ms));
+                auto newLit = eval.evaluateConstant(path, c.value, ::std::move(ty), ::std::move(ms));
                 c.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
             } catch (...) {
                 BUG(Span(), "Exception thrown during evaluation of: " << path);
@@ -171,7 +171,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
         }
 
         for (auto& ent : list.statics) {
-            if (!ent.second->ptr->mParams.isGeneric() || !evaluatedStatics.insert(ent.second.get()).second) {
+            if (!ent.second->ptr->params.isGeneric() || !evaluatedStatics.insert(ent.second.get()).second) {
                 continue;
             }
             changed = true;
@@ -180,15 +180,15 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
             const auto& pp = ent.second->pp;
             const auto& s = *ent.second->ptr;
             TRACE_FUNCTION_FR("STATIC " << path, "STATIC " << path);
-            auto ty = pp.monomorph(resolve, s.mType);
+            auto ty = pp.monomorph(resolve, s.type);
             auto eval = HIREvaluator{pp.sp, wb, nvs};
-            eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.mParams);
+            eval.resolve.setBothGenericsRaw(pp.gdefImpl, &s.params);
             MonomorphState ms(crate.types);
             ms.selfTy = pp.selfType;
             ms.ppImpl = &pp.ppImpl;
             ms.ppMethod = &pp.ppMethod;
             try {
-                auto newLit = eval.evaluateConstant(path, s.mValue, ::std::move(ty), ::std::move(ms));
+                auto newLit = eval.evaluateConstant(path, s.value, ::std::move(ty), ::std::move(ms));
                 s.monomorphCache.insert(::std::make_pair(path.clone(), ::std::move(newLit)));
             } catch (...) {
                 BUG(Span(), "Exception thrown during evaluation of: " << path);
@@ -231,7 +231,7 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
 
             const auto& fcn = *transFcn->ptr;
             // Trait methods (which are the only case where `Self` can exist in the argument list at this stage) always need to be monomorphised.
-            bool isMethod = (fcn.mArgs.size() > 0 && visitTyWith(fcn.mArgs[0].second, [&](const auto& x) {
+            bool isMethod = (fcn.args.size() > 0 && visitTyWith(fcn.args[0].second, [&](const auto& x) {
                 return x == crate.types.self();
             }));
             bool monomorphNeeded = transFcn->pp.hasTypes() || isMethod;
@@ -240,20 +240,20 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 const auto& path = fcnEnt.first;
                 const auto& pp = transFcn->pp;
                 TRACE_FUNCTION_FR("FUNCTION " << path, "FUNCTION " << path);
-                ASSERT_BUG(Span(), fcn.mCode.mir, "No code for " << path);
+                ASSERT_BUG(Span(), fcn.code.mir, "No code for " << path);
 
                 // TODO: Get the item params too
                 if (pp.ppImpl.hasParams()) {
                     assert(pp.gdefImpl);
                 }
-                resolve.setBothGenericsRaw(pp.gdefImpl, &fcn.mParams);
+                resolve.setBothGenericsRaw(pp.gdefImpl, &fcn.params);
 
-                auto mir = TransMonomorphise(resolve, pp, fcn.mCode.mir);
+                auto mir = TransMonomorphise(resolve, pp, fcn.code.mir);
 
                 // TODO: Should these be moved to their own pass? Potentially not, the extra pass should just be an inlining optimise pass
                 auto retType = pp.monomorph(resolve, fcn.returnType);
                 HIRFunction::argsT args;
-                for (const auto& a : fcn.mArgs) {
+                for (const auto& a : fcn.args) {
                     args.push_back(::std::make_pair(HIRPattern{}, pp.monomorph(resolve, a.second)));
                 }
 
@@ -275,8 +275,8 @@ void TransMonomorphiseList(const WireBoard& wb, HIRCrate& crate, TransList& list
                 // Concrete MIR was already collected by the initial
                 // enumeration.  Only automatic functions created by a late
                 // TransAutoImpls pass need their raw MIR collected here.
-                if (initialFunctions.count(transFcn) == 0 && fcn.mCode.mir) {
-                    generatedMir.push_back(&*fcn.mCode.mir);
+                if (initialFunctions.count(transFcn) == 0 && fcn.code.mir) {
+                    generatedMir.push_back(&*fcn.code.mir);
                 }
             }
         }

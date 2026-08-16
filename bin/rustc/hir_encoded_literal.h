@@ -55,7 +55,7 @@ struct EncodedLiteral {
 struct EncodedLiteralSlice {
     const EncodedLiteral& base;
     size_t ofs;
-    size_t mSize;
+    size_t size;
 
     //size_t  m_reloc_ofs;
     //size_t  m_reloc_size;

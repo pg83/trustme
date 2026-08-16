@@ -7,7 +7,7 @@
 extern bool monomorphisePathparamsNeeded(const HIRPathParams& tpl);
 
 static inline bool monomorphiseGenericpathNeeded(const HIRGenericPath& tpl) {
-    return monomorphisePathparamsNeeded(tpl.mParams);
+    return monomorphisePathparamsNeeded(tpl.params);
 }
 
 extern bool monomorphisePathNeeded(const HIRPath& tpl);

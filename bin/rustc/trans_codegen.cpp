@@ -37,7 +37,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
             codegen->emitTypeProto(ty.first);
         } else {
             if (const auto* te = ty.first->opt_Path()) {
-                TU_MATCHA((te->binding), (tpb), (Unbound, throw "";), (Opaque, throw "";), (ExternType, ), (Struct, codegen->emitStruct(sp, te->path.mData.as_Generic(), *tpb);), (Union, codegen->emitUnion(sp, te->path.mData.as_Generic(), *tpb);), (Enum, codegen->emitEnum(sp, te->path.mData.as_Generic(), *tpb);))
+                TU_MATCHA((te->binding), (tpb), (Unbound, throw "";), (Opaque, throw "";), (ExternType, ), (Struct, codegen->emitStruct(sp, te->path.data.as_Generic(), *tpb);), (Union, codegen->emitUnion(sp, te->path.data.as_Generic(), *tpb);), (Enum, codegen->emitEnum(sp, te->path.data.as_Generic(), *tpb);))
             }
             codegen->emitType(ty.first);
         }
@@ -54,20 +54,20 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         // - Struct (must be a tuple struct)
         // - Enum variant (must be a tuple variant)
         const HIRModule* modPtr = nullptr;
-        if (path.mPath.components().size() > 1) {
-            const auto& nse = cratePtr->getTypeitemByPath(sp, path.mPath, false, true);
+        if (path.path.components().size() > 1) {
+            const auto& nse = cratePtr->getTypeitemByPath(sp, path.path, false, true);
             if (const auto* e = nse.opt_Enum()) {
-                auto varIdx = e->findVariant(path.mPath.components().back());
+                auto varIdx = e->findVariant(path.path.components().back());
                 codegen->emitConstructorEnum(sp, path, *e, varIdx);
                 continue;
             }
             modPtr = &nse.as_Module();
         } else {
-            modPtr = &cratePtr->getModByPath(sp, path.mPath, true);
+            modPtr = &cratePtr->getModByPath(sp, path.path, true);
         }
 
         // Not an enum, currently must be a struct
-        const auto& te = modPtr->modItems.at(path.mPath.components().back())->ent;
+        const auto& te = modPtr->modItems.at(path.path.components().back())->ent;
         codegen->emitConstructorStruct(sp, path, te.as_Struct());
     }
     list.constructors.clear();
@@ -78,8 +78,8 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         assert(ent.second->ptr);
         const auto& fcn = *ent.second->ptr;
         // Extern if there isn't any HIR
-        bool isExtern = !static_cast<bool>(fcn.mCode);
-        if (fcn.mCode.mir && !ent.second->forcePrototype) {
+        bool isExtern = !static_cast<bool>(fcn.code);
+        if (fcn.code.mir && !ent.second->forcePrototype) {
             codegen->emitFunctionProto(ent.first, fcn, ent.second->pp, isExtern);
         }
     }
@@ -87,11 +87,11 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
     for (const auto& ent : list.functions) {
         assert(ent.second->ptr);
         const auto& fcn = *ent.second->ptr;
-        if (fcn.mCode.mir && !ent.second->forcePrototype) {
+        if (fcn.code.mir && !ent.second->forcePrototype) {
         } else {
             // TODO: Why would an intrinsic be in the queue?
             // - If it's exported it does.
-            if (fcn.mAbi == "rust-intrinsic") {
+            if (fcn.abi == "rust-intrinsic") {
             } else {
                 codegen->emitFunctionExt(ent.first, fcn, ent.second->pp);
             }
@@ -106,9 +106,9 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
 
         DEBUG(
             "STATIC proto " << ent.first << ": "
-                            << "(m_value_generated=" << stat.valueGenerated << " && !m_no_emit_value=" << stat.noEmitValue << ") || is_generic=" << stat.mParams.isGeneric()
+                            << "(m_value_generated=" << stat.valueGenerated << " && !m_no_emit_value=" << stat.noEmitValue << ") || is_generic=" << stat.params.isGeneric()
         );
-        if ((stat.valueGenerated && !stat.noEmitValue) || stat.mParams.isGeneric()) {
+        if ((stat.valueGenerated && !stat.noEmitValue) || stat.params.isGeneric()) {
             codegen->emitStaticProto(ent.first, stat, ent.second->pp);
         } else {
             codegen->emitStaticExt(ent.first, stat, ent.second->pp);
@@ -119,7 +119,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
         assert(ent.second->ptr);
         const auto& stat = *ent.second->ptr;
 
-        if (stat.mParams.isGeneric()) {
+        if (stat.params.isGeneric()) {
             codegen->emitStaticLocal(ent.first, stat, ent.second->pp, stat.monomorphCache.at(ent.first));
         } else if (stat.valueGenerated && !stat.noEmitValue) {
             codegen->emitStaticLocal(ent.first, stat, ent.second->pp, stat.valueRes);
@@ -130,16 +130,16 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
 
     // 4. Emit function code
     for (const auto& ent : list.functions) {
-        if (ent.second->ptr && ent.second->ptr->mCode.mir && !ent.second->forcePrototype) {
+        if (ent.second->ptr && ent.second->ptr->code.mir && !ent.second->forcePrototype) {
             const auto& path = ent.first;
             const auto& fcn = *ent.second->ptr;
             const auto& pp = ent.second->pp;
             TRACE_FUNCTION_F(path);
             DEBUG("FUNCTION CODE " << path);
             // `is_extern` is set if there's no HIR (i.e. this function is from an external crate)
-            bool isExtern = !static_cast<bool>(fcn.mCode);
+            bool isExtern = !static_cast<bool>(fcn.code);
             // If this is a provided trait method, it needs to be monomorphised too.
-            bool isMethod = (fcn.mArgs.size() > 0 && visitTyWith(fcn.mArgs[0].second, [&](const auto& x) {
+            bool isMethod = (fcn.args.size() > 0 && visitTyWith(fcn.args[0].second, [&](const auto& x) {
                 return x == cratePtr->types.self();
             }));
 
@@ -150,7 +150,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
                 codegen->emitFunctionCode(path, fcn, pp, isExtern, ent.second->monomorphised.code);
             } else {
                 ASSERT_BUG(sp, !isMonomorph, "Function that required monomorphisation wasn't monomorphised");
-                codegen->emitFunctionCode(path, fcn, pp, isExtern, fcn.mCode.mir);
+                codegen->emitFunctionCode(path, fcn, pp, isExtern, fcn.code.mir);
             }
         }
     }
@@ -166,7 +166,7 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
             }
         }
     };
-    emitGlobalAsm(emitGlobalAsm, cratePtr->mRootModule);
+    emitGlobalAsm(emitGlobalAsm, cratePtr->rootModule);
 
     // NOTE: Completely reinitialise the `TransList` to free all monomorphised memory before calling the backend compilation tool
     // - This can save several GB of working set

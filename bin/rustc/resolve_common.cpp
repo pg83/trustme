@@ -78,7 +78,7 @@ namespace {
                         if (mp.crate != "") {
                             ASSERT_BUG(sp, this->crate.externCrates.count(mp.crate), "Crate not loaded for " << mp);
                             const auto& crate = this->crate.externCrates.at(mp.crate);
-                            const HIRModule* mod = &crate.hir->mRootModule;
+                            const HIRModule* mod = &crate.hir->rootModule;
                             for (const auto& n : mp.ents) {
                                 ASSERT_BUG(sp, mod->modItems.count(n), "Node `" << n << "` missing in path " << mp);
                                 const auto& i = *mod->modItems.at(n);
@@ -145,7 +145,7 @@ namespace {
                                             return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
                                         }
                                         ASSERT_BUG(sp, crate.externCrates.count(c.name) > 0, "Unable to find crate `" << c.name << "`");
-                                        return getModuleHir(crate.externCrates.at(c.name).hir->mRootModule, path, 1, ignoreLast, outPath);
+                                        return getModuleHir(crate.externCrates.at(c.name).hir->rootModule, path, 1, ignoreLast, outPath);
                                     }
                                     TU_ARMA(Module, m) {
                                         return getModuleAst(m, path, 1, ignoreLast, outPath);
@@ -159,7 +159,7 @@ namespace {
                                 return getModuleAst(*m, path, 1, ignoreLast, outPath);
                             }
                             TU_ARMA(HirRoot, hirCrate) {
-                                return getModuleHir(hirCrate->mRootModule, path, 1, ignoreLast, outPath);
+                                return getModuleHir(hirCrate->rootModule, path, 1, ignoreLast, outPath);
                             }
                             TU_ARMA(Hir, iEntPtr) {
                                 ASSERT_BUG(sp, !iEntPtr->is_Import(), "");
@@ -202,7 +202,7 @@ namespace {
                                 if (outPath) {
                                     *outPath = ASTAbsolutePath(ecIt->second, {});
                                 }
-                                return getModuleHir(ec.hir->mRootModule, path, 1, ignoreLast, outPath);
+                                return getModuleHir(ec.hir->rootModule, path, 1, ignoreLast, outPath);
                             }
                         }
                     }
@@ -257,7 +257,7 @@ namespace {
                         if (outPath) {
                             *outPath = ASTAbsolutePath(ecIt->second, {});
                         }
-                        return getModuleHir(ecIt2->second.hir->mRootModule, path, 0, ignoreLast, outPath);
+                        return getModuleHir(ecIt2->second.hir->rootModule, path, 0, ignoreLast, outPath);
                     } else {
                         // HIR lookup (different)
                         auto ecIt = crate.externCrates.find(e.crate);
@@ -268,7 +268,7 @@ namespace {
                         if (outPath) {
                             *outPath = ASTAbsolutePath(e.crate, {});
                         }
-                        return getModuleHir(ecIt->second.hir->mRootModule, path, 0, ignoreLast, outPath);
+                        return getModuleHir(ecIt->second.hir->rootModule, path, 0, ignoreLast, outPath);
                     }
                 }
             }
@@ -305,7 +305,7 @@ namespace {
                                 return getModuleAst(crate.rootModule_, path, idx + 1, ignoreLast, outPath);
                             } else {
                                 ASSERT_BUG(sp, crate.externCrates.count(i->name) != 0, "Cannot find crate `" << i->name << "`");
-                                return getModuleHir(crate.externCrates.at(i->name).hir->mRootModule, path, idx + 1, ignoreLast, outPath);
+                                return getModuleHir(crate.externCrates.at(i->name).hir->rootModule, path, idx + 1, ignoreLast, outPath);
                             }
                         } else {
                             DEBUG("Found " << e->tagStr() << ", not module");
@@ -328,7 +328,7 @@ namespace {
                             outPath->crate = e->crateName;
                             outPath->nodes.clear();
                         }
-                        return getModuleHir(e->mRootModule, path, idx + 1, ignoreLast, outPath);
+                        return getModuleHir(e->rootModule, path, idx + 1, ignoreLast, outPath);
                     }
                 }
             }
@@ -355,7 +355,7 @@ namespace {
                     ASSERT_BUG(sp, crate.externCrates.count(imp->path.crateName()), "Crate " << imp->path.crateName() << " not loaded");
                     const auto& extCrate = *crate.externCrates.at(imp->path.crateName()).hir;
                     if (imp->path.components().empty()) {
-                        mod = &extCrate.mRootModule;
+                        mod = &extCrate.rootModule;
                         continue;
                     }
                     if (outPath) {
@@ -392,7 +392,7 @@ namespace {
                     continue;
                 }
                 const ASTModule* nextMod = nullptr;
-                for (const auto& i : mod->mItems) {
+                for (const auto& i : mod->items) {
                     if (const auto* m = i->data.opt_Module()) {
                         if (i->name == tgtName) {
                             nextMod = m;
@@ -421,7 +421,7 @@ namespace {
                 case ASTItem::TAG_TraitAlias:
                     return ns == ResolveNamespace::Namespace;
                 case ASTItem::TAG_Struct:
-                    return ns == ResolveNamespace::Namespace || (ns == ResolveNamespace::Value && !i.as_Struct().mData.is_Struct());
+                    return ns == ResolveNamespace::Namespace || (ns == ResolveNamespace::Value && !i.as_Struct().data.is_Struct());
                 case ASTItem::TAG_Function:
                 case ASTItem::TAG_Static:
                     return ns == ResolveNamespace::Value;
@@ -507,7 +507,7 @@ namespace {
                 }
             }
 
-            for (const auto& i : mod.mItems) {
+            for (const auto& i : mod.items) {
                 // Note: Cache the result of `cfg()` resolution, as it doesn't change
                 // - Do the caching here (on the item level) instead of in `cfg.cpp` as that avoids needing to check
                 //   the attribute list multiple times.
@@ -636,7 +636,7 @@ namespace {
                     }
                 }
             }
-            for (const auto& i : mod.mItems) {
+            for (const auto& i : mod.items) {
                 if (const auto* useStmt = i->data.opt_Use()) {
                     if (!visitUse) {
                         continue;

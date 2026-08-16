@@ -140,7 +140,7 @@ void ExpandTestHarness(ASTCrate& crate) {
     newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
 
     crate.rootModule_.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
-    crate.mLangItems["mrustc-main"] = ASTAbsolutePath("", {"test#", "main"});
+    crate.langItems["mrustc-main"] = ASTAbsolutePath("", {"test#", "main"});
 }
 
 #undef NEWNODE
@@ -534,18 +534,18 @@ int main(int argc, char* argv[]) {
                 bool panicRuntimeNeeded = false;
                 for (const auto& ec : crate.externCrates) {
                     ::std::ostringstream ss;
-                    for (const auto& e : ec.second.hir->mLangItems) {
+                    for (const auto& e : ec.second.hir->langItems) {
                         ss << e << ",";
                     }
                     DEBUG("Looking at lang items from " << ec.first << " : " << ss.str());
-                    if (ec.second.hir->mLangItems.count("mrustc-allocator")) {
+                    if (ec.second.hir->langItems.count("mrustc-allocator")) {
                         if (allocatorCrateLoaded) {
                             ERROR(Span(), E0000, "Multiple allocator crates loaded - " << allocCrateName << " and " << ec.first);
                         }
                         allocCrateName = ec.first;
                         allocatorCrateLoaded = true;
                     }
-                    if (ec.second.hir->mLangItems.count("mrustc-panic_runtime")) {
+                    if (ec.second.hir->langItems.count("mrustc-panic_runtime")) {
                         if (panicRuntimeLoaded) {
                             WARNING(Span(), W0000, "Multiple panic_runtime crates loaded - " << panicCrateName << " and " << ec.first);
                         } else {
@@ -553,7 +553,7 @@ int main(int argc, char* argv[]) {
                             panicRuntimeLoaded = true;
                         }
                     }
-                    if (ec.second.hir->mLangItems.count("mrustc-needs_panic_runtime")) {
+                    if (ec.second.hir->langItems.count("mrustc-needs_panic_runtime")) {
                         panicRuntimeNeeded = true;
                     }
                 }
@@ -570,7 +570,7 @@ int main(int argc, char* argv[]) {
 
                 // - `mrustc-main` lang item default
                 if (!crate.noMain) {
-                    crate.mLangItems.insert(::std::make_pair(::std::string("mrustc-main"), ASTAbsolutePath("", {"main"})));
+                    crate.langItems.insert(::std::make_pair(::std::string("mrustc-main"), ASTAbsolutePath("", {"main"})));
                 }
             }
         });
@@ -587,7 +587,7 @@ int main(int argc, char* argv[]) {
                     }
                     // TODO: Should we check anon modules?
                     //}
-                    for (auto& i : mod.mItems) {
+                    for (auto& i : mod.items) {
                         if (i->data.is_Module()) {
                             this->visitModule(i->data.as_Module());
                         }
@@ -837,10 +837,10 @@ int main(int argc, char* argv[]) {
                 HIRCrate crateForSer(pool, *wb.types);
                 crateForSer.crateName = hirCrate->crateName;
                 crateForSer.edition = hirCrate->edition;
-                for (const auto& i : hirCrate->mRootModule.macroItems) {
+                for (const auto& i : hirCrate->rootModule.macroItems) {
                     DEBUG(i.first << ": " << i.second->ent.tagStr());
                     if (const auto* e = i.second->ent.opt_ProcMacro()) {
-                        crateForSer.mRootModule.macroItems.insert(std::make_pair(i.first, crateForSer.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
+                        crateForSer.rootModule.macroItems.insert(std::make_pair(i.first, crateForSer.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{i.second->publicity, *e})));
                     }
                 }
                 crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;

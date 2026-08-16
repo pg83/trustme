@@ -35,7 +35,7 @@ enum class ASTBoundConstness : uint8_t {
 // Defined here for dependency reasons
 class ASTHigherRankedBounds {
 public:
-    ::std::vector<ASTLifetimeParam> mLifetimes;
+    ::std::vector<ASTLifetimeParam> lifetimes;
     //::std::vector<TypeParam>    m_types;
     //::std::vector<GenericBound>    m_bounds;
 
@@ -64,8 +64,8 @@ public:
 struct TypeFunction {
     ASTHigherRankedBounds hrbs;
     bool isUnsafe;
-    ::std::string mAbi;
-    ASTType* mRettype;
+    ::std::string abi;
+    ASTType* rettype;
     ::std::vector<ASTType*> argTypes;
     bool isVariadic;
 
@@ -171,12 +171,12 @@ namespace ASTTypeTags {
 /// records the pool it lives in so `clone()` is cheap and self-sufficient.
 struct ASTType {
     Span span_;
-    TypeData mData;
+    TypeData data;
     stl::ObjPool* pool = nullptr;
 
     ASTType(Span sp, TypeData data, stl::ObjPool* pool)
         : span_(::std::move(sp))
-        , mData(::std::move(data))
+        , data(::std::move(data))
         , pool(pool) {
     }
 
@@ -185,49 +185,49 @@ struct ASTType {
     }
 
     bool isValid() const {
-        return !mData.is_None();
+        return !data.is_None();
     }
     bool isUnbounded() const {
-        return mData.is_Any();
+        return data.is_Any();
     }
     bool isWildcard() const {
-        return mData.is_Any();
+        return data.is_Any();
     }
     bool isUnit() const {
-        return mData.is_Unit();
+        return data.is_Unit();
     }
     bool isPrimitive() const {
-        return mData.is_Primitive();
+        return data.is_Primitive();
     }
     bool isPath() const {
-        return mData.is_Path();
+        return data.is_Path();
     }
     const ASTPath& path() const {
-        return *mData.as_Path();
+        return *data.as_Path();
     }
     ASTPath& path() {
-        return *mData.as_Path();
+        return *data.as_Path();
     }
     bool isTypeParam() const {
-        return mData.is_Generic();
+        return data.is_Generic();
     }
     const RcString& typeParam() const {
-        return mData.as_Generic().name;
+        return data.as_Generic().name;
     }
     bool isReference() const {
-        return mData.is_Borrow();
+        return data.is_Borrow();
     }
     bool isPointer() const {
-        return mData.is_Pointer();
+        return data.is_Pointer();
     }
     bool isTuple() const {
-        return mData.is_Tuple();
+        return data.is_Tuple();
     }
 
     ASTType* clone() const;
 
     ASTType* innerType() const {
-        TU_MATCH_DEF(TypeData, (mData), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return e.inner;), (Pointer, return e.inner;), (Array, return e.inner;))
+        TU_MATCH_DEF(TypeData, (data), (e), (throw ::std::runtime_error("Called inner_type on non-wrapper");), (Borrow, return e.inner;), (Pointer, return e.inner;), (Array, return e.inner;))
     }
 
     Ordering ord(const ASTType& x) const;

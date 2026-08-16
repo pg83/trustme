@@ -22,14 +22,14 @@ struct HIRPatternBinding {
     };
 
     bool isMutable;
-    Type mType;
-    RcString mName;
+    Type type;
+    RcString name;
     unsigned int slot;
 
     unsigned implicitDerefCount = 0;
 
     bool isValid() const {
-        return mName != "";
+        return name != "";
     }
 
     HIRPatternBinding();
@@ -179,8 +179,8 @@ struct HIRPattern {
         })
     );
 
-    std::vector<HIRPatternBinding> mBindings;
-    Data mData;
+    std::vector<HIRPatternBinding> bindings;
+    Data data;
     unsigned implicitDerefCount = 0;
 
     HIRPattern();

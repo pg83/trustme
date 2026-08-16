@@ -88,7 +88,7 @@ Token Token::makeFloat(FloatValue val, enum eCoreType datatype) {
 }
 
 Token::Token(const InterpolatedFragment& frag) {
-    switch (frag.mType) {
+    switch (frag.type) {
         case InterpolatedFragment::TT:
             throw "";
         case InterpolatedFragment::VIS:
@@ -126,7 +126,7 @@ Token::Token(const InterpolatedFragment& frag) {
             break;
         case InterpolatedFragment::STMT_ITEM:
         case InterpolatedFragment::ITEM: {
-            type_ = frag.mType == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
+            type_ = frag.type == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
             const auto& named = *reinterpret_cast<const ASTNamed<ASTItem>*>(frag.ptr);
             auto item = named.data.clone();
             data_ = new ASTNamed<ASTItem>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
@@ -139,7 +139,7 @@ Token::Token(const InterpolatedFragment& frag) {
 }
 
 Token::Token(TagTakeIP, InterpolatedFragment frag) {
-    switch (frag.mType) {
+    switch (frag.type) {
         case InterpolatedFragment::TT:
             throw "";
         case InterpolatedFragment::VIS:
@@ -178,7 +178,7 @@ Token::Token(TagTakeIP, InterpolatedFragment frag) {
             break;
         case InterpolatedFragment::STMT_ITEM:
         case InterpolatedFragment::ITEM:
-            type_ = frag.mType == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
+            type_ = frag.type == InterpolatedFragment::STMT_ITEM ? TOK_INTERPOLATED_STMT_ITEM : TOK_INTERPOLATED_ITEM;
             data_ = frag.ptr;
             frag.ptr = nullptr;
             break;
@@ -200,7 +200,7 @@ Token::Token(const Token& t)
     , hygiene_(t.hygiene_)
     , isDocComment_(t.isDocComment_)
 {
-    assert(t.mData.tag() != Data::TAGDEAD);
+    assert(t.data.tag() != Data::TAGDEAD);
     TU_MATCH_HDRA( (t.data_), {)
     TU_ARMA(None, e) {
         }
@@ -261,7 +261,7 @@ Token Token::clone() const {
                  default:
                      BUG(Span(Span(), pos), "Fragment with invalid token type (" << *this << ")");
                      break;
-             } assert(rv.mData.is_Fragment());))
+             } assert(rv.data.is_Fragment());))
     return rv;
 }
 

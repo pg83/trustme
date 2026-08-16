@@ -56,12 +56,12 @@ public:
             // This resolver owns m_ivars, so its inference indexes must not
             // escape into HIR and be mistaken for indexes in expression typeck.
             const auto placeholderName = RcString::newInterned(FMT("static_find_impl_" << &inferredParams));
-            inferredParams.types.reserve(traitDef.mParams.types.size());
-            for (size_t i = 0; i < traitDef.mParams.types.size(); i++) {
+            inferredParams.types.reserve(traitDef.params.types.size());
+            for (size_t i = 0; i < traitDef.params.types.size(); i++) {
                 inferredParams.types.push_back(resolve_.hirCrate().types.generic(placeholderName, GENERICPlaceholder * 256 + i));
             }
-            inferredParams.values.reserve(traitDef.mParams.values.size());
-            for (size_t i = 0; i < traitDef.mParams.values.size(); i++) {
+            inferredParams.values.reserve(traitDef.params.values.size());
+            for (size_t i = 0; i < traitDef.params.values.size(); i++) {
                 inferredParams.values.push_back(HIRConstGeneric::make_Generic({placeholderName, static_cast<unsigned int>(GENERICPlaceholder * 256 + i)}));
             }
             params = &inferredParams;
@@ -172,11 +172,11 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     case HIRStructMarkings::DstType::Possible:
                     case HIRStructMarkings::DstType::TraitObject: {
                         const HIRTypeData* tailTpl = nullptr;
-                        TU_MATCHA((str.mData), (se), (Unit, BUG(sp, "Unsized unit struct in Pointee lookup - " << type);), (Tuple, ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;), (Named, ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tailTpl = se.back().ty;))
+                        TU_MATCHA((str.data), (se), (Unit, BUG(sp, "Unsized unit struct in Pointee lookup - " << type);), (Tuple, ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;), (Named, ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tailTpl = se.back().ty;))
                         ASSERT_BUG(sp, tailTpl, "Missing unsized tail field for " << type);
 
-                        const auto& path = type->as_Path().path.mData.as_Generic();
-                        auto tailTy = MonomorphStatePtr(crate.types, type, &path.mParams, nullptr).monomorphType(sp, tailTpl);
+                        const auto& path = type->as_Path().path.data.as_Generic();
+                        auto tailTy = MonomorphStatePtr(crate.types, type, &path.params, nullptr).monomorphType(sp, tailTpl);
                         this->expandAssociatedTypes(sp, tailTy);
 
                         return findImpl(sp, traitPath, traitParams, tailTy, [&](ImplRef impl, bool unk) {
@@ -234,7 +234,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     struct H {
         static const HIRTypeData* getRootTy(const HIRTypeData* t) {
             if (const auto* e = t->opt_Path()) {
-                TU_MATCH_HDRA( (e->path.mData), {)
+                TU_MATCH_HDRA( (e->path.data), {)
                 TU_ARMA(Generic, ee) {
                     }
                     TU_ARMA(UfcsKnown, ee) return getRootTy(ee.type);
@@ -304,10 +304,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         }
         TU_ARMA(Function, e) {
             if (isAsyncCallableTrait) {
-                if (e.mAbi != ABI_RUST || e.isUnsafe) {
+                if (e.abi != ABI_RUST || e.isUnsafe) {
                     return false;
                 }
-                return findAsyncCallable(e.argTypes, e.mRettype, true, true);
+                return findAsyncCallable(e.argTypes, e.rettype, true, true);
             }
             if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
                 if (traitParams) {
@@ -328,7 +328,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 HIRPathParams params;
                 params.types.push_back(crate.types.tuple(std::move(argTypes)));
                 HIRTraitPath::assocListT assoc;
-                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), params.clone()), {}, e.mRettype}));
+                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), params.clone()), {}, e.rettype}));
                 return foundCb(ImplRef(type, mv$(params), mv$(assoc)), false);
             }
             // 1.74: Magic impls of `eq` for function pointers
@@ -339,10 +339,10 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         TU_ARMA(NamedFunction, realE) {
             if (isAsyncCallableTrait) {
                 auto e = realE.decay(crate.types, sp);
-                if (e.mAbi != ABI_RUST || e.isUnsafe) {
+                if (e.abi != ABI_RUST || e.isUnsafe) {
                     return false;
                 }
-                return findAsyncCallable(e.argTypes, e.mRettype, true, true);
+                return findAsyncCallable(e.argTypes, e.rettype, true, true);
             }
             if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
                 auto e = realE.decay(crate.types, sp);
@@ -364,7 +364,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 HIRPathParams params;
                 params.types.push_back(crate.types.tuple(std::move(argTypes)));
                 HIRTraitPath::assocListT assoc;
-                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), params.clone()), {}, e.mRettype}));
+                assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{HIRGenericPath(langFnOnce(), params.clone()), {}, e.rettype}));
                 return foundCb(ImplRef(type, mv$(params), mv$(assoc)), false);
             }
         }
@@ -381,8 +381,8 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                             supportsShared = false;
                         }
                         ::std::vector<HIRTypeRef> inputs;
-                        inputs.reserve(nodeP->mArgs.size());
-                        for (const auto& arg : nodeP->mArgs) {
+                        inputs.reserve(nodeP->args.size());
+                        for (const auto& arg : nodeP->args) {
                             inputs.push_back(arg.second);
                         }
                         return findAsyncCallable(inputs, nodeP->returnType, supportsShared, supportsMutable);
@@ -390,11 +390,11 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     if (traitPath == langFn() || traitPath == langFnMut() || traitPath == langFnOnce()) {
                         if (traitParams) {
                             const auto& desArgTys = traitParams->types.at(0)->as_Tuple();
-                            if (desArgTys.size() != nodeP->mArgs.size()) {
+                            if (desArgTys.size() != nodeP->args.size()) {
                                 return false;
                             }
                             for (unsigned int i = 0; i < desArgTys.size(); i++) {
-                                if (desArgTys[i]->compareWithPlaceholders(sp, nodeP->mArgs[i].second, HIRResolvePlaceholdersNop()) == HIRCompare::Unequal) {
+                                if (desArgTys[i]->compareWithPlaceholders(sp, nodeP->args[i].second, HIRResolvePlaceholdersNop()) == HIRCompare::Unequal) {
                                     return false;
                                 }
                             }
@@ -435,7 +435,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 TU_ARMA(Async, nodeP) {
                     if (traitPath == langFuture()) {
                         HIRTraitPath::assocListT assoc;
-                        assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->mCode->resType}));
+                        assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->code->resType}));
                         HIRPathParams params;
                         return foundCb(ImplRef(type, mv$(params), mv$(assoc)), HIRCompare::Equal);
                     }
@@ -446,16 +446,16 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         // TraitObject traits and supertraits
         // ----
         TU_ARMA(TraitObject, e) {
-            if (traitPath == e.mTrait.mPath.mPath) {
-                if (H::checkParams(sp, e.mTrait.mPath.mParams, traitParams)) {
-                    return foundCb(ImplRef(type, &e.mTrait.mPath.mParams, &e.mTrait.typeBounds, e.mTrait.constness), false);
+            if (traitPath == e.trait.path.path) {
+                if (H::checkParams(sp, e.trait.path.params, traitParams)) {
+                    return foundCb(ImplRef(type, &e.trait.path.params, &e.trait.typeBounds, e.trait.constness), false);
                 }
             }
             // Markers too
             for (const auto& mt : e.markers) {
-                if (traitPath == mt.mPath) {
-                    if (H::checkParams(sp, mt.mParams, traitParams)) {
-                        return foundCb(ImplRef(type, &mt.mParams, &nullAssoc), false);
+                if (traitPath == mt.path) {
+                    if (H::checkParams(sp, mt.params, traitParams)) {
+                        return foundCb(ImplRef(type, &mt.params, &nullAssoc), false);
                     }
                 }
             }
@@ -463,14 +463,14 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             // - Check if the desired trait is a supertrait of this.
             // TODO: What if `trait_params` is nullptr?
             bool rv = false;
-            bool isSupertrait = traitParams && e.mTrait.traitPtr && this->findNamedTraitInTrait(sp, traitPath, *traitParams, *e.mTrait.traitPtr, e.mTrait.mPath.mPath, e.mTrait.mPath.mParams, type, [&](const HIRPathParams& iParams, HIRTraitPath::assocListT iAssoc) -> bool {
+            bool isSupertrait = traitParams && e.trait.traitPtr && this->findNamedTraitInTrait(sp, traitPath, *traitParams, *e.trait.traitPtr, e.trait.path.path, e.trait.path.params, type, [&](const HIRPathParams& iParams, HIRTraitPath::assocListT iAssoc) -> bool {
                 // Invoke callback with a proper ImplRef
                 HIRTraitPath::assocListT assocClone;
                 for (const auto& e : iAssoc) {
                     assocClone.insert(::std::make_pair(e.first, e.second.clone()));
                 }
                 // HACK! Just add all the associated type bounds (only inserted if not already present)
-                for (const auto& e2 : e.mTrait.typeBounds) {
+                for (const auto& e2 : e.trait.typeBounds) {
                     assocClone.insert(::std::make_pair(e2.first, e2.second.clone()));
                 }
 
@@ -488,7 +488,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             for (const auto& trait : e.traits) {
                 bool rv = false;
                 // TODO: If `trait_params` is nullptr, this doesn't run (is that sane?)
-                bool isSupertrait = traitParams && this->findNamedTraitInTrait(sp, traitPath, *traitParams, *trait.traitPtr, trait.mPath.mPath, trait.mPath.mParams, type, [&](const auto& iParams, const auto& iAssoc) {
+                bool isSupertrait = traitParams && this->findNamedTraitInTrait(sp, traitPath, *traitParams, *trait.traitPtr, trait.path.path, trait.path.params, type, [&](const auto& iParams, const auto& iAssoc) {
                     // Invoke callback with a proper ImplRef
                     HIRTraitPath::assocListT assocClone;
                     for (const auto& assocE : iAssoc) {
@@ -514,25 +514,25 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         // ---
         TU_ARMA(Path, e) {
             if (e.binding.is_Opaque()) {
-                ASSERT_BUG(sp, e.path.mData.is_UfcsKnown(), "Opaque bound type wasn't UfcsKnown - " << type);
-                const auto& pe = e.path.mData.as_UfcsKnown();
+                ASSERT_BUG(sp, e.path.data.is_UfcsKnown(), "Opaque bound type wasn't UfcsKnown - " << type);
+                const auto& pe = e.path.data.as_UfcsKnown();
                 DEBUG("Checking bounds on definition of " << pe.item << " in " << pe.trait);
 
                 // If this associated type has a bound of the desired trait, return it.
-                const auto& traitRef = crate.getTraitByPath(sp, pe.trait.mPath);
-                ASSERT_BUG(sp, traitRef.types.count(pe.item) != 0, "Trait " << pe.trait.mPath << " doesn't contain an associated type " << pe.item);
+                const auto& traitRef = crate.getTraitByPath(sp, pe.trait.path);
+                ASSERT_BUG(sp, traitRef.types.count(pe.item) != 0, "Trait " << pe.trait.path << " doesn't contain an associated type " << pe.item);
                 const auto& atyDef = traitRef.types.find(pe.item)->second;
 
-                auto monomorphCb = MonomorphStatePtr(crate.types, pe.type, &pe.trait.mParams, &pe.params);
+                auto monomorphCb = MonomorphStatePtr(crate.types, pe.type, &pe.trait.params, &pe.params);
 
                 auto checkBound = [&](const HIRTraitPath& bound) {
-                    const auto& bParams = bound.mPath.mParams;
+                    const auto& bParams = bound.path.params;
                     HIRPathParams paramsMonoO;
                     const auto& bParamsMono = monomorphisePathparamsWithOpt(sp, paramsMonoO, bParams, monomorphCb, false);
                     this->expandAssociatedTypesParams(sp, paramsMonoO);
-                    DEBUG("[find_impl] ATY : " << bound.mPath.mPath << bParamsMono);
+                    DEBUG("[find_impl] ATY : " << bound.path.path << bParamsMono);
 
-                    if (bound.mPath.mPath == traitPath) {
+                    if (bound.path.path == traitPath) {
                         if (H::checkParams(sp, bParamsMono, traitParams)) {
                             // Optimisation: If this was a monomorphised path, then move ownership into the ImplRef
                             if (&bParamsMono == &paramsMonoO || ::std::any_of(bound.typeBounds.begin(), bound.typeBounds.end(), [&](const auto& x) {
@@ -544,7 +544,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                                         auto src = monomorphCb.monomorphGenericpath(sp, tb.second.sourceTrait, false);
                                         auto aty = monomorphCb.monomorphType(sp, tb.second.type, false);
                                         expandAssociatedTypes(sp, aty);
-                                        expandAssociatedTypesParams(sp, src.mParams);
+                                        expandAssociatedTypesParams(sp, src.params);
                                         atys.insert(::std::make_pair(tb.first, HIRTraitPath::AtyEqual{mv$(src), {}, mv$(aty)}));
                                     }
                                 }
@@ -553,7 +553,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                                 }
                                 paramsMonoO = monomorphCb.monomorphPathParams(sp, bParams, false);
                             } else {
-                                if (foundCb(ImplRef(type, &bound.mPath.mParams, &bound.typeBounds, bound.constness), false)) {
+                                if (foundCb(ImplRef(type, &bound.path.params, &bound.typeBounds, bound.constness), false)) {
                                     return true;
                                 }
                             }
@@ -561,7 +561,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     }
 
                     if (traitParams) {
-                        return this->findNamedTraitInTrait(sp, traitPath, *traitParams, *bound.traitPtr, bound.mPath.mPath, bParamsMono, type, [&](const auto& iParams, const auto& iAssoc) {
+                        return this->findNamedTraitInTrait(sp, traitPath, *traitParams, *bound.traitPtr, bound.path.path, bParamsMono, type, [&](const auto& iParams, const auto& iAssoc) {
                             if (iParams != *traitParams) {
                                 return false;
                             }
@@ -576,9 +576,9 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
 
                             // TODO: When in pre-typecheck mode, this needs to be a fuzzy match (because there might be a UfcsUnknown in the
                             // monomorphed version) OR, there may be placeholders
-                            if (pt.mPath.mPath == traitPath) {
+                            if (pt.path.path == traitPath) {
                                 // TODO: Monomorphse trait params
-                                return foundCb(ImplRef(type, mv$(ptMono.mPath.mParams), {}, ptMono.constness), false);
+                                return foundCb(ImplRef(type, mv$(ptMono.path.params), {}, ptMono.constness), false);
                             }
                         }
                         return false;
@@ -592,7 +592,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 }
 
                 // Check `where` clauses on the trait too
-                for (const auto& bound : traitRef.mParams.bounds) {
+                for (const auto& bound : traitRef.params.bounds) {
                     if (!bound.is_TraitBound()) {
                         continue;
                     }
@@ -602,15 +602,15 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     if (!be.type->is_Path()) {
                         continue;
                     }
-                    if (!be.type->as_Path().path.mData.is_UfcsKnown()) {
+                    if (!be.type->as_Path().path.data.is_UfcsKnown()) {
                         continue;
                     }
                     {
-                        const auto& pe2 = be.type->as_Path().path.mData.as_UfcsKnown();
+                        const auto& pe2 = be.type->as_Path().path.data.as_UfcsKnown();
                         if (pe2.type != crate.types.self()) {
                             continue;
                         }
-                        if (pe2.trait.mPath != pe.trait.mPath) {
+                        if (pe2.trait.path != pe.trait.path) {
                             continue;
                         }
                         if (pe2.item != pe.item) {
@@ -630,7 +630,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     stack.push_back(&pe);
                     const auto* ity = &pe.type;
                     while (const auto* inner = (*ity)->opt_Path()) {
-                        if (const auto* ufcs = inner->path.mData.opt_UfcsKnown()) {
+                        if (const auto* ufcs = inner->path.data.opt_UfcsKnown()) {
                             stack.push_back(ufcs);
                             ity = &ufcs->type;
                         }
@@ -646,7 +646,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                             DEBUG("ErasedBounds: " << pe->trait << " :: " << pe->item);
                             const HIRTraitPath* tp = nullptr;
                             for (const auto& t : *traits) {
-                                if (t.mPath == pe->trait) {
+                                if (t.path == pe->trait) {
                                     tp = &t;
                                     break;
                                 }
@@ -684,7 +684,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         // --- /UfcsKnown ---
     }
 
-    const bool isMarker = crate.getTraitByPath(sp, traitPath).mIsMarker;
+    const bool isMarker = crate.getTraitByPath(sp, traitPath).isMarker;
     bool pushedNonMarkerGoal = false;
     if (!isMarker) {
         for (const auto& ent : findImplStack) {
@@ -725,14 +725,14 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
     {
         struct H {
             static bool findImplAutoTraitCheck(const StaticTraitResolve& self, const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, tCbFindImpl foundCb, const HIRMarkerImpl& impl, bool& outRv) {
-                DEBUG("- Auto " << (impl.isPositive ? "Pos" : "Neg") << " impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << " " << impl.mParams.fmtBounds());
+                DEBUG("- Auto " << (impl.isPositive ? "Pos" : "Neg") << " impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type << " " << impl.params.fmtBounds());
                 if (impl.isPositive) {
-                    return self.findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.mParams, impl.traitArgs, impl.mType, [&](auto implParams, auto cmp) -> bool {
+                    return self.findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.params, impl.traitArgs, impl.type, [&](auto implParams, auto cmp) -> bool {
                         outRv = foundCb(ImplRef(type, traitParams, &nullAssoc), cmp == HIRCompare::Fuzzy);
                         return outRv;
                     });
                 } else {
-                    return self.findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.mParams, impl.traitArgs, impl.mType, [&](auto implParams, auto cmp) -> bool {
+                    return self.findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.params, impl.traitArgs, impl.type, [&](auto implParams, auto cmp) -> bool {
                         outRv = false;
                         return true;
                     });
@@ -822,11 +822,11 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const HIRSimplePath& tra
         return t->is_Infer();
     });
     for (auto it = traitBounds.begin(); it != traitBounds.end(); ++it) {
-        if (it->first.second.mPath != traitPath) {
+        if (it->first.second.path != traitPath) {
             continue;
         }
         const auto& bType = it->first.first;
-        const auto& bParams = it->first.second.mParams;
+        const auto& bParams = it->first.second.params;
 
         if (typeHasInfer) {
             DEBUG("ivar present: type ?= " << bType);
@@ -852,31 +852,31 @@ bool StaticTraitResolve::findImplBounds(const Span& sp, const HIRSimplePath& tra
     // Obtain a pointer to UfcsKnown for magic later
     const HIRPath::Data::Data_UfcsKnown* assocInfo = nullptr;
     if (const auto* e = type->opt_Path()) {
-        assocInfo = e->path.mData.opt_UfcsKnown();
+        assocInfo = e->path.data.opt_UfcsKnown();
     }
     if (assocInfo) {
         for (auto it = traitBounds.begin(); it != traitBounds.end(); ++it) {
-            if (it->first.second.mPath != assocInfo->trait.mPath || (it->first.first != assocInfo->type && !it->first.first->equalsIgnoringRegions(assocInfo->type))) {
+            if (it->first.second.path != assocInfo->trait.path || (it->first.first != assocInfo->type && !it->first.first->equalsIgnoringRegions(assocInfo->type))) {
                 continue;
             }
             const auto& bound = *it;
-            const auto& bParams = it->first.second.mParams;
+            const auto& bParams = it->first.second.params;
 
-            if (H::comparePp(sp, bParams, assocInfo->trait.mParams)) {
+            if (H::comparePp(sp, bParams, assocInfo->trait.params)) {
                 const auto& traitRef = *bound.second.traitPtr;
                 const auto& at = traitRef.types.at(assocInfo->item);
                 for (const auto& bound : at.traitBounds) {
-                    if (bound.mPath.mPath == traitPath && (!traitParams || H::comparePp(sp, bound.mPath.mParams, *traitParams))) {
+                    if (bound.path.path == traitPath && (!traitParams || H::comparePp(sp, bound.path.params, *traitParams))) {
                         DEBUG("- Found an associated type impl");
 
-                        auto tpMono = MonomorphStatePtr(crate.types, assocInfo->type, &assocInfo->trait.mParams, &assocInfo->params).monomorphTraitpath(sp, bound, false);
+                        auto tpMono = MonomorphStatePtr(crate.types, assocInfo->type, &assocInfo->trait.params, &assocInfo->params).monomorphTraitpath(sp, bound, false);
                         // - Expand associated types
                         for (auto& ty : tpMono.typeBounds) {
                             this->expandAssociatedTypes(sp, ty.second.type);
                         }
                         DEBUG("- tp_mono = " << tpMono);
                         // TODO: Instead of using `type` here, build the real type
-                        if (foundCb(ImplRef(type, mv$(tpMono.mPath.mParams), mv$(tpMono.typeBounds), tpMono.constness), false)) {
+                        if (foundCb(ImplRef(type, mv$(tpMono.path.params), mv$(tpMono.typeBounds), tpMono.constness), false)) {
                             return true;
                         }
                     }
@@ -1028,7 +1028,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
                 placeholdersSet.types.resize(implParams.types.size());
             }
             placeholders.types[i] = crate.types.generic(placeholderName, 2 * 256 + baseImplPlaceholderIdx.ty + i);
-            DEBUG("Placeholder " << placeholders.types[i] << " for I:" << i << " " << implParamsDef.types[i].mName);
+            DEBUG("Placeholder " << placeholders.types[i] << " for I:" << i << " " << implParamsDef.types[i].name);
         }
     }
     for (size_t i = 0; i < implParams.values.size(); i++) {
@@ -1172,17 +1172,17 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
 
                     // TODO: use `assoc_bound.second.source_trait`
                     HIRGenericPath atySrcTrait;
-                    traitContainsType(sp, bTpMono.mPath, *e.trait.traitPtr, atyName.c_str(), atySrcTrait);
+                    traitContainsType(sp, bTpMono.path, *e.trait.traitPtr, atyName.c_str(), atySrcTrait);
 
                     bool rv = false;
                     if (bTyMono->is_Generic() && bTyMono->as_Generic().isPlaceholder()) {
                         DEBUG("- Placeholder param " << bTyMono << ", magic success");
                         rv = true;
                     } else {
-                        rv = this->findImpl(sp, atySrcTrait.mPath, atySrcTrait.mParams, bTyMono, [&](const ImplRef& impl, bool) -> bool {
+                        rv = this->findImpl(sp, atySrcTrait.path, atySrcTrait.params, bTyMono, [&](const ImplRef& impl, bool) -> bool {
                             HIRTypeRef have = impl.getType(crate.types, atyName.c_str(), assocBound.second.atyParams);
                             if (have == HIRTypeRef()) {
-                                have = crate.types.path(HIRPath(impl.getImplType(crate.types), HIRGenericPath(atySrcTrait.mPath, impl.getTraitParams(crate.types)), atyName), HIRTypePathBinding::make_Unbound({}));
+                                have = crate.types.path(HIRPath(impl.getImplType(crate.types), HIRGenericPath(atySrcTrait.path, impl.getTraitParams(crate.types)), atyName), HIRTypePathBinding::make_Unbound({}));
                             }
                             this->expandAssociatedTypes(sp, have);
 
@@ -1209,7 +1209,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
                     DEBUG("- Placeholder param " << bTyMono << ", magic success");
                     rv = true;
                 } else {
-                    rv = this->findImpl(sp, bTpMono.mPath.mPath, bTpMono.mPath.mParams, bTyMono, [&](const auto& impl, bool) {
+                    rv = this->findImpl(sp, bTpMono.path.path, bTpMono.path.params, bTyMono, [&](const auto& impl, bool) {
                         return true;
                     });
                 }
@@ -1265,8 +1265,8 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
 }
 
 bool StaticTraitResolve::findImplCheckCrate(const Span& sp, const HIRSimplePath& traitPath, const HIRPathParams* traitParams, const HIRTypeData* type, tCbFindImpl foundCb, const HIRTraitImpl& impl) const {
-    DEBUG("impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << impl.mParams.fmtBounds());
-    return this->findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.mParams, impl.traitArgs, impl.mType, [&](auto implParams, auto match) {
+    DEBUG("impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type << impl.params.fmtBounds());
+    return this->findImplCheckCrateRaw(sp, traitPath, traitParams, type, impl.params, impl.traitArgs, impl.type, [&](auto implParams, auto match) {
         return foundCb(ImplRef(mv$(implParams), crate.getTraitByPath(sp, traitPath), traitPath, impl), (match == HIRCompare::Fuzzy));
     });
 }
@@ -1288,10 +1288,10 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
     if (const auto* ep = type->opt_Path()) {
         const auto& e = *ep;
         HIRCompare res = HIRCompare::Equal;
-        TU_MATCH_HDRA( (e.path.mData), {)
+        TU_MATCH_HDRA( (e.path.data), {)
         TU_ARMA(Generic, pe) {
                 HIRTypeRef tmp;
-                auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe.mParams, nullptr);
+                auto monomorph = MonomorphStatePtr(crate.types, nullptr, &pe.params, nullptr);
                 // HELPER: Get a possibily monomorphised version of the input type (stored in `tmp` if needed)
                 auto monomorphGet = [&](const auto& ty) -> const HIRTypeData* {
                     return this->monomorphExpandOpt(sp, tmp, ty, monomorph);
@@ -1312,7 +1312,7 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                         // - Problems occur with type parameters
                         TU_MATCH(
                             HIRStruct::Data,
-                            (str.mData),
+                            (str.data),
                             (se),
                             (Unit, ),
                             (Tuple,
@@ -1336,7 +1336,7 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                         )
                     }
                     TU_ARMA(Enum, tpb) {
-                        if (const auto* e = tpb->mData.opt_Data()) {
+                        if (const auto* e = tpb->data.opt_Data()) {
                             for (const auto& var : *e) {
                                 const auto& fldTyMono = monomorphGet(var.type);
                                 DEBUG("Enum '" << var.name << "'" << fldTyMono);
@@ -1348,7 +1348,7 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                         }
                     }
                     TU_ARMA(Union, tpb) {
-                        for (const auto& fld : tpb->mVariants) {
+                        for (const auto& fld : tpb->variants) {
                             const auto& fldTyMono = monomorphGet(fld.ty);
                             DEBUG("Union '" << fld.name << "' " << fldTyMono);
                             res &= typeImplsTrait(fldTyMono);
@@ -1403,9 +1403,9 @@ const HIRTypeData* StaticTraitResolve::fixTraitDefaultReturn(const Span& sp, con
         const auto& trait = crate.getTraitByPath(sp, *topIp.trait);
         tmp = cloneTyWith(crate.types, sp, tpl, [&](const HIRTypeData* tpl, HIRTypeRef& out) -> bool {
             if (const auto* p = tpl->opt_Path()) {
-                if (const auto* pe = p->path.mData.opt_UfcsKnown()) {
+                if (const auto* pe = p->path.data.opt_UfcsKnown()) {
                     DEBUG("ATY " << tpl);
-                    if (pe->type == topIp.ty && pe->trait.mPath == *topIp.trait && std::strncmp(pe->item.c_str(), prefix.c_str(), prefix.size()) == 0) {
+                    if (pe->type == topIp.ty && pe->trait.path == *topIp.trait && std::strncmp(pe->item.c_str(), prefix.c_str(), prefix.size()) == 0) {
                         // Does this type have a default?
                         const auto& ty = trait.types.at(pe->item);
                         DEBUG("-> " << ty.defaultValue);
@@ -1443,18 +1443,18 @@ void StaticTraitResolve::revealOpaqueTypes(const Span& sp, HIRTypeRef& input) co
             TU_ARMA(Fcn, e) {
                 MonomorphState monomorph(resolve.hirCrate().types);
                 auto value = resolve.getValue(sp, e.origin, monomorph);
-                if (value.is_NotYetKnown() && e.origin.mData.is_UfcsKnown()) {
-                    const auto& path = e.origin.mData.as_UfcsKnown();
+                if (value.is_NotYetKnown() && e.origin.data.is_UfcsKnown()) {
+                    const auto& path = e.origin.data.as_UfcsKnown();
                     auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << path.item << "_" << e.index));
                     revealed = resolve.hirCrate().types.path(HIRPath(path.type, path.trait.clone(), name, path.params.clone()), {});
                 } else {
                     ASSERT_BUG(sp, value.is_Function(), "ErasedType with Fcn type doesn't point at a function: " << e.origin << ": " << value.tagStr());
                     const auto& function = *value.as_Function();
-                    if (e.index >= function.mCode.erasedTypes.size()) {
+                    if (e.index >= function.code.erasedTypes.size()) {
                         resolve.hirCrate().getOrGenMir(resolve.board(), HIRItemPath(e.origin), function);
                     }
-                    ASSERT_BUG(sp, e.index < function.mCode.erasedTypes.size(), "Erased type index out of range for " << e.origin << " - " << e.index << " >= " << function.mCode.erasedTypes.size());
-                    revealed = monomorph.monomorphType(sp, function.mCode.erasedTypes[e.index]);
+                    ASSERT_BUG(sp, e.index < function.code.erasedTypes.size(), "Erased type index out of range for " << e.origin << " - " << e.index << " >= " << function.code.erasedTypes.size());
+                    revealed = monomorph.monomorphType(sp, function.code.erasedTypes[e.index]);
                 }
                 resolve.expandAssociatedTypes(sp, revealed);
             }
@@ -1529,9 +1529,9 @@ void StaticTraitResolve::revealOpaqueTypesPath(const Span& sp, HIRPath& input) c
     };
 
     expandAssociatedTypesPath(sp, input);
-    TU_MATCH_HDRA((input.mData), {)
+    TU_MATCH_HDRA((input.data), {)
     TU_ARMA(Generic, e) {
-        revealParams(e.mParams);
+        revealParams(e.params);
     }
     TU_ARMA(UfcsInherent, e) {
         revealOpaqueTypes(sp, e.type);
@@ -1540,7 +1540,7 @@ void StaticTraitResolve::revealOpaqueTypesPath(const Span& sp, HIRPath& input) c
     }
     TU_ARMA(UfcsKnown, e) {
         revealOpaqueTypes(sp, e.type);
-        revealParams(e.trait.mParams);
+        revealParams(e.trait.params);
         revealParams(e.params);
     }
     TU_ARMA(UfcsUnknown, e) {
@@ -1567,9 +1567,9 @@ void StaticTraitResolve::evaluatePathParams(const Span& sp, HIRPathParams& param
 
 void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& input) const {
     TRACE_FUNCTION_FR(input, input);
-    TU_MATCH_HDRA( (input.mData), { )
+    TU_MATCH_HDRA( (input.data), { )
     TU_ARMA(Generic, e2) {
-            this->expandAssociatedTypesParams(sp, e2.mParams);
+            this->expandAssociatedTypesParams(sp, e2.params);
         }
         TU_ARMA(UfcsInherent, e2) {
             this->expandAssociatedTypesInner(sp, e2.type);
@@ -1581,7 +1581,7 @@ void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& inpu
         }
         TU_ARMA(UfcsKnown, e2) {
             this->expandAssociatedTypesInner(sp, e2.type);
-            this->expandAssociatedTypesParams(sp, e2.trait.mParams);
+            this->expandAssociatedTypesParams(sp, e2.trait.params);
             this->expandAssociatedTypesParams(sp, e2.params);
         }
         TU_ARMA(UfcsUnknown, e2) {
@@ -1594,10 +1594,10 @@ void StaticTraitResolve::expandAssociatedTypesPath(const Span& sp, HIRPath& inpu
 bool StaticTraitResolve::expandAssociatedTypesSingle(const Span& sp, HIRTypeRef& input) const {
     TRACE_FUNCTION_F(input);
     if (input->is_Path()) {
-        if (input->as_Path().path.mData.is_UfcsInherent()) {
+        if (input->as_Path().path.data.is_UfcsInherent()) {
             return expandAssociatedTypesUfcsInherent(sp, input);
         }
-        if (input->as_Path().path.mData.is_UfcsKnown()) {
+        if (input->as_Path().path.data.is_UfcsKnown()) {
             return expandAssociatedTypesUfcsKnown(sp, input, /*recurse=*/false);
         }
     }
@@ -1638,13 +1638,13 @@ void StaticTraitResolve::expandAssociatedTypesParams(const Span& sp, HIRPathPara
 }
 
 void StaticTraitResolve::expandAssociatedTypesTp(const Span& sp, HIRTraitPath& input) const {
-    expandAssociatedTypesParams(sp, input.mPath.mParams);
+    expandAssociatedTypesParams(sp, input.path.params);
     for (auto& arg : input.typeBounds) {
-        this->expandAssociatedTypesParams(sp, arg.second.sourceTrait.mParams);
+        this->expandAssociatedTypesParams(sp, arg.second.sourceTrait.params);
         this->expandAssociatedTypesInner(sp, arg.second.type);
     }
     for (auto& arg : input.traitBounds) {
-        this->expandAssociatedTypesParams(sp, arg.second.sourceTrait.mParams);
+        this->expandAssociatedTypesParams(sp, arg.second.sourceTrait.params);
         for (auto& t : arg.second.traits) {
             this->expandAssociatedTypesTp(sp, t);
         }
@@ -1662,11 +1662,11 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
         TU_ARMA(Primitive, e) {
         }
         TU_ARMA(Path, e) {
-        TU_MATCH_HDRA( (e.path.mData), { )
+        TU_MATCH_HDRA( (e.path.data), { )
         TU_ARMA(Generic, e2) {
-                    evaluatePathParams(sp, e2.mParams);
-                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, e.binding.getGenerics(), e2.mParams);
-                    expandAssociatedTypesParams(sp, e2.mParams);
+                    evaluatePathParams(sp, e2.params);
+                    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, e.binding.getGenerics(), e2.params);
+                    expandAssociatedTypesParams(sp, e2.params);
                 }
                 TU_ARMA(UfcsInherent, e2) {
                     this->expandAssociatedTypesInner(sp, e2.type);
@@ -1719,9 +1719,9 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
         TU_ARMA(Generic, e) {
         }
         TU_ARMA(TraitObject, e) {
-            expandAssociatedTypesTp(sp, e.mTrait);
+            expandAssociatedTypesTp(sp, e.trait);
             for (auto& m : e.markers) {
-                expandAssociatedTypesParams(sp, m.mParams);
+                expandAssociatedTypesParams(sp, m.params);
             }
         }
         TU_ARMA(ErasedType, e) {
@@ -1767,9 +1767,9 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
             expandAssociatedTypesInner(sp, e.inner);
         }
         TU_ARMA(NamedFunction, e) {
-        TU_MATCH_HDRA( (e.path.mData), { )
+        TU_MATCH_HDRA( (e.path.data), { )
         TU_ARMA(Generic, e2) {
-                    expandAssociatedTypesParams(sp, e2.mParams);
+                    expandAssociatedTypesParams(sp, e2.params);
                 }
                 TU_ARMA(UfcsInherent, e2) {
                     this->expandAssociatedTypesInner(sp, e2.type);
@@ -1781,7 +1781,7 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
                 }
                 TU_ARMA(UfcsKnown, e2) {
                     this->expandAssociatedTypesInner(sp, e2.type);
-                    expandAssociatedTypesParams(sp, e2.trait.mParams);
+                    expandAssociatedTypesParams(sp, e2.trait.params);
                     expandAssociatedTypesParams(sp, e2.params);
                 }
                 TU_ARMA(UfcsUnknown, e2) {
@@ -1795,7 +1795,7 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
             for (auto& ty : e.argTypes) {
                 expandAssociatedTypesInner(sp, ty);
             }
-            expandAssociatedTypesInner(sp, e.mRettype);
+            expandAssociatedTypesInner(sp, e.rettype);
         }
         TU_ARMA(NodeType, e) {
         }
@@ -1805,9 +1805,9 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
 
 bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTypeRef& input) const {
     TRACE_FUNCTION_FR(input, input);
-    ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.mData.is_UfcsInherent(), input);
+    ASSERT_BUG(sp, input->is_Path() && input->as_Path().path.data.is_UfcsInherent(), input);
 
-    const auto& pe = input->as_Path().path.mData.as_UfcsInherent();
+    const auto& pe = input->as_Path().path.data.as_UfcsInherent();
     if (visitTyWith(pe.type, [](const HIRTypeData* type) {
         const auto* erased = type->opt_ErasedType();
         const auto* opaque = erased ? erased->inner.opt_Alias() : nullptr;
@@ -1829,10 +1829,10 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
         }
 
         bool selected = false;
-        this->findImplCheckCrateRaw(sp, HIRSimplePath(), nullptr, pe.type, impl.mParams, noTraitParams, impl.mType, [&](HIRPathParams candidateParams, HIRCompare match) {
+        this->findImplCheckCrateRaw(sp, HIRSimplePath(), nullptr, pe.type, impl.params, noTraitParams, impl.type, [&](HIRPathParams candidateParams, HIRCompare match) {
             if (match != HIRCompare::Unequal && (bestMatch == HIRCompare::Unequal || match == HIRCompare::Equal)) {
                 alias = &itemIt->second.data;
-                implParamsDef = &impl.mParams;
+                implParamsDef = &impl.params;
                 implParams = mv$(candidateParams);
                 bestMatch = match;
                 selected = true;
@@ -1850,12 +1850,12 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsInherent(const Span& sp, HIRTy
     ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, implParamsDef, implParams);
 
     auto itemParams = pe.params.clone();
-    if (itemParams.types.size() != alias->mParams.types.size() || itemParams.values.size() != alias->mParams.values.size()) {
+    if (itemParams.types.size() != alias->params.types.size() || itemParams.values.size() != alias->params.values.size()) {
         ERROR(sp, E0000, "Incorrect generic arguments for inherent associated type " << input);
     }
-    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &alias->mParams, itemParams);
+    ConvertHIRConstantEvaluateMethodParams(sp, this->wb, crate, &alias->params, itemParams);
 
-    input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias->mType);
+    input = MonomorphStatePtr(crate.types, pe.type, &implParams, &itemParams).monomorphType(sp, alias->type);
     return true;
 }
 
@@ -1865,7 +1865,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     TRACE_FUNCTION_FR(input, input);
     auto data = input->cloneData();
     auto& e = data.as_Path();
-    auto& e2 = e.path.mData.as_UfcsKnown();
+    auto& e2 = e.path.data.as_UfcsKnown();
     auto publish = [&]() {
         input = crate.types.intern(data.cloneData());
     };
@@ -1922,7 +1922,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
 
     sRecursionLevel += 1;
     this->expandAssociatedTypesInner(sp, e2.type);
-    for (auto& arg : e2.trait.mParams.types) {
+    for (auto& arg : e2.trait.params.types) {
         this->expandAssociatedTypesInner(sp, arg);
     }
     sRecursionLevel -= 1;
@@ -1932,8 +1932,8 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
 
     {
         const auto* t = &e2.type;
-        while ((*t)->is_Path() && (*t)->as_Path().path.mData.is_UfcsKnown()) {
-            t = &(*t)->as_Path().path.mData.as_UfcsKnown().type;
+        while ((*t)->is_Path() && (*t)->as_Path().path.data.is_UfcsKnown()) {
+            t = &(*t)->as_Path().path.data.as_UfcsKnown().type;
         }
         if ((*t)->is_Infer()) {
             DEBUG("Infer seen in static EAT, leaving as-is");
@@ -1975,12 +1975,12 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         TU_ARMA(NodeType, te) {
         TU_MATCH_HDRA((te), {)
         TU_ARMA(Closure, nodeP) {
-                    if (e2.trait.mPath == langAsyncFn() || e2.trait.mPath == langAsyncFnMut() || e2.trait.mPath == langAsyncFnOnce()) {
+                    if (e2.trait.path == langAsyncFn() || e2.trait.path == langAsyncFnMut() || e2.trait.path == langAsyncFnOnce()) {
                         if (expandAsyncCallableAssociated(nodeP->returnType)) {
                             return true;
                         }
                     }
-                    if (e2.trait.mPath == langFn() || e2.trait.mPath == langFnMut() || e2.trait.mPath == langFnOnce()) {
+                    if (e2.trait.path == langFn() || e2.trait.path == langFnMut() || e2.trait.path == langFnOnce()) {
                         if (e2.item == "Output") {
                             input = nodeP->returnType;
                             return true;
@@ -2059,17 +2059,17 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
     // Use bounds on other associated types too (if `e2.type` was resolved to a fixed associated type)
     if(const auto* teInner = e2.type->opt_Path())
     {
-        if (const auto* peInnerP = teInner->path.mData.opt_UfcsKnown()) {
+        if (const auto* peInnerP = teInner->path.data.opt_UfcsKnown()) {
             const auto& peInner = *peInnerP;
             // TODO: Search for equality bounds on this associated type (e3) that match the entire type (e2)
             // - Does simplification of complex associated types
-            const auto& traitPtr = this->crate.getTraitByPath(sp, peInner.trait.mPath);
+            const auto& traitPtr = this->crate.getTraitByPath(sp, peInner.trait.path);
             const auto& assocTy = traitPtr.types.at(peInner.item);
 
             DEBUG("Inner UfcsKnown");
 
             // Resolve where Self=pe_inner.type (i.e. for the trait this inner UFCS is on)
-            auto cbPlaceholdersTrait = MonomorphStatePtr(crate.types, peInner.type, &peInner.trait.mParams, &peInner.params);
+            auto cbPlaceholdersTrait = MonomorphStatePtr(crate.types, peInner.type, &peInner.trait.params, &peInner.params);
             for (const auto& bound : assocTy.traitBounds) {
                 // Associated equalities on a trait bound carry the trait that
                 // actually declares the item. That can be a parent trait of
@@ -2091,9 +2091,9 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
                 }
 
                 // Find trait in this trait.
-                auto boundParams = cbPlaceholdersTrait.monomorphPathParams(sp, bound.mPath.mParams, false);
-                const auto& boundTrait = crate.getTraitByPath(sp, bound.mPath.mPath);
-                bool replaced = this->findNamedTraitInTrait(sp, e2.trait.mPath, e2.trait.mParams, boundTrait, bound.mPath.mPath, boundParams, e2.type, [&](const auto& params, const auto& assoc) {
+                auto boundParams = cbPlaceholdersTrait.monomorphPathParams(sp, bound.path.params, false);
+                const auto& boundTrait = crate.getTraitByPath(sp, bound.path.path);
+                bool replaced = this->findNamedTraitInTrait(sp, e2.trait.path, e2.trait.params, boundTrait, bound.path.path, boundParams, e2.type, [&](const auto& params, const auto& assoc) {
                     auto it = assoc.find(e2.item);
                     if (it != assoc.end()) {
                         input = it->second.type;
@@ -2116,12 +2116,12 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
 
     // - Search for the actual trait containing this associated type
     HIRGenericPath  traitPath;
-    if( !this->traitContainsType(sp, e2.trait, this->crate.getTraitByPath(sp, e2.trait.mPath), e2.item.c_str(), traitPath) )
+    if( !this->traitContainsType(sp, e2.trait, this->crate.getTraitByPath(sp, e2.trait.path), e2.item.c_str(), traitPath) )
         BUG(sp, "Cannot find associated type " << e2.item << " anywhere in trait " << e2.trait);
 
     bool replacementHappened = true;
     ::ImplRef  bestImpl;
-    rv = this->findImpl(sp, traitPath.mPath, traitPath.mParams, e2.type, [&](ImplRef impl, bool fuzzy) {
+    rv = this->findImpl(sp, traitPath.path, traitPath.params, e2.type, [&](ImplRef impl, bool fuzzy) {
         DEBUG("[expand_associated_types] Found " << impl);
         // If a fuzzy match was found, monomorphise and EAT the checked types and try again
         // - A fuzzy can be caused by an opaque match.
@@ -2142,8 +2142,8 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
                 this->expandAssociatedTypes(sp, ty);
             }
             DEBUG("pp -> " << pp);
-            if (pp.compareWithPlaceholders(sp, traitPath.mParams, cbIdent) == HIRCompare::Unequal) {
-                DEBUG("[expand_associated_types] - Fuzzy - params don't match: " << pp << " != " << traitPath.mParams);
+            if (pp.compareWithPlaceholders(sp, traitPath.params, cbIdent) == HIRCompare::Unequal) {
+                DEBUG("[expand_associated_types] - Fuzzy - params don't match: " << pp << " != " << traitPath.params);
                 return false;
             }
             DEBUG("[expand_associated_types] - Fuzzy - Actually matches");
@@ -2185,7 +2185,7 @@ bool StaticTraitResolve::expandAssociatedTypesUfcsKnown(const Span& sp, HIRTypeR
         // receiver is concrete and no more-specific impl matched. Generic or
         // unresolved receivers must remain opaque until specialization can be
         // decided.
-        if (!specializationLookupNeedsResolution(e2.type, traitPath.mParams)) {
+        if (!specializationLookupNeedsResolution(e2.type, traitPath.params)) {
             auto nt = bestImpl.getType(crate.types, e2.item.c_str(), e2.params);
             if (nt != HIRTypeRef()) {
                 input = mv$(nt);
@@ -2238,8 +2238,8 @@ bool StaticTraitResolve::replaceEqualities(HIRTypeRef& input) const {
 // -------------------------------------------------------------------------------------------------------------------
 
 bool StaticTraitResolve::iterateAtyBounds(const Span& sp, const HIRPath::Data::Data_UfcsKnown& pe, ::std::function<bool(const HIRTraitPath&)> cb) const {
-    const auto& traitRef = crate.getTraitByPath(sp, pe.trait.mPath);
-    ASSERT_BUG(sp, traitRef.types.count(pe.item) != 0, "Trait " << pe.trait.mPath << " doesn't contain an associated type " << pe.item);
+    const auto& traitRef = crate.getTraitByPath(sp, pe.trait.path);
+    ASSERT_BUG(sp, traitRef.types.count(pe.item) != 0, "Trait " << pe.trait.path << " doesn't contain an associated type " << pe.item);
     const auto& atyDef = traitRef.types.find(pe.item)->second;
 
     for (const auto& bound : atyDef.traitBounds) {
@@ -2248,7 +2248,7 @@ bool StaticTraitResolve::iterateAtyBounds(const Span& sp, const HIRPath::Data::D
         }
     }
     // Search `<Self as Trait>::Name` bounds on the trait itself
-    for (const auto& bound : traitRef.mParams.bounds) {
+    for (const auto& bound : traitRef.params.bounds) {
         if (!bound.is_TraitBound()) {
             continue;
         }
@@ -2261,11 +2261,11 @@ bool StaticTraitResolve::iterateAtyBounds(const Span& sp, const HIRPath::Data::D
             continue;
         }
 
-        const auto& beTypePe = be.type->as_Path().path.mData.as_UfcsKnown();
+        const auto& beTypePe = be.type->as_Path().path.data.as_UfcsKnown();
         if (beTypePe.type != crate.types.self()) {
             continue;
         }
-        if (beTypePe.trait.mPath != pe.trait.mPath) {
+        if (beTypePe.trait.path != pe.trait.path) {
             continue;
         }
         if (beTypePe.item != pe.item) {
@@ -2284,7 +2284,7 @@ bool StaticTraitResolve::iterateAtyBounds(const Span& sp, const HIRPath::Data::D
 // -------------------------------------------------------------------------------------------------------------------
 bool StaticTraitResolve::findNamedTraitInTrait(const Span& sp, const HIRSimplePath& des, const HIRPathParams& desParams, const HIRTrait& traitPtr, const HIRSimplePath& traitPath, const HIRPathParams& pp, const HIRTypeData* targetType, ::std::function<bool(const HIRPathParams&, HIRTraitPath::assocListT)> callback) const {
     TRACE_FUNCTION_F(des << desParams << " from " << traitPath << pp);
-    if (pp.types.size() != traitPtr.mParams.types.size()) {
+    if (pp.types.size() != traitPtr.params.types.size()) {
         BUG(sp, "Incorrect number of parameters for trait - " << traitPath << pp);
     }
 
@@ -2304,11 +2304,11 @@ bool StaticTraitResolve::findNamedTraitInTrait(const Span& sp, const HIRSimplePa
         DEBUG(pt << " => " << ptMono);
         // TODO: When in pre-typecheck mode, this needs to be a fuzzy match (because there might be a UfcsUnknown in the
         // monomorphed version) OR, there may be placeholders
-        if (pt.mPath.mPath == des) {
-            auto cmp = ptMono.mPath.mParams.compareWithPlaceholders(sp, desParams, HIRResolvePlaceholdersNop());
+        if (pt.path.path == des) {
+            auto cmp = ptMono.path.params.compareWithPlaceholders(sp, desParams, HIRResolvePlaceholdersNop());
             // pt_mono.m_path.m_params == des_params )
             if (cmp != HIRCompare::Unequal) {
-                return callback(ptMono.mPath.mParams, mv$(ptMono.typeBounds));
+                return callback(ptMono.path.params, mv$(ptMono.typeBounds));
             }
         }
     }
@@ -2325,11 +2325,11 @@ bool StaticTraitResolve::traitContainsType(const Span& sp, const HIRGenericPath&
     }
 
     auto tySelf = crate.types.self();
-    auto monomorph = MonomorphStatePtr(crate.types, tySelf, &traitPath.mParams, nullptr);
+    auto monomorph = MonomorphStatePtr(crate.types, tySelf, &traitPath.params, nullptr);
     for (const auto& st : traitPtr.allParentTraits) {
         if (st.traitPtr->types.count(name)) {
-            outPath.mPath = st.mPath.mPath;
-            outPath.mParams = monomorph.monomorphPathParams(sp, st.mPath.mParams, false);
+            outPath.path = st.path.path;
+            outPath.params = monomorph.monomorphPathParams(sp, st.path.params, false);
             return true;
         }
     }
@@ -2368,7 +2368,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
                 if (!markings->isCopy) {
                     // Doesn't impl Copy
                     return false;
-                } else if (!e.path.mData.as_Generic().mParams.hasParams()) {
+                } else if (!e.path.data.as_Generic().params.hasParams()) {
                     // No params, must be Copy
                     return true;
                 } else {
@@ -2446,7 +2446,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
         }
         TU_ARMA(ErasedType, e) {
             for (const auto& trait : e.traits) {
-                if (findNamedTraitInTrait(sp, langCopy(), {}, *trait.traitPtr, trait.mPath.mPath, trait.mPath.mParams, ty, [](const auto&, auto) {
+                if (findNamedTraitInTrait(sp, langCopy(), {}, *trait.traitPtr, trait.path.path, trait.path.params, ty, [](const auto&, auto) {
                     return true;
                 })) {
                     return true;
@@ -2559,7 +2559,7 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
         }
         TU_ARMA(ErasedType, e) {
             for (const auto& trait : e.traits) {
-                if (findNamedTraitInTrait(sp, langClone(), {}, *trait.traitPtr, trait.mPath.mPath, trait.mPath.mParams, ty, [](const auto&, auto) {
+                if (findNamedTraitInTrait(sp, langClone(), {}, *trait.traitPtr, trait.path.path, trait.path.params, ty, [](const auto&, auto) {
                     return true;
                 })) {
                     return true;
@@ -2606,9 +2606,9 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty)
                         return false;
                     }
                     TU_ARMA(Struct, pbe) {
-                        const auto& params = e.path.mData.as_Generic().mParams;
+                        const auto& params = e.path.data.as_Generic().params;
                         const auto& str = *pbe;
-            TU_MATCH_HDRA( (str.mData), {)
+            TU_MATCH_HDRA( (str.data), {)
             TU_ARMA(Unit, e)
                 return false;
                             TU_ARMA(Tuple, e) {
@@ -2634,8 +2634,8 @@ bool StaticTraitResolve::typeIsImpossible(const Span& sp, const HIRTypeData* ty)
             }
                     }
                     TU_ARMA(Enum, pbe) {
-                        const auto& params = e.path.mData.as_Generic().mParams;
-            TU_MATCH_HDRA( (pbe->mData), { )
+                        const auto& params = e.path.data.as_Generic().params;
+            TU_MATCH_HDRA( (pbe->data), { )
             TU_ARMA(Value, e) {
                                 return e.variants.size() == 0;
                             }
@@ -2710,7 +2710,7 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
 
     auto ir = traitBounds.equal_range(std::make_pair(srcTy, std::ref(langUnsize())));
     for (auto it = ir.first; it != ir.second; ++it) {
-        const auto& beDst = it->first.second.mParams.types.at(0);
+        const auto& beDst = it->first.second.params.types.at(0);
 
         if (dstTy == beDst) {
             DEBUG("Found bounded");
@@ -2719,14 +2719,14 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
     }
 
     // Associated types, check the bounds in the trait.
-    if (srcTy->is_Path() && srcTy->as_Path().path.mData.is_UfcsKnown()) {
-        const auto& pe = srcTy->as_Path().path.mData.as_UfcsKnown();
-        auto ms = MonomorphStatePtr(crate.types, pe.type, &pe.trait.mParams, nullptr);
+    if (srcTy->is_Path() && srcTy->as_Path().path.data.is_UfcsKnown()) {
+        const auto& pe = srcTy->as_Path().path.data.as_UfcsKnown();
+        auto ms = MonomorphStatePtr(crate.types, pe.type, &pe.trait.params, nullptr);
         auto foundBound = this->iterateAtyBounds(sp, pe, [&](const HIRTraitPath& bound) {
-            if (bound.mPath.mPath != langUnsize()) {
+            if (bound.path.path != langUnsize()) {
                 return false;
             }
-            const auto& beDstTpl = bound.mPath.mParams.types.at(0);
+            const auto& beDstTpl = bound.path.params.types.at(0);
             HIRTypeRef tmpTy;
             const auto& beDst = ms.maybeMonomorphType(sp, tmpTy, beDstTpl);
 
@@ -2747,17 +2747,17 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
         if (dstIsUnsizable || srcIsUnsizable) {
             DEBUG("Struct unsize? " << dstTy << " <- " << srcTy);
             const auto& str = *dstTy->as_Path().binding.as_Struct();
-            const auto& dstGp = dstTy->as_Path().path.mData.as_Generic();
-            const auto& srcGp = srcTy->as_Path().path.mData.as_Generic();
+            const auto& dstGp = dstTy->as_Path().path.data.as_Generic();
+            const auto& srcGp = srcTy->as_Path().path.data.as_Generic();
 
             if (dstGp == srcGp) {
                 DEBUG("Can't Unsize, destination and source are identical");
                 return false;
-            } else if (dstGp.mPath == srcGp.mPath) {
+            } else if (dstGp.path == srcGp.path) {
                 DEBUG("Checking for Unsize " << dstGp << " <- " << srcGp);
                 // Structures are equal, add the requirement that the ?Sized parameter also impl Unsize
-                const auto& dstInner = dstGp.mParams.types.at(str.structMarkings.unsizedParam);
-                const auto& srcInner = srcGp.mParams.types.at(str.structMarkings.unsizedParam);
+                const auto& dstInner = dstGp.params.types.at(str.structMarkings.unsizedParam);
+                const auto& srcInner = srcGp.params.types.at(str.structMarkings.unsizedParam);
                 return this->canUnsize(sp, dstInner, srcInner);
             } else {
                 DEBUG("Can't Unsize, destination and source are different structs");
@@ -2776,14 +2776,14 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
         // (Trait) <- (Trait+Foo)
         if (const auto* se = srcTy->opt_TraitObject()) {
             // 1. Data trait must be the same
-            if (de->mTrait.mPath.mPath != se->mTrait.mPath.mPath) {
+            if (de->trait.path.path != se->trait.path.path) {
                 // Ensure that `de->m_trait` is a parent of `se->m_trait`
-                const auto& trait = *se->mTrait.traitPtr;
+                const auto& trait = *se->trait.traitPtr;
                 bool found = false;
                 for (const auto& pt : trait.allParentTraits) {
-                    if (pt.mPath.mPath == de->mTrait.mPath.mPath) {
-                        auto p = MonomorphStatePtr(crate.types, nullptr, &se->mTrait.mPath.mParams, nullptr).monomorphGenericpath(sp, pt.mPath);
-                        if (p == de->mTrait.mPath) {
+                    if (pt.path.path == de->trait.path.path) {
+                        auto p = MonomorphStatePtr(crate.types, nullptr, &se->trait.path.params, nullptr).monomorphGenericpath(sp, pt.path);
+                        if (p == de->trait.path) {
                             found = true;
                             break;
                         }
@@ -2794,7 +2794,7 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
                     return false;
                 }
             } else {
-                if (de->mTrait.mPath != se->mTrait.mPath) {
+                if (de->trait.path != se->trait.path) {
                     DEBUG("Mismatched data trait params");
                     return false;
                 }
@@ -2820,17 +2820,17 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
         bool good;
 
         HIRTypeData::Data_TraitObject tmpE;
-        tmpE.mTrait.mPath = de->mTrait.mPath.mPath;
+        tmpE.trait.path = de->trait.path.path;
 
         // Check data trait first.
-        if (de->mTrait.mPath.mPath == HIRSimplePath()) {
+        if (de->trait.path.path == HIRSimplePath()) {
             ASSERT_BUG(sp, de->markers.size() > 0, "TraitObject with no traits - " << dstTy);
             good = true;
         } else {
             good = false;
-            findImpl(sp, de->mTrait.mPath.mPath, de->mTrait.mPath.mParams, srcTy, [&](const auto impl, auto fuzz) {
+            findImpl(sp, de->trait.path.path, de->trait.path.params, srcTy, [&](const auto impl, auto fuzz) {
                 good = true;
-                for (const auto& aty : de->mTrait.typeBounds) {
+                for (const auto& aty : de->trait.typeBounds) {
                     // TODO: Can ATY bounds have generics
                     auto atyv = impl.getType(crate.types, aty.first.c_str(), aty.second.atyParams);
                     if (atyv == HIRTypeRef()) {
@@ -2858,15 +2858,15 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
 
         // Then markers
         auto cb = [&](const auto impl, auto) {
-            tmpE.markers.back().mParams = impl.getTraitParams(crate.types);
+            tmpE.markers.back().params = impl.getTraitParams(crate.types);
             return true;
         };
         for (const auto& marker : de->markers) {
             if (!good) {
                 break;
             }
-            tmpE.markers.push_back(marker.mPath);
-            good &= this->findImpl(sp, marker.mPath, marker.mParams, srcTy, cb);
+            tmpE.markers.push_back(marker.path);
+            good &= this->findImpl(sp, marker.path, marker.params, srcTy, cb);
         }
 
         return good;
@@ -2899,7 +2899,7 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             return HIRCompare::Unequal;
         }
         TU_ARMA(Path, e) {
-            auto monomorphCb = MonomorphStatePtr(crate.types, nullptr, e.path.mData.is_Generic() ? &e.path.mData.as_Generic().mParams : nullptr, nullptr);
+            auto monomorphCb = MonomorphStatePtr(crate.types, nullptr, e.path.data.is_Generic() ? &e.path.data.as_Generic().params : nullptr, nullptr);
             HIRTypeRef tmpTy;
             auto monomorph = [&](const auto& tpl) -> const HIRTypeData* {
                 return this->monomorphExpandOpt(sp, tmpTy, tpl, monomorphCb);
@@ -2913,12 +2913,12 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                 return HIRCompare::Unequal;
 
                 TU_ARMA(Struct, pbe) {
-                    const HIRGenericPath& p = e.path.mData.as_Generic();
-                    if (p.mPath == crate.getLangItemPath(sp, "unsafe_cell")) {
+                    const HIRGenericPath& p = e.path.data.as_Generic();
+                    if (p.path == crate.getLangItemPath(sp, "unsafe_cell")) {
                         return HIRCompare::Equal;
                     }
                     // TODO: Cache this result?
-            TU_MATCH_HDRA( (pbe->mData), { )
+            TU_MATCH_HDRA( (pbe->data), { )
             TU_ARMA(Unit, _)    return HIRCompare::Unequal;
                         TU_ARMA(Tuple, e) {
                             for (const auto& v : e) {
@@ -2949,7 +2949,7 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             }
                 }
                 TU_ARMA(Enum, pbe) {
-            TU_MATCH_HDRA( (pbe->mData), { )
+            TU_MATCH_HDRA( (pbe->data), { )
             TU_ARMA(Value, _)   return HIRCompare::Unequal;
                         TU_ARMA(Data, ee) {
                             for (const auto& var : ee) {
@@ -2967,7 +2967,7 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             }
                 }
                 TU_ARMA(Union, pbe) {
-                    for (const auto& var : pbe->mVariants) {
+                    for (const auto& var : pbe->variants) {
                         switch (this->typeIsInteriorMutable(sp, monomorph(var.ty))) {
                             case HIRCompare::Equal:
                                 return HIRCompare::Equal;
@@ -3129,11 +3129,11 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
                             return MetadataType::TraitObject;
                         case HIRStructMarkings::DstType::None:
                         case HIRStructMarkings::DstType::Possible: {
-                            const auto& params = e.path.mData.as_Generic().mParams;
+                            const auto& params = e.path.data.as_Generic().params;
                             auto monomorph = [&](const auto& tpl) {
                                 return this->monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &params, nullptr));
                             };
-                            TU_MATCHA((pbe->mData), (se), (Unit, return MetadataType::None;), (Tuple, return se.empty() ? MetadataType::None : this->metadataType(sp, monomorph(se.back().ent));), (Named, return se.empty() ? MetadataType::None : this->metadataType(sp, monomorph(se.back().ty));))
+                            TU_MATCHA((pbe->data), (se), (Unit, return MetadataType::None;), (Tuple, return se.empty() ? MetadataType::None : this->metadataType(sp, monomorph(se.back().ent));), (Named, return se.empty() ? MetadataType::None : this->metadataType(sp, monomorph(se.back().ty));))
                             throw "";
                         }
                     }
@@ -3207,7 +3207,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
                 return true;
             }
 
-            if (e.path.mData.as_Generic().mPath == crate.getLangItemPathOpt("manually_drop")) {
+            if (e.path.data.as_Generic().path == crate.getLangItemPathOpt("manually_drop")) {
                 return false;
             }
 
@@ -3226,8 +3226,8 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             }
 
             HIRTypeRef tmpTy;
-            const auto& pe = e.path.mData.as_Generic();
-            auto monomorphCb = MonomorphStatePtr(crate.types, ty, &pe.mParams, nullptr);
+            const auto& pe = e.path.data.as_Generic();
+            auto monomorphCb = MonomorphStatePtr(crate.types, ty, &pe.params, nullptr);
             auto monomorph = [&](const auto& tpl) -> const HIRTypeData* {
                 return this->monomorphExpandOpt(sp, tmpTy, tpl, monomorphCb);
             };
@@ -3241,7 +3241,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
                  return true;),
                 (Struct,
                  TU_MATCHA(
-                     (pbe->mData),
+                     (pbe->data),
                      (se),
                      (Unit, ),
                      (Tuple,
@@ -3260,7 +3260,7 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
                       })
                  )),
                 (Enum,
-                 if (const auto* e = pbe->mData.opt_Data()) {
+                 if (const auto* e = pbe->data.opt_Data()) {
                      for (const auto& var : *e) {
                          if (typeNeedsDropGlue(sp, monomorph(var.type))) {
                              needsDropGlue = true;
@@ -3343,16 +3343,16 @@ const HIRTypeData* StaticTraitResolve::isTypeOwnedBox(const HIRTypeData* ty) con
     }
     const auto& te = ty->as_Path();
 
-    if (!te.path.mData.is_Generic()) {
+    if (!te.path.data.is_Generic()) {
         return nullptr;
     }
-    const auto& pe = te.path.mData.as_Generic();
+    const auto& pe = te.path.data.as_Generic();
 
-    if (pe.mPath != langBox()) {
+    if (pe.path != langBox()) {
         return nullptr;
     }
     // TODO: Properly assert?
-    return pe.mParams.types.at(0);
+    return pe.params.types.at(0);
 }
 
 const HIRTypeData* StaticTraitResolve::isTypePhantomData(const HIRTypeData* ty) const {
@@ -3361,16 +3361,16 @@ const HIRTypeData* StaticTraitResolve::isTypePhantomData(const HIRTypeData* ty) 
     }
     const auto& te = ty->as_Path();
 
-    if (!te.path.mData.is_Generic()) {
+    if (!te.path.data.is_Generic()) {
         return nullptr;
     }
-    const auto& pe = te.path.mData.as_Generic();
+    const auto& pe = te.path.data.as_Generic();
 
-    if (pe.mPath != langPhantomData()) {
+    if (pe.path != langPhantomData()) {
         return nullptr;
     }
     // TODO: Properly assert?
-    return pe.mParams.types.at(0);
+    return pe.params.types.at(0);
 }
 
 HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* ty, const RcString& name) const {
@@ -3394,8 +3394,8 @@ HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* t
         default:
             BUG(sp, "Getting field on invalid type - " << ty);
                 TU_ARMA(Struct, pbe) {
-                    MonomorphStatePtr ms{crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr};
-            TU_MATCH_HDRA( (pbe->mData), { )
+                    MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
+            TU_MATCH_HDRA( (pbe->data), { )
             TU_ARMA(Named, se) {
                             for (const auto& f : se) {
                                 if (f.name == name) {
@@ -3415,7 +3415,7 @@ HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* t
             }
                 }
                 TU_ARMA(Union, pbe) {
-                    MonomorphStatePtr ms{crate.types, nullptr, &te.path.mData.as_Generic().mParams, nullptr};
+                    MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
                     TODO(sp, "" << ty << " " << name);
                 }
         }
@@ -3427,44 +3427,44 @@ HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* t
 StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams, bool signatureOnly /*=false*/, const HIRGenericParams** outImplParamsDef /*=nullptr*/) const {
     TRACE_FUNCTION_F(p << ", signature_only=" << signatureOnly);
     outParams = MonomorphState{crate.types};
-    TU_MATCH_HDR( (p.mData), {)
-    TU_ARM(p.mData, Generic, pe) {
-            if (pe.mPath.components().size() > 1) {
-                const auto& ti = crate.getTypeitemByPath(sp, pe.mPath, /*ignore_crate_name=*/false, /*ignore_last_node=*/true);
+    TU_MATCH_HDR( (p.data), {)
+    TU_ARM(p.data, Generic, pe) {
+            if (pe.path.components().size() > 1) {
+                const auto& ti = crate.getTypeitemByPath(sp, pe.path, /*ignore_crate_name=*/false, /*ignore_last_node=*/true);
                 if (const auto* e = ti.opt_Enum()) {
                     if (outImplParamsDef) {
-                        *outImplParamsDef = &e->mParams;
+                        *outImplParamsDef = &e->params;
                     }
-                    outParams.ppImpl = &pe.mParams;
-                    auto idx = e->findVariant(pe.mPath.components().back());
-                    if (e->mData.is_Data()) {
-                        if (e->mData.as_Data()[idx].type != crate.types.unit()) {
+                    outParams.ppImpl = &pe.params;
+                    auto idx = e->findVariant(pe.path.components().back());
+                    if (e->data.is_Data()) {
+                        if (e->data.as_Data()[idx].type != crate.types.unit()) {
                             return ValuePtr::Data_EnumConstructor{e, idx};
                         }
                     }
                     return ValuePtr::Data_EnumValue{e, idx};
                 }
             }
-            const auto& v = crate.getValitemByPath(sp, pe.mPath);
-            TU_MATCHA((v), (ve), (Import, BUG(sp, "Module Import");), (Constant, outParams.ppMethod = &pe.mParams; return &ve;), (Static, outParams.ppMethod = &pe.mParams; return &ve;), (Function, outParams.ppMethod = &pe.mParams; return &ve;), (StructConstant, outParams.ppImpl = &pe.mParams; TODO(sp, "StructConstant - " << p);), (StructConstructor, outParams.ppImpl = &pe.mParams; const auto& str = crate.getStructByPath(sp, ve.ty); if (outImplParamsDef) { *outImplParamsDef = &str.mParams; } return ValuePtr::Data_StructConstructor{&ve.ty, &str};))
+            const auto& v = crate.getValitemByPath(sp, pe.path);
+            TU_MATCHA((v), (ve), (Import, BUG(sp, "Module Import");), (Constant, outParams.ppMethod = &pe.params; return &ve;), (Static, outParams.ppMethod = &pe.params; return &ve;), (Function, outParams.ppMethod = &pe.params; return &ve;), (StructConstant, outParams.ppImpl = &pe.params; TODO(sp, "StructConstant - " << p);), (StructConstructor, outParams.ppImpl = &pe.params; const auto& str = crate.getStructByPath(sp, ve.ty); if (outImplParamsDef) { *outImplParamsDef = &str.params; } return ValuePtr::Data_StructConstructor{&ve.ty, &str};))
             throw "";
         }
-        TU_ARM(p.mData, UfcsKnown, pe) {
-            if (pe.trait.mPath == HIRSimplePath() && pe.item == "vtable#") {
+        TU_ARM(p.data, UfcsKnown, pe) {
+            if (pe.trait.path == HIRSimplePath() && pe.item == "vtable#") {
                 DEBUG("Empty trait VTable, return NotYetKnown");
                 return ValuePtr::make_NotYetKnown({});
             }
             outParams.selfTy = pe.type;
-            outParams.ppImpl = &pe.trait.mParams;
+            outParams.ppImpl = &pe.trait.params;
             outParams.ppMethod = &pe.params;
-            const HIRTrait& tr = crate.getTraitByPath(sp, pe.trait.mPath);
+            const HIRTrait& tr = crate.getTraitByPath(sp, pe.trait.path);
             if (!tr.values.count(pe.item)) {
-                DEBUG("Value " << pe.item << " not found in trait " << pe.trait.mPath);
+                DEBUG("Value " << pe.item << " not found in trait " << pe.trait.path);
                 return ValuePtr();
             }
 
             if (outImplParamsDef) {
-                *outImplParamsDef = &tr.mParams;
+                *outImplParamsDef = &tr.params;
                 // Updated if an impl is found+used
             }
 
@@ -3477,10 +3477,10 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 bool hasFuzzyImpl = false;
                 ImplRef bestImpl;
                 ValuePtr rv;
-                bool lookupNeedsResolution = specializationLookupNeedsResolution(pe.type, pe.trait.mParams);
-                this->findImpl(sp, pe.trait.mPath, &pe.trait.mParams, pe.type, [&](auto impl, bool isFuzz) -> bool {
+                bool lookupNeedsResolution = specializationLookupNeedsResolution(pe.type, pe.trait.params);
+                this->findImpl(sp, pe.trait.path, &pe.trait.params, pe.type, [&](auto impl, bool isFuzz) -> bool {
                     DEBUG(impl);
-                    if (!impl.mData.is_TraitImpl()) {
+                    if (!impl.data.is_TraitImpl()) {
                         hasBoundedImpl = true;
                         return false;
                     }
@@ -3490,7 +3490,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         hasFuzzyImpl = true;
                         return false;
                     }
-                    const HIRTraitImpl& ti = *impl.mData.as_TraitImpl().impl;
+                    const HIRTraitImpl& ti = *impl.data.as_TraitImpl().impl;
                     bool isSpec = false;
 
                     ValuePtr thisRv;
@@ -3541,12 +3541,12 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                         return ValuePtr::make_NotYetKnown({});
                     }
                     // If the type and impl are fully known, then look for trait provided values/bodies
-                    if (!monomorphiseTypeNeeded(pe.type) && !monomorphisePathparamsNeeded(pe.trait.mParams)) {
+                    if (!monomorphiseTypeNeeded(pe.type) && !monomorphisePathparamsNeeded(pe.trait.params)) {
                         // Look for provided bodies
                     TU_MATCH_HDRA( (v), {)
                     TU_ARMA(Constant, ve) {
                                 // Constants?
-                                if (ve.mValue || ve.valueState != HIRConstant::ValueState::Unknown) {
+                                if (ve.value || ve.valueState != HIRConstant::ValueState::Unknown) {
                                     DEBUG("Trait provided value");
                                     // NOTE: The parameters have already been set
                                     return &ve;
@@ -3558,7 +3558,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                                 // Statics?
                             }
                             TU_ARMA(Function, ve) {
-                                if (ve.mCode || ve.mCode.mir) {
+                                if (ve.code || ve.code.mir) {
                                     DEBUG("Trait provided body");
                                     // NOTE: The parameters have already been set
                                     return &ve;
@@ -3573,18 +3573,18 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 }
                 if (bestIsSpec) {
                     // If there's generics present in the path, return NotYetKnown
-                    if (monomorphiseTypeNeeded(pe.type) || monomorphisePathparamsNeeded(pe.trait.mParams)) {
+                    if (monomorphiseTypeNeeded(pe.type) || monomorphisePathparamsNeeded(pe.trait.params)) {
                         DEBUG("Specialisable and still generic, return NotYetKnown");
                         return ValuePtr::make_NotYetKnown({});
                     }
                 }
 
-                if (!bestImpl.mData.is_TraitImpl()) {
+                if (!bestImpl.data.is_TraitImpl()) {
                     TODO(sp, "Use bounded constant values for " << p);
                 }
-                auto& ie = bestImpl.mData.as_TraitImpl();
+                auto& ie = bestImpl.data.as_TraitImpl();
                 if (outImplParamsDef) {
-                    *outImplParamsDef = &ie.impl->mParams;
+                    *outImplParamsDef = &ie.impl->params;
                 }
                 outParams.ppImpl = &outParams.ppImplData;
                 outParams.ppImplData = ie.implParams.clone();
@@ -3593,20 +3593,20 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             }
             throw "";
         }
-        TU_ARM(p.mData, UfcsInherent, pe) {
+        TU_ARM(p.data, UfcsInherent, pe) {
             outParams.selfTy = pe.type;
             outParams.ppImpl = &pe.implParams;
             outParams.ppMethod = &pe.params;
             ValuePtr rv;
             crate.findTypeImpls(pe.type, HIRResolvePlaceholdersNop(), [&](const auto& impl) {
-                DEBUG("Found impl" << impl.mParams.fmtArgs() << " " << impl.mType);
+                DEBUG("Found impl" << impl.params.fmtArgs() << " " << impl.type);
                 // Populate pp_impl if not populated
                 if (!pe.implParams.hasParams()) {
                     GetParams::ParamsSet paramsSet;
-                    GetParams getParams{sp, impl.mParams, outParams.ppImplData, paramsSet};
+                    GetParams getParams{sp, impl.params, outParams.ppImplData, paramsSet};
 
                     auto cbIdent = HIRResolvePlaceholdersNop();
-                    impl.mType->matchTestGenericsFuzz(sp, pe.type, cbIdent, getParams);
+                    impl.type->matchTestGenericsFuzz(sp, pe.type, cbIdent, getParams);
 
                     const auto& implParams = outParams.ppImplData;
 
@@ -3617,14 +3617,14 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 }
 
                 if (outImplParamsDef) {
-                    *outImplParamsDef = &impl.mParams;
+                    *outImplParamsDef = &impl.params;
                 }
 
                 // TODO: Specialisation
                 {
                     auto fit = impl.methods.find(pe.item);
                     if (fit != impl.methods.end()) {
-                        ASSERT_BUG(sp, impl.mParams.types.size() == outParams.ppImpl->types.size(), "Mismatch in param counts `" << *outParams.ppImpl << "`, params are `" << impl.mParams.fmtArgs() << "`\n- in " << p);
+                        ASSERT_BUG(sp, impl.params.types.size() == outParams.ppImpl->types.size(), "Mismatch in param counts `" << *outParams.ppImpl << "`, params are `" << impl.params.fmtArgs() << "`\n- in " << p);
                         DEBUG("- Contains method, good");
                         rv = ValuePtr{&fit->second.data};
                         return true;
@@ -3633,7 +3633,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 {
                     auto it = impl.constants.find(pe.item);
                     if (it != impl.constants.end()) {
-                        ASSERT_BUG(sp, impl.mParams.types.size() == pe.implParams.types.size(), "Mismatch in param counts " << p << ", params are " << impl.mParams.fmtArgs());
+                        ASSERT_BUG(sp, impl.params.types.size() == pe.implParams.types.size(), "Mismatch in param counts " << p << ", params are " << impl.params.fmtArgs());
                         rv = ValuePtr{&it->second.data};
                         return true;
                     }
@@ -3642,7 +3642,7 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             });
             return rv;
         }
-        TU_ARM(p.mData, UfcsUnknown, pe) {
+        TU_ARM(p.data, UfcsUnknown, pe) {
             BUG(sp, "UfcsUnknown - " << p);
         }
     }

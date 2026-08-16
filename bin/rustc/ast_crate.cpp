@@ -12,7 +12,7 @@
 
 namespace {
     bool checkItemCfg(const Settings& settings, const ASTAttributeList& attrs) {
-        for (const auto& at : attrs.mItems) {
+        for (const auto& at : attrs.items) {
             if (at.name() == "cfg" && !checkCfg(settings, at.span(), at)) {
                 return false;
             }
@@ -22,7 +22,7 @@ namespace {
 
     void iterateModule(const Settings& settings, ASTModule& mod, ::std::function<void(ASTModule& mod)> fcn) {
         fcn(mod);
-        for (auto& sm : mod.mItems) {
+        for (auto& sm : mod.items) {
             if (auto* e = sm->data.opt_Module()) {
                 if (checkItemCfg(settings, sm->attrs)) {
                     iterateModule(settings, *e, fcn);
@@ -45,7 +45,7 @@ ASTCrate::ASTCrate(stl::ObjPool* pool, HIRTypeInterner& types)
 
 void ASTCrate::loadExterns(Settings& settings) {
     auto cb = [this, &settings](ASTModule& mod) {
-        for (/*const*/ auto& it : mod.mItems) {
+        for (/*const*/ auto& it : mod.items) {
             if (auto* c = it->data.opt_Crate()) {
                 if (checkItemCfg(settings, it->attrs)) {
                     if (c->name == "") {
@@ -65,7 +65,7 @@ void ASTCrate::loadExterns(Settings& settings) {
     bool noStd = false;
     bool noCore = false;
 
-    for (const auto& a : this->mAttrs.mItems) {
+    for (const auto& a : this->attrs.items) {
         if (a.name() == "no_std") {
             noStd = true;
         }
@@ -232,22 +232,22 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
 
     if (extCrate.shortName == "core") {
         if (this->extCratenameCore == "") {
-            this->extCratenameCore = extCrate.mName;
+            this->extCratenameCore = extCrate.name;
         }
     }
     if (extCrate.shortName == "std") {
         if (this->extCratenameStd == "") {
-            this->extCratenameStd = extCrate.mName;
+            this->extCratenameStd = extCrate.name;
         }
     }
     if (extCrate.shortName == "proc_macro") {
         if (this->extCratenameProcmacro == "") {
-            this->extCratenameProcmacro = extCrate.mName;
+            this->extCratenameProcmacro = extCrate.name;
         }
     }
     if (extCrate.shortName == "test") {
         if (this->extCratenameTest == "") {
-            this->extCratenameTest = extCrate.mName;
+            this->extCratenameTest = extCrate.name;
         }
     }
 
@@ -256,7 +256,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
 }
 
 ASTExternCrate::ASTExternCrate(stl::ObjPool* pool, HIRTypeInterner& types, const RcString& name, const ::std::string& path)
-    : mName(name)
+    : name(name)
     , shortName(name)
     , filename(path)
 {
@@ -264,9 +264,9 @@ ASTExternCrate::ASTExternCrate(stl::ObjPool* pool, HIRTypeInterner& types, const
     hir = HIRDeserialise(pool, types, path);
 
     hir->postLoadUpdate(name);
-    mName = hir->crateName;
-    if (const auto* e = strchr(mName.c_str(), '-')) {
-        shortName = RcString::newInterned(mName.c_str(), e - mName.c_str());
+    this->name = hir->crateName;
+    if (const auto* e = strchr(this->name.c_str(), '-')) {
+        shortName = RcString::newInterned(this->name.c_str(), e - this->name.c_str());
     } else {
     }
 }

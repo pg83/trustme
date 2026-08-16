@@ -28,11 +28,11 @@ HIRExprStatePtr::HIRExprStatePtr(stl::ObjPool* pool, HIRExprState x)
 HIRExprStatePtr::~HIRExprStatePtr() = default;
 
 HIRExprStatePtr HIRExprStatePtr::clone(stl::ObjPool* pool) const {
-    auto rv = HIRExprStatePtr(pool, HIRExprState((*this)->types, (*this)->mModule, (*this)->modPath));
+    auto rv = HIRExprStatePtr(pool, HIRExprState((*this)->types, (*this)->module, (*this)->modPath));
     rv->traits = (*this)->traits;
-    rv->mImplGenerics = (*this)->mImplGenerics;
-    rv->mItemGenerics = (*this)->mItemGenerics;
-    rv->mCurrentTraitPath = (*this)->mCurrentTraitPath;
+    rv->implGenerics = (*this)->implGenerics;
+    rv->itemGenerics = (*this)->itemGenerics;
+    rv->currentTraitPath = (*this)->currentTraitPath;
     rv->currentTraitImpl = (*this)->currentTraitImpl;
     rv->defineOpaque = (*this)->defineOpaque;
     rv->stage = (*this)->stage;

@@ -125,7 +125,7 @@ public:
 
     virtual void visit(ASTExprNodeMacro& n) override {
         exprRoot = false;
-        os << n.mPath << "!";
+        os << n.path << "!";
         if (n.ident != "") {
             os << " ";
             os << n.ident;
@@ -166,7 +166,7 @@ public:
             l.fmt(os);
             os << ", ";
         }
-        for (auto& p : n.mParams) {
+        for (auto& p : n.params) {
             TU_MATCH_HDRA((p), {)
             TU_ARMA(Const, e) {
                     os << "const ";
@@ -206,7 +206,7 @@ public:
 
     virtual void visit(ASTExprNodeFlow& n) override {
         exprRoot = false;
-        switch (n.mType) {
+        switch (n.type) {
             case ASTExprNodeFlow::RETURN:
                 os << "return ";
                 break;
@@ -229,7 +229,7 @@ public:
         if (n.target.name != "") {
             os << "'" << n.target << " ";
         }
-        ASTNodeVisitor::visit(n.mValue);
+        ASTNodeVisitor::visit(n.value);
     }
 
     virtual void visit(ASTExprNodeLetBinding& n) override {
@@ -237,10 +237,10 @@ public:
         os << "let ";
         printPattern(n.pat, false);
         os << ": ";
-        printType(n.mType);
-        if (n.mValue) {
+        printType(n.type);
+        if (n.value) {
             os << " = ";
-            ASTNodeVisitor::visit(n.mValue);
+            ASTNodeVisitor::visit(n.value);
         }
         if (n.elseNode) {
             os << " else ";
@@ -287,15 +287,15 @@ public:
                 os << " <<= ";
                 break;
         }
-        ASTNodeVisitor::visit(n.mValue);
+        ASTNodeVisitor::visit(n.value);
     }
 
     virtual void visit(ASTExprNodeCallPath& n) override {
         exprRoot = false;
-        os << n.mPath;
+        os << n.path;
         os << "(";
         bool isFirst = true;
-        for (auto& arg : n.mArgs) {
+        for (auto& arg : n.args) {
             if (isFirst) {
                 isFirst = false;
             } else {
@@ -312,7 +312,7 @@ public:
         os << "." << n.method;
         os << "(";
         bool isFirst = true;
-        for (auto& arg : n.mArgs) {
+        for (auto& arg : n.args) {
             if (isFirst) {
                 isFirst = false;
             } else {
@@ -329,7 +329,7 @@ public:
         ASTNodeVisitor::visit(n.val);
         os << ")(";
         bool isFirst = true;
-        for (auto& arg : n.mArgs) {
+        for (auto& arg : n.args) {
             if (isFirst) {
                 isFirst = false;
             } else {
@@ -357,7 +357,7 @@ public:
             os << " ";
         }
 
-        ASTNodeVisitor::visit(n.mCode);
+        ASTNodeVisitor::visit(n.code);
     }
 
     virtual void visit(ASTExprNodeFor& n) override {
@@ -370,7 +370,7 @@ public:
         os << "for ";
         printPattern(n.pattern, true);
         os << " in ";
-        ASTNodeVisitor::visit(n.mValue);
+        ASTNodeVisitor::visit(n.value);
 
         if (exprRoot) {
             os << "\n";
@@ -379,7 +379,7 @@ public:
             os << " ";
         }
 
-        ASTNodeVisitor::visit(n.mCode);
+        ASTNodeVisitor::visit(n.code);
     }
 
     void visitIfletConditions(std::vector<ASTIfLetCondition>& conds) {
@@ -415,7 +415,7 @@ public:
             os << " ";
         }
 
-        ASTNodeVisitor::visit(n.mCode);
+        ASTNodeVisitor::visit(n.code);
     }
 
     virtual void visit(ASTExprNodeMatch& n) override {
@@ -449,7 +449,7 @@ public:
             os << " => ";
             // Increase indent, but don't print. Causes nested blocks to be indented above the match
             incIndent();
-            ASTNodeVisitor::visit(arm.mCode);
+            ASTNodeVisitor::visit(arm.code);
             decIndent();
             os << ",\n";
         }
@@ -514,7 +514,7 @@ public:
         }
         os << "|";
         bool isFirst = true;
-        for (const auto& arg : n.mArgs) {
+        for (const auto& arg : n.args) {
             if (!isFirst) {
                 os << ", ";
             }
@@ -526,7 +526,7 @@ public:
         os << "| ->";
         printType(n.returnType);
         os << " { ";
-        ASTNodeVisitor::visit(n.mCode);
+        ASTNodeVisitor::visit(n.code);
         os << " }";
     }
 
@@ -538,15 +538,15 @@ public:
         exprRoot = false;
         switch (n.datatype) {
             case CORETYPE_INVAL:
-                os << "0x" << ::std::hex << n.mValue << ::std::dec << "_/*INVAL*/";
+                os << "0x" << ::std::hex << n.value << ::std::dec << "_/*INVAL*/";
                 break;
             case CORETYPE_BOOL:
             case CORETYPE_STR:
-                os << "0x" << ::std::hex << n.mValue << ::std::dec << "_/*bool/str*/";
+                os << "0x" << ::std::hex << n.value << ::std::dec << "_/*bool/str*/";
                 break;
             case CORETYPE_CHAR:
-                if (n.mValue >= 0x20 && n.mValue < 128) {
-                    switch (n.mValue.truncateU64()) {
+                if (n.value >= 0x20 && n.value < 128) {
+                    switch (n.value.truncateU64()) {
                         case '\'':
                             os << "'\\''";
                             break;
@@ -554,11 +554,11 @@ public:
                             os << "'\\\\'";
                             break;
                         default:
-                            os << "'" << (char)n.mValue.truncateU64() << "'";
+                            os << "'" << (char)n.value.truncateU64() << "'";
                             break;
                     }
                 } else {
-                    os << "'\\u{" << ::std::hex << n.mValue << ::std::dec << "}'";
+                    os << "'\\u{" << ::std::hex << n.value << ::std::dec << "}'";
                 }
                 break;
             case CORETYPE_F16:
@@ -573,7 +573,7 @@ public:
             case CORETYPE_U128:
             case CORETYPE_UINT:
             case CORETYPE_ANY:
-                os << "0x" << ::std::hex << n.mValue << ::std::dec;
+                os << "0x" << ::std::hex << n.value << ::std::dec;
                 os << "_" << coretypeName(n.datatype);
                 break;
             case CORETYPE_I8:
@@ -582,7 +582,7 @@ public:
             case CORETYPE_I64:
             case CORETYPE_I128:
             case CORETYPE_INT:
-                os << n.mValue;
+                os << n.value;
                 os << "_" << coretypeName(n.datatype);
                 break;
         }
@@ -593,22 +593,22 @@ public:
         switch (n.datatype) {
             case CORETYPE_ANY:
                 os.precision(::std::numeric_limits<double>::max_digits10 + 1);
-                os << n.mValue;
+                os << n.value;
                 break;
             case CORETYPE_F16:
             case CORETYPE_F32:
                 os.precision(::std::numeric_limits<float>::max_digits10 + 1);
-                os << n.mValue;
+                os << n.value;
                 os << "_" << coretypeName(n.datatype);
                 break;
             case CORETYPE_F64:
                 os.precision(::std::numeric_limits<double>::max_digits10 + 1);
-                os << n.mValue;
+                os << n.value;
                 os << "_" << coretypeName(n.datatype);
                 break;
             case CORETYPE_F128:
                 os.precision(::std::numeric_limits<double>::max_digits10 + 1);
-                os << n.mValue;
+                os << n.value;
                 os << "_" << coretypeName(n.datatype);
                 break;
             default:
@@ -618,7 +618,7 @@ public:
 
     virtual void visit(ASTExprNodeBool& n) override {
         exprRoot = false;
-        if (n.mValue) {
+        if (n.value) {
             os << "true";
         } else {
             os << "false";
@@ -627,22 +627,22 @@ public:
 
     virtual void visit(ASTExprNodeString& n) override {
         exprRoot = false;
-        os << "\"" << FmtEscaped(n.mValue) << "\"";
+        os << "\"" << FmtEscaped(n.value) << "\"";
     }
 
     virtual void visit(ASTExprNodeByteString& n) override {
         exprRoot = false;
-        os << "b\"" << FmtEscaped(n.mValue) << "\"";
+        os << "b\"" << FmtEscaped(n.value) << "\"";
     }
 
     virtual void visit(ASTExprNodeCString& n) override {
         exprRoot = false;
-        os << "c\"" << FmtEscaped(n.mValue) << "\"";
+        os << "c\"" << FmtEscaped(n.value) << "\"";
     }
 
     virtual void visit(ASTExprNodeStructLiteral& n) override {
         exprRoot = false;
-        os << n.mPath << " {\n";
+        os << n.path << " {\n";
         incIndent();
         for (auto& i : n.values) {
             printAttrs(i.attrs);
@@ -661,7 +661,7 @@ public:
 
     virtual void visit(ASTExprNodeStructLiteralPattern& n) override {
         exprRoot = false;
-        os << n.mPath << " {\n";
+        os << n.path << " {\n";
         incIndent();
         for (auto& i : n.values) {
             printAttrs(i.attrs);
@@ -677,10 +677,10 @@ public:
     virtual void visit(ASTExprNodeArray& n) override {
         exprRoot = false;
         os << "[";
-        if (n.mSize.get()) {
+        if (n.size.get()) {
             ASTNodeVisitor::visit(n.values[0]);
             os << "; ";
-            ASTNodeVisitor::visit(n.mSize);
+            ASTNodeVisitor::visit(n.size);
         } else {
             for (auto& item : n.values) {
                 ASTNodeVisitor::visit(item);
@@ -702,13 +702,13 @@ public:
 
     virtual void visit(ASTExprNodeNamedValue& n) override {
         exprRoot = false;
-        os << n.mPath;
+        os << n.path;
     }
 
     virtual void visit(ASTExprNodeField& n) override {
         exprRoot = false;
         WRAPIF(n.obj, ASTExprNodeDeref, ASTExprNodeUniOp, ASTExprNodeCast, ASTExprNodeBinOp, ASTExprNodeAssign, ASTExprNodeMatch, ASTExprNodeIf, ASTExprNodeMatch);
-        os << "." << n.mName;
+        os << "." << n.name;
     }
 
     virtual void visit(ASTExprNodeIndex& n) override {
@@ -722,22 +722,22 @@ public:
     virtual void visit(ASTExprNodeDeref& n) override {
         exprRoot = false;
         os << "*(";
-        ASTNodeVisitor::visit(n.mValue);
+        ASTNodeVisitor::visit(n.value);
         os << ")";
     }
 
     virtual void visit(ASTExprNodeCast& n) override {
         exprRoot = false;
         os << "(";
-        ASTNodeVisitor::visit(n.mValue);
-        os << ") as " << n.mType;
+        ASTNodeVisitor::visit(n.value);
+        os << ") as " << n.type;
     }
 
     virtual void visit(ASTExprNodeTypeAnnotation& n) override {
         exprRoot = false;
         os << "(";
-        ASTNodeVisitor::visit(n.mValue);
-        os << ") : " << n.mType;
+        ASTNodeVisitor::visit(n.value);
+        os << ") : " << n.type;
     }
 
     virtual void visit(ASTExprNodeBinOp& n) override {
@@ -745,13 +745,13 @@ public:
         auto* leftBinop = cast<ASTExprNodeBinOp>(n.left.get());
         if (!n.left) {
             os << "/*null*/";
-        } else if (leftBinop && leftBinop->mType == n.mType) {
+        } else if (leftBinop && leftBinop->type == n.type) {
             ASTNodeVisitor::visit(n.left);
         } else {
             WRAPIF(n.left, ASTExprNodeCast, ASTExprNodeBinOp);
         }
         os << " ";
-        switch (n.mType) {
+        switch (n.type) {
             case ASTExprNodeBinOp::CMPEQU:
                 os << "==";
                 break;
@@ -820,7 +820,7 @@ public:
         auto* rightBinop = cast<ASTExprNodeBinOp>(n.right.get());
         if (!n.right) {
             os << "/*null*/";
-        } else if (rightBinop && rightBinop->mType != n.mType) {
+        } else if (rightBinop && rightBinop->type != n.type) {
             parenWrap(n.right);
         } else {
             ASTNodeVisitor::visit(n.right);
@@ -829,7 +829,7 @@ public:
 
     virtual void visit(ASTExprNodeUniOp& n) override {
         exprRoot = false;
-        switch (n.mType) {
+        switch (n.type) {
             case ASTExprNodeUniOp::NEGATE:
                 os << "-";
                 break;
@@ -858,15 +858,15 @@ public:
                 break;
         }
 
-        bool wrap = IS(*n.mValue, ASTExprNodeBinOp) || IS(*n.mValue, ASTExprNodeCast);
+        bool wrap = IS(*n.value, ASTExprNodeBinOp) || IS(*n.value, ASTExprNodeCast);
         if (wrap) {
             os << "(";
         }
-        ASTNodeVisitor::visit(n.mValue);
+        ASTNodeVisitor::visit(n.value);
         if (wrap) {
             os << ")";
         }
-        switch (n.mType) {
+        switch (n.type) {
             case ASTExprNodeUniOp::QMARK:
                 os << "?";
                 break;
@@ -905,7 +905,7 @@ private:
 };
 
 void RustPrinter::printAttrs(const ASTAttributeList& attrs) {
-    for (const auto& a : attrs.mItems) {
+    for (const auto& a : attrs.items) {
         os << indent() << "#[" << a << "]\n";
     }
 }
@@ -913,7 +913,7 @@ void RustPrinter::printAttrs(const ASTAttributeList& attrs) {
 void RustPrinter::handleModule(const ASTModule& mod) {
     bool needNl = true;
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& i = *ip;
         if (!i.data.is_Use()) {
             continue;
@@ -946,7 +946,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
     }
     needNl = true;
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Crate()) {
             continue;
@@ -957,7 +957,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         os << indent() << "extern crate \"" << e.name << "\" as " << item.name << ";\n";
     }
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_ExternBlock()) {
             continue;
@@ -968,7 +968,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         os << indent() << "extern \"" << e.abi() << "\" {}\n";
     }
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Module()) {
             continue;
@@ -985,7 +985,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         os << "\n";
     }
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Type()) {
             continue;
@@ -1005,7 +1005,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
     }
     needNl = true;
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Struct()) {
             continue;
@@ -1018,7 +1018,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         handleStruct(e);
     }
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Enum()) {
             continue;
@@ -1031,7 +1031,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         handleEnum(e);
     }
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Trait()) {
             continue;
@@ -1044,7 +1044,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         handleTrait(e);
     }
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Static()) {
             continue;
@@ -1059,7 +1059,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         handleStatic(item.vis, item.name, e);
     }
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Function()) {
             continue;
@@ -1071,7 +1071,7 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         handleFunction(item.vis, item.name, e);
     }
 
-    for (const auto& ip : mod.mItems) {
+    for (const auto& ip : mod.items) {
         const auto& item = *ip;
         if (!item.data.is_Impl()) {
             continue;
@@ -1119,10 +1119,10 @@ void RustPrinter::handleModule(const ASTModule& mod) {
 }
 
 void RustPrinter::printParams(const ASTGenericParams& params) {
-    if (!params.mParams.empty()) {
+    if (!params.params.empty()) {
         bool isFirst = true;
         os << "<";
-        for (const auto& p : params.mParams) {
+        for (const auto& p : params.params) {
             if (!isFirst) {
                 os << ", ";
             }
@@ -1196,7 +1196,7 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
         if (pb.isMutable) {
             os << "mut ";
         }
-        switch (pb.mType) {
+        switch (pb.type) {
             case ASTPatternBinding::Type::MOVE:
                 break;
             case ASTPatternBinding::Type::REF:
@@ -1206,7 +1206,7 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 os << "ref mut ";
                 break;
         }
-        os << pb.mName << "/*" << pb.slot << "*/";
+        os << pb.name << "/*" << pb.slot << "*/";
         // If binding is irrefutable, and would be binding against a wildcard, just emit the name
         if (!isRefutable && p.bindings().size() == 1 && p.data().is_Any()) {
             return;
@@ -1280,7 +1280,7 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                                                                 if (b.isMutable) {
                                                                     os << "mut ";
                                                                 }
-                                                                switch (b.mType) {
+                                                                switch (b.type) {
                                                                     case ASTPatternBinding::Type::MOVE:
                                                                         break;
                                                                     case ASTPatternBinding::Type::REF:
@@ -1290,7 +1290,7 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                                                                         os << "ref mut ";
                                                                         break;
                                                                 }
-                                                                os << b.mName << "/*" << b.slot << "*/";
+                                                                os << b.name << "/*" << b.slot << "*/";
                                                             } os
                                                             << "..";
             needsComma = true;
@@ -1322,15 +1322,15 @@ void RustPrinter::handleStruct(const ASTStruct& s) {
 
     TU_MATCH(
         ASTStructData,
-        (s.mData),
+        (s.data),
         (e),
         (Unit, os << " /* unit-like */\n"; printBounds(s.params()); os << indent() << ";\n";),
-        (Tuple, os << "("; for (const auto& i : e.ents) { os << i.vis << i.mType << ", "; } os << ")\n"; printBounds(s.params()); os << indent() << ";\n";),
+        (Tuple, os << "("; for (const auto& i : e.ents) { os << i.vis << i.type << ", "; } os << ")\n"; printBounds(s.params()); os << indent() << ";\n";),
         (Struct, os << "\n"; printBounds(s.params());
 
          os << indent() << "{\n";
          incIndent();
-         for (const auto& i : e.ents) { os << indent() << i.vis << i.mName << ": " << i.mType->printPretty() << ",\n"; } decIndent();
+         for (const auto& i : e.ents) { os << indent() << i.vis << i.name << ": " << i.type->printPretty() << ",\n"; } decIndent();
          os << indent() << "}\n";)
     )
     os << "\n";
@@ -1345,8 +1345,8 @@ void RustPrinter::handleEnum(const ASTEnum& s) {
     incIndent();
     unsigned int idx = 0;
     for (const auto& i : s.variants()) {
-        os << indent() << "/*" << idx << "*/" << i.mName;
-        TU_MATCH(ASTEnumVariantData, (i.mData), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.mItems) os << t.mType->printPretty() << ", "; os << ")";), (Struct, os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.mName << ": " << i.mType->printPretty() << ",\n"; } decIndent(); os << indent() << "}";))
+        os << indent() << "/*" << idx << "*/" << i.name;
+        TU_MATCH(ASTEnumVariantData, (i.data), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.items) os << t.type->printPretty() << ", "; os << ")";), (Struct, os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.name << ": " << i.type->printPretty() << ",\n"; } decIndent(); os << indent() << "}";))
         if (i.discriminantValue) {
             os << " = " << i.discriminantValue;
         }

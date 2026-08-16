@@ -205,13 +205,13 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
     TU_MATCH_HDRA( (this->def), { )
     TU_ARMA(Function, fp) {
             ASSERT_BUG(sp, fp, "Non-initialised NamedFunction definition: " << this->path);
-        TU_MATCH_HDRA( (this->path.mData), {)
+        TU_MATCH_HDRA( (this->path.data), {)
         TU_ARMA(Generic, pe) {
-                    ppMethod = &pe.mParams;
+                    ppMethod = &pe.params;
                 }
                 TU_ARMA(UfcsKnown, pe) {
                     tySelf = pe.type;
-                    ppImpl = &pe.trait.mParams;
+                    ppImpl = &pe.trait.params;
                     ppMethod = &pe.params;
                 }
                 TU_ARMA(UfcsInherent, pe) {
@@ -228,37 +228,37 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
         HIRTypeDataFunctionPointer ft {
             f.unsafe,
             f.variadic,
-            f.mAbi,
+            f.abi,
             ms.monomorphType(sp, f.returnType),
             {}
         };
-        for( const auto& arg : f.mArgs )
+        for( const auto& arg : f.args )
         {
                 ft.argTypes.push_back(ms.monomorphType(sp, arg.second));
         }
         return mv$(ft);
         }
         TU_ARMA(EnumConstructor, ec) {
-            const auto& e = this->path.mData.as_Generic();
-            MonomorphStatePtr ms{types, nullptr, &e.mParams, nullptr};
-            auto enumPath = e.mPath.parent();
+            const auto& e = this->path.data.as_Generic();
+            MonomorphStatePtr ms{types, nullptr, &e.params, nullptr};
+            auto enumPath = e.path.parent();
             const auto& enm = *ec.e;
-            ASSERT_BUG(sp, enm.mData.is_Data(), "Enum " << enumPath << " isn't a data-holding enum");
-            const auto& varTy = enm.mData.as_Data()[ec.v].type;
+            ASSERT_BUG(sp, enm.data.is_Data(), "Enum " << enumPath << " isn't a data-holding enum");
+            const auto& varTy = enm.data.as_Data()[ec.v].type;
             const auto& str = *varTy->as_Path().binding.as_Struct();
-            const auto& varData = str.mData.as_Tuple();
+            const auto& varData = str.data.as_Tuple();
 
-            HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(HIRPath(HIRGenericPath(mv$(enumPath), e.mParams.clone())), HIRTypePathBinding::make_Enum(&enm)), {}};
+            HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(HIRPath(HIRGenericPath(mv$(enumPath), e.params.clone())), HIRTypePathBinding::make_Enum(&enm)), {}};
             for (const auto& arg : varData) {
                 ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
             }
             return ft;
         }
         TU_ARMA(StructConstructor, p) {
-            const auto& e = this->path.mData.as_Generic();
-            MonomorphStatePtr ms{types, nullptr, &e.mParams, nullptr};
+            const auto& e = this->path.data.as_Generic();
+            MonomorphStatePtr ms{types, nullptr, &e.params, nullptr};
             HIRTypeDataFunctionPointer ft{false, false, RcString::newInterned(ABI_RUST), types.path(this->path.clone(), HIRTypePathBinding::make_Struct(p)), {}};
-            for (const auto& arg : p->mData.as_Tuple()) {
+            for (const auto& arg : p->data.as_Tuple()) {
                 ft.argTypes.push_back(ms.monomorphType(sp, arg.ent));
             }
             return ft;
@@ -322,8 +322,8 @@ void HIRTypeData::fmt(::std::ostream& os) const {
         }
         TU_ARMA(TraitObject, e) {
             os << "dyn (";
-            if (e.mTrait.mPath != HIRGenericPath()) {
-                os << e.mTrait;
+            if (e.trait.path != HIRGenericPath()) {
+                os << e.trait;
             }
             for (const auto& tr : e.markers) {
                 os << "+" << tr;
@@ -409,8 +409,8 @@ void HIRTypeData::fmt(::std::ostream& os) const {
             if (e.isUnsafe) {
                 os << "unsafe ";
             }
-            if (e.mAbi != "") {
-                os << "extern \"" << e.mAbi << "\" ";
+            if (e.abi != "") {
+                os << "extern \"" << e.abi << "\" ";
             }
             os << "fn(";
             for (const auto& t : e.argTypes) {
@@ -419,7 +419,7 @@ void HIRTypeData::fmt(::std::ostream& os) const {
             if (e.isVariadic) {
                 os << "...";
             }
-            os << ") -> " << e.mRettype;
+            os << ") -> " << e.rettype;
         }
         TU_ARMA(NodeType, e) {
             e.fmt(os);
@@ -519,7 +519,7 @@ namespace {
     }
 
     bool exactGenericPathEqual(const HIRGenericPath& a, const HIRGenericPath& b) {
-        return a.mPath == b.mPath && exactPathParamsEqual(a.mParams, b.mParams);
+        return a.path == b.path && exactPathParamsEqual(a.params, b.params);
     }
 
     bool exactOptionalGenericParamsEqual(const ::std::unique_ptr<HIRGenericParams>& a, const ::std::unique_ptr<HIRGenericParams>& b) {
@@ -527,10 +527,10 @@ namespace {
     }
 
     bool exactPathEqual(const HIRPath& a, const HIRPath& b) {
-        if (a.mData.tag() != b.mData.tag()) {
+        if (a.data.tag() != b.data.tag()) {
             return false;
         }
-        TU_MATCH_HDRA((a.mData, b.mData), {)
+        TU_MATCH_HDRA((a.data, b.data), {)
         TU_ARMA(Generic, ae, be) return exactGenericPathEqual(ae, be);
             TU_ARMA(UfcsInherent, ae, be) {
                 return ae.type == be.type && ae.item == be.item && exactPathParamsEqual(ae.params, be.params) && exactPathParamsEqual(ae.implParams, be.implParams);
@@ -546,7 +546,7 @@ namespace {
     }
 
     bool exactTraitPathEqual(const HIRTraitPath& a, const HIRTraitPath& b) {
-        if (!exactGenericPathEqual(a.mPath, b.mPath) || a.traitPtr != b.traitPtr || a.typeBounds.size() != b.typeBounds.size() || a.traitBounds.size() != b.traitBounds.size()) {
+        if (!exactGenericPathEqual(a.path, b.path) || a.traitPtr != b.traitPtr || a.typeBounds.size() != b.typeBounds.size() || a.traitBounds.size() != b.traitBounds.size()) {
             return false;
         }
         auto ai = a.typeBounds.begin();
@@ -589,12 +589,12 @@ namespace {
             return false;
         }
         for (size_t i = 0; i < a.types.size(); i++) {
-            if (a.types[i].mName != b.types[i].mName || a.types[i].defaultValue != b.types[i].defaultValue || a.types[i].isSized != b.types[i].isSized) {
+            if (a.types[i].name != b.types[i].name || a.types[i].defaultValue != b.types[i].defaultValue || a.types[i].isSized != b.types[i].isSized) {
                 return false;
             }
         }
         for (size_t i = 0; i < a.values.size(); i++) {
-            if (a.values[i].mName != b.values[i].mName || a.values[i].mType != b.values[i].mType || !exactConstGenericEqual(a.values[i].defaultValue, b.values[i].defaultValue)) {
+            if (a.values[i].name != b.values[i].name || a.values[i].type != b.values[i].type || !exactConstGenericEqual(a.values[i].defaultValue, b.values[i].defaultValue)) {
                 return false;
             }
         }
@@ -657,7 +657,7 @@ namespace {
             }
             TU_ARMA(Generic, ae, be) return exactGenericRefEqual(ae, be);
             TU_ARMA(TraitObject, ae, be) {
-                if (!exactTraitPathEqual(ae.mTrait, be.mTrait) || ae.markers.size() != be.markers.size()) {
+                if (!exactTraitPathEqual(ae.trait, be.trait) || ae.markers.size() != be.markers.size()) {
                     return false;
                 }
                 for (size_t i = 0; i < ae.markers.size(); i++) {
@@ -696,7 +696,7 @@ namespace {
             throw "";
             }
             TU_ARMA(Function, ae, be) {
-                return ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.mAbi == be.mAbi && ae.mRettype == be.mRettype && ae.argTypes == be.argTypes && ae.trackCaller == be.trackCaller;
+                return ae.isUnsafe == be.isUnsafe && ae.isVariadic == be.isVariadic && ae.abi == be.abi && ae.rettype == be.rettype && ae.argTypes == be.argTypes && ae.trackCaller == be.trackCaller;
             }
             TU_ARMA(NodeType, ae, be) return ae == be;
         }
@@ -710,11 +710,11 @@ namespace {
     uint32_t typeFlags(const HIRPathParams& params);
 
     uint32_t typeFlags(const HIRGenericPath& path) {
-        return typeFlags(path.mParams);
+        return typeFlags(path.params);
     }
 
     uint32_t typeFlags(const HIRTraitPath& trait) {
-        auto flags = typeFlags(trait.mPath);
+        auto flags = typeFlags(trait.path);
         for (const auto& bound : trait.typeBounds) {
             flags |= typeFlags(bound.second.sourceTrait);
             flags |= typeFlags(bound.second.atyParams);
@@ -747,9 +747,9 @@ namespace {
 
     uint32_t typeFlags(const HIRPath& path) {
         uint32_t flags = 0;
-        TU_MATCH_HDRA((path.mData), {)
+        TU_MATCH_HDRA((path.data), {)
         TU_ARMA(Generic, e) {
-                flags |= typeFlags(e.mParams);
+                flags |= typeFlags(e.params);
             }
             TU_ARMA(UfcsInherent, e) {
                 addTypeFlags(flags, e.type);
@@ -781,7 +781,7 @@ namespace {
             }
             TU_ARMA(Path, e) {
                 flags |= typeFlags(e.path);
-                if (e.path.mData.is_UfcsKnown() && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
+                if (e.path.data.is_UfcsKnown() && (e.binding.is_Unbound() || e.binding.is_Opaque())) {
                     flags |= HIRTypeData::HAS_ASSOCIATED_TYPE;
                 }
             }
@@ -789,7 +789,7 @@ namespace {
                 flags |= HIRTypeData::HAS_TYPE_PARAM;
             }
             TU_ARMA(TraitObject, e) {
-                flags |= typeFlags(e.mTrait);
+                flags |= typeFlags(e.trait);
                 for (const auto& marker : e.markers) {
                     flags |= typeFlags(marker);
                 }
@@ -830,7 +830,7 @@ namespace {
             TU_ARMA(Pointer, e) addTypeFlags(flags, e.inner);
             TU_ARMA(NamedFunction, e) flags |= typeFlags(e.path);
             TU_ARMA(Function, e) {
-                addTypeFlags(flags, e.mRettype);
+                addTypeFlags(flags, e.rettype);
                 for (const auto argument : e.argTypes) {
                     addTypeFlags(flags, argument);
                 }
@@ -903,12 +903,12 @@ namespace {
     }
 
     size_t hashGenericPath(const HIRGenericPath& path) {
-        return hashMix(hashSimplePath(path.mPath), hashPathParams(path.mParams));
+        return hashMix(hashSimplePath(path.path), hashPathParams(path.params));
     }
 
     size_t hashPath(const HIRPath& path) {
-        size_t h = static_cast<size_t>(path.mData.tag());
-        TU_MATCH_HDRA((path.mData), {)
+        size_t h = static_cast<size_t>(path.data.tag());
+        TU_MATCH_HDRA((path.data), {)
         TU_ARMA(Generic, e) {
                 h = hashMix(h, hashGenericPath(e));
             }
@@ -974,12 +974,12 @@ namespace {
                 h = hashMix(h, hashGenericRef(e));
             }
             TU_ARMA(TraitObject, e) {
-                h = hashMix(h, hashGenericPath(e.mTrait.mPath));
-                h = hashMix(h, reinterpret_cast<uintptr_t>(e.mTrait.traitPtr));
+                h = hashMix(h, hashGenericPath(e.trait.path));
+                h = hashMix(h, reinterpret_cast<uintptr_t>(e.trait.traitPtr));
                 for (const auto& marker : e.markers) {
                     h = hashMix(h, hashGenericPath(marker));
                 }
-                for (const auto& bound : e.mTrait.typeBounds) {
+                for (const auto& bound : e.trait.typeBounds) {
                     h = hashMix(h, ::std::hash<RcString>()(bound.first));
                     h = hashMix(h, hashGenericPath(bound.second.sourceTrait));
                     h = hashMix(h, hashPathParams(bound.second.atyParams));
@@ -1043,11 +1043,11 @@ namespace {
                 h = hashMix(h, static_cast<size_t>(e.def.tag()));
             }
             TU_ARMA(Function, e) {
-                h = hashMix(h, ::std::hash<RcString>()(e.mAbi));
+                h = hashMix(h, ::std::hash<RcString>()(e.abi));
                 h = hashMix(h, e.isUnsafe);
                 h = hashMix(h, e.isVariadic);
                 h = hashMix(h, e.trackCaller);
-                h = hashMix(h, hashTypeRef(e.mRettype));
+                h = hashMix(h, hashTypeRef(e.rettype));
                 for (auto t : e.argTypes) {
                     h = hashMix(h, hashTypeRef(t));
                 }
@@ -1149,11 +1149,11 @@ HIRTypeRef HIRTypeInterner::asyncBlock(HIRExprNodeAsyncBlock* node) {
 }
 
 const HIRSimplePath* HIRTypeData::getSortPath() const {
-    if (TU_TEST1(*this, Path, .path.mData.is_Generic())) {
-        return &as_Path().path.mData.as_Generic().mPath;
+    if (TU_TEST1(*this, Path, .path.data.is_Generic())) {
+        return &as_Path().path.data.as_Generic().path;
     }
     if (is_TraitObject()) {
-        return &as_TraitObject().mTrait.mPath.mPath;
+        return &as_TraitObject().trait.path.path;
     }
     return nullptr;
 }
@@ -1186,7 +1186,7 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
             return /*te.name == xe.name &&*/ te.binding == xe.binding;
         }
         TU_ARMA(TraitObject, te, xe) {
-            if (!te.mTrait.equalsIgnoringRegions(xe.mTrait)) {
+            if (!te.trait.equalsIgnoringRegions(xe.trait)) {
                 return false;
             }
             if (te.markers.size() != xe.markers.size()) {
@@ -1248,7 +1248,7 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
             if (te.isUnsafe != xe.isUnsafe) {
                 return false;
             }
-            if (te.mAbi != xe.mAbi) {
+            if (te.abi != xe.abi) {
                 return false;
             }
             if (te.argTypes.size() != xe.argTypes.size()) {
@@ -1259,7 +1259,7 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
                     return false;
                 }
             }
-            return te.mRettype->equalsIgnoringRegions(xe.mRettype);
+            return te.rettype->equalsIgnoringRegions(xe.rettype);
         }
         TU_ARMA(NodeType, te, xe) {
             return te == xe;
@@ -1305,7 +1305,7 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         (Primitive, return ::ord(static_cast<unsigned>(te), static_cast<unsigned>(xe));),
         (Path, return ::ord(te.path, xe.path);),
         (Generic, if ((rv = ::ord(te.binding, xe.binding)) != OrdEqual) return rv; return OrdEqual;),
-        (TraitObject, ORD(te.mTrait, xe.mTrait); ORD(te.markers, xe.markers); return OrdEqual;),
+        (TraitObject, ORD(te.trait, xe.trait); ORD(te.markers, xe.markers); return OrdEqual;),
         (ErasedType, ORD(te.inner, xe.inner); return OrdEqual;),
         (Array, ORD(te.inner, xe.inner); ORD(te.size, xe.size); return OrdEqual;),
         (Slice, return ::ord(te.inner, xe.inner);),
@@ -1314,7 +1314,7 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
         (Borrow, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
         (Pointer, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
         (NamedFunction, return ::ord(te.path, xe.path);),
-        (Function, ORD(te.isUnsafe, xe.isUnsafe); ORD(te.isVariadic, xe.isVariadic); ORD(te.trackCaller, xe.trackCaller); ORD(te.mAbi, xe.mAbi); ORD(te.argTypes, xe.argTypes); return ::ord(te.mRettype, xe.mRettype);),
+        (Function, ORD(te.isUnsafe, xe.isUnsafe); ORD(te.isVariadic, xe.isVariadic); ORD(te.trackCaller, xe.trackCaller); ORD(te.abi, xe.abi); ORD(te.argTypes, xe.argTypes); return ::ord(te.rettype, xe.rettype);),
         (NodeType, return te.ord(xe);)
     )
     throw "";
@@ -1375,23 +1375,23 @@ HIRCompare HIRTypeData::matchTestGenericsFuzz(const Span& sp, HIRTypeRef xIn, tC
 
 HIRCompare HIRMatchGenerics::cmpPath(const Span& sp, const HIRPath& pathL, const HIRPath& pathR, tCbResolveType resolvePlaceholder) {
     HIRCompare rv = HIRCompare::Unequal;
-    if (pathL.mData.tag() != pathR.mData.tag()) {
+    if (pathL.data.tag() != pathR.data.tag()) {
         rv = HIRCompare::Unequal;
     } else {
-        TU_MATCH_HDRA((pathL.mData, pathR.mData), {)
+        TU_MATCH_HDRA((pathL.data, pathR.data), {)
         TU_ARMA(Generic, tpe, xpe) {
-                if (tpe.mPath != xpe.mPath) {
+                if (tpe.path != xpe.path) {
                     rv = HIRCompare::Unequal;
                 } else {
-                    rv = matchGenericsPp(sp, tpe.mParams, xpe.mParams, resolvePlaceholder, *this);
+                    rv = matchGenericsPp(sp, tpe.params, xpe.params, resolvePlaceholder, *this);
                 }
             }
             TU_ARMA(UfcsKnown, tpe, xpe) {
                 rv = this->cmpType(sp, tpe.type, xpe.type, resolvePlaceholder);
-                if (tpe.trait.mPath != xpe.trait.mPath) {
+                if (tpe.trait.path != xpe.trait.path) {
                     rv = HIRCompare::Unequal;
                 }
-                rv &= matchGenericsPp(sp, tpe.trait.mParams, xpe.trait.mParams, resolvePlaceholder, *this);
+                rv &= matchGenericsPp(sp, tpe.trait.params, xpe.trait.params, resolvePlaceholder, *this);
                 if (tpe.item != xpe.item) {
                     rv = HIRCompare::Unequal;
                 }
@@ -1609,23 +1609,23 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             return rv;
         }
         TU_ARMA(TraitObject, te, xe) {
-            if (te.mTrait.mPath.mPath != xe.mTrait.mPath.mPath) {
+            if (te.trait.path.path != xe.trait.path.path) {
                 return HIRCompare::Unequal;
             }
             if (te.markers.size() != xe.markers.size()) {
                 return HIRCompare::Unequal;
             }
-            auto cmp = matchGenericsPp(sp, te.mTrait.mPath.mParams, xe.mTrait.mPath.mParams, resolvePlaceholder, *this);
+            auto cmp = matchGenericsPp(sp, te.trait.path.params, xe.trait.path.params, resolvePlaceholder, *this);
             for (unsigned int i = 0; i < te.markers.size(); i++) {
-                if (te.markers[i].mPath != xe.markers[i].mPath) {
+                if (te.markers[i].path != xe.markers[i].path) {
                     return HIRCompare::Unequal;
                 }
-                cmp &= matchGenericsPp(sp, te.markers[i].mParams, xe.markers[i].mParams, resolvePlaceholder, *this);
+                cmp &= matchGenericsPp(sp, te.markers[i].params, xe.markers[i].params, resolvePlaceholder, *this);
             }
 
-            auto itL = te.mTrait.typeBounds.begin();
-            auto itR = xe.mTrait.typeBounds.begin();
-            while (itL != te.mTrait.typeBounds.end() && itR != xe.mTrait.typeBounds.end()) {
+            auto itL = te.trait.typeBounds.begin();
+            auto itR = xe.trait.typeBounds.begin();
+            while (itL != te.trait.typeBounds.end() && itR != xe.trait.typeBounds.end()) {
                 if (itL->first != itR->first) {
                     return HIRCompare::Unequal;
                 }
@@ -1634,7 +1634,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                 ++itR;
             }
 
-            if (itL != te.mTrait.typeBounds.end() || itR != xe.mTrait.typeBounds.end()) {
+            if (itL != te.trait.typeBounds.end() || itR != xe.trait.typeBounds.end()) {
                 return HIRCompare::Unequal;
             }
 
@@ -1718,7 +1718,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             if (te.isUnsafe != xe.isUnsafe) {
                 return HIRCompare::Unequal;
             }
-            if (te.mAbi != xe.mAbi) {
+            if (te.abi != xe.abi) {
                 return HIRCompare::Unequal;
             }
             if (te.argTypes.size() != xe.argTypes.size()) {
@@ -1731,7 +1731,7 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
                     return rv;
                 }
             }
-            rv &= this->cmpType(sp, te.mRettype, xe.mRettype, resolvePlaceholder);
+            rv &= this->cmpType(sp, te.rettype, xe.rettype, resolvePlaceholder);
             return rv;
         }
         TU_ARMA(NodeType, te, xe) {
@@ -1770,9 +1770,9 @@ const HIRGenericParams* HIRTypePathBinding::getGenerics() const {
         }
         TU_ARMA(ExternType, tpb) {
         }
-        TU_ARMA(Struct, tpb) rv = &tpb->mParams;
-        TU_ARMA(Union, tpb) rv = &tpb->mParams;
-        TU_ARMA(Enum, tpb) rv = &tpb->mParams;
+        TU_ARMA(Struct, tpb) rv = &tpb->params;
+        TU_ARMA(Union, tpb) rv = &tpb->params;
+        TU_ARMA(Enum, tpb) rv = &tpb->params;
     }
     return rv;
 }
@@ -1805,7 +1805,7 @@ HIRTypeData HIRTypeData::cloneData() const {
         }
         TU_ARMA(TraitObject, e) {
             HIRTypeData::Data_TraitObject rv;
-            rv.mTrait = e.mTrait.clone();
+            rv.trait = e.trait.clone();
             for (const auto& trait : e.markers) {
                 rv.markers.push_back(trait.clone());
             }
@@ -1862,7 +1862,7 @@ HIRTypeData HIRTypeData::cloneData() const {
             return HIRTypeData::make_NamedFunction({e.path.clone(), e.def.clone()});
         }
         TU_ARMA(Function, e) {
-            HIRTypeDataFunctionPointer ft{e.isUnsafe, e.isVariadic, e.mAbi, e.mRettype, {}, e.trackCaller};
+            HIRTypeDataFunctionPointer ft{e.isUnsafe, e.isVariadic, e.abi, e.rettype, {}, e.trackCaller};
             for (const auto& a : e.argTypes) {
                 ft.argTypes.push_back(a);
             }
@@ -2070,7 +2070,7 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
             if (le.markers.size() != re.markers.size()) {
                 return HIRCompare::Unequal;
             }
-            auto rv = le.mTrait.compareWithPlaceholders(sp, re.mTrait, resolvePlaceholder);
+            auto rv = le.trait.compareWithPlaceholders(sp, re.trait, resolvePlaceholder);
             if (rv == HIRCompare::Unequal) {
                 return rv;
             }
@@ -2177,7 +2177,7 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
             return le.path.compareWithPlaceholders(sp, re.path, resolvePlaceholder);
         }
         TU_ARMA(Function, le, re) {
-            if (le.mAbi != re.mAbi || le.isUnsafe != re.isUnsafe || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller) {
+            if (le.abi != re.abi || le.isUnsafe != re.isUnsafe || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller) {
                 return HIRCompare::Unequal;
             }
             if (le.argTypes.size() != re.argTypes.size()) {
@@ -2190,7 +2190,7 @@ HIRCompare HIRTypeData::compareWithPlaceholders(const Span& sp, HIRTypeRef x, tC
                     return HIRCompare::Unequal;
                 }
             }
-            rv &= le.mRettype->compareWithPlaceholders(sp, re.mRettype, resolvePlaceholder);
+            rv &= le.rettype->compareWithPlaceholders(sp, re.rettype, resolvePlaceholder);
             return rv;
         }
         TU_ARMA(NodeType, le, re) {

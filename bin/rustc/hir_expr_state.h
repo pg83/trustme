@@ -6,16 +6,16 @@ class HIRExprState {
 public:
     HIRTypeInterner& types;
     HIRSimplePath modPath;
-    const HIRModule& mModule;
+    const HIRModule& module;
 
-    const HIRGenericParams* mImplGenerics;
-    const HIRGenericParams* mItemGenerics;
+    const HIRGenericParams* implGenerics;
+    const HIRGenericParams* itemGenerics;
 
     // The owner trait implementation is needed when this expression is
     // typechecked or expanded lazily (e.g. while evaluating a const
     // generic).  The normal whole-crate visitors keep this on their
     // traversal stack, but that stack is absent for lazy processing.
-    HIRSimplePath mCurrentTraitPath;
+    HIRSimplePath currentTraitPath;
     const HIRTraitImpl* currentTraitImpl;
 
     ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> traits;

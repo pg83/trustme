@@ -195,7 +195,7 @@ namespace {
         ::std::map<HIRTypeRef, HIRTypeRef> normalizedCtypes;
 
         bool usesIntelCompilerAsmDialect() const {
-            const auto& arch = TargetGetCurSpec(wb_).arch.mName;
+            const auto& arch = TargetGetCurSpec(wb_).arch.name;
             return arch == "x86" || arch == "x86_64";
         }
 
@@ -250,7 +250,7 @@ namespace {
                         of << "\treturn 0;\n";
                     } else {
                         auto startGpath = HIRGenericPath(resolve_.hirCrate().getLangItemPath(Span(), "start"));
-                        startGpath.mParams.types.push_back(mainFcn.returnType);
+                        startGpath.params.types.push_back(mainFcn.returnType);
                         of << "\treturn " << TransMangle(startGpath) << "(" << TransMangle(HIRGenericPath(mainPath)) << ", argc, (uint8_t**)argv";
                         of << ", 0"; // `sigpipe` setting
                         // 0: Default, 1: Inherit, 2: SIG_IGN, 3: SIG_DFL
@@ -267,8 +267,8 @@ namespace {
             if (createShims) {
                 // Allocator/panic shims
                 {
-                    const auto allocatorIt = crate.mLangItems.find(GLOBAL_ALLOCATOR_LANG_ITEM);
-                    const bool hasGlobalAllocator = allocatorIt != crate.mLangItems.end();
+                    const auto allocatorIt = crate.langItems.find(GLOBAL_ALLOCATOR_LANG_ITEM);
+                    const bool hasGlobalAllocator = allocatorIt != crate.langItems.end();
                     const HIRStatic* globalAllocator = hasGlobalAllocator ? &crate.getStaticByPath(Span(), allocatorIt->second) : nullptr;
                     for (size_t i = 0; i < NUM_ALLOCATOR_METHODS; i++) {
                         struct H {
@@ -364,7 +364,7 @@ namespace {
                                 }
                             }
 
-                            const auto methodPath = TransAllocatorMethodPath(crate, globalAllocator->mType, method);
+                            const auto methodPath = TransAllocatorMethodPath(crate, globalAllocator->type, method);
                             const HIRPath staticPath = HIRGenericPath(allocatorIt->second);
                             of << "\t";
                             if (method.ret != AllocatorDataTy::Unit) {
@@ -556,15 +556,15 @@ namespace {
                         auto isDylib = [](const HIRExternCrate& c) {
                             bool rv = false;
                             // TODO: Better rule than this
-                            rv |= (c.mPath.compare(c.mPath.size() - 3, 3, ".so") == 0);
+                            rv |= (c.path.compare(c.path.size() - 3, 3, ".so") == 0);
                             return rv;
                         };
                         // If this crate is included in a dylib crate, ignore it
                         bool isInDylib = false;
                         for (const auto& crate2 : crate.extCrates) {
                             if (isDylib(crate2.second)) {
-                                for (const auto& subcrate : crate2.second.mData->extCrates) {
-                                    if (subcrate.second.mPath == extCrate.mPath) {
+                                for (const auto& subcrate : crate2.second.data->extCrates) {
+                                    if (subcrate.second.path == extCrate.path) {
                                         DEBUG(crateName << " referenced by dylib " << crate2.first);
                                         isInDylib = true;
                                     }
@@ -580,7 +580,7 @@ namespace {
                         }
 
                         // Ignore panic crates unless they're the selected crate (and add in the selected panic crate)
-                        if (extCrate.mData->mLangItems.count("mrustc-panic_runtime")) {
+                        if (extCrate.data->langItems.count("mrustc-panic_runtime")) {
                             // Check if this is the requested panic crate
                             if (strncmp(crateName.c_str(), opt.panicCrate.c_str(), opt.panicCrate.size()) != 0) {
                                 DEBUG("Ignore not-selected panic crate: " << crateName);
@@ -590,10 +590,10 @@ namespace {
                             }
                         }
 
-                        if (extCrate.mPath.compare(extCrate.mPath.size() - 5, 5, ".rlib") == 0) {
-                            extCrates.push_back(extCrate.mPath.c_str());
+                        if (extCrate.path.compare(extCrate.path.size() - 5, 5, ".rlib") == 0) {
+                            extCrates.push_back(extCrate.path.c_str());
                         } else if (isDylib(extCrate)) {
-                            extCratesDylib.push_back(extCrate.mPath.c_str());
+                            extCratesDylib.push_back(extCrate.path.c_str());
                         } else {
                             // Probably a procedural macro, ignore it
                         }
@@ -651,17 +651,17 @@ namespace {
 
                     for (const auto& crateName : crate.extCratesOrdered) {
                         const auto& extCrate = crate.extCrates.at(crateName);
-                        if (!extCrate.mData->extLibs.empty() || !extCrate.mData->linkPaths.empty()) {
+                        if (!extCrate.data->extLibs.empty() || !extCrate.data->linkPaths.empty()) {
                             librariesAndDirs.pushBorder();
                         }
-                        for (const auto& path : extCrate.mData->linkPaths) {
+                        for (const auto& path : extCrate.data->linkPaths) {
                             librariesAndDirs.pushDir(path.c_str());
                         }
                         // NOTE: Does explicit lookup, to provide scoped search directories
                         // - Needed for 1.39 cargo on linux when libgit2 and libz exist on the system, butsystem libgit2 isn't new enough
-                        for (const auto& lib : extCrate.mData->extLibs) {
+                        for (const auto& lib : extCrate.data->extLibs) {
                             ASSERT_BUG(Span(), lib.name != "", "Empty lib from " << crateName);
-                            auto path = H::findLibrary(extCrate.mData->linkPaths, opt.librarySearchDirs, lib.name);
+                            auto path = H::findLibrary(extCrate.data->linkPaths, opt.librarySearchDirs, lib.name);
                             if (path != "") {
                                 librariesAndDirs.pushExplicit(std::move(path));
                             } else {
@@ -1050,13 +1050,13 @@ namespace {
 
             const auto& te = ty->as_Function();
             of << "typedef ";
-            if (te.mRettype == crate.types.unit()) {
+            if (te.rettype == crate.types.unit()) {
                 of << "void";
             } else {
                 // TODO: Better emit_ctype call for return type?
-                emitCtype(te.mRettype);
+                emitCtype(te.rettype);
             }
-            of << " (" << compilerAbiAttribute(te.mAbi);
+            of << " (" << compilerAbiAttribute(te.abi);
             of << "*";
             emitCtype(ty);
             of << ")(";
@@ -1162,7 +1162,7 @@ namespace {
                     MIR_ASSERT(*mirRes, curOfs <= offset, "Current offset is already past expected (#" << fld << "): " << curOfs << " > " << offset);
                     auto fieldAlign = a;
                     // PowerPC 32-bit ABI alignment
-                    if (TargetGetCurSpec(wb_).arch.mName == "powerpc") {
+                    if (TargetGetCurSpec(wb_).arch.name == "powerpc") {
                         if (s > 0) {
                             if (!isFirstField && fieldAlign >= 4 && fieldAlign <= 8) {
                                 fieldAlign = 4;
@@ -1563,21 +1563,21 @@ namespace {
             TRACE_FUNCTION_F(path << " var_idx=" << varIdx);
 
             auto p = path.clone();
-            p.mPath.popComponent();
+            p.path.popComponent();
             auto ty = crate.types.path(p.clone(), HIRTypePathBinding::make_Enum(&item));
 
-            MonomorphStatePtr ms(crate.types, nullptr, &path.mParams, nullptr);
+            MonomorphStatePtr ms(crate.types, nullptr, &path.params, nullptr);
             HIRTypeRef tmp;
             auto monomorph = [&](const auto& x) {
                 return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
             };
 
-            ASSERT_BUG(sp, item.mData.is_Data(), "");
-            const auto& var = item.mData.as_Data().at(varIdx);
+            ASSERT_BUG(sp, item.data.is_Data(), "");
+            const auto& var = item.data.as_Data().at(varIdx);
             ASSERT_BUG(sp, var.type->is_Path(), "");
             const auto& str = *var.type->as_Path().binding.as_Struct();
-            ASSERT_BUG(sp, str.mData.is_Tuple(), "");
-            const auto& e = str.mData.as_Tuple();
+            ASSERT_BUG(sp, str.data.is_Tuple(), "");
+            const auto& e = str.data.as_Tuple();
 
             HIRFunction::argsT args;
             for (unsigned int i = 0; i < e.size(); i++) {
@@ -1618,13 +1618,13 @@ namespace {
         void emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override {
             TRACE_FUNCTION_F(p);
             HIRTypeRef tmp;
-            MonomorphStatePtr ms(crate.types, nullptr, &p.mParams, nullptr);
+            MonomorphStatePtr ms(crate.types, nullptr, &p.params, nullptr);
             auto monomorph = [&](const auto& x) {
                 return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
             };
 
             // Crate constructor function
-            const auto& e = item.mData.as_Tuple();
+            const auto& e = item.data.as_Tuple();
             of << "static struct s_" << TransMangle(p) << " " << TransMangle(p) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
                 if (i != 0) {
@@ -1687,7 +1687,7 @@ namespace {
             };
             mirRes = &topMirRes;
             TRACE_FUNCTION_F(p);
-            auto type = params.monomorph(resolve_, item.mType);
+            auto type = params.monomorph(resolve_, item.type);
 
             // LLVM supports prepending a symbol name with \1 to prevent further mangling.
             // Since we're targeting C, not LLVM, strip off this prefix.
@@ -1738,7 +1738,7 @@ namespace {
             mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
-            auto type = params.monomorph(resolve_, item.mType);
+            auto type = params.monomorph(resolve_, item.type);
             switch (item.linkage.type) {
                 case HIRLinkage::Type::External:
                     break;
@@ -1756,7 +1756,7 @@ namespace {
             if (item.linkage.section != "") {
                 of << "__attribute__((section(\"" << item.linkage.section << "\"))) ";
             }
-            if (item.mParams.isGeneric()) {
+            if (item.params.isGeneric()) {
                 of << "__attribute__((weak)) ";
             }
             of << "extern ";
@@ -1780,9 +1780,9 @@ namespace {
 
             TRACE_FUNCTION_F(p);
 
-            auto type = params.monomorph(resolve_, item.mType);
+            auto type = params.monomorph(resolve_, item.type);
             const bool isZero = isZeroLiteral(type, encoded, params);
-            if (item.mParams.isGeneric()) {
+            if (item.params.isGeneric()) {
                 of << "__attribute__((weak)) ";
             }
             bool isPacked = emitStaticTy(type, p, /*is_proto=*/false, item.explicitAlignment);
@@ -1819,8 +1819,8 @@ namespace {
 
                             of << "(uintptr_t)";
                             if (relocIt->p) {
-                                if (relocIt->p->mData.is_UfcsInherent() && relocIt->p->mData.as_UfcsInherent().item == "#type_id") {
-                                    const auto& ty = relocIt->p->mData.as_UfcsInherent().type;
+                                if (relocIt->p->data.is_UfcsInherent() && relocIt->p->data.as_UfcsInherent().item == "#type_id") {
+                                    const auto& ty = relocIt->p->data.as_UfcsInherent().type;
                                     of << "&__typeid_" << TransMangle(ty);
                                 } else {
                                     of << "&";
@@ -1953,7 +1953,7 @@ namespace {
                 trackedFunctions.insert(p.clone());
             }
 
-            of << "// EXTERN extern \"" << item.mAbi << "\" " << p << "\n";
+            of << "// EXTERN extern \"" << item.abi << "\" " << p << "\n";
             if (item.linkage.name.rfind("llvm.", 0) == 0) {
                 of << "static ";
                 emitFunctionHeader(p, item, params);
@@ -2585,7 +2585,7 @@ namespace {
             mirRes = &topMirRes;
 
             TRACE_FUNCTION_F(p);
-            of << "// PROTO extern \"" << item.mAbi << "\" " << p << "\n";
+            of << "// PROTO extern \"" << item.abi << "\" " << p << "\n";
             if (item.linkage.name != "") {
                 // If this function is implementing an external ABI, just rename it.
                 of << "#define " << TransMangle(p) << " " << item.linkage.name << "\n";
@@ -2620,7 +2620,7 @@ namespace {
             TRACE_FUNCTION_F(p);
 
             MIRTypeResolve::argsT argTypes;
-            for (const auto& ent : item.mArgs) {
+            for (const auto& ent : item.args) {
                 argTypes.push_back(::std::make_pair(HIRPattern{}, params.monomorph(resolve_, ent.second)));
             }
 
@@ -3751,7 +3751,7 @@ namespace {
                             }
                         }
                         TU_ARMA(UnionVariant, ve) {
-                            MIR_ASSERT(localMirRes, crate.getTypeitemByPath(sp, ve.path.mPath).is_Union(), "");
+                            MIR_ASSERT(localMirRes, crate.getTypeitemByPath(sp, ve.path.path).is_Union(), "");
                             if (!this->typeIsBadZst(mirRes->getParamType(tmp, ve.val))) {
                                 emitLvalue(e.dst);
                                 of << ".var_" << ve.index << " = ";
@@ -3759,7 +3759,7 @@ namespace {
                             }
                         }
                         TU_ARMA(EnumVariant, ve) {
-                            const auto& tyi = crate.getTypeitemByPath(sp, ve.path.mPath);
+                            const auto& tyi = crate.getTypeitemByPath(sp, ve.path.path);
                             MIR_ASSERT(localMirRes, tyi.is_Enum(), "");
                             const auto* enmP = &tyi.as_Enum();
 
@@ -4476,7 +4476,7 @@ namespace {
                         const auto& ty = localMirRes.getLvalueType(tmp, e2);
                         MIR_ASSERT(localMirRes, ty->is_Function(), "Call::Value on non-function - " << ty);
 
-                        const auto& retTy = ty->as_Function().mRettype;
+                        const auto& retTy = ty->as_Function().rettype;
                         omitAssign |= retTy->is_Diverge();
                         if (!omitAssign) {
                             emitLvalue(e.retVal);
@@ -4489,9 +4489,9 @@ namespace {
                 }
                 TU_ARMA(Path, e2) {
                     {
-                    TU_MATCH_HDRA( (e2.mData), {)
+                    TU_MATCH_HDRA( (e2.data), {)
                     TU_ARMA(Generic, pe) {
-                                const auto& fcn = crate.getFunctionByPath(sp, pe.mPath);
+                                const auto& fcn = crate.getFunctionByPath(sp, pe.path);
                                 omitAssign |= fcn.returnType->is_Diverge();
                                 // TODO: Monomorph.
                             }
@@ -4513,7 +4513,7 @@ namespace {
                             }
                             TU_ARMA(UfcsKnown, pe) {
                                 // Check if the return type is !
-                                const auto& tr = resolve_.hirCrate().getTraitByPath(sp, pe.trait.mPath);
+                                const auto& tr = resolve_.hirCrate().getTraitByPath(sp, pe.trait.path);
                                 const auto& fcn = tr.values.find(pe.item)->second.as_Function();
                                 const auto& rvTpl = fcn.returnType;
                                 if (rvTpl->is_Diverge() || rvTpl == crate.types.unit()) {
@@ -5147,7 +5147,7 @@ namespace {
                                         switch (*regClass) {
                                             case AsmRegisterClass::x86Reg:
                                             case AsmRegisterClass::x86RegAbcd:
-                                                of << (TargetGetCurSpec(wb_).arch.mName == "x86_64" ? 'q' : 'k');
+                                                of << (TargetGetCurSpec(wb_).arch.name == "x86_64" ? 'q' : 'k');
                                                 break;
                                             case AsmRegisterClass::x86RegByte:
                                                 of << 'b';
@@ -5420,7 +5420,7 @@ namespace {
                     tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
                         if (const auto* te = x->opt_ErasedType()) {
                             if (const auto* e = te->inner.opt_Fcn()) {
-                                out = item.mCode.erasedTypes.at(e->index);
+                                out = item.code.erasedTypes.at(e->index);
                                 return true;
                             }
                         }
@@ -5446,13 +5446,13 @@ namespace {
             }
             auto cb = FMT_CB(
                 ss,
-                ss << " " << compilerAbiAttribute(item.mAbi) << TransMangle(p) << nameSuffix << "(";
-                if (item.mArgs.empty() && !hasCallerLocation) { ss << "void)"; } else {
-                    for (unsigned int i = 0; i < item.mArgs.size(); i++) {
+                ss << " " << compilerAbiAttribute(item.abi) << TransMangle(p) << nameSuffix << "(";
+                if (item.args.empty() && !hasCallerLocation) { ss << "void)"; } else {
+                    for (unsigned int i = 0; i < item.args.size(); i++) {
                         ss << "\n\t\t";
-                        auto ty = params.monomorph(resolve_, item.mArgs[i].second);
+                        auto ty = params.monomorph(resolve_, item.args[i].second);
                         this->emitFunctionArgument(ty, FMT_CB(os, os << "arg" << i;));
-                        if (item.variadic || i + 1 < item.mArgs.size() || hasCallerLocation) {
+                        if (item.variadic || i + 1 < item.args.size() || hasCallerLocation) {
                             of << ",";
                         }
                         of << " // " << ty;
@@ -5501,8 +5501,8 @@ namespace {
                 first = false;
                 of << prefix << index << suffix;
             };
-            for (unsigned int i = 0; i < item.mArgs.size(); i++) {
-                auto type = params.monomorph(resolve_, item.mArgs[i].second);
+            for (unsigned int i = 0; i < item.args.size(); i++) {
+                auto type = params.monomorph(resolve_, item.args[i].second);
                 switch (metadataType(type)) {
                     case MetadataType::Unknown:
                         MIR_BUG(*mirRes, type << " has unknown function-argument metadata");
@@ -7479,7 +7479,7 @@ namespace {
                     } ty;
 
                     static SimdInfo forTy(const CodeGeneratorC& self, const HIRTypeData* ty) {
-                        const auto* tyRepr = TargetGetTypeRepr(self.sp, self.mirRes->mResolve, ty);
+                        const auto* tyRepr = TargetGetTypeRepr(self.sp, self.mirRes->resolve, ty);
                         MIR_ASSERT(*self.mirRes, tyRepr, "No repr for " << ty);
                         size_t sizeSlot = tyRepr->size;
                         const auto& ity = tyRepr->fields[0].ty;
@@ -8351,8 +8351,8 @@ namespace {
                         word -= EncodedLiteral::PTR_BASE;
                         of << "(uintptr_t)";
                         if (relocation->p) {
-                            if (relocation->p->mData.is_UfcsInherent() && relocation->p->mData.as_UfcsInherent().item == "#type_id") {
-                                of << "&__typeid_" << TransMangle(relocation->p->mData.as_UfcsInherent().type);
+                            if (relocation->p->data.is_UfcsInherent() && relocation->p->data.as_UfcsInherent().item == "#type_id") {
+                                of << "&__typeid_" << TransMangle(relocation->p->data.as_UfcsInherent().type);
                             } else {
                                 of << "&";
                                 emitReifiedFunctionName(*relocation->p, relocation->preserveTrackCaller);
@@ -8494,8 +8494,8 @@ namespace {
                         MIR_ASSERT(*mirRes, c.offset.isU64(), "Item address offset is too large: " << c.offset);
                         of << "((void*)((uint8_t*)";
                     }
-                    if (c->mData.is_UfcsInherent() && c->mData.as_UfcsInherent().item == "#type_id") {
-                        of << "(void*)&__typeid_" << TransMangle(c->mData.as_UfcsInherent().type);
+                    if (c->data.is_UfcsInherent() && c->data.as_UfcsInherent().item == "#type_id") {
+                        of << "(void*)&__typeid_" << TransMangle(c->data.as_UfcsInherent().type);
                     } else {
                         MonomorphState msTmp(crate.types);
                         auto v = resolve_.getValue(sp, *c, msTmp, /*signature_only=*/true);
@@ -8544,7 +8544,7 @@ namespace {
             const auto& ty = localMirRes.getParamType(tmp, param);
             emitParam(param);
             if (const auto* te = ty->opt_Path()) {
-                if (te->path.mData.is_Generic() && te->path.mData.as_Generic().mPath == resolve_.langDynMetadata()) {
+                if (te->path.data.is_Generic() && te->path.data.as_Generic().path == resolve_.langDynMetadata()) {
                     of << "._0._0";
                 }
             }
@@ -8729,12 +8729,12 @@ namespace {
                             case HIRStructMarkings::DstType::TraitObject:
                             case HIRStructMarkings::DstType::Possible: {
                                 // TODO: How to figure out? Lazy way is to check the monomorpised type of the last field (structs only)
-                                const auto& path = ty->as_Path().path.mData.as_Generic();
+                                const auto& path = ty->as_Path().path.data.as_Generic();
                                 const auto& str = *ty->as_Path().binding.as_Struct();
                                 auto monomorph = [&](const auto& tpl) {
-                                    return resolve_.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.mParams, nullptr));
+                                    return resolve_.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.params, nullptr));
                                 };
-                        TU_MATCH_HDRA( (str.mData), { )
+                        TU_MATCH_HDRA( (str.data), { )
                         TU_ARMA(Unit, se) MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");
                                     TU_ARMA(Tuple, se) return getInnerUnsizedType(monomorph(se.back().ent));
                                     TU_ARMA(Named, se) return getInnerUnsizedType(monomorph(se.back().ty));

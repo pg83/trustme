@@ -8,7 +8,7 @@ struct Settings;
 
 // NOTE: The default architecture is an unnamed 32-bit little-endian arch with all types natively aligned
 struct TargetArch {
-    ::std::string mName;
+    ::std::string name;
     unsigned pointerBits;
     bool bigEndian;
 

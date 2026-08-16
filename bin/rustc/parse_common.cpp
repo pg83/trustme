@@ -125,8 +125,8 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
             lex.parseState().module = localMod.get();
         }
         auto item = tok.takeFragStmtItem();
-        for (auto& attr : itemAttrs.mItems) {
-            item.attrs.mItems.push_back(mv$(attr));
+        for (auto& attr : itemAttrs.items) {
+            item.attrs.items.push_back(mv$(attr));
         }
         localMod->addItem(mv$(item));
         return ASTExprNodeP();
@@ -250,7 +250,7 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
     auto rv = ParseExprBlockLine(lex, &addSilenceIfEnd);
     if (rv) {
         rv->setAttrs(mv$(itemAttrs));
-    } else if (itemAttrs.mItems.size() > 0) {
+    } else if (itemAttrs.items.size() > 0) {
         // TODO: Is this an error? - Attributes on a expression that didn't yeild a node.
         // - They should have applied to the item that was parsed?
     } else {
@@ -611,7 +611,7 @@ ASTExprNodeP ParseExprMatch(TokenStream& lex) {
         ASTExprNodeMatchArm arm;
 
         ParseParentAttrs(lex, nodeAttrs);
-        arm.mAttrs = ParseItemAttrs(lex);
+        arm.attrs = ParseItemAttrs(lex);
 
         // Match-arm grammar permits an optional leading `|` before the first pattern.
         lex.getTokenIf(TOK_PIPE);
@@ -627,7 +627,7 @@ ASTExprNodeP ParseExprMatch(TokenStream& lex) {
         }
         CHECK_TOK(tok, TOK_FATARROW);
 
-        arm.mCode = ParseStmt(lex);
+        arm.code = ParseStmt(lex);
 
         arms.push_back(::std::move(arm));
 
@@ -1430,13 +1430,13 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                                     std::vector<ASTExprNodeP> exprArgs;
                                     for (;;) {
                                         if (const auto* n = cast<const ASTExprNodeNamedValue>(expr)) {
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeString, n->mPath.asTrivial().c_str(), {}));
+                                            exprArgs.push_back(NEWNODE(ASTExprNodeString, n->path.asTrivial().c_str(), {}));
                                             break;
                                         } else if (const auto* n = cast<const ASTExprNodeInteger>(expr)) {
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeInteger, n->mValue, n->datatype));
+                                            exprArgs.push_back(NEWNODE(ASTExprNodeInteger, n->value, n->datatype));
                                             break;
                                         } else if (const auto* n = cast<const ASTExprNodeFloat>(expr)) {
-                                            const auto value = n->mValue;
+                                            const auto value = n->value;
                                             if (value < FloatValue() || floatValueIsNan(value) || floatValueIsInfinite(value)) {
                                                 TODO(lex.pointSpan(), "offset_of - invalid tuple indices " << *expr);
                                             }
@@ -1468,7 +1468,7 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                                             exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<uint64_t>(whole)), CORETYPE_ANY));
                                             break;
                                         } else if (const auto* n = cast<const ASTExprNodeField>(expr)) {
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeString, n->mName.c_str(), {}));
+                                            exprArgs.push_back(NEWNODE(ASTExprNodeString, n->name.c_str(), {}));
                                             expr = &*n->obj;
                                         } else {
                                             TODO(lex.pointSpan(), "offset_of - " << *expr);
@@ -2226,15 +2226,15 @@ ASTPattern::Value ParsePatternValue(TokenStream& lex) {
             auto e = tok.takeFragNode();
             // TODO: Visitor?
             if (auto* n = cast<ASTExprNodeString>(e.get())) {
-                return ASTPattern::Value::make_String(mv$(n->mValue));
+                return ASTPattern::Value::make_String(mv$(n->value));
             } else if (auto* n = cast<ASTExprNodeByteString>(e.get())) {
-                return ASTPattern::Value::make_ByteString({mv$(n->mValue)});
+                return ASTPattern::Value::make_ByteString({mv$(n->value)});
             } else if (auto* n = cast<ASTExprNodeBool>(e.get())) {
-                return ASTPattern::Value::make_Integer({CORETYPE_BOOL, U128(n->mValue ? 1 : 0)});
+                return ASTPattern::Value::make_Integer({CORETYPE_BOOL, U128(n->value ? 1 : 0)});
             } else if (auto* n = cast<ASTExprNodeInteger>(e.get())) {
-                return ASTPattern::Value::make_Integer({n->datatype, n->mValue});
+                return ASTPattern::Value::make_Integer({n->datatype, n->value});
             } else if (auto* n = cast<ASTExprNodeFloat>(e.get())) {
-                return ASTPattern::Value::make_Float({n->datatype, n->mValue});
+                return ASTPattern::Value::make_Float({n->datatype, n->value});
             } else {
                 TODO(lex.pointSpan(), "Convert :expr into a pattern value - " << *e);
             }
@@ -2712,7 +2712,7 @@ ASTHigherRankedBounds ParseHRB(TokenStream& lex) {
 
         switch (GET_TOK(tok, lex)) {
             case TOK_LIFETIME:
-                rv.mLifetimes.push_back(ASTLifetimeParam(lex.pointSpan(), ::std::move(attrs), tok.ident()));
+                rv.lifetimes.push_back(ASTLifetimeParam(lex.pointSpan(), ::std::move(attrs), tok.ident()));
                 break;
             case TOK_IDENT:
                 // Type parameters in higher-ranked binders are accepted by the
@@ -2775,7 +2775,7 @@ void ParseTypeBound(TokenStream& lex, ASTGenericParams& ret, ASTType* checkedTyp
         // retained so that any anon-const side effects it carries are resolved
         // consistently with lowering (which visits every anon module).
         if (retainBareType) {
-            ret.mBareBoundTypes.push_back(mv$(checkedType));
+            ret.bareBoundTypes.push_back(mv$(checkedType));
         }
         return;
     }
@@ -3271,8 +3271,8 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
     if (lex.lookahead(0) == TOK_INTERPOLATED_ITEM) {
         tok = lex.getToken();
         auto item = tok.takeFragItem();
-        for (auto& a : itemAttrs.mItems) {
-            item.attrs.mItems.push_back(std::move(a));
+        for (auto& a : itemAttrs.items) {
+            item.attrs.items.push_back(std::move(a));
         }
         // Only the kinds a trait body can hold; anything else is a loud TODO rather than silently accepted.
         TU_MATCH_HDRA((item.data), {)
@@ -3779,8 +3779,8 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
             tok = lex.getToken();
             auto item = tok.takeFragItem();
             // Attributes are parsed before the fragment is seen, so without this transfer they are dropped - turning a `#[cfg]` that should remove the item into a no-op.
-            for (auto& a : itemAttrs.mItems) {
-                item.attrs.mItems.push_back(std::move(a));
+            for (auto& a : itemAttrs.items) {
+                item.attrs.items.push_back(std::move(a));
             }
             TU_MATCH_HDRA((item.data), {)
             default:
@@ -4229,8 +4229,8 @@ ASTFunction ParseDelegationFunction(TokenStream& lex, RcString& itemName) {
                 // Macro output is not the delegation body's magic `self`.
             }
             void visit(ASTExprNodeNamedValue& node) override {
-                if (node.mPath.cls.is_Local() && node.mPath.cls.as_Local().name == "self") {
-                    node.mPath = ASTPath(RcString::newInterned("#delegation-self"));
+                if (node.path.cls.is_Local() && node.path.cls.as_Local().name == "self") {
+                    node.path = ASTPath(RcString::newInterned("#delegation-self"));
                 }
             }
         } visitor;
@@ -4347,8 +4347,8 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
         GET_TOK(tok, lex);
         auto rv = tok.takeFragItem();
         // Transfer new attributes onto the item
-        for (auto& mi : metaItems.mItems) {
-            rv.attrs.mItems.push_back(mv$(mi));
+        for (auto& mi : metaItems.items) {
+            rv.attrs.items.push_back(mv$(mi));
         }
         return rv;
     }
@@ -4755,7 +4755,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                 Ident::ModPath mp;
                 mp.crate = "";
                 mp.ents = modPath.nodes;
-                mrp->mHygiene.setModPath(lex.typePool(), ::std::move(mp));
+                mrp->hygiene.setModPath(lex.typePool(), ::std::move(mp));
                 mrp->isMacroItem = true;
             }
 
@@ -4772,7 +4772,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             // Check #[cfg] and don't load if it fails
             struct H {
                 static bool checkItemCfg(const Settings& settings, const ASTAttributeList& attrs) {
-                    for (const auto& at : attrs.mItems) {
+                    for (const auto& at : attrs.items) {
                         if (at.name() == "cfg" && !checkCfg(settings, at.span(), at)) {
                             return false;
                         }
@@ -4787,7 +4787,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             // - IF in crate root or mod.rs, allow (input flag)
             // - else, disallow and set flag
             ::std::string pathAttr;
-            for (const auto& a : metaItems.mItems) {
+            for (const auto& a : metaItems.items) {
                 DEBUG("[mod path_attr] " << a);
                 if (a.name() == "path") {
                     pathAttr = a.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);
@@ -4993,7 +4993,7 @@ ASTCrate* ParseCrate(const WireBoard& wb, stl::ObjPool* pool, ::std::string main
 
     lex.parseState().crate = crate;
     lex.parseState().wb = &wb;
-    ParseModRoot(lex, crate->rootModule(), crate->mAttrs);
+    ParseModRoot(lex, crate->rootModule(), crate->attrs);
 
     return crate;
 }

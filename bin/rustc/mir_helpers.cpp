@@ -44,26 +44,26 @@ const MIRBasicBlock& MIRTypeResolve::getBlock(MIRBasicBlockId id) const {
 }
 
 const HIRTypeData* MIRTypeResolve::getStaticType(HIRTypeRef& tmp, const HIRPath& path) const {
-    if (path.mData.is_UfcsInherent() && path.mData.as_UfcsInherent().item == "#type_id") {
+    if (path.data.is_UfcsInherent() && path.data.as_UfcsInherent().item == "#type_id") {
         tmp = crate.types.unit();
         return tmp;
     }
     MonomorphState ms(crate.types);
-    auto v = mResolve.getValue(this->sp, path, ms, /*signature_only*/ true);
+    auto v = resolve.getValue(this->sp, path, ms, /*signature_only*/ true);
     MIR_ASSERT(*this, v.is_Static(), "LValue::Static not a static - " << path << " : " << v.tagStr());
     MIR_ASSERT(*this, v.as_Static(), "LValue::Static is null? - " << path << " : " << v.tagStr());
     if (ms.hasTypes()) {
-        tmp = ms.monomorphType(sp, v.as_Static()->mType);
-        mResolve.expandAssociatedTypes(this->sp, tmp);
+        tmp = ms.monomorphType(sp, v.as_Static()->type);
+        resolve.expandAssociatedTypes(this->sp, tmp);
         return tmp;
     } else {
-        return v.as_Static()->mType;
+        return v.as_Static()->type;
     }
 }
 
 const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValue& val, unsigned wrapperSkipCount /*=0*/) const {
     const HIRTypeData* rv = nullptr;
-    TU_MATCHA((val.root), (e), (Return, rv = monomorphedRettype ? monomorphedRettype : retType;), (Argument, MIR_ASSERT(*this, e < mArgs.size(), "Argument " << val << " out of range (" << mArgs.size() << ")"); rv = mArgs.at(e).second;), (Local, MIR_ASSERT(*this, e < fcn.locals.size(), "Local " << val << " out of range (" << fcn.locals.size() << ")"); rv = monomorphedLocals ? monomorphedLocals->at(e) : fcn.locals.at(e);), (Static, rv = getStaticType(tmp, e);))
+    TU_MATCHA((val.root), (e), (Return, rv = monomorphedRettype ? monomorphedRettype : retType;), (Argument, MIR_ASSERT(*this, e < args.size(), "Argument " << val << " out of range (" << args.size() << ")"); rv = args.at(e).second;), (Local, MIR_ASSERT(*this, e < fcn.locals.size(), "Local " << val << " out of range (" << fcn.locals.size() << ")"); rv = monomorphedLocals ? monomorphedLocals->at(e) : fcn.locals.at(e);), (Static, rv = getStaticType(tmp, e);))
     if (val.wrappers.size() > 0) {
         assert(wrapperSkipCount <= val.wrappers.size());
         const auto* stopWrapper = val.wrappers.data() + (val.wrappers.size() - wrapperSkipCount);
@@ -101,16 +101,16 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                     if (const auto* tep = te.binding.opt_Struct()) {
                         const auto& str = **tep;
                         auto maybeMonomorph = [&](const auto& fieldType) {
-                            return mResolve.monomorphExpandOpt(sp, tmp, fieldType, MonomorphStatePtr(crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr));
+                            return resolve.monomorphExpandOpt(sp, tmp, fieldType, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                         };
-                        TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*this, "Field on unit-like struct - " << ty);), (Tuple, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in tuple-struct " << te.path); return maybeMonomorph(se[fieldIndex].ent);), (Named, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in struct " << te.path); return maybeMonomorph(se[fieldIndex].ty);))
+                        TU_MATCHA((str.data), (se), (Unit, MIR_BUG(*this, "Field on unit-like struct - " << ty);), (Tuple, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in tuple-struct " << te.path); return maybeMonomorph(se[fieldIndex].ent);), (Named, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in struct " << te.path); return maybeMonomorph(se[fieldIndex].ty);))
                     } else if (const auto* tep = te.binding.opt_Union()) {
                         const auto& unm = **tep;
                         auto maybeMonomorph = [&](const HIRTypeData* t) -> const HIRTypeData* {
-                            return mResolve.monomorphExpandOpt(sp, tmp, t, MonomorphStatePtr(crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr));
+                            return resolve.monomorphExpandOpt(sp, tmp, t, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                         };
-                        MIR_ASSERT(*this, fieldIndex < unm.mVariants.size(), "Field index out of range for union");
-                        return maybeMonomorph(unm.mVariants.at(fieldIndex).ty);
+                        MIR_ASSERT(*this, fieldIndex < unm.variants.size(), "Field index out of range for union");
+                        return maybeMonomorph(unm.variants.at(fieldIndex).ty);
                     } else {
                         MIR_BUG(*this, "Field access on invalid type - " << ty);
                     }
@@ -156,20 +156,20 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                     MIR_ASSERT(*this, te.binding.is_Enum() || te.binding.is_Union(), "Downcast on non-Enum");
                     if (te.binding.is_Enum()) {
                         const auto& enm = *te.binding.as_Enum();
-                        MIR_ASSERT(*this, enm.mData.is_Data(), "Downcast on non-data enum - " << ty);
-                        const auto& variants = enm.mData.as_Data();
+                        MIR_ASSERT(*this, enm.data.is_Data(), "Downcast on non-data enum - " << ty);
+                        const auto& variants = enm.data.as_Data();
                         MIR_ASSERT(*this, variantIndex < variants.size(), "Variant index out of range for " << ty);
                         const auto& variant = variants[variantIndex];
 
                         const auto& varTy = variant.type;
-                        return mResolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr));
+                        return resolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                     } else {
                         const auto& unm = *te.binding.as_Union();
-                        MIR_ASSERT(*this, variantIndex < unm.mVariants.size(), "Variant index out of range");
-                        const auto& variant = unm.mVariants[variantIndex];
+                        MIR_ASSERT(*this, variantIndex < unm.variants.size(), "Variant index out of range");
+                        const auto& variant = unm.variants[variantIndex];
                         const auto& varTy = variant.ty;
 
-                        return mResolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.mData.as_Generic().mParams, nullptr));
+                        return resolve.monomorphExpandOpt(sp, tmp, varTy, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                     }
                 }
         }
@@ -219,12 +219,12 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
         }
         TU_ARMA(Const, e) {
             MonomorphState p(crate.types);
-            auto v = mResolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
+            auto v = resolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
             if (const auto* ve = v.opt_Constant()) {
-                const auto& ty = (*ve)->mType;
+                const auto& ty = (*ve)->type;
                 if (monomorphiseTypeNeeded(ty)) {
                     auto rv = p.monomorphType(this->sp, ty);
-                    mResolve.expandAssociatedTypes(this->sp, rv);
+                    resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 } else {
                     return ty;
@@ -234,11 +234,11 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
             }
         }
         TU_ARMA(Generic, e) {
-            return mResolve.getConstParamType(this->sp, e.binding);
+            return resolve.getConstParamType(this->sp, e.binding);
         }
         TU_ARMA(Function, e) {
             MonomorphState p(crate.types);
-            auto v = mResolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
+            auto v = resolve.getValue(this->sp, *e.p, p, /*signature_only=*/true);
         TU_MATCH_HDRA( (v), {)
         default:
             MIR_BUG(*this, "get_const_type - Function points to bad type: " << v.tagStr() << " - " << c);
@@ -259,15 +259,15 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
         TU_ARMA(ItemAddr, e) {
             MonomorphState p(crate.types);
             ASSERT_BUG(sp, e, "get_const_type - " << c);
-            auto v = mResolve.getValue(this->sp, *e, p, /*signature_only=*/true);
+            auto v = resolve.getValue(this->sp, *e, p, /*signature_only=*/true);
         TU_MATCH_HDRA( (v), {)
         TU_ARMA(NotFound, ve) {
                     MIR_BUG(*this, "get_const_type - ItemAddr points to unknown value - " << c);
                 }
                 TU_ARMA(NotYetKnown, ve) {
-                    if (e->mData.is_UfcsKnown()) {
-                        const auto& pe = e->mData.as_UfcsKnown();
-                        if (pe.item == "vtable#" && pe.trait.mPath == HIRSimplePath()) {
+                    if (e->data.is_UfcsKnown()) {
+                        const auto& pe = e->data.as_UfcsKnown();
+                        if (pe.item == "vtable#" && pe.trait.path == HIRSimplePath()) {
                             ::std::vector<HIRTypeRef> fields;
                             fields.push_back(crate.types.primitive(HIRCoreType::Usize));
                             fields.push_back(crate.types.primitive(HIRCoreType::Usize));
@@ -278,22 +278,22 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                     MIR_BUG(*this, "get_const_type - get_value returned NotYetKnown with signature_only=true");
                 }
                 TU_ARMA(Constant, ve) {
-                    const auto& ty = ve->mType;
+                    const auto& ty = ve->type;
                     HIRTypeRef rv;
                     if (monomorphiseTypeNeeded(ty)) {
                         rv = p.monomorphType(this->sp, ty);
-                        mResolve.expandAssociatedTypes(this->sp, rv);
+                        resolve.expandAssociatedTypes(this->sp, rv);
                     } else {
                         rv = ty;
                     }
                     return crate.types.borrow(HIRBorrowType::Shared, rv);
                 }
                 TU_ARMA(Static, ve) {
-                    const auto& ty = ve->mType;
+                    const auto& ty = ve->type;
                     HIRTypeRef rv;
                     if (monomorphiseTypeNeeded(ty)) {
                         rv = p.monomorphType(this->sp, ty);
-                        mResolve.expandAssociatedTypes(this->sp, rv);
+                        resolve.expandAssociatedTypes(this->sp, rv);
                     } else {
                         rv = ty;
                     }
@@ -301,7 +301,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                 }
                 TU_ARMA(Function, ve) {
                     auto rv = crate.types.function((HIRTypeData::Data_NamedFunction{e->clone(), ve}).decay(crate.types, this->sp));
-                    mResolve.expandAssociatedTypes(this->sp, rv);
+                    resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
                 TU_ARMA(EnumValue, ve) {
@@ -309,7 +309,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                 }
                 TU_ARMA(EnumConstructor, ve) {
                     auto rv = crate.types.function((HIRTypeData::Data_NamedFunction{e->clone(), HIRTypeDataNamedFunctionTy::make_EnumConstructor({ve.e, ve.v})}).decay(crate.types, this->sp));
-                    mResolve.expandAssociatedTypes(this->sp, rv);
+                    resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
                 TU_ARMA(StructConstant, ve) {
@@ -317,7 +317,7 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
                 }
                 TU_ARMA(StructConstructor, ve) {
                     auto rv = crate.types.function((HIRTypeData::Data_NamedFunction{e->clone(), ve.s}).decay(crate.types, this->sp));
-                    mResolve.expandAssociatedTypes(this->sp, rv);
+                    resolve.expandAssociatedTypes(this->sp, rv);
                     return rv;
                 }
         }
@@ -328,11 +328,11 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
 
 bool MIRTypeResolve::lvalueIsCopy(const MIRLValue& val) const {
     HIRTypeRef tmp;
-    return mResolve.typeIsCopy(this->sp, getLvalueType(tmp, val));
+    return resolve.typeIsCopy(this->sp, getLvalueType(tmp, val));
 }
 
 const HIRTypeData* MIRTypeResolve::isTypeOwnedBox(const HIRTypeData* ty) const {
-    return mResolve.isTypeOwnedBox(ty);
+    return resolve.isTypeOwnedBox(ty);
 }
 
 size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vector<MIRParam>& values) const {
@@ -361,7 +361,7 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vec
                 } else if (const auto* tyPath = curTy->opt_Path()) {
                     if (const auto* bep = tyPath->binding.opt_Struct()) {
                         const auto& str = **bep;
-                    TU_MATCH_HDRA((str.mData), {)
+                    TU_MATCH_HDRA((str.data), {)
                     TU_ARMA(Named, fields) {
                                 idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
                                     return x.name == fieldName;
@@ -376,14 +376,14 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vec
                     }
                     } else if (const auto* bep = tyPath->binding.opt_Union()) {
                         const auto& unm = **bep;
-                        const auto& fields = unm.mVariants;
+                        const auto& fields = unm.variants;
                         idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
                             return x.name == fieldName;
                         }) - fields.begin();
                     } else if (const auto* bep = tyPath->binding.opt_Enum()) {
                         const auto& enm = **bep;
-                        MIR_ASSERT(*this, enm.mData.is_Data(), "Non-Data enum: " << curTy << " ." << fieldName);
-                        const auto& fields = enm.mData.as_Data();
+                        MIR_ASSERT(*this, enm.data.is_Data(), "Non-Data enum: " << curTy << " ." << fieldName);
+                        const auto& fields = enm.data.as_Data();
                         idx = ::std::find_if(fields.begin(), fields.end(), [&](const auto& x) {
                             return x.name == fieldName;
                         }) - fields.begin();
@@ -395,7 +395,7 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vec
                 }
             }
         }
-        auto* repr = TargetGetTypeRepr(this->sp, mResolve, curTy);
+        auto* repr = TargetGetTypeRepr(this->sp, resolve, curTy);
         if(!repr) {
             MIR_BUG(*this, "Calling `offset_of!` on type with non-defined repr: " << curTy);
         }
@@ -407,8 +407,8 @@ size_t MIRTypeResolve::intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vec
 }
 
 std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
-    if (ty->is_Path() && ty->as_Path().path.mData.is_Generic()) {
-        auto p = ty->as_Path().path.mData.as_Generic().clone();
+    if (ty->is_Path() && ty->as_Path().path.data.is_Generic()) {
+        auto p = ty->as_Path().path.data.as_Generic().clone();
         return FMT(p);
     }
     return FMT(ty);
@@ -752,9 +752,9 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
         const MIRFunction& fcn;
         size_t initBbIdx;
         size_t initStmtIdx;
-        const MIRLValue& mLv;
+        const MIRLValue& lv;
         const ::std::vector<size_t>& blockOffsets;
-        ValueLifetime& mLifetimes;
+        ValueLifetime& lifetimes;
         bool isCopy;
 
         ::std::vector<bool> visitedStatements;
@@ -766,15 +766,15 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             , fcn(fcn)
             , initBbIdx(initBbIdx)
             , initStmtIdx(initStmtIdx)
-            , mLv(lv)
+            , lv(lv)
             , blockOffsets(blockOffsets)
-            , mLifetimes(vl)
+            , lifetimes(vl)
             ,
 
-            visitedStatements(mLifetimes.stmtBitmap.size())
+            visitedStatements(lifetimes.stmtBitmap.size())
         {
             HIRTypeRef tmp;
-            isCopy = mirRes.mResolve.typeIsCopy(localMirRes.sp, mirRes.getLvalueType(tmp, lv));
+            isCopy = mirRes.resolve.typeIsCopy(localMirRes.sp, mirRes.getLvalueType(tmp, lv));
         }
 
         void runBlock(size_t bbIdx, size_t stmtIdx, State state) {
@@ -784,7 +784,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             bool wasMoved = false;
             bool wasUpdated = false;
             auto visitCb = [&](const auto& lv, auto vu) {
-                if (lv.root == mLv.root) {
+                if (lv.root == this->lv.root) {
                     switch (vu) {
                         case MIRValUsage::Read:
                             DEBUG(mirRes << "Used");
@@ -792,7 +792,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                             wasUpdated = true;
                             break;
                         case MIRValUsage::Move:
-                            if (lv.wrappers.size() == mLv.wrappers.size()) {
+                            if (lv.wrappers.size() == this->lv.wrappers.size()) {
                                 DEBUG(mirRes << (isCopy ? "Read" : "Moved"));
                                 state.markRead(stmtIdx);
                                 wasMoved = !isCopy;
@@ -813,7 +813,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     }
                 }
                 for (const auto& w : lv.wrappers) {
-                    if (w.is_Index() && mLv.is_Local() && w.as_Index() == mLv.as_Local()) {
+                    if (w.is_Index() && this->lv.is_Local() && w.as_Index() == this->lv.as_Local()) {
                         DEBUG(mirRes << "Index used");
                         state.markRead(stmtIdx);
                         wasUpdated = true;
@@ -844,7 +844,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
 
                 TU_MATCH_HDRA( (stmt), {)
                 TU_ARMA(Assign, se) {
-                        if (se.dst == mLv) {
+                        if (se.dst == lv) {
                             DEBUG(mirRes << "- Assigned to, return");
                             // Value assigned, just apply
                             state.finalise(stmtIdx);
@@ -853,7 +853,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     }
                     TU_ARMA(Asm, se) {
                         for (const auto& e : se.outputs) {
-                            if (e.second == mLv) {
+                            if (e.second == lv) {
                                 // Assigned, just apply
                                 DEBUG(mirRes << "- Assigned (asm!), return");
                                 state.finalise(stmtIdx);
@@ -870,7 +870,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                                 }
                                 TU_ARMA(Reg, v) {
                                     if (v.output) {
-                                        if (*v.output == mLv) {
+                                        if (*v.output == lv) {
                                             // Assigned, just apply
                                             DEBUG(mirRes << "- Assigned (asm!), return");
                                             state.finalise(stmtIdx);
@@ -957,7 +957,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     statesToDo.push_back(::std::make_pair(te.defTarget, mv$(state)));
                 }
                 TU_ARMA(Drop, te) {
-                    if (te.slot == mLv) {
+                    if (te.slot == lv) {
                         DEBUG(mirRes << "Dropped, return");
                         state.markRead(stmtIdx);
                         state.finalise(stmtIdx);
@@ -967,7 +967,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     statesToDo.push_back(::std::make_pair(te.target, mv$(state)));
                 }
                 TU_ARMA(Call, te) {
-                    if (te.retVal == mLv) {
+                    if (te.retVal == lv) {
                         DEBUG(mirRes << "Assigned (Call), return");
                         // Value assigned, just apply
                         state.finalise(stmtIdx);
@@ -982,7 +982,7 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                 TU_ARMA(Asm2, te) {
                     for (const auto& p : te.params) {
                         if (const auto* reg = p.opt_Reg()) {
-                            if (reg->output && *reg->output == mLv) {
+                            if (reg->output && *reg->output == lv) {
                                 state.finalise(stmtIdx);
                                 return;
                             }
@@ -1540,17 +1540,17 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
 MIRTypeResolve::MIRTypeResolve(const Span& sp, const ::StaticTraitResolve& resolve, ::FmtLambda path, const HIRTypeData* retType, const argsT& args, const MIRFunction& fcn)
     : sp(sp)
-    , mResolve(resolve)
+    , resolve(resolve)
     , crate(resolve.hirCrate())
     , path_(path)
     , retType(retType)
-    , mArgs(args)
+    , args(args)
     , fcn(fcn)
     , monomorphedRettype(nullptr)
     , monomorphedLocals(nullptr)
 {
-    if (crate.mLangItems.count("owned_box") > 0) {
-        langBox_ = &crate.mLangItems.at("owned_box");
+    if (crate.langItems.count("owned_box") > 0) {
+        langBox_ = &crate.langItems.at("owned_box");
     }
 }
 

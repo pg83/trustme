@@ -34,7 +34,7 @@ public:
         META,
         ITEM,
         VIS,
-    } mType;
+    } type;
 
     // Owned type-pruned pointer
     void* ptr;

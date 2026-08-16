@@ -388,9 +388,9 @@ namespace {
         void visitTypeImpl(HIRTypeImpl& impl) override {
             shortItemName = true;
 
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << impl.mType << "\n";
-            if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
+            os << indent() << "impl" << impl.params.fmtArgs() << " " << impl.type << "\n";
+            if (!impl.params.bounds.empty()) {
+                os << indent() << " " << impl.params.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             incIndent();
@@ -404,9 +404,9 @@ namespace {
         virtual void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
             shortItemName = true;
 
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
-            if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
+            os << indent() << "impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type << "\n";
+            if (!impl.params.bounds.empty()) {
+                os << indent() << " " << impl.params.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             incIndent();
@@ -420,9 +420,9 @@ namespace {
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override {
             shortItemName = true;
 
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
-            if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
+            os << indent() << "impl" << impl.params.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.type << "\n";
+            if (!impl.params.bounds.empty()) {
+                os << indent() << " " << impl.params.fmtBounds() << "\n";
             }
             os << indent() << "{ }\n";
 
@@ -433,9 +433,9 @@ namespace {
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
             shortItemName = true;
 
-            os << indent() << "trait " << p << item.mParams.fmtArgs() << "\n";
-            if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmtBounds() << "\n";
+            os << indent() << "trait " << p << item.params.fmtArgs() << "\n";
+            if (!item.params.bounds.empty()) {
+                os << indent() << " " << item.params.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             incIndent();
@@ -454,8 +454,8 @@ namespace {
             if (item.unsafe) {
                 os << "unsafe ";
             }
-            if (item.mAbi != ABI_RUST) {
-                os << "extern \"" << item.mAbi << "\" ";
+            if (item.abi != ABI_RUST) {
+                os << "extern \"" << item.abi << "\" ";
             }
             os << "fn ";
             if (shortItemName) {
@@ -463,22 +463,22 @@ namespace {
             } else {
                 os << p;
             }
-            os << item.mParams.fmtArgs() << "(";
-            for (unsigned int i = 0; i < item.mArgs.size(); i++) {
-                if (i == 0 && item.mArgs[i].first.mBindings.size() > 0 && item.mArgs[i].first.mBindings[0].mName == "self") {
+            os << item.params.fmtArgs() << "(";
+            for (unsigned int i = 0; i < item.args.size(); i++) {
+                if (i == 0 && item.args[i].first.bindings.size() > 0 && item.args[i].first.bindings[0].name == "self") {
                     os << "self=";
                 }
-                os << "arg$" << i << ": " << item.mArgs[i].second << ", ";
+                os << "arg$" << i << ": " << item.args[i].second << ", ";
             }
             os << ") -> " << item.returnType << "\n";
-            if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmtBounds() << "\n";
+            if (!item.params.bounds.empty()) {
+                os << indent() << " " << item.params.fmtBounds() << "\n";
             }
 
-            if (item.mCode) {
+            if (item.code) {
                 os << indent() << "{\n";
                 incIndent();
-                dumpMir(os, indentLevel, item.mCode.getMirOrError(Span()));
+                dumpMir(os, indentLevel, item.code.getMirOrError(Span()));
                 decIndent();
                 os << indent() << "}\n";
             } else {
@@ -494,12 +494,12 @@ namespace {
             } else {
                 os << p;
             }
-            os << ": " << item.mType;
-            if (item.mValue) {
+            os << ": " << item.type;
+            if (item.value) {
                 incIndent();
                 os << " = {\n";
                 incIndent();
-                dumpMir(os, indentLevel, item.mValue.getMirOrError(Span()));
+                dumpMir(os, indentLevel, item.value.getMirOrError(Span()));
                 decIndent();
                 os << indent() << "} /* = " << item.valueRes << "*/;\n";
                 decIndent();
@@ -516,12 +516,12 @@ namespace {
             } else {
                 os << p;
             }
-            os << ": " << item.mType;
-            if (item.mValue) {
+            os << ": " << item.type;
+            if (item.value) {
                 incIndent();
                 os << " = {\n";
                 incIndent();
-                dumpMir(os, indentLevel, item.mValue.getMirOrError(Span()));
+                dumpMir(os, indentLevel, item.value.getMirOrError(Span()));
                 decIndent();
                 os << indent() << "} /* = " << item.valueRes << "*/;\n";
                 decIndent();

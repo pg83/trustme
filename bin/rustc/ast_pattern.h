@@ -21,8 +21,8 @@ public:
         REF,
         MUTREF,
     };
-    Ident mName;
-    Type mType;
+    Ident name;
+    Type type;
     bool isMutable;
     unsigned int slot;
 
@@ -35,7 +35,7 @@ public:
     ASTPatternBinding& operator=(ASTPatternBinding&& x) = default;
 
     bool isValid() const {
-        return mName.name != "";
+        return name.name != "";
     }
 };
 

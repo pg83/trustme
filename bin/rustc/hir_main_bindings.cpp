@@ -46,10 +46,10 @@ class HirDeserialiser {
     HIRTypeInterner& typeInterner;
 
 public:
-    stl::ObjPool& mPool;
+    stl::ObjPool& pool;
 
     HirDeserialiser(stl::ObjPool& pool, HIRSerialiseReader& in, HIRTypeInterner& typeInterner)
-        : mPool(pool)
+        : pool(pool)
         , in(in)
         , typeInterner(typeInterner)
     {
@@ -134,7 +134,7 @@ public:
         ::std::unordered_map<RcString, T*> rv;
         for (size_t i = 0; i < n; i++) {
             auto s = in.readIstring();
-            rv.insert(::std::make_pair(mv$(s), mPool.make<T>(D<T>::des(*this))));
+            rv.insert(::std::make_pair(mv$(s), pool.make<T>(D<T>::des(*this))));
         }
         return rv;
     }
@@ -287,10 +287,10 @@ public:
 
     HIRTypeImpl deserialiseTypeimpl() {
         HIRTypeImpl rv;
-        TRACE_FUNCTION_FR("", "impl" << rv.mParams.fmtArgs() << " " << rv.mType);
+        TRACE_FUNCTION_FR("", "impl" << rv.params.fmtArgs() << " " << rv.type);
 
-        rv.mParams = deserialiseGenericparams();
-        rv.mType = deserialiseType();
+        rv.params = deserialiseGenericparams();
+        rv.type = deserialiseType();
 
         size_t methodCount = in.readCount();
         for (size_t i = 0; i < methodCount; i++) {
@@ -313,13 +313,13 @@ public:
 
     HIRTraitImpl deserialiseTraitimpl() {
         HIRTraitImpl rv;
-        TRACE_FUNCTION_FR("", "impl" << rv.mParams.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.mType);
+        TRACE_FUNCTION_FR("", "impl" << rv.params.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.type);
 
-        rv.mParams = deserialiseGenericparams();
+        rv.params = deserialiseGenericparams();
         rv.traitArgs = deserialisePathparams();
-        rv.mType = deserialiseType();
+        rv.type = deserialiseType();
         rv.isConst = in.readBool();
-        DEBUG("impl" << rv.mParams.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.mType);
+        DEBUG("impl" << rv.params.fmtArgs() << " ?" << rv.traitArgs << " for " << rv.type);
 
         size_t methodCount = in.readCount();
         for (size_t i = 0; i < methodCount; i++) {
@@ -375,7 +375,7 @@ public:
                 assert(crateName != "");
                 mp.crate = crateName;
             }
-            rv.setModPath(mPool, mv$(mp));
+            rv.setModPath(pool, mv$(mp));
         }
         return rv;
     }
@@ -393,7 +393,7 @@ public:
         rv.rules = deserialiseVecC<::MacroRulesArm>([&]() {
             return deserialiseMacrorulesarm();
         });
-        rv.mHygiene = deserialiseHygine();
+        rv.hygiene = deserialiseHygine();
         return rv;
     }
 
@@ -755,18 +755,18 @@ public:
         if (rv.receiver == HIRFunction::Receiver::Custom) {
             rv.receiverType = receiverType;
         }
-        rv.mAbi = in.readIstring();
+        rv.abi = in.readIstring();
         rv.unsafe = in.readBool();
         rv.isConst = in.readBool();
         rv.markings = deserialiseFunctionMarkings();
-        rv.mParams = deserialiseGenericparams();
-        rv.mArgs = deserialiseFcnargs();
+        rv.params = deserialiseGenericparams();
+        rv.args = deserialiseFcnargs();
         rv.variadic = in.readBool();
         rv.returnType = deserialiseType();
         rv.source.filename = in.readIstring();
         rv.source.line = static_cast<unsigned int>(in.readCount());
         rv.source.column = static_cast<unsigned int>(in.readCount());
-        rv.mCode = deserialiseExprptr();
+        rv.code = deserialiseExprptr();
         return rv;
     }
 
@@ -795,9 +795,9 @@ public:
         TRACE_FUNCTION;
 
         HIRConstant rv;
-        rv.mParams = deserialiseGenericparams();
-        rv.mType = deserialiseType();
-        rv.mValue = deserialiseExprptr();
+        rv.params = deserialiseGenericparams();
+        rv.type = deserialiseType();
+        rv.value = deserialiseExprptr();
         if (in.readBool()) {
             rv.valueRes = deserialiseEncodedliteral();
             rv.valueState = HIRConstant::ValueState::Known;
@@ -826,9 +826,9 @@ public:
         auto rv = HIRStatic(mv$(linkage), isMut, mv$(ty), {});
         rv.explicitAlignment = explicitAlignment;
         if (params.isGeneric()) {
-            rv.mValue = deserialiseExprptr();
+            rv.value = deserialiseExprptr();
         }
-        rv.mParams = ::std::move(params);
+        rv.params = ::std::move(params);
         if (saveLiteral) {
             rv.valueRes = deserialiseEncodedliteral();
             rv.valueGenerated = true;
@@ -1117,8 +1117,8 @@ HIRPathParams HirDeserialiser::deserialisePathparams() {
 HIRGenericPath HirDeserialiser::deserialiseGenericpath() {
     HIRGenericPath rv;
     TRACE_FUNCTION_FR("", rv);
-    rv.mPath = deserialiseSimplepath();
-    rv.mParams = deserialisePathparams();
+    rv.path = deserialiseSimplepath();
+    rv.params = deserialisePathparams();
     return rv;
 }
 
@@ -1161,14 +1161,14 @@ HIRGenericParams HirDeserialiser::deserialiseGenericparams() {
 
 HIRTypeParamDef HirDeserialiser::deserialiseTyparamdef() {
     auto rv = HIRTypeParamDef{in.readIstring(), deserialiseType(), in.readBool()};
-    DEBUG("::HIR::TypeParamDef { " << rv.mName << ", " << rv.defaultValue << ", " << rv.isSized << "}");
+    DEBUG("::HIR::TypeParamDef { " << rv.name << ", " << rv.defaultValue << ", " << rv.isSized << "}");
     return rv;
 }
 
 HIRValueParamDef HirDeserialiser::deserialiseValueparamdef() {
     auto rv = HIRValueParamDef{in.readIstring(), deserialiseType()};
     rv.defaultValue = deserialiseConstgeneric();
-    DEBUG("::HIR::ValueParamDef { " << rv.mName << ": " << rv.mType << " = " << rv.defaultValue << "}");
+    DEBUG("::HIR::ValueParamDef { " << rv.name << ": " << rv.type << " = " << rv.defaultValue << "}");
     return rv;
 }
 
@@ -1276,9 +1276,9 @@ HIRTrait HirDeserialiser::deserialiseTrait() {
 
     HIRTrait rv{deserialiseGenericparams(), {}};
     const auto traitFlags = in.readU8();
-    rv.mIsMarker = traitFlags & 1;
+    rv.isMarker = traitFlags & 1;
     rv.isFundamental = traitFlags & 2;
-    rv.isCoinductive = (traitFlags & 4) || rv.mIsMarker;
+    rv.isCoinductive = (traitFlags & 4) || rv.isMarker;
     rv.isConst = traitFlags & 8;
     rv.skipArrayDuringMethodDispatch = traitFlags & 16;
     rv.skipBoxedSliceDuringMethodDispatch = traitFlags & 32;
@@ -1579,14 +1579,14 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
     gVisPrivate = HIRPublicity::newPriv(HIRSimplePath(this->crateName));
     rv.crateName = this->crateName;
     rv.edition = static_cast<ASTEdition>(in.readTag());
-    rv.mRootModule = deserialiseModule();
+    rv.rootModule = deserialiseModule();
 
     rv.typeImpls = D<HIRCrate::ImplGroup<std::unique_ptr<HIRTypeImpl>>>::des(*this);
     rv.traitImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRTraitImpl>>>();
     rv.markerImpls = deserialisePathmap<HIRCrate::ImplGroup<std::unique_ptr<HIRMarkerImpl>>>();
 
     rv.exportedMacroNames = deserialiseVec<::RcString>();
-    rv.mLangItems = deserialiseStrumap<HIRSimplePath>();
+    rv.langItems = deserialiseStrumap<HIRSimplePath>();
 
     {
         size_t n = in.readCount();
@@ -1595,7 +1595,7 @@ void HirDeserialiser::deserialiseCrate(HIRCrate& rv) {
             auto extCrateFile = in.readString();
             auto extCrate = HIRExternCrate{};
             extCrate.basename = extCrateFile;
-            extCrate.mPath = extCrateFile;
+            extCrate.path = extCrateFile;
             rv.extCrates.insert(::std::make_pair(mv$(extCrateName), mv$(extCrate)));
         }
     }
@@ -1680,9 +1680,9 @@ namespace {
         }
 
         void visitTypeImpl(HIRTypeImpl& impl) override {
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << impl.mType << "\n";
-            if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
+            os << indent() << "impl" << impl.params.fmtArgs() << " " << impl.type << "\n";
+            if (!impl.params.bounds.empty()) {
+                os << indent() << " " << impl.params.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             incIndent();
@@ -1692,9 +1692,9 @@ namespace {
         }
 
         virtual void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
-            if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
+            os << indent() << "impl" << impl.params.fmtArgs() << " " << traitPath << impl.traitArgs << " for " << impl.type << "\n";
+            if (!impl.params.bounds.empty()) {
+                os << indent() << " " << impl.params.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             incIndent();
@@ -1707,16 +1707,16 @@ namespace {
         }
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override {
-            os << indent() << "impl" << impl.mParams.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.mType << "\n";
-            if (!impl.mParams.bounds.empty()) {
-                os << indent() << " " << impl.mParams.fmtBounds() << "\n";
+            os << indent() << "impl" << impl.params.fmtArgs() << " " << (impl.isPositive ? "" : "!") << traitPath << impl.traitArgs << " for " << impl.type << "\n";
+            if (!impl.params.bounds.empty()) {
+                os << indent() << " " << impl.params.fmtBounds() << "\n";
             }
             os << indent() << "{ }\n";
         }
 
         // - Type Items
         void visitTypeAlias(HIRItemPath p, HIRTypeAlias& item) override {
-            os << indent() << "type " << p.getName() << item.mParams.fmtArgs() << " = " << item.mType << item.mParams.fmtBounds() << "\n";
+            os << indent() << "type " << p.getName() << item.params.fmtArgs() << " = " << item.type << item.params.fmtBounds() << "\n";
         }
 
         void visitInherentType(HIRItemPath p, HIRTypeAlias& item) override {
@@ -1724,7 +1724,7 @@ namespace {
         }
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
-            os << indent() << "trait " << p.getName() << item.mParams.fmtArgs() << "\n";
+            os << indent() << "trait " << p.getName() << item.params.fmtArgs() << "\n";
             if (!item.parentTraits.empty()) {
                 os << indent() << "  " << ": ";
                 bool isFirst = true;
@@ -1736,8 +1736,8 @@ namespace {
                     isFirst = false;
                 }
             }
-            if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmtBounds() << "\n";
+            if (!item.params.bounds.empty()) {
+                os << indent() << " " << item.params.fmtBounds() << "\n";
             }
             if (!item.allParentTraits.empty()) {
                 os << indent() << "/* All parent traits:\n";
@@ -1772,14 +1772,14 @@ namespace {
         }
 
         void visitStruct(HIRItemPath p, HIRStruct& item) override {
-            os << indent() << "struct " << p.getName() << item.mParams.fmtArgs();
-            TU_MATCH_HDRA( (item.mData), {)
+            os << indent() << "struct " << p.getName() << item.params.fmtArgs();
+            TU_MATCH_HDRA( (item.data), {)
             TU_ARMA(Unit, flds) {
-                    if (item.mParams.bounds.empty()) {
+                    if (item.params.bounds.empty()) {
                         os << ";\n";
                     } else {
                         os << "\n";
-                        os << indent() << " " << item.mParams.fmtBounds() << "\n";
+                        os << indent() << " " << item.params.fmtBounds() << "\n";
                         os << indent() << "    ;\n";
                     }
                 }
@@ -1788,18 +1788,18 @@ namespace {
                     for (const auto& fld : flds) {
                         os << fld.publicity << " " << fld.ent << ", ";
                     }
-                    if (item.mParams.bounds.empty()) {
+                    if (item.params.bounds.empty()) {
                         os << ");\n";
                     } else {
                         os << ")\n";
-                        os << indent() << " " << item.mParams.fmtBounds() << "\n";
+                        os << indent() << " " << item.params.fmtBounds() << "\n";
                         os << indent() << "    ;\n";
                     }
                 }
                 TU_ARMA(Named, flds) {
                     os << "\n";
-                    if (!item.mParams.bounds.empty()) {
-                        os << indent() << " " << item.mParams.fmtBounds() << "\n";
+                    if (!item.params.bounds.empty()) {
+                        os << indent() << " " << item.params.fmtBounds() << "\n";
                     }
                     os << indent() << "{\n";
                     incIndent();
@@ -1817,19 +1817,19 @@ namespace {
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {
-            os << indent() << "enum " << p.getName() << item.mParams.fmtArgs() << "\n";
-            if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmtBounds() << "\n";
+            os << indent() << "enum " << p.getName() << item.params.fmtArgs() << "\n";
+            if (!item.params.bounds.empty()) {
+                os << indent() << " " << item.params.fmtBounds() << "\n";
             }
             os << indent() << "{\n";
             incIndent();
-            if (const auto* e = item.mData.opt_Value()) {
+            if (const auto* e = item.data.opt_Value()) {
                 for (const auto& var : e->variants) {
                     os << indent() << var.name;
                     os << ",\n";
                 }
             } else {
-                for (const auto& var : item.mData.as_Data()) {
+                for (const auto& var : item.data.as_Data()) {
                     os << indent() << var.name;
                     if (var.type == typeInterner().unit()) {
                     } else {
@@ -1851,28 +1851,28 @@ namespace {
             if (item.unsafe) {
                 os << "unsafe ";
             }
-            if (item.mAbi != ABI_RUST) {
-                os << "extern \"" << item.mAbi << "\" ";
+            if (item.abi != ABI_RUST) {
+                os << "extern \"" << item.abi << "\" ";
             }
-            os << "fn " << p.getName() << item.mParams.fmtArgs() << "(";
-            for (const auto& arg : item.mArgs) {
+            os << "fn " << p.getName() << item.params.fmtArgs() << "(";
+            for (const auto& arg : item.args) {
                 os << arg.first << ": " << arg.second << ", ";
             }
             os << ") -> " << item.returnType << "\n";
-            if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmtBounds() << "\n";
+            if (!item.params.bounds.empty()) {
+                os << indent() << " " << item.params.fmtBounds() << "\n";
             }
 
-            if (item.mCode) {
+            if (item.code) {
                 os << indent();
-                if (cast<HIRExprNodeBlock>(&*item.mCode)) {
-                    item.mCode->visit(*this);
+                if (cast<HIRExprNodeBlock>(&*item.code)) {
+                    item.code->visit(*this);
                 } else {
                     os << "{\n";
                     incIndent();
                     os << indent();
 
-                    item.mCode->visit(*this);
+                    item.code->visit(*this);
 
                     os << "\n";
                     decIndent();
@@ -1889,24 +1889,24 @@ namespace {
             if (item.linkage.name != "") {
                 os << indent() << "#[link_name=\"" << item.linkage.name << "\"]\n";
             }
-            if (item.mValue) {
-                os << indent() << "static " << p.getName() << item.mParams.fmtArgs() << ": " << item.mType << " = " << item.valueRes;
+            if (item.value) {
+                os << indent() << "static " << p.getName() << item.params.fmtArgs() << ": " << item.type << " = " << item.valueRes;
             } else if (item.valueGenerated) {
-                os << indent() << "static " << p.getName() << item.mParams.fmtArgs() << ": " << item.mType << " = /*magic*/ " << item.valueRes;
+                os << indent() << "static " << p.getName() << item.params.fmtArgs() << ": " << item.type << " = /*magic*/ " << item.valueRes;
             } else {
-                os << indent() << "extern static " << p.getName() << ": " << item.mType;
+                os << indent() << "extern static " << p.getName() << ": " << item.type;
             }
-            if (!item.mParams.bounds.empty()) {
-                os << indent() << " " << item.mParams.fmtBounds() << "\n";
+            if (!item.params.bounds.empty()) {
+                os << indent() << " " << item.params.fmtBounds() << "\n";
             }
             os << ";\n";
         }
 
         void visitConstant(HIRItemPath p, HIRConstant& item) override {
-            os << indent() << "const " << p.getName() << ": " << item.mType << " = " << item.valueRes;
-            if (item.mValue /*&& item.m_value_state != HIR::Constant::ValueState::Known*/) {
+            os << indent() << "const " << p.getName() << ": " << item.type << " = " << item.valueRes;
+            if (item.value /*&& item.m_value_state != HIR::Constant::ValueState::Known*/) {
                 os << " /*= ";
-                item.mValue->visit(*this);
+                item.value->visit(*this);
                 os << "*/";
             }
             os << ";\n";
@@ -1972,37 +1972,37 @@ namespace {
 
         void visit(HIRExprNodeReturn& node) override {
             os << (node.isTailCall ? "become" : "return");
-            if (node.mValue) {
+            if (node.value) {
                 os << " ";
-                this->visitNodePtr(node.mValue);
+                this->visitNodePtr(node.value);
             }
         }
 
         void visit(HIRExprNodeYield& node) override {
             os << "yield";
-            if (node.mValue) {
+            if (node.value) {
                 os << " ";
-                this->visitNodePtr(node.mValue);
+                this->visitNodePtr(node.value);
             }
         }
 
         void visit(HIRExprNodeAWait& node) override {
             os << "(";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << ").await";
         }
 
         void visit(HIRExprNodeUse& node) override {
             os << "(";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << ").use";
         }
 
         void visit(HIRExprNodeLet& node) override {
-            os << "let " << node.pattern << ": " << node.mType;
-            if (node.mValue) {
+            os << "let " << node.pattern << ": " << node.type;
+            if (node.value) {
                 os << " = ";
-                this->visitNodePtr(node.mValue);
+                this->visitNodePtr(node.value);
             }
             os << ";";
         }
@@ -2012,7 +2012,7 @@ namespace {
                 os << "'" << node.label << ": ";
             }
             os << "loop ";
-            this->visitNodePtr(node.mCode);
+            this->visitNodePtr(node.code);
         }
 
         void visit(HIRExprNodeLoopControl& node) override {
@@ -2020,15 +2020,15 @@ namespace {
             if (node.label != "") {
                 os << " '" << node.label;
             }
-            if (node.mValue) {
+            if (node.value) {
                 os << " ";
-                this->visitNodePtr(node.mValue);
+                this->visitNodePtr(node.value);
             }
         }
 
         void visit(HIRExprNodeMatch& node) override {
             os << "match ";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << " {\n";
             for (/*const*/ auto& arm : node.arms) {
                 os << indent();
@@ -2049,7 +2049,7 @@ namespace {
                 }
                 os << " => ";
                 incIndent();
-                this->visitNodePtr(arm.mCode);
+                this->visitNodePtr(arm.code);
                 decIndent();
                 os << ",\n";
             }
@@ -2059,7 +2059,7 @@ namespace {
         void visit(HIRExprNodeAssign& node) override {
             this->visitNodePtr(node.slot);
             os << " " << HIRExprNodeAssign::opname(node.op) << "= ";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
         }
 
         void visit(HIRExprNodeBinOp& node) override {
@@ -2082,13 +2082,13 @@ namespace {
                     break;
             }
             os << "(";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << ")";
         }
 
         void visit(HIRExprNodeBorrow& node) override {
             os << "&";
-            switch (node.mType) {
+            switch (node.type) {
                 case HIRBorrowType::Shared:
                     break;
                 case HIRBorrowType::Unique:
@@ -2099,11 +2099,11 @@ namespace {
                     break;
             }
 
-            bool skipParens = this->nodeIsLeaf(*node.mValue) || NODE_IS(node.mValue, Deref);
+            bool skipParens = this->nodeIsLeaf(*node.value) || NODE_IS(node.value, Deref);
             if (!skipParens) {
                 os << "(";
             }
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             if (!skipParens) {
                 os << ")";
             }
@@ -2111,7 +2111,7 @@ namespace {
 
         void visit(HIRExprNodeRawBorrow& node) override {
             os << "&raw ";
-            switch (node.mType) {
+            switch (node.type) {
                 case HIRBorrowType::Shared:
                     break;
                 case HIRBorrowType::Unique:
@@ -2122,30 +2122,30 @@ namespace {
                     break;
             }
 
-            bool skipParens = this->nodeIsLeaf(*node.mValue) || NODE_IS(node.mValue, Deref);
+            bool skipParens = this->nodeIsLeaf(*node.value) || NODE_IS(node.value, Deref);
             if (!skipParens) {
                 os << "(";
             }
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             if (!skipParens) {
                 os << ")";
             }
         }
 
         void visit(HIRExprNodeCast& node) override {
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << " as " << node.dstType;
         }
 
         void visit(HIRExprNodeUnsize& node) override {
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << " : " << node.dstType;
         }
 
         void visit(HIRExprNodeIndex& node) override {
             // TODO: Avoid parens
             os << "(";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << ")";
             os << "[";
             this->visitNodePtr(node.index);
@@ -2155,32 +2155,32 @@ namespace {
         void visit(HIRExprNodeDeref& node) override {
             os << "*";
 
-            bool skipParens = this->nodeIsLeaf(*node.mValue);
+            bool skipParens = this->nodeIsLeaf(*node.value);
             if (!skipParens) {
                 os << "(";
             }
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             if (!skipParens) {
                 os << ")";
             }
         }
 
         void visit(HIRExprNodeEmplace& node) override {
-            if (node.mType == HIRExprNodeEmplace::Type::Noop) {
-                return node.mValue->visit(*this);
+            if (node.type == HIRExprNodeEmplace::Type::Noop) {
+                return node.value->visit(*this);
             }
             os << "(";
             this->visitNodePtr(node.place);
             os << " <- ";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << ")";
-            os << "/*" << (node.mType == HIRExprNodeEmplace::Type::Boxer ? "box" : "place") << "*/";
+            os << "/*" << (node.type == HIRExprNodeEmplace::Type::Boxer ? "box" : "place") << "*/";
         }
 
         void visit(HIRExprNodeTupleVariant& node) override {
-            os << node.mPath;
+            os << node.path;
             os << "(";
-            for (/*const*/ auto& arg : node.mArgs) {
+            for (/*const*/ auto& arg : node.args) {
                 this->visitNodePtr(arg);
                 os << ", ";
             }
@@ -2188,9 +2188,9 @@ namespace {
         }
 
         void visit(HIRExprNodeCallPath& node) override {
-            os << node.mPath;
+            os << node.path;
             os << "(";
-            for (/*const*/ auto& arg : node.mArgs) {
+            for (/*const*/ auto& arg : node.args) {
                 this->visitNodePtr(arg);
                 os << ", ";
             }
@@ -2201,10 +2201,10 @@ namespace {
         void visit(HIRExprNodeCallValue& node) override {
             // TODO: Avoid brackets if not needed
             os << "(";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << ")";
             os << "(";
-            for (/*const*/ auto& arg : node.mArgs) {
+            for (/*const*/ auto& arg : node.args) {
                 this->visitNodePtr(arg);
                 os << ", ";
             }
@@ -2214,10 +2214,10 @@ namespace {
         void visit(HIRExprNodeCallMethod& node) override {
             // TODO: Avoid brackets if not needed
             os << "(";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << ")";
-            os << "." << node.method << node.mParams << "(";
-            for (/*const*/ auto& arg : node.mArgs) {
+            os << "." << node.method << node.params << "(";
+            for (/*const*/ auto& arg : node.args) {
                 this->visitNodePtr(arg);
                 os << ", ";
             }
@@ -2230,47 +2230,47 @@ namespace {
         void visit(HIRExprNodeField& node) override {
             // TODO: Avoid brackets if not needed
             os << "(";
-            this->visitNodePtr(node.mValue);
+            this->visitNodePtr(node.value);
             os << ")";
             os << "." << node.field;
         }
 
         void visit(HIRExprNodeLiteral& node) override {
-            TU_MATCH_HDRA( (node.mData), {)
+            TU_MATCH_HDRA( (node.data), {)
             TU_ARMA(Integer, e) {
-                    switch (e.mType) {
+                    switch (e.type) {
                         case HIRCoreType::U8:
-                            os << e.mValue << "_u8";
+                            os << e.value << "_u8";
                             break;
                         case HIRCoreType::U16:
-                            os << e.mValue << "_u16";
+                            os << e.value << "_u16";
                             break;
                         case HIRCoreType::U32:
-                            os << e.mValue << "_u32";
+                            os << e.value << "_u32";
                             break;
                         case HIRCoreType::U64:
-                            os << e.mValue << "_u64";
+                            os << e.value << "_u64";
                             break;
                         case HIRCoreType::Usize:
-                            os << e.mValue << "_usize";
+                            os << e.value << "_usize";
                             break;
                         case HIRCoreType::I8:
-                            os << /*I128*/ (e.mValue) << "_i8";
+                            os << /*I128*/ (e.value) << "_i8";
                             break;
                         case HIRCoreType::I16:
-                            os << /*I128*/ (e.mValue) << "_i16";
+                            os << /*I128*/ (e.value) << "_i16";
                             break;
                         case HIRCoreType::I32:
-                            os << /*I128*/ (e.mValue) << "_i32";
+                            os << /*I128*/ (e.value) << "_i32";
                             break;
                         case HIRCoreType::I64:
-                            os << /*I128*/ (e.mValue) << "_i64";
+                            os << /*I128*/ (e.value) << "_i64";
                             break;
                         case HIRCoreType::Isize:
-                            os << /*I128*/ (e.mValue) << "_isize";
+                            os << /*I128*/ (e.value) << "_isize";
                             break;
                         case HIRCoreType::Char: {
-                            auto v = e.mValue.truncateU64();
+                            auto v = e.value.truncateU64();
                             if (v == '\\' || v == '\'') {
                                 os << "'\\" << static_cast<char>(v) << "'";
                             } else if (' ' <= v && v <= 0x7F) {
@@ -2280,20 +2280,20 @@ namespace {
                             }
                         } break;
                         default:
-                            os << e.mValue << "_unk";
+                            os << e.value << "_unk";
                             break;
                     }
                 }
                 TU_ARMA(Float, e) {
-                    switch (e.mType) {
+                    switch (e.type) {
                         case HIRCoreType::F32:
-                            os << e.mValue << "_f32";
+                            os << e.value << "_f32";
                             break;
                         case HIRCoreType::F64:
-                            os << e.mValue << "_f64";
+                            os << e.value << "_f64";
                             break;
                         default:
-                            os << e.mValue << "_unk";
+                            os << e.value << "_unk";
                             break;
                     }
                 }
@@ -2325,23 +2325,23 @@ namespace {
         }
 
         void visit(HIRExprNodeUnitVariant& node) override {
-            os << node.mPath;
+            os << node.path;
         }
 
         void visit(HIRExprNodePathValue& node) override {
-            os << node.mPath;
+            os << node.path;
         }
 
         void visit(HIRExprNodeVariable& node) override {
-            os << node.mName << "#" << node.slot;
+            os << node.name << "#" << node.slot;
         }
 
         void visit(HIRExprNodeConstParam& node) override {
-            os << node.mName << "#" << node.mBinding;
+            os << node.name << "#" << node.binding;
         }
 
         void visit(HIRExprNodeStructLiteral& node) override {
-            os << node.mType << " {\n";
+            os << node.type << " {\n";
             incIndent();
             for (/*const*/ auto& val : node.values) {
                 os << indent() << val.first << ": ";
@@ -2378,12 +2378,12 @@ namespace {
         void visit(HIRExprNodeArraySized& node) override {
             os << "[";
             this->visitNodePtr(node.val);
-            os << "; " << node.mSize;
+            os << "; " << node.size;
             os << "]";
         }
 
         void visit(HIRExprNodeClosure& node) override {
-            if (node.mCode) {
+            if (node.code) {
                 if (node.isMove) {
                     os << " move";
                 }
@@ -2391,11 +2391,11 @@ namespace {
                     os << " use";
                 }
                 os << "|";
-                for (const auto& arg : node.mArgs) {
+                for (const auto& arg : node.args) {
                     os << arg.first << ": " << arg.second << ", ";
                 }
                 os << "| -> " << node.returnType << " ";
-                this->visitNodePtr(node.mCode);
+                this->visitNodePtr(node.code);
             } else {
                 os << node.objPath << "( ";
                 for (/*const*/ auto& cap : node.captures) {
@@ -2407,7 +2407,7 @@ namespace {
         }
 
         void visit(HIRExprNodeGenerator& node) override {
-            if (node.mCode) {
+            if (node.code) {
                 os << "/*gen*/";
                 if (node.isPinned) {
                     os << "static ";
@@ -2417,7 +2417,7 @@ namespace {
                 }
                 os << "|";
                 os << "| -> " << node.returnType << " ";
-                this->visitNodePtr(node.mCode);
+                this->visitNodePtr(node.code);
             } else {
                 os << node.objPath << "( ";
                 for (/*const*/ auto& cap : node.captures) {
@@ -2432,7 +2432,7 @@ namespace {
             os << "/*gen body*/";
             os << "|";
             os << "| -> " << node.returnType << " ";
-            this->visitNodePtr(node.mCode);
+            this->visitNodePtr(node.code);
         }
 
         void visit(HIRExprNodeAsyncBlock& node) override {
@@ -2440,10 +2440,10 @@ namespace {
                 os << "move ";
             }
             os << "async {";
-            if (!node.mCode) {
+            if (!node.code) {
                 os << "/* lowered: " << node.objPath << " */";
             } else {
-                this->visitNodePtr(node.mCode);
+                this->visitNodePtr(node.code);
             }
             os << "}";
         }
@@ -2717,7 +2717,7 @@ public:
                 serialise(e);
             }
             TU_ARMA(TraitObject, e) {
-                serialiseTraitpath(e.mTrait);
+                serialiseTraitpath(e.trait);
                 serialiseVec(e.markers);
             }
             TU_ARMA(ErasedType, e) {
@@ -2751,8 +2751,8 @@ public:
             TU_ARMA(Function, e) {
                 out.writeBool(e.isUnsafe);
                 out.writeBool(e.isVariadic);
-                out.writeString(e.mAbi);
-                serialiseType(e.mRettype);
+                out.writeString(e.abi);
+                serialiseType(e.rettype);
                 serialiseVec(e.argTypes);
                 out.writeBool(e.trackCaller);
             }
@@ -2788,8 +2788,8 @@ public:
 
     void serialiseGenericpath(const HIRGenericPath& path) {
         TRACE_FUNCTION_F(path);
-        serialiseSimplepath(path.mPath);
-        serialisePathparams(path.mParams);
+        serialiseSimplepath(path.path);
+        serialisePathparams(path.params);
     }
 
     void serialise(const HIRGenericPath& path) {
@@ -2798,7 +2798,7 @@ public:
 
     void serialiseTraitpath(const HIRTraitPath& path) {
         auto _ = out.openObject("HIR::TraitPath");
-        serialiseGenericpath(path.mPath);
+        serialiseGenericpath(path.path);
         serialiseStrmap(path.typeBounds);
         serialiseStrmap(path.traitBounds);
         out.writeU8(static_cast<uint8_t>(path.constness));
@@ -2818,7 +2818,7 @@ public:
 
     void serialisePath(const HIRPath& path) {
         TRACE_FUNCTION_F("path=" << path);
-            TU_MATCH_HDRA( (path.mData), {)
+            TU_MATCH_HDRA( (path.data), {)
             TU_ARMA(Generic, e) {
                 out.writeTag(0);
                 serialiseGenericpath(e);
@@ -2852,14 +2852,14 @@ public:
     }
 
     void serialise(const HIRTypeParamDef& pd) {
-        out.writeString(pd.mName);
+        out.writeString(pd.name);
         serialiseType(pd.defaultValue);
         out.writeBool(pd.isSized);
     }
 
     void serialise(const HIRValueParamDef& pd) {
-        out.writeString(pd.mName);
-        serialiseType(pd.mType);
+        out.writeString(pd.name);
+        serialiseType(pd.type);
         serialise(pd.defaultValue);
     }
 
@@ -2908,7 +2908,7 @@ public:
     void serialiseCrate(const HIRCrate& crate) {
         out.writeString(crate.crateName);
         out.writeTag(static_cast<int>(crate.edition));
-        serialiseModule(crate.mRootModule);
+        serialiseModule(crate.rootModule);
 
         serialise(crate.typeImpls);
         serialisePathmap(crate.traitImpls);
@@ -2917,8 +2917,8 @@ public:
         serialiseVec(crate.exportedMacroNames);
 
         {
-            decltype(crate.mLangItems) langItemsFiltered;
-            for (const auto& ent : crate.mLangItems) {
+            decltype(crate.langItems) langItemsFiltered;
+            for (const auto& ent : crate.langItems) {
                 if (ent.second.crateName() == "" || ent.second.crateName() == crate.crateName) {
                     langItemsFiltered.insert(ent);
                 }
@@ -2951,9 +2951,9 @@ public:
     }
 
     void serialiseTypeimpl(const HIRTypeImpl& impl) {
-        TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " " << impl.mType);
-        serialiseGenerics(impl.mParams);
-        serialiseType(impl.mType);
+        TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " " << impl.type);
+        serialiseGenerics(impl.params);
+        serialiseType(impl.type);
 
         out.writeCount(impl.methods.size());
         for (const auto& v : impl.methods) {
@@ -2984,10 +2984,10 @@ public:
     }
 
     void serialiseTraitimpl(const HIRTraitImpl& impl) {
-        TRACE_FUNCTION_F("impl" << impl.mParams.fmtArgs() << " ?" << impl.traitArgs << " for " << impl.mType);
-        serialiseGenerics(impl.mParams);
+        TRACE_FUNCTION_F("impl" << impl.params.fmtArgs() << " ?" << impl.traitArgs << " for " << impl.type);
+        serialiseGenerics(impl.params);
         serialisePathparams(impl.traitArgs);
-        serialiseType(impl.mType);
+        serialiseType(impl.type);
         out.writeBool(impl.isConst);
 
         out.writeCount(impl.methods.size());
@@ -3026,10 +3026,10 @@ public:
     }
 
     void serialiseMarkerimpl(const HIRMarkerImpl& impl) {
-        serialiseGenerics(impl.mParams);
+        serialiseGenerics(impl.params);
         serialisePathparams(impl.traitArgs);
         out.writeBool(impl.isPositive);
-        serialiseType(impl.mType);
+        serialiseType(impl.type);
     }
 
     void serialise(const HIRMarkerImpl& impl) {
@@ -3076,7 +3076,7 @@ public:
         assert(mac.rules.size() > 0);
         out.writeBool(mac.isMacroItem);
         serialiseVec(mac.rules);
-        serialise(mac.mHygiene);
+        serialise(mac.hygiene);
     }
 
     void serialise(const ::MacroPatEnt& pe) {
@@ -3507,24 +3507,24 @@ public:
 
         out.writeTag(static_cast<int>(fcn.receiver));
         serialise(fcn.receiverType.value_or(typeInterner.infer()));
-        out.writeString(fcn.mAbi);
+        out.writeString(fcn.abi);
         out.writeBool(fcn.unsafe);
         out.writeBool(fcn.isConst);
         serialise(fcn.markings);
 
-        serialiseGenerics(fcn.mParams);
-        out.writeCount(fcn.mArgs.size());
-        for (const auto& a : fcn.mArgs) {
+        serialiseGenerics(fcn.params);
+        out.writeCount(fcn.args.size());
+        for (const auto& a : fcn.args) {
             serialise(a.second);
         }
-        DEBUG("m_args = " << fcn.mArgs);
+        DEBUG("m_args = " << fcn.args);
         out.writeBool(fcn.variadic);
         serialise(fcn.returnType);
         out.writeString(fcn.source.filename);
         out.writeCount(fcn.source.line);
         out.writeCount(fcn.source.column);
 
-        serialise(fcn.mCode, fcn.saveCode || fcn.isConst);
+        serialise(fcn.code, fcn.saveCode || fcn.isConst);
     }
 
     void serialise(const HIRFunction::Markings& m) {
@@ -3538,9 +3538,9 @@ public:
     void serialise(const HIRConstant& item) {
         TRACE_FUNCTION_F("_constant:");
 
-        serialiseGenerics(item.mParams);
-        serialise(item.mType);
-        serialise(item.mValue);
+        serialiseGenerics(item.params);
+        serialise(item.type);
+        serialise(item.value);
         bool writeVal = item.valueState == HIRConstant::ValueState::Known;
         out.writeBool(writeVal);
         if (writeVal) {
@@ -3552,7 +3552,7 @@ public:
         TRACE_FUNCTION_F("_static:");
 
         serialise(item.linkage);
-        serialiseGenerics(item.mParams);
+        serialiseGenerics(item.params);
 
         uint8_t bitflag1 = 0;
 #define BIT(i, fld) \
@@ -3566,10 +3566,10 @@ public:
         if (item.explicitAlignment != 0) {
             out.writeCount(item.explicitAlignment);
         }
-        serialise(item.mType);
+        serialise(item.type);
 
-        if (item.mParams.isGeneric()) {
-            serialise(item.mValue);
+        if (item.params.isGeneric()) {
+            serialise(item.value);
         }
         // NOTE: Value not stored (What if the static is generic? It can't be.)
         // - Need to store if the item was from a const (special linkage?)
@@ -3580,21 +3580,21 @@ public:
 
     // - Type items
     void serialise(const HIRTypeAlias& ta) {
-        serialiseGenerics(ta.mParams);
-        serialiseType(ta.mType);
+        serialiseGenerics(ta.params);
+        serialiseType(ta.type);
     }
 
     void serialise(const HIRTraitAlias& ta) {
-        serialiseGenerics(ta.mParams);
+        serialiseGenerics(ta.params);
         serialiseVec(ta.traits);
     }
 
     void serialise(const HIREnum& item) {
         auto _ = out.openObject("HIR::Enum");
-        serialiseGenerics(item.mParams);
+        serialiseGenerics(item.params);
         out.writeBool(item.isCRepr);
         out.writeTag(static_cast<int>(item.tagRepr));
-        serialise(item.mData);
+        serialise(item.data);
 
         serialise(item.markings);
     }
@@ -3660,11 +3660,11 @@ public:
         TRACE_FUNCTION_F("Struct");
         auto _ = out.openObject("HIR::Struct");
 
-        serialiseGenerics(item.mParams);
+        serialiseGenerics(item.params);
         out.writeTag(static_cast<int>(item.repr));
 
-        out.writeTag(item.mData.tag());
-        TU_MATCHA((item.mData), (e), (Unit, ), (Tuple, serialiseVec(e);), (Named, serialiseVec(e);))
+        out.writeTag(item.data.tag());
+        TU_MATCHA((item.data), (e), (Unit, ), (Tuple, serialiseVec(e);), (Named, serialiseVec(e);))
 
         out.writeCount(item.forcedAlignment);
         out.writeCount(item.maxFieldAlignment);
@@ -3685,10 +3685,10 @@ public:
     void serialise(const HIRUnion& item) {
         TRACE_FUNCTION_F("Union");
 
-        serialiseGenerics(item.mParams);
+        serialiseGenerics(item.params);
         out.writeTag(static_cast<int>(item.repr));
 
-        serialiseVec(item.mVariants);
+        serialiseVec(item.variants);
 
         serialise(item.markings);
     }
@@ -3702,10 +3702,10 @@ public:
         TRACE_FUNCTION_F("_trait:");
         auto _ = out.openObject("HIR::Trait");
 
-        serialiseGenerics(item.mParams);
+        serialiseGenerics(item.params);
         // Kept as one byte for compatibility with metadata written before
         // the fundamental bit was represented in HIR.
-        out.writeU8((item.mIsMarker ? 1u : 0u) | (item.isFundamental ? 2u : 0u) | (item.isCoinductive ? 4u : 0u) | (item.isConst ? 8u : 0u) | (item.skipArrayDuringMethodDispatch ? 16u : 0u) | (item.skipBoxedSliceDuringMethodDispatch ? 32u : 0u));
+        out.writeU8((item.isMarker ? 1u : 0u) | (item.isFundamental ? 2u : 0u) | (item.isCoinductive ? 4u : 0u) | (item.isConst ? 8u : 0u) | (item.skipArrayDuringMethodDispatch ? 16u : 0u) | (item.skipBoxedSliceDuringMethodDispatch ? 32u : 0u));
         serialiseStrmap(item.types);
         serialiseStrmap(item.values);
         serialiseStrmap(item.valueIndexes);

@@ -11,13 +11,13 @@ HIRTraitPath::HIRTraitPath()
 }
 
 HIRTraitPath::HIRTraitPath(HIRGenericPath path)
-    : mPath(::std::move(path))
+    : path(::std::move(path))
     , traitPtr(nullptr)
 {
 }
 
 HIRTraitPath::HIRTraitPath(HIRGenericPath path, assocListT typeBounds, ::std::map<RcString, AtyBound> traitBounds, const HIRTrait* traitPtr, HIRBoundConstness constness)
-    : mPath(::std::move(path))
+    : path(::std::move(path))
     , typeBounds(::std::move(typeBounds))
     , traitBounds(::std::move(traitBounds))
     , constness(constness)
@@ -61,7 +61,7 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRGenericPath& x) {
-    os << x.mPath << x.mParams;
+    os << x.path << x.params;
     return os;
 }
 
@@ -71,16 +71,16 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     } else if (x.constness == HIRBoundConstness::Maybe) {
         os << "[const] ";
     }
-    os << x.mPath.mPath;
-    bool hasArgs = (x.mPath.mParams.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
+    os << x.path.path;
+    bool hasArgs = (x.path.params.types.size() > 0 || x.typeBounds.size() > 0 || x.traitBounds.size() > 0);
 
     if (hasArgs) {
         os << "<";
     }
-    for (const auto& ty : x.mPath.mParams.types) {
+    for (const auto& ty : x.path.params.types) {
         os << ty << ",";
     }
-    for (const auto& v : x.mPath.mParams.values) {
+    for (const auto& v : x.path.params.values) {
         os << v << ",";
     }
     for (const auto& assoc : x.typeBounds) {
@@ -98,7 +98,7 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRPath& x) {
-    TU_MATCH(HIRPath::Data, (x.mData), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
+    TU_MATCH(HIRPath::Data, (x.data), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
     return os;
 }
 
@@ -205,18 +205,18 @@ HIRGenericPath::HIRGenericPath() {
 }
 
 HIRGenericPath::HIRGenericPath(HIRSimplePath sp)
-    : mPath(mv$(sp))
+    : path(mv$(sp))
 {
 }
 
 HIRGenericPath::HIRGenericPath(HIRSimplePath sp, HIRPathParams params)
-    : mPath(mv$(sp))
-    , mParams(mv$(params))
+    : path(mv$(sp))
+    , params(mv$(params))
 {
 }
 
 HIRGenericPath HIRGenericPath::clone() const {
-    return HIRGenericPath(mPath.clone(), mParams.clone());
+    return HIRGenericPath(path.clone(), params.clone());
 }
 
 bool HIRPathParams::equalsIgnoringRegions(const HIRPathParams& x) const {
@@ -237,18 +237,18 @@ bool HIRPathParams::equalsIgnoringRegions(const HIRPathParams& x) const {
 }
 
 bool HIRGenericPath::equalsIgnoringRegions(const HIRGenericPath& x) const {
-    return mPath == x.mPath && mParams.equalsIgnoringRegions(x.mParams);
+    return path == x.path && params.equalsIgnoringRegions(x.params);
 }
 
 Ordering HIRGenericPath::ord(const HIRGenericPath& x) const {
-    ORD(mPath, x.mPath);
-    ORD(mParams, x.mParams);
+    ORD(path, x.path);
+    ORD(params, x.params);
 
     return OrdEqual;
 }
 
 HIRTraitPath HIRTraitPath::clone() const {
-    HIRTraitPath rv{mPath.clone(), {}, {}, traitPtr, constness};
+    HIRTraitPath rv{path.clone(), {}, {}, traitPtr, constness};
 
     for (const auto& assoc : typeBounds) {
         rv.typeBounds.insert(::std::make_pair(assoc.first, assoc.second.clone()));
@@ -261,7 +261,7 @@ HIRTraitPath HIRTraitPath::clone() const {
 }
 
 bool HIRTraitPath::equalsIgnoringRegions(const HIRTraitPath& x) const {
-    if (!mPath.equalsIgnoringRegions(x.mPath) || typeBounds.size() != x.typeBounds.size() || traitBounds.size() != x.traitBounds.size()) {
+    if (!path.equalsIgnoringRegions(x.path) || typeBounds.size() != x.typeBounds.size() || traitBounds.size() != x.traitBounds.size()) {
         return false;
     }
 
@@ -294,34 +294,34 @@ bool HIRTraitPath::equalsIgnoringRegions(const HIRTraitPath& x) const {
 
 Ordering HIRTraitPath::ord(const HIRTraitPath& x) const {
     // NOTE: An empty set is treated as the same as none
-    ORD(mPath, x.mPath);
+    ORD(path, x.path);
     ORD(traitBounds, x.traitBounds);
     ORD(typeBounds, x.typeBounds);
     return OrdEqual;
 }
 
 HIRPath::HIRPath(HIRGenericPath gp)
-    : mData(HIRPath::Data::make_Generic(mv$(gp)))
+    : data(HIRPath::Data::make_Generic(mv$(gp)))
 {
 }
 
 HIRPath::HIRPath(HIRSimplePath sp)
-    : mData(HIRPath::Data::make_Generic(HIRGenericPath(mv$(sp))))
+    : data(HIRPath::Data::make_Generic(HIRGenericPath(mv$(sp))))
 {
 }
 
 HIRPath::HIRPath(HIRTypeRef ty, RcString item, HIRPathParams itemParams)
-    : mData(Data::make_UfcsInherent({mv$(ty), mv$(item), mv$(itemParams)}))
+    : data(Data::make_UfcsInherent({mv$(ty), mv$(item), mv$(itemParams)}))
 {
 }
 
 HIRPath::HIRPath(HIRTypeRef ty, HIRGenericPath trait, RcString item, HIRPathParams itemParams)
-    : mData(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(itemParams)}))
+    : data(Data::make_UfcsKnown({mv$(ty), mv$(trait), mv$(item), mv$(itemParams)}))
 {
 }
 
 HIRPath HIRPath::clone() const {
-    TU_MATCH_HDRA((mData), {)
+    TU_MATCH_HDRA((data), {)
     TU_ARMA(Generic, e) {
             return HIRPath(Data::make_Generic(e.clone()));
         }
@@ -424,10 +424,10 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
                 static bool getLiteral(const HIRConstGeneric& v, U128& out) {
                     if (const auto* ev = v.opt_Evaluated()) {
                         auto sl = EncodedLiteralSlice(**ev);
-                        if (sl.mSize == 0 || sl.mSize > 16) {
+                        if (sl.size == 0 || sl.size > 16) {
                             return false;
                         }
-                        out = sl.readUint(sl.mSize);
+                        out = sl.readUint(sl.size);
                         return true;
                     }
                     if (const auto* uev = v.opt_Unevaluated()) {
@@ -436,8 +436,8 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
                         }
                         const auto& node = **(*uev)->expr;
                         if (const auto* lit = cast<const HIRExprNodeLiteral>(&node)) {
-                            if (const auto* i = lit->mData.opt_Integer()) {
-                                out = i->mValue;
+                            if (const auto* i = lit->data.opt_Integer()) {
+                                out = i->value;
                                 return true;
                             }
                         }
@@ -466,11 +466,11 @@ HIRCompare HIRPathParams::matchTestGenericsFuzz(const Span& sp, const HIRPathPar
 }
 
 HIRCompare HIRGenericPath::compareWithPlaceholders(const Span& sp, const HIRGenericPath& x, tCbResolveType resolvePlaceholder) const {
-    if (this->mPath != x.mPath) {
+    if (this->path != x.path) {
         return HIRCompare::Unequal;
     }
 
-    return this->mParams.compareWithPlaceholders(sp, x.mParams, resolvePlaceholder);
+    return this->params.compareWithPlaceholders(sp, x.params, resolvePlaceholder);
 }
 
 namespace {
@@ -497,7 +497,7 @@ namespace {
     } while (0)
 
 HIRCompare HIRTraitPath::compareWithPlaceholders(const Span& sp, const HIRTraitPath& x, tCbResolveType resolvePlaceholder) const {
-    auto rv = mPath.compareWithPlaceholders(sp, x.mPath, resolvePlaceholder);
+    auto rv = path.compareWithPlaceholders(sp, x.path, resolvePlaceholder);
     if (rv == HIRCompare::Unequal) {
         return rv;
     }
@@ -521,10 +521,10 @@ HIRCompare HIRTraitPath::compareWithPlaceholders(const Span& sp, const HIRTraitP
 }
 
 HIRCompare HIRPath::compareWithPlaceholders(const Span& sp, const HIRPath& x, tCbResolveType resolvePlaceholder) const {
-    if (this->mData.tag() != x.mData.tag()) {
+    if (this->data.tag() != x.data.tag()) {
         return HIRCompare::Unequal;
     }
-    TU_MATCH_HDRA( (this->mData, x.mData), {)
+    TU_MATCH_HDRA( (this->data, x.data), {)
     TU_ARMA(Generic, ple, pre) {
             return ::compareWithPlaceholders(sp, ple, pre, resolvePlaceholder);
         }
@@ -560,16 +560,16 @@ HIRCompare HIRPath::compareWithPlaceholders(const Span& sp, const HIRPath& x, tC
 }
 
 Ordering HIRPath::ord(const HIRPath& x) const {
-    ORD((unsigned)mData.tag(), (unsigned)x.mData.tag());
-    TU_MATCH(HIRPath::Data, (this->mData, x.mData), (tpe, xpe), (Generic, return ::ord(tpe, xpe);), (UfcsInherent, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsKnown, ORD(tpe.type, xpe.type); ORD(tpe.trait, xpe.trait); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsUnknown, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);))
+    ORD((unsigned)data.tag(), (unsigned)x.data.tag());
+    TU_MATCH(HIRPath::Data, (this->data, x.data), (tpe, xpe), (Generic, return ::ord(tpe, xpe);), (UfcsInherent, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsKnown, ORD(tpe.type, xpe.type); ORD(tpe.trait, xpe.trait); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsUnknown, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);))
     throw "";
 }
 
 bool HIRPath::equalsIgnoringRegions(const HIRPath& x) const {
-    if (mData.tag() != x.mData.tag()) {
+    if (data.tag() != x.data.tag()) {
         return false;
     }
-    TU_MATCH_HDRA((mData, x.mData), {)
+    TU_MATCH_HDRA((data, x.data), {)
     TU_ARMA(Generic, lhs, rhs) {
             return lhs.equalsIgnoringRegions(rhs);
         }
@@ -716,7 +716,7 @@ HIRTraitPath::AtyBound HIRTraitPath::AtyBound::clone() const {
 }
 
 HIRPath::HIRPath(Data data)
-    : mData(mv$(data))
+    : data(mv$(data))
 {
 }
 

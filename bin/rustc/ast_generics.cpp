@@ -51,23 +51,23 @@ ASTGenericParams::ASTGenericParams() {
 
 ASTGenericParams ASTGenericParams::clone() const {
     ASTGenericParams rv;
-    rv.mParams.reserve(mParams.size());
-    for (const auto& e : mParams) {
-        rv.mParams.push_back(e.clone());
+    rv.params.reserve(params.size());
+    for (const auto& e : params) {
+        rv.params.push_back(e.clone());
     }
     rv.bounds.reserve(bounds.size());
     for (auto& e : bounds) {
         rv.bounds.push_back(e.clone());
     }
-    rv.mBareBoundTypes.reserve(mBareBoundTypes.size());
-    for (const auto& e : mBareBoundTypes) {
-        rv.mBareBoundTypes.push_back(e->clone());
+    rv.bareBoundTypes.reserve(bareBoundTypes.size());
+    for (const auto& e : bareBoundTypes) {
+        rv.bareBoundTypes.push_back(e->clone());
     }
     return rv;
 }
 
 void ASTGenericParams::addParam(GenericParam gp, size_t boundsStart, size_t boundsEnd) {
-    mParams.push_back(::std::move(gp));
-    mParams.back().boundsStart = boundsStart;
-    mParams.back().boundsEnd = boundsEnd;
+    params.push_back(::std::move(gp));
+    params.back().boundsStart = boundsStart;
+    params.back().boundsEnd = boundsEnd;
 }

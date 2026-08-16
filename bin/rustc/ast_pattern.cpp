@@ -59,7 +59,7 @@
     if (pb.isMutable) {
         os << "mut ";
     }
-    switch (pb.mType) {
+    switch (pb.type) {
         case ASTPatternBinding::Type::MOVE:
             break;
         case ASTPatternBinding::Type::REF:
@@ -69,7 +69,7 @@
             os << "ref mut ";
             break;
     }
-    os << pb.mName;
+    os << pb.name;
     return os;
 }
 
@@ -257,16 +257,16 @@ ASTPattern ASTPattern::clone() const {
 }
 
 ASTPatternBinding::ASTPatternBinding()
-    : mName({}, "")
-    , mType(Type::MOVE)
+    : name({}, "")
+    , type(Type::MOVE)
     , isMutable(false)
     , slot(~0u)
 {
 }
 
 ASTPatternBinding::ASTPatternBinding(Ident name, Type ty, bool ismut)
-    : mName(::std::move(name))
-    , mType(ty)
+    : name(::std::move(name))
+    , type(ty)
     , isMutable(ismut)
     , slot(~0u)
 {

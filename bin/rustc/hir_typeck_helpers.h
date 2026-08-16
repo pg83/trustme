@@ -153,7 +153,7 @@ class TraitResolution: public TraitResolveCommon {
     const HMTypeInferrence& ivars;
 
 public:
-    const HIRSimplePath& mVisPath;
+    const HIRSimplePath& visPath;
 
 private:
     const HIRGenericPath* currentTraitPath_;

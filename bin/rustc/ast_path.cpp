@@ -251,7 +251,7 @@ ASTPath ASTPath::newUfcsTrait(ASTType* type, ASTPath trait, ::std::vector<ASTPat
 
 ASTPath::ASTPath(const ASTPath& x)
     : cls()
-    , mBindings(x.mBindings.clone())
+    , bindings(x.bindings.clone())
 {
     TU_MATCH(Class, (x.cls), (ent), (Invalid, cls = Class::make_Invalid({});), (Local, cls = Class::make_Local({ent.name});), (Relative, cls = Class::make_Relative({ent.hygiene, ent.nodes});), (Self, cls = Class::make_Self({ent.nodes});), (Super, cls = Class::make_Super({ent.count, ent.nodes});), (Absolute, cls = Class::make_Absolute({ent.crate, ent.nodes});), (UFCS, if (ent.trait) cls = Class::make_UFCS({ent.type->clone(), ::std::unique_ptr<ASTPath>(new ASTPath(*ent.trait)), ent.nodes}); else cls = Class::make_UFCS({ent.type->clone(), nullptr, ent.nodes});))
 }
@@ -281,7 +281,7 @@ bool ASTPath::isParentOf(const ASTPath& x) const {
 }
 
 void ASTPath::bindVariable(unsigned int slot) {
-    mBindings.value.set(ASTAbsolutePath(), ASTPathBindingValue::make_Variable({slot}));
+    bindings.value.set(ASTAbsolutePath(), ASTPathBindingValue::make_Variable({slot}));
 }
 
 ASTPath& ASTPath::operator+=(const ASTPath& other) {
@@ -289,7 +289,7 @@ ASTPath& ASTPath::operator+=(const ASTPath& other) {
         append(node);
     }
     // If the path is modified, clear the binding
-    mBindings = Bindings();
+    bindings = Bindings();
     return *this;
 }
 
@@ -315,12 +315,12 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
         }
         TU_ARMA(Local, ent) {
             // Only print comment if there's no binding
-            if (mBindings.value.is_Unbound() && mBindings.type.is_Unbound()) {
+            if (bindings.value.is_Unbound() && bindings.type.is_Unbound()) {
                 if (isDebug) {
                     os << "/*var*/";
                 }
             } else {
-                assert(mBindings.value.binding.is_Variable() || mBindings.value.binding.is_Generic() || mBindings.type.binding.is_TypeParameter());
+                assert(bindings.value.binding.is_Variable() || bindings.value.binding.is_Generic() || bindings.type.binding.is_TypeParameter());
             }
             os << ent.name;
         }
@@ -384,25 +384,25 @@ void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) 
     if( isDebug ) {
         os << "/*";
         bool printed = false;
-        if (!mBindings.value.is_Unbound()) {
+        if (!bindings.value.is_Unbound()) {
             if (printed) {
                 os << ",";
             }
-            os << "v:" << mBindings.value;
+            os << "v:" << bindings.value;
             printed = true;
         }
-        if (!mBindings.type.is_Unbound()) {
+        if (!bindings.type.is_Unbound()) {
             if (printed) {
                 os << ",";
             }
-            os << "t:" << mBindings.type;
+            os << "t:" << bindings.type;
             printed = true;
         }
-        if (!mBindings.macro.is_Unbound()) {
+        if (!bindings.macro.is_Unbound()) {
             if (printed) {
                 os << ",";
             }
-            os << "m:" << mBindings.macro;
+            os << "m:" << bindings.macro;
             printed = true;
         }
         if (!printed) {
@@ -507,19 +507,19 @@ ASTPath::ASTPath(const ASTAbsolutePath& p)
 ASTPath::ASTPath(const ASTPathBinding<ASTPathBindingValue>& pb)
     : ASTPath(pb.path)
 {
-    this->mBindings.value = pb.clone();
+    this->bindings.value = pb.clone();
 }
 
 ASTPath::ASTPath(const ASTPathBinding<ASTPathBindingType>& pb)
     : ASTPath(pb.path)
 {
-    this->mBindings.type = pb.clone();
+    this->bindings.type = pb.clone();
 }
 
 ASTPath::ASTPath(const ASTPathBinding<ASTPathBindingMacro>& pb)
     : ASTPath(pb.path)
 {
-    this->mBindings.macro = pb.clone();
+    this->bindings.macro = pb.clone();
 }
 
 ASTPath::ASTPath(const ASTAbsolutePath& p, ASTPathParams pp)
@@ -586,5 +586,5 @@ size_t ASTPath::size() const {
 void ASTPath::append(ASTPathNode node) {
     assert(!cls.is_Invalid());
     nodes().push_back(mv$(node));
-    mBindings = Bindings();
+    bindings = Bindings();
 }

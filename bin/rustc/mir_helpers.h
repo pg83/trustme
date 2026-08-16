@@ -62,7 +62,7 @@ private:
 
 public:
     const Span& sp;
-    const ::StaticTraitResolve& mResolve;
+    const ::StaticTraitResolve& resolve;
     const HIRCrate& crate;
 
 private:
@@ -70,7 +70,7 @@ private:
 
 public:
     const HIRTypeData* retType;
-    const argsT& mArgs;
+    const argsT& args;
     const MIRFunction& fcn;
 
     // If set, these override the list in `m_fcn`
@@ -216,9 +216,9 @@ public:
     }
 
     virtual void visitPath(typename Dec<HIRPath>::Type& path) {
-            TU_MATCH_HDRA((path.mData), {)
+            TU_MATCH_HDRA((path.data), {)
             TU_ARMA(Generic, e) {
-                visitPathParams(e.mParams);
+                visitPathParams(e.params);
             }
             TU_ARMA(UfcsInherent, e) {
                 visitType(e.type);
@@ -226,7 +226,7 @@ public:
             }
             TU_ARMA(UfcsKnown, e) {
                 visitType(e.type);
-                visitPathParams(e.trait.mParams);
+                visitPathParams(e.trait.params);
                 visitPathParams(e.params);
             }
             TU_ARMA(UfcsUnknown, e) {
@@ -237,7 +237,7 @@ public:
     }
 
     virtual void visitGenericpath(typename Dec<HIRGenericPath>::Type& p) {
-        visitPathParams(p.mParams);
+        visitPathParams(p.params);
     }
 
     virtual void visitPathParams(typename Dec<HIRPathParams>::Type& p) {

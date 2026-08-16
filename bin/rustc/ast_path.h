@@ -346,7 +346,7 @@ public:
 
 public:
     Class cls;
-    Bindings mBindings;
+    Bindings bindings;
 
     virtual ~ASTPath();
 

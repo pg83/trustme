@@ -45,8 +45,8 @@ HIRItemPath::HIRItemPath(const HIRSimplePath& path)
 
 HIRSimplePath HIRItemPath::getSimplePath() const {
     if (wrapped) {
-        assert(wrapped->mData.is_Generic());
-        return wrapped->mData.as_Generic().mPath;
+        assert(wrapped->data.is_Generic());
+        return wrapped->data.as_Generic().path;
     } else if (trait && !name) {
         return trait->clone();
     } else if (parent) {

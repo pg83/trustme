@@ -31,17 +31,17 @@ struct TyVisitor {
     }
 
     virtual bool visitTraitPath(typename W<HIRTraitPath>::T& tpl) {
-        if (visitPathParams(tpl.mPath.mParams)) {
+        if (visitPathParams(tpl.path.params)) {
             return true;
         }
         for (auto& assoc : tpl.typeBounds) {
-            visitPathParams(assoc.second.sourceTrait.mParams);
+            visitPathParams(assoc.second.sourceTrait.params);
             if (visitType(assoc.second.type)) {
                 return true;
             }
         }
         for (auto& assoc : tpl.traitBounds) {
-            visitPathParams(assoc.second.sourceTrait.mParams);
+            visitPathParams(assoc.second.sourceTrait.params);
             for (auto& t : assoc.second.traits) {
                 visitTraitPath(t);
             }
@@ -50,15 +50,15 @@ struct TyVisitor {
     }
 
     virtual bool visitPath(typename W<HIRPath>::T& path) {
-        TU_MATCH_HDRA((path.mData), {)
+        TU_MATCH_HDRA((path.data), {)
         TU_ARMA(Generic, e) {
-                return visitPathParams(e.mParams);
+                return visitPathParams(e.params);
             }
             TU_ARMA(UfcsInherent, e) {
                 return visitType(e.type) || visitPathParams(e.params);
             }
             TU_ARMA(UfcsKnown, e) {
-                return visitType(e.type) || visitPathParams(e.trait.mParams) || visitPathParams(e.params);
+                return visitType(e.type) || visitPathParams(e.trait.params) || visitPathParams(e.params);
             }
             TU_ARMA(UfcsUnknown, e) {
                 return visitType(e.type) || visitPathParams(e.params);
@@ -106,11 +106,11 @@ struct TyVisitor {
                 return visitPath(e.path);
             }
             TU_ARMA(TraitObject, e) {
-                if (visitTraitPath(e.mTrait)) {
+                if (visitTraitPath(e.trait)) {
                     return true;
                 }
                 for (auto& trait : e.markers) {
-                    if (visitPathParams(trait.mParams)) {
+                    if (visitPathParams(trait.params)) {
                         return true;
                     }
                 }
@@ -172,7 +172,7 @@ struct TyVisitor {
                         return true;
                     }
                 }
-                return visitType(e.mRettype);
+                return visitType(e.rettype);
             }
             TU_ARMA(NodeType, e) {
                 // These just have a node pointer, no visiting
@@ -231,16 +231,16 @@ namespace {
         }
 
         bool rewriteTraitPath(HIRTraitPath& trait) {
-            if (rewritePathParams(trait.mPath.mParams)) {
+            if (rewritePathParams(trait.path.params)) {
                 return true;
             }
             for (auto& assoc : trait.typeBounds) {
-                if (rewritePathParams(assoc.second.sourceTrait.mParams) || rewritePathParams(assoc.second.atyParams) || rewriteType(assoc.second.type)) {
+                if (rewritePathParams(assoc.second.sourceTrait.params) || rewritePathParams(assoc.second.atyParams) || rewriteType(assoc.second.type)) {
                     return true;
                 }
             }
             for (auto& assoc : trait.traitBounds) {
-                if (rewritePathParams(assoc.second.sourceTrait.mParams) || rewritePathParams(assoc.second.atyParams)) {
+                if (rewritePathParams(assoc.second.sourceTrait.params) || rewritePathParams(assoc.second.atyParams)) {
                     return true;
                 }
                 for (auto& bound : assoc.second.traits) {
@@ -253,10 +253,10 @@ namespace {
         }
 
         bool rewritePath(HIRPath& path) {
-            TU_MATCH_HDRA((path.mData), {)
-            TU_ARMA(Generic, e) return rewritePathParams(e.mParams);
+            TU_MATCH_HDRA((path.data), {)
+            TU_ARMA(Generic, e) return rewritePathParams(e.params);
                 TU_ARMA(UfcsInherent, e) return rewriteType(e.type) || rewritePathParams(e.params) || rewritePathParams(e.implParams);
-                TU_ARMA(UfcsKnown, e) return rewriteType(e.type) || rewritePathParams(e.trait.mParams) || rewritePathParams(e.params);
+                TU_ARMA(UfcsKnown, e) return rewriteType(e.type) || rewritePathParams(e.trait.params) || rewritePathParams(e.params);
                 TU_ARMA(UfcsUnknown, e) return rewriteType(e.type) || rewritePathParams(e.params);
             }
             throw "";
@@ -289,10 +289,10 @@ namespace {
                     }
                     TU_ARMA(Path, e) childStop = rewritePath(e.path);
                     TU_ARMA(TraitObject, e) {
-                        childStop = rewriteTraitPath(e.mTrait);
+                        childStop = rewriteTraitPath(e.trait);
                         for (auto& marker : e.markers) {
                             if (!childStop) {
-                                childStop = rewritePathParams(marker.mParams);
+                                childStop = rewritePathParams(marker.params);
                             }
                         }
                     }
@@ -327,7 +327,7 @@ namespace {
                             }
                         }
                         if (!childStop) {
-                            childStop = rewriteType(e.mRettype);
+                            childStop = rewriteType(e.rettype);
                         }
                     }
                     TU_ARMA(NodeType, e) {
@@ -417,7 +417,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
         TU_ARMA(TraitObject, e) {
             HIRTypeData::Data_TraitObject to;
             {
-                to.mTrait = this->monomorphTraitpath(sp, e.mTrait, allowInfer);
+                to.trait = this->monomorphTraitpath(sp, e.trait, allowInfer);
                 for (const auto& trait : e.markers) {
                     to.markers.push_back(this->monomorphGenericpath(sp, trait, allowInfer));
                 }
@@ -501,8 +501,8 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             ft.isUnsafe = e.isUnsafe;
             ft.isVariadic = e.isVariadic;
             ft.trackCaller = e.trackCaller;
-            ft.mAbi = e.mAbi;
-            ft.mRettype = this->monomorphType(sp, e.mRettype, allowInfer);
+            ft.abi = e.abi;
+            ft.rettype = this->monomorphType(sp, e.rettype, allowInfer);
             for (const auto& arg : e.argTypes) {
                 ft.argTypes.push_back(this->monomorphType(sp, arg, allowInfer));
             }
@@ -517,7 +517,7 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
 }
 
 HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool allowInfer /*=true*/) const {
-    TU_MATCH_HDRA( (tpl.mData), {)
+    TU_MATCH_HDRA( (tpl.data), {)
     TU_ARMA(Generic, e2) {
             return HIRPath(this->monomorphGenericpath(sp, e2, allowInfer));
         }
@@ -536,7 +536,7 @@ HIRPath Monomorphiser::monomorphPath(const Span& sp, const HIRPath& tpl, bool al
 }
 
 HIRTraitPath Monomorphiser::monomorphTraitpath(const Span& sp, const HIRTraitPath& tpl, bool allowInfer) const {
-    HIRTraitPath rv{this->monomorphGenericpath(sp, tpl.mPath, allowInfer), {}, {}, tpl.traitPtr, tpl.constness};
+    HIRTraitPath rv{this->monomorphGenericpath(sp, tpl.path, allowInfer), {}, {}, tpl.traitPtr, tpl.constness};
 
     for (const auto& assoc : tpl.typeBounds) {
         rv.typeBounds.insert(::std::make_pair(assoc.first, this->monomorphTpAtyEqual(sp, assoc.second, allowInfer)));
@@ -585,7 +585,7 @@ HIRPathParams Monomorphiser::monomorphPathParams(const Span& sp, const HIRPathPa
 }
 
 HIRGenericPath Monomorphiser::monomorphGenericpath(const Span& sp, const HIRGenericPath& tpl, bool allowInfer) const {
-    return HIRGenericPath(tpl.mPath, this->monomorphPathParams(sp, tpl.mParams, allowInfer));
+    return HIRGenericPath(tpl.path, this->monomorphPathParams(sp, tpl.params, allowInfer));
 }
 
 HIRArraySize Monomorphiser::monomorphArraysize(const Span& sp, const HIRArraySize& tpl) const {

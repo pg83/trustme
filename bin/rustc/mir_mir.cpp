@@ -497,8 +497,8 @@ HIRGenericPath MIRCloner::monomorph(const HIRGenericPath& ty) const {
     TRACE_FUNCTION_F(ty);
     auto rv = monomorphiser().monomorphGenericpath(sp, ty, false);
     if (const auto* r = resolve()) {
-        r->evaluatePathParams(sp, rv.mParams);
-        for (auto& arg : rv.mParams.types) {
+        r->evaluatePathParams(sp, rv.params);
+        for (auto& arg : rv.params.types) {
             r->expandAssociatedTypes(sp, arg);
         }
     }
@@ -511,13 +511,13 @@ HIRPath MIRCloner::monomorph(const HIRPath& ty) const {
     if (const auto* r = resolve()) {
         TU_MATCH(
             HIRPath::Data,
-            (rv.mData),
+            (rv.data),
             (e2),
-            (Generic, r->evaluatePathParams(sp, e2.mParams); for (auto& arg : e2.mParams.types) r->expandAssociatedTypes(sp, arg);),
+            (Generic, r->evaluatePathParams(sp, e2.params); for (auto& arg : e2.params.types) r->expandAssociatedTypes(sp, arg);),
             (UfcsInherent, r->expandAssociatedTypes(sp, e2.type); r->evaluatePathParams(sp, e2.params); r->evaluatePathParams(sp, e2.implParams); for (auto& arg : e2.params.types) r->expandAssociatedTypes(sp, arg);
              // TODO: impl params too?
              for (auto& arg : e2.implParams.types) r->expandAssociatedTypes(sp, arg);),
-            (UfcsKnown, r->expandAssociatedTypes(sp, e2.type); r->evaluatePathParams(sp, e2.trait.mParams); r->evaluatePathParams(sp, e2.params); for (auto& arg : e2.trait.mParams.types) r->expandAssociatedTypes(sp, arg); for (auto& arg : e2.params.types) r->expandAssociatedTypes(sp, arg);),
+            (UfcsKnown, r->expandAssociatedTypes(sp, e2.type); r->evaluatePathParams(sp, e2.trait.params); r->evaluatePathParams(sp, e2.params); for (auto& arg : e2.trait.params.types) r->expandAssociatedTypes(sp, arg); for (auto& arg : e2.params.types) r->expandAssociatedTypes(sp, arg);),
             (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown");)
         )
     }

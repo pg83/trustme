@@ -13,8 +13,8 @@ struct TypeckModuleState {
 
     const HIRGenericPath* currentTrait;
     const HIRTraitImpl* currentTraitImpl;
-    const HIRGenericParams* mImplGenerics;
-    const HIRGenericParams* mItemGenerics;
+    const HIRGenericParams* implGenerics;
+    const HIRGenericParams* itemGenerics;
 
     ::std::vector<::std::pair<const HIRSimplePath*, const HIRTrait*>> traits;
     ::std::vector<HIRSimplePath> modPaths;

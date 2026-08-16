@@ -171,7 +171,7 @@ public:
     RcString sourceCrate;
     ASTEdition edition;
 
-    Ident::Hygiene mHygiene;
+    Ident::Hygiene hygiene;
     // Lexical context at the macro definition, before the parser enters the
     // token-tree scope used to distinguish literal RHS tokens.
     Ident::Hygiene definitionHygiene;

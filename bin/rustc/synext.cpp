@@ -106,8 +106,8 @@ class CMacroUseHandler: public ExpandDecorator {
                     DEBUG("Skip " << name);
                     continue;
                 }
-                ASSERT_BUG(sp, ec.hir->mRootModule.macroItems.count(name) == 1, "Macro `" << name << "` missing from crate " << ec.mName);
-                const auto* e = &*ec.hir->mRootModule.macroItems.at(name);
+                ASSERT_BUG(sp, ec.hir->rootModule.macroItems.count(name) == 1, "Macro `" << name << "` missing from crate " << ec.name);
+                const auto* e = &*ec.hir->rootModule.macroItems.at(name);
                 if (!e->publicity.isGlobal()) {
                     DEBUG("Not public: " << name);
                     continue;
@@ -222,7 +222,7 @@ namespace {
             Ident::ModPath mp;
             mp.crate = "";
             // Empty node list, so macro lookups start at the crate root.
-            e.data->mHygiene.setModPath(*wb.pool, mv$(mp));
+            e.data->hygiene.setModPath(*wb.pool, mv$(mp));
         }
 
         e.data->exported = true;
@@ -299,7 +299,7 @@ class CMacroReexportHandler: public ExpandDecorator {
                 ERROR(sp, E0000, "Could not find macro " << name << "! in crate " << crateName);
             }
             // TODO: Do this differently.
-            extCrate.mRootModule.macroItems.at(name)->ent.as_MacroRules()->exported = true;
+            extCrate.rootModule.macroItems.at(name)->ent.as_MacroRules()->exported = true;
         });
     }
 };

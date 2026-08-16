@@ -186,8 +186,8 @@ struct HIRPathParams {
 /// Generic path - Simple path with one lot of generic params
 class HIRGenericPath {
 public:
-    HIRSimplePath mPath;
-    HIRPathParams mParams;
+    HIRSimplePath path;
+    HIRPathParams params;
 
     HIRGenericPath();
     HIRGenericPath(HIRSimplePath sp);
@@ -244,7 +244,7 @@ public:
 
     typedef ::std::map<RcString, AtyEqual> assocListT;
 
-    HIRGenericPath mPath;
+    HIRGenericPath path;
     assocListT typeBounds;
     ::std::map<RcString, AtyBound> traitBounds;
     HIRBoundConstness constness = HIRBoundConstness::Never;
@@ -309,7 +309,7 @@ public:
         })
     );
 
-    Data mData;
+    Data data;
 
     HIRPath(Data data);
 

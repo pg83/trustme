@@ -53,15 +53,15 @@ namespace {
 }
 
 ASTAttributeList ASTAttributeList::clone() const {
-    return ASTAttributeList(cloneMivec(mItems));
+    return ASTAttributeList(cloneMivec(items));
 }
 
 void ASTAttributeList::push_back(ASTAttribute i) {
-    mItems.push_back(::std::move(i));
+    items.push_back(::std::move(i));
 }
 
 const ASTAttribute* ASTAttributeList::get(const char* name) const {
-    for (auto& i : mItems) {
+    for (auto& i : items) {
         if (i.name() == name) {
             return &i;
         }
@@ -70,7 +70,7 @@ const ASTAttribute* ASTAttributeList::get(const char* name) const {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTAttributeList& x) {
-    for (const auto& i : x.mItems) {
+    for (const auto& i : x.items) {
         os << "#[" << i << "]";
     }
     return os;
@@ -115,7 +115,7 @@ std::string ASTAttribute::parseEqualsString(const WireBoard& wb, const ASTCrate&
 
     std::string rv;
     if (auto* v = cast<ASTExprNodeString>(&*n)) {
-        rv = v->mValue;
+        rv = v->value;
     } else {
         throw ParseErrorUnexpected(lex, Token(InterpolatedFragment(InterpolatedFragment::EXPR, n.release())), TOK_STRING);
     }
@@ -239,11 +239,11 @@ void ASTVisibility::inplaceUnion(const ASTVisibility& x) {
 // ---
 
 ASTStructItem ASTStructItem::clone() const {
-    return ASTStructItem(mAttrs.clone(), vis, mName, mType->clone(), defaultValue.clone());
+    return ASTStructItem(attrs.clone(), vis, name, type->clone(), defaultValue.clone());
 }
 
 ASTTupleItem ASTTupleItem::clone() const {
-    return ASTTupleItem(mAttrs.clone(), vis, mType->clone());
+    return ASTTupleItem(attrs.clone(), vis, type->clone());
 }
 
 ASTTypeAlias ASTTypeAlias::clone() const {
@@ -329,7 +329,7 @@ ASTTrait ASTTrait::clone() const {
 ASTEnum ASTEnum::clone() const {
     decltype(variants_) newVariants;
     for (const auto& var : variants_) {
-        TU_MATCHA((var.mData), (e), (Unit, newVariants.push_back(ASTEnumVariant(var.mAttrs.clone(), var.mName));), (Tuple, decltype(e.mItems) newSt; for (const auto& f : e.mItems) newSt.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.mAttrs.clone(), var.mName, mv$(newSt)));), (Struct, decltype(e.fields) newFields; for (const auto& f : e.fields) newFields.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.mAttrs.clone(), var.mName, mv$(newFields)));))
+        TU_MATCHA((var.data), (e), (Unit, newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name));), (Tuple, decltype(e.items) newSt; for (const auto& f : e.items) newSt.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newSt)));), (Struct, decltype(e.fields) newFields; for (const auto& f : e.fields) newFields.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newFields)));))
         newVariants.back().discriminantValue = var.discriminantValue.clone();
     }
     auto rv = ASTEnum(params_.clone(), mv$(newVariants));
@@ -338,13 +338,13 @@ ASTEnum ASTEnum::clone() const {
 }
 
 ASTStruct ASTStruct::clone() const {
-    TU_MATCHA((mData), (e), (Unit, return ASTStruct(params_.clone());), (Tuple, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));), (Struct, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));))
+    TU_MATCHA((data), (e), (Unit, return ASTStruct(params_.clone());), (Tuple, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));), (Struct, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));))
     throw "";
 }
 
 ASTUnion ASTUnion::clone() const {
-    decltype(mVariants) newVars;
-    for (const auto& f : mVariants) {
+    decltype(variants) newVars;
+    for (const auto& f : variants) {
         newVars.push_back(f.clone());
     }
     return ASTUnion(params_.clone(), mv$(newVars));
@@ -455,8 +455,8 @@ ASTModule& ASTModule::operator=(ASTModule&&) = default;
 }
 
 void ASTModule::addItem(ASTNamed<ASTItem> namedItem) {
-    mItems.push_back(box$(namedItem));
-    const auto& i = mItems.back();
+    items.push_back(box$(namedItem));
+    const auto& i = items.back();
     if (i->name == "") {
     } else {
         DEBUG(myPath << "::" << i->name << " = " << i->data.tagStr() << ", attrs = " << i->attrs);
@@ -536,7 +536,7 @@ ASTItem ASTItem::clone() const {
 ::std::ostream& operator<<(::std::ostream& os, const ASTHigherRankedBounds& x) {
     if (!x.empty()) {
         os << "for<";
-        for (const auto& l : x.mLifetimes) {
+        for (const auto& l : x.lifetimes) {
             os << l << ",";
         }
         os << "> ";
@@ -614,13 +614,13 @@ std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
 //}
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTGenericParams& tps) {
-    return os << "<" << tps.mParams << "> where {" << tps.bounds << "}";
+    return os << "<" << tps.params << "> where {" << tps.bounds << "}";
 }
 
 ASTAttributeList::ASTAttributeList() = default;
 
 ASTAttributeList::ASTAttributeList(::std::vector<ASTAttribute> items)
-    : mItems(mv$(items))
+    : items(mv$(items))
 {
 }
 
@@ -632,10 +632,10 @@ ASTAttributeList::ASTAttributeList(const ASTAttributeList&) = default;
 //StructItem() {}
 
 ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue)
-    : mAttrs(mv$(attrs))
+    : attrs(mv$(attrs))
     , vis(mv$(vis))
-    , mName(mv$(name))
-    , mType(mv$(ty))
+    , name(mv$(name))
+    , type(mv$(ty))
     , defaultValue(mv$(defaultValue))
 {
 }
@@ -643,9 +643,9 @@ ASTStructItem::ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString
 //TupleItem() {}
 
 ASTTupleItem::ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, ASTType* ty)
-    : mAttrs(mv$(attrs))
+    : attrs(mv$(attrs))
     , vis(mv$(vis))
-    , mType(mv$(ty))
+    , type(mv$(ty))
 {
 }
 
@@ -722,23 +722,23 @@ ASTEnumVariant::ASTEnumVariant() {
 }
 
 ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name)
-    : mAttrs(mv$(attrs))
-    , mName(mv$(name))
-    , mData(ASTEnumVariantData::make_Unit({}))
+    : attrs(mv$(attrs))
+    , name(mv$(name))
+    , data(ASTEnumVariantData::make_Unit({}))
 {
 }
 
 ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTTupleItem> subTypes)
-    : mAttrs(mv$(attrs))
-    , mName(::std::move(name))
-    , mData(ASTEnumVariantData::make_Tuple({std::move(subTypes)}))
+    : attrs(mv$(attrs))
+    , name(::std::move(name))
+    , data(ASTEnumVariantData::make_Tuple({std::move(subTypes)}))
 {
 }
 
 ASTEnumVariant::ASTEnumVariant(ASTAttributeList attrs, RcString name, ::std::vector<ASTStructItem> fields)
-    : mAttrs(mv$(attrs))
-    , mName(::std::move(name))
-    , mData(ASTEnumVariantData::make_Struct({std::move(fields)}))
+    : attrs(mv$(attrs))
+    , name(::std::move(name))
+    , data(ASTEnumVariantData::make_Struct({std::move(fields)}))
 {
 }
 
@@ -759,25 +759,25 @@ ASTStruct::ASTStruct() {
 
 ASTStruct::ASTStruct(ASTGenericParams params)
     : params_(::std::move(params))
-    , mData(ASTStructData::make_Unit({}))
+    , data(ASTStructData::make_Unit({}))
 {
 }
 
 ASTStruct::ASTStruct(ASTGenericParams params, ::std::vector<ASTStructItem> fields)
     : params_(::std::move(params))
-    , mData(ASTStructData::make_Struct({mv$(fields)}))
+    , data(ASTStructData::make_Struct({mv$(fields)}))
 {
 }
 
 ASTStruct::ASTStruct(ASTGenericParams params, ::std::vector<ASTTupleItem> fields)
     : params_(::std::move(params))
-    , mData(ASTStructData::make_Tuple({mv$(fields)}))
+    , data(ASTStructData::make_Tuple({mv$(fields)}))
 {
 }
 
 ASTUnion::ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields)
     : params_(::std::move(params))
-    , mVariants(::std::move(fields))
+    , variants(::std::move(fields))
 {
 }
 
@@ -791,8 +791,8 @@ ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTT
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTEnumVariant& x) {
-    os << "EnumVariant(" << x.mName;
-    TU_MATCH(ASTEnumVariantData, (x.mData), (e), (Unit, ), (Tuple, os << "(" << e.mItems << ")";), (Struct, os << " { " << e.fields << " }";))
+    os << "EnumVariant(" << x.name;
+    TU_MATCH(ASTEnumVariantData, (x.data), (e), (Unit, ), (Tuple, os << "(" << e.items << ")";), (Struct, os << " { " << e.fields << " }";))
     if (x.discriminantValue) {
         os << " = " << x.discriminantValue;
     }

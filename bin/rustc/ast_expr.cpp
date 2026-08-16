@@ -318,7 +318,7 @@ NODE(ASTExprNodeTry, { os << "try " << *inner; }, { return NEWNODE(ASTExprNodeTr
 NODE(
     ASTExprNodeMacro,
     {
-        mPath.printPretty(os, false);
+        path.printPretty(os, false);
         os << "!";
         if (ident.size() > 0) {
             os << " " << ident << " ";
@@ -329,7 +329,7 @@ NODE(
         printMacroTokens(os, tokens, hasPrevious, previous);
         os << (isBraced ? " }" : ")");
     },
-    { return NEWNODE(ASTExprNodeMacro, ASTPath(mPath), ident, tokens.clone(), isBraced, definitionHygiene); }
+    { return NEWNODE(ASTExprNodeMacro, ASTPath(path), ident, tokens.clone(), isBraced, definitionHygiene); }
 )
 
 NODE(
@@ -408,7 +408,7 @@ NODE(
             l.fmt(os);
             os << ", ";
         }
-        for (const auto& p : mParams) {
+        for (const auto& p : params) {
         TU_MATCH_HDRA( (p), {)
         TU_ARMA(Const, e) {
                 os << "const " << *e;
@@ -444,7 +444,7 @@ NODE(
     {
         std::vector<Param> params;
 
-        for (const auto& p : mParams) {
+        for (const auto& p : this->params) {
         TU_MATCH_HDRA( (p), { )
         TU_ARMA(Const, e) {
                 params.push_back(Param::make_Const(e->clone()));
@@ -471,7 +471,7 @@ NODE(
 NODE(
     ASTExprNodeFlow,
     {
-        switch (mType) {
+        switch (type) {
             case RETURN:
                 os << "return";
                 break;
@@ -491,25 +491,25 @@ NODE(
                 os << "do yeet";
                 break;
         }
-        if (mValue) {
-            os << " " << *mValue;
+        if (value) {
+            os << " " << *value;
         }
     },
-    { return NEWNODE(ASTExprNodeFlow, mType, target, mValue ? mValue->clone() : nullptr); }
+    { return NEWNODE(ASTExprNodeFlow, type, target, value ? value->clone() : nullptr); }
 )
 
 NODE(
     ASTExprNodeLetBinding,
     {
-        os << (isSuper ? "super let " : "let ") << pat << ": " << mType;
-        if (mValue) {
-            os << " = " << *mValue;
+        os << (isSuper ? "super let " : "let ") << pat << ": " << type;
+        if (value) {
+            os << " = " << *value;
             if (elseNode) {
                 os << " else " << *elseNode;
             }
         }
     },
-    { return NEWNODE(ASTExprNodeLetBinding, pat.clone(), mType->clone(), OPT_CLONE(mValue), OPT_CLONE(elseNode), isSuper); }
+    { return NEWNODE(ASTExprNodeLetBinding, pat.clone(), type->clone(), OPT_CLONE(value), OPT_CLONE(elseNode), isSuper); }
 )
 
 NODE(
@@ -529,18 +529,18 @@ NODE(
             case SHR: os << ">>="; break;
             case SHL: os << "<<="; break;
         }
-        os << " " << *mValue;
+        os << " " << *value;
     },
-    { return NEWNODE(ASTExprNodeAssign, op, slot->clone(), mValue->clone()); }
+    { return NEWNODE(ASTExprNodeAssign, op, slot->clone(), value->clone()); }
 )
 
 NODE(
     ASTExprNodeCallPath,
     {
-        mPath.printPretty(os, false);
+        path.printPretty(os, false);
         os << "(";
-        for (const auto& a : mArgs) {
-            if (&a != &mArgs.front()) {
+        for (const auto& a : args) {
+            if (&a != &args.front()) {
                 os << ", ";
             }
             os << *a;
@@ -549,10 +549,10 @@ NODE(
     },
     {
         ::std::vector<ASTExprNodeP> args;
-        for (const auto& a : mArgs) {
+        for (const auto& a : this->args) {
             args.push_back(a->clone());
         }
-        return NEWNODE(ASTExprNodeCallPath, ASTPath(mPath), mv$(args));
+        return NEWNODE(ASTExprNodeCallPath, ASTPath(path), mv$(args));
     }
 )
 
@@ -560,14 +560,14 @@ NODE(
     ASTExprNodeCallMethod,
     {
         os << "(" << *val << ")." << method << "(";
-        for (const auto& a : mArgs) {
+        for (const auto& a : args) {
             os << *a << ",";
         }
         os << ")";
     },
     {
         ::std::vector<ASTExprNodeP> args;
-        for (const auto& a : mArgs) {
+        for (const auto& a : this->args) {
             args.push_back(a->clone());
         }
         return NEWNODE(ASTExprNodeCallMethod, val->clone(), method, mv$(args));
@@ -578,29 +578,29 @@ NODE(
     ASTExprNodeCallObject,
     {
         os << "(" << *val << ")(";
-        for (const auto& a : mArgs) {
+        for (const auto& a : args) {
             os << *a << ",";
         }
         os << ")";
     },
     {
         ::std::vector<ASTExprNodeP> args;
-        for (const auto& a : mArgs) {
+        for (const auto& a : this->args) {
             args.push_back(a->clone());
         }
         return NEWNODE(ASTExprNodeCallObject, val->clone(), mv$(args));
     }
 )
 
-NODE(ASTExprNodeLoop, { os << "LOOP [" << label << "] " << *mCode; }, { return NEWNODE(ASTExprNodeLoop, label, mCode->clone()); })
+NODE(ASTExprNodeLoop, { os << "LOOP [" << label << "] " << *code; }, { return NEWNODE(ASTExprNodeLoop, label, code->clone()); })
 
 NODE(
     ASTExprNodeFor,
     {
-        os << "FOR [" << label << "] " << pattern << "in" << *mValue;
-        os << " " << *mCode;
+        os << "FOR [" << label << "] " << pattern << "in" << *value;
+        os << " " << *code;
     },
-    { return NEWNODE(ASTExprNodeFor, label, pattern.clone(), mValue->clone(), mCode->clone()); }
+    { return NEWNODE(ASTExprNodeFor, label, pattern.clone(), value->clone(), code->clone()); }
 )
 
 namespace {
@@ -640,11 +640,11 @@ NODE(
         }
         os << "while ";
         fmtIfletConditions(os, conditions);
-        os << " { " << *mCode << " }";
+        os << " { " << *code << " }";
     },
     {
         auto newConds = cloneIfletConditions(conditions);
-        return NEWNODE(ASTExprNodeWhile, label, mv$(newConds), mCode->clone());
+        return NEWNODE(ASTExprNodeWhile, label, mv$(newConds), code->clone());
     }
 )
 
@@ -661,7 +661,7 @@ NODE(
                 fmtIfletConditions(os, arm.guard);
             }
 
-            os << " => " << *arm.mCode << ",";
+            os << " => " << *arm.code << ",";
         }
         os << "}";
     },
@@ -672,8 +672,8 @@ NODE(
             for (const auto& pat : arm.patterns) {
                 patterns.push_back(pat.clone());
             }
-            newArms.push_back(ASTExprNodeMatchArm(mv$(patterns), cloneIfletConditions(arm.guard), arm.mCode->clone()));
-            newArms.back().mAttrs = arm.mAttrs.clone();
+            newArms.push_back(ASTExprNodeMatchArm(mv$(patterns), cloneIfletConditions(arm.guard), arm.code->clone()));
+            newArms.back().attrs = arm.attrs.clone();
         }
         return NEWNODE(ASTExprNodeMatch, val->clone(), mv$(newArms));
     }
@@ -709,9 +709,9 @@ NODE(
     ASTExprNodeInteger,
     {
         if (datatype == CORETYPE_CHAR) {
-            os << "'\\u{" << ::std::hex << mValue << ::std::dec << "}'";
+            os << "'\\u{" << ::std::hex << value << ::std::dec << "}'";
         } else {
-            os << mValue;
+            os << value;
             if (datatype == CORETYPE_ANY)
                 ;
             else {
@@ -719,22 +719,22 @@ NODE(
             }
         }
     },
-    { return NEWNODE(ASTExprNodeInteger, mValue, datatype); }
+    { return NEWNODE(ASTExprNodeInteger, value, datatype); }
 )
 NODE(
     ASTExprNodeFloat,
     {
-        os << formatFloatValueForToken(mValue);
+        os << formatFloatValueForToken(value);
         if (datatype != CORETYPE_ANY) {
             os << coretypeName(datatype);
         }
     },
-    { return NEWNODE(ASTExprNodeFloat, mValue, datatype); }
+    { return NEWNODE(ASTExprNodeFloat, value, datatype); }
 )
-NODE(ASTExprNodeBool, { os << mValue; }, { return NEWNODE(ASTExprNodeBool, mValue); })
-NODE(ASTExprNodeString, { os << "\"" << mValue << "\""; }, { return NEWNODE(ASTExprNodeString, mValue, mHygiene); })
-NODE(ASTExprNodeByteString, { os << "b\"" << mValue << "\""; }, { return NEWNODE(ASTExprNodeByteString, mValue); })
-NODE(ASTExprNodeCString, { os << "c\"" << mValue << "\""; }, { return NEWNODE(ASTExprNodeCString, mValue); })
+NODE(ASTExprNodeBool, { os << value; }, { return NEWNODE(ASTExprNodeBool, value); })
+NODE(ASTExprNodeString, { os << "\"" << value << "\""; }, { return NEWNODE(ASTExprNodeString, value, hygiene); })
+NODE(ASTExprNodeByteString, { os << "b\"" << value << "\""; }, { return NEWNODE(ASTExprNodeByteString, value); })
+NODE(ASTExprNodeCString, { os << "c\"" << value << "\""; }, { return NEWNODE(ASTExprNodeCString, value); })
 
 NODE(
     ASTExprNodeClosure,
@@ -749,26 +749,26 @@ NODE(
             os << "use ";
         }
         os << "|";
-        for (const auto& a : mArgs) {
+        for (const auto& a : args) {
             os << a.first << ": " << a.second << ",";
         }
         os << "|";
         os << "->" << returnType;
-        os << " " << *mCode;
+        os << " " << *code;
     },
     {
         ASTExprNodeClosure::argsT args;
-        for (const auto& a : mArgs) {
+        for (const auto& a : this->args) {
             args.push_back(::std::make_pair(a.first.clone(), a.second->clone()));
         }
-        return NEWNODE(ASTExprNodeClosure, mv$(args), returnType->clone(), mCode->clone(), isMove, isUse, isPinned, trackCaller);
+        return NEWNODE(ASTExprNodeClosure, mv$(args), returnType->clone(), code->clone(), isMove, isUse, isPinned, trackCaller);
     }
 );
 
 NODE(
     ASTExprNodeStructLiteral,
     {
-        mPath.printPretty(os, false);
+        path.printPretty(os, false);
         os << " { ";
         for (const auto& v : values) {
             if (&v != &values.front()) {
@@ -791,13 +791,13 @@ NODE(
             vals.push_back({v.attrs.clone(), v.name, v.value->clone()});
         }
 
-        return NEWNODE(ASTExprNodeStructLiteral, ASTPath(mPath), OPT_CLONE(baseValue), mv$(vals));
+        return NEWNODE(ASTExprNodeStructLiteral, ASTPath(path), OPT_CLONE(baseValue), mv$(vals));
     }
 )
 NODE(
     ASTExprNodeStructLiteralPattern,
     {
-        os << mPath << " /*pat*/ { ";
+        os << path << " /*pat*/ { ";
         for (const auto& v : values) {
             os << v.name << ": " << *v.value << ", ";
         }
@@ -810,7 +810,7 @@ NODE(
             vals.push_back({v.attrs.clone(), v.name, v.value->clone()});
         }
 
-        return NEWNODE(ASTExprNodeStructLiteralPattern, ASTPath(mPath), mv$(vals));
+        return NEWNODE(ASTExprNodeStructLiteralPattern, ASTPath(path), mv$(vals));
     }
 )
 
@@ -818,8 +818,8 @@ NODE(
     ASTExprNodeArray,
     {
         os << "[";
-        if (mSize.get()) {
-            os << *values[0] << "; " << *mSize;
+        if (size.get()) {
+            os << *values[0] << "; " << *size;
         } else {
             for (const auto& a : values) {
                 os << *a << ",";
@@ -828,8 +828,8 @@ NODE(
         os << "]";
     },
     {
-        if (mSize.get()) {
-            return NEWNODE(ASTExprNodeArray, values[0]->clone(), mSize->clone());
+        if (size.get()) {
+            return NEWNODE(ASTExprNodeArray, values[0]->clone(), size->clone());
         } else {
             ::std::vector<ASTExprNodeP> nodes;
             for (const auto& n : values) {
@@ -858,21 +858,21 @@ NODE(
     }
 )
 
-NODE(ASTExprNodeNamedValue, { mPath.printPretty(os, false); }, { return NEWNODE(ASTExprNodeNamedValue, ASTPath(mPath)); })
+NODE(ASTExprNodeNamedValue, { path.printPretty(os, false); }, { return NEWNODE(ASTExprNodeNamedValue, ASTPath(path)); })
 
-NODE(ASTExprNodeField, { os << "(" << *obj << ")." << mName; }, { return NEWNODE(ASTExprNodeField, obj->clone(), mName); })
+NODE(ASTExprNodeField, { os << "(" << *obj << ")." << name; }, { return NEWNODE(ASTExprNodeField, obj->clone(), name); })
 
 NODE(ASTExprNodeIndex, { os << "(" << *obj << ")[" << *idx << "]"; }, { return NEWNODE(ASTExprNodeIndex, obj->clone(), idx->clone()); })
 
-NODE(ASTExprNodeDeref, { os << "*(" << *mValue << ")"; }, { return NEWNODE(ASTExprNodeDeref, mValue->clone()); });
+NODE(ASTExprNodeDeref, { os << "*(" << *value << ")"; }, { return NEWNODE(ASTExprNodeDeref, value->clone()); });
 
-NODE(ASTExprNodeCast, { os << "(" << *mValue << " as " << mType << ")"; }, { return NEWNODE(ASTExprNodeCast, mValue->clone(), mType->clone()); })
-NODE(ASTExprNodeTypeAnnotation, { os << "(" << *mValue << ": " << mType << ")"; }, { return NEWNODE(ASTExprNodeTypeAnnotation, mValue->clone(), mType->clone()); })
+NODE(ASTExprNodeCast, { os << "(" << *value << " as " << type << ")"; }, { return NEWNODE(ASTExprNodeCast, value->clone(), type->clone()); })
+NODE(ASTExprNodeTypeAnnotation, { os << "(" << *value << ": " << type << ")"; }, { return NEWNODE(ASTExprNodeTypeAnnotation, value->clone(), type->clone()); })
 
 NODE(
     ASTExprNodeBinOp,
     {
-        if (mType == RANGE_INC) {
+        if (type == RANGE_INC) {
             os << "(";
             if (left) {
                 os << *left << " ";
@@ -881,7 +881,7 @@ NODE(
             os << ")";
             return;
         }
-        if (mType == RANGE) {
+        if (type == RANGE) {
             os << "(";
             if (left) {
                 os << *left;
@@ -894,7 +894,7 @@ NODE(
             return;
         }
         os << "(" << *left << " ";
-        switch (mType) {
+        switch (type) {
             case CMPEQU:
                 os << "==";
                 break;
@@ -961,13 +961,13 @@ NODE(
         }
         os << " " << *right << ")";
     },
-    { return NEWNODE(ASTExprNodeBinOp, mType, OPT_CLONE(left), OPT_CLONE(right)); }
+    { return NEWNODE(ASTExprNodeBinOp, type, OPT_CLONE(left), OPT_CLONE(right)); }
 )
 
 NODE(
     ASTExprNodeUniOp,
     {
-        switch (mType) {
+        switch (type) {
             case NEGATE:
                 os << "-";
                 break;
@@ -990,18 +990,18 @@ NODE(
                 os << "&raw mut ";
                 break;
             case QMARK:
-                os << *mValue << "?";
+                os << *value << "?";
                 return;
             case AWait:
-                os << *mValue << ".await";
+                os << *value << ".await";
                 return;
             case USE:
-                os << *mValue << ".use";
+                os << *value << ".use";
                 return;
         }
-        os << *mValue;
+        os << *value;
     },
-    { return NEWNODE(ASTExprNodeUniOp, mType, mValue->clone()); }
+    { return NEWNODE(ASTExprNodeUniOp, type, value->clone()); }
 )
 
 NODE(ASTExprNodeMacroDefinition, { os << "/* macro definition #" << definitionId << " */"; }, { return NEWNODE(ASTExprNodeMacroDefinition, definitionId, tokenHygiene, definitionHygiene); })
@@ -1030,7 +1030,7 @@ NV(ASTExprNodeAsm, {
     }
 })
 NV(ASTExprNodeAsm2, {
-    for (auto& v : node.mParams) {
+    for (auto& v : node.params) {
         TU_MATCH_HDRA((v), {)
         TU_ARMA(Const, e) {
                 visit(e);
@@ -1050,21 +1050,21 @@ NV(ASTExprNodeAsm2, {
         }
     }
 })
-NV(ASTExprNodeFlow, { visit(node.mValue); })
+NV(ASTExprNodeFlow, { visit(node.value); })
 NV(ASTExprNodeLetBinding, {
     // TODO: Handle recurse into Let pattern?
-    visit(node.mValue);
+    visit(node.value);
     visit(node.elseNode);
 })
 NV(ASTExprNodeAssign, {
     INDENT();
     visit(node.slot);
-    visit(node.mValue);
+    visit(node.value);
     UNINDENT();
 })
 NV(ASTExprNodeCallPath, {
     INDENT();
-    for (auto& arg : node.mArgs) {
+    for (auto& arg : node.args) {
         visit(arg);
     }
     UNINDENT();
@@ -1072,7 +1072,7 @@ NV(ASTExprNodeCallPath, {
 NV(ASTExprNodeCallMethod, {
     INDENT();
     visit(node.val);
-    for (auto& arg : node.mArgs) {
+    for (auto& arg : node.args) {
         visit(arg);
     }
     UNINDENT();
@@ -1080,20 +1080,20 @@ NV(ASTExprNodeCallMethod, {
 NV(ASTExprNodeCallObject, {
     INDENT();
     visit(node.val);
-    for (auto& arg : node.mArgs) {
+    for (auto& arg : node.args) {
         visit(arg);
     }
     UNINDENT();
 })
 NV(ASTExprNodeLoop, {
     INDENT();
-    visit(node.mCode);
+    visit(node.code);
     UNINDENT();
 })
 NV(ASTExprNodeFor, {
     INDENT();
-    visit(node.mValue);
-    visit(node.mCode);
+    visit(node.value);
+    visit(node.code);
     UNINDENT();
 })
 NV(ASTExprNodeWhile, {
@@ -1101,7 +1101,7 @@ NV(ASTExprNodeWhile, {
     for (auto& c : node.conditions) {
         visit(c.value);
     }
-    visit(node.mCode);
+    visit(node.code);
     UNINDENT();
 })
 NV(ASTExprNodeMatch, {
@@ -1111,7 +1111,7 @@ NV(ASTExprNodeMatch, {
         for (auto& c : arm.guard) {
             visit(c.value);
         }
-        visit(arm.mCode);
+        visit(arm.code);
     }
     UNINDENT();
 })
@@ -1135,7 +1135,7 @@ NV(ASTExprNodeString, { (void)node; })
 NV(ASTExprNodeByteString, { (void)node; })
 NV(ASTExprNodeCString, { (void)node; })
 
-NV(ASTExprNodeClosure, { visit(node.mCode); });
+NV(ASTExprNodeClosure, { visit(node.code); });
 NV(ASTExprNodeStructLiteral, {
     visit(node.baseValue);
     for (auto& val : node.values) {
@@ -1148,7 +1148,7 @@ NV(ASTExprNodeStructLiteralPattern, {
     }
 })
 NV(ASTExprNodeArray, {
-    visit(node.mSize);
+    visit(node.size);
     for (auto& val : node.values) {
         visit(val);
     }
@@ -1168,22 +1168,22 @@ NV(ASTExprNodeIndex, {
     visit(node.obj);
     visit(node.idx);
 })
-NV(ASTExprNodeDeref, { visit(node.mValue); })
-NV(ASTExprNodeCast, { visit(node.mValue); })
-NV(ASTExprNodeTypeAnnotation, { visit(node.mValue); })
+NV(ASTExprNodeDeref, { visit(node.value); })
+NV(ASTExprNodeCast, { visit(node.value); })
+NV(ASTExprNodeTypeAnnotation, { visit(node.value); })
 NV(ASTExprNodeBinOp, {
     visit(node.left);
     visit(node.right);
 })
-NV(ASTExprNodeUniOp, { visit(node.mValue); })
+NV(ASTExprNodeUniOp, { visit(node.value); })
 NV(ASTExprNodeMacroDefinition, {})
 #undef NV
 
 void ASTExprNode::setAttrs(ASTAttributeList&& mi) {
-    for (auto& i : mi.mItems) {
-        attrs_.mItems.push_back(mv$(i));
+    for (auto& i : mi.items) {
+        attrs_.items.push_back(mv$(i));
     }
-    mi.mItems.clear();
+    mi.items.clear();
 }
 
 ASTExprNodeBlock::ASTExprNodeBlock(::std::vector<Line> nodes)
@@ -1230,7 +1230,7 @@ ASTExprNodeTry::ASTExprNodeTry(ASTExprNodeP inner)
 }
 
 ASTExprNodeMacro::ASTExprNodeMacro(ASTPath name, RcString ident, ::TokenTree&& tokens, bool isBraced, Ident::Hygiene definitionHygiene)
-    : mPath(::std::move(name))
+    : path(::std::move(name))
     , ident(ident)
     , tokens(::std::move(tokens))
     , isBraced(isBraced)
@@ -1250,21 +1250,21 @@ ASTExprNodeAsm::ASTExprNodeAsm(::std::string text, ::std::vector<ValRef> output,
 ASTExprNodeAsm2::ASTExprNodeAsm2(AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params)
     : options(options)
     , lines(::std::move(lines))
-    , mParams(::std::move(params))
+    , params(::std::move(params))
 {
 }
 
 ASTExprNodeFlow::ASTExprNodeFlow(Type type, Ident target, ASTExprNodeP value)
-    : mType(type)
+    : type(type)
     , target(::std::move(target))
-    , mValue(::std::move(value))
+    , value(::std::move(value))
 {
 }
 
 ASTExprNodeLetBinding::ASTExprNodeLetBinding(ASTPattern pat, ASTType* type, ASTExprNodeP value, ASTExprNodeP elseArm, bool isSuper)
     : pat(::std::move(pat))
-    , mType(::std::move(type))
-    , mValue(::std::move(value))
+    , type(::std::move(type))
+    , value(::std::move(value))
     , elseNode(::std::move(elseArm))
     , isSuper(isSuper)
 {
@@ -1278,26 +1278,26 @@ ASTExprNodeAssign::ASTExprNodeAssign()
 ASTExprNodeAssign::ASTExprNodeAssign(Operation op, ASTExprNodeP slot, ASTExprNodeP value)
     : op(op)
     , slot(::std::move(slot))
-    , mValue(::std::move(value))
+    , value(::std::move(value))
 {
 }
 
 ASTExprNodeCallPath::ASTExprNodeCallPath(ASTPath&& path, ::std::vector<ASTExprNodeP>&& args)
-    : mPath(::std::move(path))
-    , mArgs(::std::move(args))
+    : path(::std::move(path))
+    , args(::std::move(args))
 {
 }
 
 ASTExprNodeCallMethod::ASTExprNodeCallMethod(ASTExprNodeP obj, ASTPathNode method, ::std::vector<ASTExprNodeP> args)
     : val(::std::move(obj))
     , method(::std::move(method))
-    , mArgs(::std::move(args))
+    , args(::std::move(args))
 {
 }
 
 ASTExprNodeCallObject::ASTExprNodeCallObject(ASTExprNodeP val, ::std::vector<ASTExprNodeP>&& args)
     : val(::std::move(val))
-    , mArgs(::std::move(args))
+    , args(::std::move(args))
 {
 }
 
@@ -1308,22 +1308,22 @@ ASTExprNodeLoop::ASTExprNodeLoop()
 
 ASTExprNodeLoop::ASTExprNodeLoop(Ident label, ASTExprNodeP code)
     : label(::std::move(label))
-    , mCode(::std::move(code))
+    , code(::std::move(code))
 {
 }
 
 ASTExprNodeFor::ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code)
     : label(::std::move(label))
     , pattern(::std::move(pattern))
-    , mValue(::std::move(val))
-    , mCode(::std::move(code))
+    , value(::std::move(val))
+    , code(::std::move(code))
 {
 }
 
 ASTExprNodeWhile::ASTExprNodeWhile(Ident label, std::vector<ASTIfLetCondition> conditions, ASTExprNodeP code)
     : label(::std::move(label))
     , conditions(::std::move(conditions))
-    , mCode(::std::move(code))
+    , code(::std::move(code))
 {
 }
 
@@ -1333,7 +1333,7 @@ ASTExprNodeMatchArm::ASTExprNodeMatchArm() {
 ASTExprNodeMatchArm::ASTExprNodeMatchArm(::std::vector<ASTPattern> patterns, std::vector<ASTIfLetCondition> guard, ASTExprNodeP code)
     : patterns(mv$(patterns))
     , guard(mv$(guard))
-    , mCode(mv$(code))
+    , code(mv$(code))
 {
 }
 
@@ -1351,46 +1351,46 @@ ASTExprNodeIf::ASTExprNodeIf(std::vector<Arm> arms, ASTExprNodeP elseCode)
 
 ASTExprNodeInteger::ASTExprNodeInteger(U128 value, enum eCoreType datatype)
     : datatype(datatype)
-    , mValue(value)
+    , value(value)
 {
 }
 
 ASTExprNodeFloat::ASTExprNodeFloat(FloatValue value, enum eCoreType datatype)
     : datatype(datatype)
-    , mValue(value)
+    , value(value)
 {
 }
 
 ASTExprNodeBool::ASTExprNodeBool(bool value)
-    : mValue(value)
+    : value(value)
 {
 }
 
 ASTExprNodeString::ASTExprNodeString(::std::string value, Ident::Hygiene h)
-    : mValue(::std::move(value))
-    , mHygiene(::std::move(h))
+    : value(::std::move(value))
+    , hygiene(::std::move(h))
 {
 }
 
 ASTExprNodeByteString::ASTExprNodeByteString(::std::string value)
-    : mValue(::std::move(value))
+    : value(::std::move(value))
 {
 }
 
 ASTExprNodeCString::ASTExprNodeCString(::std::string value)
-    : mValue(::std::move(value))
+    : value(::std::move(value))
 {
 }
 
 ASTExprNodeStructLiteral::ASTExprNodeStructLiteral(ASTPath path, ASTExprNodeP baseValue, tValues&& values)
-    : mPath(std::move(path))
+    : path(std::move(path))
     , baseValue(std::move(baseValue))
     , values(std::move(values))
 {
 }
 
 ASTExprNodeStructLiteralPattern::ASTExprNodeStructLiteralPattern(ASTPath path, tValues&& values)
-    : mPath(std::move(path))
+    : path(std::move(path))
     , values(std::move(values))
 {
 }
@@ -1401,7 +1401,7 @@ ASTExprNodeArray::ASTExprNodeArray(::std::vector<ASTExprNodeP> vals)
 }
 
 ASTExprNodeArray::ASTExprNodeArray(ASTExprNodeP val, ASTExprNodeP size)
-    : mSize(::std::move(size))
+    : size(::std::move(size))
 {
     values.push_back(::std::move(val));
 }
@@ -1412,13 +1412,13 @@ ASTExprNodeTuple::ASTExprNodeTuple(::std::vector<ASTExprNodeP> vals)
 }
 
 ASTExprNodeNamedValue::ASTExprNodeNamedValue(ASTPath path)
-    : mPath(::std::move(path))
+    : path(::std::move(path))
 {
 }
 
 ASTExprNodeField::ASTExprNodeField(ASTExprNodeP obj, RcString name)
     : obj(::std::move(obj))
-    , mName(::std::move(name))
+    , name(::std::move(name))
 {
 }
 
@@ -1429,32 +1429,32 @@ ASTExprNodeIndex::ASTExprNodeIndex(ASTExprNodeP obj, ASTExprNodeP idx)
 }
 
 ASTExprNodeDeref::ASTExprNodeDeref(ASTExprNodeP value)
-    : mValue(::std::move(value))
+    : value(::std::move(value))
 {
 }
 
 ASTExprNodeCast::ASTExprNodeCast(ASTExprNodeP value, ASTType*&& dstType)
-    : mValue(::std::move(value))
-    , mType(::std::move(dstType))
+    : value(::std::move(value))
+    , type(::std::move(dstType))
 {
 }
 
 ASTExprNodeTypeAnnotation::ASTExprNodeTypeAnnotation(ASTExprNodeP value, ASTType*&& dstType)
-    : mValue(::std::move(value))
-    , mType(::std::move(dstType))
+    : value(::std::move(value))
+    , type(::std::move(dstType))
 {
 }
 
 ASTExprNodeBinOp::ASTExprNodeBinOp(Type type, ASTExprNodeP left, ASTExprNodeP right)
-    : mType(type)
+    : type(type)
     , left(::std::move(left))
     , right(::std::move(right))
 {
 }
 
 ASTExprNodeUniOp::ASTExprNodeUniOp(Type type, ASTExprNodeP value)
-    : mType(type)
-    , mValue(::std::move(value))
+    : type(type)
+    , value(::std::move(value))
 {
 }
 

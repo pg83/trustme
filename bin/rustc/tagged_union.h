@@ -191,12 +191,12 @@
 #define TU_CONS_I(__name, __tag, __type)               \
     __name(__type&& v)                                 \
         : tag_(TAG_##__tag) {                         \
-        TUMoveInplace(mData.__tag, ::std::move(v)); \
+        TUMoveInplace(data.__tag, ::std::move(v)); \
     }                                                  \
     template <typename _TU_Dummy = void>               \
     __name(const __type& v)                            \
         : tag_(TAG_##__tag) {                         \
-        TUCopyInplace(mData.__tag, v);              \
+        TUCopyInplace(data.__tag, v);              \
     }                                                  \
     static selfT make_##__tag(__type&& v) {           \
         return __name(::std::move(v));                 \
@@ -210,21 +210,21 @@
     }                                                  \
     const __type* opt_##__tag() const {                \
         if (tag_ == TAG_##__tag)                      \
-            return &mData.__tag;                      \
+            return &data.__tag;                      \
         return nullptr;                                \
     }                                                  \
     __type* opt_##__tag() {                            \
         if (tag_ == TAG_##__tag)                      \
-            return &mData.__tag;                      \
+            return &data.__tag;                      \
         return nullptr;                                \
     }                                                  \
     const __type& as_##__tag() const {                 \
         assert(tag_ == TAG_##__tag);                  \
-        return mData.__tag;                           \
+        return data.__tag;                           \
     }                                                  \
     __type& as_##__tag() {                             \
         assert(tag_ == TAG_##__tag);                  \
-        return mData.__tag;                           \
+        return data.__tag;                           \
     }                                                  \
     template <typename _TU_Type = __type>              \
     _TU_Type unwrap_##__tag() {                        \
@@ -243,21 +243,21 @@
     }                                         \
     const __type* opt_##__tag() const {       \
         if (tag_ == TAG_##__tag)             \
-            return &mData.__tag;             \
+            return &data.__tag;             \
         return nullptr;                       \
     }                                         \
     __type* opt_##__tag() {                   \
         if (tag_ == TAG_##__tag)             \
-            return &mData.__tag;             \
+            return &data.__tag;             \
         return nullptr;                       \
     }                                         \
     const __type& as_##__tag() const {        \
         assert(tag_ == TAG_##__tag);         \
-        return mData.__tag;                  \
+        return data.__tag;                  \
     }                                         \
     __type& as_##__tag() {                    \
         assert(tag_ == TAG_##__tag);         \
-        return mData.__tag;                  \
+        return data.__tag;                  \
     }                                         \
     __type unwrap_##__tag();
 
@@ -266,7 +266,7 @@
 #define TU_CONS_IMPL(__name, name, ...)                               \
     __name::__name(__name::TU_DATANAME(name) v)                       \
         : tag_(TAG_##name) {                                         \
-        new (&mData.name) __name::TU_DATANAME(name)(::std::move(v)); \
+        new (&data.name) __name::TU_DATANAME(name)(::std::move(v)); \
     }                                                                 \
     __name __name::make_##name(__name::TU_DATANAME(name) v) {         \
         return __name(::std::move(v));                                \
@@ -285,14 +285,14 @@
 // Destructor internals
 #define TU_DEST_CASE(tag, ...)           \
     case TAG_##tag:                      \
-        TUDestructInplace(mData.tag); \
+        TUDestructInplace(data.tag); \
         break; /*
 */
 
 // move constructor internals
 #define TU_MOVE_CASE(tag, ...)                                  \
     case TAG_##tag:                                             \
-        TUMoveInplace(mData.tag, ::std::move(x.mData.tag)); \
+        TUMoveInplace(data.tag, ::std::move(x.data.tag)); \
         break; /*
 */
 
@@ -365,12 +365,12 @@
             }                                                                                  \
             ~DataUnion() {                                                                     \
             }                                                                                  \
-        } mData; /*
+        } data; /*
 */                                                                           \
     public:                                                                                    \
         _name()                                                                                \
             : tag_(TAG_##_def) {                                                              \
-            new (&mData._def) TU_DATANAME(_def)();                                            \
+            new (&data._def) TU_DATANAME(_def)();                                            \
         } /*
 */                                                                                   \
         _name(const _name&) = delete; /*
@@ -475,7 +475,7 @@
             }                                                                     \
             ~DataUnion() {                                                        \
             }                                                                     \
-        } mData; /*
+        } data; /*
 */                                                              \
     public:                                                                       \
         _name();                      /*
@@ -522,7 +522,7 @@
 #define TAGGED_UNION_OUT_OF_LINE_IMPL(_name, _def, ...) \
     _name::_name()                                      \
         : tag_(TAG_##_def) {                           \
-        new (&mData._def) TU_DATANAME(_def)();         \
+        new (&data._def) TU_DATANAME(_def)();         \
     }                                                   \
     _name::_name(_name&& x) noexcept                    \
         : tag_(x.tag_) {                              \

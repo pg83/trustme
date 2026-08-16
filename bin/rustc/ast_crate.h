@@ -51,9 +51,9 @@ class ASTCrate {
 public:
     stl::ObjPool* pool;
     HIRTypeInterner& types;
-    ASTAttributeList mAttrs;
+    ASTAttributeList attrs;
 
-    ::std::map<::std::string, ASTAbsolutePath> mLangItems;
+    ::std::map<::std::string, ASTAbsolutePath> langItems;
     ::std::set<RcString> features;
 
 public:
@@ -125,7 +125,7 @@ public:
 /// Representation of an imported crate
 class ASTExternCrate {
 public:
-    RcString mName;
+    RcString name;
     RcString shortName;
     ::std::string filename;
     HIRCrate* hir = nullptr;

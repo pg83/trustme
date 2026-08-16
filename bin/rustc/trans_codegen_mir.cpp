@@ -61,7 +61,7 @@ namespace {
                 BUG(Span(), "" << x.e);
             }
             TU_ARMA(TraitObject, te) {
-                auto path = te.mTrait.mPath.clone();
+                auto path = te.trait.path.clone();
                 os << "dyn " << TransMangle(path);
             }
             TU_ARMA(ErasedType, te) {
@@ -115,14 +115,14 @@ namespace {
                 if (e.isUnsafe) {
                     os << "unsafe ";
                 }
-                if (e.mAbi != "") {
-                    os << "extern \"" << e.mAbi << "\" ";
+                if (e.abi != "") {
+                    os << "extern \"" << e.abi << "\" ";
                 }
                 os << "fn(";
                 for (const auto& t : e.argTypes) {
                     os << fmt(t) << ", ";
                 }
-                os << ") -> " << fmt(e.mRettype);
+                os << ") -> " << fmt(e.rettype);
             }
             break;
             case HIRTypeData::TAG_NodeType:
@@ -273,7 +273,7 @@ namespace {
             , of(outfilePath + ".mir")
         {
             for (const auto& crateName : crate.extCratesOrdered) {
-                of << "crate \"" << FmtEscaped(crate.extCrates.at(crateName).mPath) << ".mir\";\n";
+                of << "crate \"" << FmtEscaped(crate.extCrates.at(crateName).path) << ".mir\";\n";
             }
         }
 
@@ -383,12 +383,12 @@ namespace {
                                 return MetadataType::None;
                             case HIRStructMarkings::DstType::Possible: {
                                 // TODO: How to figure out? Lazy way is to check the monomorpised type of the last field (structs only)
-                                const auto& path = ty->as_Path().path.mData.as_Generic();
+                                const auto& path = ty->as_Path().path.data.as_Generic();
                                 const auto& str = *ty->as_Path().binding.as_Struct();
                                 auto monomorph = [&](const auto& tpl) {
-                                    return resolve_.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.mParams, nullptr));
+                                    return resolve_.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.params, nullptr));
                                 };
-                                TU_MATCHA((str.mData), (se), (Unit, MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");), (Tuple, return metadataType(monomorph(se.back().ent));), (Named, return metadataType(monomorph(se.back().ty));))
+                                TU_MATCHA((str.data), (se), (Unit, MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");), (Tuple, return metadataType(monomorph(se.back().ent));), (Named, return metadataType(monomorph(se.back().ty));))
                                 //MIR_TODO(*m_mir_res, "Determine DST type when ::Possible - " << ty);
                                 return MetadataType::None;
                             }
@@ -436,7 +436,7 @@ namespace {
                     } else if (t->is_TraitObject()) {
                         const auto& te = t->as_TraitObject();
 
-                        const auto& trait = resolve.hirCrate().getTraitByPath(sp, te.mTrait.mPath.mPath);
+                        const auto& trait = resolve.hirCrate().getTraitByPath(sp, te.trait.path.path);
                         auto vtableTy = trait.getVtableType(sp, resolve.hirCrate(), te);
                         return resolve.hirCrate().types.pointer(HIRBorrowType::Shared, vtableTy);
                     } else if (t->is_Path() && t->as_Path().binding.is_ExternType()) {
@@ -476,17 +476,17 @@ namespace {
             TRACE_FUNCTION_F(varPath);
 
             HIRTypeRef tmp;
-            MonomorphStatePtr ms(crate.types, nullptr, &varPath.mParams, nullptr);
+            MonomorphStatePtr ms(crate.types, nullptr, &varPath.params, nullptr);
             auto monomorph = [&](const auto& x) {
                 return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
             };
 
             auto enumPath = varPath.clone();
-            enumPath.mPath.popComponent();
+            enumPath.path.popComponent();
 
             // Create constructor function
-            const auto& varTy = item.mData.as_Data().at(varIdx).type;
-            const auto& e = varTy->as_Path().binding.as_Struct()->mData.as_Tuple();
+            const auto& varTy = item.data.as_Data().at(varIdx).type;
+            const auto& e = varTy->as_Path().binding.as_Struct()->data.as_Tuple();
             of << "/* " << varPath << " */\n";
             of << "fn " << fmt(varPath) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
@@ -513,12 +513,12 @@ namespace {
         void emitConstructorStruct(const Span& sp, const HIRGenericPath& p, const HIRStruct& item) override {
             TRACE_FUNCTION_F(p);
             HIRTypeRef tmp;
-            MonomorphStatePtr ms(crate.types, nullptr, &p.mParams, nullptr);
+            MonomorphStatePtr ms(crate.types, nullptr, &p.params, nullptr);
             auto monomorph = [&](const auto& x) {
                 return resolve_.monomorphExpandOpt(sp, tmp, x, ms);
             };
             // Create constructor function
-            const auto& e = item.mData.as_Tuple();
+            const auto& e = item.data.as_Tuple();
             of << "/* " << p << " */\n";
             of << "fn " << fmt(p) << "(";
             for (unsigned int i = 0; i < e.size(); i++) {
@@ -693,7 +693,7 @@ namespace {
 
             TRACE_FUNCTION_F(p);
 
-            auto type = params.monomorph(resolve_, item.mType);
+            auto type = params.monomorph(resolve_, item.type);
 
             of << "static " << fmt(p) << ": " << fmt(type) << " = \"";
             for (auto b : encoded.bytes) {
@@ -731,13 +731,13 @@ namespace {
 
                 of << "/* " << p << " */\n";
                 of << "fn " << fmt(p) << "(";
-                for (unsigned int i = 0; i < item.mArgs.size(); i++) {
+                for (unsigned int i = 0; i < item.args.size(); i++) {
                     if (i != 0) {
                         of << ", ";
                     }
-                    of << fmt(params.monomorph(resolve_, item.mArgs[i].second));
+                    of << fmt(params.monomorph(resolve_, item.args[i].second));
                 }
-                of << "): " << fmt(retType) << " = \"" << item.linkage.name << "\":\"" << item.mAbi << "\";\n";
+                of << "): " << fmt(retType) << " = \"" << item.linkage.name << "\":\"" << item.abi << "\";\n";
             }
 
             mirRes = nullptr;
@@ -747,7 +747,7 @@ namespace {
             TRACE_FUNCTION_F(p);
 
             MIRTypeResolve::argsT argTypes;
-            for (const auto& ent : item.mArgs) {
+            for (const auto& ent : item.args) {
                 argTypes.push_back(::std::make_pair(HIRPattern{}, params.monomorph(resolve_, ent.second)));
             }
 
@@ -762,15 +762,15 @@ namespace {
             // - Signature
             of << "/* " << p << " */\n";
             of << "fn " << fmt(p) << "(";
-            for (unsigned int i = 0; i < item.mArgs.size(); i++) {
+            for (unsigned int i = 0; i < item.args.size(); i++) {
                 if (i != 0) {
                     of << ", ";
                 }
-                of << fmt(params.monomorph(resolve_, item.mArgs[i].second));
+                of << fmt(params.monomorph(resolve_, item.args[i].second));
             }
             of << "): " << fmt(retType);
             if (item.linkage.name != "") {
-                of << " = \"" << item.linkage.name << "\":\"" << item.mAbi << "\"";
+                of << " = \"" << item.linkage.name << "\":\"" << item.abi << "\"";
             }
             of << " {\n";
             // - Locals
@@ -1225,7 +1225,7 @@ namespace {
                     tmp = cloneTyWith(crate.types, sp, item.returnType, [&](const auto& x, auto& out) {
                         if (const auto* te = x->opt_ErasedType()) {
                             if (const auto* e = te->inner.opt_Fcn()) {
-                                out = item.mCode.erasedTypes.at(e->index);
+                                out = item.code.erasedTypes.at(e->index);
                                 return true;
                             }
                         }

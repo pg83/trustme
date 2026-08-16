@@ -98,7 +98,7 @@ struct TomlValue {
         friend ::std::ostream& operator<<(::std::ostream& os, const TypeError& e);
     };
 
-    Type mType;
+    Type type;
     uint64_t intValue;
     ::std::string strValue;
     ::std::vector<TomlValue> subValues;

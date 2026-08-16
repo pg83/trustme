@@ -46,15 +46,15 @@ struct ImplTraitSource {
 // All HIR-lowering state, threaded via `this` instead of file-scope globals.
 // Every `LowerHIR*` is a method; helper structs hold an `AST2HIR&` back-ref.
 struct AST2HIR {
-    const WireBoard* mWb = nullptr;
+    const WireBoard* wb = nullptr;
     HIRSimplePath pathSized;
     HIRSimplePath pathPointeeSized;
     HIRSimplePath pathMetadataSized;
-    RcString mCoreCrate; // lowering-internal working copy; the canonical value lives in Settings
-    RcString mCrateName;
-    HIRCrate* mCrate = nullptr;
-    const ASTCrate* mAstCrate = nullptr;
-    ImplTraitSource mImplTraitSource;
+    RcString coreCrate; // lowering-internal working copy; the canonical value lives in Settings
+    RcString crateName;
+    HIRCrate* crate = nullptr;
+    const ASTCrate* astCrate = nullptr;
+    ImplTraitSource implTraitSource;
 
     HIRPublicity LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibility& vis);
     HIRGenericParams LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized);
@@ -106,13 +106,13 @@ HIRPublicity AST2HIR::LowerHIRVis(const HIRSimplePath& modPath, const ASTVisibil
         return HIRPublicity::newGlobal();
     }
     const auto* ap = &vis.visPath();
-    return HIRPublicity::newPriv(HIRSimplePath((ap->crate == "" ? mCrateName : ap->crate), ap->nodes));
+    return HIRPublicity::newPriv(HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes));
 }
 
 HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool* selfIsSized) {
     HIRGenericParams rv;
 
-    for (const auto& param : gp.mParams) {
+    for (const auto& param : gp.params) {
         TU_MATCH_HDRA( (param), {)
         TU_ARMA(None, _) {
             }
@@ -152,7 +152,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                 boundTraitPath.traitBounds.clear();
 
                 // 1.90 added some traits that imply ?Sized
-                if (boundTraitPath.mPath.mPath == pathPointeeSized || boundTraitPath.mPath.mPath == pathMetadataSized) {
+                if (boundTraitPath.path.path == pathPointeeSized || boundTraitPath.path.path == pathMetadataSized) {
                     if (const auto* ge = type->opt_Generic()) {
                         if (ge->binding == GENERICSelf) {
                             *selfIsSized = false;
@@ -171,7 +171,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                     const auto& srcTrait = bound.second.sourceTrait;
                     const auto& params = bound.second.atyParams;
                     for (auto& trait : bound.second.traits) {
-                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({mCrate->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait)}));
+                        rv.bounds.push_back(HIRGenericBound::make_TraitBound({crate->types.path(HIRPath(type, srcTrait.clone(), name, params.clone()), {}), std::move(trait)}));
                     }
                     bound.second.traits.clear();
                 }
@@ -197,7 +197,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
 
                 // Compare with list of known default traits (just Sized atm) and set a marker
                 auto trait = LowerHIRGenericPath(bound.span, e.trait, FromASTPathClass::Type);
-                if (trait.mPath == pathSized) {
+                if (trait.path == pathSized) {
                     if (paramIdx == 0xFFFF) {
                         assert(selfIsSized);
                         *selfIsSized = false;
@@ -206,7 +206,7 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                         rv.types[paramIdx].isSized = false;
                     }
                 } else {
-                    ERROR(bound.span, E0000, "MaybeTrait on unknown trait " << trait.mPath);
+                    ERROR(bound.span, E0000, "MaybeTrait on unknown trait " << trait.path);
                 }
             }
             TU_ARMA(NotTrait, e) {
@@ -222,10 +222,10 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
 }
 
 HIRPath AST2HIR::LowerHIRPatternPath(const Span& sp, const ASTPath& path, FromASTPathClass pc) {
-    if (const auto* be = path.mBindings.type.binding.opt_TypeParameter()) {
+    if (const auto* be = path.bindings.type.binding.opt_TypeParameter()) {
         if (be->slot == GENERICSelf) {
             // HACK: Return `<Self>::` (to be expanded later on)
-            return HIRPath(mCrate->types.self(), "");
+            return HIRPath(crate->types.self(), "");
         }
     }
     return LowerHIRPath(sp, path, pc);
@@ -250,16 +250,16 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
 
     std::vector<HIRPatternBinding> bindings;
     for (const auto& pb : pat.bindings()) {
-        bindings.push_back(HIRPatternBinding(pb.isMutable, convertBindingType(pb.mType), pb.mName.name, pb.slot));
+        bindings.push_back(HIRPatternBinding(pb.isMutable, convertBindingType(pb.type), pb.name.name, pb.slot));
     }
 
     struct H {
-        AST2HIR& mCtx;
-        explicit H(AST2HIR& ctx) : mCtx(ctx) {}
+        AST2HIR& ctx;
+        explicit H(AST2HIR& ctx) : ctx(ctx) {}
         ::std::vector<HIRPattern> lowerhirPatternvec(const ::std::vector<ASTPattern>& subPatterns) {
             ::std::vector<HIRPattern> rv;
             for (const auto& sp : subPatterns) {
-                rv.push_back(mCtx.LowerHIRPattern(sp));
+                rv.push_back(ctx.LowerHIRPattern(sp));
             }
             return rv;
         }
@@ -337,7 +337,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
                     return HIRPattern::Value::make_ByteString({e.v});
                 }
                 TU_ARMA(Named, e) {
-                    return HIRPattern::Value::make_Named({mCtx.LowerHIRPatternPath(sp, e, FromASTPathClass::Value), nullptr});
+                    return HIRPattern::Value::make_Named({ctx.LowerHIRPatternPath(sp, e, FromASTPathClass::Value), nullptr});
                 }
             }
             throw "BUGCHECK: Reached end of LowerHIR_Pattern::H::lowerhir_pattern_value";
@@ -404,7 +404,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
 
             // No sub-patterns, no `..`, and the VALUE binding points to an enum variant
             if (e.subPatterns.empty() /*&& !e.is_exhaustive*/) {
-                if (/*const auto* pbp =*/e.path.mBindings.value.binding.opt_EnumVar()) {
+                if (/*const auto* pbp =*/e.path.bindings.value.binding.opt_EnumVar()) {
                     return HIRPattern{
                         mv$(bindings),
                         HIRPattern::Data::make_PathNamed(
@@ -457,7 +457,7 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
                 trailing.push_back(LowerHIRPattern(sp));
             }
 
-            auto extraBind = e.extraBind.isValid() ? HIRPatternBinding(false, convertBindingType(e.extraBind.mType), e.extraBind.mName.name, e.extraBind.slot) : HIRPatternBinding();
+            auto extraBind = e.extraBind.isValid() ? HIRPatternBinding(false, convertBindingType(e.extraBind.type), e.extraBind.name.name, e.extraBind.slot) : HIRPatternBinding();
 
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_SplitSlice({mv$(leading), mv$(extraBind), mv$(trailing)})};
         }
@@ -501,20 +501,20 @@ HIRSimplePath AST2HIR::LowerHIRSimplePath(const Span& sp, const ASTPath& path, F
     const ASTAbsolutePath* ap = nullptr;
     switch (pc) {
         case FromASTPathClass::Value:
-            ASSERT_BUG(sp, !path.mBindings.value.is_Unbound(), "Encountered unbound value path - " << path);
-            ap = &path.mBindings.value.path;
+            ASSERT_BUG(sp, !path.bindings.value.is_Unbound(), "Encountered unbound value path - " << path);
+            ap = &path.bindings.value.path;
             break;
         case FromASTPathClass::Type:
-            ASSERT_BUG(sp, !path.mBindings.type.is_Unbound(), "Encountered unbound type path - " << path);
-            ap = &path.mBindings.type.path;
+            ASSERT_BUG(sp, !path.bindings.type.is_Unbound(), "Encountered unbound type path - " << path);
+            ap = &path.bindings.type.path;
             break;
         case FromASTPathClass::Macro:
-            ASSERT_BUG(sp, !path.mBindings.macro.is_Unbound(), "Encountered unbound macro path - " << path);
-            ap = &path.mBindings.macro.path;
+            ASSERT_BUG(sp, !path.bindings.macro.is_Unbound(), "Encountered unbound macro path - " << path);
+            ap = &path.bindings.macro.path;
             break;
     }
     assert(ap);
-    return HIRSimplePath((ap->crate == "" ? mCrateName : ap->crate), ap->nodes);
+    return HIRSimplePath((ap->crate == "" ? crateName : ap->crate), ap->nodes);
 }
 
 HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& srcParams, bool allowAssoc) {
@@ -585,11 +585,11 @@ HIRConstGeneric AST2HIR::LowerHIRConstGeneric(const ASTExprNode& nodeRef) {
     }
     // TODO: Explicitly handle each expected variant... or add a proper consteval expression
     if (const auto* e = cast<const ASTExprNodeNamedValue>(nodeP)) {
-        if (e->mPath.isTrivial()) {
-            const auto& b = e->mPath.mBindings.value.binding;
-            ASSERT_BUG(sp, b.is_Generic(), "Trivial path not type parameter - " << e->mPath << " - " << b.tagStr());
+        if (e->path.isTrivial()) {
+            const auto& b = e->path.bindings.value.binding;
+            ASSERT_BUG(sp, b.is_Generic(), "Trivial path not type parameter - " << e->path << " - " << b.tagStr());
             const auto& param = b.as_Generic();
-            return HIRGenericRef(e->mPath.asTrivial(), param.index);
+            return HIRGenericRef(e->path.asTrivial(), param.index);
         }
     }
     return std::make_unique<HIRConstGenericUnevaluated>(LowerHIRExprNode(nodeRef));
@@ -609,11 +609,11 @@ HIRGenericPath AST2HIR::LowerHIRGenericPath(const Span& sp, const ASTPath& path,
             }
             //}
             else if (!e->nodes.empty()) {
-            } else if (!e->type->mData.is_Path()) {
+            } else if (!e->type->data.is_Path()) {
             } else {
                 // HACK: `Self` replacement
                 ASSERT_BUG(sp, pc == FromASTPathClass::Type, "`Self` used in value context");
-                return LowerHIRGenericPath(sp, *e->type->mData.as_Path(), pc, false);
+                return LowerHIRGenericPath(sp, *e->type->data.as_Path(), pc, false);
             }
         }
 
@@ -631,8 +631,8 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             Function,
         };
 
-        AST2HIR& mCtx;
-        explicit H(AST2HIR& ctx) : mCtx(ctx) {}
+        AST2HIR& ctx;
+        explicit H(AST2HIR& ctx) : ctx(ctx) {}
         bool hasItem(const HIRTrait& trait, const RcString& name, Namespace ns) const {
             if (ns == Namespace::Type) {
                 return trait.types.find(name) != trait.types.end();
@@ -652,15 +652,15 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
             if (hasItem(trait, name, ns)) {
                 return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
             }
-            auto selfTy = mCtx.mCrate->types.self();
-            auto cb = MonomorphStatePtr(mCtx.mCrate->types, selfTy, &path.mParams, nullptr);
+            auto selfTy = ctx.crate->types.self();
+            auto cb = MonomorphStatePtr(ctx.crate->types, selfTy, &path.params, nullptr);
             for (const auto& st : trait.allParentTraits) {
                 // NOTE: st.m_trait_ptr isn't populated yet
-                const auto& t = mCtx.mCrate->getTraitByPath(sp, st.mPath.mPath);
+                const auto& t = ctx.crate->getTraitByPath(sp, st.path.path);
 
                 if (hasItem(t, name, ns)) {
                     // Monomorphse into outer scope, then run the outer monomorph
-                    auto p = cb.monomorphGenericpath(sp, st.mPath, /*allow_infer=*/true);
+                    auto p = cb.monomorphGenericpath(sp, st.path, /*allow_infer=*/true);
                     return ms.monomorphGenericpath(sp, p, /*allow_infer=*/true);
                 }
             }
@@ -672,12 +672,12 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                 return ms.monomorphGenericpath(sp, path, /*allow_infer=*/true);
             }
 
-            auto selfTy = mCtx.mCrate->types.self();
-            auto cb = MonomorphStatePtr(mCtx.mCrate->types, selfTy, &path.mParams, nullptr);
+            auto selfTy = ctx.crate->types.self();
+            auto cb = MonomorphStatePtr(ctx.crate->types, selfTy, &path.params, nullptr);
             for (const auto& st : trait.supertraits()) {
-                auto b = mCtx.LowerHIRTraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
-                ASSERT_BUG(sp, st.ent.path->mBindings.type.binding.is_Trait(), "Not a trait: " << *st.ent.path);
-                auto rv = findSourceTrait(sp, b.mPath, st.ent.path->mBindings.type.binding.as_Trait(), name, ns, cb);
+                auto b = ctx.LowerHIRTraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
+                ASSERT_BUG(sp, st.ent.path->bindings.type.binding.is_Trait(), "Not a trait: " << *st.ent.path);
+                auto rv = findSourceTrait(sp, b.path, st.ent.path->bindings.type.binding.as_Trait(), name, ns, cb);
                 if (rv != HIRGenericPath()) {
                     return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/true);
                 }
@@ -702,21 +702,21 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                 const auto& pbe = pb.as_TraitAlias();
                 if (pbe.hir) {
                     for (const auto& subTrait : pbe.hir->traits) {
-                        auto p = ms.monomorphGenericpath(sp, subTrait.mPath);
-                        const auto& t = mCtx.mCrate->getTraitByPath(sp, p.mPath);
-                        auto selfTy = mCtx.mCrate->types.self();
-                        auto rv = findSourceTraitHir(sp, p, t, name, ns, MonomorphStatePtr(mCtx.mCrate->types, selfTy, &p.mParams, nullptr));
+                        auto p = ms.monomorphGenericpath(sp, subTrait.path);
+                        const auto& t = ctx.crate->getTraitByPath(sp, p.path);
+                        auto selfTy = ctx.crate->types.self();
+                        auto rv = findSourceTraitHir(sp, p, t, name, ns, MonomorphStatePtr(ctx.crate->types, selfTy, &p.params, nullptr));
                         if (rv != HIRGenericPath()) {
                             return rv;
                         }
                     }
                     return HIRGenericPath();
                 } else if (pbe.trait_) {
-                    auto selfTy = mCtx.mCrate->types.self();
-                    auto cb = MonomorphStatePtr(mCtx.mCrate->types, selfTy, &path.mParams, nullptr);
+                    auto selfTy = ctx.crate->types.self();
+                    auto cb = MonomorphStatePtr(ctx.crate->types, selfTy, &path.params, nullptr);
                     for (const auto& st : pbe.trait_->traits) {
-                        auto b = mCtx.LowerHIRTraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
-                        auto rv = findSourceTrait(sp, b.mPath, st.ent.path->mBindings.type.binding, name, ns, cb);
+                        auto b = ctx.LowerHIRTraitPath(sp, *st.ent.path, st.ent.hrbs, true, st.ent.constness);
+                        auto rv = findSourceTrait(sp, b.path, st.ent.path->bindings.type.binding, name, ns, cb);
                         if (rv != HIRGenericPath()) {
                             return ms.monomorphGenericpath(sp, rv, /*allow_infer=*/true);
                         }
@@ -731,7 +731,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
         }
 
         std::pair<RcString, HIRPathParams> getAtyNode(const Span& sp, const ASTPathNode& pn) {
-            auto args = mCtx.LowerHIRPathParams(sp, pn.args(), false);
+            auto args = ctx.LowerHIRPathParams(sp, pn.args(), false);
             if (args.hasParams()) {
                 TODO(sp, "Handle ATYs with args");
             }
@@ -754,7 +754,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     ERROR(sp, E0000, "Return-type notation does not support equality constraints");
                 }
                 auto nameArgs = H(*this).getAtyNode(sp, assoc.first);
-                auto srcTrait = H(*this).findSourceTrait(sp, rv.mPath, path.mBindings.type.binding, nameArgs.first, H::Namespace::Type, MonomorphiserNop(mCrate->types));
+                auto srcTrait = H(*this).findSourceTrait(sp, rv.path, path.bindings.type.binding, nameArgs.first, H::Namespace::Type, MonomorphiserNop(crate->types));
                 DEBUG("src_trait = " << srcTrait << " for " << assoc.first);
                 rv.typeBounds.insert(::std::make_pair(nameArgs.first, HIRTraitPath::AtyEqual{std::move(srcTrait), std::move(nameArgs.second), LowerHIRType(assoc.second)}));
             }
@@ -765,7 +765,7 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
                     auto nameArgs = H(*this).getAtyNode(sp, assoc.first);
                     const auto sourceName = nameArgs.first;
                     const auto ns = assoc.first.args().isRtn ? H::Namespace::Function : H::Namespace::Type;
-                    auto srcTrait = H(*this).findSourceTrait(sp, rv.mPath, path.mBindings.type.binding, sourceName, ns, MonomorphiserNop(mCrate->types));
+                    auto srcTrait = H(*this).findSourceTrait(sp, rv.path, path.bindings.type.binding, sourceName, ns, MonomorphiserNop(crate->types));
                     if (assoc.first.args().isRtn) {
                         nameArgs.first = RcString::newInterned(FMT(ATY_PREFIX_ERASED << sourceName << "_0"));
                     }
@@ -840,35 +840,35 @@ namespace {
         ::std::unordered_set<const void*> activeAliases;
 
         bool hasPrincipal() const {
-            return !out.mTrait.mPath.mPath.components().empty();
+            return !out.trait.path.path.components().empty();
         }
 
         void addTrait(HIRTraitPath trait, bool isMarker) {
             if (isMarker) {
                 if (!trait.typeBounds.empty() || !trait.traitBounds.empty()) {
-                    ERROR(span_, E0000, "Associated type bounds on auto trait " << trait.mPath);
+                    ERROR(span_, E0000, "Associated type bounds on auto trait " << trait.path);
                 }
-                out.markers.push_back(mv$(trait.mPath));
+                out.markers.push_back(mv$(trait.path));
                 return;
             }
 
             if (hasPrincipal()) {
-                ERROR(span_, E0000, "Multiple data traits in trait object: " << out.mTrait.mPath << " and " << trait.mPath);
+                ERROR(span_, E0000, "Multiple data traits in trait object: " << out.trait.path << " and " << trait.path);
             }
-            out.mTrait = mv$(trait);
+            out.trait = mv$(trait);
         }
 
         void applyAliasBounds(HIRTraitPath& aliasPath, bool hadPrincipal) {
             const bool addedPrincipal = !hadPrincipal && hasPrincipal();
             if ((!aliasPath.typeBounds.empty() || !aliasPath.traitBounds.empty()) && !addedPrincipal) {
-                ERROR(span_, E0000, "Associated type bounds on trait alias without a data trait: " << aliasPath.mPath);
+                ERROR(span_, E0000, "Associated type bounds on trait alias without a data trait: " << aliasPath.path);
             }
             if (addedPrincipal) {
                 for (auto& bound : aliasPath.typeBounds) {
-                    out.mTrait.typeBounds.insert(::std::make_pair(bound.first, mv$(bound.second)));
+                    out.trait.typeBounds.insert(::std::make_pair(bound.first, mv$(bound.second)));
                 }
                 for (auto& bound : aliasPath.traitBounds) {
-                    out.mTrait.traitBounds.insert(::std::make_pair(bound.first, mv$(bound.second)));
+                    out.trait.traitBounds.insert(::std::make_pair(bound.first, mv$(bound.second)));
                 }
             }
         }
@@ -891,43 +891,43 @@ namespace {
 
         void addAstPath(HIRTraitPath path, const ASTPathBindingType& binding) {
             if (const auto* trait = binding.opt_Trait()) {
-                ASSERT_BUG(span_, trait->trait_ || trait->hir, "Null trait binding for " << path.mPath);
-                addTrait(mv$(path), trait->trait_ ? trait->trait_->isMarker() : trait->hir->mIsMarker);
+                ASSERT_BUG(span_, trait->trait_ || trait->hir, "Null trait binding for " << path.path);
+                addTrait(mv$(path), trait->trait_ ? trait->trait_->isMarker() : trait->hir->isMarker);
             } else if (const auto* alias = binding.opt_TraitAlias()) {
                 expandAstAlias(mv$(path), *alias);
             } else {
-                BUG(span_, "Not a trait or trait alias: " << path.mPath << " (" << binding.tagStr() << ")");
+                BUG(span_, "Not a trait or trait alias: " << path.path << " (" << binding.tagStr() << ")");
             }
         }
 
         void addHirPath(HIRTraitPath path) {
-            const auto& item = ctx_.mCrate->getTypeitemByPath(span_, path.mPath.mPath);
+            const auto& item = ctx_.crate->getTypeitemByPath(span_, path.path.path);
             if (const auto* trait = item.opt_Trait()) {
-                addTrait(mv$(path), trait->mIsMarker);
+                addTrait(mv$(path), trait->isMarker);
             } else if (const auto* alias = item.opt_TraitAlias()) {
                 expandHirAlias(mv$(path), *alias);
             } else {
-                BUG(span_, "Trait alias expanded to non-trait path " << path.mPath << " (" << item.tagStr() << ")");
+                BUG(span_, "Trait alias expanded to non-trait path " << path.path << " (" << item.tagStr() << ")");
             }
         }
 
         void expandAstAlias(HIRTraitPath aliasPath, const ASTPathBindingType::Data_TraitAlias& binding) {
             const void* key = binding.trait_ ? static_cast<const void*>(binding.trait_) : static_cast<const void*>(binding.hir);
-            ASSERT_BUG(span_, key, "Null trait alias binding for " << aliasPath.mPath);
-            auto active = enterAlias(key, aliasPath.mPath);
+            ASSERT_BUG(span_, key, "Null trait alias binding for " << aliasPath.path);
+            auto active = enterAlias(key, aliasPath.path);
             const bool hadPrincipal = hasPrincipal();
 
             if (binding.trait_) {
                 bool traitRequiresSized = false;
                 auto paramsDef = ctx_.LowerHIRGenericParams(binding.trait_->params, &traitRequiresSized);
-                auto params = ConvertHIRCompleteAliasParams(ctx_.mCrate->types, span_, paramsDef, aliasPath.mPath, false);
-                auto monomorph = MonomorphStatePtr(ctx_.mCrate->types, nullptr, &params, nullptr);
+                auto params = ConvertHIRCompleteAliasParams(ctx_.crate->types, span_, paramsDef, aliasPath.path, false);
+                auto monomorph = MonomorphStatePtr(ctx_.crate->types, nullptr, &params, nullptr);
                 for (const auto& bound : binding.trait_->traits) {
                     auto trait = ctx_.LowerHIRTraitPath(bound.sp, *bound.ent.path, bound.ent.hrbs, false, bound.ent.constness);
-                    addAstPath(monomorph.monomorphTraitpath(span_, trait, false), bound.ent.path->mBindings.type.binding);
+                    addAstPath(monomorph.monomorphTraitpath(span_, trait, false), bound.ent.path->bindings.type.binding);
                 }
             } else {
-                ASSERT_BUG(span_, binding.hir, "Null trait alias binding for " << aliasPath.mPath);
+                ASSERT_BUG(span_, binding.hir, "Null trait alias binding for " << aliasPath.path);
                 expandHirAliasContents(aliasPath, *binding.hir);
             }
 
@@ -935,8 +935,8 @@ namespace {
         }
 
         void expandHirAliasContents(const HIRTraitPath& aliasPath, const HIRTraitAlias& alias) {
-            auto params = ConvertHIRCompleteAliasParams(ctx_.mCrate->types, span_, alias.mParams, aliasPath.mPath, false);
-            auto monomorph = MonomorphStatePtr(ctx_.mCrate->types, nullptr, &params, nullptr);
+            auto params = ConvertHIRCompleteAliasParams(ctx_.crate->types, span_, alias.params, aliasPath.path, false);
+            auto monomorph = MonomorphStatePtr(ctx_.crate->types, nullptr, &params, nullptr);
             for (const auto& bound : alias.traits) {
                 auto trait = bound.clone();
                 addHirPath(monomorph.monomorphTraitpath(span_, trait, false));
@@ -944,7 +944,7 @@ namespace {
         }
 
         void expandHirAlias(HIRTraitPath aliasPath, const HIRTraitAlias& alias) {
-            auto active = enterAlias(&alias, aliasPath.mPath);
+            auto active = enterAlias(&alias, aliasPath.path);
             const bool hadPrincipal = hasPrincipal();
             expandHirAliasContents(aliasPath, alias);
             applyAliasBounds(aliasPath, hadPrincipal);
@@ -960,24 +960,24 @@ namespace {
 
         void add(const ::TypeTraitPath& bound) {
             auto path = ctx_.LowerHIRTraitPath(span_, *bound.path, bound.hrbs, false, bound.constness);
-            addAstPath(mv$(path), bound.path->mBindings.type.binding);
+            addAstPath(mv$(path), bound.path->bindings.type.binding);
         }
     };
 }
 
 HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
-    TU_MATCH_HDRA( (ty->mData), {)
+    TU_MATCH_HDRA( (ty->data), {)
     TU_ARMA(None, e) {
             BUG(ty->span(), "TypeData::None");
         }
         TU_ARMA(Bang, e) {
-            return mCrate->types.diverge();
+            return crate->types.diverge();
         }
         TU_ARMA(Any, e) {
-            return mCrate->types.infer();
+            return crate->types.infer();
         }
         TU_ARMA(Unit, e) {
-            return mCrate->types.unit();
+            return crate->types.unit();
         }
         TU_ARMA(Macro, e) {
             BUG(ty->span(), "TypeData::Macro");
@@ -985,46 +985,46 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
         TU_ARMA(Primitive, e) {
             switch (e.coreType) {
                 case CORETYPE_BOOL:
-                    return mCrate->types.primitive(HIRCoreType::Bool);
+                    return crate->types.primitive(HIRCoreType::Bool);
                 case CORETYPE_CHAR:
-                    return mCrate->types.primitive(HIRCoreType::Char);
+                    return crate->types.primitive(HIRCoreType::Char);
                 case CORETYPE_STR:
-                    return mCrate->types.primitive(HIRCoreType::Str);
+                    return crate->types.primitive(HIRCoreType::Str);
                 case CORETYPE_F16:
-                    return mCrate->types.primitive(HIRCoreType::F16);
+                    return crate->types.primitive(HIRCoreType::F16);
                 case CORETYPE_F32:
-                    return mCrate->types.primitive(HIRCoreType::F32);
+                    return crate->types.primitive(HIRCoreType::F32);
                 case CORETYPE_F64:
-                    return mCrate->types.primitive(HIRCoreType::F64);
+                    return crate->types.primitive(HIRCoreType::F64);
                 case CORETYPE_F128:
-                    return mCrate->types.primitive(HIRCoreType::F128);
+                    return crate->types.primitive(HIRCoreType::F128);
 
                 case CORETYPE_I8:
-                    return mCrate->types.primitive(HIRCoreType::I8);
+                    return crate->types.primitive(HIRCoreType::I8);
                 case CORETYPE_U8:
-                    return mCrate->types.primitive(HIRCoreType::U8);
+                    return crate->types.primitive(HIRCoreType::U8);
                 case CORETYPE_I16:
-                    return mCrate->types.primitive(HIRCoreType::I16);
+                    return crate->types.primitive(HIRCoreType::I16);
                 case CORETYPE_U16:
-                    return mCrate->types.primitive(HIRCoreType::U16);
+                    return crate->types.primitive(HIRCoreType::U16);
                 case CORETYPE_I32:
-                    return mCrate->types.primitive(HIRCoreType::I32);
+                    return crate->types.primitive(HIRCoreType::I32);
                 case CORETYPE_U32:
-                    return mCrate->types.primitive(HIRCoreType::U32);
+                    return crate->types.primitive(HIRCoreType::U32);
                 case CORETYPE_I64:
-                    return mCrate->types.primitive(HIRCoreType::I64);
+                    return crate->types.primitive(HIRCoreType::I64);
                 case CORETYPE_U64:
-                    return mCrate->types.primitive(HIRCoreType::U64);
+                    return crate->types.primitive(HIRCoreType::U64);
 
                 case CORETYPE_I128:
-                    return mCrate->types.primitive(HIRCoreType::I128);
+                    return crate->types.primitive(HIRCoreType::I128);
                 case CORETYPE_U128:
-                    return mCrate->types.primitive(HIRCoreType::U128);
+                    return crate->types.primitive(HIRCoreType::U128);
 
                 case CORETYPE_INT:
-                    return mCrate->types.primitive(HIRCoreType::Isize);
+                    return crate->types.primitive(HIRCoreType::Isize);
                 case CORETYPE_UINT:
-                    return mCrate->types.primitive(HIRCoreType::Usize);
+                    return crate->types.primitive(HIRCoreType::Usize);
                 case CORETYPE_ANY:
                     TODO(ty->span(), "TypeData::Primitive - CORETYPE_ANY");
                 case CORETYPE_INVAL:
@@ -1036,15 +1036,15 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
             for (const auto& st : e.innerTypes) {
                 v.push_back(LowerHIRType(st));
             }
-            return mCrate->types.tuple(mv$(v));
+            return crate->types.tuple(mv$(v));
         }
         TU_ARMA(Borrow, e) {
             auto cl = (e.isMut ? HIRBorrowType::Unique : HIRBorrowType::Shared);
-            return mCrate->types.borrow(cl, LowerHIRType(e.inner));
+            return crate->types.borrow(cl, LowerHIRType(e.inner));
         }
         TU_ARMA(Pointer, e) {
             auto cl = (e.isMut ? HIRBorrowType::Unique : HIRBorrowType::Shared);
-            return mCrate->types.pointer(cl, LowerHIRType(e.inner));
+            return crate->types.pointer(cl, LowerHIRType(e.inner));
         }
         TU_ARMA(Array, e) {
             auto inner = LowerHIRType(e.inner);
@@ -1053,27 +1053,27 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
                 if (const auto* ptr = cast<const ASTExprNodeInteger>(&*e.size)) {
                     if (ptr->datatype == CORETYPE_UINT || ptr->datatype == CORETYPE_ANY) {
                         // TODO: Chage the HIR format to support very large arrays
-                        if (ptr->mValue >= U128(UINT64_MAX)) {
-                            ERROR(ty->span(), E0000, "Array size out of bounds - 0x" << ::std::hex << ptr->mValue << " > 0x" << UINT64_MAX << " in " << ::std::dec << ty);
+                        if (ptr->value >= U128(UINT64_MAX)) {
+                            ERROR(ty->span(), E0000, "Array size out of bounds - 0x" << ::std::hex << ptr->value << " > 0x" << UINT64_MAX << " in " << ::std::dec << ty);
                         }
-                        return mCrate->types.array(inner, ptr->mValue.truncateU64());
+                        return crate->types.array(inner, ptr->value.truncateU64());
                     }
                 }
                 if (const auto* ptr = cast<const ASTExprNodeNamedValue>(&*e.size)) {
-                    if (ptr->mPath.isTrivial()) {
-                        auto gr = HIRGenericRef(ptr->mPath.asTrivial(), ptr->mPath.mBindings.value.binding.as_Generic().index);
-                        return mCrate->types.array(inner, HIRConstGeneric(mv$(gr)));
+                    if (ptr->path.isTrivial()) {
+                        auto gr = HIRGenericRef(ptr->path.asTrivial(), ptr->path.bindings.value.binding.as_Generic().index);
+                        return crate->types.array(inner, HIRConstGeneric(mv$(gr)));
                     }
                 }
 
-                return mCrate->types.array(inner, HIRConstGeneric::make_Unevaluated(std::make_unique<HIRConstGenericUnevaluated>(LowerHIRExpr(e.size))));
+                return crate->types.array(inner, HIRConstGeneric::make_Unevaluated(std::make_unique<HIRConstGenericUnevaluated>(LowerHIRExpr(e.size))));
             } else {
-                return mCrate->types.array(inner, HIRConstGeneric::make_Infer({}));
+                return crate->types.array(inner, HIRConstGeneric::make_Infer({}));
             }
         }
         TU_ARMA(Slice, e) {
             auto inner = LowerHIRType(e.inner);
-            return mCrate->types.slice(inner);
+            return crate->types.slice(inner);
         }
         TU_ARMA(Pattern, e) {
             auto lowerValue = [&](const ASTPattern::Value& value, const Span& sp) -> HIRConstGeneric {
@@ -1120,22 +1120,22 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
                 }
             };
             lowerPattern(*e.pattern);
-            return mCrate->types.intern(HIRTypeData::make_Pattern({LowerHIRType(e.inner), mv$(pattern)}));
+            return crate->types.intern(HIRTypeData::make_Pattern({LowerHIRType(e.inner), mv$(pattern)}));
         }
         TU_ARMA(Path, e) {
             if (const auto* l = e->cls.opt_Local()) {
                 unsigned int slot;
                 // NOTE: TypeParameter is unused
-                if (const auto* p = e->mBindings.type.binding.opt_TypeParameter()) {
+                if (const auto* p = e->bindings.type.binding.opt_TypeParameter()) {
                     slot = p->slot;
                 } else {
                     BUG(ty->span(), "Unbound local encountered in " << *e);
                 }
-                return mCrate->types.generic(l->name, slot);
-            } else if (e->mBindings.type.path.crate == CRATE_BUILTINS) {
-                return LowerHIRType(mkType(*ty->pool, ty->span(), coretypeFromstring(e->mBindings.type.path.nodes.back().c_str())));
+                return crate->types.generic(l->name, slot);
+            } else if (e->bindings.type.path.crate == CRATE_BUILTINS) {
+                return LowerHIRType(mkType(*ty->pool, ty->span(), coretypeFromstring(e->bindings.type.path.nodes.back().c_str())));
             } else {
-                return mCrate->types.path(LowerHIRPath(ty->span(), *e, FromASTPathClass::Type), {});
+                return crate->types.path(LowerHIRPath(ty->span(), *e, FromASTPathClass::Type), {});
             }
         }
         TU_ARMA(TraitObject, e) {
@@ -1148,7 +1148,7 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
             // Sort markers so downstream can compare properly
             ::std::sort(v.markers.begin(), v.markers.end());
             v.markers.erase(::std::unique(v.markers.begin(), v.markers.end()), v.markers.end());
-            return mCrate->types.intern(HIRTypeData::make_TraitObject(mv$(v)));
+            return crate->types.intern(HIRTypeData::make_TraitObject(mv$(v)));
         }
         TU_ARMA(ErasedType, e) {
             ASSERT_BUG(ty->span(), e->traits.size() > 0, "ErasedType with no traits");
@@ -1164,49 +1164,49 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
             bool isSized = true;
             for (const auto& t : e->maybeTraits) {
                 auto tp = LowerHIRTraitPath(ty->span(), *t.path, t.hrbs, /*allow_aty_trait_bounds=*/true);
-                if (tp.mPath.mPath == pathSized) {
+                if (tp.path.path == pathSized) {
                     isSized = false;
                 } else {
                     TODO(ty->span(), "Optional trait (not Sized) - " << ty);
                 }
             }
             TypeDataErasedTypeInner inner;
-            if (mImplTraitSource.path) {
-                if (mImplTraitSource.paramsInner && mImplTraitSource.paramsInner->isGeneric()) {
+            if (implTraitSource.path) {
+                if (implTraitSource.paramsInner && implTraitSource.paramsInner->isGeneric()) {
                     TODO(ty->span(), "Handle multi-layered generic erased type (used in a GAT)");
                 }
-                inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{mImplTraitSource.paramsOuter->makeNopParams(mCrate->types, 0), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*mImplTraitSource.path, *mImplTraitSource.paramsOuter)});
+                inner = TypeDataErasedTypeInner(TypeDataErasedTypeInner::Data_Alias{implTraitSource.paramsOuter->makeNopParams(crate->types, 0), std::make_shared<HIRTypeDataErasedTypeAliasInner>(*implTraitSource.path, *implTraitSource.paramsOuter)});
             } else {
                 inner = TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}; // Populated in bind, could be populated now?
             }
-            return mCrate->types.intern(HIRTypeData::make_ErasedType({isSized, mv$(traits), mv$(inner), e->use ? LowerHIRPathParams(ty->span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
+            return crate->types.intern(HIRTypeData::make_ErasedType({isSized, mv$(traits), mv$(inner), e->use ? LowerHIRPathParams(ty->span(), *e->use, false) : HIRPathParams(), e->use ? HIRTypeDataErasedType::Use::Present : (e->isEdition2024OrLater ? HIRTypeDataErasedType::Use::Omitted2024 : HIRTypeDataErasedType::Use::OmittedOld)}));
         }
         TU_ARMA(Function, e) {
             ::std::vector<HIRTypeRef> args;
             for (const auto& arg : e.info.argTypes) {
                 args.push_back(LowerHIRType(arg));
             }
-            HIRTypeDataFunctionPointer f{e.info.isUnsafe, e.info.isVariadic, RcString::newInterned(e.info.mAbi), LowerHIRType(e.info.mRettype), mv$(args)};
-            if (f.mAbi == "") {
-                f.mAbi = RcString::newInterned(ABI_RUST);
+            HIRTypeDataFunctionPointer f{e.info.isUnsafe, e.info.isVariadic, RcString::newInterned(e.info.abi), LowerHIRType(e.info.rettype), mv$(args)};
+            if (f.abi == "") {
+                f.abi = RcString::newInterned(ABI_RUST);
             }
-            return mCrate->types.function(mv$(f));
+            return crate->types.function(mv$(f));
         }
         TU_ARMA(Generic, e) {
             assert(e.index < 0x10000);
-            return mCrate->types.generic(e.name, e.index);
+            return crate->types.generic(e.name, e.index);
         }
     }
     throw "BUGCHECK: Reached end of LowerHIR_Type";
 }
 
 HIRTypeAlias AST2HIR::LowerHIRTypeAlias(const HIRItemPath& p, const ASTTypeAlias& ta) {
-    assert(!mImplTraitSource.path);
+    assert(!implTraitSource.path);
     auto params = LowerHIRGenericParams(ta.params(), nullptr);
-    mImplTraitSource = ImplTraitSource(&p, &params);
+    implTraitSource = ImplTraitSource(&p, &params);
     auto ty = LowerHIRType(ta.type());
     //}
-    mImplTraitSource = ImplTraitSource();
+    implTraitSource = ImplTraitSource();
     return HIRTypeAlias{std::move(params), ::std::move(ty)};
 }
 
@@ -1230,16 +1230,16 @@ namespace {
 tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericParams& params, const ::std::vector<ASTStructItem>& inFields, HIRModule& outMod) {
     HIRStruct::Data::Data_Named fields;
     for (const auto& field : inFields) {
-        auto type = LowerHIRType(field.mType);
+        auto type = LowerHIRType(field.type);
         ::std::unique_ptr<HIRGenericPath> fieldDefault;
         if (field.defaultValue) {
             // NOTE: I'd love to have this be a `Constant`, but that would require duplicating the type and the params
             // meh. Lazy option is to just duplicate
-            auto name = RcString::newInterned(FMT(path.getName() << "#default_" << field.mName));
-            outMod.valueItems.insert(std::make_pair(name, mCrate->pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(HIRConstant(params.clone(), type, LowerHIRExpr(field.defaultValue)))})));
-            fieldDefault = std::make_unique<HIRGenericPath>((*path.parent + name).getSimplePath(), params.makeNopParams(mCrate->types, 0));
+            auto name = RcString::newInterned(FMT(path.getName() << "#default_" << field.name));
+            outMod.valueItems.insert(std::make_pair(name, crate->pool->make<HIRVisEnt<HIRValueItem>>(HIRVisEnt<HIRValueItem>{HIRPublicity::newGlobal(), HIRValueItem(HIRConstant(params.clone(), type, LowerHIRExpr(field.defaultValue)))})));
+            fieldDefault = std::make_unique<HIRGenericPath>((*path.parent + name).getSimplePath(), params.makeNopParams(crate->types, 0));
         }
-        fields.push_back(HIRStructField{field.mName, LowerHIRVis(getParentModule(path), field.vis), std::move(type), std::move(fieldDefault)});
+        fields.push_back(HIRStructField{field.name, LowerHIRVis(getParentModule(path), field.vis), std::move(type), std::move(fieldDefault)});
     }
     return fields;
 }
@@ -1255,22 +1255,22 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
 
     auto rv = HIRStruct{LowerHIRGenericParams(ent.params(), nullptr), HIRStruct::Repr::Rust, {}};
 
-    TU_MATCH_HDRA( (ent.mData), {)
+    TU_MATCH_HDRA( (ent.data), {)
     TU_ARMA(Unit, e) {
-            rv.mData = HIRStruct::Data::make_Unit({});
+            rv.data = HIRStruct::Data::make_Unit({});
         }
         TU_ARMA(Tuple, e) {
             HIRStruct::Data::Data_Tuple fields;
 
             for (const auto& field : e.ents) {
-                fields.push_back({getVis(field.vis), LowerHIRType(field.mType)});
+                fields.push_back({getVis(field.vis), LowerHIRType(field.type)});
             }
 
-            rv.mData = HIRStruct::Data::make_Tuple(mv$(fields));
+            rv.data = HIRStruct::Data::make_Tuple(mv$(fields));
         }
         TU_ARMA(Struct, e) {
-            auto fields = LowerHIRStructFields(path, rv.mParams, e.ents, outMod);
-            rv.mData = HIRStruct::Data::make_Named(mv$(fields));
+            auto fields = LowerHIRStructFields(path, rv.params, e.ents, outMod);
+            rv.data = HIRStruct::Data::make_Named(mv$(fields));
         }
     }
 
@@ -1304,7 +1304,7 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
     }
     rv.structMarkings.isFundamental = attrs.has("fundamental");
     const auto& simplePath = path.getSimplePath();
-    rv.structMarkings.isNoNiche = simplePath == mCrate->getLangItemPathOpt("unsafe_cell") || simplePath == mCrate->getLangItemPathOpt("unsafe_pinned");
+    rv.structMarkings.isNoNiche = simplePath == crate->getLangItemPathOpt("unsafe_cell") || simplePath == crate->getLangItemPathOpt("unsafe_pinned");
     if(ent.markings.scalarValidStartSet)
     {
         if (ent.markings.scalarValidStart == U128(1)) {
@@ -1318,7 +1318,7 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
     {
         const HIRTypeData* ty = nullptr;
         const HIRTypeData* ty2 = nullptr;
-        if (const auto* d = rv.mData.opt_Named()) {
+        if (const auto* d = rv.data.opt_Named()) {
             switch (d->size()) {
                 case 2:
                     ty2 = (*d)[1].ty;
@@ -1326,7 +1326,7 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
                     ty = (*d)[0].ty;
                     break;
             }
-        } else if (const auto* d = rv.mData.opt_Tuple()) {
+        } else if (const auto* d = rv.data.opt_Tuple()) {
             if (d->size() == 1) {
                 ty = (*d)[0].ent;
             }
@@ -1409,11 +1409,11 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
     // 1. Figure out what sort of enum this is (value or data)
     bool hasData = false;
     for (const auto& var : ent.variants()) {
-        if (var.mData.is_Tuple() || var.mData.is_Struct()) {
+        if (var.data.is_Tuple() || var.data.is_Struct()) {
             hasData = true;
         } else {
             // Unit-like
-            assert(var.mData.is_Unit());
+            assert(var.data.is_Unit());
         }
     }
     if (ent.markings.alignValue != 0) {
@@ -1471,7 +1471,7 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
         ::std::vector<HIREnum::ValueVariant> variants;
         for (const auto& var : ent.variants()) {
             // TODO: Quick consteval on the expression?
-            variants.push_back({var.mName, LowerHIRExpr(var.discriminantValue), U128(0)});
+            variants.push_back({var.name, LowerHIRExpr(var.discriminantValue), U128(0)});
         }
 
         data = HIREnum::Class::make_Value({mv$(variants)});
@@ -1481,27 +1481,27 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
         ::std::vector<HIREnum::DataVariant> variants;
         const auto variantRepr = isReprC || repr != HIREnum::Repr::Auto ? HIRStruct::Repr::C : HIRStruct::Repr::Rust;
         for (const auto& var : ent.variants()) {
-            if (var.mData.is_Unit() && ent.markings.alignValue == 0) {
+            if (var.data.is_Unit() && ent.markings.alignValue == 0) {
                 // TODO: Should this make its own unit-like struct?
-                variants.push_back({var.mName, false, mCrate->types.unit()});
+                variants.push_back({var.name, false, crate->types.unit()});
             } else {
                 HIRStruct::Data data;
-                if (var.mData.is_Unit()) {
+                if (var.data.is_Unit()) {
                     data = HIRStruct::Data::make_Unit({});
-                } else if (const auto* ve = var.mData.opt_Tuple()) {
+                } else if (const auto* ve = var.data.opt_Tuple()) {
                     HIRStruct::Data::Data_Tuple fields;
-                    for (const auto& field : ve->mItems) {
-                        fields.push_back(newVisent(HIRPublicity::newGlobal(), LowerHIRType(field.mType)));
+                    for (const auto& field : ve->items) {
+                        fields.push_back(newVisent(HIRPublicity::newGlobal(), LowerHIRType(field.type)));
                     }
                     data = HIRStruct::Data::make_Tuple(mv$(fields));
-                } else if (const auto* ve = var.mData.opt_Struct()) {
+                } else if (const auto* ve = var.data.opt_Struct()) {
                     auto fields = LowerHIRStructFields(path, params, ve->fields, outMod);
                     data = HIRStruct::Data::make_Named(mv$(fields));
                 } else {
                     throw "";
                 }
 
-                auto tyName = RcString::newInterned(FMT(path.name << "#" << var.mName));
+                auto tyName = RcString::newInterned(FMT(path.name << "#" << var.name));
                 auto variantStruct = HIRStruct{LowerHIRGenericParams(ent.params(), nullptr), variantRepr, mv$(data)};
                 variantStruct.forcedAlignment = ent.markings.alignValue;
                 pushStruct(tyName, mv$(variantStruct));
@@ -1509,8 +1509,8 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
                 tyIpath.name = tyName.c_str();
                 auto tyPath = tyIpath.getFullPath();
                 // Add type params
-                tyPath.mData.as_Generic().mParams = params.makeNopParams(mCrate->types, 0);
-                variants.push_back({var.mName, var.mData.is_Struct(), mCrate->types.path(mv$(tyPath), {})});
+                tyPath.data.as_Generic().params = params.makeNopParams(crate->types, 0);
+                variants.push_back({var.name, var.data.is_Struct(), crate->types.path(mv$(tyPath), {})});
             }
 
             if (var.discriminantValue) {
@@ -1562,8 +1562,8 @@ HIRUnion AST2HIR::LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAt
     }
 
     HIRStruct::Data::Data_Named variants;
-    for (const auto& field : f.mVariants) {
-        variants.push_back(HIRStructField{field.mName, getVis(field.vis), LowerHIRType(field.mType), {}});
+    for (const auto& field : f.variants) {
+        variants.push_back(HIRStructField{field.name, getVis(field.vis), LowerHIRType(field.type), {}});
     }
 
     return HIRUnion{LowerHIRGenericParams(f.params_, nullptr), repr, mv$(variants)};
@@ -1593,7 +1593,7 @@ namespace {
 
 HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, const ASTAttributeList& attrs) {
     TRACE_FUNCTION_F(traitPath);
-    traitPath.updateCrateName(mCrateName);
+    traitPath.updateCrateName(crateName);
 
     bool traitReqiresSized = false;
     auto params = LowerHIRGenericParams(f.params(), &traitReqiresSized);
@@ -1627,8 +1627,8 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
     // HACK: Add a bound of Self: ThisTrait for parts of typeck (TODO: Remove this, it's evil)
     {
         auto thisTrait = HIRGenericPath(traitPath);
-        thisTrait.mParams = rv.mParams.makeNopParams(mCrate->types, 0);
-        rv.mParams.bounds.push_back(HIRGenericBound::make_TraitBound({mCrate->types.self(), HIRTraitPath(mv$(thisTrait))}));
+        thisTrait.params = rv.params.makeNopParams(crate->types, 0);
+        rv.params.bounds.push_back(HIRGenericBound::make_TraitBound({crate->types.self(), HIRTraitPath(mv$(thisTrait))}));
     }
 
     for (const auto& item : f.items()) {
@@ -1663,22 +1663,22 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
                         }
                         TU_ARMA(IsTrait, be) {
                             auto type = LowerHIRType(be.type);
-                            ASSERT_BUG(item.span, type == mCrate->types.self(), "Associated type bound has non-Self subject " << type);
+                            ASSERT_BUG(item.span, type == crate->types.self(), "Associated type bound has non-Self subject " << type);
                             ASSERT_BUG(item.span, be.outerHrbs.empty() || be.innerHrbs.empty(), "Two layers of higher-ranked binders in associated type bound");
                             auto trait = LowerHIRTraitPath(be.span, be.trait, be.innerHrbs, /*allow_bounds=*/true, be.constness);
-                            if (trait.mPath.mPath == pathPointeeSized || trait.mPath.mPath == pathMetadataSized) {
+                            if (trait.path.path == pathPointeeSized || trait.path.path == pathMetadataSized) {
                                 isSized = false;
                             }
                             traitBounds.push_back(mv$(trait));
                         }
                         TU_ARMA(MaybeTrait, be) {
                             auto type = LowerHIRType(be.type);
-                            ASSERT_BUG(item.span, type == mCrate->types.self(), "Associated type maybe-bound has non-Self subject " << type);
+                            ASSERT_BUG(item.span, type == crate->types.self(), "Associated type maybe-bound has non-Self subject " << type);
                             auto trait = LowerHIRGenericPath(item.span, be.trait, FromASTPathClass::Type);
-                            if (trait.mPath == pathSized) {
+                            if (trait.path == pathSized) {
                                 isSized = false;
                             } else {
-                                ERROR(item.span, E0000, "MaybeTrait on unknown trait " << trait.mPath);
+                                ERROR(item.span, E0000, "MaybeTrait on unknown trait " << trait.path);
                             }
                         }
                         TU_ARMA(NotTrait, _) {
@@ -1692,15 +1692,15 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
                 rv.types.insert(::std::make_pair(item.name, HIRAssociatedType{mv$(gps), isSized, mv$(traitBounds), LowerHIRType(i.type())}));
             }
             TU_ARMA(Function, i) {
-                auto fcn = LowerHIRFunction(itemPath, traitPath.parent(), item.attrs, i, mCrate->types.self());
-                RpititTypeCollector(mCrate->types, [&](unsigned index, HIRTypeRef type) {
+                auto fcn = LowerHIRFunction(itemPath, traitPath.parent(), item.attrs, i, crate->types.self());
+                RpititTypeCollector(crate->types, [&](unsigned index, HIRTypeRef type) {
                     const auto& erased = type->as_ErasedType();
                     auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << item.name << "_" << index));
                     ::std::vector<HIRTraitPath> bounds;
                     for (const auto& bound : erased.traits) {
                         bounds.push_back(bound.clone());
                     }
-                    auto inserted = rv.types.insert(std::make_pair(name, HIRAssociatedType{fcn.mParams.clone(), erased.isSized, std::move(bounds), mCrate->types.infer()}));
+                    auto inserted = rv.types.insert(std::make_pair(name, HIRAssociatedType{fcn.params.clone(), erased.isSized, std::move(bounds), crate->types.infer()}));
                     ASSERT_BUG(item.span, inserted.second, "Synthetic RPITIT associated type collides with " << name);
                 }).visitType(fcn.returnType);
                 if (rv.isConst) {
@@ -1721,8 +1721,8 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
         }
     }
 
-    rv.mIsMarker = f.isMarker();
-    rv.isCoinductive = rv.mIsMarker || attrs.has("rustc_coinductive");
+    rv.isMarker = f.isMarker();
+    rv.isCoinductive = rv.isMarker || attrs.has("rustc_coinductive");
     rv.isFundamental = attrs.has("fundamental");
 
     return rv;
@@ -1732,7 +1732,7 @@ HIRTraitAlias AST2HIR::LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const A
     bool traitReqiresSized = false;
 
     HIRTraitAlias ta;
-    ta.mParams = LowerHIRGenericParams(f.params, &traitReqiresSized);
+    ta.params = LowerHIRGenericParams(f.params, &traitReqiresSized);
     for (const auto& t : f.traits) {
         ta.traits.push_back(LowerHIRTraitPath(t.sp, *t.ent.path, t.ent.hrbs, false, t.ent.constness));
     }
@@ -1757,7 +1757,7 @@ HIRTraitAlias AST2HIR::LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const A
 
             HIRSimplePath aliasPath;
             if (const auto* path = opaquePath.cls.opt_Absolute()) {
-                aliasPath = appendNodes(HIRSimplePath(path->crate == "" ? mCrateName : path->crate), path->nodes);
+                aliasPath = appendNodes(HIRSimplePath(path->crate == "" ? crateName : path->crate), path->nodes);
             } else if (const auto* path = opaquePath.cls.opt_Relative()) {
                 aliasPath = appendNodes(sourceModule.clone(), path->nodes);
             } else if (const auto* path = opaquePath.cls.opt_Self()) {
@@ -1771,7 +1771,7 @@ HIRTraitAlias AST2HIR::LowerHIRTraitAlias(const Span& sp, HIRItemPath p, const A
                 ERROR(attr->span(), E0000, "Unsupported path in #[define_opaque]: " << opaquePath);
             }
             ASSERT_BUG(attr->span(), !aliasPath.components().empty(), "Empty path in #[define_opaque]");
-            mCrate->opaqueTypeDefiners[aliasPath].push_back(p.getFullPath());
+            crate->opaqueTypeDefiners[aliasPath].push_back(p.getFullPath());
             defineOpaque.push_back(::std::move(aliasPath));
             if (!tokens.getTokenIf(TOK_COMMA)) {
                 break;
@@ -1796,18 +1796,18 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
 
     auto receiver = HIRFunction::Receiver::Free;
 
-    if (args.size() > 0 && args.front().first.mBindings.size() > 0 && args.front().first.mBindings[0].mName == "self") {
+    if (args.size() > 0 && args.front().first.bindings.size() > 0 && args.front().first.bindings[0].name == "self") {
         const auto& sp = f.args()[0].pat.span();
         auto& argSelfTy = args.front().second;
 
         struct Ivcr {
-            AST2HIR& mCtx;
+            AST2HIR& ctx;
             const Span& sp;
             const HIRTypeData* realSelfType;
             ::std::vector<HIRSimplePath> aliasStack;
 
             Ivcr(AST2HIR& ctx, const Span& sp, const HIRTypeData* realSelfType)
-                : mCtx(ctx)
+                : ctx(ctx)
                 , sp(sp)
                 , realSelfType(realSelfType)
             {
@@ -1815,14 +1815,14 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
 
             const HIRTypeItem* findTypeItem(const HIRSimplePath& path) const {
                 const HIRModule* mod;
-                if (path.crateName() == mCtx.mCrate->crateName) {
-                    mod = &mCtx.mCrate->mRootModule;
+                if (path.crateName() == ctx.crate->crateName) {
+                    mod = &ctx.crate->rootModule;
                 } else {
-                    auto crateIt = mCtx.mCrate->extCrates.find(path.crateName());
-                    if (crateIt == mCtx.mCrate->extCrates.end()) {
+                    auto crateIt = ctx.crate->extCrates.find(path.crateName());
+                    if (crateIt == ctx.crate->extCrates.end()) {
                         return nullptr;
                     }
-                    mod = &crateIt->second.mData->mRootModule;
+                    mod = &crateIt->second.data->rootModule;
                 }
                 for (size_t i = 0; i < path.components().size(); ++i) {
                     auto itemIt = mod->modItems.find(path.components()[i]);
@@ -1842,22 +1842,22 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
 
             bool isValidCustomReceiver(HIRTypeRef& ty) {
                 // - The path must include Self as a (the only?) type param.
-                if (ty == mCtx.mCrate->types.self()) {
+                if (ty == ctx.crate->types.self()) {
                     return true;
                 } else if (ty == realSelfType) {
-                    ty = mCtx.mCrate->types.self();
+                    ty = ctx.crate->types.self();
                     return true;
                 } else if (ty->is_Path()) {
                     auto data = ty->cloneData();
                     auto& e = data.as_Path();
-                    if (auto* pe = e.path.mData.opt_Generic()) {
-                        const auto* item = findTypeItem(pe->mPath);
+                    if (auto* pe = e.path.data.opt_Generic()) {
+                        const auto* item = findTypeItem(pe->path);
                         if (item && item->is_TypeAlias()) {
-                            if (::std::find(aliasStack.begin(), aliasStack.end(), pe->mPath) != aliasStack.end()) {
+                            if (::std::find(aliasStack.begin(), aliasStack.end(), pe->path) != aliasStack.end()) {
                                 return false;
                             }
-                            aliasStack.push_back(pe->mPath);
-                            auto expanded = ConvertHIRExpandTypeAlias(sp, *mCtx.mCrate, *pe, false);
+                            aliasStack.push_back(pe->path);
+                            auto expanded = ConvertHIRExpandTypeAlias(sp, *ctx.crate, *pe, false);
                             auto valid = isValidCustomReceiver(expanded);
                             aliasStack.pop_back();
                             if (valid) {
@@ -1866,7 +1866,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                             }
                             return false;
                         }
-                        if (pe->mParams.types.size() == 0) {
+                        if (pe->params.types.size() == 0) {
                             ERROR(sp, E0000, "Receiver type should have one type param - " << ty);
                         }
                         //   TODO(sp, "Receiver types with more than one param - " << arg_self_ty);
@@ -1874,8 +1874,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
 
                         // TODO: Allow if the type parm is a valid receiver it type too
                         // - In general, it's valid if there's a deref chain from this type to `self` (maybe could check that in a later pass, instead of erroring here)
-                        if (isValidCustomReceiver(pe->mParams.types[0])) {
-                            ty = mCtx.mCrate->types.intern(mv$(data));
+                        if (isValidCustomReceiver(pe->params.types[0])) {
+                            ty = ctx.crate->types.intern(mv$(data));
                             return true;
                         }
                     }
@@ -1886,7 +1886,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                     if (!isValidCustomReceiver(inner)) {
                         return false;
                     }
-                    ty = mCtx.mCrate->types.borrow(e.type, inner);
+                    ty = ctx.crate->types.borrow(e.type, inner);
                     return true;
                 } else if (ty->is_Pointer()) {
                     const auto& e = ty->as_Pointer();
@@ -1894,7 +1894,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                     if (!isValidCustomReceiver(inner)) {
                         return false;
                     }
-                    ty = mCtx.mCrate->types.pointer(e.type, inner);
+                    ty = ctx.crate->types.pointer(e.type, inner);
                     return true;
                 } else {
                     return false;
@@ -1902,12 +1902,12 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
             }
         } ivcr(*this, sp, realSelfType);
 
-        if (argSelfTy == mCrate->types.self() || argSelfTy == realSelfType) {
+        if (argSelfTy == crate->types.self() || argSelfTy == realSelfType) {
             receiver = HIRFunction::Receiver::Value;
         } else if (const auto* e = argSelfTy->opt_Borrow()) {
-            if (e->inner == mCrate->types.self() || e->inner == realSelfType) {
+            if (e->inner == crate->types.self() || e->inner == realSelfType) {
                 if (e->inner == realSelfType) {
-                    argSelfTy = mCrate->types.borrow(e->type, mCrate->types.self());
+                    argSelfTy = crate->types.borrow(e->type, crate->types.self());
                 }
                 switch (e->type) {
                     case HIRBorrowType::Owned:
@@ -1923,20 +1923,20 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
             } else {
                 auto inner = e->inner;
                 if (ivcr.isValidCustomReceiver(inner)) {
-                    argSelfTy = mCrate->types.borrow(e->type, inner);
+                    argSelfTy = crate->types.borrow(e->type, inner);
                     receiver = HIRFunction::Receiver::Custom;
                 }
             }
         } else if (const auto* e = argSelfTy->opt_Path()) {
             // Box - Compare with `owned_box` lang item
-            if (const auto* pe = e->path.mData.opt_Generic()) {
-                auto p = mCrate->getLangItemPathOpt("owned_box");
-                if (pe->mPath == p) {
-                    if (pe->mParams.types.size() >= 1 && (pe->mParams.types[0] == mCrate->types.self() || pe->mParams.types[0] == realSelfType)) {
-                        if (pe->mParams.types[0] == realSelfType) {
+            if (const auto* pe = e->path.data.opt_Generic()) {
+                auto p = crate->getLangItemPathOpt("owned_box");
+                if (pe->path == p) {
+                    if (pe->params.types.size() >= 1 && (pe->params.types[0] == crate->types.self() || pe->params.types[0] == realSelfType)) {
+                        if (pe->params.types[0] == realSelfType) {
                             auto data = argSelfTy->cloneData();
-                            data.as_Path().path.mData.as_Generic().mParams.types[0] = mCrate->types.self();
-                            argSelfTy = mCrate->types.intern(mv$(data));
+                            data.as_Path().path.data.as_Generic().params.types[0] = crate->types.self();
+                            argSelfTy = crate->types.intern(mv$(data));
                         }
                         receiver = HIRFunction::Receiver::Box;
                     }
@@ -1947,7 +1947,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                         receiver = HIRFunction::Receiver::Custom;
                     }
                 }
-            } else if (e->path.mData.is_UfcsKnown()) {
+            } else if (e->path.data.is_UfcsKnown()) {
                 // Associated type projections need the complete impl set, so
                 // their receiver relation is checked after HIR lowering.
                 receiver = HIRFunction::Receiver::Custom;
@@ -1959,7 +1959,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
 
         if (receiver == HIRFunction::Receiver::Free && visitTyWith(argSelfTy, [](const HIRTypeData* ty) {
                 const auto* path = ty->opt_Path();
-                return path && path->path.mData.is_UfcsKnown();
+                return path && path->path.data.is_UfcsKnown();
             })) {
             // A projection nested inside Box/Rc/etc. needs the same deferred
             // normalization as a projection used directly as the receiver.
@@ -2017,7 +2017,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     linkage.section = f.markings.linkSection;
 
     // Convert #[link_name/no_mangle] attributes into the name
-    if (mAstCrate->testHarness && f.code().isValid()) {
+    if (astCrate->testHarness && f.code().isValid()) {
         // If we're making a test harness, and this item defines code, don't apply the linkage rules
     } else if (f.markings.linkName != "") {
         linkage.name = f.markings.linkName;
@@ -2040,32 +2040,32 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     rv.linkage = mv$(linkage);
     rv.receiver = receiver;
     if (receiver == HIRFunction::Receiver::Custom) {
-        rv.receiverType = MonomorphiserNop(mCrate->types).monomorphType(f.args()[0].ty->span(), args.front().second, false);
+        rv.receiverType = MonomorphiserNop(crate->types).monomorphType(f.args()[0].ty->span(), args.front().second, false);
     }
-    rv.mAbi = RcString::newInterned(f.abi());
+    rv.abi = RcString::newInterned(f.abi());
     rv.unsafe = f.isUnsafe();
     rv.isConst = f.isConst();
-    rv.mParams = LowerHIRGenericParams(f.params(), nullptr); // TODO: If this is a method, then it can add the Self: Sized bound
-    rv.mArgs = mv$(args);
+    rv.params = LowerHIRGenericParams(f.params(), nullptr); // TODO: If this is a method, then it can add the Self: Sized bound
+    rv.args = mv$(args);
     rv.variadic = f.isVariadic();
     rv.returnType = LowerHIRType(f.rettype());
     rv.source = SourceLocation(f.sp());
-    rv.mCode = LowerHIRExpr(f.code());
+    rv.code = LowerHIRExpr(f.code());
     rv.defineOpaque = ::std::move(defineOpaque);
     rv.markings = markings;
 
     if (f.isAsync()) {
         // Wrap the code in an async block
-        if (rv.mCode) {
-            auto* asyncNode = mCrate->pool->make<HIRExprNodeAsyncBlock>(sp, rv.returnType, rv.mCode.takeNode(), true);
-            asyncNode->resType = mCrate->types.infer();
-            rv.mCode = HIRExprPtr(HIRExprNodeP(asyncNode));
+        if (rv.code) {
+            auto* asyncNode = crate->pool->make<HIRExprNodeAsyncBlock>(sp, rv.returnType, rv.code.takeNode(), true);
+            asyncNode->resType = crate->types.infer();
+            rv.code = HIRExprPtr(HIRExprNodeP(asyncNode));
         }
         // Make the return type be `impl Future<Output=Ret>`
         HIRTraitPath futurePath;
-        futurePath.mPath.mPath = mCrate->getLangItemPath(sp, "future_trait");
-        futurePath.typeBounds.insert(std::make_pair(RcString::newInterned("Output"), HIRTraitPath::AtyEqual{futurePath.mPath.clone(), {}, std::move(rv.returnType)}));
-        rv.returnType = mCrate->types.intern(HIRTypeData::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(futurePath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+        futurePath.path.path = crate->getLangItemPath(sp, "future_trait");
+        futurePath.typeBounds.insert(std::make_pair(RcString::newInterned("Output"), HIRTraitPath::AtyEqual{futurePath.path.clone(), {}, std::move(rv.returnType)}));
+        rv.returnType = crate->types.intern(HIRTypeData::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(futurePath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
     }
 
     return rv;
@@ -2135,11 +2135,11 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
     // Populate trait list
     {
         struct Foo {
-            AST2HIR& mCtx;
+            AST2HIR& ctx;
             HIRModule& mod;
 
             Foo(AST2HIR& ctx, HIRModule& mod)
-                : mCtx(ctx)
+                : ctx(ctx)
                 , mod(mod)
             {
             }
@@ -2161,20 +2161,20 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
 
             void pushTraitAliasAst(const ASTTraitAlias& ta) {
                 for (const auto& e : ta.traits) {
-                    if (const auto* pbe = e.ent.path->mBindings.type.binding.opt_TraitAlias()) {
+                    if (const auto* pbe = e.ent.path->bindings.type.binding.opt_TraitAlias()) {
                         pushTraitAlias(*pbe);
                     } else {
-                        pushTrait(mCtx.LowerHIRSimplePath(e.sp, *e.ent.path, FromASTPathClass::Type, true));
+                        pushTrait(ctx.LowerHIRSimplePath(e.sp, *e.ent.path, FromASTPathClass::Type, true));
                     }
                 }
             }
 
             void pushTraitAliasHir(const HIRTraitAlias& ta) {
                 for (const auto& p : ta.traits) {
-                    if (const auto* tap = mCtx.mCrate->getTypeitemByPath(Span(), p.mPath.mPath).opt_TraitAlias()) {
+                    if (const auto* tap = ctx.crate->getTypeitemByPath(Span(), p.path.path).opt_TraitAlias()) {
                         pushTraitAliasHir(*tap);
                     } else {
-                        pushTrait(p.mPath.mPath);
+                        pushTrait(p.path.path);
                     }
                 }
             }
@@ -2182,10 +2182,10 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
 
         Foo f{*this, mod};
         for (const auto& traitPath : astMod.traits) {
-            f.pushTrait(HIRSimplePath((traitPath.crate == "" ? mCrateName : traitPath.crate), traitPath.nodes));
+            f.pushTrait(HIRSimplePath((traitPath.crate == "" ? crateName : traitPath.crate), traitPath.nodes));
         }
         for (const auto& i : astMod.typeItems) {
-            if (const auto* pbe = i.second.path.mBindings.type.binding.opt_TraitAlias()) {
+            if (const auto* pbe = i.second.path.bindings.type.binding.opt_TraitAlias()) {
                 // TODO: Should expanding trait aliases instead be handled in expr_cs__enum.cpp?
                 f.pushTraitAlias(*pbe);
             }
@@ -2199,11 +2199,11 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
             auto name = RcString::newInterned(FMT("#" << i));
             auto itemPath = HIRItemPath(path, name.c_str());
             auto ti = HIRTypeItem::make_Module(LowerHIRModule(submod, itemPath, mod.traits));
-            _add_mod_ns_item(*mCrate->pool, mod, mv$(name), HIRPublicity::newPriv(modPath), mv$(ti));
+            _add_mod_ns_item(*crate->pool, mod, mv$(name), HIRPublicity::newPriv(modPath), mv$(ti));
         }
     }
 
-    for (const auto& ip : astMod.mItems) {
+    for (const auto& ip : astMod.items) {
         const auto& item = *ip;
         const auto& sp = item.span;
         auto itemPath = HIRItemPath(path, item.name.c_str());
@@ -2243,7 +2243,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
                     TODO(sp, "Expand ExternBlock");
                 }
                 for (const auto& lib : e.libraries) {
-                    mCrate->extLibs.push_back(HIRExternLibrary{lib.libName});
+                    crate->extLibs.push_back(HIRExternLibrary{lib.libName});
                 }
             }
             TU_ARMA(Impl, e) {
@@ -2256,53 +2256,53 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
                 // Ignore - The index is used to add `Import`s
             }
             TU_ARMA(Module, e) {
-                _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRModule(e, mv$(itemPath)));
+                _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), LowerHIRModule(e, mv$(itemPath)));
             }
             TU_ARMA(Crate, e) {
                 // All 'extern crate' items should be normalised into a list in the crate root
                 // - If public, add a namespace import here referring to the root of the imported crate
-                _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), HIRTypeItem::make_Import({HIRSimplePath(e.name, {}), false, 0}));
+                _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), HIRTypeItem::make_Import({HIRSimplePath(e.name, {}), false, 0}));
             }
             TU_ARMA(Type, e) {
-                if (e.type()->mData.is_Any()) {
-                    if (!e.params().mParams.empty() || !e.params().bounds.empty()) {
+                if (e.type()->data.is_Any()) {
+                    if (!e.params().params.empty() || !e.params().bounds.empty()) {
                         ERROR(item.span, E0000, "Generics on extern type");
                     }
-                    _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), HIRExternType{});
+                    _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), HIRExternType{});
                     break;
                 }
-                _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), HIRTypeItem::make_TypeAlias(LowerHIRTypeAlias(itemPath, e)));
+                _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), HIRTypeItem::make_TypeAlias(LowerHIRTypeAlias(itemPath, e)));
             }
             TU_ARMA(Struct, e) {
                 /// Add value reference
-                if (e.mData.is_Unit()) {
-                    _add_mod_val_item(*mCrate->pool, mod, item.name, getVis(item.vis), HIRValueItem::make_StructConstant({itemPath.getSimplePath()}));
-                } else if (e.mData.is_Tuple()) {
-                    _add_mod_val_item(*mCrate->pool, mod, item.name, getVis(item.vis), HIRValueItem::make_StructConstructor({itemPath.getSimplePath()}));
+                if (e.data.is_Unit()) {
+                    _add_mod_val_item(*crate->pool, mod, item.name, getVis(item.vis), HIRValueItem::make_StructConstant({itemPath.getSimplePath()}));
+                } else if (e.data.is_Tuple()) {
+                    _add_mod_val_item(*crate->pool, mod, item.name, getVis(item.vis), HIRValueItem::make_StructConstructor({itemPath.getSimplePath()}));
                 } else {
                 }
-                _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRStruct(ip->span, itemPath, e, item.attrs, mod));
+                _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), LowerHIRStruct(ip->span, itemPath, e, item.attrs, mod));
             }
             TU_ARMA(Enum, e) {
                 auto enm = LowerHIREnum(itemPath, e, item.attrs, [&](auto name, auto str) {
-                    _add_mod_ns_item(*mCrate->pool, mod, name, getVis(item.vis), mv$(str));
+                    _add_mod_ns_item(*crate->pool, mod, name, getVis(item.vis), mv$(str));
                 }, mod);
-                _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), mv$(enm));
+                _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), mv$(enm));
             }
             TU_ARMA(Union, e) {
-                _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRUnion(itemPath, e, item.attrs));
+                _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), LowerHIRUnion(itemPath, e, item.attrs));
             }
             TU_ARMA(Trait, e) {
-                _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRTrait(itemPath.getSimplePath(), e, item.attrs));
+                _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), LowerHIRTrait(itemPath.getSimplePath(), e, item.attrs));
             }
             TU_ARMA(TraitAlias, e) {
-                _add_mod_ns_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRTraitAlias(sp, itemPath, e));
+                _add_mod_ns_item(*crate->pool, mod, item.name, getVis(item.vis), LowerHIRTraitAlias(sp, itemPath, e));
             }
             TU_ARMA(Function, e) {
-                _add_mod_val_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRFunction(itemPath, modPath, item.attrs, e, HIRTypeRef{}));
+                _add_mod_val_item(*crate->pool, mod, item.name, getVis(item.vis), LowerHIRFunction(itemPath, modPath, item.attrs, e, HIRTypeRef{}));
             }
             TU_ARMA(Static, e) {
-                _add_mod_val_item(*mCrate->pool, mod, item.name, getVis(item.vis), LowerHIRStatic(itemPath, item.attrs, e, sp, item.name));
+                _add_mod_val_item(*crate->pool, mod, item.name, getVis(item.vis), LowerHIRStatic(itemPath, item.attrs, e, sp, item.name));
             }
         }
     }
@@ -2311,7 +2311,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
         if (mac.data || mac.vis.isGlobal()) {
             ASSERT_BUG(mac.span, mac.data, "Null macro - " << mac.name);
             ASSERT_BUG(mac.span, mac.data->rules.size() > 0, "Empty macro - " << mac.name);
-            _add_mod_mac_item(*mCrate->pool, mod, mac.name, getVis(mac.vis), std::move(mac.data));
+            _add_mod_mac_item(*crate->pool, mod, mac.name, getVis(mac.vis), std::move(mac.data));
         }
     }
 
@@ -2325,14 +2325,14 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
             auto hirPath = LowerHIRSimplePath(sp, ie.second.path, FromASTPathClass::Type);
             assert(hirPath.components().empty() || hirPath.components().back() != "");
             HIRTypeItem ti;
-            if (const auto* pb = ie.second.path.mBindings.type.binding.opt_EnumVar()) {
+            if (const auto* pb = ie.second.path.bindings.type.binding.opt_EnumVar()) {
                 DEBUG("Import NS " << ie.first << " = " << hirPath << " (Enum Variant)");
                 ti = HIRTypeItem::make_Import({mv$(hirPath), true, pb->idx});
             } else {
                 DEBUG("Import NS " << ie.first << " = " << hirPath);
                 ti = HIRTypeItem::make_Import({mv$(hirPath), false, 0});
             }
-            _add_mod_ns_item(*mCrate->pool, mod, ie.first, getVis(ie.second.vis), mv$(ti));
+            _add_mod_ns_item(*crate->pool, mod, ie.first, getVis(ie.second.vis), mv$(ti));
         }
     }
     for (const auto& ie : astMod.valueItems) {
@@ -2348,7 +2348,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
             assert(hirPath.components().back() != "");
             HIRValueItem vi;
 
-            TU_MATCH_HDRA( (ie.second.path.mBindings.value.binding), {)
+            TU_MATCH_HDRA( (ie.second.path.bindings.value.binding), {)
             default:
                 DEBUG("Import VAL " << ie.first << " = " << hirPath);
                 vi = HIRValueItem::make_Import({mv$(hirPath), false, 0});
@@ -2357,7 +2357,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
                     vi = HIRValueItem::make_Import({mv$(hirPath), true, pb.idx});
                 }
             }
-            _add_mod_val_item(*mCrate->pool, mod, ie.first, getVis(ie.second.vis), mv$(vi));
+            _add_mod_val_item(*crate->pool, mod, ie.first, getVis(ie.second.vis), mv$(vi));
         }
     }
 
@@ -2373,7 +2373,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
 
             DEBUG("Import MACRO " << ie.first << " = " << hirPath);
             auto mi = HIRMacroItem::make_Import({mv$(hirPath)});
-            _add_mod_mac_item(*mCrate->pool, mod, ie.first, getVis(ie.second.vis), mv$(mi));
+            _add_mod_mac_item(*crate->pool, mod, ie.first, getVis(ie.second.vis), mv$(mi));
         } else {
             DEBUG("Defined MACRO " << ie.first << " = " << hirPath);
         }
@@ -2384,10 +2384,10 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
 
 void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
     TRACE_FUNCTION_F(astMod.path());
-    HIRSimplePath modPath(mCrateName, astMod.path().nodes);
+    HIRSimplePath modPath(crateName, astMod.path().nodes);
 
     // Sub-modules
-    for (const auto& item : astMod.mItems) {
+    for (const auto& item : astMod.items) {
         if (const auto* e = item->data.opt_Module()) {
             LowerHIRModuleImpls(*e, hirCrate);
         }
@@ -2398,7 +2398,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         }
     }
 
-    for (const auto& i : astMod.mItems) {
+    for (const auto& i : astMod.items) {
         if (!i->data.is_Impl()) {
             continue;
         }
@@ -2409,13 +2409,13 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         TRACE_FUNCTION_F("IMPL " << impl.def());
 
         if (impl.def().trait().ent.isValid()) {
-            const auto& pb = impl.def().trait().ent.mBindings.type.binding;
+            const auto& pb = impl.def().trait().ent.bindings.type.binding;
             ASSERT_BUG(Span(), pb.is_Trait(), "Binding for trait path in impl isn't a Trait - " << impl.def().trait().ent);
             ASSERT_BUG(Span(), pb.as_Trait().trait_ || pb.as_Trait().hir, "Trait pointer for trait path in impl isn't set");
-            bool isMarker = (pb.as_Trait().trait_ ? pb.as_Trait().trait_->isMarker() : pb.as_Trait().hir->mIsMarker);
+            bool isMarker = (pb.as_Trait().trait_ ? pb.as_Trait().trait_->isMarker() : pb.as_Trait().hir->isMarker);
             auto traitPath = LowerHIRGenericPath(impl.def().trait().sp, impl.def().trait().ent, FromASTPathClass::Type);
-            auto traitName = mv$(traitPath.mPath);
-            auto traitArgs = mv$(traitPath.mParams);
+            auto traitName = mv$(traitPath.path);
+            auto traitArgs = mv$(traitPath.params);
 
             if (!isMarker) {
                 auto type = LowerHIRType(impl.def().type());
@@ -2450,15 +2450,15 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                             auto atyParams = LowerHIRGenericParams(e.params(), nullptr);
                             //ASSERT_BUG(Span(), aty_params.is_empty(), "TODO: GATs");
 
-                            assert(!mImplTraitSource.path);
+                            assert(!implTraitSource.path);
                             HIRItemPath ip1(modPath);
                             ::std::string name2 = ::std::string("#impl_") + ::std::to_string((uintptr_t)&impl) + "_" + item.name.c_str();
                             HIRItemPath ip2(ip1, name2.c_str());
-                            mImplTraitSource = ImplTraitSource(&ip2, &params, &atyParams);
+                            implTraitSource = ImplTraitSource(&ip2, &params, &atyParams);
 
                             types.insert(::std::make_pair(item.name, HIRTraitImpl::ImplEnt<HIRTypeRef>{item.isSpecialisable, LowerHIRType(e.type())}));
 
-                            mImplTraitSource = ImplTraitSource();
+                            implTraitSource = ImplTraitSource();
                         }
                         TU_ARMA(Function, e) {
                             DEBUG("- method " << item.name);
@@ -2486,7 +2486,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                 });
                 hirImpl->isConst = impl.def().isConst();
                 hirCrate.traitImpls[mv$(traitName)].generic.push_back(mv$(hirImpl));
-            } else if (impl.def().type()->mData.is_None()) {
+            } else if (impl.def().type()->data.is_None()) {
                 // Ignore - These are encoded in the 'is_marker' field of the trait
             } else {
                 auto type = LowerHIRType(impl.def().type());
@@ -2535,10 +2535,10 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
                         DEBUG("- type " << item.name);
                         auto atyParams = LowerHIRGenericParams(e.params(), nullptr);
 
-                        assert(!mImplTraitSource.path);
-                        mImplTraitSource = ImplTraitSource(&itemPath, &params, &atyParams);
+                        assert(!implTraitSource.path);
+                        implTraitSource = ImplTraitSource(&itemPath, &params, &atyParams);
                         auto atyType = LowerHIRType(e.type());
-                        mImplTraitSource = ImplTraitSource();
+                        implTraitSource = ImplTraitSource();
 
                         types.insert(::std::make_pair(item.name, HIRTypeImpl::VisImplEnt<HIRTypeAlias>{getVis(item.vis), item.isSpecialisable, HIRTypeAlias{mv$(atyParams), mv$(atyType)}}));
                     }
@@ -2562,7 +2562,7 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
             ));
         }
     }
-    for (const auto& i : astMod.mItems) {
+    for (const auto& i : astMod.items) {
         if (!i->data.is_NegImpl()) {
             continue;
         }
@@ -2571,8 +2571,8 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
         auto params = LowerHIRGenericParams(impl.params(), nullptr);
         auto type = LowerHIRType(impl.type());
         auto trait = LowerHIRGenericPath(impl.trait().sp, impl.trait().ent, FromASTPathClass::Type);
-        auto traitName = mv$(trait.mPath);
-        auto traitArgs = mv$(trait.mParams);
+        auto traitName = mv$(trait.path);
+        auto traitArgs = mv$(trait.params);
 
         // Sorting done later
         hirCrate.markerImpls[mv$(traitName)].generic.push_back(box$(
@@ -2602,7 +2602,7 @@ public:
     void visitParams(HIRGenericParams& params) override {
         for (auto& bound : params.bounds) {
             if (auto* e = bound.opt_TraitBound()) {
-                e->trait.traitPtr = &this->crate.getTraitByPath(nullSpan, e->trait.mPath.mPath);
+                e->trait.traitPtr = &this->crate.getTraitByPath(nullSpan, e->trait.path.path);
             }
         }
     }
@@ -2617,7 +2617,7 @@ HIRCrate* LowerHIRFromAST(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& cra
     return self.lowerCrate(wb, pool, crate);
 }
 HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate& crate) {
-    mWb = &wb;
+    this->wb = &wb;
     auto& rv = *pool->make<HIRCrate>(pool, crate.types);
 
     if (crate.crateType != ASTCrate::Type::Executable) {
@@ -2631,12 +2631,12 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
     rv.noMain = crate.noMain;
     rv.features = crate.features;
 
-    mCrate = &rv;
-    mAstCrate = &crate;
-    mCrateName = rv.crateName;
-    mCoreCrate = crate.extCratenameCore;
-    wb.settings->crateName = mCrateName;
-    wb.settings->coreCrate = mCoreCrate;
+    this->crate = &rv;
+    astCrate = &crate;
+    crateName = rv.crateName;
+    coreCrate = crate.extCratenameCore;
+    wb.settings->crateName = crateName;
+    wb.settings->coreCrate = coreCrate;
     auto macros = std::map<RcString, HIRMacroItem>();
 
     // - Extract exported macros
@@ -2658,7 +2658,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
                         assert(!mac.data->rules.empty());
                         auto pc = mod.path().nodes;
                         pc.push_back(mac.name);
-                        mi = HIRMacroItem::make_Import({HIRSimplePath(mCrateName, std::move(pc))});
+                        mi = HIRMacroItem::make_Import({HIRSimplePath(crateName, std::move(pc))});
                     }
                     ASSERT_BUG(Span(), macros.count(mac.name) == 0, "Duplicate export of: " << mac.name);
                     if (macros.count(mac.name) == 0) {
@@ -2682,7 +2682,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
                 }
             }
 
-            for (auto& i : mod.mItems) {
+            for (auto& i : mod.items) {
                 if (i->data.is_Module()) {
                     mods.push_back(&i->data.as_Module());
                 }
@@ -2692,7 +2692,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
         for (const auto& mac : crate.rootModule_.macroImports) {
             if (mac.isPub || (mac.ref.is_MacroRules() && mac.ref.as_MacroRules()->exported)) {
                 // Add to the re-export list
-                auto path = HIRSimplePath(mac.path.crate == "" ? mCrateName : mac.path.crate, mac.path.nodes);
+                auto path = HIRSimplePath(mac.path.crate == "" ? crateName : mac.path.crate, mac.path.nodes);
                 auto res = macros.insert(std::make_pair(mac.name, HIRMacroItem::make_Import({path})));
                 if (!res.second) {
                     DEBUG("Conflict in imported vs local macros: " << mac.name);
@@ -2738,18 +2738,18 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
 
     auto sp = Span();
     // - Store the lang item paths so conversion code can use them.
-    for (const auto& langItemPath : crate.mLangItems) {
+    for (const auto& langItemPath : crate.langItems) {
         assert(langItemPath.second.crate == "");
-        rv.mLangItems.insert(::std::make_pair(langItemPath.first, HIRSimplePath(mCrateName, langItemPath.second.nodes)));
+        rv.langItems.insert(::std::make_pair(langItemPath.first, HIRSimplePath(crateName, langItemPath.second.nodes)));
         DEBUG("Defined language item '" << langItemPath.first << "' at " << langItemPath.second);
     }
     rv.extCratesOrdered = crate.externCratesOrd;
     for (auto& extCrate : crate.externCrates) {
         // Populate m_lang_items from loaded crates too
-        for (const auto& lang : extCrate.second.hir->mLangItems) {
+        for (const auto& lang : extCrate.second.hir->langItems) {
             const auto& name = lang.first;
             const auto& path = lang.second;
-            auto irv = rv.mLangItems.insert(::std::make_pair(name, path));
+            auto irv = rv.langItems.insert(::std::make_pair(name, path));
             DEBUG("Load language item '" << lang.first << "' at " << lang.second << " from " << extCrate.first);
             if (irv.second == true) {
                 // Doesn't yet exist, all good
@@ -2771,12 +2771,12 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
     pathPointeeSized = rv.getLangItemPathOpt("pointee_sized");
     pathMetadataSized = rv.getLangItemPathOpt("metadata_sized");
 
-    rv.mRootModule = LowerHIRModule(crate.rootModule_, HIRItemPath(rv.crateName));
+    rv.rootModule = LowerHIRModule(crate.rootModule_, HIRItemPath(rv.crateName));
     for (auto& e : macros) {
         if (e.second.is_MacroRules()) {
             ASSERT_BUG(Span(), !e.second.as_MacroRules()->rules.empty(), "Empty macro? - " << e.first);
         }
-        rv.mRootModule.macroItems.insert(::std::make_pair(e.first, rv.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{HIRPublicity::newGlobal(), mv$(e.second)})));
+        rv.rootModule.macroItems.insert(::std::make_pair(e.first, rv.pool->make<HIRVisEnt<HIRMacroItem>>(HIRVisEnt<HIRMacroItem>{HIRPublicity::newGlobal(), mv$(e.second)})));
     }
 
     LowerHIRModuleImpls(crate.rootModule_, rv);
@@ -2787,10 +2787,10 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
     // - Convert interpolated AST items to token sequences
     {
         struct H {
-            AST2HIR& mCtx;
-            explicit H(AST2HIR& ctx) : mCtx(ctx) {}
+            AST2HIR& ctx;
+            explicit H(AST2HIR& ctx) : ctx(ctx) {}
             void fixMacroContents(std::vector<MacroExpansionEnt>& ruleContents) {
-                MacroRulesNormaliseFragments(*mCtx.mWb, ruleContents);
+                MacroRulesNormaliseFragments(*ctx.wb, ruleContents);
             }
 
             void fixMacrosInMod(HIRItemPath path, HIRModule& mod) {
@@ -2804,7 +2804,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
                     if (auto* mrpp = mi.second->ent.opt_MacroRules()) {
                         auto& mr = **mrpp;
                         if (mr.sourceCrate.size() == 0) {
-                            mr.sourceCrate = mCtx.mCrateName;
+                            mr.sourceCrate = ctx.crateName;
                         }
                         for (auto& rule : mr.rules) {
                             fixMacroContents(rule.contents);
@@ -2813,7 +2813,7 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
                     if (const auto* i = mi.second->ent.opt_Import()) {
                         DEBUG(path << ": Import " << mi.first << " = " << i->path);
                         if (i->path.crateName() == CRATE_BUILTINS) {
-                        } else if (const auto* i2 = mCtx.mCrate->getMacroitemByPath(Span(), i->path).opt_Import()) {
+                        } else if (const auto* i2 = ctx.crate->getMacroitemByPath(Span(), i->path).opt_Import()) {
                             BUG(Span(), "Attempted recusive import - " << i->path << " points at " << i2->path);
                         }
                     }
@@ -2821,23 +2821,23 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
             }
         };
 
-        H(*this).fixMacrosInMod(HIRItemPath(""), rv.mRootModule);
+        H(*this).fixMacrosInMod(HIRItemPath(""), rv.rootModule);
     }
 
-    if (mCoreCrate == "") {
-        mCoreCrate = mCrateName;
-        wb.settings->coreCrate = mCoreCrate;
+    if (coreCrate == "") {
+        coreCrate = crateName;
+        wb.settings->coreCrate = coreCrate;
     }
 
-    mCrate = nullptr;
+    this->crate = nullptr;
     return &rv;
 }
 
 struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
-    AST2HIR& mCtx;
-    explicit LowerHIRExprNodeVisitor(AST2HIR& ctx) : mCtx(ctx) {}
+    AST2HIR& ctx;
+    explicit LowerHIRExprNodeVisitor(AST2HIR& ctx) : ctx(ctx) {}
 
-    HIRExprNodeP mRv;
+    HIRExprNodeP rv;
 
     struct LoopLabel {
         Ident source;
@@ -2857,7 +2857,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
 
     // Used to track if a closure is a generator or a normal closure
     // - They have different HIR node types
-    bool mHasYield = false;
+    bool hasYield = false;
 
     RcString enterLoopLabel(const Ident& source) {
         if (source.name == "") {
@@ -2886,7 +2886,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         for (auto it = loopLabels.rbegin(); it != loopLabels.rend(); ++it) {
             while (definitionDepth > it->macroDefinitionDepth) {
                 const auto& definition = macroDefinitions[--definitionDepth];
-                targetHygiene.leaveMacroDefinition(*mCtx.mCrate->pool, definition.definitionId, definition.tokenHygiene, definition.definitionHygiene);
+                targetHygiene.leaveMacroDefinition(*ctx.crate->pool, definition.definitionId, definition.tokenHygiene, definition.definitionHygiene);
             }
             if (it->source.name == target.name && it->source.hygiene.isVisible(targetHygiene)) {
                 return it->lowered;
@@ -2898,9 +2898,9 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
     HIRExprNodeP lower(ASTExprNodeP& ep) {
         assert(ep);
         ep->visit(*this);
-        ASSERT_BUG(ep->span(), mRv, ep.typeName() << " - Yielded a nullptr HIR node");
-        mRv->resType = mCtx.mCrate->types.infer();
-        return std::move(mRv);
+        ASSERT_BUG(ep->span(), rv, ep.typeName() << " - Yielded a nullptr HIR node");
+        rv->resType = ctx.crate->types.infer();
+        return std::move(rv);
     }
 
     HIRExprNodeP lowerOpt(ASTExprNodeP& ep) {
@@ -2923,7 +2923,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
     virtual void visit(ASTExprNodeBlock& v) override {
         const size_t macroDefinitionBase = macroDefinitions.size();
         auto label = enterLoopLabel(v.label);
-        auto rv = mCtx.mCrate->pool->make<HIRExprNodeBlock>(v.span());
+        auto rv = ctx.crate->pool->make<HIRExprNodeBlock>(v.span());
         bool lastHasSemicolon = true;
         for (auto& n : v.nodes) {
             ASSERT_BUG(v.span(), n.node, "NULL node encountered in block");
@@ -2944,14 +2944,14 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
 
         if (v.localMod) {
             // TODO: Populate m_traits from the local module's import list
-            rv->localMod = HIRSimplePath(mCtx.mCrateName, v.localMod->path().nodes);
+            rv->localMod = HIRSimplePath(ctx.crateName, v.localMod->path().nodes);
         }
 
         switch (v.blockType) {
             case ASTExprNodeBlock::Type::Bare:
                 break;
             case ASTExprNodeBlock::Type::Unsafe:
-                rv->mIsUnsafe = true;
+                rv->isUnsafe = true;
                 break;
             case ASTExprNodeBlock::Type::Const:
                 break;
@@ -2959,15 +2959,15 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
 
         if (label != "") {
             if (rv->valueNode) {
-                auto* breakNode = mCtx.mCrate->pool->make<HIRExprNodeLoopControl>(v.span(), label, /*cont=*/false, ::std::move(rv->valueNode));
+                auto* breakNode = ctx.crate->pool->make<HIRExprNodeLoopControl>(v.span(), label, /*cont=*/false, ::std::move(rv->valueNode));
                 rv->nodes.push_back(HIRExprNodeP(breakNode));
                 rv->valueNode.reset();
             }
-            auto* loop = mCtx.mCrate->pool->make<HIRExprNodeLoop>(v.span(), label, HIRExprNodeP(rv));
+            auto* loop = ctx.crate->pool->make<HIRExprNodeLoop>(v.span(), label, HIRExprNodeP(rv));
             loop->requireLabel = true;
-            mRv.reset(loop);
+            this->rv.reset(loop);
         } else {
-            mRv.reset(static_cast<HIRExprNode*>(rv));
+            this->rv.reset(static_cast<HIRExprNode*>(rv));
         }
 
         switch (v.blockType) {
@@ -2976,24 +2976,24 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             case ASTExprNodeBlock::Type::Unsafe:
                 break;
             case ASTExprNodeBlock::Type::Const:
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeConstBlock>(v.span(), std::move(mRv)));
+                this->rv.reset(ctx.crate->pool->make<HIRExprNodeConstBlock>(v.span(), std::move(this->rv)));
                 break;
         }
     }
 
     virtual void visit(ASTExprNodeAsyncBlock& v) override {
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeAsyncBlock>(v.span(), mCtx.mCrate->types.infer(), lowerIsolated(v.inner), v.isMove));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeAsyncBlock>(v.span(), ctx.crate->types.infer(), lowerIsolated(v.inner), v.isMove));
     }
 
     virtual void visit(ASTExprNodeGeneratorBlock& v) override {
-        auto origHasYield = mHasYield;
-        mHasYield = false;
+        auto origHasYield = hasYield;
+        hasYield = false;
         auto inner = lowerIsolated(v.inner);
-        mHasYield = origHasYield;
+        hasYield = origHasYield;
 
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), mCtx.mCrate->types.infer(), HIRPattern(), false, mCtx.mCrate->types.infer(), mv$(inner), v.isMove, false, v.isCoroutineClosureBody));
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallPath>(v.span(), HIRSimplePath(mCtx.mCoreCrate, {"iter", "sources", "from_coroutine", "from_coroutine"}), makeVec1(mv$(mRv))));
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallMethod>(v.span(), mv$(mRv), RcString::newInterned("fuse"), HIRPathParams(), ::std::vector<HIRExprNodeP>()));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeGenerator>(v.span(), ctx.LowerHIRType(v.returnType), ctx.crate->types.infer(), HIRPattern(), false, ctx.crate->types.infer(), mv$(inner), v.isMove, false, v.isCoroutineClosureBody));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeCallPath>(v.span(), HIRSimplePath(ctx.coreCrate, {"iter", "sources", "from_coroutine", "from_coroutine"}), makeVec1(mv$(rv))));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeCallMethod>(v.span(), mv$(rv), RcString::newInterned("fuse"), HIRPathParams(), ::std::vector<HIRExprNodeP>()));
     }
 
     virtual void visit(ASTExprNodeTry& v) override {
@@ -3018,19 +3018,19 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             inputs.push_back(HIRExprNodeAsm::ValRef{vr.name, lower(vr.value)});
         }
 
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeAsm>(v.span(), v.text, mv$(outputs), mv$(inputs), v.clobbers, v.flags));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeAsm>(v.span(), v.text, mv$(outputs), mv$(inputs), v.clobbers, v.flags));
     }
 
     virtual void visit(ASTExprNodeAsm2& v) override {
         std::vector<HIRExprNodeAsm2::Param> params;
-        for (auto& p : v.mParams) {
+        for (auto& p : v.params) {
             TU_MATCH_HDRA((p), {)
             TU_ARMA(Const, e) {
                     ASSERT_BUG(v.span(), e, "Missing node for ASM Const");
                     params.push_back(lower(e));
                 }
                 TU_ARMA(Sym, e) {
-                    params.push_back(mCtx.LowerHIRPath(v.span(), e, FromASTPathClass::Value));
+                    params.push_back(ctx.LowerHIRPath(v.span(), e, FromASTPathClass::Value));
                 }
                 TU_ARMA(Label, e) {
                     params.push_back(HIRExprNodeAsm2::Param::make_Label({lower(e.code)}));
@@ -3049,37 +3049,37 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 }
             }
         }
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeAsm2>(v.span(), v.options, v.lines, mv$(params)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeAsm2>(v.span(), v.options, v.lines, mv$(params)));
     }
 
     virtual void visit(ASTExprNodeFlow& v) override {
-        switch (v.mType) {
+        switch (v.type) {
             case ASTExprNodeFlow::RETURN:
-                if (v.mValue) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeReturn>(v.span(), lower(v.mValue)));
+                if (v.value) {
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeReturn>(v.span(), lower(v.value)));
                 } else {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeReturn>(v.span(), HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>{}))));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeReturn>(v.span(), HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>{}))));
                 }
                 break;
             case ASTExprNodeFlow::TAILCALL:
-                if (!v.mValue) {
+                if (!v.value) {
                     ERROR(v.span(), E0000, "`become` requires a call expression");
                 }
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeReturn>(v.span(), lower(v.mValue), true));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeReturn>(v.span(), lower(v.value), true));
                 break;
             case ASTExprNodeFlow::YIELD:
-                mHasYield = true;
+                hasYield = true;
                 {
-                    auto value = v.mValue ? lower(v.mValue) : HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>{}));
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeYield>(v.span(), std::move(value)));
+                    auto value = v.value ? lower(v.value) : HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>{}));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeYield>(v.span(), std::move(value)));
                 }
                 break;
             case ASTExprNodeFlow::CONTINUE:
             case ASTExprNodeFlow::BREAK: {
-                auto val = v.mValue ? lower(v.mValue) : HIRExprNodeP();
-                ASSERT_BUG(v.span(), !(v.mType == ASTExprNodeFlow::CONTINUE && val), "Continue with a value isn't allowed");
+                auto val = v.value ? lower(v.value) : HIRExprNodeP();
+                ASSERT_BUG(v.span(), !(v.type == ASTExprNodeFlow::CONTINUE && val), "Continue with a value isn't allowed");
                 auto target = resolveLoopLabel(v.span(), v.target);
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLoopControl>(v.span(), mv$(target), (v.mType == ASTExprNodeFlow::CONTINUE), mv$(val)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeLoopControl>(v.span(), mv$(target), (v.type == ASTExprNodeFlow::CONTINUE), mv$(val)));
             } break;
             case ASTExprNodeFlow::YEET:
                 BUG(v.span(), "do yeet should have been desugared");
@@ -3091,9 +3091,9 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         if (v.elseNode) {
             // Cannot be expanded in expand, as it needs `None` to have been resolved to the enum variant
             // So, it's expanded here - with the cooperation of `Resolve_Absolute` allocating some variable bindings for us
-            auto pat = mCtx.LowerHIRPattern(v.pat);
-            auto type = mCtx.LowerHIRType(v.mType);
-            auto nodeValue = lower(v.mValue);
+            auto pat = ctx.LowerHIRPattern(v.pat);
+            auto type = ctx.LowerHIRType(v.type);
+            auto nodeValue = lower(v.value);
             auto nodeElse = lower(v.elseNode);
 
             auto base = v.letelseSlots.first;
@@ -3115,11 +3115,11 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
 
                 void visitPattern(HIRPattern& pat) override {
                     HIRVisitor::visitPattern(pat);
-                    for (size_t i = 0; i < pat.mBindings.size(); i++) {
-                        this->handleBinding(pat.mBindings[i]);
+                    for (size_t i = 0; i < pat.bindings.size(); i++) {
+                        this->handleBinding(pat.bindings[i]);
                     }
                     // SplitSlice also defines bindings
-                    if (auto* e = pat.mData.opt_SplitSlice()) {
+                    if (auto* e = pat.data.opt_SplitSlice()) {
                         if (e->extraBind.isValid()) {
                             this->handleBinding(e->extraBind);
                         }
@@ -3136,13 +3136,13 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                         unsigned newIdx = base + bindings.size();
 
                         bindings.push_back(HIRPatternBinding(pb));
-                        bindings.back().mType = HIRPatternBinding::Type::Move;
+                        bindings.back().type = HIRPatternBinding::Type::Move;
                         it = mapping.insert(std::make_pair(pb.slot, newIdx)).first;
                     }
                     pb.isMutable = false;
                     pb.slot = it->second;
                 }
-            } visitor(mCtx.mCrate->types, base, count);
+            } visitor(ctx.crate->types, base, count);
 
             visitor.visitPattern(pat);
             /*
@@ -3160,29 +3160,29 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             for (const auto slot : bindingSlots) {
                 ASSERT_BUG(v.span(), base <= slot && slot - base < visitor.bindings.size(), "Invalid temporary let-else binding " << slot);
                 auto& binding = visitor.bindings[slot - base];
-                tupleVals.push_back(HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeVariable>(v.span(), binding.mName, slot)));
+                tupleVals.push_back(HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeVariable>(v.span(), binding.name, slot)));
                 newPats.push_back(HIRPattern(std::move(binding), HIRPattern::Data{}));
             }
 
             std::vector<HIRExprNodeMatch::Arm> matchArms(2);
             // `$pat => (a,b,c,...),`
             matchArms[0].patterns.push_back(std::move(pat));
-            matchArms[0].mCode.reset(mCtx.mCrate->pool->make<HIRExprNodeTuple>(v.span(), std::move(tupleVals)));
+            matchArms[0].code.reset(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), std::move(tupleVals)));
             matchArms[1].patterns.push_back(HIRPattern());
             // `_ => loop { let _: ! = $else; },
-            matchArms[1].mCode.reset(mCtx.mCrate->pool->make<HIRExprNodeLet>(v.span(), HIRPattern(), mCtx.mCrate->types.diverge(), std::move(nodeElse)));
-            matchArms[1].mCode.reset(mCtx.mCrate->pool->make<HIRExprNodeLoop>(v.span(), "", std::move(matchArms[1].mCode), /*require_label*/ true));
+            matchArms[1].code.reset(ctx.crate->pool->make<HIRExprNodeLet>(v.span(), HIRPattern(), ctx.crate->types.diverge(), std::move(nodeElse)));
+            matchArms[1].code.reset(ctx.crate->pool->make<HIRExprNodeLoop>(v.span(), "", std::move(matchArms[1].code), /*require_label*/ true));
             // HACK: Just use the code as-is.
             // `match $value: $ty {`
             auto matchValue = type->is_Infer() // Only emit the `: $ty` part if the type was specified (not a `_`)
                                   ? std::move(nodeValue)
-                                  : HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeUnsize>(v.span(), std::move(nodeValue), std::move(type)));
-            auto match = HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeMatch>(v.span(), std::move(matchValue), std::move(matchArms), true));
+                                  : HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeUnsize>(v.span(), std::move(nodeValue), std::move(type)));
+            auto match = HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeMatch>(v.span(), std::move(matchValue), std::move(matchArms), true));
 
             // `let (a,b,c,...) = ...`
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLet>(v.span(), HIRPattern(::std::vector<HIRPatternBinding>(), HIRPattern::Data::make_Tuple({std::move(newPats)})), mCtx.mCrate->types.infer(), std::move(match)));
+            rv.reset(ctx.crate->pool->make<HIRExprNodeLet>(v.span(), HIRPattern(::std::vector<HIRPatternBinding>(), HIRPattern::Data::make_Tuple({std::move(newPats)})), ctx.crate->types.infer(), std::move(match)));
         } else {
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLet>(v.span(), mCtx.LowerHIRPattern(v.pat), mCtx.LowerHIRType(v.mType), lowerOpt(v.mValue), v.isSuper));
+            rv.reset(ctx.crate->pool->make<HIRExprNodeLet>(v.span(), ctx.LowerHIRPattern(v.pat), ctx.LowerHIRType(v.type), lowerOpt(v.value), v.isSuper));
         }
     }
 
@@ -3220,12 +3220,12 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             }
         };
 
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeAssign>(v.span(), H::getOp(v.op), lower(v.slot), lower(v.mValue)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeAssign>(v.span(), H::getOp(v.op), lower(v.slot), lower(v.value)));
     }
 
     virtual void visit(ASTExprNodeBinOp& v) override {
         HIRExprNodeBinOp::Op op;
-        switch (v.mType) {
+        switch (v.type) {
             case ASTExprNodeBinOp::RANGE: {
                 BUG(v.span(), "Unexpected RANGE binop");
                 break;
@@ -3235,7 +3235,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 break;
             }
             case ASTExprNodeBinOp::PLACE_IN:
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeEmplace>(v.span(), HIRExprNodeEmplace::Type::Placer, lower(v.left), lower(v.right)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeEmplace>(v.span(), HIRExprNodeEmplace::Type::Placer, lower(v.left), lower(v.right)));
                 break;
 
             case ASTExprNodeBinOp::CMPEQU:
@@ -3309,39 +3309,39 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                         op = HIRExprNodeBinOp::Op::Shl;
                 }
 
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeBinOp>(v.span(), op, lower(v.left), lower(v.right)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeBinOp>(v.span(), op, lower(v.left), lower(v.right)));
                 break;
         }
     }
 
     virtual void visit(ASTExprNodeUniOp& v) override {
         HIRExprNodeUniOp::Op op;
-        switch (v.mType) {
+        switch (v.type) {
             case ASTExprNodeUniOp::BOX: {
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeEmplace>(v.span(), HIRExprNodeEmplace::Type::Boxer, HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>{})), lower(v.mValue)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeEmplace>(v.span(), HIRExprNodeEmplace::Type::Boxer, HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>{})), lower(v.value)));
             } break;
             case ASTExprNodeUniOp::QMARK:
                 BUG(v.span(), "Encounterd question mark operator (should have been expanded in AST)");
                 break;
 
             case ASTExprNodeUniOp::REF:
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeBorrow>(v.span(), HIRBorrowType::Shared, lower(v.mValue)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeBorrow>(v.span(), HIRBorrowType::Shared, lower(v.value)));
                 break;
             case ASTExprNodeUniOp::RawBorrow:
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeRawBorrow>(v.span(), HIRBorrowType::Shared, lower(v.mValue)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeRawBorrow>(v.span(), HIRBorrowType::Shared, lower(v.value)));
                 break;
             case ASTExprNodeUniOp::REFMUT:
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeBorrow>(v.span(), HIRBorrowType::Unique, lower(v.mValue)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeBorrow>(v.span(), HIRBorrowType::Unique, lower(v.value)));
                 break;
             case ASTExprNodeUniOp::RawBorrowMut:
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeRawBorrow>(v.span(), HIRBorrowType::Unique, lower(v.mValue)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeRawBorrow>(v.span(), HIRBorrowType::Unique, lower(v.value)));
                 break;
 
             case ASTExprNodeUniOp::AWait:
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeAWait>(v.span(), lower(v.mValue)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeAWait>(v.span(), lower(v.value)));
                 break;
             case ASTExprNodeUniOp::USE:
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeUse>(v.span(), lower(v.mValue)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeUse>(v.span(), lower(v.value)));
                 break;
 
             case ASTExprNodeUniOp::INVERT:
@@ -3350,40 +3350,40 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                     case ASTExprNodeUniOp::NEGATE:
                         op = HIRExprNodeUniOp::Op::Negate;
                 }
-                mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeUniOp>(v.span(), op, lower(v.mValue)));
+                rv.reset(ctx.crate->pool->make<HIRExprNodeUniOp>(v.span(), op, lower(v.value)));
                 break;
         }
     }
 
     virtual void visit(ASTExprNodeCast& v) override {
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCast>(v.span(), lower(v.mValue), mCtx.LowerHIRType(v.mType)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeCast>(v.span(), lower(v.value), ctx.LowerHIRType(v.type)));
     }
 
     virtual void visit(ASTExprNodeTypeAnnotation& v) override {
         // TODO: Create a proper node for this
         // - Using `Unsize` works pretty well, but isn't quite "correct"
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeUnsize>(v.span(), lower(v.mValue), mCtx.LowerHIRType(v.mType)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeUnsize>(v.span(), lower(v.value), ctx.LowerHIRType(v.type)));
     }
 
     virtual void visit(ASTExprNodeCallPath& v) override {
         ::std::vector<HIRExprNodeP> args;
-        for (auto& arg : v.mArgs) {
+        for (auto& arg : v.args) {
             args.push_back(lower(arg));
         }
 
-        if (const auto* e = v.mPath.cls.opt_Local()) {
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallValue>(v.span(), HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeVariable>(v.span(), e->name, v.mPath.mBindings.value.binding.as_Variable().slot)), mv$(args)));
+        if (const auto* e = v.path.cls.opt_Local()) {
+            rv.reset(ctx.crate->pool->make<HIRExprNodeCallValue>(v.span(), HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeVariable>(v.span(), e->name, v.path.bindings.value.binding.as_Variable().slot)), mv$(args)));
         } else {
-            TU_MATCH_HDRA( (v.mPath.mBindings.value.binding), {)
+            TU_MATCH_HDRA( (v.path.bindings.value.binding), {)
             default:
-                mRv.reset( mCtx.mCrate->pool->make<HIRExprNodeCallPath>( v.span(),
-                    mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value),
+                rv.reset( ctx.crate->pool->make<HIRExprNodeCallPath>( v.span(),
+                    ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value),
                     mv$( args )
                     ) );
                 TU_ARMA(Static, e) {
                     bool isConst = e.static_ ? e.static_->sClass() == ASTStatic::Class::CONST : (e.hir ? false : true) // If HIR Pointer is null, this is a HIR::Const
                         ;
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallValue>(v.span(), HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodePathValue>(v.span(), mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), isConst ? HIRExprNodePathValue::CONSTANT : HIRExprNodePathValue::STATIC)), mv$(args)));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeCallValue>(v.span(), HIRExprNodeP(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), isConst ? HIRExprNodePathValue::CONSTANT : HIRExprNodePathValue::STATIC)), mv$(args)));
                 }
                 //    TODO(v.span(), "CallPath -> TupleVariant TypeAlias");
                 //    }
@@ -3391,29 +3391,29 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                     ASSERT_BUG(v.span(), e.enum_ || e.hir, "Call path bound to an enum variant without its enum");
                     bool isUnit = false;
                     if (e.enum_) {
-                        isUnit = e.enum_->variants().at(e.idx).mData.is_Unit();
-                    } else if (e.hir->mData.is_Value()) {
+                        isUnit = e.enum_->variants().at(e.idx).data.is_Unit();
+                    } else if (e.hir->data.is_Value()) {
                         isUnit = true;
                     } else {
-                        isUnit = e.hir->mData.as_Data().at(e.idx).type == mCtx.mCrate->types.unit();
+                        isUnit = e.hir->data.as_Data().at(e.idx).type == ctx.crate->types.unit();
                     }
-                    auto path = mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Value);
+                    auto path = ctx.LowerHIRGenericPath(v.span(), v.path, FromASTPathClass::Value);
                     if (isUnit) {
-                        auto value = HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeUnitVariant>(v.span(), mv$(path), false));
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallValue>(v.span(), mv$(value), mv$(args)));
+                        auto value = HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeUnitVariant>(v.span(), mv$(path), false));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodeCallValue>(v.span(), mv$(value), mv$(args)));
                     } else {
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeTupleVariant>(v.span(), mv$(path), false, mv$(args)));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodeTupleVariant>(v.span(), mv$(path), false, mv$(args)));
                     }
                 }
                 TU_ARMA(Struct, e) {
                     ASSERT_BUG(v.span(), e.struct_ || e.hir, "Call path bound to a struct without its definition");
-                    const bool isUnit = e.struct_ ? e.struct_->mData.is_Unit() : e.hir->mData.is_Unit();
-                    auto path = mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Value);
+                    const bool isUnit = e.struct_ ? e.struct_->data.is_Unit() : e.hir->data.is_Unit();
+                    auto path = ctx.LowerHIRGenericPath(v.span(), v.path, FromASTPathClass::Value);
                     if (isUnit) {
-                        auto value = HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeUnitVariant>(v.span(), mv$(path), true));
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallValue>(v.span(), mv$(value), mv$(args)));
+                        auto value = HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeUnitVariant>(v.span(), mv$(path), true));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodeCallValue>(v.span(), mv$(value), mv$(args)));
                     } else {
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeTupleVariant>(v.span(), mv$(path), true, mv$(args)));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodeTupleVariant>(v.span(), mv$(path), true, mv$(args)));
                     }
                 }
             }
@@ -3422,27 +3422,27 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
 
     virtual void visit(ASTExprNodeCallMethod& v) override {
         ::std::vector<HIRExprNodeP> args;
-        for (auto& arg : v.mArgs) {
+        for (auto& arg : v.args) {
             args.push_back(lower(arg));
         }
 
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallMethod>(v.span(), lower(v.val), v.method.name(), mCtx.LowerHIRPathParams(v.span(), v.method.args(), /*allow_assoc=*/false), mv$(args)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeCallMethod>(v.span(), lower(v.val), v.method.name(), ctx.LowerHIRPathParams(v.span(), v.method.args(), /*allow_assoc=*/false), mv$(args)));
     }
 
     virtual void visit(ASTExprNodeCallObject& v) override {
         ::std::vector<HIRExprNodeP> args;
-        for (auto& arg : v.mArgs) {
+        for (auto& arg : v.args) {
             args.push_back(lower(arg));
         }
 
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeCallValue>(v.span(), lower(v.val), mv$(args)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeCallValue>(v.span(), lower(v.val), mv$(args)));
     }
 
     virtual void visit(ASTExprNodeLoop& v) override {
         auto label = enterLoopLabel(v.label);
-        auto code = lower(v.mCode);
+        auto code = lower(v.code);
         leaveLoopLabel(label);
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLoop>(v.span(), mv$(label), mv$(code)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeLoop>(v.span(), mv$(label), mv$(code)));
     }
 
     void visit(ASTExprNodeFor& v) override {
@@ -3454,7 +3454,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         ::std::vector<HIRExprNodeMatch::Guard> rv;
         rv.reserve(guards.size());
         for (auto& c : guards) {
-            auto condPat = c.optPat ? mCtx.LowerHIRPattern(*c.optPat) : HIRPattern{HIRPatternBinding(), HIRPattern::Data::make_Value({HIRPattern::Value::make_Integer({HIRCoreType::Bool, U128(1)})})};
+            auto condPat = c.optPat ? ctx.LowerHIRPattern(*c.optPat) : HIRPattern{HIRPatternBinding(), HIRPattern::Data::make_Value({HIRPattern::Value::make_Integer({HIRCoreType::Bool, U128(1)})})};
             auto condVal = lowerOpt(c.value);
             rv.push_back(HIRExprNodeMatch::Guard{std::move(condPat), std::move(condVal), c.optPat ? false : true});
         }
@@ -3465,26 +3465,26 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         // Desugar to `loop { match () { _ if ... => { body }, _ => break, } }`
         auto label = enterLoopLabel(v.label);
         ::std::vector<HIRExprNodeMatch::Arm> arms;
-        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), ifletToGuards(v.conditions), lower(v.mCode)});
-        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), {}, HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeLoopControl>(v.span(), "", false, nullptr))});
+        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), ifletToGuards(v.conditions), lower(v.code)});
+        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), {}, HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeLoopControl>(v.span(), "", false, nullptr))});
         leaveLoopLabel(label);
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLoop>(v.span(), mv$(label), HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeMatch>(v.span(), HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>())), std::move(arms)))));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeLoop>(v.span(), mv$(label), HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeMatch>(v.span(), HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>())), std::move(arms)))));
     }
 
     virtual void visit(ASTExprNodeMatch& v) override {
         ::std::vector<HIRExprNodeMatch::Arm> arms;
 
         for (auto& arm : v.arms) {
-            HIRExprNodeMatch::Arm newArm{{}, ifletToGuards(arm.guard), lower(arm.mCode)};
+            HIRExprNodeMatch::Arm newArm{{}, ifletToGuards(arm.guard), lower(arm.code)};
 
             for (const auto& pat : arm.patterns) {
-                newArm.patterns.push_back(mCtx.LowerHIRPattern(pat));
+                newArm.patterns.push_back(ctx.LowerHIRPattern(pat));
             }
 
             arms.push_back(mv$(newArm));
         }
 
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeMatch>(v.span(), lower(v.val), mv$(arms)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeMatch>(v.span(), lower(v.val), mv$(arms)));
     }
 
     virtual void visit(ASTExprNodeIf& v) override {
@@ -3493,9 +3493,9 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         for (auto& arm : v.arms) {
             arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), ifletToGuards(arm.conditions), lower(arm.body)});
         }
-        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), {}, v.elseNode ? lower(v.elseNode) : HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>()))});
+        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), {}, v.elseNode ? lower(v.elseNode) : HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>()))});
 
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeMatch>(v.span(), HIRExprNodeP(mCtx.mCrate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>())), std::move(arms)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeMatch>(v.span(), HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>())), std::move(arms)));
     }
 
     virtual void visit(ASTExprNodeWildcardPattern& v) override {
@@ -3563,11 +3563,11 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 default:
                     BUG(v.span(), "Unexpected floating point type");
             }
-            const auto text = FMT(v.mValue);
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Float({type, parseFloatValue(text.c_str())})));
+            const auto text = FMT(v.value);
+            rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Float({type, parseFloatValue(text.c_str())})));
             return;
         }
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Integer({H::getType(v.span(), v.datatype), v.mValue})));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Integer({H::getType(v.span(), v.datatype), v.value})));
     }
 
     virtual void visit(ASTExprNodeFloat& v) override {
@@ -3591,60 +3591,60 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             default:
                 BUG(v.span(), "Unknown type for float literal - " << coretypeName(v.datatype));
         }
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Float({ct, v.mValue})));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Float({ct, v.value})));
     }
 
     virtual void visit(ASTExprNodeBool& v) override {
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Boolean(v.mValue)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Boolean(v.value)));
     }
 
     virtual void visit(ASTExprNodeString& v) override {
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_String(v.mValue)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_String(v.value)));
     }
 
     virtual void visit(ASTExprNodeByteString& v) override {
-        ::std::vector<char> dat{v.mValue.begin(), v.mValue.end()};
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_ByteString(mv$(dat))));
+        ::std::vector<char> dat{v.value.begin(), v.value.end()};
+        rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_ByteString(mv$(dat))));
     }
 
     virtual void visit(ASTExprNodeCString& v) override {
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_CString({v.mValue})));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_CString({v.value})));
     }
 
     virtual void visit(ASTExprNodeClosure& v) override {
         HIRExprNodeClosure::argsT args;
-        for (const auto& arg : v.mArgs) {
-            args.push_back(::std::make_pair(mCtx.LowerHIRPattern(arg.first), mCtx.LowerHIRType(arg.second)));
+        for (const auto& arg : v.args) {
+            args.push_back(::std::make_pair(ctx.LowerHIRPattern(arg.first), ctx.LowerHIRType(arg.second)));
         }
 
-        auto origHasYield = mHasYield;
-        mHasYield = false;
-        auto inner = lowerIsolated(v.mCode);
-        auto hasYield = mHasYield;
-        mHasYield = origHasYield;
+        auto origHasYield = this->hasYield;
+        this->hasYield = false;
+        auto inner = lowerIsolated(v.code);
+        auto hasYield = this->hasYield;
+        this->hasYield = origHasYield;
 
         if (hasYield) {
             if (args.size() > 1) {
                 ERROR(v.span(), E0000, "Coroutine closures take at most one resume argument.");
             }
             const bool hasResumePattern = !args.empty();
-            auto resumeTy = hasResumePattern ? args.front().second : mCtx.mCrate->types.unit();
+            auto resumeTy = hasResumePattern ? args.front().second : ctx.crate->types.unit();
             auto resumePattern = hasResumePattern ? ::std::move(args.front().first) : HIRPattern();
-            auto* generator = mCtx.mCrate->pool->make<HIRExprNodeGenerator>(v.span(), mCtx.LowerHIRType(v.returnType), resumeTy, ::std::move(resumePattern), hasResumePattern, mCtx.mCrate->types.infer(), mv$(inner), v.isMove, v.isPinned, false);
+            auto* generator = ctx.crate->pool->make<HIRExprNodeGenerator>(v.span(), ctx.LowerHIRType(v.returnType), resumeTy, ::std::move(resumePattern), hasResumePattern, ctx.crate->types.infer(), mv$(inner), v.isMove, v.isPinned, false);
             generator->trackCaller = v.trackCaller;
-            mRv.reset(generator);
+            rv.reset(generator);
         } else {
             if (v.isPinned) {
                 ERROR(v.span(), E0000, "Invalid use of `static` on non-yielding closure");
             }
-            auto* closure = mCtx.mCrate->pool->make<HIRExprNodeClosure>(v.span(), std::move(args), mCtx.LowerHIRType(v.returnType), std::move(inner), v.isMove, v.isUse);
+            auto* closure = ctx.crate->pool->make<HIRExprNodeClosure>(v.span(), std::move(args), ctx.LowerHIRType(v.returnType), std::move(inner), v.isMove, v.isUse);
             closure->trackCaller = v.trackCaller;
-            mRv.reset(closure);
+            rv.reset(closure);
         }
     }
 
     virtual void visit(ASTExprNodeStructLiteral& v) override {
-        if (v.mPath.mBindings.type.binding.is_Union()) {
+        if (v.path.bindings.type.binding.is_Union()) {
             if (v.values.size() != 1) {
                 ERROR(v.span(), E0000, "Union constructors can only specify a single field");
             }
@@ -3665,66 +3665,66 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                 Tuple,
             };
 
-            if (const auto* binding = v.mPath.mBindings.type.binding.opt_EnumVar()) {
+            if (const auto* binding = v.path.bindings.type.binding.opt_EnumVar()) {
                 EmptyKind kind = EmptyKind::None;
                 if (binding->enum_) {
-                    const auto& data = binding->enum_->variants().at(binding->idx).mData;
-                    kind = data.is_Unit() ? EmptyKind::Unit : data.is_Tuple() && data.as_Tuple().mItems.empty() ? EmptyKind::Tuple : EmptyKind::None;
+                    const auto& data = binding->enum_->variants().at(binding->idx).data;
+                    kind = data.is_Unit() ? EmptyKind::Unit : data.is_Tuple() && data.as_Tuple().items.empty() ? EmptyKind::Tuple : EmptyKind::None;
                 } else if (binding->hir) {
                     const auto& enm = *binding->hir;
-                    if (enm.mData.is_Value()) {
+                    if (enm.data.is_Value()) {
                         kind = EmptyKind::Unit;
                     } else {
-                        const auto& var = enm.mData.as_Data().at(binding->idx);
-                        if (var.type == mCtx.mCrate->types.unit()) {
+                        const auto& var = enm.data.as_Data().at(binding->idx);
+                        if (var.type == ctx.crate->types.unit()) {
                             kind = EmptyKind::Unit;
                         } else {
                             const auto& str = *var.type->as_Path().binding.as_Struct();
-                            kind = str.mData.is_Unit() ? EmptyKind::Unit : str.mData.is_Tuple() && str.mData.as_Tuple().empty() ? EmptyKind::Tuple : EmptyKind::None;
+                            kind = str.data.is_Unit() ? EmptyKind::Unit : str.data.is_Tuple() && str.data.as_Tuple().empty() ? EmptyKind::Tuple : EmptyKind::None;
                         }
                     }
                 }
                 if (kind == EmptyKind::Unit) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeUnitVariant>(v.span(), mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Type), false));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeUnitVariant>(v.span(), ctx.LowerHIRGenericPath(v.span(), v.path, FromASTPathClass::Type), false));
                     return;
                 }
                 if (kind == EmptyKind::Tuple) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeTupleVariant>(v.span(), mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Type), false, ::std::vector<HIRExprNodeP>{}));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeTupleVariant>(v.span(), ctx.LowerHIRGenericPath(v.span(), v.path, FromASTPathClass::Type), false, ::std::vector<HIRExprNodeP>{}));
                     return;
                 }
-            } else if (const auto* binding = v.mPath.mBindings.type.binding.opt_Struct()) {
+            } else if (const auto* binding = v.path.bindings.type.binding.opt_Struct()) {
                 EmptyKind kind = EmptyKind::None;
                 if (binding->struct_) {
-                    const auto& data = binding->struct_->mData;
+                    const auto& data = binding->struct_->data;
                     kind = data.is_Unit() ? EmptyKind::Unit : data.is_Tuple() && data.as_Tuple().ents.empty() ? EmptyKind::Tuple : EmptyKind::None;
                 } else if (binding->hir) {
-                    const auto& data = binding->hir->mData;
+                    const auto& data = binding->hir->data;
                     kind = data.is_Unit() ? EmptyKind::Unit : data.is_Tuple() && data.as_Tuple().empty() ? EmptyKind::Tuple : EmptyKind::None;
                 }
                 if (kind == EmptyKind::Unit) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeUnitVariant>(v.span(), mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Type), true));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeUnitVariant>(v.span(), ctx.LowerHIRGenericPath(v.span(), v.path, FromASTPathClass::Type), true));
                     return;
                 }
                 if (kind == EmptyKind::Tuple) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeTupleVariant>(v.span(), mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Type), true, ::std::vector<HIRExprNodeP>{}));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeTupleVariant>(v.span(), ctx.LowerHIRGenericPath(v.span(), v.path, FromASTPathClass::Type), true, ::std::vector<HIRExprNodeP>{}));
                     return;
                 }
             }
         }
-        auto ty = mCtx.LowerHIRType(::mkType(*mCtx.mCrate->pool, v.span(), v.mPath));
-        if (v.mPath.mBindings.type.binding.is_EnumVar()) {
-            ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.mData.is_Generic()), "Enum variant path not GenericPath: " << ty);
+        auto ty = ctx.LowerHIRType(::mkType(*ctx.crate->pool, v.span(), v.path));
+        if (v.path.bindings.type.binding.is_EnumVar()) {
+            ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.data.is_Generic()), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();
-            auto& gp = data.as_Path().path.mData.as_Generic();
-            auto varName = gp.mPath.popComponent();
-            auto enumTy = mCtx.mCrate->types.intern(mv$(data));
-            ty = mCtx.mCrate->types.path(HIRPath(enumTy, mv$(varName)), {});
+            auto& gp = data.as_Path().path.data.as_Generic();
+            auto varName = gp.path.popComponent();
+            auto enumTy = ctx.crate->types.intern(mv$(data));
+            ty = ctx.crate->types.path(HIRPath(enumTy, mv$(varName)), {});
         }
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeStructLiteral>(v.span(), mv$(ty), !v.mPath.mBindings.type.binding.is_EnumVar(), lowerOpt(v.baseValue), mv$(values)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeStructLiteral>(v.span(), mv$(ty), !v.path.bindings.type.binding.is_EnumVar(), lowerOpt(v.baseValue), mv$(values)));
     }
 
     virtual void visit(ASTExprNodeStructLiteralPattern& v) override {
-        if (v.mPath.mBindings.type.binding.is_Union()) {
+        if (v.path.bindings.type.binding.is_Union()) {
             if (v.values.size() != 1) {
                 ERROR(v.span(), E0000, "Union constructors can only specify a single field");
             }
@@ -3734,32 +3734,32 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         for (auto& val : v.values) {
             values.push_back(::std::make_pair(val.name, lower(val.value)));
         }
-        auto ty = mCtx.LowerHIRType(::mkType(*mCtx.mCrate->pool, v.span(), v.mPath));
-        if (v.mPath.mBindings.type.binding.is_EnumVar()) {
-            ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.mData.is_Generic()), "Enum variant path not GenericPath: " << ty);
+        auto ty = ctx.LowerHIRType(::mkType(*ctx.crate->pool, v.span(), v.path));
+        if (v.path.bindings.type.binding.is_EnumVar()) {
+            ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.data.is_Generic()), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();
-            auto& gp = data.as_Path().path.mData.as_Generic();
-            auto varName = gp.mPath.popComponent();
-            auto enumTy = mCtx.mCrate->types.intern(mv$(data));
-            ty = mCtx.mCrate->types.path(HIRPath(enumTy, mv$(varName)), {});
+            auto& gp = data.as_Path().path.data.as_Generic();
+            auto varName = gp.path.popComponent();
+            auto enumTy = ctx.crate->types.intern(mv$(data));
+            ty = ctx.crate->types.path(HIRPath(enumTy, mv$(varName)), {});
         }
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeStructLiteral>(v.span(), mv$(ty), !v.mPath.mBindings.type.binding.is_EnumVar(), true, mv$(values)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeStructLiteral>(v.span(), mv$(ty), !v.path.bindings.type.binding.is_EnumVar(), true, mv$(values)));
     }
 
     virtual void visit(ASTExprNodeArray& v) override {
-        if (v.mSize) {
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeArraySized>(
+        if (v.size) {
+            rv.reset(ctx.crate->pool->make<HIRExprNodeArraySized>(
                 v.span(),
                 lower(v.values.at(0)),
                 // TODO: Should this size be a full expression on its own?
-                lower(v.mSize)
+                lower(v.size)
             ));
         } else {
             ::std::vector<HIRExprNodeP> vals;
             for (auto& val : v.values) {
                 vals.push_back(lower(val));
             }
-            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeArrayList>(v.span(), mv$(vals)));
+            rv.reset(ctx.crate->pool->make<HIRExprNodeArrayList>(v.span(), mv$(vals)));
         }
     }
 
@@ -3768,73 +3768,73 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         for (auto& val : v.values) {
             vals.push_back(lower(val));
         }
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeTuple>(v.span(), mv$(vals)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), mv$(vals)));
     }
 
     virtual void visit(ASTExprNodeNamedValue& v) override {
-        if (const auto* e = v.mPath.cls.opt_Local()) {
-            TU_MATCH_HDRA( (v.mPath.mBindings.value.binding), {)
+        if (const auto* e = v.path.cls.opt_Local()) {
+            TU_MATCH_HDRA( (v.path.bindings.value.binding), {)
             default:
-                BUG(v.span(), "Named value was a local, but wasn't bound to a known type - " << v.mPath);
+                BUG(v.span(), "Named value was a local, but wasn't bound to a known type - " << v.path);
                 TU_ARMA(Generic, binding) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeConstParam>(v.span(), e->name, binding.index));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeConstParam>(v.span(), e->name, binding.index));
                 }
                 TU_ARMA(Variable, binding) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeVariable>(v.span(), e->name, binding.slot));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodeVariable>(v.span(), e->name, binding.slot));
                 }
             }
         } else {
-            TU_MATCH_HDRA( (v.mPath.mBindings.value.binding), {)
+            TU_MATCH_HDRA( (v.path.bindings.value.binding), {)
             TU_ARMA(Struct, e) {
-                    ASSERT_BUG(v.span(), e.struct_ || e.hir, "PathValue bound to a struct but pointer not set - " << v.mPath);
+                    ASSERT_BUG(v.span(), e.struct_ || e.hir, "PathValue bound to a struct but pointer not set - " << v.path);
                     // Check the form and emit a PathValue if not a unit
                     bool isTupleConstructor = false;
                     if (e.struct_) {
-                        if (e.struct_->mData.is_Struct()) {
-                            ERROR(v.span(), E0000, "Named value referring to a struct that isn't tuple-like or unit-like - " << v.mPath);
+                        if (e.struct_->data.is_Struct()) {
+                            ERROR(v.span(), E0000, "Named value referring to a struct that isn't tuple-like or unit-like - " << v.path);
                         }
-                        isTupleConstructor = e.struct_->mData.is_Tuple();
+                        isTupleConstructor = e.struct_->data.is_Tuple();
                     } else {
                         const auto& str = *e.hir;
-                        if (str.mData.is_Unit()) {
+                        if (str.data.is_Unit()) {
                             isTupleConstructor = false;
-                        } else if (str.mData.is_Tuple()) {
+                        } else if (str.data.is_Tuple()) {
                             isTupleConstructor = true;
                         } else {
-                            ERROR(v.span(), E0000, "Named value referring to a struct that isn't tuple-like or unit-like - " << v.mPath);
+                            ERROR(v.span(), E0000, "Named value referring to a struct that isn't tuple-like or unit-like - " << v.path);
                         }
                     }
                     if (isTupleConstructor) {
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodePathValue>(v.span(), mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), HIRExprNodePathValue::STRUCT_CONSTR));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), HIRExprNodePathValue::STRUCT_CONSTR));
                     } else {
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeUnitVariant>(v.span(), mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Value), true));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodeUnitVariant>(v.span(), ctx.LowerHIRGenericPath(v.span(), v.path, FromASTPathClass::Value), true));
                     }
                 }
                 TU_ARMA(EnumVar, e) {
-                    ASSERT_BUG(v.span(), e.enum_ || e.hir, "PathValue bound to an enum but pointer not set - " << v.mPath);
-                    const auto& varName = v.mPath.nodes().back().name();
+                    ASSERT_BUG(v.span(), e.enum_ || e.hir, "PathValue bound to an enum but pointer not set - " << v.path);
+                    const auto& varName = v.path.nodes().back().name();
                     bool isTupleConstructor = false;
                     unsigned int varIdx;
                     if (e.enum_) {
                         const auto& enm = *e.enum_;
                         auto it = ::std::find_if(enm.variants().begin(), enm.variants().end(), [&](const auto& x) {
-                            return x.mName == varName;
+                            return x.name == varName;
                         });
                         assert(it != enm.variants().end());
 
                         varIdx = static_cast<unsigned int>(it - enm.variants().begin());
-                        if (it->mData.is_Struct()) {
-                            ERROR(v.span(), E0000, "Named value referring to an enum that isn't tuple-like or unit-like - " << v.mPath);
+                        if (it->data.is_Struct()) {
+                            ERROR(v.span(), E0000, "Named value referring to an enum that isn't tuple-like or unit-like - " << v.path);
                         }
-                        isTupleConstructor = it->mData.is_Tuple() && it->mData.as_Tuple().mItems.size() > 0;
+                        isTupleConstructor = it->data.is_Tuple() && it->data.as_Tuple().items.size() > 0;
                     } else {
                         const auto& enm = *e.hir;
                         auto idx = enm.findVariant(varName);
                         assert(idx != SIZE_MAX);
 
                         varIdx = idx;
-                        if (const auto* ee = enm.mData.opt_Data()) {
-                            if (ee->at(idx).type == mCtx.mCrate->types.unit()) {
+                        if (const auto* ee = enm.data.opt_Data()) {
+                            if (ee->at(idx).type == ctx.crate->types.unit()) {
                             }
                             // TODO: Assert that it's not a struct-like
                             else {
@@ -3844,48 +3844,48 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                     }
                     (void)varIdx; // TODO: Save time later by saving this.
                     if (isTupleConstructor) {
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodePathValue>(v.span(), mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), HIRExprNodePathValue::ENUM_VAR_CONSTR));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), HIRExprNodePathValue::ENUM_VAR_CONSTR));
                     } else {
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeUnitVariant>(v.span(), mCtx.LowerHIRGenericPath(v.span(), v.mPath, FromASTPathClass::Value), false));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodeUnitVariant>(v.span(), ctx.LowerHIRGenericPath(v.span(), v.path, FromASTPathClass::Value), false));
                     }
                 }
                 TU_ARMA(Function, e) {
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodePathValue>(v.span(), mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), HIRExprNodePathValue::FUNCTION));
+                    rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), HIRExprNodePathValue::FUNCTION));
                 }
                 TU_ARMA(Static, e) {
                     if (e.static_) {
                         if (e.static_->sClass() != ASTStatic::CONST) {
-                            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodePathValue>(v.span(), mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), HIRExprNodePathValue::STATIC));
+                            rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), HIRExprNodePathValue::STATIC));
                         } else {
-                            mRv.reset(mCtx.mCrate->pool->make<HIRExprNodePathValue>(v.span(), mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), HIRExprNodePathValue::CONSTANT));
+                            rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), HIRExprNodePathValue::CONSTANT));
                         }
                     } else if (e.hir) {
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodePathValue>(v.span(), mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), HIRExprNodePathValue::STATIC));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), HIRExprNodePathValue::STATIC));
                     }
                     // HACK: If the HIR pointer is nullptr, then it refers to a `const
                     else {
-                        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodePathValue>(v.span(), mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value), HIRExprNodePathValue::CONSTANT));
+                        rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), HIRExprNodePathValue::CONSTANT));
                     }
                 }
                 break;
                 default:
-                    auto p = mCtx.LowerHIRPath(v.span(), v.mPath, FromASTPathClass::Value);
-                    ASSERT_BUG(v.span(), !p.mData.is_Generic(), "Unknown binding for PathValue but path is generic - " << v.mPath);
-                    mRv.reset(mCtx.mCrate->pool->make<HIRExprNodePathValue>(v.span(), mv$(p), HIRExprNodePathValue::UNKNOWN));
+                    auto p = ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value);
+                    ASSERT_BUG(v.span(), !p.data.is_Generic(), "Unknown binding for PathValue but path is generic - " << v.path);
+                    rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), mv$(p), HIRExprNodePathValue::UNKNOWN));
             }
         }
     }
 
     virtual void visit(ASTExprNodeField& v) override {
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeField>(v.span(), lower(v.obj), v.mName));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeField>(v.span(), lower(v.obj), v.name));
     }
 
     virtual void visit(ASTExprNodeIndex& v) override {
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeIndex>(v.span(), lower(v.obj), lower(v.idx)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeIndex>(v.span(), lower(v.obj), lower(v.idx)));
     }
 
     virtual void visit(ASTExprNodeDeref& v) override {
-        mRv.reset(mCtx.mCrate->pool->make<HIRExprNodeDeref>(v.span(), lower(v.mValue)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeDeref>(v.span(), lower(v.value)));
     }
 };
 
@@ -3894,7 +3894,7 @@ HIRExprPtr AST2HIR::LowerHIRExprNode(const ASTExprNode& e) {
 
     const_cast<ASTExprNode*>(&e)->visit(v);
 
-    if (!v.mRv) {
+    if (!v.rv) {
         BUG(e.span(), typeid(e).name() << " - Yielded a nullptr HIR node");
     }
 
@@ -3911,9 +3911,9 @@ HIRExprPtr AST2HIR::LowerHIRExprNode(const ASTExprNode& e) {
 
         void visitType(HIRTypeRef&) override {
         }
-    } initialise(mCrate->types);
+    } initialise(crate->types);
 
-    initialise.visitNodePtr(v.mRv);
+    initialise.visitNodePtr(v.rv);
 
-    return HIRExprPtr(mv$(v.mRv));
+    return HIRExprPtr(mv$(v.rv));
 }

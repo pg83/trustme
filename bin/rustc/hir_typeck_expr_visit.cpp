@@ -24,7 +24,7 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
                 return mod.modItems.at(ip.name)->ent.as_Module();
             } else {
                 assert(ip.crateName);
-                return (ip.crateName[0] ? crate.extCrates.at(ip.crateName).mData->mRootModule : crate.mRootModule);
+                return (ip.crateName[0] ? crate.extCrates.at(ip.crateName).data->rootModule : crate.rootModule);
             }
         }
 
@@ -47,13 +47,13 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
         const auto& item = trait.values.at(ip.name);
             TU_MATCH_HDRA( (item), { )
             TU_ARMA(Function, e) {
-                mItemGenerics = &e.mParams;
+                itemGenerics = &e.params;
             }
             TU_ARMA(Constant, e) {
-                mItemGenerics = &e.mParams;
+                itemGenerics = &e.params;
             }
             TU_ARMA(Static, e) {
-                mItemGenerics = nullptr;
+                itemGenerics = nullptr;
             }
             }
     } else if (ip.parent->ty) {
@@ -64,15 +64,15 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
         const auto& mod = H::getModForIp(crate, *ip.parent);
         H::addTraitsFromMod(*this, mod);
         const auto& item = mod.valueItems.at(ip.name)->ent;
-        mImplGenerics = nullptr;
+        implGenerics = nullptr;
             TU_MATCH_HDRA( (item), { )
             TU_ARMA(Constant, e) {
-                mItemGenerics = &e.mParams;
+                itemGenerics = &e.params;
             }
             TU_ARMA(Static, e) {
             }
             TU_ARMA(Function, e) {
-                mItemGenerics = &e.mParams;
+                itemGenerics = &e.params;
             }
             TU_ARMA(StructConstant, _e) BUG(sp, ip << " is StructConstant");
             TU_ARMA(StructConstructor, _e) BUG(sp, ip << " is StructConstructor");
@@ -110,21 +110,21 @@ namespace {
 
         void visitTrait(HIRItemPath p, HIRTrait& item) override {
             HIRGenericPath traitGpath;
-            traitGpath.mPath = p.getSimplePath();
-            for (size_t i = 0; i < item.mParams.types.size(); i++) {
-                traitGpath.mParams.types.push_back(ms.crate.types.generic(item.mParams.types[i].mName, i));
+            traitGpath.path = p.getSimplePath();
+            for (size_t i = 0; i < item.params.types.size(); i++) {
+                traitGpath.params.types.push_back(ms.crate.types.generic(item.params.types[i].name, i));
             }
-            for (size_t i = 0; i < item.mParams.values.size(); i++) {
-                traitGpath.mParams.values.push_back(HIRGenericRef(item.mParams.values[i].mName, i));
+            for (size_t i = 0; i < item.params.values.size(); i++) {
+                traitGpath.params.values.push_back(HIRGenericRef(item.params.values[i].name, i));
             }
             auto _1 = this->ms.setCurrentTrait(traitGpath);
-            auto _ = this->ms.setImplGenerics(item.mParams);
+            auto _ = this->ms.setImplGenerics(item.params);
             HIRVisitor::visitTrait(p, item);
         }
 
         void visitTypeImpl(HIRTypeImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << impl.mType);
-            auto _ = this->ms.setImplGenerics(impl.mParams);
+            TRACE_FUNCTION_F("impl " << impl.type);
+            auto _ = this->ms.setImplGenerics(impl.params);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.pushTraits(impl.srcModule, mod);
@@ -133,11 +133,11 @@ namespace {
         }
 
         void visitTraitImpl(const HIRSimplePath& traitPath, HIRTraitImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << traitPath << impl.traitArgs << " for " << impl.mType);
+            TRACE_FUNCTION_F("impl " << traitPath << impl.traitArgs << " for " << impl.type);
             auto traitGpath = HIRGenericPath(traitPath, impl.traitArgs.clone());
             auto _0 = this->ms.setCurrentTraitImpl(impl);
             auto _1 = this->ms.setCurrentTrait(traitGpath);
-            auto _ = this->ms.setImplGenerics(impl.mParams);
+            auto _ = this->ms.setImplGenerics(impl.params);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.pushTraits(impl.srcModule, mod);
@@ -148,8 +148,8 @@ namespace {
         }
 
         void visitMarkerImpl(const HIRSimplePath& traitPath, HIRMarkerImpl& impl) override {
-            TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.mType << " { }");
-            auto _ = this->ms.setImplGenerics(impl.mParams);
+            TRACE_FUNCTION_F("impl " << traitPath << " for " << impl.type << " { }");
+            auto _ = this->ms.setImplGenerics(impl.params);
 
             const auto& mod = this->ms.crate.getModByPath(Span(), impl.srcModule);
             ms.pushTraits(impl.srcModule, mod);
@@ -197,36 +197,36 @@ namespace {
         // Code-containing items
         // ------
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
-            auto _ = this->ms.setItemGenerics(item.mParams);
-            if (item.mCode) {
+            auto _ = this->ms.setItemGenerics(item.params);
+            if (item.code) {
                 DEBUG("Function code " << p);
-                TypecheckCode(ms, item.mArgs, item.traitReturnType.value_or(item.returnType), item.mCode);
+                TypecheckCode(ms, item.args, item.traitReturnType.value_or(item.returnType), item.code);
             } else {
                 DEBUG("Function code " << p << " (none)");
             }
         }
 
         void visitStatic(HIRItemPath p, HIRStatic& item) override {
-            if (item.mValue) {
+            if (item.value) {
                 DEBUG("Static value " << p);
                 tArgs tmp;
-                TypecheckCode(ms, tmp, item.mType, item.mValue);
+                TypecheckCode(ms, tmp, item.type, item.value);
             }
         }
 
         void visitConstant(HIRItemPath p, HIRConstant& item) override {
-            auto _ = this->ms.setItemGenerics(item.mParams);
-            if (item.mValue) {
+            auto _ = this->ms.setItemGenerics(item.params);
+            if (item.value) {
                 DEBUG("Const value " << p);
                 tArgs tmp;
-                TypecheckCode(ms, tmp, item.mType, item.mValue);
+                TypecheckCode(ms, tmp, item.type, item.value);
             }
         }
 
         void visitEnum(HIRItemPath p, HIREnum& item) override {
-            auto _ = this->ms.setItemGenerics(item.mParams);
+            auto _ = this->ms.setItemGenerics(item.params);
 
-            if (auto* e = item.mData.opt_Value()) {
+            if (auto* e = item.data.opt_Value()) {
                 auto enumType = HIREnum::getReprType(item.tagRepr);
 
                 for (auto& var : e->variants) {
@@ -251,8 +251,8 @@ TypeckModuleState::TypeckModuleState(const WireBoard& wb)
     , crate(*wb.crate)
     , currentTrait(nullptr)
     , currentTraitImpl(nullptr)
-    , mImplGenerics(nullptr)
-    , mItemGenerics(nullptr)
+    , implGenerics(nullptr)
+    , itemGenerics(nullptr)
 {
 }
 
@@ -269,15 +269,15 @@ TypeckModuleState::NullOnDrop<const HIRTraitImpl> TypeckModuleState::setCurrentT
 }
 
 TypeckModuleState::NullOnDrop<const HIRGenericParams> TypeckModuleState::setImplGenerics(const HIRGenericParams& gps) {
-    assert(!mImplGenerics);
-    mImplGenerics = &gps;
-    return NullOnDrop<const HIRGenericParams>(mImplGenerics);
+    assert(!implGenerics);
+    implGenerics = &gps;
+    return NullOnDrop<const HIRGenericParams>(implGenerics);
 }
 
 TypeckModuleState::NullOnDrop<const HIRGenericParams> TypeckModuleState::setItemGenerics(const HIRGenericParams& gps) {
-    assert(!mItemGenerics);
-    mItemGenerics = &gps;
-    return NullOnDrop<const HIRGenericParams>(mItemGenerics);
+    assert(!itemGenerics);
+    itemGenerics = &gps;
+    return NullOnDrop<const HIRGenericParams>(itemGenerics);
 }
 
 void TypeckModuleState::pushTraits(HIRItemPath p, const HIRModule& mod) {

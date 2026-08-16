@@ -122,7 +122,7 @@ struct ASTExprNodeTry: public ASTExprNode {
 };
 
 struct ASTExprNodeMacro: public ASTExprNode {
-    ASTPath mPath;
+    ASTPath path;
     RcString ident;
     ::TokenTree tokens;
     bool isBraced;
@@ -183,7 +183,7 @@ struct ASTExprNodeAsm2: public ASTExprNode {
 
     AsmOptions options;
     std::vector<AsmLine> lines;
-    std::vector<Param> mParams;
+    std::vector<Param> params;
 
     ASTExprNodeAsm2(AsmOptions options, std::vector<AsmLine> lines, std::vector<Param> params);
 
@@ -204,10 +204,10 @@ struct ASTExprNodeFlow: public ASTExprNode {
         BREAK,
         // `do yeet value` - a failed `?`
         YEET,
-    } mType;
+    } type;
 
     Ident target;
-    ASTExprNodeP mValue;
+    ASTExprNodeP value;
 
     ASTExprNodeFlow(Type type, Ident target, ASTExprNodeP value);
 
@@ -220,8 +220,8 @@ struct ASTExprNodeFlow: public ASTExprNode {
 
 struct ASTExprNodeLetBinding: public ASTExprNode {
     ASTPattern pat;
-    ASTType* mType;
-    ASTExprNodeP mValue;
+    ASTType* type;
+    ASTExprNodeP value;
     ASTExprNodeP elseNode;
     bool isSuper;
     /// Allocated binding slots/indexes for the pattern in `let-else`
@@ -252,7 +252,7 @@ struct ASTExprNodeAssign: public ASTExprNode {
     } op;
 
     ASTExprNodeP slot;
-    ASTExprNodeP mValue;
+    ASTExprNodeP value;
 
     ASTExprNodeAssign();
 
@@ -266,8 +266,8 @@ struct ASTExprNodeAssign: public ASTExprNode {
 };
 
 struct ASTExprNodeCallPath: public ASTExprNode {
-    ASTPath mPath;
-    ::std::vector<ASTExprNodeP> mArgs;
+    ASTPath path;
+    ::std::vector<ASTExprNodeP> args;
 
     ASTExprNodeCallPath(ASTPath&& path, ::std::vector<ASTExprNodeP>&& args);
 
@@ -281,7 +281,7 @@ struct ASTExprNodeCallPath: public ASTExprNode {
 struct ASTExprNodeCallMethod: public ASTExprNode {
     ASTExprNodeP val;
     ASTPathNode method;
-    ::std::vector<ASTExprNodeP> mArgs;
+    ::std::vector<ASTExprNodeP> args;
 
     ASTExprNodeCallMethod(ASTExprNodeP obj, ASTPathNode method, ::std::vector<ASTExprNodeP> args);
 
@@ -295,7 +295,7 @@ struct ASTExprNodeCallMethod: public ASTExprNode {
 // Call an object (Fn/FnMut/FnOnce)
 struct ASTExprNodeCallObject: public ASTExprNode {
     ASTExprNodeP val;
-    ::std::vector<ASTExprNodeP> mArgs;
+    ::std::vector<ASTExprNodeP> args;
 
     ASTExprNodeCallObject(ASTExprNodeP val, ::std::vector<ASTExprNodeP>&& args);
 
@@ -308,7 +308,7 @@ struct ASTExprNodeCallObject: public ASTExprNode {
 
 struct ASTExprNodeLoop: public ASTExprNode {
     Ident label;
-    ASTExprNodeP mCode;
+    ASTExprNodeP code;
 
     ASTExprNodeLoop();
 
@@ -324,8 +324,8 @@ struct ASTExprNodeLoop: public ASTExprNode {
 struct ASTExprNodeFor: public ASTExprNode {
     Ident label;
     ASTPattern pattern;
-    ASTExprNodeP mValue;
-    ASTExprNodeP mCode;
+    ASTExprNodeP value;
+    ASTExprNodeP code;
 
     ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code);
 
@@ -344,7 +344,7 @@ struct ASTIfLetCondition {
 struct ASTExprNodeWhile: public ASTExprNode {
     Ident label;
     std::vector<ASTIfLetCondition> conditions;
-    ASTExprNodeP mCode;
+    ASTExprNodeP code;
 
     ASTExprNodeWhile(Ident label, std::vector<ASTIfLetCondition> conditions, ASTExprNodeP code);
 
@@ -356,11 +356,11 @@ struct ASTExprNodeWhile: public ASTExprNode {
 };
 
 struct ASTExprNodeMatchArm {
-    ASTAttributeList mAttrs;
+    ASTAttributeList attrs;
     ::std::vector<ASTPattern> patterns;
     std::vector<ASTIfLetCondition> guard;
 
-    ASTExprNodeP mCode;
+    ASTExprNodeP code;
 
     ASTExprNodeMatchArm();
 
@@ -410,7 +410,7 @@ struct ASTExprNodeWildcardPattern: public ASTExprNode {
 // Literal integer
 struct ASTExprNodeInteger: public ASTExprNode {
     enum eCoreType datatype;
-    U128 mValue;
+    U128 value;
 
     ASTExprNodeInteger(U128 value, enum eCoreType datatype);
 
@@ -424,7 +424,7 @@ struct ASTExprNodeInteger: public ASTExprNode {
 // Literal float
 struct ASTExprNodeFloat: public ASTExprNode {
     enum eCoreType datatype;
-    FloatValue mValue;
+    FloatValue value;
 
     ASTExprNodeFloat(FloatValue value, enum eCoreType datatype);
 
@@ -437,7 +437,7 @@ struct ASTExprNodeFloat: public ASTExprNode {
 
 // Literal boolean
 struct ASTExprNodeBool: public ASTExprNode {
-    bool mValue;
+    bool value;
 
     ASTExprNodeBool(bool value);
 
@@ -450,9 +450,9 @@ struct ASTExprNodeBool: public ASTExprNode {
 
 // Literal string
 struct ASTExprNodeString: public ASTExprNode {
-    ::std::string mValue;
+    ::std::string value;
     /// Hygiene for format strings
-    Ident::Hygiene mHygiene;
+    Ident::Hygiene hygiene;
 
     ASTExprNodeString(::std::string value, Ident::Hygiene h = {});
 
@@ -465,7 +465,7 @@ struct ASTExprNodeString: public ASTExprNode {
 
 // Literal byte string
 struct ASTExprNodeByteString: public ASTExprNode {
-    ::std::string mValue;
+    ::std::string value;
 
     ASTExprNodeByteString(::std::string value);
 
@@ -478,7 +478,7 @@ struct ASTExprNodeByteString: public ASTExprNode {
 
 // Literal C string
 struct ASTExprNodeCString: public ASTExprNode {
-    ::std::string mValue;
+    ::std::string value;
 
     ASTExprNodeCString(::std::string value);
 
@@ -493,18 +493,18 @@ struct ASTExprNodeCString: public ASTExprNode {
 struct ASTExprNodeClosure: public ASTExprNode {
     typedef ::std::vector<::std::pair<ASTPattern, ASTType*>> argsT;
 
-    argsT mArgs;
+    argsT args;
     ASTType* returnType;
-    ASTExprNodeP mCode;
+    ASTExprNodeP code;
     bool isMove;   //< The closure takes ownership of all values
     bool isUse;    //< The closure copies, clones, or moves each captured value
     bool isPinned; //< The closure cannot be moved (this is for generators)
     bool trackCaller;
 
     ASTExprNodeClosure(argsT args, ASTType* rv, ASTExprNodeP code, bool isMove, bool isUse, bool isPinned, bool trackCaller = false)
-        : mArgs(::std::move(args))
+        : args(::std::move(args))
         , returnType(::std::move(rv))
-        , mCode(::std::move(code))
+        , code(::std::move(code))
         , isMove(isMove)
         , isUse(isUse)
         , isPinned(isPinned)
@@ -528,7 +528,7 @@ struct ASTExprNodeStructLiteral: public ASTExprNode {
     };
 
     typedef ::std::vector<Ent> tValues;
-    ASTPath mPath;
+    ASTPath path;
     ASTExprNodeP baseValue;
     tValues values;
 
@@ -545,7 +545,7 @@ struct ASTExprNodeStructLiteral: public ASTExprNode {
 // This implicitly has a `..` in it
 struct ASTExprNodeStructLiteralPattern: public ASTExprNode {
     typedef ::std::vector<ASTExprNodeStructLiteral::Ent> tValues;
-    ASTPath mPath;
+    ASTPath path;
     tValues values;
 
     ASTExprNodeStructLiteralPattern(ASTPath path, tValues&& values);
@@ -559,7 +559,7 @@ struct ASTExprNodeStructLiteralPattern: public ASTExprNode {
 
 // Array
 struct ASTExprNodeArray: public ASTExprNode {
-    ASTExprNodeP mSize; // if non-NULL, it's a sized array
+    ASTExprNodeP size; // if non-NULL, it's a sized array
     ::std::vector<ASTExprNodeP> values;
 
     ASTExprNodeArray(::std::vector<ASTExprNodeP> vals);
@@ -588,7 +588,7 @@ struct ASTExprNodeTuple: public ASTExprNode {
 
 // Variable / Constant
 struct ASTExprNodeNamedValue: public ASTExprNode {
-    ASTPath mPath;
+    ASTPath path;
 
     ASTExprNodeNamedValue(ASTPath path);
 
@@ -602,7 +602,7 @@ struct ASTExprNodeNamedValue: public ASTExprNode {
 // Field dereference
 struct ASTExprNodeField: public ASTExprNode {
     ASTExprNodeP obj;
-    RcString mName;
+    RcString name;
 
     ASTExprNodeField(ASTExprNodeP obj, RcString name);
 
@@ -628,7 +628,7 @@ struct ASTExprNodeIndex: public ASTExprNode {
 
 // Pointer dereference
 struct ASTExprNodeDeref: public ASTExprNode {
-    ASTExprNodeP mValue;
+    ASTExprNodeP value;
 
     ASTExprNodeDeref(ASTExprNodeP value);
 
@@ -641,8 +641,8 @@ struct ASTExprNodeDeref: public ASTExprNode {
 
 // Type cast ('as')
 struct ASTExprNodeCast: public ASTExprNode {
-    ASTExprNodeP mValue;
-    ASTType* mType;
+    ASTExprNodeP value;
+    ASTType* type;
 
     ASTExprNodeCast(ASTExprNodeP value, ASTType*&& dstType);
 
@@ -655,8 +655,8 @@ struct ASTExprNodeCast: public ASTExprNode {
 
 // Type annotation (': _')
 struct ASTExprNodeTypeAnnotation: public ASTExprNode {
-    ASTExprNodeP mValue;
-    ASTType* mType;
+    ASTExprNodeP value;
+    ASTType* type;
 
     ASTExprNodeTypeAnnotation(ASTExprNodeP value, ASTType*&& dstType);
 
@@ -698,7 +698,7 @@ struct ASTExprNodeBinOp: public ASTExprNode {
         PLACE_IN, // `in PLACE { expr }` or `PLACE <- expr`
     };
 
-    Type mType;
+    Type type;
     ASTExprNodeP left;
     ASTExprNodeP right;
 
@@ -725,8 +725,8 @@ struct ASTExprNodeUniOp: public ASTExprNode {
         USE,    // `.use`
     };
 
-    enum Type mType;
-    ASTExprNodeP mValue;
+    enum Type type;
+    ASTExprNodeP value;
 
     ASTExprNodeUniOp(Type type, ASTExprNodeP value);
 

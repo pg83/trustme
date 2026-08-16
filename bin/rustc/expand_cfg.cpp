@@ -274,7 +274,7 @@ namespace {
                     auto n = lex.getTokenCheck(TOK_INTERPOLATED_EXPR).takeFragNode();
                     const auto* np = cast<ASTExprNodeString>(n.get());
                     ASSERT_BUG(n->span(), np, "");
-                    val = np->mValue;
+                    val = np->value;
                 } else {
                     GET_CHECK_TOK(tok, lex, TOK_STRING);
                     val = tok.str();
@@ -391,7 +391,7 @@ bool checkCfg(const Settings& settings, const Span& sp, const ASTAttribute& mi) 
 }
 
 bool checkCfgAttrs(const Settings& settings, const ASTAttributeList& attrs) {
-    for (auto& a : attrs.mItems) {
+    for (auto& a : attrs.items) {
         if (a.name() == rcstringCfg) {
             if (!checkCfg(settings, a.span(), a)) {
                 return false;
@@ -464,7 +464,7 @@ class CCfgHandler: public ExpandDecorator {
         if (checkCfg(*wb.settings, sp, mi)) {
         } else {
             // Remove all items (can't remove the module)
-            crate.rootModule_.mItems.clear();
+            crate.rootModule_.items.clear();
         }
     }
 
@@ -507,21 +507,21 @@ class CCfgHandler: public ExpandDecorator {
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTStructItem& si) const override {
         DEBUG("#[cfg] struct item - " << mi);
         if (!checkCfg(*wb.settings, sp, mi)) {
-            si.mName = RcString();
+            si.name = RcString();
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTTupleItem& i) const override {
         DEBUG("#[cfg] tuple item - " << mi);
         if (!checkCfg(*wb.settings, sp, mi)) {
-            i.mType = ::mkType(*crate.pool, sp);
+            i.type = ::mkType(*crate.pool, sp);
         }
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTEnumVariant& i) const override {
         DEBUG("#[cfg] enum variant - " << mi);
         if (!checkCfg(*wb.settings, sp, mi)) {
-            i.mName = RcString();
+            i.name = RcString();
         }
     }
 

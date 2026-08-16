@@ -14,7 +14,7 @@ class ASTAttribute;
 /// A list of attributes on an item (searchable by the attribute name)
 class ASTAttributeList {
 public:
-    ::std::vector<ASTAttribute> mItems;
+    ::std::vector<ASTAttribute> items;
 
     ASTAttributeList();
     ASTAttributeList(::std::vector<ASTAttribute> items);

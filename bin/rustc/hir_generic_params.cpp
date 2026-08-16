@@ -11,7 +11,7 @@
     if (x.gp.types.size() > 0 || x.gp.values.size() > 0) {
         os << "<";
         for (const auto& typ : x.gp.types) {
-            os << typ.mName;
+            os << typ.name;
             if (!typ.isSized) {
                 os << ": ?Sized";
             }
@@ -24,9 +24,9 @@
             os << "const ";
         }
         for (const auto& valP : x.gp.values) {
-            os << valP.mName;
+            os << valP.name;
             os << ": ";
-            os << valP.mType;
+            os << valP.type;
             os << ",";
         }
         os << ">";
@@ -62,10 +62,10 @@ HIRPathParams HIRGenericParams::makeNopParams(HIRTypeInterner& types, unsigned l
     rv.types = ThinVector<HIRTypeRef>(this->types.size());
     rv.values = ThinVector<HIRConstGeneric>(this->values.size());
     for (size_t i = 0; i < this->types.size(); i++) {
-        rv.types[i] = types.generic(this->types[i].mName, 256 * level + i);
+        rv.types[i] = types.generic(this->types[i].name, 256 * level + i);
     }
     for (size_t i = 0; i < this->values.size(); i++) {
-        rv.values[i] = HIRGenericRef(this->values[i].mName, 256 * level + i);
+        rv.values[i] = HIRGenericRef(this->values[i].name, 256 * level + i);
     }
     return rv;
 }
@@ -74,11 +74,11 @@ HIRGenericParams HIRGenericParams::clone() const {
     HIRGenericParams rv;
     rv.types.reserve(types.size());
     for (const auto& type : types) {
-        rv.types.push_back(HIRTypeParamDef{type.mName, type.defaultValue, type.isSized});
+        rv.types.push_back(HIRTypeParamDef{type.name, type.defaultValue, type.isSized});
     }
     rv.values.reserve(values.size());
     for (const auto& type : values) {
-        rv.values.push_back(HIRValueParamDef{type.mName, type.mType, type.defaultValue.clone()});
+        rv.values.push_back(HIRValueParamDef{type.name, type.type, type.defaultValue.clone()});
     }
     rv.bounds.reserve(bounds.size());
     for (const auto& bound : bounds) {
@@ -100,15 +100,15 @@ HIRGenericBound HIRGenericBound::clone() const {
 }
 
 Ordering HIRTypeParamDef::ord(const HIRTypeParamDef& x) const {
-    ORD(mName, x.mName);
+    ORD(name, x.name);
     ORD(defaultValue, x.defaultValue);
     ORD(isSized, x.isSized);
     return OrdEqual;
 }
 
 Ordering HIRValueParamDef::ord(const HIRValueParamDef& x) const {
-    ORD(mName, x.mName);
-    ORD(mType, x.mType);
+    ORD(name, x.name);
+    ORD(type, x.type);
     return OrdEqual;
 }
 

@@ -201,8 +201,8 @@ public:
 
     // GenericPath : <SimplePath> <PathParams>
     void fmtGenericPath(const HIRGenericPath& gp) {
-        this->fmtSimplePath(gp.mPath);
-        this->fmtPathParams(gp.mParams);
+        this->fmtSimplePath(gp.path);
+        this->fmtPathParams(gp.params);
     }
 
     void fmtPath(const HIRPath& p) {
@@ -211,7 +211,7 @@ public:
         // - Inherent: Starts with `I`
         // - Trait: Starts with `Q` (qualified)
         // - bare type: Starts with `T` (see Trans_MangleType)
-        TU_MATCH_HDRA( (p.mData), {)
+        TU_MATCH_HDRA( (p.data), {)
         TU_ARMA(Generic, e) {
                 os << "G";
                 this->fmtGenericPath(e);
@@ -292,10 +292,10 @@ public:
             TU_ARMA(TraitObject, e) {
                 // - TraitObject: 'D' <data:GenericPath> <naty> [<ASTType*> ...] <nmarker> [markers: <GenericPath> ...]
                 os << "D";
-                this->fmtGenericPath(e.mTrait.mPath);
-                os << e.mTrait.typeBounds.size();
+                this->fmtGenericPath(e.trait.path);
+                os << e.trait.typeBounds.size();
                 // HACK: Assume all TraitObject types have the same aty set (std::map is deterministic)
-                for (const auto& aty : e.mTrait.typeBounds) {
+                for (const auto& aty : e.trait.typeBounds) {
                     this->fmtType(aty.second.type);
                 }
                 os << e.markers.size();
@@ -313,15 +313,15 @@ public:
                 os << "F";
                 os << (e.isUnsafe ? "u" : ""); // Optional allowed, next is a number
                 os << (e.trackCaller ? "c" : "");
-                if (e.mAbi != ABI_RUST) {
+                if (e.abi != ABI_RUST) {
                     os << "e";
-                    this->fmtName(e.mAbi.c_str());
+                    this->fmtName(e.abi.c_str());
                 }
                 os << e.argTypes.size();
                 for (const auto& t : e.argTypes) {
                     this->fmtType(t);
                 }
-                this->fmtType(e.mRettype);
+                this->fmtType(e.rettype);
             }
             TU_ARMA(Borrow, e) {
                 os << "B";

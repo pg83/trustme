@@ -46,7 +46,7 @@ ASTHigherRankedBounds& ASTHigherRankedBounds::operator=(ASTHigherRankedBounds&&)
 ASTHigherRankedBounds::ASTHigherRankedBounds(const ASTHigherRankedBounds&) = default;
 
 bool ASTHigherRankedBounds::empty() const {
-    return mLifetimes.empty();
+    return lifetimes.empty();
 }
 
 TypeFunction::TypeFunction() = default;
@@ -54,8 +54,8 @@ TypeFunction::TypeFunction() = default;
 TypeFunction::TypeFunction(ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ASTType* ret, ::std::vector<ASTType*> args, bool isVariadic)
     : hrbs(mv$(hrbs))
     , isUnsafe(isUnsafe)
-    , mAbi(mv$(abi))
-    , mRettype(mv$(ret))
+    , abi(mv$(abi))
+    , rettype(mv$(ret))
     , argTypes(mv$(args))
     , isVariadic(isVariadic)
 {
@@ -129,8 +129,8 @@ const char* coretypeName(const eCoreType ct) {
 TypeFunction::TypeFunction(const TypeFunction& other)
     : hrbs(other.hrbs)
     , isUnsafe(other.isUnsafe)
-    , mAbi(other.mAbi)
-    , mRettype(other.mRettype->clone())
+    , abi(other.abi)
+    , rettype(other.rettype->clone())
     , isVariadic(other.isVariadic)
 {
     for (const auto& at : other.argTypes) {
@@ -141,7 +141,7 @@ TypeFunction::TypeFunction(const TypeFunction& other)
 Ordering TypeFunction::ord(const TypeFunction& x) const {
     Ordering rv;
 
-    rv = ::ord(mAbi, x.mAbi);
+    rv = ::ord(abi, x.abi);
     if (rv != OrdEqual) {
         return rv;
     }
@@ -149,7 +149,7 @@ Ordering TypeFunction::ord(const TypeFunction& x) const {
     if (rv != OrdEqual) {
         return rv;
     }
-    return mRettype->ord(*x.mRettype);
+    return rettype->ord(*x.rettype);
 }
 
 ASTType* ASTType::clone() const {
@@ -165,16 +165,16 @@ ASTType* ASTType::clone() const {
     };
 
     auto& p = *this->pool;
-    switch (mData.tag()) {
+    switch (data.tag()) {
         case TypeData::TAGDEAD:
             assert(!"Copying a destructed type");
 #define _COPY(VAR)                                                        \
     case TypeData::TAG_##VAR:                                             \
-        return mkType(p, span_, TypeData::make_##VAR(mData.as_##VAR())); \
+        return mkType(p, span_, TypeData::make_##VAR(data.as_##VAR())); \
         break;
 #define _CLONE(VAR, ...)                                       \
     case TypeData::TAG_##VAR: {                                \
-        auto& old = mData.as_##VAR();                          \
+        auto& old = data.as_##VAR();                          \
         return mkType(p, span_, TypeData::make_##VAR(__VA_ARGS__)); \
     } break;
             _COPY(None)
@@ -237,13 +237,13 @@ Ordering TypeTraitPath::ord(const TypeTraitPath& x) const {
 Ordering ASTType::ord(const ASTType& x) const {
     Ordering rv;
 
-    rv = ::ord((unsigned)mData.tag(), (unsigned)x.mData.tag());
+    rv = ::ord((unsigned)data.tag(), (unsigned)x.data.tag());
     if (rv != OrdEqual) {
         return rv;
     }
 
-    TU_MATCH(TypeData, (mData, x.mData), (ent, xEnt), (None, return OrdEqual;), (Macro, throw CompileErrorBugCheck("ASTType*::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);), (Function, return ent.info.ord(xEnt.info);), (Tuple, return ::ord(ent.innerTypes, xEnt.innerTypes);), (Borrow, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Pointer, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Array, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return ent.inner->ord(*xEnt.inner);), (Pattern, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; return ::ord(*ent.pattern, *xEnt.pattern);), (Generic, return ::ord(ent.name, xEnt.name);), (Path, return ent->ord(*xEnt);), (TraitObject, return ::ord(ent.traits, xEnt.traits);), (ErasedType, ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;))
-    throw ::std::runtime_error(FMT("BUGCHECK - Unhandled ASTType* class '" << mData.tag() << "'"));
+    TU_MATCH(TypeData, (data, x.data), (ent, xEnt), (None, return OrdEqual;), (Macro, throw CompileErrorBugCheck("ASTType*::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);), (Function, return ent.info.ord(xEnt.info);), (Tuple, return ::ord(ent.innerTypes, xEnt.innerTypes);), (Borrow, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Pointer, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Array, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return ent.inner->ord(*xEnt.inner);), (Pattern, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; return ::ord(*ent.pattern, *xEnt.pattern);), (Generic, return ::ord(ent.name, xEnt.name);), (Path, return ent->ord(*xEnt);), (TraitObject, return ::ord(ent.traits, xEnt.traits);), (ErasedType, ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;))
+    throw ::std::runtime_error(FMT("BUGCHECK - Unhandled ASTType* class '" << data.tag() << "'"));
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const eCoreType ct) {
@@ -257,15 +257,15 @@ Ordering ord(ASTType* a, ASTType* b) {
 void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
 #define _(VAR, ...)                               \
     case TypeData::TAG_##VAR: {                   \
-        const auto& ent = this->mData.as_##VAR(); \
+        const auto& ent = this->data.as_##VAR(); \
         (void)&ent;                               \
         __VA_ARGS__                               \
     } break;
 #define _2(VAR, brace)                            \
     case TypeData::TAG_##VAR: {                   \
-        const auto& ent = this->mData.as_##VAR(); \
+        const auto& ent = this->data.as_##VAR(); \
         (void)&ent;
-    switch (this->mData.tag()) {
+    switch (this->data.tag()) {
         case TypeData::TAGDEAD:
             throw "";
             _(None, os << "!/*none*/!";)
@@ -274,10 +274,10 @@ void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
             _(Macro, os << *ent.inv;)
             _(Unit, os << "()";)
             _(Primitive, os << ent.coreType;)
-            TU_ARM(mData, Function, ent) {
+            TU_ARM(data, Function, ent) {
                 os << ent.info.hrbs;
-                if (ent.info.mAbi != "") {
-                    os << "extern \"" << ent.info.mAbi << "\" ";
+                if (ent.info.abi != "") {
+                    os << "extern \"" << ent.info.abi << "\" ";
                 }
                 if (ent.info.isUnsafe) {
                     os << "unsafe ";
@@ -288,8 +288,8 @@ void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
                     os << ", ";
                 }
                 os << ")";
-                if (!ent.info.mRettype->isUnit()) {
-                    os << " -> " << *ent.info.mRettype;
+                if (!ent.info.rettype->isUnit()) {
+                    os << " -> " << *ent.info.rettype;
                 }
             }
             break;
@@ -297,7 +297,7 @@ void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
                 it->print(os, isDebug);
                 os << ", ";
             } os << ")";)
-            TU_ARM(mData, Borrow, ent) {
+            TU_ARM(data, Borrow, ent) {
                 os << "&";
                 if (ent.lifetime != ASTLifetimeRef()) {
                     os << ent.lifetime << " ";

@@ -195,13 +195,13 @@ TAGGED_UNION_EX(
 
 class ASTGenericParams {
 public:
-    ::std::vector<GenericParam> mParams;
+    ::std::vector<GenericParam> params;
     ::std::vector<ASTGenericBound> bounds;
     // Types that appear in a `where` clause with an empty bound list (`T:`).
     // These impose no constraint, but must still be expanded/resolved so that
     // any side effects they carry (e.g. anon-const blocks with nested items)
     // are processed consistently with how lowering later visits them.
-    ::std::vector<ASTType*> mBareBoundTypes;
+    ::std::vector<ASTType*> bareBoundTypes;
 
     ASTGenericParams();
 
@@ -230,7 +230,7 @@ public:
     }
 
     void addValueParam(Span sp, ASTAttributeList attrs, Ident name, ASTType* ty, ASTExpr val) {
-        mParams.push_back(ASTValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), mv$(val)));
+        params.push_back(ASTValueParam(mv$(sp), mv$(attrs), mv$(name), mv$(ty), mv$(val)));
     }
 
     void addBound(ASTGenericBound bound) {

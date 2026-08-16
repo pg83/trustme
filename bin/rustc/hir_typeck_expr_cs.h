@@ -110,9 +110,9 @@ struct Context {
     const HIRCrate& crate;
     const HIRTraitImpl* currentTraitImpl;
 
-    ::std::vector<Binding> mBindings;
+    ::std::vector<Binding> bindings;
     HMTypeInferrence ivars;
-    TraitResolution mResolve;
+    TraitResolution resolve;
 
     unsigned nextRuleIdx;
     // NOTE: unique_ptr used to reduce copy costs of the list
@@ -151,7 +151,7 @@ struct Context {
 
     ::std::vector<RpitEntry> rpitTypes;
 
-    const HIRSimplePath mLangBox;
+    const HIRSimplePath langBox;
 
     Context(const WireBoard& wb, const HIRGenericParams* implParams, const HIRGenericParams* itemParams, const HIRSimplePath& modPath, const HIRGenericPath* currentTrait, const HIRTraitImpl* currentTraitImpl);
 

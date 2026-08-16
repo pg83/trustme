@@ -464,13 +464,13 @@ class MacroExpander: public TokenStream {
     Ident::Hygiene lastHygiene;
 
 public:
-    stl::ObjPool& mPool;
+    stl::ObjPool& pool;
 
     MacroExpander(const MacroExpander& x) = delete;
 
     MacroExpander(stl::ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
         : TokenStream(ParseState())
-        , mPool(pool)
+        , pool(pool)
         , logIndex(sNextLogIndex++)
         , thisSpan(sp, crateName, macroName)
         , crateName(mv$(crateName))
@@ -613,7 +613,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
 ::std::unique_ptr<TokenStream> MacroInvokeRules(const RcString& name, const MacroRules& rules, const Span& sp, const WireBoard& wb, TokenTree input, const ASTCrate& crate, ASTModule& mod) {
     TRACE_FUNCTION_F("'" << name << "', " << input);
     DEBUG("rules.m_source_crate = " << rules.sourceCrate);
-    DEBUG("rules.m_hygiene = " << rules.mHygiene);
+    DEBUG("rules.m_hygiene = " << rules.hygiene);
 
     ParameterMappings boundTts;
     unsigned int ruleIndex = MacroInvokeRulesMatchPattern(sp, wb, rules, mv$(input), crate, mod, boundTts);
@@ -628,7 +628,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     // Run through the expansion counting the number of times each fragment is used
     MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
 
-    TokenStream* retPtr = new MacroExpander(*crate.pool, name, sp, crate.edition, rules.isMacroItem, rules.definitionId, rules.mHygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
+    TokenStream* retPtr = new MacroExpander(*crate.pool, name, sp, crate.edition, rules.isMacroItem, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
 
     return ::std::unique_ptr<TokenStream>(retPtr);
 }
@@ -2387,7 +2387,7 @@ Token MacroExpander::realGetToken() {
                     case TOK_IDENT:
                     case TOK_LIFETIME: {
                         auto ident = e.ident();
-                        ident.hygiene = ident.hygiene.withTailScope(mPool, hygiene_, isMacroItem);
+                        ident.hygiene = ident.hygiene.withTailScope(pool, hygiene_, isMacroItem);
                         lastHygiene = ident.hygiene;
                         auto rv = Token(e.type(), std::move(ident));
                         DEBUG("[" << logIndex << "] Updated hygine: " << rv);
@@ -2397,7 +2397,7 @@ Token MacroExpander::realGetToken() {
                     case TOK_BYTESTRING:
                     case TOK_STRING: {
                         auto h = e.strHygiene();
-                        h = h.withTailScope(mPool, hygiene_, isMacroItem);
+                        h = h.withTailScope(pool, hygiene_, isMacroItem);
                         lastHygiene = h;
                         auto rv = Token(e.type(), e.str(), std::move(h));
                         DEBUG("[" << logIndex << "] Updated hygine: " << rv);
@@ -2450,7 +2450,7 @@ Token MacroExpander::realGetToken() {
 
                         bool canSteal = (mappings_.decCount(this->pointSpan(), state.iterations(), e) == false);
                         DEBUG("[" << logIndex << "] Insert replacement #" << e << " = " << *frag);
-                        if (frag->mType == InterpolatedFragment::TT) {
+                        if (frag->type == InterpolatedFragment::TT) {
                             auto resTt = canSteal ? mv$(frag->asTt()) : frag->asTt().clone();
                             ttstream.reset(new TTStreamO(this->outerSpan(), ParseState(), mv$(resTt)));
                             return ttstream->getToken();
@@ -2474,7 +2474,7 @@ Token MacroExpander::realGetToken() {
                             auto* frag = mappings_.get(this->pointSpan(), state.iterations(), v);
                             ASSERT_BUG(this->pointSpan(), frag, "Cannot find '" << v << "' for " << state.iterations());
                             Token tok;
-                            if (frag->mType == InterpolatedFragment::TT) {
+                            if (frag->type == InterpolatedFragment::TT) {
                                 auto resTt = canSteal ? mv$(frag->asTt()) : frag->asTt().clone();
                                 TTStreamO tts(this->outerSpan(), ParseState(), std::move(resTt));
                                 tok = tts.getToken();
@@ -3281,13 +3281,13 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
 
         void emitAst(const ASTExprNode& node) {
             if (const auto* e = cast<const ASTExprNodeInteger>(&node)) {
-                out.push_back(Token(e->mValue, e->datatype));
+                out.push_back(Token(e->value, e->datatype));
             } else if (const auto* e = cast<const ASTExprNodeBool>(&node)) {
-                out.push_back(Token(e->mValue ? TOK_RWORD_TRUE : TOK_RWORD_FALSE));
+                out.push_back(Token(e->value ? TOK_RWORD_TRUE : TOK_RWORD_FALSE));
             } else if (const auto* e = cast<const ASTExprNodeNamedValue>(&node)) {
-                emitPath(e->mPath);
+                emitPath(e->path);
             } else if (const auto* e = cast<const ASTExprNodeMacro>(&node)) {
-                emitPath(e->mPath);
+                emitPath(e->path);
                 out.push_back(Token(TOK_EXCLAM));
                 if (e->ident != "") {
                     out.push_back(Token(TOK_IDENT, e->ident));
@@ -3302,7 +3302,7 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
         }
 
         void emitType(ASTType*& type) {
-            TU_MATCH_HDRA((type->mData), {)
+            TU_MATCH_HDRA((type->data), {)
             default:
                 TODO(Span(), "Convert interpolated macro fragment: " << type);
             TU_ARMA(Path, p) {
@@ -3708,7 +3708,7 @@ namespace {
     MacroRulesPtr makeMrPtr(const TokenStream& lex) {
         auto s = lex.pointSpan();
         auto rv = MacroRulesPtr(new MacroRules(s->crateName(), lex.getEdition()));
-        rv->mHygiene = lex.getHygiene();
+        rv->hygiene = lex.getHygiene();
         return rv;
     }
 }

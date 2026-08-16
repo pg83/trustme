@@ -9,7 +9,7 @@
 #include <iostream>
 
 struct HIRTypeParamDef {
-    RcString mName;
+    RcString name;
     HIRTypeRef defaultValue;
     bool isSized;
 
@@ -17,8 +17,8 @@ struct HIRTypeParamDef {
 };
 
 struct HIRValueParamDef {
-    RcString mName;
-    HIRTypeRef mType;
+    RcString name;
+    HIRTypeRef type;
     HIRConstGeneric defaultValue;
 
     Ordering ord(const HIRValueParamDef& x) const;

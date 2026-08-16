@@ -31,10 +31,10 @@ using ::std::move;
 using ::std::unique_ptr;
 
 struct ASTStructItem {
-    ASTAttributeList mAttrs;
+    ASTAttributeList attrs;
     ASTVisibility vis;
-    RcString mName;
-    ASTType* mType;
+    RcString name;
+    ASTType* type;
     // RFC3681
     ASTExpr defaultValue;
 
@@ -43,23 +43,23 @@ struct ASTStructItem {
     ASTStructItem(ASTAttributeList attrs, ASTVisibility vis, RcString name, ASTType* ty, ASTExpr defaultValue);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTStructItem& x) {
-        return os << x.vis << x.mName << ": " << x.mType;
+        return os << x.vis << x.name << ": " << x.type;
     }
 
     ASTStructItem clone() const;
 };
 
 struct ASTTupleItem {
-    ASTAttributeList mAttrs;
+    ASTAttributeList attrs;
     ASTVisibility vis;
-    ASTType* mType;
+    ASTType* type;
 
     //TupleItem() {}
 
     ASTTupleItem(ASTAttributeList attrs, ASTVisibility vis, ASTType* ty);
 
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTTupleItem& x) {
-        return os << x.vis << x.mType;
+        return os << x.vis << x.type;
     }
 
     ASTTupleItem clone() const;
@@ -401,12 +401,12 @@ public:
     ASTTrait clone() const;
 };
 
-TAGGED_UNION_EX(ASTEnumVariantData, (), Unit, ((Unit, struct {}), (Tuple, struct { ::std::vector<ASTTupleItem> mItems; }), (Struct, struct { ::std::vector<ASTStructItem> fields; })), (), (), (public:));
+TAGGED_UNION_EX(ASTEnumVariantData, (), Unit, ((Unit, struct {}), (Tuple, struct { ::std::vector<ASTTupleItem> items; }), (Struct, struct { ::std::vector<ASTStructItem> fields; })), (), (), (public:));
 
 struct ASTEnumVariant {
-    ASTAttributeList mAttrs;
-    RcString mName;
-    ASTEnumVariantData mData;
+    ASTAttributeList attrs;
+    RcString name;
+    ASTEnumVariantData data;
     /// Optional discriminant value
     ASTExpr discriminantValue;
 
@@ -475,7 +475,7 @@ class ASTStruct {
     ASTGenericParams params_;
 
 public:
-    ASTStructData mData;
+    ASTStructData data;
 
     struct Markings {
         Markings();
@@ -519,7 +519,7 @@ public:
 class ASTUnion {
 public:
     ASTGenericParams params_;
-    ::std::vector<ASTStructItem> mVariants;
+    ::std::vector<ASTStructItem> variants;
 
     struct Markings {
         enum class Repr {
@@ -725,7 +725,7 @@ class ASTModule {
     // Module-level items
     /// General items
 public:
-    ::std::vector<std::unique_ptr<ASTNamed<ASTItem>>> mItems;
+    ::std::vector<std::unique_ptr<ASTNamed<ASTItem>>> items;
 
 private:
     // --- Runtime caches and state ---

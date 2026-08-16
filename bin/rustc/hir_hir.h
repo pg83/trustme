@@ -100,16 +100,16 @@ struct HIRLinkage {
 class HIRStatic {
 public:
     // NOTE: The generics can't influence the value of this `const`
-    HIRGenericParams mParams;
+    HIRGenericParams params;
 
     HIRLinkage linkage;
     bool isMut;
-    HIRTypeRef mType;
+    HIRTypeRef type;
     // Stronger alignment requested for compiler-generated storage.  This is
-    // zero for Rust statics, whose alignment is determined by mType.
+    // zero for Rust statics, whose alignment is determined by type.
     size_t explicitAlignment = 0;
 
-    HIRExprPtr mValue;
+    HIRExprPtr value;
 
     EncodedLiteral valueRes;
     bool valueGenerated = false;
@@ -124,10 +124,10 @@ public:
 class HIRConstant {
 public:
     // NOTE: The generics can't influence the value of this `const`
-    HIRGenericParams mParams;
+    HIRGenericParams params;
 
-    HIRTypeRef mType;
-    HIRExprPtr mValue;
+    HIRTypeRef type;
+    HIRExprPtr value;
 
     EncodedLiteral valueRes;
     enum class ValueState {
@@ -166,13 +166,13 @@ public:
 
     Receiver receiver = Receiver::Free;
     ::std::optional<HIRTypeRef> receiverType; // Present only for a custom receiver
-    RcString mAbi = RcString::newInterned(ABI_RUST);
+    RcString abi = RcString::newInterned(ABI_RUST);
     bool unsafe = false;
     bool isConst = false;
 
-    HIRGenericParams mParams;
+    HIRGenericParams params;
 
-    argsT mArgs;
+    argsT args;
     bool variadic = false;
     HIRTypeRef returnType;
     // The trait-declared return used to typecheck a refining RPITIT impl.
@@ -180,7 +180,7 @@ public:
     ::std::optional<HIRTypeRef> traitReturnType;
 
     SourceLocation source;
-    HIRExprPtr mCode;
+    HIRExprPtr code;
     // Exact aliases named by this current-crate function's
     // #[define_opaque(...)] attribute.
     std::vector<HIRSimplePath> defineOpaque;
@@ -213,12 +213,12 @@ public:
 // Type structures
 // --------------------------------------------------------------------
 struct HIRTypeAlias {
-    HIRGenericParams mParams;
-    HIRTypeRef mType;
+    HIRGenericParams params;
+    HIRTypeRef type;
 };
 
 struct HIRTraitAlias {
-    HIRGenericParams mParams;
+    HIRGenericParams params;
     ::std::vector<HIRTraitPath> traits;
 };
 
@@ -344,10 +344,10 @@ public:
 
     TAGGED_UNION(Class, Data, (Data, ::std::vector<DataVariant>), (Value, struct { ::std::vector<ValueVariant> variants; }));
 
-    HIRGenericParams mParams;
+    HIRGenericParams params;
     bool isCRepr;
     Repr tagRepr;
-    Class mData;
+    Class data;
 
     // Flag indicating that constant evaluation has completed
     bool discriminantsEvaluated;
@@ -355,7 +355,7 @@ public:
     HIRTraitMarkings markings;
 
     size_t numVariants() const {
-        return (mData.is_Data() ? mData.as_Data().size() : mData.as_Value().variants.size());
+        return (data.is_Data() ? data.as_Data().size() : data.as_Value().variants.size());
     }
 
     size_t findVariant(const RcString&) const;
@@ -392,9 +392,9 @@ public:
 
     HIRStruct(HIRGenericParams params, Repr repr, Data data, unsigned align, HIRTraitMarkings tm, HIRStructMarkings sm);
 
-    HIRGenericParams mParams;
+    HIRGenericParams params;
     Repr repr;
-    Data mData;
+    Data data;
     unsigned forcedAlignment = 0;
     unsigned maxFieldAlignment = 0; // for packed
 
@@ -414,9 +414,9 @@ public:
         Transparent,
     };
 
-    HIRGenericParams mParams;
+    HIRGenericParams params;
     Repr repr;
-    tStructFields mVariants;
+    tStructFields variants;
 
     HIRTraitMarkings markings;
 };
@@ -435,11 +435,11 @@ TAGGED_UNION(HIRTraitValueItem, Constant, (Constant, HIRConstant), (Static, HIRS
 
 class HIRTrait {
 public:
-    HIRGenericParams mParams;
+    HIRGenericParams params;
     // NOTE: Not serialised!
     ::std::vector<HIRTraitPath> parentTraits;
 
-    bool mIsMarker; // aka auto trait/OIBIT
+    bool isMarker; // aka auto trait/OIBIT
     bool isConst;
     /// Auto traits and traits carrying `#[rustc_coinductive]` admit
     /// productive recursive goals in the trait solver.
@@ -589,8 +589,8 @@ public:
         T data;
     };
 
-    HIRGenericParams mParams;
-    HIRTypeRef mType;
+    HIRGenericParams params;
+    HIRTypeRef type;
 
     ::std::map<RcString, VisImplEnt<HIRFunction>> methods;
     ::std::map<RcString, VisImplEnt<HIRConstant>> constants;
@@ -613,9 +613,9 @@ public:
         T data;
     };
 
-    HIRGenericParams mParams;
+    HIRGenericParams params;
     HIRPathParams traitArgs;
-    HIRTypeRef mType;
+    HIRTypeRef type;
 
     ::std::map<RcString, ImplEnt<HIRFunction>> methods;
     ::std::map<RcString, ImplEnt<HIRConstant>> constants;
@@ -640,10 +640,10 @@ public:
 
 class HIRMarkerImpl {
 public:
-    HIRGenericParams mParams;
+    HIRGenericParams params;
     HIRPathParams traitArgs;
     bool isPositive;
-    HIRTypeRef mType;
+    HIRTypeRef type;
 
     HIRSimplePath srcModule;
 
@@ -656,9 +656,9 @@ public:
 
 class HIRExternCrate {
 public:
-    HIRCrate* mData = nullptr;
+    HIRCrate* data = nullptr;
     ::std::string basename; // Just the filename (serialised)
-    ::std::string mPath;    // The path used to load this crate
+    ::std::string path;    // The path used to load this crate
 };
 
 class HIRExternLibrary {
@@ -683,7 +683,7 @@ public:
     // consumers of its metadata use their own feature set.
     ::std::set<RcString> features;
 
-    HIRModule mRootModule;
+    HIRModule rootModule;
 
     // Placeholder for types created during constant evaluation
     mutable std::vector<std::pair<RcString, HIRVisEnt<HIRTypeItem>*>> newTypes;
@@ -746,7 +746,7 @@ public:
     std::vector<RcString> exportedMacroNames;
 
     /// Language items avaliable through this crate (includes ones from loaded externs)
-    ::std::unordered_map<::std::string, HIRSimplePath> mLangItems;
+    ::std::unordered_map<::std::string, HIRSimplePath> langItems;
 
     /// Referenced crates (in load order) - Used to ensure final linking order is sane
     // NOT SERIALISED

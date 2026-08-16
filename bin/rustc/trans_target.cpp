@@ -105,23 +105,23 @@ namespace {
                         rv.envName = keyVal.value.asString();
                     } else if (keyVal.path[1] == "arch") {
                         checkPathLength(keyVal, 2);
-                        if (keyVal.value.asString() == ARCH_ARM32.mName) {
+                        if (keyVal.value.asString() == ARCH_ARM32.name) {
                             rv.arch = ARCH_ARM32;
-                        } else if (keyVal.value.asString() == ARCH_ARM64.mName) {
+                        } else if (keyVal.value.asString() == ARCH_ARM64.name) {
                             rv.arch = ARCH_ARM64;
-                        } else if (keyVal.value.asString() == ARCH_X86.mName) {
+                        } else if (keyVal.value.asString() == ARCH_X86.name) {
                             rv.arch = ARCH_X86;
-                        } else if (keyVal.value.asString() == ARCH_X86_64.mName) {
+                        } else if (keyVal.value.asString() == ARCH_X86_64.name) {
                             rv.arch = ARCH_X86_64;
-                        } else if (keyVal.value.asString() == ARCH_M68K.mName) {
+                        } else if (keyVal.value.asString() == ARCH_M68K.name) {
                             rv.arch = ARCH_M68K;
-                        } else if (keyVal.value.asString() == ARCH_POWERPC.mName) {
+                        } else if (keyVal.value.asString() == ARCH_POWERPC.name) {
                             rv.arch = ARCH_POWERPC;
-                        } else if (keyVal.value.asString() == ARCH_POWERPC64.mName) {
+                        } else if (keyVal.value.asString() == ARCH_POWERPC64.name) {
                             rv.arch = ARCH_POWERPC64;
-                        } else if (keyVal.value.asString() == ARCH_POWERPC64LE.mName) {
+                        } else if (keyVal.value.asString() == ARCH_POWERPC64LE.name) {
                             rv.arch = ARCH_POWERPC64LE;
-                        } else if (keyVal.value.asString() == ARCH_RISCV64.mName) {
+                        } else if (keyVal.value.asString() == ARCH_RISCV64.name) {
                             rv.arch = ARCH_RISCV64;
                         } else {
                             // Error.
@@ -176,11 +176,11 @@ namespace {
                     checkPathLengthMin(keyVal, 2);
                     if (keyVal.path[1] == "name") {
                         checkPathLength(keyVal, 2);
-                        if (rv.arch.mName != "") {
-                            ::std::cerr << "ERROR: Architecture already specified to be '" << rv.arch.mName << "'" << ::std::endl;
+                        if (rv.arch.name != "") {
+                            ::std::cerr << "ERROR: Architecture already specified to be '" << rv.arch.name << "'" << ::std::endl;
                             exit(1);
                         }
-                        rv.arch.mName = keyVal.value.asString();
+                        rv.arch.name = keyVal.value.asString();
                     } else if (keyVal.path[1] == "pointer-bits") {
                         checkPathLength(keyVal, 2);
                         rv.arch.pointerBits = keyVal.value.asInt();
@@ -234,7 +234,7 @@ namespace {
         }
 
         // TODO: Ensure that everything is set
-        if (rv.arch.mName == "") {
+        if (rv.arch.name == "") {
             ::std::cerr << "ERROR: Architecture not specified in " << filename << ::std::endl;
             exit(1);
         }
@@ -283,7 +283,7 @@ namespace {
         of << "]\n"
            << "\n"
            << "[arch]\n"
-           << "name = \"" << spec.arch.mName << "\"\n"
+           << "name = \"" << spec.arch.name << "\"\n"
            << "pointer-bits = " << spec.arch.pointerBits << "\n"
            << "is-big-endian = " << H::tfstr(spec.arch.bigEndian) << "\n"
            << "has-atomic-u8 = " << H::tfstr(spec.arch.atomics.u8) << "\n"
@@ -441,7 +441,7 @@ void TargetSetCfg(WireBoard& wb, const ::std::string& targetName) {
     CfgSetValue(settings, "target_os", tgt.osName);
     CfgSetValue(settings, "target_pointer_width", FMT(tgt.arch.pointerBits));
     CfgSetValue(settings, "target_endian", tgt.arch.bigEndian ? "big" : "little");
-    CfgSetValue(settings, "target_arch", tgt.arch.mName);
+    CfgSetValue(settings, "target_arch", tgt.arch.name);
     CfgSetValue(settings, "target_abi", "llvm"); // This is a lie, but hopefully works?
     // target_has_atomic_equal_alignment="N" means align_of::<AtomicN>() == align_of::<N>().
     // Since libcore declares AtomicN with repr(align(sizeof(N))), only set it when the
@@ -509,10 +509,10 @@ namespace {
             }
 
             void visitPattern(const Span& sp, HIRPattern& pattern) override {
-                for (const auto& binding : pattern.mBindings) {
+                for (const auto& binding : pattern.bindings) {
                     definitions.push_back(binding.slot);
                 }
-                if (const auto* split = pattern.mData.opt_SplitSlice(); split && split->extraBind.isValid()) {
+                if (const auto* split = pattern.data.opt_SplitSlice(); split && split->extraBind.isValid()) {
                     definitions.push_back(split->extraBind.slot);
                 }
                 HIRExprVisitorDef::visitPattern(sp, pattern);
@@ -801,11 +801,11 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& str = *te.binding.as_Struct();
         // TODO: Wipe lifetimes?
-        auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.data.as_Generic().params, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };
-        TU_MATCH_HDRA( (str.mData), {)
+        TU_MATCH_HDRA( (str.data), {)
         TU_ARMA(Unit, se) {
             }
             TU_ARMA(Tuple, se) {
@@ -1562,21 +1562,21 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& enm = *te.binding.as_Enum();
 
-        auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.data.as_Generic().params, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };
 
         if (!enm.discriminantsEvaluated) {
-            ConvertHIRConstantEvaluateEnum(resolve.board(), resolve.hirCrate(), te.path.mData.as_Generic().mPath, enm);
+            ConvertHIRConstantEvaluateEnum(resolve.board(), resolve.hirCrate(), te.path.data.as_Generic().path, enm);
             assert(enm.discriminantsEvaluated);
         }
 
         TypeRepr rv;
-        switch (enm.mData.tag()) {
+        switch (enm.data.tag()) {
             case HIREnum::Class::TAGDEAD:
                 throw "";
-                TU_ARM(enm.mData, Data, e) {
+                TU_ARM(enm.data, Data, e) {
                     // repr(C) enums - they have different rules
                     // - A data enum with `repr(C)` puts the tag before the data
                     if (enm.isCRepr) {
@@ -2025,7 +2025,7 @@ namespace {
                     }
                 }
                 break;
-                TU_ARM(enm.mData, Value, e) {
+                TU_ARM(enm.data, Value, e) {
                     // TODO: If the values aren't yet populated, force const evaluation
                     switch (enm.tagRepr) {
                         case HIREnum::Repr::Auto:
@@ -2113,7 +2113,7 @@ namespace {
         const auto& te = ty->as_Path();
         const auto& unn = *te.binding.as_Union();
 
-        auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.mData.as_Generic().mParams, nullptr);
+        auto monomorphCb = MonomorphStatePtr(resolve.hirCrate().types, ty, &te.path.data.as_Generic().params, nullptr);
         auto monomorph = [&](const auto& tpl) {
             return resolve.monomorphExpand(sp, tpl, monomorphCb);
         };
@@ -2121,7 +2121,7 @@ namespace {
         TypeRepr rv;
         // codegen_c pins union alignment with an explicit `__attribute__((aligned))`, which gcc counts as user-alignment - so a union, and anything containing it, is exempt from the cap.
         rv.userAlign = true;
-        for (const auto& var : unn.mVariants) {
+        for (const auto& var : unn.variants) {
             rv.fields.push_back({0, monomorph(var.ty)});
             size_t size, align;
             if (!TargetGetSizeAndAlignOf(sp, resolve, rv.fields.back().ty, size, align)) {
@@ -2697,7 +2697,7 @@ namespace {
             } else if (const auto* values = repr.variants.opt_Values()) {
                 const auto tagOffset = repr.getOffset(sp, resolve, values->field);
                 for (unsigned variant = 0; variant < values->values.size(); variant++) {
-                    auto value = enm.mData.is_Value()
+                    auto value = enm.data.is_Value()
                         ? combine({Segment{tagOffset, exact(values->values[variant], values->field.size)}}, repr.size)
                         : taggedVariant(repr, variant, tagOffset, values->field.size, values->values[variant], true);
                     alternatives.push_back(value.fragment);

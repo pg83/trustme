@@ -98,7 +98,7 @@ class HIRExprPtr {
 
 public:
     //::std::vector< ::HIR::ASTType*>  m_type_table;
-    ::std::vector<HIRTypeRef> mBindings;
+    ::std::vector<HIRTypeRef> bindings;
     ::std::vector<HIRTypeRef> erasedTypes;
     ::std::vector<HIRSimplePath> defineOpaque;
 

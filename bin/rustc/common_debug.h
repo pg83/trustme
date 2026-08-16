@@ -65,7 +65,7 @@ namespace {
 }
 
 struct DebugFunctionScope {
-    const char* mName;
+    const char* name;
 
     DebugFunctionScope(const char* name, dbgCbT cb);
 

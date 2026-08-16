@@ -167,7 +167,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     newmod.addItem(Span(), visPrivate, "MACROS", mv$(testsList), {});
 
     crate.rootModule_.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
-    crate.mLangItems["mrustc-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
+    crate.langItems["mrustc-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
 }
 
 enum class TokenClass {
@@ -445,7 +445,7 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCr
     const auto& extCrate = crate.externCrates.at(crateName);
     // TODO: Ensure that this macro is in the listed crate.
     const HIRProcMacro* pmp = nullptr;
-    for (const auto& mi : extCrate.hir->mRootModule.macroItems) {
+    for (const auto& mi : extCrate.hir->rootModule.macroItems) {
         if (!mi.second->ent.is_ProcMacro()) {
             continue;
         }
@@ -481,7 +481,7 @@ ProcMacroInv ProcMacroInvokeInt(const Span& sp, const WireBoard& wb, const ASTCr
 
 namespace {
     struct Visitor {
-        const WireBoard& mWb;
+        const WireBoard& wb;
         const Span& sp;
         const Settings& settings;
         ProcMacroInv& pmi;
@@ -491,7 +491,7 @@ namespace {
         bool skipDeriveAttrs = false;
 
         Visitor(const WireBoard& wb, const Span& sp, const Settings& settings, ProcMacroInv& pmi)
-            : mWb(wb)
+            : wb(wb)
             , sp(sp)
             , settings(settings)
             , pmi(pmi)
@@ -918,7 +918,7 @@ namespace {
                 if (b.isMutable) {
                     pmi.sendRword("mut");
                 }
-                switch (b.mType) {
+                switch (b.type) {
                     case ASTPatternBinding::Type::MOVE:
                         break;
                     case ASTPatternBinding::Type::REF:
@@ -929,11 +929,11 @@ namespace {
                         pmi.sendRword("mut");
                         break;
                 }
-                if (b.mName == "self") {
+                if (b.name == "self") {
                     pmi.sendRword("self");
                     return;
                 } else {
-                    pmi.sendIdent(b.mName);
+                    pmi.sendIdent(b.name);
                 }
                 pmi.sendSymbol("@");
             }
@@ -1010,7 +1010,7 @@ namespace {
         void visitType(::ASTType* ty) {
             // TODO: Correct handling of visit_type
             TU_MATCHA(
-                (ty->mData),
+                (ty->data),
                 (te),
                 (None, BUG(sp, ty);),
                 (Any, pmi.sendRword("_");),
@@ -1085,7 +1085,7 @@ namespace {
             if (!hrbs.empty()) {
                 pmi.sendRword("for");
                 pmi.sendSymbol("<");
-                for (const auto& v : hrbs.mLifetimes) {
+                for (const auto& v : hrbs.lifetimes) {
                     pmi.sendLifetime(v.name().name.c_str());
                     pmi.sendSymbol(",");
                 }
@@ -1226,10 +1226,10 @@ namespace {
         }
 
         void visitParams(const ASTGenericParams& params) {
-            if (!params.mParams.empty()) {
+            if (!params.params.empty()) {
                 bool isFirst = true;
                 pmi.sendSymbol("<");
-                for (const auto& param : params.mParams) {
+                for (const auto& param : params.params) {
                     if (!isFirst) {
                         pmi.sendSymbol(",");
                     }
@@ -1320,7 +1320,7 @@ namespace {
             if (!hrb.empty()) {
                 pmi.sendRword("for");
                 pmi.sendSymbol("<");
-                for (const auto& lft : hrb.mLifetimes) {
+                for (const auto& lft : hrb.lifetimes) {
                     pmi.sendLifetime(lft.name().name.c_str());
                     pmi.sendSymbol(",");
                 }
@@ -1335,7 +1335,7 @@ namespace {
                 for (const auto& e : params.bounds) {
                     size_t i = &e - params.bounds.data();
                     bool alreadyEmitted = false;
-                    for (const auto& p : params.mParams) {
+                    for (const auto& p : params.params) {
                         if (p.is_None()) {
                             continue;
                         }
@@ -1408,7 +1408,7 @@ namespace {
 
         void parseString(const ::std::string& s) {
             ::std::istringstream iss{s};
-            Lexer l{*mWb.pool, iss, ASTEdition::Rust2021, {}};
+            Lexer l{*wb.pool, iss, ASTEdition::Rust2021, {}};
             for (;;) {
                 auto t = l.getToken();
                 if (t == TOK_EOF) {
@@ -1430,7 +1430,7 @@ namespace {
         }
 
         void visitAttrs(const ASTAttributeList& attrs) {
-            for (const auto& a : attrs.mItems) {
+            for (const auto& a : attrs.items) {
                 this->visitAttr(a);
             }
         }
@@ -1518,7 +1518,7 @@ namespace {
             pmi.sendRword("struct");
             pmi.sendIdent(name.c_str());
             this->visitParams(str.params());
-            TU_MATCH_HDRA((str.mData), {)
+            TU_MATCH_HDRA((str.data), {)
             TU_ARMA(Unit, se) {
                     this->visitBounds(str.params());
                     pmi.sendSymbol(";");
@@ -1526,9 +1526,9 @@ namespace {
                 TU_ARMA(Tuple, se) {
                     pmi.sendSymbol("(");
                     for (const auto& si : se.ents) {
-                        this->visitAttrs(si.mAttrs);
+                        this->visitAttrs(si.attrs);
                         this->visitVis(si.vis);
-                        this->visitType(si.mType);
+                        this->visitType(si.type);
                         pmi.sendSymbol(",");
                     }
                     pmi.sendSymbol(")");
@@ -1540,11 +1540,11 @@ namespace {
                     pmi.sendSymbol("{");
 
                     for (const auto& si : se.ents) {
-                        this->visitAttrs(si.mAttrs);
+                        this->visitAttrs(si.attrs);
                         this->visitVis(si.vis);
-                        pmi.sendIdent(si.mName.c_str());
+                        pmi.sendIdent(si.name.c_str());
                         pmi.sendSymbol(":");
-                        this->visitType(si.mType);
+                        this->visitType(si.type);
                         if (si.defaultValue) {
                             pmi.sendSymbol("=");
                             this->visitNodes(si.defaultValue);
@@ -1565,16 +1565,16 @@ namespace {
             this->visitBounds(enm.params());
             pmi.sendSymbol("{");
             for (const auto& v : enm.variants()) {
-                this->visitAttrs(v.mAttrs);
-                pmi.sendIdent(v.mName.c_str());
-                TU_MATCH_HDRA( (v.mData), { )
+                this->visitAttrs(v.attrs);
+                pmi.sendIdent(v.name.c_str());
+                TU_MATCH_HDRA( (v.data), { )
                 TU_ARMA(Unit, e) {
                     }
                     TU_ARMA(Tuple, e) {
                         pmi.sendSymbol("(");
-                        for (const auto& f : e.mItems) {
-                            this->visitAttrs(f.mAttrs);
-                            this->visitType(f.mType);
+                        for (const auto& f : e.items) {
+                            this->visitAttrs(f.attrs);
+                            this->visitType(f.type);
                             pmi.sendSymbol(",");
                         }
                         pmi.sendSymbol(")");
@@ -1582,10 +1582,10 @@ namespace {
                     TU_ARMA(Struct, e) {
                         pmi.sendSymbol("{");
                         for (const auto& f : e.fields) {
-                            this->visitAttrs(f.mAttrs);
-                            pmi.sendIdent(f.mName.c_str());
+                            this->visitAttrs(f.attrs);
+                            pmi.sendIdent(f.name.c_str());
                             pmi.sendSymbol(":");
-                            this->visitType(f.mType);
+                            this->visitType(f.type);
                             pmi.sendSymbol(",");
                         }
                         pmi.sendSymbol("}");

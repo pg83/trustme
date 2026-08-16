@@ -61,7 +61,7 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef typ
         }
         DEBUG("[get_or_add_trait_bound] Add " << genericPath);
         auto& rv = traitBounds[std::make_pair(type, genericPath.clone())];
-        rv.traitPtr = &crate.getTraitByPath(sp, genericPath.mPath);
+        rv.traitPtr = &crate.getTraitByPath(sp, genericPath.path);
         rv.constness = boundConstness;
         return rv;
     };
@@ -70,15 +70,15 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef typ
         b.assoc.insert(std::make_pair(name, atye.clone()));
     };
 
-    auto& traitParams = traitPath.mPath.mParams;
+    auto& traitParams = traitPath.path.params;
     auto monomorph = MonomorphStatePtr(crate.types, type, &traitParams, nullptr);
 
-    const auto& trait = crate.getTraitByPath(sp, traitPath.mPath.mPath);
-    while (traitParams.types.size() < trait.mParams.types.size()) {
-        traitParams.types.push_back(monomorph.monomorphType(sp, trait.mParams.types[traitParams.types.size()].defaultValue));
+    const auto& trait = crate.getTraitByPath(sp, traitPath.path.path);
+    while (traitParams.types.size() < trait.params.types.size()) {
+        traitParams.types.push_back(monomorph.monomorphType(sp, trait.params.types[traitParams.types.size()].defaultValue));
     }
 
-    getOrAddTraitBound(traitPath.mPath);
+    getOrAddTraitBound(traitPath.path);
 
     for (const auto& tb : traitPath.typeBounds) {
         DEBUG("Equality (TB) - <" << type << " as " << tb.second.sourceTrait << ">::" << tb.first << " = " << tb.second);
@@ -109,10 +109,10 @@ void TraitResolveCommon::prepIndexesAddTraitBound(const Span& sp, HIRTypeRef typ
         ASSERT_BUG(sp, !aTy.second.generics.isGeneric(), "prep_indexes__add_trait_bound: Handle type generic ATYs - " << aTy.first << aTy.second.generics.fmtArgs() << " in " << traitPath);
         auto tyA = crate.types.path(
             // TODO: Empty params works for now, as there's no type generics (yet)
-            HIRPath(type, traitPath.mPath.clone(), aTy.first, HIRPathParams()),
+            HIRPath(type, traitPath.path.clone(), aTy.first, HIRPathParams()),
             HIRTypePathBinding::make_Opaque({})
         );
-        monomorph.ppMethod = &tyA->as_Path().path.mData.as_UfcsKnown().params;
+        monomorph.ppMethod = &tyA->as_Path().path.data.as_UfcsKnown().params;
 
         for (const auto& aTyB : aTy.second.traitBounds) {
             DEBUG("(Assoc) " << aTyB);
@@ -159,7 +159,7 @@ const HIRTypeData* TraitResolveCommon::getConstParamType(const Span& sp, unsigne
     }
     ASSERT_BUG(sp, p, "No generic list for " << (binding >> 8) << ":" << slot);
     ASSERT_BUG(sp, slot < p->values.size(), "Generic param index out of range");
-    return p->values.at(slot).mType;
+    return p->values.at(slot).type;
 }
 
 ::std::ostream& operator<<(::std::ostream& s, const TraitResolveCommon::CachedEquality& x) {
@@ -175,7 +175,7 @@ Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refT& b) c
 
 Ordering TraitResolveCommon::CachedBoundCmp::ord(const keyT& a, const refSpT& b) const {
     ORD(a.first, b.first);
-    ORD(a.second.mPath, b.second);
+    ORD(a.second.path, b.second);
     return OrdEqual;
 }
 

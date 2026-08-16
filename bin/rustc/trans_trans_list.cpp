@@ -113,9 +113,9 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
     TRACE_FUNCTION_F(p);
     auto rv = this->monomorphPath(sp, p, false);
 
-    TU_MATCH_HDRA( (rv.mData), {)
+    TU_MATCH_HDRA( (rv.data), {)
     TU_ARMA(Generic, e2) {
-            for (auto& arg : e2.mParams.types) {
+            for (auto& arg : e2.params.types) {
                 resolve.expandAssociatedTypes(sp, arg);
             }
         }
@@ -131,7 +131,7 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
         }
         TU_ARMA(UfcsKnown, e2) {
             resolve.expandAssociatedTypes(sp, e2.type);
-            for (auto& arg : e2.trait.mParams.types) {
+            for (auto& arg : e2.trait.params.types) {
                 resolve.expandAssociatedTypes(sp, arg);
             }
             for (auto& arg : e2.params.types) {
@@ -146,7 +146,7 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
 }
 
 HIRGenericPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRGenericPath& p) const {
-    return HIRGenericPath(p.mPath, this->monomorph(resolve, p.mParams));
+    return HIRGenericPath(p.path, this->monomorph(resolve, p.params));
 }
 
 HIRPathParams TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPathParams& p) const {

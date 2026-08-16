@@ -27,22 +27,22 @@ Ordering EncodedLiteral::ord(const EncodedLiteral& x) const {
 EncodedLiteralSlice::EncodedLiteralSlice(const EncodedLiteral& base)
     : base(base)
     , ofs(0)
-    , mSize(base.bytes.size())
+    , size(base.bytes.size())
 //, m_reloc_ofs(0)
 //, m_reloc_size(base.relocations.size())
 {
 }
 EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs) const {
-    assert(ofs <= mSize);
-    return slice(ofs, mSize - ofs);
+    assert(ofs <= size);
+    return slice(ofs, size - ofs);
 }
 EncodedLiteralSlice EncodedLiteralSlice::slice(size_t ofs, size_t len) const {
-    assert(ofs <= mSize);
-    assert(len <= mSize);
-    assert(ofs + len <= mSize);
+    assert(ofs <= size);
+    assert(len <= size);
+    assert(ofs + len <= size);
     auto rv = EncodedLiteralSlice(base);
     rv.ofs = this->ofs + ofs;
-    rv.mSize = len;
+    rv.size = len;
     return rv;
 }
 

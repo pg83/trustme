@@ -109,20 +109,20 @@ struct HIRTypeDataPath {
     HIRTypePathBinding binding;
 
     bool isClosure() const {
-        return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0;
+        return path.data.is_Generic() && path.data.as_Generic().path.components().back().size() > 8 && path.data.as_Generic().path.components().back().compare(0, strlen(CLOSURE_PATH_PREFIX), CLOSURE_PATH_PREFIX) == 0;
     }
 
     bool isGenerator() const {
-        return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(GENERATOR_PATH_PREFIX), GENERATOR_PATH_PREFIX) == 0;
+        return path.data.is_Generic() && path.data.as_Generic().path.components().back().size() > 8 && path.data.as_Generic().path.components().back().compare(0, strlen(GENERATOR_PATH_PREFIX), GENERATOR_PATH_PREFIX) == 0;
     }
 
     bool isFuture() const {
-        return path.mData.is_Generic() && path.mData.as_Generic().mPath.components().back().size() > 8 && path.mData.as_Generic().mPath.components().back().compare(0, strlen(PATH_PREFIX_FUTURE), PATH_PREFIX_FUTURE) == 0;
+        return path.data.is_Generic() && path.data.as_Generic().path.components().back().size() > 8 && path.data.as_Generic().path.components().back().compare(0, strlen(PATH_PREFIX_FUTURE), PATH_PREFIX_FUTURE) == 0;
     }
 };
 
 struct HIRTypeDataTraitObject {
-    HIRTraitPath mTrait;
+    HIRTraitPath trait;
     ::std::vector<HIRGenericPath> markers;
 };
 
@@ -180,8 +180,8 @@ struct HIRTypeDataErasedType {
 struct HIRTypeDataFunctionPointer {
     bool isUnsafe;
     bool isVariadic;
-    RcString mAbi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
-    HIRTypeRef mRettype;
+    RcString abi; // RcString is usually used for identifiers, but ABI names also form a small interned set.
+    HIRTypeRef rettype;
     ::std::vector<HIRTypeRef> argTypes;
     // Internal ABI bit used by trait-object vtables. Ordinary Rust function
     // pointers erase #[track_caller], but a tracked trait method keeps the

@@ -7,7 +7,7 @@
 
 InterpolatedFragment::~InterpolatedFragment() {
     if (ptr) {
-        switch (mType) {
+        switch (type) {
             case InterpolatedFragment::TT:
                 delete reinterpret_cast<TokenTree*>(ptr);
                 break;
@@ -40,77 +40,77 @@ InterpolatedFragment::~InterpolatedFragment() {
 }
 
 InterpolatedFragment::InterpolatedFragment(InterpolatedFragment&& x)
-    : mType(x.mType)
+    : type(x.type)
     , span(std::move(x.span))
 {
     ptr = x.ptr, x.ptr = nullptr;
 }
 
 InterpolatedFragment& InterpolatedFragment::operator=(InterpolatedFragment&& x) {
-    mType = x.mType;
+    type = x.type;
     ptr = x.ptr, x.ptr = nullptr;
     span = std::move(x.span);
     return *this;
 }
 
 InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, ASTExprNode* ptr)
-    : mType(type)
+    : type(type)
     , ptr(ptr)
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(ASTAttribute v)
-    : mType(InterpolatedFragment::META)
+    : type(InterpolatedFragment::META)
     , ptr(new ASTAttribute(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(ASTNamed<ASTItem> v)
-    : mType(InterpolatedFragment::ITEM)
+    : type(InterpolatedFragment::ITEM)
     , ptr(new ASTNamed<ASTItem>(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(InterpolatedFragment::Type type, ASTNamed<ASTItem> v)
-    : mType(type)
+    : type(type)
     , ptr(new ASTNamed<ASTItem>(mv$(v)))
 {
     assert(type == InterpolatedFragment::STMT_ITEM || type == InterpolatedFragment::ITEM);
 }
 
 InterpolatedFragment::InterpolatedFragment(TokenTree v)
-    : mType(InterpolatedFragment::TT)
+    : type(InterpolatedFragment::TT)
     , ptr(new TokenTree(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(ASTPath v, Span span)
-    : mType(InterpolatedFragment::PATH)
+    : type(InterpolatedFragment::PATH)
     , ptr(new ASTPath(mv$(v)))
     , span(std::move(span))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(ASTPattern v)
-    : mType(InterpolatedFragment::PAT)
+    : type(InterpolatedFragment::PAT)
     , ptr(new ASTPattern(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(ASTType* v)
-    : mType(InterpolatedFragment::TYPE)
+    : type(InterpolatedFragment::TYPE)
     , ptr(new ASTType*(mv$(v)))
 {
 }
 
 InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
-    : mType(InterpolatedFragment::VIS)
+    : type(InterpolatedFragment::VIS)
     , ptr(new ASTVisibility(mv$(v)))
 {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, InterpolatedFragment const& x) {
-    switch (x.mType) {
+    switch (x.type) {
         case InterpolatedFragment::TT:
             os << "tt[" << x.asTt() << "]";
             break;
@@ -155,11 +155,11 @@ InterpolatedFragment::InterpolatedFragment(ASTVisibility v)
 // :vis
 
 TokenTree& InterpolatedFragment::asTt() {
-    assert(mType == TT);
+    assert(type == TT);
     return *reinterpret_cast<TokenTree*>(ptr);
 }
 
 const TokenTree& InterpolatedFragment::asTt() const {
-    assert(mType == TT);
+    assert(type == TT);
     return *reinterpret_cast<TokenTree*>(ptr);
 }

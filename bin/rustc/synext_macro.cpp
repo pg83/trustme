@@ -35,7 +35,7 @@ namespace {
         if (!formatStringNp) {
             ERROR(sp, E0000, "asm! requires a string literal - got " << *n);
         }
-        return mv$(formatStringNp->mValue);
+        return mv$(formatStringNp->value);
     }
 
     RcString getTokIdentRword(TokenStream& lex) {
@@ -106,13 +106,13 @@ public:
         GET_CHECK_TOK(tok, lex, TOK_EOF);
 
         auto* closure = cast<ASTExprNodeClosure>(node.get());
-        if (!closure || closure->isPinned || cast<ASTExprNodeAsyncBlock>(closure->mCode.get())) {
+        if (!closure || closure->isPinned || cast<ASTExprNodeAsyncBlock>(closure->code.get())) {
             ERROR(sp, E0000, "iter! requires a plain closure");
         }
 
-        auto* generator = new ASTExprNodeGeneratorBlock(mv$(closure->mCode), closure->returnType, true, true);
+        auto* generator = new ASTExprNodeGeneratorBlock(mv$(closure->code), closure->returnType, true, true);
         generator->setSpan(sp);
-        closure->mCode = ASTExprNodeP(generator);
+        closure->code = ASTExprNodeP(generator);
         closure->returnType = mkType(*crate.pool, sp);
 
         return box$(TTStreamO(sp, ParseState(), TokenTree(Token(InterpolatedFragment(InterpolatedFragment::EXPR, node.release())))));
@@ -285,13 +285,13 @@ namespace {
     }
 
     AsmRegisterClass getRegClass(const WireBoard& wb, const Span& sp, const RcString& str) {
-        if (TargetGetCurSpec(wb).arch.mName == "x86_64") {
+        if (TargetGetCurSpec(wb).arch.name == "x86_64") {
             return getRegClassX8664(sp, str);
         }
-        if (TargetGetCurSpec(wb).arch.mName == "x86") {
+        if (TargetGetCurSpec(wb).arch.name == "x86") {
             return getRegClassX8664(sp, str);
         }
-        if (TargetGetCurSpec(wb).arch.mName == "riscv64") {
+        if (TargetGetCurSpec(wb).arch.name == "riscv64") {
             return getRegClassRiscv(sp, str);
         }
         ERROR(sp, E0000, "Unknown architecture for asm!");
@@ -328,7 +328,7 @@ namespace {
     }
 
     std::vector<std::string> getClobberAbiRegisters(const WireBoard& wb, const Span& sp, const std::string& abi) {
-        const auto& arch = TargetGetCurSpec(wb).arch.mName;
+        const auto& arch = TargetGetCurSpec(wb).arch.name;
         if (arch == "x86_64") {
             const bool sysv = abi == "C" || abi == "system" || abi == "sysv64";
             const bool win = abi == "win64" || abi == "efiapi";
@@ -608,7 +608,7 @@ public:
         }
 
         if (!clobberAbis.empty()) {
-            const auto& arch = TargetGetCurSpec(wb).arch.mName;
+            const auto& arch = TargetGetCurSpec(wb).arch.name;
             const bool isX86 = arch == "x86" || arch == "x86_64";
             const bool is64Bit = arch == "x86_64";
             std::set<std::string> explicitOutputs;
@@ -769,8 +769,8 @@ public:
         auto& nodeA = *nodeAp;
 
         auto globalAsm = ASTGlobalAsm{std::move(nodeA.lines), {}, nodeA.options};
-        globalAsm.operands.reserve(nodeA.mParams.size());
-        for (auto& param : nodeA.mParams) {
+        globalAsm.operands.reserve(nodeA.params.size());
+        for (auto& param : nodeA.params) {
             TU_MATCH_HDRA((param), {)
             TU_ARMA(Const, expr) {
                     globalAsm.operands.push_back(ASTGlobalAsm::Operand::make_Const(std::move(expr)));
@@ -925,17 +925,17 @@ class CConcatExpander: public ExpandProcMacro {
             DEBUG("concat[pe] - v=" << *v);
             // TODO: Visitor instead
             if (auto* vp = cast<ASTExprNodeString>(v.get())) {
-                rv += vp->mValue;
+                rv += vp->value;
             } else if (auto* vp = cast<ASTExprNodeInteger>(v.get())) {
                 if (vp->datatype == CORETYPE_CHAR) {
-                    rv += Codepoint{static_cast<uint32_t>(vp->mValue.truncateU64())};
+                    rv += Codepoint{static_cast<uint32_t>(vp->value.truncateU64())};
                 } else {
-                    rv += FMT(vp->mValue);
+                    rv += FMT(vp->value);
                 }
             } else if (auto* vp = cast<ASTExprNodeFloat>(v.get())) {
-                rv += FMT(vp->mValue);
+                rv += FMT(vp->value);
             } else if (auto* vp = cast<ASTExprNodeBool>(v.get())) {
-                rv += (vp->mValue ? "true" : "false");
+                rv += (vp->value ? "true" : "false");
             } else {
                 ERROR(sp, E0000, "Unexpected expression type in concat! argument");
             }
@@ -952,38 +952,38 @@ class CConcatBytesExpander: public ExpandProcMacro {
     static char getArrayByte(const Span& sp, const ASTExprNode& node) {
         const auto* value = cast<const ASTExprNodeInteger>(&node);
         if (!value || (value->datatype != CORETYPE_ANY && value->datatype != CORETYPE_U8)
-            || !value->mValue.isU64() || value->mValue.truncateU64() > 0xff) {
+            || !value->value.isU64() || value->value.truncateU64() > 0xff) {
             ERROR(sp, E0000, "concat_bytes! array elements must be byte or u8 literals");
         }
-        return static_cast<char>(value->mValue.truncateU64());
+        return static_cast<char>(value->value.truncateU64());
     }
 
     static void append(const Span& sp, ::std::string& output, const ASTExprNode& node) {
         if (const auto* value = cast<const ASTExprNodeInteger>(&node)) {
-            if (value->datatype != CORETYPE_U8 || !value->mValue.isU64() || value->mValue.truncateU64() > 0xff) {
+            if (value->datatype != CORETYPE_U8 || !value->value.isU64() || value->value.truncateU64() > 0xff) {
                 ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
             }
-            output.push_back(static_cast<char>(value->mValue.truncateU64()));
+            output.push_back(static_cast<char>(value->value.truncateU64()));
             return;
         }
         if (const auto* value = cast<const ASTExprNodeByteString>(&node)) {
-            output += value->mValue;
+            output += value->value;
             return;
         }
         if (const auto* value = cast<const ASTExprNodeArray>(&node)) {
-            if (!value->mSize) {
+            if (!value->size) {
                 for (const auto& element : value->values) {
                     output.push_back(getArrayByte(sp, *element));
                 }
                 return;
             }
 
-            const auto* count = cast<const ASTExprNodeInteger>(value->mSize.get());
-            if (!count || !count->mValue.isU64()) {
+            const auto* count = cast<const ASTExprNodeInteger>(value->size.get());
+            if (!count || !count->value.isU64()) {
                 ERROR(sp, E0000, "concat_bytes! repeat count must be an integer literal");
             }
             const auto byte = getArrayByte(sp, *value->values.at(0));
-            output.append(static_cast<size_t>(count->mValue.truncateU64()), byte);
+            output.append(static_cast<size_t>(count->value.truncateU64()), byte);
             return;
         }
         ERROR(sp, E0000, "concat_bytes! arguments must be byte string, byte, or byte-array literals");
@@ -1063,7 +1063,7 @@ namespace {
         if (!stringNp) {
             ERROR(sp, E0000, "Expected a string literal - got " << *n);
         }
-        return mv$(stringNp->mValue);
+        return mv$(stringNp->value);
     }
 }
 
@@ -1676,8 +1676,8 @@ namespace {
             ERROR(sp, E0000, "format_args! requires a string literal - got " << *formatStringNode);
         }
         const auto& formatStringSp = formatStringNp->span();
-        const auto& formatString = formatStringNp->mValue;
-        auto h = formatStringNp->mHygiene;
+        const auto& formatString = formatStringNp->value;
+        auto h = formatStringNp->hygiene;
 
         ::std::map<RcString, unsigned int> namedArgsIndex;
         ::std::vector<TokenTree> namedArgs;
@@ -2048,7 +2048,7 @@ namespace {
         if (!stringNp) {
             ERROR(sp, E0000, "include! requires a string literal - got " << *n);
         }
-        return mv$(stringNp->mValue);
+        return mv$(stringNp->value);
     }
 
     ::std::string getPathRelativeTo(const ::std::string& basePath, ::std::string path) {

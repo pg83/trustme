@@ -37,7 +37,7 @@ namespace {
             std::unique_ptr<Inner> ptr;
             std::unique_ptr<Inner> ptrMut;
             std::unique_ptr<Inner> ptrMove;
-            std::map<HIRSimplePath, Inner> mPath;
+            std::map<HIRSimplePath, Inner> path;
 
             void insert(const Span& sp, const HIRTypeData* receiver, const HIRTypeImpl& impl);
             void find(const Span& sp, const HIRTypeData* curTy, tCbResolveType tyRes, innerCallbackT& cb) const;
@@ -51,7 +51,7 @@ namespace {
 }
 
 void InherentCacheImpl::Lowest::insert(const Span& sp, const HIRTypeImpl& impl) {
-    const auto& type = impl.mType;
+    const auto& type = impl.type;
     if (const auto* path = type->getSortPath()) {
         this->named[*path].push_back(&impl);
     } else if (type->is_Path() || type->is_Generic()) {
@@ -129,11 +129,11 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
             }
         }
         TU_ARMA(Path, te) {
-            ASSERT_BUG(sp, te.path.mData.is_Generic(), "Receiver path not a generic path - " << curTy);
-            const auto& gp = te.path.mData.as_Generic();
-            ASSERT_BUG(sp, gp.mParams.types.size() > 0, "Receiver path has no type params (needs at least one) - " << curTy);
-            DEBUG("m_path[" << gp.mPath << "] += " << gp.mParams.types.at(0) << " impl" << impl.mParams.fmtArgs() << " " << impl.mType);
-            mPath[gp.mPath].insert(sp, gp.mParams.types.at(0), impl);
+            ASSERT_BUG(sp, te.path.data.is_Generic(), "Receiver path not a generic path - " << curTy);
+            const auto& gp = te.path.data.as_Generic();
+            ASSERT_BUG(sp, gp.params.types.size() > 0, "Receiver path has no type params (needs at least one) - " << curTy);
+            DEBUG("m_path[" << gp.path << "] += " << gp.params.types.at(0) << " impl" << impl.params.fmtArgs() << " " << impl.type);
+            path[gp.path].insert(sp, gp.params.types.at(0), impl);
         }
     }
 }
@@ -178,12 +178,12 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
             }
         }
         TU_ARMA(Path, te) {
-            if (te.path.mData.is_Generic()) {
-                const auto& gp = te.path.mData.as_Generic();
-                if (gp.mParams.types.size() > 0) {
-                    auto it = mPath.find(gp.mPath);
-                    if (it != mPath.end()) {
-                        innerTy = gp.mParams.types.at(0);
+            if (te.path.data.is_Generic()) {
+                const auto& gp = te.path.data.as_Generic();
+                if (gp.params.types.size() > 0) {
+                    auto it = path.find(gp.path);
+                    if (it != path.end()) {
+                        innerTy = gp.params.types.at(0);
                         inner = &it->second;
                     }
                 }
@@ -229,7 +229,7 @@ void InherentCacheImpl::insertAll(const Span& sp, const HIRTypeImpl& impl, const
                 break;
             case HIRFunction::Receiver::Box:
                 // TODO: 1.54+ has an allocator param here.
-                items[name].mPath[langBox].byvalue.insert(sp, impl);
+                items[name].path[langBox].byvalue.insert(sp, impl);
                 break;
             case HIRFunction::Receiver::Value:
                 items[name].byvalue.insert(sp, impl);
