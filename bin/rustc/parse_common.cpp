@@ -40,6 +40,7 @@ ASTExprNodeP ParseExpr3(TokenStream& lex);
 ASTExprNodeP ParseIfStmt(TokenStream& lex);
 ASTExprNodeP ParseWhileStmt(TokenStream& lex, Ident lifetime);
 ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime);
+std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral = false);
 RcString getOptionalIdent(TokenStream& lex);
 ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
 static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
@@ -485,7 +486,10 @@ ASTExprNodeP ParseExprBlockLineStmt(TokenStream& lex, bool& hasSemicolon) {
     return ret;
 }
 
-std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex) {
+/// @param allowStructLiteral A match guard ends at `=>`, so a struct literal
+/// is unambiguous there; an `if`/`while` condition is followed by its body's
+/// `{` and cannot take one.
+std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral /*=false*/) {
     Token tok;
     std::vector<ASTIfLetCondition> conditions;
     bool hadPat = false;
@@ -495,7 +499,9 @@ std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex) {
             auto pat = ParsePattern(lex, AllowOrPattern::Yes);
             GET_CHECK_TOK(tok, lex, TOK_EQUAL);
             ASTExprNodeP val;
-            {
+            if (allowStructLiteral) {
+                val = ParseExpr3(lex);
+            } else {
                 SET_PARSE_FLAG(lex, disallowStructLiteral);
                 val = ParseExpr3(lex); // This is just after `||` and `&&`
             }
@@ -503,7 +509,9 @@ std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex) {
             hadPat = true;
         } else {
             ASTExprNodeP val;
-            {
+            if (allowStructLiteral) {
+                val = ParseExpr3(lex);
+            } else {
                 SET_PARSE_FLAG(lex, disallowStructLiteral);
                 val = ParseExpr3(lex); // This is just after `||` and `&&`
             }
@@ -632,7 +640,7 @@ ASTExprNodeP ParseExprMatch(TokenStream& lex) {
         } while (GET_TOK(tok, lex) == TOK_PIPE);
 
         if (tok.type() == TOK_RWORD_IF) {
-            arm.guard = ParseIfLetChain(lex);
+            arm.guard = ParseIfLetChain(lex, /*allowStructLiteral=*/true);
             GET_TOK(tok, lex);
         }
         CHECK_TOK(tok, TOK_FATARROW);
