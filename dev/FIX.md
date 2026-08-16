@@ -34,13 +34,13 @@ environment. The authoritative rerun data is in
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 568 |
-| fixed, or no longer reproducing, since the gate | 63 |
+| still failing on the current tree | 565 |
+| fixed, or no longer reproducing, since the gate | 66 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 296 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 99 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 96 |
 | wrong runtime behaviour, panic, abort, or output | 74 |
 | missing rejection or diagnostic | 57 |
 | generated C++ or link failure | 33 |
@@ -67,7 +67,7 @@ one- and two-test spellings.
 
 ## P1: internal compiler failures
 
-There are 99 compiler-internal failures in 75 stable signatures.
+There are 96 compiler-internal failures in 74 stable signatures.
 
 | compiler area | tests |
 |---|---:|
@@ -85,7 +85,6 @@ The multi-test signatures are:
 |---|---:|
 | `BUG hir_typeck_common.cpp:704` | 3 |
 | `ASSERT` with no backtrace | 5 |
-| `BUG hir_typeck_common.cpp:687` | 3 |
 | `BUG hir_typeck_static.cpp:3636` | 3 |
 | `BUG hir_conv_constant_evaluation.cpp:4586` | 3 |
 | twelve other shared signatures | 24 |
