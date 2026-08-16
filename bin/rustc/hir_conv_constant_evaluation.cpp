@@ -2961,6 +2961,12 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                 TU_ARMA(Pointer, de) {
                     if (const auto* e = srcTy->opt_NamedFunction()) {
                         dst.writePtr(state, EncodedLiteral::PTR_BASE, localState.getStaticrefMono(e->path));
+                    } else if (TypeInfo::forType(srcTy).ty == TypeInfo::Signed && TypeInfo::forType(srcTy).bits < dst.getLen() * 8) {
+                        // A signed integer sign-extends on its way to a pointer,
+                        // as it would on its way to a wider integer. Copying the
+                        // bytes would leave the high half zero.
+                        auto srcTi = TypeInfo::forType(srcTy);
+                        dst.writeUint(state, dst.getLen() * 8, inval.readSint(state, srcTi.bits).getInner());
                     } else {
                         dst.copyFrom(state, inval.slice(0, std::min(inval.getLen(), dst.getLen())));
 
