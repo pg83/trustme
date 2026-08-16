@@ -2593,27 +2593,32 @@ ASTPattern ParsePatternStruct(TokenStream& lex, ProtoSpan ps, ASTPath path) {
         }
         CHECK_TOK(tok, TOK_BRACE_CLOSE);
 
-        bool hasSplit = false;
         ::std::vector<ASTPattern> leading;
         ::std::vector<ASTPattern> trailing;
         unsigned int i = 0;
-        for (auto& p : pats) {
-            if (p.first != i) {
-                if (hasSplit || !splitAllowed) {
+        if (splitAllowed) {
+            // A trailing `..` covers every field past the highest index written,
+            // and an index below that one which was not written matches
+            // anything. The result is always a split pattern.
+            for (auto& p : pats) {
+                while (i < p.first) {
+                    leading.push_back(ASTPattern(lex.pointSpan(), {}));
+                    i++;
+                }
+                leading.push_back(mv$(p.second));
+                i++;
+            }
+        } else {
+            for (auto& p : pats) {
+                if (p.first != i) {
                     ERROR(lex.pointSpan(), E0000, "Missing index " << i);
                 }
-                hasSplit = true;
-                i = p.first;
-            }
-            if (!hasSplit) {
                 leading.push_back(mv$(p.second));
-            } else {
-                trailing.push_back(mv$(p.second));
+                i++;
             }
-            i++;
         }
 
-        return ASTPattern(ASTPattern::TagNamedTuple(), lex.endSpan(ps), mv$(path), ASTPattern::TuplePat{mv$(leading), hasSplit, mv$(trailing)});
+        return ASTPattern(ASTPattern::TagNamedTuple(), lex.endSpan(ps), mv$(path), ASTPattern::TuplePat{mv$(leading), splitAllowed, mv$(trailing)});
     }
 
     bool isExhaustive = true;
