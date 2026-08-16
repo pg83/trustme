@@ -4,8 +4,10 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-Snapshot: 2026-08-16, commit `79582dd3f`. The full gate ran in the clang Nix
-environment on all 78 available cores:
+Snapshot: 2026-08-16, commit `b8c247ba4`. The numbers below come from rerunning
+every node that failed the last full gate, not from a fresh gate. The gate
+itself ran at commit `79582dd3f` in the clang Nix environment on all 78
+available cores:
 
 ```text
 nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
@@ -25,67 +27,47 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 
 All 631 failed nodes were then rerun independently inside the same clang Nix
 environment. The authoritative rerun data is in
-`/tmp/trustme-reclass-20260815-nix`; classified records are in
-`/tmp/trustme-classification-20260815-nix`.
+`/tmp/trustme-reclass-20260816-nix`; classified records are in
+`/tmp/trustme-classification-20260816-nix`.
 
 | result | tests |
 |---|---:|
 | total active fast-gate nodes | 14,113 |
-| passed in the full gate | 13,482 |
 | failed in the full gate | 631 |
-| failures reproduced independently | 630 |
-| parallel-only flakes | 1 |
-| unfinished after focused fixes | 603 |
+| still failing on the current tree | 605 |
+| fixed, or no longer reproducing, since the gate | 26 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 295 |
-| wrong runtime behaviour, panic, abort, signal, or output | 96 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 93 |
+| accepted Rust rejected by the compiler or driver | 296 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 101 |
+| wrong runtime behaviour, panic, abort, or output | 90 |
 | missing rejection or diagnostic | 76 |
 | generated C++ or link failure | 33 |
 | stable timeout | 9 |
-| parallel-only flake | 1 |
 
 ## P0: accepted Rust rejected by the front end
 
-All 295 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 296 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 119 | trait/impl selection 29; unresolved type/value names 18; receiver/Deref lowering 2; polymorphic constants in MIR 2 |
-| parser | 137 | 134 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 slice-pattern/parser-common failures |
-| macro and attribute expansion | 31 | macro parsing/formatting 10; attributes 9; AST expansion 8; other expansion 4 |
+| parser | 137 | 134 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
+| type checking, HIR lowering, and resolution | 120 | trait/impl selection 29 (`hir_typeck_expr_cs.cpp:6693`, `:6695`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 15 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
+| macro and attribute expansion | 31 | macro parsing/formatting 10; attributes 8; AST expansion 8; other expansion 5 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; pathless `--extern` 1 |
 
 The 134 parser failures must be regrouped by syntax family before changing the
-parser; the common `parse_parseerror.cpp` line is only the reporting site. The
-largest visible families include new `gen` syntax, unsafe binders, closure
-binders, specialization/default items, parser recovery cases, and macro
-interpolation.
-
-## P1: runtime semantics
-
-Ninety-six programs compile but execute incorrectly:
-
-| runtime result | tests | note |
-|---|---:|---|
-| Rust panic, exit 101 | 83 | group by the failed semantic assertion, never by exit code |
-| generated executable assertion | 5 | SIMD `reduce_add`, `round`, and `fabs`; two SysV empty-struct ABI cases |
-| stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
-| abort | 3 | NLL case, packed-drop double panic, library allocation failure |
-| segmentation fault | 2 | coroutine issue-69039 and resume-live-across-yield |
-
-The repeated high-yield areas inside the panic set are integer/NonZero and
-128-bit operations, formatting and type-name behaviour, enum/DST/layout, drop
-order, and coroutine layout. Minimise representatives before treating nearby
-assertions as one root cause.
+parser; the common `parse_parseerror.cpp` line is only the reporting site. By
+unexpected token the largest families are `gen` blocks and functions (8),
+`default`/specialization items (6), lifetime binders (6), and a long tail of
+one- and two-test spellings.
 
 ## P1: internal compiler failures
 
-There are 93 compiler-internal failures in 74 stable signatures.
+There are 101 compiler-internal failures in 75 stable signatures.
 
 | compiler area | tests |
 |---|---:|
@@ -94,6 +76,7 @@ There are 93 compiler-internal failures in 74 stable signatures.
 | MIR lowering, CTFE MIR, and optimisation | 13 |
 | parser and macro expansion | 12 |
 | translation and code generation | 10 |
+| unattributed (assert or signal with no backtrace) | 8 |
 | name resolution | 4 |
 
 The multi-test signatures are:
@@ -101,14 +84,33 @@ The multi-test signatures are:
 | signature | tests |
 |---|---:|
 | `BUG hir_typeck_common.cpp:704` | 5 |
+| `ASSERT` with no backtrace | 5 |
 | `BUG hir_typeck_common.cpp:687` | 3 |
 | `BUG hir_typeck_static.cpp:3636` | 3 |
-| `BUG/ASSERT/SIG*` at eleven other shared signatures | 22 |
-| sixty one-test signatures | 60 |
+| `BUG hir_conv_constant_evaluation.cpp:4586` | 3 |
+| twelve other shared signatures | 24 |
+| fifty-eight one-test signatures | 58 |
 
-The remaining internal set includes ten compiler signals, five MIR errors,
-five MIR TODOs, and three uncaught exceptions. Generated-program signals and
-assertions are counted under runtime semantics, not here.
+`BUG hir_conv_constant_evaluation.cpp:4586` is the polymorphic-constant
+assertion `[T; Generic(N)]`, reached by the two
+`generic_const_parameter_types` tests now that `_` const arguments infer.
+
+## P1: runtime semantics
+
+Ninety programs build but execute incorrectly:
+
+| runtime result | tests | note |
+|---|---:|---|
+| Rust panic, exit 101 | 83 | group by the failed semantic assertion, never by exit code |
+| stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
+| abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
+| generated executable SIGABRT | 1 | |
+| compiled, exited 1 | 1 | |
+
+The repeated high-yield areas inside the panic set are integer/NonZero and
+128-bit operations, formatting and type-name behaviour, enum/DST/layout, drop
+order, and coroutine layout. Minimise representatives before treating nearby
+assertions as one root cause.
 
 ## P2: missing language checks
 
@@ -151,7 +153,7 @@ to intentional native test symbols, and one exercises native-link directives.
 
 ## P3: performance and flakes
 
-Nine nodes time out in isolated reruns:
+Nine nodes still time out in isolated reruns:
 
 - Exercism `palindrome-products`;
 - `enum-discriminant/discriminant_value.rs`;
@@ -163,8 +165,9 @@ Nine nodes time out in isolated reruns:
 - `deriving/issue-58319.rs`;
 - RustSmith seed 7.
 
-RustSmith seed 36 is the sole parallel-only flake: it timed out in the full
-gate and passed in the independent Nix rerun.
+Twenty-six of the gate's failures pass when rerun on the current tree. Most
+are the fixes recorded above; the rest were parallel-only, RustSmith seed 36
+among them.
 
 ## Fix discipline
 
@@ -178,6 +181,10 @@ For every compiler fix:
 5. Remove completed rows from this file instead of commenting them out.
 6. Decrement a baseline node only once; a latent failure exposed after an
    earlier root disappears is not an additional old-gate node.
+
+`resvg` is outside this file: its node is wrapped in the 60-second
+`TEST_TIMEOUT` (`build.py`), which no from-source project build can meet, so it
+cannot pass regardless of the compiler.
 
 Do not run another full gate until this file is exhausted. Reclassification is
 performed by `dev/gate_reclassify.py` inside the clang Nix environment and then
