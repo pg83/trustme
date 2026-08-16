@@ -1825,9 +1825,14 @@ namespace {
             // An inferred `[val; _]` length only exists in the ivar table:
             // write it back so MIR lowering and codegen see a concrete size.
             if (node.size.is_Unevaluated() && node.size.as_Unevaluated().is_Infer()) {
-                const auto& count = ivars.getValue(node.size.as_Unevaluated());
+                auto count = ivars.getValue(node.size.as_Unevaluated()).clone();
+                ASSERT_BUG(node.span(), !count.is_Infer(), "Failure to infer the length of " << node.resType);
                 if (count.is_Evaluated()) {
                     node.size = HIRArraySize::make_Known(count.as_Evaluated()->readUsize(0));
+                } else {
+                    // A generic length (`[0; _]` inside `fn f<const N: usize>()`)
+                    // stays symbolic until monomorphisation.
+                    node.size = HIRArraySize(std::move(count));
                 }
             }
         }
@@ -9515,7 +9520,19 @@ void fix_param_count_(const Span& sp, Context& context, const HIRTypeData* selfT
     if (params.types.size() == paramDefs.types.size()) {
         // Nothing to do, all good
     } else if (params.types.size() > paramDefs.types.size()) {
-        ERROR(sp, E0000, "Too many type parameters passed to " << path);
+        // The parser cannot tell a type argument from a const argument, so a
+        // `_` const argument (`make_buf::<_>()`) lands in the type list. Move
+        // the surplus placeholders across before complaining.
+        while (params.types.size() > paramDefs.types.size()
+            && params.values.size() < paramDefs.values.size()
+            && params.types.back()->is_Infer()) {
+            params.types.pop_back();
+            params.values.push_back({});
+            context.ivars.addIvars(params.values.back());
+        }
+        if (params.types.size() > paramDefs.types.size()) {
+            ERROR(sp, E0000, "Too many type parameters passed to " << path);
+        }
     } else {
         while (params.types.size() < paramDefs.types.size()) {
             const auto& typ = paramDefs.types[params.types.size()];

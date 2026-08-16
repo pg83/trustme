@@ -85,8 +85,20 @@ namespace {
                     params.types.push_back(types.infer());
                 }
             } else if (params.types.size() > paramDefs.types.size()) {
-                ERROR(sp, E0000, "Too many type parameters passed to " << path);
-            } else {
+                // `_` is written the same way for a type and for a const
+                // argument (`Foo<_>` where `Foo` takes `const N: usize`), so a
+                // surplus placeholder belongs in the value list.
+                while (params.types.size() > paramDefs.types.size()
+                    && params.values.size() < paramDefs.values.size()
+                    && params.types.back()->is_Infer()) {
+                    params.types.pop_back();
+                    params.values.push_back(HIRConstGeneric::make_Infer({}));
+                }
+                if (params.types.size() > paramDefs.types.size()) {
+                    ERROR(sp, E0000, "Too many type parameters passed to " << path);
+                }
+            }
+            if (params.types.size() < paramDefs.types.size()) {
                 while (params.types.size() < paramDefs.types.size()) {
                     const auto& typ = paramDefs.types[params.types.size()];
                     if (typ.defaultValue->is_Infer()) {
