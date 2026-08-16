@@ -247,6 +247,20 @@ ASTExprNodeP ParseExprBlockLineWithItems(TokenStream& lex, ::std::shared_ptr<AST
                 return ASTExprNodeP();
             }
             // fall
+        // `auto trait Foo {}` is an item too, and `auto` is only a keyword here.
+        case TOK_IDENT:
+            // Reached by fallthrough from `unsafe` as well, so check the token.
+            if (tok.type() == TOK_IDENT && tok.ident().name == "auto" && lex.lookahead(0) == TOK_RWORD_TRAIT) {
+                PUTBACK(tok, lex);
+                if (!localMod) {
+                    localMod = lex.parseState().getCurrentMod().addAnon();
+                    DEBUG("Set module from " << lex.parseState().module->path() << " to " << localMod->path());
+                    lex.parseState().module = localMod.get();
+                }
+                ParseModItem(lex, *localMod, mv$(itemAttrs));
+                return ASTExprNodeP();
+            }
+            break;
         default:
             break;
     }
@@ -4095,6 +4109,9 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
     } else {
         PUTBACK(tok, lex);
     }
+    // The opposite of `safe`: everything in an extern block is already unsafe to
+    // use, so the marker only makes that explicit.
+    lex.getTokenIf(TOK_RWORD_UNSAFE);
     switch (GET_TOK(tok, lex)) {
         case TOK_RWORD_FN: {
             auto definitionSpan = lex.tokenStartSpan(tok);
