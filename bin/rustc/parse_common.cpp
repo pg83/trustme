@@ -4425,10 +4425,21 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries) {
             path = std::move(tok.fragType()->path());
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
         } break;
-        case TOK_INTERPOLATED_PATH:
+        case TOK_INTERPOLATED_PATH: {
             path = mv$(tok.fragPath());
-            GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-            break;
+            // `use $p;` -- the fragment is the whole path, with no `::` after it.
+            if (!lex.getTokenIf(TOK_DOUBLE_COLON)) {
+                RcString name;
+                if (lex.getTokenIf(TOK_RWORD_AS)) {
+                    name = getOptionalIdent(lex);
+                } else {
+                    ASSERT_BUG(lex.pointSpan(), path.nodes().size() > 0, "`use` with an empty path fragment");
+                    name = path.nodes().back().name();
+                }
+                entries.push_back({lex.pointSpan(), ASTPath(path), ::std::move(name)});
+                return;
+            }
+        } break;
         default:
             if (lex.editionAfter(ASTEdition::Rust2018)) {
                 path = ASTPath::newRelative(/*hygine=*/{}, {});

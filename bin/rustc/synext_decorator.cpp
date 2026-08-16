@@ -4058,20 +4058,22 @@ class CTestHandlerSP: public ExpandDecorator {
                     if (lex.getTokenIf(TOK_EQUAL)) {
                         parseMessage();
                     } else {
-                        lex.getTokenCheck(TOK_PAREN_OPEN);
-                        while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
+                        // Anything other than exactly `expected = "..."` is a
+                        // lint in rustc, and the attribute still means "this
+                        // test panics" -- just without a message to match.
+                        bool gotMessage = false;
+                        if (lex.getTokenIf(TOK_PAREN_OPEN) && lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_EQUAL) {
                             auto n = lex.getTokenCheck(TOK_IDENT).ident().name;
-                            if (n == "expected") {
-                                lex.getTokenCheck(TOK_EQUAL);
+                            lex.getTokenCheck(TOK_EQUAL);
+                            if (n == "expected" && lex.lookahead(0) == TOK_STRING) {
                                 parseMessage();
-                            } else {
-                                TODO(sp, "Handle #[should_panic(" << n << ")");
-                            }
-                            if (!lex.getTokenIf(TOK_COMMA)) {
-                                break;
+                                gotMessage = lex.lookahead(0) == TOK_PAREN_CLOSE;
                             }
                         }
-                        lex.getTokenCheck(TOK_PAREN_CLOSE);
+                        if (!gotMessage) {
+                            td.panicType = ASTTestDesc::ShouldPanic::Yes;
+                            td.expectedPanicMessage = "";
+                        }
                     }
                 } else {
                     td.panicType = ASTTestDesc::ShouldPanic::Yes;
