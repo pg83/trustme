@@ -3686,6 +3686,10 @@ MacroRule ParseMacroRulesVar(TokenStream& lex) {
         case TOK_PAREN_OPEN:
             close = TOK_PAREN_CLOSE;
             break;
+        // The transcriber takes any of the three delimiters, as the matcher does.
+        case TOK_SQUARE_OPEN:
+            close = TOK_SQUARE_CLOSE;
+            break;
         default:
             throw ParseErrorUnexpected(lex, tok);
     }
