@@ -1249,6 +1249,73 @@ tStructFields AST2HIR::LowerHIRStructFields(HIRItemPath path, const HIRGenericPa
     return fields;
 }
 
+namespace {
+    /// Record which of the item's own type parameters a type mentions.
+    ///
+    /// Two shapes hide a parameter from this walk: `Self`, which names the item
+    /// with all of its parameters, and a const argument that is still an
+    /// unevaluated expression. Both set `opaque`, and the caller then makes no
+    /// claim about that item.
+    void collectUsedTypeParams(HIRTypeInterner& types, const Span& sp, const HIRTypeData* ty, ::std::set<unsigned>& used, bool& opaque) {
+        cloneTyWith(types, sp, ty, [&](const HIRTypeData* tpl, HIRTypeRef&) {
+            if (const auto* ge = tpl->opt_Generic()) {
+                if (ge->isSelf()) {
+                    opaque = true;
+                } else if (ge->group() == GENERICImpl) {
+                    used.insert(ge->idx());
+                }
+            }
+            if (const auto* ae = tpl->opt_Array()) {
+                if (ae->size.is_Unevaluated() && ae->size.as_Unevaluated().is_Unevaluated()) {
+                    opaque = true;
+                }
+            }
+            if (const auto* pe = tpl->opt_Path()) {
+                if (!pe->path.data.is_Generic()) {
+                    // A projection can name the parameter through its `Self`.
+                    opaque = true;
+                }
+            }
+            return false;
+        });
+    }
+
+    /// A parameter named by a bound is determined by whatever satisfies that
+    /// bound (`struct S<K, I: Iterator<Item = K>>(I)` constrains `K`), so the
+    /// bounds count as uses too.
+    void collectUsedTypeParamsInBounds(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& params, ::std::set<unsigned>& used, bool& opaque) {
+        for (const auto& bound : params.bounds) {
+            TU_MATCH_HDRA( (bound), {)
+            TU_ARMA(TraitBound, be) {
+                    collectUsedTypeParams(types, sp, be.type, used, opaque);
+                    for (const auto& ty : be.trait.path.params.types) {
+                        collectUsedTypeParams(types, sp, ty, used, opaque);
+                    }
+                    for (const auto& assoc : be.trait.typeBounds) {
+                        collectUsedTypeParams(types, sp, assoc.second.type, used, opaque);
+                    }
+                }
+                TU_ARMA(TypeEquality, be) {
+                    collectUsedTypeParams(types, sp, be.type, used, opaque);
+                    collectUsedTypeParams(types, sp, be.otherType, used, opaque);
+                }
+            }
+        }
+    }
+
+    /// A type parameter that no field mentions cannot be inferred at a use
+    /// site, so rustc rejects the definition and points at `PhantomData`.
+    void checkTypeParamsUsed(const Span& sp, const HIRGenericParams& params, const ::std::set<unsigned>& used, const char* what) {
+        for (size_t i = 0; i < params.types.size(); i++) {
+            if (used.count(static_cast<unsigned>(i))) {
+                continue;
+            }
+            ERROR(sp, E0000, "parameter `" << params.types[i].name << "` is never used in this " << what << " - consider a `PhantomData` field");
+        }
+    }
+}
+
+
 HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStruct& ent, const ASTAttributeList& attrs, HIRModule& outMod) {
     TRACE_FUNCTION_F(path);
     HIRStruct::Data data;
@@ -1306,6 +1373,30 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
     {
         // In 1.90 this no longer marks wrappers as nonzero; scalar limits carry
         // the layout information instead.
+    }
+    // `PhantomData` is the escape hatch for an unused parameter, so it is the
+    // one struct that may leave its own parameter unused.
+    if (path.getSimplePath() != crate->getLangItemPathOpt("phantom_data")) {
+        ::std::set<unsigned> used;
+        bool opaque = false;
+        TU_MATCH_HDRA( (rv.data), {)
+        TU_ARMA(Unit, de) {
+            }
+            TU_ARMA(Tuple, de) {
+                for (const auto& fld : de) {
+                    collectUsedTypeParams(crate->types, sp, fld.ent, used, opaque);
+                }
+            }
+            TU_ARMA(Named, de) {
+                for (const auto& fld : de) {
+                    collectUsedTypeParams(crate->types, sp, fld.ty, used, opaque);
+                }
+            }
+        }
+        collectUsedTypeParamsInBounds(crate->types, sp, rv.params, used, opaque);
+        if (!opaque) {
+            checkTypeParamsUsed(sp, rv.params, used, "struct");
+        }
     }
     rv.mustUse = attrs.has("must_use");
     rv.structMarkings.isFundamental = attrs.has("fundamental");
