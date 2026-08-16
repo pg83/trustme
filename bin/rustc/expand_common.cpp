@@ -875,6 +875,12 @@ struct CExpandExpr: public ASTNodeVisitor {
                     SET_MODULE((*ttl), mod);
                     DEBUG("-- Parsing as expression");
                     rv = ParseExpr0(*ttl);
+                    // A macro body written as `expr;` and used where an
+                    // expression is expected keeps the expression: rustc reports
+                    // the trailing semicolon as a lint, not an error.
+                    if (ttl->lookahead(0) == TOK_SEMICOLON && ttl->lookahead(1) == TOK_EOF) {
+                        ttl->getToken();
+                    }
                     if (ttl->lookahead(0) != TOK_EOF) {
                         ERROR(node.span(), E0000, "Unused tokens at the end of macro expansion - " << ttl->getToken());
                     }
