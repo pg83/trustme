@@ -3529,7 +3529,8 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
     // visibility here — rustc rejects it after parsing, which matters because
     // the item may be stripped by a `cfg` before that point.
     // TODO: reject a non-default visibility on a trait item that survives cfg.
-    if (tok.type() == TOK_RWORD_PUB) {
+    // A `$vis` fragment stands here too, and expands to nothing when empty.
+    if (tok.type() == TOK_RWORD_PUB || tok.type() == TOK_INTERPOLATED_VIS) {
         PUTBACK(tok, lex);
         (void)ParsePublicity(lex);
         GET_TOK(tok, lex);
