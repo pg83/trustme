@@ -24,8 +24,10 @@ class HIRArraySize;
 
 extern HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& sp, const HIRGenericParams& paramsDef, const HIRGenericPath& path, bool isExpr);
 extern void ConvertHIRExpandAliases(HIRCrate& crate);
+extern void ConvertHIRValidateReceivers(const WireBoard& wb, HIRCrate& crate);
 extern void ConvertHIRExpandAliasesSelf(HIRCrate& crate);
 extern void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRTypeData* implType, ::std::vector<::std::pair<HIRPattern, HIRTypeRef>>& args, HIRTypeRef& retTy, HIRExprPtr& expr);
+extern HIRTypeRef ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr);
 extern void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate);
 extern void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate);
 extern void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate);

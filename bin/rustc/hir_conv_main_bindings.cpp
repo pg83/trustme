@@ -1353,7 +1353,7 @@ HIRPathParams ConvertHIRCompleteAliasParams(HIRTypeInterner& types, const Span& 
     return pp;
 }
 
-HIRTypeRef ConvertHIRExpandAliasesGetExpansionGP(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr) {
+HIRTypeRef ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr) {
     const auto& ti = crate.getTypeitemByPath(sp, path.mPath);
     if (const auto* ep = ti.opt_TypeAlias()) {
         const auto& ta = *ep;
@@ -1370,7 +1370,7 @@ HIRTypeRef ConvertHIRExpandAliasesGetExpansionGP(const Span& sp, const HIRCrate&
 
 HIRTypeRef ConvertHIRExpandAliasesGetExpansion(const HIRCrate& crate, const HIRPath& path, bool isExpr) {
     static Span sp;
-    TU_MATCH(HIRPath::Data, (path.mData), (e), (Generic, return ConvertHIRExpandAliasesGetExpansionGP(sp, crate, e, isExpr);), (UfcsInherent, DEBUG("TODO: Locate impl blocks for types - path=" << path);), (UfcsKnown, DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);), (UfcsUnknown, DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);))
+    TU_MATCH(HIRPath::Data, (path.mData), (e), (Generic, return ConvertHIRExpandTypeAlias(sp, crate, e, isExpr);), (UfcsInherent, DEBUG("TODO: Locate impl blocks for types - path=" << path);), (UfcsKnown, DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);), (UfcsUnknown, DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);))
     return crate.types.infer();
 }
 
@@ -1967,6 +1967,174 @@ void ConvertHIRExpandAliases(HIRCrate& crate) {
     AliasConstGenericParamBinder(crate.types).visitCrate(crate);
     Expander exp{crate};
     exp.visitCrate(crate);
+}
+
+namespace {
+    class ReceiverValidator {
+        HIRCrate& crate;
+        StaticTraitResolve resolve;
+        const HIRTypeData* implType = nullptr;
+
+        bool replaceImplTypeWithSelf(HIRTypeRef& ty) {
+            if (ty == crate.types.self()) {
+                return true;
+            }
+            if (ty == implType) {
+                ty = crate.types.self();
+                return true;
+            }
+            if (const auto* path = ty->opt_Path()) {
+                const auto* generic = path->path.mData.opt_Generic();
+                if (!generic || generic->mParams.types.empty()) {
+                    return false;
+                }
+                auto data = ty->cloneData();
+                auto& inner = data.as_Path().path.mData.as_Generic().mParams.types[0];
+                if (!replaceImplTypeWithSelf(inner)) {
+                    return false;
+                }
+                ty = crate.types.intern(mv$(data));
+                return true;
+            }
+            if (const auto* borrow = ty->opt_Borrow()) {
+                auto inner = borrow->inner;
+                if (!replaceImplTypeWithSelf(inner)) {
+                    return false;
+                }
+                ty = crate.types.borrow(borrow->type, inner);
+                return true;
+            }
+            if (const auto* pointer = ty->opt_Pointer()) {
+                auto inner = pointer->inner;
+                if (!replaceImplTypeWithSelf(inner)) {
+                    return false;
+                }
+                ty = crate.types.pointer(pointer->type, inner);
+                return true;
+            }
+            return false;
+        }
+
+        bool needsProjectionValidation(const HIRFunction& item) const {
+            if (item.receiver != HIRFunction::Receiver::Custom) {
+                return false;
+            }
+            ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");
+            return visitTyWith(*item.receiverType, [](const HIRTypeData* ty) {
+                const auto* path = ty->opt_Path();
+                return path && path->path.mData.is_UfcsKnown();
+            });
+        }
+
+        void validateFunction(HIRFunction& item) {
+            if (item.receiver == HIRFunction::Receiver::Custom) {
+                ASSERT_BUG(Span(), item.receiverType, "Custom receiver without a receiver type");
+                ASSERT_BUG(Span(), !item.mArgs.empty(), "Custom receiver without arguments");
+
+                auto receiverType = *item.receiverType;
+                if (needsProjectionValidation(item)) {
+                    auto itemGenerics = resolve.setItemGenerics(item.mParams);
+                    resolve.expandAssociatedTypes(Span(), receiverType);
+                }
+                if (!replaceImplTypeWithSelf(receiverType)) {
+                    ERROR(Span(), E0000, "Unknown receiver type - " << *item.receiverType);
+                }
+                item.receiverType = receiverType;
+                item.mArgs.front().second = receiverType;
+            }
+        }
+
+        void validateTrait(HIRTrait& trait) {
+            const auto needsValidation = ::std::any_of(trait.values.begin(), trait.values.end(), [&](const auto& value) {
+                const auto* function = value.second.opt_Function();
+                return function && needsProjectionValidation(*function);
+            });
+            if (!needsValidation) {
+                return;
+            }
+            const auto* oldImplType = implType;
+            implType = crate.types.self();
+            auto implGenerics = resolve.setImplGenerics(MetadataType::Unknown, trait.mParams);
+            for (auto& value : trait.values) {
+                if (auto* function = value.second.opt_Function()) {
+                    validateFunction(*function);
+                }
+            }
+            implType = oldImplType;
+        }
+
+        void validateModule(HIRModule& module) {
+            for (auto& item : module.modItems) {
+                if (auto* submodule = item.second->ent.opt_Module()) {
+                    validateModule(*submodule);
+                } else if (auto* trait = item.second->ent.opt_Trait()) {
+                    validateTrait(*trait);
+                }
+            }
+        }
+
+        template <typename Impl, typename Callback>
+        void forEachImpl(HIRCrate::ImplGroup<::std::unique_ptr<Impl>>& group, Callback callback) {
+            for (auto& named : group.named) {
+                for (auto& impl : named.second) {
+                    callback(*impl);
+                }
+            }
+            for (auto& impl : group.nonNamed) {
+                callback(*impl);
+            }
+            for (auto& impl : group.generic) {
+                callback(*impl);
+            }
+        }
+
+    public:
+        ReceiverValidator(const WireBoard& wb, HIRCrate& crate)
+            : crate(crate)
+            , resolve(wb)
+        {
+        }
+
+        void validate() {
+            validateModule(crate.mRootModule);
+            forEachImpl(crate.typeImpls, [&](HIRTypeImpl& impl) {
+                const auto needsValidation = ::std::any_of(impl.methods.begin(), impl.methods.end(), [&](const auto& method) {
+                    return needsProjectionValidation(method.second.data);
+                });
+                if (!needsValidation) {
+                    return;
+                }
+                const auto* oldImplType = implType;
+                implType = impl.mType;
+                auto implGenerics = resolve.setImplGenerics(MetadataType::Unknown, impl.mParams);
+                for (auto& method : impl.methods) {
+                    validateFunction(method.second.data);
+                }
+                implType = oldImplType;
+            });
+            for (auto& traitImpls : crate.traitImpls) {
+                forEachImpl(traitImpls.second, [&](HIRTraitImpl& impl) {
+                    const auto needsValidation = ::std::any_of(impl.methods.begin(), impl.methods.end(), [&](const auto& method) {
+                        return needsProjectionValidation(method.second.data);
+                    });
+                    if (!needsValidation) {
+                        return;
+                    }
+                    const auto* oldImplType = implType;
+                    implType = impl.mType;
+                    auto implGenerics = resolve.setImplGenerics(MetadataType::Unknown, impl.mParams);
+                    for (auto& method : impl.methods) {
+                        validateFunction(method.second.data);
+                    }
+                    implType = oldImplType;
+                });
+            }
+        }
+    };
+}
+
+void ConvertHIRValidateReceivers(const WireBoard& wb, HIRCrate& crate) {
+    ReceiverValidator(wb, crate).validate();
 }
 
 void ConvertHIRExpandAliasesSelf(HIRCrate& crate) {

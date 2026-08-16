@@ -21,6 +21,7 @@
 
 #include <std/mem/obj_pool.h>
 
+#include <algorithm>
 #include <limits.h>
 #include <unordered_set>
 
@@ -1803,6 +1804,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
             AST2HIR& mCtx;
             const Span& sp;
             const HIRTypeData* realSelfType;
+            ::std::vector<HIRSimplePath> aliasStack;
 
             Ivcr(AST2HIR& ctx, const Span& sp, const HIRTypeData* realSelfType)
                 : mCtx(ctx)
@@ -1811,7 +1813,34 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
             {
             }
 
-            bool isValidCustomReceiver(HIRTypeRef& ty) const {
+            const HIRTypeItem* findTypeItem(const HIRSimplePath& path) const {
+                const HIRModule* mod;
+                if (path.crateName() == mCtx.mCrate->crateName) {
+                    mod = &mCtx.mCrate->mRootModule;
+                } else {
+                    auto crateIt = mCtx.mCrate->extCrates.find(path.crateName());
+                    if (crateIt == mCtx.mCrate->extCrates.end()) {
+                        return nullptr;
+                    }
+                    mod = &crateIt->second.mData->mRootModule;
+                }
+                for (size_t i = 0; i < path.components().size(); ++i) {
+                    auto itemIt = mod->modItems.find(path.components()[i]);
+                    if (itemIt == mod->modItems.end()) {
+                        return nullptr;
+                    }
+                    if (i + 1 == path.components().size()) {
+                        return &itemIt->second->ent;
+                    }
+                    mod = itemIt->second->ent.opt_Module();
+                    if (!mod) {
+                        return nullptr;
+                    }
+                }
+                return nullptr;
+            }
+
+            bool isValidCustomReceiver(HIRTypeRef& ty) {
                 // - The path must include Self as a (the only?) type param.
                 if (ty == mCtx.mCrate->types.self()) {
                     return true;
@@ -1822,6 +1851,21 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                     auto data = ty->cloneData();
                     auto& e = data.as_Path();
                     if (auto* pe = e.path.mData.opt_Generic()) {
+                        const auto* item = findTypeItem(pe->mPath);
+                        if (item && item->is_TypeAlias()) {
+                            if (::std::find(aliasStack.begin(), aliasStack.end(), pe->mPath) != aliasStack.end()) {
+                                return false;
+                            }
+                            aliasStack.push_back(pe->mPath);
+                            auto expanded = ConvertHIRExpandTypeAlias(sp, *mCtx.mCrate, *pe, false);
+                            auto valid = isValidCustomReceiver(expanded);
+                            aliasStack.pop_back();
+                            if (valid) {
+                                ty = expanded;
+                                return true;
+                            }
+                            return false;
+                        }
                         if (pe->mParams.types.size() == 0) {
                             ERROR(sp, E0000, "Receiver type should have one type param - " << ty);
                         }
@@ -1903,10 +1947,23 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                         receiver = HIRFunction::Receiver::Custom;
                     }
                 }
+            } else if (e->path.mData.is_UfcsKnown()) {
+                // Associated type projections need the complete impl set, so
+                // their receiver relation is checked after HIR lowering.
+                receiver = HIRFunction::Receiver::Custom;
             }
         } else if (ivcr.isValidCustomReceiver(argSelfTy)) {
             receiver = HIRFunction::Receiver::Custom;
         } else {
+        }
+
+        if (receiver == HIRFunction::Receiver::Free && visitTyWith(argSelfTy, [](const HIRTypeData* ty) {
+                const auto* path = ty->opt_Path();
+                return path && path->path.mData.is_UfcsKnown();
+            })) {
+            // A projection nested inside Box/Rc/etc. needs the same deferred
+            // normalization as a projection used directly as the receiver.
+            receiver = HIRFunction::Receiver::Custom;
         }
 
         if (receiver == HIRFunction::Receiver::Free) {
@@ -1984,17 +2041,6 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     rv.receiver = receiver;
     if (receiver == HIRFunction::Receiver::Custom) {
         rv.receiverType = MonomorphiserNop(mCrate->types).monomorphType(f.args()[0].ty->span(), args.front().second, false);
-        // Ensure that the reciever references `Self`
-        ASSERT_BUG(
-            f.args()[0].ty->span(),
-            visitTyWith(
-                *rv.receiverType,
-                [](const HIRTypeData* v) {
-            return v->is_Generic() && v->as_Generic().isSelf();
-        }
-            ),
-            *rv.receiverType
-        );
     }
     rv.mAbi = RcString::newInterned(f.abi());
     rv.unsafe = f.isUnsafe();

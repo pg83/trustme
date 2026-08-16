@@ -35,10 +35,11 @@ environment. The authoritative rerun data is in
 | failed in the full gate | 631 |
 | failures reproduced independently | 630 |
 | parallel-only flakes | 1 |
+| unfinished after focused fixes | 620 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 323 |
+| accepted Rust rejected by the compiler or driver | 312 |
 | wrong runtime behaviour, panic, abort, signal, or output | 96 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 93 |
 | missing rejection or diagnostic | 76 |
@@ -48,12 +49,12 @@ environment. The authoritative rerun data is in
 
 ## P0: accepted Rust rejected by the front end
 
-All 323 tests are positive programs accepted by Rust 1.90. A normal mrustc
+All 312 tests are positive programs accepted by Rust 1.90. A normal mrustc
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 147 | trait/impl selection 32; receiver lowering 15; unresolved type/value names 18; `_` assignment lowering 9 |
+| type checking, HIR lowering, and resolution | 136 | trait/impl selection 32; unresolved type/value names 18; `_` assignment lowering 9; receiver/Deref lowering 4 |
 | parser | 137 | 134 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 slice-pattern/parser-common failures |
 | macro and attribute expansion | 31 | macro parsing/formatting 10; attributes 9; AST expansion 8; other expansion 4 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |

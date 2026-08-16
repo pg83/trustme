@@ -662,6 +662,9 @@ int main(int argc, char* argv[]) {
         CompilePhaseV("Resolve Type Aliases", [&]() {
             ConvertHIRExpandAliases(*hirCrate);
         });
+        CompilePhaseV("Validate Receivers", [&]() {
+            ConvertHIRValidateReceivers(wb, *hirCrate);
+        });
         // Set up bindings and other useful information.
         CompilePhaseV("Resolve Bind", [&]() {
             ConvertHIRBind(wb, *hirCrate);
