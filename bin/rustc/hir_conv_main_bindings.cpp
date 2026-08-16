@@ -122,6 +122,12 @@ namespace {
                     const auto& val = paramDefs.values[params.values.size()];
                     if (val.defaultValue.is_Infer()) {
                         ERROR(sp, E0000, "Omitted value parameter with no default in " << path);
+                    } else if (val.defaultValue.is_Unevaluated()) {
+                        // An unevaluated default carries the item's own generic
+                        // arguments, which are exactly the ones still being
+                        // filled here. Constant evaluation resolves it later,
+                        // in a context that has them.
+                        params.values.push_back(val.defaultValue.clone());
                     } else {
                         MonomorphStatePtr ms(types, selfTy, &params, nullptr);
                         params.values.push_back(ms.monomorphConstgeneric(sp, val.defaultValue, false));
