@@ -434,6 +434,9 @@ public:
 
     HIRTraitMarkings markings;
 
+    /// `#[repr(align(N))]`, which raises the alignment past any member's.
+    unsigned forcedAlignment = 0;
+
     /// `#[must_use]`. NOTE: not serialised, so only meaningful for a
     /// type defined in the crate being compiled.
     bool mustUse = false;

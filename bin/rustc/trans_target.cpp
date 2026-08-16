@@ -2150,6 +2150,10 @@ namespace {
                 rv.userAlign = true;
             }
         }
+        // `#[repr(align(N))]` raises the union past its widest member.
+        if (unn.forcedAlignment > 0) {
+            rv.align = ::std::max(rv.align, static_cast<size_t>(unn.forcedAlignment));
+        }
         // Round the size to be a multiple of align
         if (rv.size % rv.align != 0) {
             rv.size += rv.align - rv.size % rv.align;

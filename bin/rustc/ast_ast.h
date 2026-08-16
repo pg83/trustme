@@ -527,6 +527,8 @@ public:
             C,
             Transparent,
         } repr = Repr::Rust;
+        /// `#[repr(align(N))]`
+        uint64_t alignValue = 0;
     } markings;
 
     ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields);

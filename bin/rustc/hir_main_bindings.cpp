@@ -1232,9 +1232,12 @@ HIRUnion HirDeserialiser::deserialiseUnion() {
     auto params = deserialiseGenericparams();
     auto repr = static_cast<HIRUnion::Repr>(in.readTag());
     auto variants = deserialiseVec<HIRStructField>();
+    auto forcedAlignment = static_cast<unsigned>(in.readCount());
     auto markings = deserialiseMarkings();
 
-    return HIRUnion{mv$(params), repr, mv$(variants), mv$(markings)};
+    auto rv = HIRUnion{mv$(params), repr, mv$(variants), mv$(markings)};
+    rv.forcedAlignment = forcedAlignment;
+    return rv;
 }
 
 HIRStruct HirDeserialiser::deserialiseStruct() {
@@ -3696,6 +3699,7 @@ public:
         out.writeTag(static_cast<int>(item.repr));
 
         serialiseVec(item.variants);
+        out.writeCount(item.forcedAlignment);
 
         serialise(item.markings);
     }

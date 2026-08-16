@@ -283,6 +283,16 @@ class CHandlerRepr: public ExpandDecorator {
                         lex.getTokenCheck(TOK_PAREN_CLOSE);
                     } else {
                     }
+                } else if (reprStr == "align") {
+                    lex.getTokenCheck(TOK_PAREN_OPEN);
+                    auto n = ExpandParseAndExpandExprVal(crate, mod, lex);
+                    auto* val = cast<ASTExprNodeInteger>(&*n);
+                    ASSERT_BUG(n->span(), val, "#[repr(align(...))] - alignment must be an integer");
+                    auto v = val->value;
+                    ASSERT_BUG(lex.pointSpan(), v > U128(0), "#[repr(align(" << v << "))] - alignment must be non-zero");
+                    ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
+                    e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
+                    lex.getTokenCheck(TOK_PAREN_CLOSE);
                 } else {
                     ERROR(lex.pointSpan(), E0000, "Unknown union repr '" << reprStr << "'");
                 }
