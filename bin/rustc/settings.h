@@ -3,6 +3,7 @@
 #include "rc_string.h"
 
 #include <map>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -14,8 +15,18 @@ struct TraitSolverConfig {
     bool globally = false;
 };
 
-// Opaque cfg!() evaluation state (values, flags, --check-cfg expectations,
-// lint levels). Defined and created by expand_cfg.cpp.
+// Lint reporting level, as set by `-A/-W/-D/-F` and by `#![allow(...)]` and
+// friends on the crate.
+enum class CfgLintLevel {
+    Allow,
+    Warn,
+    ForceWarn,
+    Deny,
+    Forbid,
+};
+
+// Opaque cfg!() evaluation state (values, flags, --check-cfg expectations).
+// Defined and created by expand_cfg.cpp.
 struct CfgState;
 
 // The one authoritative compilation-settings component, wired on the
@@ -42,4 +53,19 @@ struct Settings {
 
     // cfg!() evaluation state; created by main via CfgCreateState.
     CfgState* cfg = nullptr;
+
+    // Lint levels by name, and the cap applied to every lint (`--cap-lints`).
+    // Empty means every lint keeps its built-in level.
+    ::std::map<::std::string, CfgLintLevel> lintLevels;
+    ::std::optional<CfgLintLevel> lintCap;
+
+    /// The level a lint reports at, after its own setting and the cap.
+    CfgLintLevel lintLevel(const ::std::string& name, CfgLintLevel builtin) const {
+        auto it = lintLevels.find(name);
+        auto level = (it != lintLevels.end() ? it->second : builtin);
+        if (lintCap && level > *lintCap && level != CfgLintLevel::ForceWarn) {
+            level = *lintCap;
+        }
+        return level;
+    }
 };

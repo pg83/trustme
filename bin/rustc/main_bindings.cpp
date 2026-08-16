@@ -24,6 +24,7 @@
 #include "resolve_main_bindings.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_expand_main_bindings.h"
+#include "lint_must_use.h"
 #include "hir_typeck_main_bindings.h"
 
 #include <std/mem/obj_pool.h>
@@ -287,6 +288,8 @@ void initDebugList() {
 
          "Typecheck Outer",
          "Typecheck Expressions",
+
+         "Lint",
 
          "Expand HIR Annotate",
          "Expand HIR Static Borrow Mark",
@@ -724,6 +727,11 @@ int main(int argc, char* argv[]) {
         CompilePhaseV("Typecheck Expressions", [&]() {
             TypecheckExpressions(wb, *hirCrate);
         });
+        // Lints that need resolved types, but must see the code as written.
+        CompilePhaseV("Lint", [&]() {
+            LintUnusedMustUse(wb, *hirCrate);
+        });
+
         // === HIR Expansion ===
         // Annotate how each node's result is used
         CompilePhaseV("Expand HIR Annotate", [&]() {

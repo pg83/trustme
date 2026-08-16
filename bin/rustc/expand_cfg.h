@@ -1,12 +1,13 @@
 #pragma once
 
+#include "settings.h"
+
 #include <iosfwd>
 #include <string>
 #include <vector>
 #include <functional>
 
 struct Span;
-struct Settings;
 struct CfgState;
 
 namespace stl {
@@ -14,13 +15,6 @@ namespace stl {
 }
 class TokenStream;
 
-enum class CfgLintLevel {
-    Allow,
-    Warn,
-    ForceWarn,
-    Deny,
-    Forbid,
-};
 
 class ASTAttribute;
 class ASTAttributeList;

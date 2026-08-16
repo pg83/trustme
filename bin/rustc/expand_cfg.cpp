@@ -234,11 +234,16 @@ bool CfgSetCheckSpec(Settings& settings, const ::std::string& spec, ::std::strin
 }
 
 void CfgSetLintLevel(Settings& settings, ::std::string name, CfgLintLevel level) {
-    // Accepted for cargo compatibility; cfg lints are not checked.
+    // `forbid` cannot be lifted later, and a cap never raises a level.
+    auto it = settings.lintLevels.find(name);
+    if (it != settings.lintLevels.end() && it->second == CfgLintLevel::Forbid) {
+        return;
+    }
+    settings.lintLevels[std::move(name)] = level;
 }
 
 void CfgSetLintCap(Settings& settings, CfgLintLevel level) {
-    // Accepted for cargo compatibility; cfg lints are not checked.
+    settings.lintCap = level;
 }
 
 namespace {

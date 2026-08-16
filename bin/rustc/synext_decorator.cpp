@@ -3493,11 +3493,57 @@ STATIC_DECORATOR("alloc_error_handler", DecoratorAllocErrorHandler);
 STATIC_DECORATOR("global_allocator", DecoratorGlobalAllocator);
 
 class CMultiHandlerLint: public ExpandDecorator {
+    /// The level this attribute sets.
+    virtual CfgLintLevel level() const = 0;
+
     AttrStage stage() const override {
         return AttrStage::Pre;
     }
 
+    /// Report the plain lint names in `(...)`. The list also carries entries
+    /// this compiler has no lint for — tool lints (`clippy::foo`) and keyed
+    /// entries (`reason = "..."`) — so the scan skips whatever it cannot read
+    /// instead of rejecting the attribute.
+    static void collectLintNames(const ASTAttribute& mi, const std::function<void(const RcString&)>& cb) {
+        TTStream lex(mi.span(), ParseState(), mi.data());
+        if (!lex.getTokenIf(TOK_PAREN_OPEN)) {
+            return;
+        }
+        unsigned depth = 1;
+        bool atName = true;
+        while (depth > 0) {
+            auto tok = lex.getToken();
+            if (tok == TOK_EOF) {
+                break;
+            }
+            if (tok == TOK_PAREN_OPEN) {
+                depth += 1;
+                atName = false;
+                continue;
+            }
+            if (tok == TOK_PAREN_CLOSE) {
+                depth -= 1;
+                atName = true;
+                continue;
+            }
+            if (tok == TOK_COMMA) {
+                atName = (depth == 1);
+                continue;
+            }
+            if (depth == 1 && atName && tok == TOK_IDENT) {
+                const auto next = lex.lookahead(0);
+                if (next == TOK_COMMA || next == TOK_PAREN_CLOSE) {
+                    cb(tok.ident().name);
+                }
+            }
+            atName = false;
+        }
+    }
+
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
+        collectLintNames(mi, [&](const RcString& name) {
+            CfgSetLintLevel(*wb.settings, name.c_str(), this->level());
+        });
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
@@ -3528,19 +3574,35 @@ class CMultiHandlerLint: public ExpandDecorator {
     }
 };
 
-class CHandlerAllow: public CMultiHandlerLint {};
+class CHandlerAllow: public CMultiHandlerLint {
+    CfgLintLevel level() const override {
+        return CfgLintLevel::Allow;
+    }
+};
 
 STATIC_DECORATOR("allow", CHandlerAllow);
 
-class CHandlerWarn: public CMultiHandlerLint {};
+class CHandlerWarn: public CMultiHandlerLint {
+    CfgLintLevel level() const override {
+        return CfgLintLevel::Warn;
+    }
+};
 
 STATIC_DECORATOR("warn", CHandlerWarn);
 
-class CHandlerDeny: public CMultiHandlerLint {};
+class CHandlerDeny: public CMultiHandlerLint {
+    CfgLintLevel level() const override {
+        return CfgLintLevel::Deny;
+    }
+};
 
 STATIC_DECORATOR("deny", CHandlerDeny);
 
-class CHandlerForbid: public CMultiHandlerLint {};
+class CHandlerForbid: public CMultiHandlerLint {
+    CfgLintLevel level() const override {
+        return CfgLintLevel::Forbid;
+    }
+};
 
 STATIC_DECORATOR("forbid", CHandlerForbid);
 

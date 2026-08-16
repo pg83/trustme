@@ -188,6 +188,9 @@ public:
     struct Markings {
         std::vector<unsigned> rustcLegacyConstGenerics;
         bool trackCaller = false;
+        /// `#[must_use]`. NOTE: not serialised, so only meaningful for
+        /// functions defined in the crate being compiled.
+        bool mustUse = false;
         bool isNaked = false;
         // Calls to functions with #[rustc_intrinsic] must remain visible to
         // CTFE even when the function also provides a runtime fallback body.
@@ -367,6 +370,10 @@ public:
 
     /// Get a type for the given repr value
     static HIRCoreType getReprType(Repr r);
+
+    /// `#[must_use]`. NOTE: not serialised, so only meaningful for a
+    /// type defined in the crate being compiled.
+    bool mustUse = false;
 };
 
 class HIRStruct {
@@ -402,6 +409,10 @@ public:
     HIRStructMarkings structMarkings;
 
     HIRConstEvalState constEvalState = HIRConstEvalState::None;
+
+    /// `#[must_use]`. NOTE: not serialised, so only meaningful for a
+    /// type defined in the crate being compiled.
+    bool mustUse = false;
 };
 
 extern ::std::ostream& operator<<(::std::ostream& os, const HIRStruct::Repr& x);
@@ -419,6 +430,10 @@ public:
     tStructFields variants;
 
     HIRTraitMarkings markings;
+
+    /// `#[must_use]`. NOTE: not serialised, so only meaningful for a
+    /// type defined in the crate being compiled.
+    bool mustUse = false;
 };
 
 struct HIRAssociatedType {
@@ -474,6 +489,10 @@ public:
     unsigned getVtableValueIndex(const HIRGenericPath& traitPath, const RcString& name) const;
     unsigned getVtableParentIndex(HIRTypeInterner& types, const Span& sp, const HIRPathParams& thisParams, const HIRGenericPath& traitPath) const;
     ::std::pair<const HIRAssociatedType*, const HIRPathParams*> getAtyDef(const RcString& name) const;
+
+    /// `#[must_use]`. NOTE: not serialised, so only meaningful for a
+    /// type defined in the crate being compiled.
+    bool mustUse = false;
 };
 
 class HIRProcMacro {

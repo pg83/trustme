@@ -1307,6 +1307,7 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
         // In 1.90 this no longer marks wrappers as nonzero; scalar limits carry
         // the layout information instead.
     }
+    rv.mustUse = attrs.has("must_use");
     rv.structMarkings.isFundamental = attrs.has("fundamental");
     const auto& simplePath = path.getSimplePath();
     rv.structMarkings.isNoNiche = simplePath == crate->getLangItemPathOpt("unsafe_cell") || simplePath == crate->getLangItemPathOpt("unsafe_pinned");
@@ -1544,7 +1545,9 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
         data = HIREnum::Class::make_Data(mv$(variants));
     }
 
-    return HIREnum{mv$(params), isReprC, repr, mv$(data)};
+    HIREnum rv{mv$(params), isReprC, repr, mv$(data)};
+    rv.mustUse = attrs.has("must_use");
+    return rv;
 }
 
 HIRUnion AST2HIR::LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAttributeList& attrs) {
@@ -1571,7 +1574,9 @@ HIRUnion AST2HIR::LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAt
         variants.push_back(HIRStructField{field.name, getVis(field.vis), LowerHIRType(field.type), {}});
     }
 
-    return HIRUnion{LowerHIRGenericParams(f.params_, nullptr), repr, mv$(variants)};
+    HIRUnion rv{LowerHIRGenericParams(f.params_, nullptr), repr, mv$(variants)};
+    rv.mustUse = attrs.has("must_use");
+    return rv;
 }
 
 namespace {
@@ -1610,6 +1615,7 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
     }
     HIRTrait rv{mv$(params), mv$(supertraits)};
     rv.isConst = attrs.has("const_trait");
+    rv.mustUse = attrs.has("must_use");
     if (const auto* attr = attrs.get("rustc_skip_during_method_dispatch")) {
         TTStream tokens(attr->span(), ParseState(), attr->data());
         tokens.getTokenCheck(TOK_PAREN_OPEN);
@@ -2005,6 +2011,8 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     if (attrs.get("track_caller")) {
         markings.trackCaller = true;
     }
+    // #[must_use] - The caller has to use the return value
+    markings.mustUse = attrs.has("must_use");
     markings.isNaked = f.markings.isNaked;
     markings.isRustcIntrinsic = attrs.has("rustc_intrinsic");
     markings.isRustcPromotable = attrs.has("rustc_promotable");
