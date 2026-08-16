@@ -3573,6 +3573,12 @@ ASTTrait ParseTraitDef(TokenStream& lex, const ASTAttributeList& metaItems, ASTG
     ASTTrait trait(mv$(params), mv$(supertraits), mv$(lifetimes));
 
     CHECK_TOK(tok, TOK_BRACE_OPEN);
+    // A trait body takes inner attributes. Nothing reads them on a trait, so
+    // they are parsed and dropped rather than rejected.
+    {
+        ASTAttributeList innerAttrs;
+        ParseParentAttrs(lex, innerAttrs);
+    }
     while (GET_TOK(tok, lex) != TOK_BRACE_CLOSE) {
         PUTBACK(tok, lex);
 
