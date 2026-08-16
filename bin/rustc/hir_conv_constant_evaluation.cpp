@@ -1,5 +1,40 @@
 #include "hir_conv_constant_evaluation.h"
 
+namespace {
+    /// The largest value an unsigned `repr` can hold, or nothing when the tag
+    /// is signed or not a fixed-width integer.
+    ::std::optional<U128> enumTagUnsignedMax(HIRCoreType ty) {
+        switch (ty) {
+            case HIRCoreType::U8:
+                return U128(0xFFu);
+            case HIRCoreType::U16:
+                return U128(0xFFFFu);
+            case HIRCoreType::U32:
+                return U128(0xFFFFFFFFu);
+            default:
+                return {};
+        }
+    }
+
+    /// Reject the two ways a discriminant list can be invalid: two variants
+    /// sharing a value, and a value the tag cannot hold.
+    template <typename Variants, typename GetValue>
+    void checkEnumDiscriminants(const Span& sp, HIRCoreType ty, const Variants& variants, GetValue getValue) {
+        const auto max = enumTagUnsignedMax(ty);
+        ::std::map<U128, RcString> seen;
+        for (const auto& var : variants) {
+            const auto value = getValue(var);
+            if (max && value > *max) {
+                ERROR(sp, E0000, "discriminant value `" << value << "` for variant `" << var.name << "` is not in the range of the enum's tag type");
+            }
+            auto inserted = seen.insert(::std::make_pair(value, var.name));
+            if (!inserted.second) {
+                ERROR(sp, E0000, "discriminant value `" << value << "` assigned more than once - `" << inserted.first->second << "` and `" << var.name << "`");
+            }
+        }
+    }
+}
+
 #include "floats.h"
 #include "int128.h" // 128 bit integer support
 #include "hir_hir.h"
@@ -4963,6 +4998,7 @@ namespace {
                         }
                         i += 1;
                     }
+                    checkEnumDiscriminants(Span(), ty, e.variants, [](const auto& var) { return var.val; });
                 }
                 TU_ARMA(Data, e) {
                     U128 i(0);
@@ -4986,6 +5022,7 @@ namespace {
                         var.discriminantValue = i;
                         i += 1;
                     }
+                    checkEnumDiscriminants(Span(), ty, e, [](const auto& var) { return var.discriminantValue; });
                 }
             }
             item.discriminantsEvaluated = true;
