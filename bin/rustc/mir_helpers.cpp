@@ -411,6 +411,65 @@ std::string MIRTypeResolve::intrinsicTypeName(const HIRTypeData* ty) const {
         auto p = ty->as_Path().path.data.as_Generic().clone();
         return FMT(p);
     }
+    if (const auto* te = ty->opt_TraitObject()) {
+        // The type printer decorates a trait object with crate tags and wraps
+        // the bound list in parentheses; `type_name` wants the path as written.
+        auto plainPath = [](const HIRSimplePath& path) {
+            ::std::string rv;
+            const auto& crate = path.crateName();
+            if (crate != "") {
+                // Crate names carry a version tag (`core-0_0_0`) that the name
+                // of the type does not.
+                ::std::string name(crate.c_str());
+                const auto tag = name.rfind('-');
+                rv += (tag == ::std::string::npos ? name : name.substr(0, tag));
+            }
+            for (const auto& comp : path.components()) {
+                if (!rv.empty()) {
+                    rv += "::";
+                }
+                rv += comp.c_str();
+            }
+            return rv;
+        };
+
+        ::std::vector<::std::string> bounds;
+        if (te->trait.path.path.crateName() != "" || !te->trait.path.path.components().empty()) {
+            auto principal = plainPath(te->trait.path.path);
+            // The callable traits keep their parenthesised sugar.
+            const auto& comps = te->trait.path.path.components();
+            const auto& last = comps.empty() ? RcString() : comps.back();
+            const auto& params = te->trait.path.params;
+            if ((last == "Fn" || last == "FnMut" || last == "FnOnce") && params.types.size() == 1 && params.types[0]->is_Tuple()) {
+                principal += "(";
+                const auto& args = params.types[0]->as_Tuple();
+                for (size_t i = 0; i < args.size(); i++) {
+                    if (i > 0) {
+                        principal += ", ";
+                    }
+                    principal += this->intrinsicTypeName(args[i]);
+                }
+                principal += ")";
+                auto it = te->trait.typeBounds.find(RcString::newInterned("Output"));
+                if (it != te->trait.typeBounds.end() && !(it->second.type->is_Tuple() && it->second.type->as_Tuple().empty())) {
+                    principal += " -> ";
+                    principal += this->intrinsicTypeName(it->second.type);
+                }
+            }
+            bounds.push_back(std::move(principal));
+        }
+        for (const auto& marker : te->markers) {
+            bounds.push_back(plainPath(marker.path));
+        }
+        ::std::string rv = "dyn ";
+        for (size_t i = 0; i < bounds.size(); i++) {
+            if (i > 0) {
+                rv += " + ";
+            }
+            rv += bounds[i];
+        }
+        return rv;
+    }
     return FMT(ty);
 }
 
