@@ -722,9 +722,17 @@ ASTExprNodeP ParseStmt(TokenStream& lex) {
             return ParseFlowControl(lex, ASTExprNodeFlow::RETURN);
         case TOK_RWORD_BECOME:
             return ParseFlowControl(lex, ASTExprNodeFlow::TAILCALL);
-        case TOK_BRACE_OPEN:
+        case TOK_BRACE_OPEN: {
             PUTBACK(tok, lex);
-            return ParseExprBlockNode(lex);
+            auto block = ParseExprBlockNode(lex);
+            // A block followed by `.` or `?` is the start of an expression, not
+            // a statement that happens to be a block.
+            if (lex.lookahead(0) == TOK_DOT || lex.lookahead(0) == TOK_QMARK) {
+                lex.putback(Token(Token::TagTakeIP(), InterpolatedFragment(InterpolatedFragment::EXPR, block.release())));
+                return ParseExpr0(lex);
+            }
+            return block;
+        }
         case TOK_RWORD_IF:
         case TOK_RWORD_WHILE:
         case TOK_RWORD_FOR:
