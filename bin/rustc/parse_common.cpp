@@ -3355,6 +3355,15 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
     }
 
     GET_TOK(tok, lex);
+    // A trait item is public by definition, but the grammar still accepts a
+    // visibility here — rustc rejects it after parsing, which matters because
+    // the item may be stripped by a `cfg` before that point.
+    // TODO: reject a non-default visibility on a trait item that survives cfg.
+    if (tok.type() == TOK_RWORD_PUB) {
+        PUTBACK(tok, lex);
+        (void)ParsePublicity(lex);
+        GET_TOK(tok, lex);
+    }
     bool isSpecialisable = false;
     if (tok.type() == TOK_IDENT && tok.ident().name == "default") {
         isSpecialisable = true;
