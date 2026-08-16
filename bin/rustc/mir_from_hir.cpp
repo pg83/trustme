@@ -1164,7 +1164,9 @@ namespace {
                 auto res = builder.getResult(node.span());
 
                 // Shortcut for `let foo = bar;` (avoids the extra temporary that would need to be optimised out)
-                if (node.pattern.data.is_Any() && !node.pattern.bindings.empty() && std::all_of(node.pattern.bindings.begin(), node.pattern.bindings.end(), [](const HIRPatternBinding& pb) {
+                // - Only for a single binding: `let a @ b = ...` needs the
+                //   value once per binding, which the general path handles.
+                if (node.pattern.data.is_Any() && node.pattern.bindings.size() == 1 && std::all_of(node.pattern.bindings.begin(), node.pattern.bindings.end(), [](const HIRPatternBinding& pb) {
                     return pb.type == HIRPatternBinding::Type::Move;
                 })) {
                     this->schedulePatternDrops(node.span(), node.pattern, PatternDropOrder::FirstCandidate);
