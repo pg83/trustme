@@ -1,4 +1,4 @@
-// MRustC custom version of libproc_macro
+// trustme's version of libproc_macro
 //
 // Unlike the original rustc version, this one is designed to live complely detached from its compiler.
 #![allow(ellipsis_inclusive_range_patterns)]
@@ -13,14 +13,14 @@ macro_rules! some_else {
 
 macro_rules! debug {
     ( $($t:tt)* ) => {
-        if ::std::env::var_os("MRUSTC_PM_DEBUG").is_some() {
+        if ::std::env::var_os("TRUSTME_PM_DEBUG").is_some() {
             eprintln!($($t)*)
         }
     }
 }
 macro_rules! note {
     ( $($t:tt)* ) => {
-        if ::std::env::var_os("MRUSTC_PM_DEBUG").is_some() {
+        if ::std::env::var_os("TRUSTME_PM_DEBUG").is_some() {
             eprintln!($($t)*)
         }
     }

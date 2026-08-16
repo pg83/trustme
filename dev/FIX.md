@@ -49,7 +49,7 @@ environment. The authoritative rerun data is in
 
 ## P0: accepted Rust rejected by the front end
 
-All 312 tests are positive programs accepted by Rust 1.90. A normal mrustc
+All 312 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
@@ -171,8 +171,8 @@ gate and passed in the independent Nix rerun.
 For every compiler fix:
 
 1. Add a minimal `tst/unit/test_*.rs` that is green with the exact Rust 1.90
-   compiler before changing mrustc.
-2. Confirm that unit is red on current mrustc.
+   compiler before changing trustme.
+2. Confirm that unit is red on current trustme.
 3. Fix the shared compiler path, not the corpus expectation.
 4. Run only the new unit, the affected original triggers, and the unit group.
 5. Remove completed rows from this file instead of commenting them out.

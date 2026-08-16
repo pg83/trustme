@@ -140,7 +140,7 @@ void ExpandTestHarness(ASTCrate& crate) {
     newmod.addItem(Span(), visPrivate, "TESTS", mv$(testsList), {});
 
     crate.rootModule_.addItem(Span(), visPrivate, "test#", mv$(newmod), {});
-    crate.langItems["mrustc-main"] = ASTAbsolutePath("", {"test#", "main"});
+    crate.langItems["trustme-main"] = ASTAbsolutePath("", {"test#", "main"});
 }
 
 #undef NEWNODE
@@ -150,9 +150,9 @@ void ExpandTestHarness(ASTCrate& crate) {
 #endif
 
 #if __has_feature(addressSanitizer) || __has_feature(undefinedBehaviorSanitizer)
-    #define MRUSTC_SANITIZER_BUILD 1
+    #define TRUSTME_SANITIZER_BUILD 1
 #else
-    #define MRUSTC_SANITIZER_BUILD 0
+    #define TRUSTME_SANITIZER_BUILD 0
 #endif
 
 struct ProgramParams {
@@ -220,7 +220,7 @@ struct ProgramParams {
         ::std::string codegenType;
         ::std::string emitBuildCommand;
         // Emit the generated C++ source and stop, without invoking the C
-        // compiler (for profiling the mrustc front/middle-end in isolation).
+        // compiler (for profiling the trustme front/middle-end in isolation).
         bool emitCppOnly = false;
         ::std::string panicType;
         ::std::vector<::std::string> linkerArgs;
@@ -262,7 +262,7 @@ void CompilePhaseV(const char* name, Fcn f) {
 
 void initDebugList() {
     debugInitPhases(
-        "MRUSTC_DEBUG",
+        "TRUSTME_DEBUG",
         {"Target Load",
          "Parse",
          "LoadCrates",
@@ -319,7 +319,7 @@ void initDebugList() {
 /// main!
 int main(int argc, char* argv[]) {
     initDebugList();
-#if MRUSTC_SANITIZER_BUILD
+#if TRUSTME_SANITIZER_BUILD
     // Keep teardown out of production, but make sanitizer builds destroy every
     // pooled object so ASan/LSan can distinguish real leaks from arena lifetime.
     auto poolOwner = stl::ObjPool::fromMemory();
@@ -350,7 +350,7 @@ int main(int argc, char* argv[]) {
 
     // Set up cfg values
     CompilePhaseV("Setup", [&]() {
-        CfgSetValue(*wb.settings, "rust_compiler", "mrustc");
+        CfgSetValue(*wb.settings, "rust_compiler", "trustme");
         CfgSetValue(*wb.settings, "panic", params.codegen.panicType);
         if (params.debugAssertionsEnabled()) {
             CfgSetFlag(*wb.settings, "debug_assertions");
@@ -538,14 +538,14 @@ int main(int argc, char* argv[]) {
                         ss << e << ",";
                     }
                     DEBUG("Looking at lang items from " << ec.first << " : " << ss.str());
-                    if (ec.second.hir->langItems.count("mrustc-allocator")) {
+                    if (ec.second.hir->langItems.count("trustme-allocator")) {
                         if (allocatorCrateLoaded) {
                             ERROR(Span(), E0000, "Multiple allocator crates loaded - " << allocCrateName << " and " << ec.first);
                         }
                         allocCrateName = ec.first;
                         allocatorCrateLoaded = true;
                     }
-                    if (ec.second.hir->langItems.count("mrustc-panic_runtime")) {
+                    if (ec.second.hir->langItems.count("trustme-panic_runtime")) {
                         if (panicRuntimeLoaded) {
                             WARNING(Span(), W0000, "Multiple panic_runtime crates loaded - " << panicCrateName << " and " << ec.first);
                         } else {
@@ -553,7 +553,7 @@ int main(int argc, char* argv[]) {
                             panicRuntimeLoaded = true;
                         }
                     }
-                    if (ec.second.hir->langItems.count("mrustc-needs_panic_runtime")) {
+                    if (ec.second.hir->langItems.count("trustme-needs_panic_runtime")) {
                         panicRuntimeNeeded = true;
                     }
                 }
@@ -568,9 +568,9 @@ int main(int argc, char* argv[]) {
                     crate.loadExternCrate(*wb.settings, Span(), panicCrate.c_str());
                 }
 
-                // - `mrustc-main` lang item default
+                // - `trustme-main` lang item default
                 if (!crate.noMain) {
-                    crate.langItems.insert(::std::make_pair(::std::string("mrustc-main"), ASTAbsolutePath("", {"main"})));
+                    crate.langItems.insert(::std::make_pair(::std::string("trustme-main"), ASTAbsolutePath("", {"main"})));
                 }
             }
         });
@@ -832,7 +832,7 @@ int main(int argc, char* argv[]) {
 
         // TODO: For 1.29 executables/dylibs, add oom/panic shims
         if (crateType == ASTCrate::Type::ProcMacro) {
-            // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `mrustc-main`)
+            // - Save a very basic HIR dump, making sure that there's no lang items in it (e.g. `trustme-main`)
             CompilePhaseV("HIR Serialise", [&]() {
                 HIRCrate crateForSer(pool, *wb.types);
                 crateForSer.crateName = hirCrate->crateName;
@@ -995,7 +995,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         }
     };
 
-    if (const auto* a = getenv("MRUSTC_LIBDIR")) {
+    if (const auto* a = getenv("TRUSTME_LIBDIR")) {
         addLibrarySearchDir(a);
     }
 
@@ -1008,7 +1008,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         if (strcmp(arg, "-vV") == 0) {
             const char* rustcTarget = RUSTC_TARGET_VERSION;
 
-            ::std::cout << "rustc " << rustcTarget << ".100 (mrustc " << VersionGetString() << ")" << ::std::endl;
+            ::std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << ::std::endl;
             ::std::cout << "binary: rustc" << ::std::endl;
             ::std::cout << "commit-hash: " << gsVersionGitHash << ::std::endl;
             ::std::cout << "commit-date: UNKNOWN" << ::std::endl;
@@ -1181,7 +1181,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             const auto feature = optval.substr(start, end == ::std::string::npos ? ::std::string::npos : end - start);
                             if (feature != "-crt-static") {
                                 ::std::cerr << "unsupported value for -C target-feature: '" << feature
-                                            << "' (mrustc only supports -crt-static)" << ::std::endl;
+                                            << "' (trustme only supports -crt-static)" << ::std::endl;
                                 exit(1);
                             }
                             if (end == ::std::string::npos) {
@@ -1312,7 +1312,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         this->printCfgs = true;
                     } else if (optname == "check-cfg-all-expected") {
                         // This only controls how many expected cfg values rustc
-                        // prints in diagnostics.  mrustc emits a compact
+                        // prints in diagnostics.  trustme emits a compact
                         // diagnostic and has no corresponding display limit.
                         noOptval();
                     } else {
@@ -1372,7 +1372,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             } else if (strcmp(arg, "--version") == 0) {
                 const char* rustcTarget = RUSTC_TARGET_VERSION;
                 // NOTE: Starts the version with "rustc 1.29.100" so build scripts don't get confused
-                ::std::cout << "rustc " << rustcTarget << ".100 (mrustc " << VersionGetString() << ")" << ::std::endl;
+                ::std::cout << "rustc " << rustcTarget << ".100 (trustme " << VersionGetString() << ")" << ::std::endl;
                 ::std::cout << "release: " << rustcTarget << ".100" << ::std::endl; // `autoconfig` looks for this line
                 ::std::cout << "- Build time: " << gsVersionBuildTime << ::std::endl;
                 ::std::cout << "- Commit: " << gsVersionGitHash << (gbVersionGitDirty ? " (dirty tree)" : "") << ::std::endl;
@@ -1517,7 +1517,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
         }
     }
 
-    if (const auto* a = getenv("MRUSTC_DUMP")) {
+    if (const auto* a = getenv("TRUSTME_DUMP")) {
         while (a[0]) {
             const char* end = strchr(a, ':');
 
@@ -1540,7 +1540,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
             } else if (s == "mir") {
                 this->debug.dumpMir = true;
             } else {
-                ::std::cerr << "Unknown option in $MRUSTC_DUMP '" << s << "'" << ::std::endl;
+                ::std::cerr << "Unknown option in $TRUSTME_DUMP '" << s << "'" << ::std::endl;
                 // - No terminate, just warn
             }
         }
@@ -1548,7 +1548,7 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
 }
 
 void ProgramParams::showHelp() const {
-    ::std::cout << "USAGE: mrustc <sourcefile>\n"
+    ::std::cout << "USAGE: rustc <sourcefile>\n"
                    "\n"
                    "OPTIONS:\n"
                    "-L [kind=]<dir>    : Search for crates or native libraries in this directory\n"

@@ -194,7 +194,7 @@ void ExpandAttr(const ExpandState& es, const Span& sp, const ASTAttribute& a, At
                         auto lex = ProcMacroInvoke(sp, wb, crate, this->macPath, attr.data(), attrs, vis, path.nodes.back(), i);
                         if (lex) {
                             // TODO: `derive_where` returns its own attribute invocation in the output, between two other additions
-                            //   > This seems to so the derive (first attribute) can see the trait list? (does mrustc handle that properly? I think so)
+                            //   > This seems to so the derive (first attribute) can see the trait list? (does trustme handle that properly? I think so)
                             // - Could parse, and the locate the first matching item (same name?) and merge/filter its attributes
                             // - Should the rest of the attributes be applied
                             // - Tag the item (or item-range?) to stop it being able to invoke this macro again?

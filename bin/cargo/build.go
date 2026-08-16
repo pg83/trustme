@@ -68,7 +68,7 @@ func buildPackage(opts BuildOptions, manifestPath string) []string {
 	workspace := findWorkspace(manifestPath)
 	repository := newRepository(workspace, opts.vendorDir)
 	root := repository.loadPath(manifestPath)
-	compiler := os.Getenv("MRUSTC_PATH")
+	compiler := os.Getenv("TRUSTME_PATH")
 
 	if compiler == "" {
 		compiler = siblingCompiler()
@@ -567,7 +567,7 @@ func (b *Builder) runBuildScript(pkg *Package, output string) {
 	env["RUSTC"] = b.context.compiler
 
 	if len(b.context.opts.libSearch) > 0 {
-		env["MRUSTC_LIBDIR"] = absolutePath(b.context.opts.libSearch[0])
+		env["TRUSTME_LIBDIR"] = absolutePath(b.context.opts.libSearch[0])
 	}
 
 	for feature := range pkg.activeFeatures {
@@ -590,7 +590,7 @@ func (b *Builder) runBuildScript(pkg *Package, output string) {
 	}
 
 	if b.context.opts.emitMmir {
-		miri := os.Getenv("MRUSTC_MIRI")
+		miri := os.Getenv("TRUSTME_MIRI")
 
 		if miri == "" {
 			miri = filepath.Join(filepath.Dir(b.context.compiler), "standalone_miri"+executableSuffix())
@@ -918,7 +918,7 @@ func crateType(target *Target) string {
 }
 
 func runCommand(dir string, extraEnv map[string]string, logPath string, dryRun bool, name string, args ...string) {
-	if _, dump := os.LookupEnv("CARGO_MRUSTC_DUMP_ENV"); dump {
+	if _, dump := os.LookupEnv("CARGO_TRUSTME_DUMP_ENV"); dump {
 		keys := make([]string, 0, len(extraEnv))
 
 		for key := range extraEnv {
@@ -1031,25 +1031,25 @@ func rustName(name string) string {
 }
 
 func deferredCodegen() bool {
-	_, enabled := os.LookupEnv("CARGO_MRUSTC_DEFER_CODEGEN")
+	_, enabled := os.LookupEnv("CARGO_TRUSTME_DEFER_CODEGEN")
 
 	return enabled
 }
 
 func dylibEnabled() bool {
-	_, enabled := os.LookupEnv("CARGO_MRUSTC_DYLIB")
+	_, enabled := os.LookupEnv("CARGO_TRUSTME_DYLIB")
 
 	return enabled
 }
 
 func ignoreToolTimestamps() bool {
-	_, enabled := os.LookupEnv("CARGO_MRUSTC_IGNORE_TOOL_TIMESTAMPS")
+	_, enabled := os.LookupEnv("CARGO_TRUSTME_IGNORE_TOOL_TIMESTAMPS")
 
 	return enabled
 }
 
 func debugAssertions(profile string) bool {
-	if _, disabled := os.LookupEnv("CARGO_MRUSTC_NO_DEBUG_ASSERTIONS"); disabled {
+	if _, disabled := os.LookupEnv("CARGO_TRUSTME_NO_DEBUG_ASSERTIONS"); disabled {
 		return false
 	}
 

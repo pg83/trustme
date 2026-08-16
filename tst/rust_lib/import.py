@@ -2,7 +2,7 @@
 """Import target-applicable Rust 1.90 core/alloc/std unit tests.
 
 Usage: import.py /path/to/rust-1.90.0 --rustc /path/to/rustc-1.90.0
-                 --target-rustc /path/to/mrustc-driver
+                 --target-rustc /path/to/trustme-driver
 """
 
 import argparse

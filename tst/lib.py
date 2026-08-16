@@ -18,7 +18,7 @@ def compiletest_split_flags(flags: str) -> list[str]:
     return result
 
 
-MRUSTC_IGNORED_RUSTC_CODEGEN_OPTIONS = {
+TRUSTME_IGNORED_RUSTC_CODEGEN_OPTIONS = {
     "codegen-units",
     "codegen_units",
     "link-dead-code",
@@ -28,8 +28,8 @@ MRUSTC_IGNORED_RUSTC_CODEGEN_OPTIONS = {
 }
 
 
-def mrustc_compile_flags(flags: list[str], *, system_rustc: bool) -> list[str]:
-    """Drop rustc backend tuning only when running the mrustc adapters.
+def trustme_compile_flags(flags: list[str], *, system_rustc: bool) -> list[str]:
+    """Drop rustc backend tuning only when running the trustme adapters.
 
     Tests whose purpose is the omitted LLVM/CGU behaviour are excluded by the
     corpus importers. The retained tests use these switches only to reproduce a
@@ -45,7 +45,7 @@ def mrustc_compile_flags(flags: list[str], *, system_rustc: bool) -> list[str]:
         flag = flags[index]
         if flag == "-C" and index + 1 < len(flags):
             option = flags[index + 1].split("=", 1)[0]
-            if option in MRUSTC_IGNORED_RUSTC_CODEGEN_OPTIONS:
+            if option in TRUSTME_IGNORED_RUSTC_CODEGEN_OPTIONS:
                 index += 2
                 continue
             result.extend((flag, flags[index + 1]))
@@ -53,7 +53,7 @@ def mrustc_compile_flags(flags: list[str], *, system_rustc: bool) -> list[str]:
             continue
         if flag.startswith("-C") and len(flag) > 2:
             option = flag[2:].split("=", 1)[0]
-            if option in MRUSTC_IGNORED_RUSTC_CODEGEN_OPTIONS:
+            if option in TRUSTME_IGNORED_RUSTC_CODEGEN_OPTIONS:
                 index += 1
                 continue
         result.append(flag)
@@ -88,12 +88,12 @@ def require_env(name: str) -> str:
     return val
 
 
-def mrustc_link(work: str) -> str:
-    """Give the graph-built compiler a stable `mrustc` basename and return it."""
+def trustme_link(work: str) -> str:
+    """Give the graph-built compiler a stable `trustme` basename and return it."""
     rustc = os.path.realpath(require_env("RUSTC"))
     bindir = os.path.join(work, "bin")
     os.makedirs(bindir, exist_ok=True)
-    link = os.path.join(bindir, "mrustc")
+    link = os.path.join(bindir, "trustme")
     if os.path.lexists(link):
         os.remove(link)
     os.symlink(rustc, link)

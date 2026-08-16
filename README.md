@@ -30,7 +30,7 @@ binaries, fixing mrustc as we go.
 ## layout
 
 ```
-bin/rustc/  the compiler sources (flat), and mrustc's original README
+bin/rustc/  the compiler sources (flat)
 bin/cargo/  our cargo, rewritten in Go — vendors dependencies by lockfile
 lib/        Rust libraries built with the toolchain
 ext/libstd/ the external C++ platform library in the rustc graph
@@ -42,7 +42,7 @@ build.py    the build graph for everything above
 
 `cargo` provides Cargo-compatible `build`, `test`, and `vendor` commands. It
 resolves path, workspace, patched, target-specific, and vendored dependencies,
-runs build scripts, and schedules mrustc/codegen jobs in parallel. The test
+runs build scripts, and schedules compile/codegen jobs in parallel. The test
 graph uses its archive extension (`cargo vendor -Zarchive=...`) to pass a
 hermetic vendor tree between isolated nodes.
 

@@ -2740,7 +2740,7 @@ namespace {
                         builder.setResult(node.span(), std::move(res));
                         return;
                     }
-                    // aggregate_raw_ptr: Lowers to mrustc's MakeDst (rustc's `Aggregate` with `AggregateKind::RawPtr`)
+                    // aggregate_raw_ptr: Lowers to trustme's MakeDst (rustc's `Aggregate` with `AggregateKind::RawPtr`)
                     if (name == "aggregate_raw_ptr") {
                         auto& vPtr = values.at(0);
                         auto& vMeta = values.at(1);
@@ -2832,7 +2832,7 @@ namespace {
                     builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), MIRCallTarget::make_Intrinsic({RcString(FMT("platform:" << gpath.path.components().back())), gpath.params.clone()}), mv$(values)}));
                 }
 
-                // rustc has drop_in_place as a lang item, mrustc uses an intrinsic
+                // rustc has drop_in_place as a lang item, trustme uses an intrinsic
                 if (gpath.path == builder.crate().getLangItemPathOpt("drop_in_place")) {
                     builder.endBlock(MIRTerminator::make_Call({nextBlock, MIRUnwindAction::make_Cleanup(panicBlock), res.clone(), MIRCallTarget::make_Intrinsic({"drop_in_place", gpath.params.clone()}), mv$(values)}));
                 }

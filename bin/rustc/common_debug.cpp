@@ -1,9 +1,5 @@
 /*
- * MiniCargo - mrustc's minimal clone of cargo
- * - By John Hodge (Mutabah/thePowersGang)
- *
- * debug.cpp
- * - Debugging helpers
+ * Debugging helpers
  */
 #include "common_debug.h"
 #include <set>

@@ -26,8 +26,8 @@ def main() -> int:
 
     with lib.workdir() as work:
         env = dict(os.environ)
-        env["MRUSTC_PATH"] = lib.mrustc_link(work)
-        env["CARGO_MRUSTC_DEFER_CODEGEN"] = "1"
+        env["TRUSTME_PATH"] = lib.trustme_link(work)
+        env["CARGO_TRUSTME_DEFER_CODEGEN"] = "1"
         env.setdefault("CC", "cc")
 
         src = lib.untar(src_tar, os.path.join(work, "src"))

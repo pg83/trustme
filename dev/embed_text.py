@@ -14,7 +14,7 @@ def main() -> int:
     output_path = pathlib.Path(sys.argv[2])
     symbol = sys.argv[3]
     text = input_path.read_text(encoding="utf-8")
-    delimiter = "MRUSTC_" + hashlib.sha256(text.encode()).hexdigest()[:8]
+    delimiter = "TRUSTME_" + hashlib.sha256(text.encode()).hexdigest()[:8]
     terminator = ")" + delimiter + '"'
     if terminator in text:
         raise RuntimeError("generated raw-string delimiter occurs in input")

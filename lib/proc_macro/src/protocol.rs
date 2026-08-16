@@ -1,4 +1,4 @@
-//! mrustc's libproc_macro protocol - interface between the compiler and the macro process
+//! trustme's libproc_macro protocol - interface between the compiler and the macro process
 //!
 //! See also [crate::serialisation], which uses this to convert to public types
 

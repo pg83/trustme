@@ -34,7 +34,7 @@ def main() -> int:
                             re.MULTILINE):
         compile_flags.extend(lib.compiletest_split_flags(value))
     system_rustc = os.environ.get("TRUSTME_SYSTEM_RUSTC") == "1"
-    compile_flags = lib.mrustc_compile_flags(
+    compile_flags = lib.trustme_compile_flags(
         compile_flags, system_rustc=system_rustc
     )
     run_flags = []

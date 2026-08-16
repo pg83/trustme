@@ -10,11 +10,11 @@
 #endif
 
 void memoryDump(const char* phase) {
-    if (getenv("MRUSTC_DUMPMEM")) {
+    if (getenv("TRUSTME_DUMPMEM")) {
         static unsigned sCount;
         auto idx = sCount++;
         char filename[256];
-        sprintf(filename, "mrustc-%i-%s.dmp", idx, phase);
+        sprintf(filename, "trustme-%i-%s.dmp", idx, phase);
 #if defined(__linux__) && defined(__x86_64__)
         // On linux, dump out a custom format that covers the entire address space
         // Could save as an ELF core dump, but lazy

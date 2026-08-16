@@ -1338,7 +1338,7 @@ namespace {
                 it = named.insert(std::make_pair(ident, static_cast<unsigned>(namedArgs.size()))).first;
                 // TODO: Create a token with span information pointing to this location in the string.
                 if (ident == "self") {
-                    // Technically, `self` needs hygiene, but mrustc doesn't do that
+                    // Technically, `self` needs hygiene, but trustme doesn't do that
                     namedArgs.push_back(Token(TOK_RWORD_SELF));
                 } else {
                     namedArgs.push_back(Token(TOK_IDENT, Ident(hygiene, ident)));
@@ -1846,7 +1846,7 @@ namespace {
                 toks.push_back(TokenTree(TOK_COMMA));
 
                 // TODO: Fragments to format
-                // - The format stored by mrustc doesn't quite work with how rustc (and fmt::rt::v1) works
+                // - The format stored by trustme doesn't quite work with how rustc (and fmt::rt::v1) works
                 H::argumentList(toks, fragments, crate);
                 toks.push_back(TokenTree(TOK_COMMA));
 

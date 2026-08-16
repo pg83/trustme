@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Fetch the rust-1.90.0 standard-library source, adjust it, drop in the
-mrustc-stdlib shim, and pack the tree into a tar. This is the `std_src` graph
+trustme-stdlib shim, and pack the tree into a tar. This is the `std_src` graph
 node — shared by every project test.
 
     fetch.py <out.tar>
@@ -19,7 +19,7 @@ VER = "1.90.0"
 
 SHIM_TOML = """\
 [package]
-name = "mrustc_standard_library"
+name = "trustme_standard_library"
 version = "0.0.0"
 [lib]
 path = "lib.rs"
@@ -38,7 +38,7 @@ SOURCE_EDITS = (
         "// Some nodes are used a lot. Make sure they don't unintentionally get bigger.\n"
         '#[cfg(target_pointer_width = "64")]\n',
         "// Some nodes are used a lot. Make sure they don't unintentionally get bigger.\n"
-        '#[cfg(not(rust_compiler="mrustc"))]\n'
+        '#[cfg(not(rust_compiler="trustme"))]\n'
         '#[cfg(target_pointer_width = "64")]\n',
         1,
     ),
@@ -48,7 +48,7 @@ SOURCE_EDITS = (
         '#[cfg(target_pointer_width = "64")]\n'
         "rustc_data_structures::static_assert_size!(PResult<'_, bool>, 24);\n",
         "rustc_data_structures::static_assert_size!(PResult<'_, ()>, 24);\n"
-        '#[cfg(not(rust_compiler="mrustc"))]\n'
+        '#[cfg(not(rust_compiler="trustme"))]\n'
         '#[cfg(target_pointer_width = "64")]\n'
         "rustc_data_structures::static_assert_size!(PResult<'_, bool>, 24);\n",
         1,
@@ -58,7 +58,7 @@ SOURCE_EDITS = (
         "// though, because `TokenTypeSet(u128)` alignment varies on others, changing the total size.\n"
         '#[cfg(all(target_pointer_width = "64", any(target_arch = "aarch64", target_arch = "x86_64")))]\n',
         "// though, because `TokenTypeSet(u128)` alignment varies on others, changing the total size.\n"
-        '#[cfg(not(rust_compiler="mrustc"))]\n'
+        '#[cfg(not(rust_compiler="trustme"))]\n'
         '#[cfg(all(target_pointer_width = "64", any(target_arch = "aarch64", target_arch = "x86_64")))]\n',
         1,
     ),
@@ -175,7 +175,7 @@ def main() -> int:
             os.rename(os.path.join(work, f"rustc-{VER}-src"), src)
         adjust_sources(src)
         # The shim pulls std + panic_unwind + test + workspace crates into one build.
-        shim = os.path.join(src, "mrustc-stdlib")
+        shim = os.path.join(src, "trustme-stdlib")
         os.makedirs(shim, exist_ok=True)
         with open(os.path.join(shim, "lib.rs"), "w") as fh:
             fh.write("#![no_core]\n")

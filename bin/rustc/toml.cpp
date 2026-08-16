@@ -1,9 +1,5 @@
 /*
- * mrustc common tools
- * - by John Hodge (Mutabah)
- *
- * tools/common/toml.cpp
- * - A very basic (and probably incomplete) streaming TOML parser
+ * A very basic (and probably incomplete) streaming TOML parser
  */
 #include "toml.h"
 #include "common_debug.h"
@@ -406,7 +402,7 @@ namespace {
             case 'f':
                 str += '\f';
                 break;
-            // `\uXXXX` / `\UXXXXXXXX`: consume the hex digits. minicargo never
+            // `\uXXXX` / `\UXXXXXXXX`: consume the hex digits. The compiler never
             // needs the exact codepoint of a string value, so store a placeholder.
             case 'u':
                 for (int i = 0; i < 4; i++) {

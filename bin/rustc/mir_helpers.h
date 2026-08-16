@@ -140,7 +140,7 @@ public:
     /// @param params Field names (must be Const::String)
     /// @return Offset in bytes
     size_t intrinsicOffsetOf(const HIRTypeData* ty, const ::std::vector<MIRParam>& params) const;
-    /// @brief Handler for the `type_name` intrinsic, strips out mrustc's helper comments
+    /// @brief Handler for the `type_name` intrinsic, strips out trustme's helper comments
     /// @param ty Type
     /// @return Clean string form of the type
     std::string intrinsicTypeName(const HIRTypeData* ty) const;

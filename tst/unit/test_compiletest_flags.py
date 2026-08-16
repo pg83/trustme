@@ -34,17 +34,17 @@ def main() -> int:
         "-Cdebug_assertions=no",
         "-C", "target-feature=-crt-static",
     ]
-    expected_mrustc = [
+    expected_trustme = [
         "-O",
         "-Cdebug_assertions=no",
         "-C", "target-feature=-crt-static",
     ]
-    actual_mrustc = lib.mrustc_compile_flags(flags, system_rustc=False)
-    if actual_mrustc != expected_mrustc:
+    actual_trustme = lib.trustme_compile_flags(flags, system_rustc=False)
+    if actual_trustme != expected_trustme:
         raise RuntimeError(
-            f"mrustc backend flag filtering differs: {actual_mrustc!r} != {expected_mrustc!r}"
+            f"trustme backend flag filtering differs: {actual_trustme!r} != {expected_trustme!r}"
         )
-    if lib.mrustc_compile_flags(flags, system_rustc=True) != flags:
+    if lib.trustme_compile_flags(flags, system_rustc=True) != flags:
         raise RuntimeError("system rustc flags must remain byte-for-byte intact")
 
     stamp = os.path.abspath(sys.argv[1])

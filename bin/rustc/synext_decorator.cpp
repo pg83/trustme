@@ -176,7 +176,7 @@ class CHandlerRepr: public ExpandDecorator {
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
                 } else if (reprType == "no_niche") {
                     // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
-                    // - Would mrustc also have this?
+                    // - Would trustme also have this?
                 } else {
                     TODO(sp, "Handle struct repr '" << reprType << "'");
                 }
@@ -734,7 +734,7 @@ public:
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         // TODO: Check for an existing allocator crate
-        crate.langItems.insert(::std::make_pair("mrustc-allocator", ASTAbsolutePath()));
+        crate.langItems.insert(::std::make_pair("trustme-allocator", ASTAbsolutePath()));
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
@@ -754,7 +754,7 @@ public:
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
         // TODO: Check for an existing panic_runtime crate
-        crate.langItems.insert(::std::make_pair("mrustc-panic_runtime", ASTAbsolutePath()));
+        crate.langItems.insert(::std::make_pair("trustme-panic_runtime", ASTAbsolutePath()));
     }
 };
 
@@ -765,7 +765,7 @@ public:
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
-        crate.langItems.insert(::std::make_pair("mrustc-needs_panic_runtime", ASTAbsolutePath()));
+        crate.langItems.insert(::std::make_pair("trustme-needs_panic_runtime", ASTAbsolutePath()));
     }
 };
 
@@ -2820,7 +2820,7 @@ public:
 
 STATIC_DECORATOR("derive", DecoratorDerive)
 
-// TODO: `derive_const` should generate const impls, but mrustc doesn't care
+// TODO: `derive_const` should generate const impls, but trustme doesn't care
 class DecoratorDeriveConst: public DecoratorDerive {};
 STATIC_DECORATOR("derive_const", DecoratorDeriveConst)
 
@@ -2962,7 +2962,7 @@ void handleLangItem(const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path
         H::add("coerce_unsized", Handler(ITEM_TRAIT, handleSave));
         H::add("freeze", Handler(ITEM_TRAIT, handleSave)); // TODO: What version?
 
-        H::add("iterator", Handler(ITEM_TRAIT, handleSave));    /* mrustc just desugars? */
+        H::add("iterator", Handler(ITEM_TRAIT, handleSave));    /* trustme just desugars? */
         H::add("debug_trait", Handler(ITEM_TRAIT, handleSave)); /* TODO: Poke derive() with this */
 
         {
@@ -3211,7 +3211,7 @@ void handleLangItem(const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path
     else if (name == "eh_personality") {
     }
     // libcompiler_builtins
-    // - i128/u128 helpers (not used by mrustc)
+    // - i128/u128 helpers (not used by trustme)
     else if (name == "i128_add") {
     } else if (name == "i128_addo") {
     } else if (name == "u128_add") {
@@ -3316,7 +3316,7 @@ public:
                 }
 
                 // TODO: Somehow annotate these impls to allow them to provide inherents?
-                // - mrustc is lazy and inefficient, so these don't matter :)
+                // - trustme is lazy and inefficient, so these don't matter :)
             }
             TU_ARMA(Function, e) {
                 if (e.code().isValid()) {
@@ -3369,7 +3369,7 @@ public:
         if (i.is_None()) {
             // Ignore.
         } else if (/*const auto* e =*/i.opt_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("mrustc-main"), path));
+            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-main"), path));
             if (!rv.second) {
                 const auto& otherPath = rv.first->second;
                 ERROR(sp, E0000, "Duplicate definition of #[main] - " << otherPath << " and " << path);
@@ -3389,7 +3389,7 @@ public:
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_None()) {
         } else if (i.is_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("mrustc-start"), path));
+            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-start"), path));
             if (!rv.second) {
                 const auto& otherPath = rv.first->second;
                 ERROR(sp, E0000, "Duplicate definition of #[start] - " << otherPath << " and " << path);
@@ -3408,7 +3408,7 @@ public:
 
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("mrustc-panic_implementation"), path));
+            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-panic_implementation"), path));
             if (!rv.second) {
                 const auto& otherPath = rv.first->second;
                 ERROR(sp, E0000, "Duplicate definition of #[panic_implementation] - " << otherPath << " and " << path);
@@ -3427,7 +3427,7 @@ public:
 
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("mrustc-panic_implementation"), path));
+            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-panic_implementation"), path));
             if (!rv.second) {
                 const auto& otherPath = rv.first->second;
                 ERROR(sp, E0000, "Duplicate definition of #[panic_handler] - " << otherPath << " and " << path);
@@ -3457,7 +3457,7 @@ public:
 
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule&, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         if (i.is_Function()) {
-            auto rv = crate.langItems.insert(::std::make_pair(::std::string("mrustc-alloc_error_handler"), path));
+            auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-alloc_error_handler"), path));
             if (!rv.second) {
                 const auto& otherPath = rv.first->second;
                 ERROR(sp, E0000, "Duplicate definition of #[alloc_error_handler] - " << otherPath << " and " << path);
@@ -3476,7 +3476,7 @@ public:
         if (!item.is_Static()) {
             ERROR(sp, E0000, "#[global_allocator] on non-static " << path);
         }
-        auto rv = crate.langItems.insert(::std::make_pair(::std::string("mrustc-global_allocator"), path));
+        auto rv = crate.langItems.insert(::std::make_pair(::std::string("trustme-global_allocator"), path));
         if (!rv.second && rv.first->second != path) {
             ERROR(sp, E0000, "Duplicate definition of #[global_allocator] - " << rv.first->second << " and " << path);
         }

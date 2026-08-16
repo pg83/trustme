@@ -1,6 +1,6 @@
 # cargo
 
-A Cargo-compatible package manager and build driver for this mrustc-derived
+A Cargo-compatible package manager and build driver for the trustme
 toolchain.
 
 Supported commands:
@@ -15,7 +15,7 @@ cargo vendor [PATH] --manifest-path Cargo.toml
 registry dependencies, semver requirements, patches, renamed/optional/target
 dependencies, feature unification, editions and Cargo target kinds. Builds use
 the Cargo build-script protocol, host/target separation, incremental timestamps,
-parallel jobs, proc macros, and mrustc's deferred C-codegen mode.
+parallel jobs, proc macros, and trustme's deferred C-codegen mode.
 
 Backend-only inputs use Cargo's unstable option namespace instead of replacing
 standard Cargo flags:

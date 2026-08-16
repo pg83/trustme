@@ -1,11 +1,7 @@
 #pragma once
 
 /*
- * mrustc common tools
- * - by John Hodge (Mutabah)
- *
- * tools/common/toml.h
- * - A very basic (and probably incomplete) streaming TOML parser
+ * A very basic (and probably incomplete) streaming TOML parser
  */
 
 #include <fstream>
@@ -69,7 +65,7 @@ private:
     /// Consume a balanced `[...]` / `{...}` group (nested groups included),
     /// discarding its contents. The opening bracket/brace must already have
     /// been consumed. Used to skip nested arrays / inline tables that only
-    /// appear in sections minicargo never reads (e.g. `[package.metadata.*]`).
+    /// appear in sections the compiler never reads (e.g. `[package.metadata.*]`).
     void skipCompositeValue();
 };
 

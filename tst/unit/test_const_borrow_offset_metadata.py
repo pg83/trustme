@@ -22,7 +22,7 @@ def main() -> int:
     sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
     import lib
 
-    with tempfile.TemporaryDirectory(prefix="mrustc-const-offset-metadata-") as work:
+    with tempfile.TemporaryDirectory(prefix="trustme-const-offset-metadata-") as work:
         libstd = lib.untar(libstd_tar, os.path.join(work, "libstd"))
         search = os.path.join(libstd, "release")
         producer_rlib = os.path.join(work, "libconst_borrow_offset_producer.rlib")

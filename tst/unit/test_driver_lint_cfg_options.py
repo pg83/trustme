@@ -60,7 +60,7 @@ def main() -> int:
         'cfg(driver_value, values("active", "unexpected"))',
     ]
 
-    with tempfile.TemporaryDirectory(prefix="mrustc-driver-lint-cfg-") as work:
+    with tempfile.TemporaryDirectory(prefix="trustme-driver-lint-cfg-") as work:
         spellings = invoke(
             rustc,
             src,

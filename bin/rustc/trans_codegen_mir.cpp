@@ -281,9 +281,9 @@ namespace {
             if (outTy == CodegenOutput::Executable) {
                 if (!crate.noMain) {
                     of << "fn main#(isize, *const *const i8): isize {\n";
-                    auto cStartPath = resolve_.hirCrate().getLangItemPathOpt("mrustc-start");
+                    auto cStartPath = resolve_.hirCrate().getLangItemPathOpt("trustme-start");
                     if (cStartPath == HIRSimplePath()) {
-                        auto mainPath = resolve_.hirCrate().getLangItemPath(Span(), "mrustc-main");
+                        auto mainPath = resolve_.hirCrate().getLangItemPath(Span(), "trustme-main");
                         const auto& startPath = resolve_.hirCrate().getLangItemPathOpt("start");
                         if (crate.isNoCore && startPath == HIRSimplePath()) {
                             const auto& mainFcn = crate.getFunctionByPath(Span(), mainPath);
@@ -308,7 +308,7 @@ namespace {
                 }
 
                 // Bind `panic_impl` lang item to the item tagged with `panic_implementation`.
-                const auto& panicImplPath = crate.getLangItemPathOpt("mrustc-panic_implementation");
+                const auto& panicImplPath = crate.getLangItemPathOpt("trustme-panic_implementation");
                 if (panicImplPath != HIRSimplePath()) {
                     of << "fn panic_impl#(usize): u32 = \"panic_impl\":\"Rust\" {\n";
                     of << "\t0: {\n";
@@ -318,7 +318,7 @@ namespace {
                     of << "\t2: { DIVERGE }\n";
                     of << "}\n";
                 } else if (!crate.isNoCore) {
-                    crate.getLangItemPath(Span(), "mrustc-panic_implementation");
+                    crate.getLangItemPath(Span(), "trustme-panic_implementation");
                 }
 
                 // TODO: OOM impl?

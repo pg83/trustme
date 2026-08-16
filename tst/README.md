@@ -19,7 +19,7 @@ parallelised like any other build, and the expensive standard-library build is
 The nodes:
 
 - **`std_src`** — download `rustc-1.90.0-src`, apply the fixed source and
-  manifest adjustments in `tst/std/fetch.py`, and add the `mrustc-stdlib`
+  manifest adjustments in `tst/std/fetch.py`, and add the `trustme-stdlib`
   shim. Output: `rust-src.tar`. (Set `RUST_SRC` to reuse a local tree.)
 - **`libstd`** — build the standard library and `lib/proc_macro` from that source
   with `cargo`. Output: `libstd.tar`. Depends on `rustc`, `cargo`, `std_src`.

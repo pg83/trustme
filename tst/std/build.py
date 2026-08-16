@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Build the mrustc standard library (libcore/liballoc/libstd/libtest/…) plus
+"""Build the trustme standard library (libcore/liballoc/libstd/libtest/…) plus
 libproc_macro from a packed rust-src tree, into a tar. This is the `libstd`
 graph node — built once, depended on by every project build.
 
@@ -26,10 +26,10 @@ def main() -> int:
 
     with lib.workdir() as work:
         env = dict(os.environ)
-        env["MRUSTC_PATH"] = lib.mrustc_link(work)
+        env["TRUSTME_PATH"] = lib.trustme_link(work)
         env["RUSTC_VERSION"] = "1.90.0"
         env["STD_ENV_ARCH"] = env.get("STD_ENV_ARCH", "x86_64")
-        env["CARGO_MRUSTC_DEFER_CODEGEN"] = "1"
+        env["CARGO_TRUSTME_DEFER_CODEGEN"] = "1"
         env.setdefault("CC", "cc")
 
         src = lib.untar(src_tar, os.path.join(work, "rust-src"))
@@ -38,7 +38,7 @@ def main() -> int:
 
         lib.log("[libstd] standard library")
         lib.run([cargo, "build", "--release", "-j", jobs,
-                 "--manifest-path", os.path.join(src, "mrustc-stdlib", "Cargo.toml"),
+                 "--manifest-path", os.path.join(src, "trustme-stdlib", "Cargo.toml"),
                  "--target-dir", outdir,
                  "-Zvendor-dir=" + os.path.join(src, "vendor")],
                 env=env)

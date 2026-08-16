@@ -553,7 +553,7 @@ namespace {
             const auto* currentTy = node.value->resType;
             ::std::vector<HIRTypeRef> derefResTypes;
 
-            // TODO: (CHECK) rustc doesn't use the index value type when finding the indexable item, mrustc does.
+            // TODO: (CHECK) rustc doesn't use the index value type when finding the indexable item, trustme does.
             HIRPathParams traitPp;
             traitPp.types.push_back(idxTy);
             do {

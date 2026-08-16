@@ -216,10 +216,10 @@ namespace {
             options.disallowEmptyStructs = true;
 
             const auto& targetSpec = TargetGetCurSpec(wb_);
-            of << "#define MRUSTC_CODEGEN_DISALLOW_EMPTY_STRUCTS " << options.disallowEmptyStructs << "\n"
-               << "#define MRUSTC_TARGET_EMULATED_I128 " << options.emulatedI128 << "\n"
-               << "#define MRUSTC_TARGET_U128_ALIGN " << static_cast<unsigned>(targetSpec.arch.alignments.u128) << "\n"
-               << "#define MRUSTC_TARGET_HAS_NATIVE_F128 " << usesIntelCompilerAsmDialect() << "\n"
+            of << "#define TRUSTME_CODEGEN_DISALLOW_EMPTY_STRUCTS " << options.disallowEmptyStructs << "\n"
+               << "#define TRUSTME_TARGET_EMULATED_I128 " << options.emulatedI128 << "\n"
+               << "#define TRUSTME_TARGET_U128_ALIGN " << static_cast<unsigned>(targetSpec.arch.alignments.u128) << "\n"
+               << "#define TRUSTME_TARGET_HAS_NATIVE_F128 " << usesIntelCompilerAsmDialect() << "\n"
                << CODEGEN_C_PRELUDE;
         }
 
@@ -236,9 +236,9 @@ namespace {
                 // TODO: Define this function in MIR?
                 of << "}\n";
                 of << "int main(int argc, const char* argv[]) {\n";
-                auto cStartPath = resolve_.hirCrate().getLangItemPathOpt("mrustc-start");
+                auto cStartPath = resolve_.hirCrate().getLangItemPathOpt("trustme-start");
                 if (cStartPath == HIRSimplePath()) {
-                    auto mainPath = crate.getLangItemPath(Span(), "mrustc-main");
+                    auto mainPath = crate.getLangItemPath(Span(), "trustme-main");
                     const auto& mainFcn = crate.getFunctionByPath(sp, mainPath);
 
                     const auto& startPath = resolve_.hirCrate().getLangItemPathOpt("start");
@@ -406,7 +406,7 @@ namespace {
                     of << "void __rust_no_alloc_shim_is_unstable_v2() {}\n";
 
                     {
-                        auto oomMethod = crate.getLangItemPathOpt("mrustc-alloc_error_handler");
+                        auto oomMethod = crate.getLangItemPathOpt("trustme-alloc_error_handler");
                         of << "uint8_t __rust_alloc_error_handler_should_panic = 0;\n";
                         of << "uint8_t __rust_no_alloc_shim_is_unstable = 0;\n";
 
@@ -437,14 +437,14 @@ namespace {
                     // Bind `panic_impl` only when this crate actually provides
                     // a panic implementation. A no_core binary without one can
                     // still be valid when no generated code uses it.
-                    const auto& panicImplPath = crate.getLangItemPathOpt("mrustc-panic_implementation");
+                    const auto& panicImplPath = crate.getLangItemPathOpt("trustme-panic_implementation");
                     if (panicImplPath != HIRSimplePath()) {
                         of << "uint32_t panic_impl(uintptr_t payload) {";
                         of << "extern uint32_t " << TransMangle(panicImplPath) << "(uintptr_t payload);";
                         of << "return " << TransMangle(panicImplPath) << "(payload);";
                         of << "}\n";
                     } else if (!crate.isNoCore) {
-                        crate.getLangItemPath(Span(), "mrustc-panic_implementation");
+                        crate.getLangItemPath(Span(), "trustme-panic_implementation");
                     }
                 }
             }
@@ -455,7 +455,7 @@ namespace {
             ASSERT_BUG(Span(), !of.bad(), "Error set on output stream for: " << outfilePathC);
 
             // Stop after emitting the C++ source, without invoking the C
-            // compiler (used to profile the mrustc front/middle-end alone).
+            // compiler (used to profile the trustme front/middle-end alone).
             if (opt.emitCppOnly) {
                 return;
             }
@@ -580,7 +580,7 @@ namespace {
                         }
 
                         // Ignore panic crates unless they're the selected crate (and add in the selected panic crate)
-                        if (extCrate.data->langItems.count("mrustc-panic_runtime")) {
+                        if (extCrate.data->langItems.count("trustme-panic_runtime")) {
                             // Check if this is the requested panic crate
                             if (strncmp(crateName.c_str(), opt.panicCrate.c_str(), opt.panicCrate.size()) != 0) {
                                 DEBUG("Ignore not-selected panic crate: " << crateName);
@@ -724,7 +724,7 @@ namespace {
                     break;
                 case OptimizationLevel::More:
                 case OptimizationLevel::Aggressive:
-                    args.push_back("-O1"); // HACK: Work around mrustc #347 by reducing the optimisation level
+                    args.push_back("-O1"); // HACK: Reduce the optimisation level to work around a GCC miscompilation
                     break;
                 case OptimizationLevel::Size:
                     args.push_back("-Os");
@@ -821,7 +821,7 @@ namespace {
             ::std::stringstream cmdSs;
             std::string commandFile = outfilePath + "_cmd.txt";
             std::ofstream commandFileStream;
-            if (getenv("MRUSTC_CCACHE")) {
+            if (getenv("TRUSTME_CCACHE")) {
                 cmdSs << "ccache ";
             }
             bool useArgFile = argFileStart > 0;
@@ -1078,7 +1078,7 @@ namespace {
                     if (!te.argTypes.empty()) {
                         of << ",";
                     }
-                    of << " const mrustc_caller_location* mrustc_caller";
+                    of << " const trustme_caller_location* trustme_caller";
                 }
                 of << " )";
             }
@@ -2026,13 +2026,13 @@ namespace {
                 } else if (item.linkage.name == "llvm.x86.sse.cmp.ps") {
                     of << "\tfloat lhs[4], rhs[4]; uint32_t result[4];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
-                       << "\tfor(unsigned i = 0; i < 4; i++) result[i] = mrustc_x86_cmp_f32(lhs[i], rhs[i], arg2) ? UINT32_MAX : 0;\n"
+                       << "\tfor(unsigned i = 0; i < 4; i++) result[i] = trustme_x86_cmp_f32(lhs[i], rhs[i], arg2) ? UINT32_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse.cmp.ss") {
                     of << "\tfloat lhs[4], rhs[4]; uint32_t result[4];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n"
-                       << "\tresult[0] = mrustc_x86_cmp_f32(lhs[0], rhs[0], arg2) ? UINT32_MAX : 0;\n"
+                       << "\tresult[0] = trustme_x86_cmp_f32(lhs[0], rhs[0], arg2) ? UINT32_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse.comieq.ss"
@@ -2068,7 +2068,7 @@ namespace {
                     const bool truncate = item.linkage.name == "llvm.x86.sse.cvttss2si" || item.linkage.name == "llvm.x86.sse.cvttss2si64";
                     const bool is64 = item.linkage.name == "llvm.x86.sse.cvtss2si64" || item.linkage.name == "llvm.x86.sse.cvttss2si64";
                     of << "\tfloat input[4]; memcpy(input, &arg0, sizeof(input));\n"
-                       << "\treturn mrustc_x86_f32_to_i" << (is64 ? 64 : 32) << "(input[0], " << truncate << ");\n";
+                       << "\treturn trustme_x86_f32_to_i" << (is64 ? 64 : 32) << "(input[0], " << truncate << ");\n";
                 } else if (item.linkage.name == "llvm.x86.sse.min.ps"
                         || item.linkage.name == "llvm.x86.sse.min.ss"
                         || item.linkage.name == "llvm.x86.sse.max.ps"
@@ -2094,13 +2094,13 @@ namespace {
                 } else if (item.linkage.name == "llvm.x86.sse2.cmp.pd") {
                     of << "\tdouble lhs[2], rhs[2]; uint64_t result[2];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
-                       << "\tfor(unsigned i = 0; i < 2; i++) result[i] = mrustc_x86_cmp_f64(lhs[i], rhs[i], arg2) ? UINT64_MAX : 0;\n"
+                       << "\tfor(unsigned i = 0; i < 2; i++) result[i] = trustme_x86_cmp_f64(lhs[i], rhs[i], arg2) ? UINT64_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.cmp.sd") {
                     of << "\tdouble lhs[2], rhs[2]; uint64_t result[2];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n"
-                       << "\tresult[0] = mrustc_x86_cmp_f64(lhs[0], rhs[0], arg2) ? UINT64_MAX : 0;\n"
+                       << "\tresult[0] = trustme_x86_cmp_f64(lhs[0], rhs[0], arg2) ? UINT64_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.comieq.sd"
@@ -2133,10 +2133,10 @@ namespace {
                     const bool truncate = item.linkage.name == "llvm.x86.sse2.cvttpd2dq" || item.linkage.name == "llvm.x86.sse2.cvttps2dq";
                     if (inputIsDouble) {
                         of << "\tdouble input[2]; int32_t result[4] = {0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n"
-                           << "\tfor(unsigned i = 0; i < 2; i++) result[i] = mrustc_x86_f64_to_i32(input[i], " << truncate << ");\n";
+                           << "\tfor(unsigned i = 0; i < 2; i++) result[i] = trustme_x86_f64_to_i32(input[i], " << truncate << ");\n";
                     } else {
                         of << "\tfloat input[4]; int32_t result[4]; memcpy(input, &arg0, sizeof(input));\n"
-                           << "\tfor(unsigned i = 0; i < 4; i++) result[i] = mrustc_x86_f32_to_i32(input[i], " << truncate << ");\n";
+                           << "\tfor(unsigned i = 0; i < 4; i++) result[i] = trustme_x86_f32_to_i32(input[i], " << truncate << ");\n";
                     }
                     of << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.cvtsd2si"
@@ -2146,7 +2146,7 @@ namespace {
                     const bool truncate = item.linkage.name == "llvm.x86.sse2.cvttsd2si" || item.linkage.name == "llvm.x86.sse2.cvttsd2si64";
                     const bool is64 = item.linkage.name == "llvm.x86.sse2.cvtsd2si64" || item.linkage.name == "llvm.x86.sse2.cvttsd2si64";
                     of << "\tdouble input[2]; memcpy(input, &arg0, sizeof(input));\n"
-                       << "\treturn mrustc_x86_f64_to_i" << (is64 ? 64 : 32) << "(input[0], " << truncate << ");\n";
+                       << "\treturn trustme_x86_f64_to_i" << (is64 ? 64 : 32) << "(input[0], " << truncate << ");\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.cvtsd2ss") {
                     of << "\tfloat result[4]; double input[2];\n"
                        << "\tmemcpy(result, &arg0, sizeof(result)); memcpy(input, &arg1, sizeof(input)); result[0] = (float)input[0];\n"
@@ -2250,12 +2250,12 @@ namespace {
                 } else if (item.linkage.name == "llvm.x86.sse41.round.ps" || item.linkage.name == "llvm.x86.sse41.round.ss") {
                     const bool scalar = item.linkage.name == "llvm.x86.sse41.round.ss";
                     of << "\tfloat input[4], result[4]; memcpy(input, &arg" << (scalar ? 1 : 0) << ", sizeof(input)); memcpy(result, &arg0, sizeof(result));\n"
-                       << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 4) << "; i++) result[i] = mrustc_x86_round_f32(input[i], arg" << (scalar ? 2 : 1) << ");\n"
+                       << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 4) << "; i++) result[i] = trustme_x86_round_f32(input[i], arg" << (scalar ? 2 : 1) << ");\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse41.round.pd" || item.linkage.name == "llvm.x86.sse41.round.sd") {
                     const bool scalar = item.linkage.name == "llvm.x86.sse41.round.sd";
                     of << "\tdouble input[2], result[2]; memcpy(input, &arg" << (scalar ? 1 : 0) << ", sizeof(input)); memcpy(result, &arg0, sizeof(result));\n"
-                       << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 2) << "; i++) result[i] = mrustc_x86_round_f64(input[i], arg" << (scalar ? 2 : 1) << ");\n"
+                       << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 2) << "; i++) result[i] = trustme_x86_round_f64(input[i], arg" << (scalar ? 2 : 1) << ");\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse42.crc32.32.8"
                         || item.linkage.name == "llvm.x86.sse42.crc32.32.16"
@@ -2264,19 +2264,19 @@ namespace {
                     const unsigned bits = item.linkage.name == "llvm.x86.sse42.crc32.32.8" ? 8
                         : (item.linkage.name == "llvm.x86.sse42.crc32.32.16" ? 16
                         : (item.linkage.name == "llvm.x86.sse42.crc32.32.32" ? 32 : 64));
-                    of << "\treturn mrustc_x86_crc32c((uint32_t)arg0, arg1, " << bits << ");\n";
+                    of << "\treturn trustme_x86_crc32c((uint32_t)arg0, arg1, " << bits << ");\n";
                 } else if (item.linkage.name.rfind("llvm.x86.sse42.pcmp", 0) == 0) {
                     const bool explicitLengths = item.linkage.name.find("pcmpestr") != ::std::string::npos;
                     const char* control = explicitLengths ? "arg4" : "arg2";
                     if (explicitLengths) {
-                        of << "\tmrustc_x86_pcmp_state state = mrustc_x86_pcmp(&arg0, arg1, &arg2, arg3, arg4, true);\n";
+                        of << "\ttrustme_x86_pcmp_state state = trustme_x86_pcmp(&arg0, arg1, &arg2, arg3, arg4, true);\n";
                     } else {
-                        of << "\tmrustc_x86_pcmp_state state = mrustc_x86_pcmp(&arg0, 0, &arg1, 0, arg2, false);\n";
+                        of << "\ttrustme_x86_pcmp_state state = trustme_x86_pcmp(&arg0, 0, &arg1, 0, arg2, false);\n";
                     }
                     if (item.linkage.name.find("pcmpestrm128") != ::std::string::npos || item.linkage.name.find("pcmpistrm128") != ::std::string::npos) {
-                        of << "\tmrustc_x86_pcmp_mask(&rv, state, " << control << ");\n\treturn rv;\n";
+                        of << "\ttrustme_x86_pcmp_mask(&rv, state, " << control << ");\n\treturn rv;\n";
                     } else if (item.linkage.name.find("pcmpestri128") != ::std::string::npos || item.linkage.name.find("pcmpistri128") != ::std::string::npos) {
-                        of << "\treturn mrustc_x86_pcmp_index(state, " << control << ");\n";
+                        of << "\treturn trustme_x86_pcmp_index(state, " << control << ");\n";
                     } else if (item.linkage.name.find("pcmpestria128") != ::std::string::npos || item.linkage.name.find("pcmpistria128") != ::std::string::npos) {
                         of << "\treturn state.mask == 0 && state.len2 == state.count;\n";
                     } else if (item.linkage.name.find("pcmpestric128") != ::std::string::npos || item.linkage.name.find("pcmpistric128") != ::std::string::npos) {
@@ -2554,7 +2554,7 @@ namespace {
                 of << "static ";
                 emitFunctionHeader(p, item, params);
                 of << " {\n";
-                of << "\tthrow mrustc_panic{arg0};\n";
+                of << "\tthrow trustme_panic{arg0};\n";
                 of << "}\n";
                 return;
             } else {
@@ -2758,7 +2758,7 @@ namespace {
                     of << indent << "try {\n";
                     emitOperation(indentLevel + 1);
                     of << indent << "} catch (...) {\n";
-                    of << indent << "\ttry { mrustc_run_cleanup(" << target << "); } catch (...) { abort(); }\n";
+                    of << indent << "\ttry { trustme_run_cleanup(" << target << "); } catch (...) { abort(); }\n";
                     of << indent << "\tthrow;\n";
                     of << indent << "}\n";
                 }
@@ -2859,8 +2859,8 @@ namespace {
         }
 
         void emitCleanupRunner(MIRTypeResolve& localMirRes, const ::std::set<unsigned>& cleanupBlocks) {
-            of << "\tauto mrustc_run_cleanup = [&](unsigned mrustc_cleanup_entry) {\n";
-            of << "\t\tswitch(mrustc_cleanup_entry) {\n";
+            of << "\tauto trustme_run_cleanup = [&](unsigned trustme_cleanup_entry) {\n";
+            of << "\t\tswitch(trustme_cleanup_entry) {\n";
             for (auto block : cleanupBlocks) {
                 of << "\t\tcase " << block << ": goto cleanup_bb" << block << ";\n";
             }
@@ -4308,7 +4308,7 @@ namespace {
                     of << "," << v.size() << "},";
                 }
                 of << " {0,0} };\n";
-                of << indent << "switch( mrustc_string_search_linear(";
+                of << indent << "switch( trustme_string_search_linear(";
                 emitLvalue(val);
                 of << ", " << ve->size() << ", switch_strings) ) {\n";
                 for (size_t i = 0; i < ve->size(); i++) {
@@ -4330,7 +4330,7 @@ namespace {
                 of << " {0,0} };\n";
                 HIRTypeRef tmp;
                 const auto& ty = localMirRes.getLvalueType(tmp, val);
-                of << indent << "switch( mrustc_string_search_linear(";
+                of << indent << "switch( trustme_string_search_linear(";
                 if (const auto* a = ty->as_Borrow().inner->opt_Array()) {
                     auto len = a->size.as_Known();
                     of << "make_sliceptr(";
@@ -4421,7 +4421,7 @@ namespace {
                 MIR_BUG(localMirRes, "Intrinsic used as an explicit tail-call target");
             }
             if (targetTracksCaller && !currentFunctionTracksCaller) {
-                of << indent << "static const mrustc_caller_location mrustc_callsite = ";
+                of << indent << "static const trustme_caller_location trustme_callsite = ";
                 emitSourceLocationInitializer(e.source);
                 of << ";\n";
             }
@@ -4464,7 +4464,7 @@ namespace {
 
             if (tailCall) {
                 if (targetTracksCaller == currentFunctionTracksCaller) {
-                    of << "MRUSTC_MUSTTAIL ";
+                    of << "TRUSTME_MUSTTAIL ";
                 }
                 of << "return ";
             }
@@ -4577,7 +4577,7 @@ namespace {
                 if (!firstCallArgument) {
                     of << ",";
                 }
-                of << " " << (currentFunctionTracksCaller ? "mrustc_caller" : "&mrustc_callsite");
+                of << " " << (currentFunctionTracksCaller ? "trustme_caller" : "&trustme_callsite");
             }
             of << " );\n";
 
@@ -5405,7 +5405,7 @@ namespace {
         void emitReifiedFunctionName(const HIRPath& path, bool preserveTrackCaller = false) {
             of << TransMangle(path);
             if (!preserveTrackCaller && pathTracksCaller(path)) {
-                of << "__mrustc_reify";
+                of << "__trustme_reify";
             }
         }
 
@@ -5464,7 +5464,7 @@ namespace {
 
                     if (hasCallerLocation) {
                         MIR_ASSERT(*mirRes, !item.variadic, "#[track_caller] on a variadic function");
-                        of << "\n\t\tconst mrustc_caller_location* mrustc_caller";
+                        of << "\n\t\tconst trustme_caller_location* trustme_caller";
                     }
 
                     ss << "\n\t\t)";
@@ -5481,9 +5481,9 @@ namespace {
         void emitTrackCallerReifyWrapper(const HIRPath& p, const HIRFunction& item, const TransParams& params) {
             MIR_ASSERT(*mirRes, !item.variadic, "Cannot reify a variadic #[track_caller] function");
             of << "static ";
-            emitFunctionHeader(p, item, params, /*includeCallerLocation=*/false, "__mrustc_reify");
+            emitFunctionHeader(p, item, params, /*includeCallerLocation=*/false, "__trustme_reify");
             of << "{\n";
-            of << "\tstatic const mrustc_caller_location mrustc_definition = ";
+            of << "\tstatic const trustme_caller_location trustme_definition = ";
             emitSourceLocationInitializer(item.source);
             of << ";\n\t";
 
@@ -5520,7 +5520,7 @@ namespace {
             if (!first) {
                 of << ", ";
             }
-            of << "&mrustc_definition);\n";
+            of << "&trustme_definition);\n";
             if (returnType == crate.types.unit()) {
                 of << "\treturn;\n";
             }
@@ -5663,7 +5663,7 @@ namespace {
                         break;
                 }
                 if (typeIsEmulatedI128(params.types.at(0))) {
-                    emitCtype(params.types.at(0), FMT_CB(ss, ss << " mrustc_atomic_desired";));
+                    emitCtype(params.types.at(0), FMT_CB(ss, ss << " trustme_atomic_desired";));
                     of << " = ";
                     emitParam(e.args.at(2));
                     of << ";\n\t";
@@ -5681,7 +5681,7 @@ namespace {
                 of << "._0"; // Expected (i.e. the check value)
                 of << ", ";
                 if (typeIsEmulatedI128(params.types.at(0))) {
-                    of << "&mrustc_atomic_desired";
+                    of << "&trustme_atomic_desired";
                 } else {
                     emitParam(e.args.at(2)); // `desired` (the new value for the slot if equal)
                 }
@@ -6090,7 +6090,7 @@ namespace {
                 emitParam(e.args.at(1));
                 of << "); ";
                 emitLvalue(e.retVal);
-                of << " = 0; } catch (mrustc_panic& panic) { (";
+                of << " = 0; } catch (trustme_panic& panic) { (";
                 emitParam(e.args.at(2));
                 of << ")(";
                 emitParam(e.args.at(1));
@@ -6105,7 +6105,7 @@ namespace {
                 of << " = (";
                 HIRTypeRef callerTypeTmp;
                 emitCtype(localMirRes.getLvalueType(callerTypeTmp, e.retVal));
-                of << ")mrustc_caller";
+                of << ")trustme_caller";
             }
             // --- Pointer manipulation
             else if (name == "offset") { // addition, with the reqirement that the resultant pointer be in bounds
@@ -6209,19 +6209,19 @@ namespace {
                 of << " = ";
                 switch (getPrimSize(ty)) {
                     case 8:
-                        of << "__mrustc_bitrev8";
+                        of << "__trustme_bitrev8";
                         break;
                     case 16:
-                        of << "__mrustc_bitrev16";
+                        of << "__trustme_bitrev16";
                         break;
                     case 32:
-                        of << "__mrustc_bitrev32";
+                        of << "__trustme_bitrev32";
                         break;
                     case 64:
-                        of << "__mrustc_bitrev64";
+                        of << "__trustme_bitrev64";
                         break;
                     case 128:
-                        of << "__mrustc_bitrev128";
+                        of << "__trustme_bitrev128";
                         break;
                     default:
                         MIR_TODO(localMirRes, "bswap<" << ty << ">");
@@ -7240,7 +7240,7 @@ namespace {
                     of << "/* zst */";
                     return;
                 }
-                of << "__mrustc_unaligned_volatile_load((void*)&";
+                of << "__trustme_unaligned_volatile_load((void*)&";
                 emitLvalue(e.retVal);
                 of << ", (const void*)";
                 emitParam(e.args.at(0));
@@ -7263,11 +7263,11 @@ namespace {
                 }
                 of << "{ ";
                 emitCtype(params.types.at(0));
-                of << " mrustc_value = ";
+                of << " trustme_value = ";
                 emitParam(e.args.at(1));
-                of << "; __mrustc_unaligned_volatile_store((void*)";
+                of << "; __trustme_unaligned_volatile_store((void*)";
                 emitParam(e.args.at(0));
-                of << ", (const void*)&mrustc_value, " << valueSize << "); }";
+                of << ", (const void*)&trustme_value, " << valueSize << "); }";
             } else if (name == "volatile_copy_memory" || name == "volatile_copy_nonoverlapping_memory") {
                 size_t elementSize = 0;
                 MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, params.types.at(0), elementSize), "Can't get size of " << params.types.at(0));
@@ -7275,7 +7275,7 @@ namespace {
                     of << "/* zst */";
                     return;
                 }
-                of << (name == "volatile_copy_memory" ? "__mrustc_volatile_memmove" : "__mrustc_volatile_memcpy");
+                of << (name == "volatile_copy_memory" ? "__trustme_volatile_memmove" : "__trustme_volatile_memcpy");
                 of << "((void*)";
                 emitParam(e.args.at(0));
                 of << ", (const void*)";
@@ -7290,7 +7290,7 @@ namespace {
                     of << "/* zst */";
                     return;
                 }
-                of << "__mrustc_volatile_memset((void*)";
+                of << "__trustme_volatile_memset((void*)";
                 emitParam(e.args.at(0));
                 of << ", (uint8_t)";
                 emitParam(e.args.at(1));
@@ -7327,13 +7327,13 @@ namespace {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitAtomicRmwCast();
-                    of << "__mrustc_atomicloop" << getPrimSize(ty) << "(";
+                    of << "__trustme_atomicloop" << getPrimSize(ty) << "(";
                     of << "(volatile uint" << getPrimSize(ty) << "_t*)";
                     emitParam(e.args.at(0));
                     of << ", ";
                     emitAtomicRmwOperand(e.args.at(1));
                     of << ", " << getAtomicTyGcc(ordering);
-                    of << ", __mrustc_op_and_not" << getPrimSize(ty);
+                    of << ", __trustme_op_and_not" << getPrimSize(ty);
                     of << ")";
                 } else if (name == "atomic_or" || name.compare(0, 7 + 2 + 1, "atomic_or_") == 0) {
                     auto ordering = getAtomicOrdering(name, 7 + 2 + 1);
@@ -7348,13 +7348,13 @@ namespace {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitAtomicRmwCast();
-                    of << "__mrustc_atomicloop" << getPrimSize(ty) << "(";
+                    of << "__trustme_atomicloop" << getPrimSize(ty) << "(";
                     of << "(volatile uint" << getPrimSize(ty) << "_t*)";
                     emitParam(e.args.at(0));
                     of << ", ";
                     emitAtomicRmwOperand(e.args.at(1));
                     of << ", " << getAtomicTyGcc(ordering);
-                    of << ", __mrustc_op_" << op << getPrimSize(ty);
+                    of << ", __trustme_op_" << op << getPrimSize(ty);
                     of << ")";
                 } else if (name == "atomic_umax" || name.compare(0, 7 + 4 + 1, "atomic_umax_") == 0 || name == "atomic_umin" || name.compare(0, 7 + 4 + 1, "atomic_umin_") == 0) {
                     auto ordering = getAtomicOrdering(name, 7 + 4 + 1);
@@ -7363,13 +7363,13 @@ namespace {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitAtomicRmwCast();
-                    of << "__mrustc_atomicloop" << getPrimSize(ty) << "(";
+                    of << "__trustme_atomicloop" << getPrimSize(ty) << "(";
                     of << "(volatile uint" << getPrimSize(ty) << "_t*)";
                     emitParam(e.args.at(0));
                     of << ", ";
                     emitAtomicRmwOperand(e.args.at(1));
                     of << ", " << getAtomicTyGcc(ordering);
-                    of << ", __mrustc_op_" << op << getPrimSize(ty);
+                    of << ", __trustme_op_" << op << getPrimSize(ty);
                     of << ")";
                 } else if (name == "atomic_load" || name.compare(0, 7 + 4 + 1, "atomic_load_") == 0) {
                     auto ordering = getAtomicOrdering(name, 7 + 4 + 1);
@@ -7983,15 +7983,15 @@ namespace {
             }
 
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
-            of << indent << "{ unsigned mrustc_drop_progress = 0;\n";
+            of << indent << "{ unsigned trustme_drop_progress = 0;\n";
             of << indent << "\ttry {\n";
             for (size_t i = 0; i < fields.size(); i++) {
                 emitDestructorCall(fields[i], fieldTypes[i], fieldUnsized[i], indentLevel + 2);
-                of << indent << "\t\tmrustc_drop_progress = " << i + 1 << ";\n";
+                of << indent << "\t\ttrustme_drop_progress = " << i + 1 << ";\n";
             }
             of << indent << "\t} catch (...) {\n";
             for (size_t i = 1; i < fields.size(); i++) {
-                of << indent << "\t\tif(mrustc_drop_progress < " << i << ") {\n";
+                of << indent << "\t\tif(trustme_drop_progress < " << i << ") {\n";
                 of << indent << "\t\t\ttry {\n";
                 emitDestructorCall(fields[i], fieldTypes[i], fieldUnsized[i], indentLevel + 4);
                 of << indent << "\t\t\t} catch (...) { abort(); }\n";
@@ -8057,7 +8057,7 @@ namespace {
                                 // an elided local (which can be behind Field/Index/etc.).
                                 of << indent << "{ ";
                                 emitCtype(ty);
-                                of << " mrustc_zst{}; " << TransMangle(p) << "(&mrustc_zst); }\n";
+                                of << " trustme_zst{}; " << TransMangle(p) << "(&trustme_zst); }\n";
                             } else if (this->typeIsBadZst(ty) && MIRLValue::CRef(slot).is_Index()) {
                                 of << indent << TransMangle(p) << "((";
                                 emitCtype(ty);
@@ -8790,7 +8790,7 @@ namespace {
         void emitTraitObjectDstTailAlign(const HIRTypeData* outerTy, const HIRTypeData* tailTy, const MIRParam& value) {
             const auto maxAlign = getPackingMaxAlign(outerTy);
             if (maxAlign != 0) {
-                of << "mrustc_min(";
+                of << "trustme_min(";
             }
             emitTraitObjectDstAlign(tailTy, value);
             if (maxAlign != 0) {
@@ -8806,7 +8806,7 @@ namespace {
 
             const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
             MIR_ASSERT(*mirRes, repr && repr->size == SIZE_MAX && !repr->fields.empty(), "Expected a DST wrapper - " << ty);
-            of << "mrustc_max(" << repr->align << ", ";
+            of << "trustme_max(" << repr->align << ", ";
             emitTraitObjectDstTailAlign(ty, repr->fields.back().ty, value);
             of << ")";
         }

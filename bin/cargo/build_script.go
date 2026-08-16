@@ -39,7 +39,7 @@ func parseBuildScriptOutput(pkg *Package, source string, input io.Reader) {
 		}
 
 		switch key {
-		case "minicargo-pre-build", "mrustc-pre-build":
+		case "trustme-pre-build":
 			output.preBuild = append(output.preBuild, value)
 		case "rustc-link-search":
 			_, path, hasKind := strings.Cut(value, "=")

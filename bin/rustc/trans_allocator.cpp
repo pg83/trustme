@@ -13,7 +13,7 @@ DEF_METHOD_ARGS(alloc_zeroed, AllocatorDataTy::Layout)
 const AllocatorMethod ALLOCATOR_METHODS[4] = {DEF_METHOD(alloc, ResultPtr), DEF_METHOD(dealloc, Unit), DEF_METHOD(realloc, ResultPtr), DEF_METHOD(alloc_zeroed, ResultPtr)};
 const size_t NUM_ALLOCATOR_METHODS = sizeof(ALLOCATOR_METHODS) / sizeof(ALLOCATOR_METHODS[0]);
 
-const char GLOBAL_ALLOCATOR_LANG_ITEM[] = "mrustc-global_allocator";
+const char GLOBAL_ALLOCATOR_LANG_ITEM[] = "trustme-global_allocator";
 
 HIRSimplePath TransAllocatorTraitPath(const HIRCrate& crate) {
     const auto& layoutPath = TransAllocatorLayoutPath(crate);

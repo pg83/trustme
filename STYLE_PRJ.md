@@ -5,10 +5,10 @@ They cover the compiler tree. `bin/cargo` is Go and follows
 [bin/cargo/STYLE.md](bin/cargo/STYLE.md); `ext/libstd` is its own project
 with its own copies of both files.
 
-- **Macro prefix.** None reserved. The compiler keeps mrustc's unprefixed
+- **Macro prefix.** None reserved. The compiler keeps its inherited unprefixed
   diagnostic macros (`ASSERT`, `BUG`, `TODO`, `DEBUG`, ...).
 - **Namespace.** The compiler is a program: no project namespace. Code keeps
-  the module namespaces inherited from mrustc (`AST`, `HIR`, `MIR`, ...).
+  the module namespaces inherited from upstream (`AST`, `HIR`, `MIR`, ...).
 - **Formatter.** `./dev/style.py` formats every tracked C++ source except
   `ext/`, which formats itself.
 - **Unit tests.** New compiler modules pair `x.h`/`x.cpp` with an `x_ut.cpp`
@@ -19,7 +19,7 @@ with its own copies of both files.
 
 ## Deviations
 
-`bin/rustc` is inherited from mrustc, but the naming migration is done: the
+`bin/rustc` is inherited code, but the naming migration is done: the
 tree uses house names — `UpperCamelCase` types, `lowerCamelCase` functions and
 methods, `lowerCamelCase_` private data members, unprefixed public fields,
 `snake_case` filenames. No `m` prefix survives. New code follows

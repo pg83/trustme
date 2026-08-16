@@ -4,8 +4,8 @@ version = "0.0.0"
 
 # - Populate features so the crate signature is different to rustc's
 [features]
-default = ["mrustc"]
-mrustc = []
+default = ["trustme"]
+trustme = []
 
 [lib]
 path = "src/lib.rs"

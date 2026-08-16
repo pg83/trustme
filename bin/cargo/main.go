@@ -37,7 +37,7 @@ parseGlobals:
 
 		switch arg {
 		case "-V", "--version":
-			fmt.Println("cargo 0.1.0 (mrustc)")
+			fmt.Println("cargo 0.1.0 (trustme)")
 
 			return
 		case "-h", "--help":
@@ -102,7 +102,7 @@ parseGlobals:
 }
 
 func usage(out *os.File) {
-	fmt.Fprint(out, `Rust's package manager (mrustc backend)
+	fmt.Fprint(out, `Rust's package manager (trustme backend)
 
 Usage: cargo [OPTIONS] <COMMAND>
 
@@ -311,7 +311,7 @@ Options:
       --bench/--benches       Select benchmark targets
       --no-run                Build tests without running them
 
-mrustc options are passed as -Zname=value: vendor-dir, lib-search;
+trustme options are passed as -Zname=value: vendor-dir, lib-search;
 flags: emit-mmir, dry-run and pause.
 `, command)
 }

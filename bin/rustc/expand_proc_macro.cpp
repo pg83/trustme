@@ -167,7 +167,7 @@ void ExpandProcMacroHarness(const WireBoard& wb, ASTCrate& crate) {
     newmod.addItem(Span(), visPrivate, "MACROS", mv$(testsList), {});
 
     crate.rootModule_.addItem(Span(), visPrivate, "proc_macro#", mv$(newmod), {});
-    crate.langItems["mrustc-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
+    crate.langItems["trustme-main"] = ASTAbsolutePath("", {"proc_macro#", "main"});
 }
 
 enum class TokenClass {
@@ -1737,7 +1737,7 @@ namespace {
             this->visitBounds(trait.params());
 
             pmi.sendSymbol("{");
-            // Trait items inherit the trait's visibility; mrustc records them as `pub`, which the plugin's parser rejects. Send them unqualified.
+            // Trait items inherit the trait's visibility; trustme records them as `pub`, which the plugin's parser rejects. Send them unqualified.
             const auto itemVis = ASTVisibility::makeBarePrivate();
             for (const auto& i : trait.items()) {
                 this->visitAttrs(i.attrs);
@@ -1905,17 +1905,17 @@ ProcMacroInv::ProcMacroInv(const Span& sp, ASTEdition edition, const char* execu
     , procMacroDesc(procMacroDesc)
     , edition(edition)
 {
-    if (getenv("MRUSTC_DUMP_PROCMACRO") && getenv("MRUSTC_DUMP_PROCMACRO")[0]) {
+    if (getenv("TRUSTME_DUMP_PROCMACRO") && getenv("TRUSTME_DUMP_PROCMACRO")[0]) {
         // TODO: Dump both input and output, AND (optionally) dump each invocation
         static unsigned int dumpCount = 0;
         std::string namePrefix;
-        namePrefix = FMT(getenv("MRUSTC_DUMP_PROCMACRO") << "-" << dumpCount);
+        namePrefix = FMT(getenv("TRUSTME_DUMP_PROCMACRO") << "-" << dumpCount);
         DEBUG("Dumping to " << namePrefix);
         dumpFileOut.open(FMT(namePrefix << "-out.bin"), ::std::ios::out | ::std::ios::binary);
         dumpFileRes.open(FMT(namePrefix << "-res.bin"), ::std::ios::out | ::std::ios::binary);
         dumpCount++;
     } else {
-        DEBUG("Set MRUSTC_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`");
+        DEBUG("Set TRUSTME_DUMP_PROCMACRO=procmacro_dump to dump to `procmacro_dump-NNN-{out,res}.bin`");
     }
     int stdinPipes[2];
     if (pipe(stdinPipes) != 0) {

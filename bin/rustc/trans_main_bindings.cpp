@@ -1520,10 +1520,10 @@ TransList TransEnumerateMain(const WireBoard& wb, HIRCrate& crate) {
     EnumState state{wb};
 
     if (!crate.noMain) {
-        auto cStartPath = crate.getLangItemPathOpt("mrustc-start");
+        auto cStartPath = crate.getLangItemPathOpt("trustme-start");
         if (cStartPath == HIRSimplePath()) {
             // user entrypoint
-            auto mainPath = crate.getLangItemPath(Span(), "mrustc-main");
+            auto mainPath = crate.getLangItemPath(Span(), "trustme-main");
             const auto& mainFcn = crate.getFunctionByPath(sp, mainPath);
 
             state.rv.roots.push_back(mainPath);
@@ -1952,7 +1952,7 @@ TransList TransEnumeratePublic(const WireBoard& wb, HIRCrate& crate) {
 
     // Ensure that the panic handler is emitted
     {
-        auto it = crate.langItems.find("mrustc-panic_implementation");
+        auto it = crate.langItems.find("trustme-panic_implementation");
         if (it != crate.langItems.end()) {
             HIRGenericPath p = it->second;
             const auto& f = crate.getFunctionByPath(Span(), p.path);

@@ -197,7 +197,7 @@ void CfgDump(const Settings& settings, ::std::ostream& os) {
     for (const auto& f : cfg.flags) {
         os << ">" << f << std::endl;
     }
-    // NOTE: `g_cfg_value_fcns` is only used for feature flags, which minicargo doesn't need
+    // NOTE: `g_cfg_value_fcns` is only used for feature flags, which the cargo driver doesn't need
 }
 
 void CfgSetFlag(Settings& settings, ::std::string name) {

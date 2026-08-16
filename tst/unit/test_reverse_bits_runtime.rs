@@ -1,4 +1,4 @@
-// __mrustc_revmap was missing the entry for nibble 13, corrupting runtime
+// __trustme_revmap was missing the entry for nibble 13, corrupting runtime
 // reverse_bits() of any value with a high nibble.
 fn main() {
     for n in 0u16..=255 { assert_eq!(n.reverse_bits(), reference(n), "n={}", n); }

@@ -1,9 +1,5 @@
 /*
- * mrustc common code
- * - by John Hodge (Mutabah)
- *
- * tools/common/path.cpp
- * - Generic representation of a filesystem path
+ * Generic representation of a filesystem path
  */
 #include "path.h"
 #include <unistd.h> // getcwd/chdir

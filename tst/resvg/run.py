@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """resvg smoke test: render a bundled SVG with the freshly built binary and
 assert the PNG is well-formed and non-empty. This is the project's "test run"
-in the tst/ graph — proof that the mrustc-built binary actually works."""
+in the tst/ graph — proof that the trustme-built binary actually works."""
 import struct
 import subprocess
 import sys

@@ -51,7 +51,7 @@ def main() -> int:
                 rustc,
                 os.path.join(upstream, relative),
                 "-L", library_path,
-                *lib.mrustc_compile_flags(
+                *lib.trustme_compile_flags(
                     case["flags"], system_rustc=system_rustc
                 ),
                 "--edition", case["edition"],

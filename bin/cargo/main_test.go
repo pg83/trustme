@@ -28,7 +28,7 @@ func TestCargoBuildCLI(t *testing.T) {
 	}
 
 	if opts.vendorDir != "vendor" || len(opts.libSearch) != 1 || opts.libSearch[0] != "std" {
-		t.Fatalf("mrustc options not parsed: %#v", opts)
+		t.Fatalf("trustme options not parsed: %#v", opts)
 	}
 
 	if len(opts.testArgs) != 2 || opts.testArgs[0] != "--exact" {

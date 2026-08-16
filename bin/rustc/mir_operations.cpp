@@ -4589,8 +4589,8 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
             }
             bb.terminator = MIRTerminator::make_Goto(te.retBlock);
             changed = true;
-        } else if (tef.name == "mrustc_slice_len") {
-            MIR_ASSERT(state, te.args.at(0).is_LValue(), "Argument to `mrustc_slice_len` must be a lvalue");
+        } else if (tef.name == "trustme_slice_len") {
+            MIR_ASSERT(state, te.args.at(0).is_LValue(), "Argument to `trustme_slice_len` must be a lvalue");
             auto& e = te.args.at(0).as_LValue();
             bb.statements.push_back(MIRStatement::make_Assign({mv$(te.retVal), MIRRValue::make_DstMeta({mv$(e)})}));
             bb.terminator = MIRTerminator::make_Goto(te.retBlock);
@@ -7175,7 +7175,7 @@ void MIROptimiseCrate(const WireBoard& wb, HIRCrate& crate, unsigned optLevel, b
         } else {
             // The crate driver validates after this optimisation and its final cleanup.
             // Preserve explicitly requested diagnostic checks inside the optimiser.
-            MIROptimise(res, p, mir, args, ty, optLevel, enableInlining, /*validate=*/getenv("MRUSTC_MIR_CHECK") != nullptr);
+            MIROptimise(res, p, mir, args, ty, optLevel, enableInlining, /*validate=*/getenv("TRUSTME_MIR_CHECK") != nullptr);
         }
         // Run cleanup to handle now-monomoprhised inlined constants
         MIRCleanup(res, p, mir, args, ty);

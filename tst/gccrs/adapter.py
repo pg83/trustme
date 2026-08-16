@@ -31,7 +31,7 @@ def compiler_options(text: str) -> list[str]:
             elif option.startswith("-frust-cfg="):
                 result.extend(["--cfg", option.removeprefix("-frust-cfg=")])
             # The remaining options control gccrs diagnostics, dumps, or its
-            # parser version.  They have no mrustc command-line equivalent.
+            # parser version.  They have no trustme command-line equivalent.
     return result
 
 

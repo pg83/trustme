@@ -4,7 +4,7 @@ from pathlib import Path
 
 import build
 
-# Build description for rustc (the mrustc-derived Rust compiler).
+# Build description for rustc (the trustme Rust compiler).
 # The compiler sources live flat under bin/rustc/; C++26, links the external
 # platform library and zlib.
 
@@ -61,7 +61,7 @@ build.includes += ["$(S)/bin/rustc", "$(B)/gen"]
 build.cppflags += [
     "-DVERSION_GIT_ISDIRTY=0",
     '-DVERSION_GIT_FULLHASH="unknown"',
-    '-DVERSION_GIT_SHORTHASH="mrustc"',
+    '-DVERSION_GIT_SHORTHASH="trustme"',
     '-DVERSION_BUILDTIME="unknown"',
     '-DVERSION_GIT_BRANCH="master"',
 ]
@@ -191,7 +191,7 @@ ident_ordering_test = program(
     deps=[platform_libstd],
 )
 
-# cargo: Cargo-compatible package resolver and mrustc build driver, written in
+# cargo: Cargo-compatible package resolver and trustme build driver, written in
 # Go. Dependencies are checked in under bin/cargo/vendor, so this node is
 # offline. Rust 1.90 source adjustments belong to std_src below; Cargo has no
 # toolchain-specific override configuration.

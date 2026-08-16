@@ -7,7 +7,7 @@ from pathlib import Path
 
 RUSTC = Path(__file__).parents[2] / "bin" / "rustc"
 INCLUDE = re.compile(r'^\s*#\s*include\s+"([^"]+)"')
-MRUSTC_BANNER = re.compile(r"/\*.*?\bMRustC\b.*?\*/", re.DOTALL)
+UPSTREAM_NAME = re.compile(r"mrustc", re.IGNORECASE)
 
 
 class RustcHeaderPairsTest(unittest.TestCase):
@@ -39,13 +39,13 @@ class RustcHeaderPairsTest(unittest.TestCase):
                 module = source.with_name(source.name.removesuffix("_ut.cpp") + ".h")
                 self.assertTrue(module.is_file(), f"missing {module.name}")
 
-    def test_sources_have_no_mrustc_banners(self):
+    def test_sources_have_no_upstream_branding(self):
         sources = sorted(
             path for path in RUSTC.iterdir() if path.suffix in {".cpp", ".h", ".inc"}
         )
         for source in sources:
             with self.subTest(source=source.name):
-                self.assertIsNone(MRUSTC_BANNER.search(source.read_text()))
+                self.assertIsNone(UPSTREAM_NAME.search(source.read_text()))
 
 
 if __name__ == "__main__":

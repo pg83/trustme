@@ -1757,7 +1757,7 @@ ASTPath ParsePath(TokenStream& lex, eParsePathGenericMode genericMode) {
                 GET_CHECK_TOK(tok, lex, TOK_GT);
                 // TODO: Terminating the "path" here is sometimes valid?
                 GET_CHECK_TOK(tok, lex, TOK_DOUBLE_COLON);
-                // NOTE: <Foo>::BAR is actually `<Foo as _>::BAR` (in mrustc parleance)
+                // NOTE: <Foo>::BAR is actually `<Foo as _>::BAR` (in trustme parleance)
                 return ASTPath::newUfcsTy(mv$(ty), ParsePathNodes(lex, genericMode));
             }
             throw "";
@@ -4104,7 +4104,7 @@ void ParseUseRoot(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries) {
         case TOK_DOUBLE_COLON:
             // Absolute path
             explicitAbsolute = true;
-            // Internal `$crate` path encoding emitted by mrustc is `::"crate-name"`.
+            // Internal `$crate` path encoding emitted by trustme is `::"crate-name"`.
             if (LOOK_AHEAD(lex) == TOK_STRING) {
                 GET_CHECK_TOK(tok, lex, TOK_STRING);
                 path = ASTPath(RcString::newInterned(tok.str()), {});
@@ -4428,7 +4428,7 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             }
                             break;
                         // `extern crate "crate-name" as crate_name;`
-                        // NOTE: rustc doesn't allow this, keep in mrustc for for reparse support
+                        // NOTE: rustc doesn't allow this, keep in trustme for for reparse support
                         case TOK_STRING:
                             itemData = ASTItem::make_Crate({RcString::newInterned(tok.str())});
                             GET_CHECK_TOK(tok, lex, TOK_RWORD_AS);

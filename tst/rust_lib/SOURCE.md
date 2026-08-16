@@ -11,7 +11,7 @@ Revision: tag `1.90.0` (tag object
 `cases.tsv` is one independently compiled and executed test node.
 
 The importer first finds explicit source `#[test]` functions, then asks the
-exact upstream rustc 1.90.0 to expand each real harness using the target mrustc
+exact upstream rustc 1.90.0 to expand each real harness using the target trustme
 driver's backend capability cfgs. It retains a source item only when rustc
 emitted a libtest descriptor with the same `source_file` and `start_line`.
 Thus rustc evaluates the upstream cfg expressions; there is no second local

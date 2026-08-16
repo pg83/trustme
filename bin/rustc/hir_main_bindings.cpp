@@ -26,7 +26,7 @@ namespace {
     bool desDebugEnabled() {
         static unsigned enabled = 0;
         if (enabled == 0) {
-            enabled = (getenv("MRUSTC_DEBUG_DESERIALISE") ? 2 : 1);
+            enabled = (getenv("TRUSTME_DEBUG_DESERIALISE") ? 2 : 1);
         }
         return enabled > 1;
     }

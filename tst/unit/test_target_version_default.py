@@ -15,7 +15,7 @@ def main() -> int:
     env = dict(os.environ)
     # This was the old compatibility switch. It must not downgrade the fixed
     # Rust 1.90 compiler even when inherited from an old build environment.
-    env["MRUSTC_TARGET_VER"] = "1.74"
+    env["TRUSTME_TARGET_VER"] = "1.74"
     result = subprocess.run(
         [rustc, "-vV"],
         env=env,
@@ -29,7 +29,7 @@ def main() -> int:
         raise RuntimeError("rustc -vV failed")
     if not result.stdout.startswith("rustc 1.90.100 "):
         raise RuntimeError(
-            "MRUSTC_TARGET_VER must not change fixed Rust 1.90; got "
+            "TRUSTME_TARGET_VER must not change fixed Rust 1.90; got "
             + result.stdout.splitlines()[0]
         )
 

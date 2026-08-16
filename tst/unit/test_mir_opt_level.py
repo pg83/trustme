@@ -89,7 +89,7 @@ def main() -> int:
         raise SystemExit("usage: test_mir_opt_level.py RUSTC INPUT_RS STAMP")
 
     rustc, src, stamp = map(os.path.abspath, sys.argv[1:])
-    with tempfile.TemporaryDirectory(prefix="mrustc-mir-opt-level-") as work:
+    with tempfile.TemporaryDirectory(prefix="trustme-mir-opt-level-") as work:
         level0 = compile_mir(rustc, src, work, "level0", ["-Zmir-opt-level=0"])
         level1 = compile_mir(rustc, src, work, "level1", ["-Z", "mir-opt-level=1"])
         level2 = compile_mir(rustc, src, work, "level2", ["-Zmir-opt-level=2"])

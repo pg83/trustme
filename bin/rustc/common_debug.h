@@ -1,11 +1,7 @@
 #pragma once
 
 /*
- * mrustc common tools
- * - by John Hodge (Mutabah)
- *
- * tools/common/debug.h
- * - Generic debug interface (used by minicargo/standalone_miri)
+ * Generic debug interface
  */
 
 #include <functional>

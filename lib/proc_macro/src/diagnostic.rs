@@ -1,4 +1,4 @@
-#![cfg_attr(mrustc,unstable(proc_macro_diagnostic, issue="54150"))]
+#![cfg_attr(trustme,unstable(proc_macro_diagnostic, issue="54150"))]
 
 // NOTE: As of 1.54, this is unstable
 #[derive(Debug,Clone)]

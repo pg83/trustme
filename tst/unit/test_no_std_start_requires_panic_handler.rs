@@ -1,4 +1,4 @@
-//@ compile-fail: Undefined language item 'mrustc-panic_implementation' required
+//@ compile-fail: Undefined language item 'trustme-panic_implementation' required
 #![no_std]
 #![no_main]
 

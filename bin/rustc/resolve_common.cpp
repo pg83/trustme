@@ -534,7 +534,7 @@ namespace {
                                     if (rv) {
                                         return ResolveItemRefMacro(rv);
                                     }
-                                    // HACK: Ignore, as there's references to the `Debug` macro... but mrustc doesn't do things that way
+                                    // HACK: Ignore, as there's references to the `Debug` macro... but trustme doesn't do things that way
                                     // - Probably should have derives be in the same namespace as macros
                                 }
                                 return ResolveItemRefMacro(&**mac);

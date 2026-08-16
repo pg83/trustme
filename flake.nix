@@ -1,5 +1,5 @@
 {
-  description = "Standalone mrustc-derived Rust compiler and Cargo driver";
+  description = "trustme: a standalone Rust compiler and Cargo driver";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -25,7 +25,7 @@
       mkToolchain =
         pkgs:
         pkgs.gcc16Stdenv.mkDerivation {
-          pname = "mrustc-toolchain";
+          pname = "trustme-toolchain";
           version = "0.1.0";
 
           src = self;
@@ -64,7 +64,7 @@
               cd cargo
               go test ./...
             )
-            MRUSTC_TARGET_VER=1.90 .build-nix/rustc/rustc -vV
+            TRUSTME_TARGET_VER=1.90 .build-nix/rustc/rustc -vV
             runHook postCheck
           '';
 
@@ -76,8 +76,8 @@
           '';
 
           meta = {
-            description = "Standalone mrustc-derived Rust compiler and Cargo-compatible driver";
-            homepage = "https://github.com/pg83/mrustc";
+            description = "trustme: a standalone Rust compiler and Cargo-compatible driver";
+            homepage = "https://github.com/pg83/trustme";
             license = lib.licenses.mit;
             platforms = lib.platforms.linux;
           };
