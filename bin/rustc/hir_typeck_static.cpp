@@ -3633,7 +3633,9 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 {
                     auto it = impl.constants.find(pe.item);
                     if (it != impl.constants.end()) {
-                        ASSERT_BUG(sp, impl.params.types.size() == pe.implParams.types.size(), "Mismatch in param counts " << p << ", params are " << impl.params.fmtArgs());
+                        // The impl parameters may have been deduced above, as
+                        // the method branch already accounts for.
+                        ASSERT_BUG(sp, impl.params.types.size() == outParams.ppImpl->types.size(), "Mismatch in param counts " << p << ", params are " << impl.params.fmtArgs());
                         rv = ValuePtr{&it->second.data};
                         return true;
                     }
