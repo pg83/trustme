@@ -1331,6 +1331,15 @@ namespace {
                     completed = true;
                     return;
                 }
+                // An associated const keeps `target == UNKNOWN`: only generic
+                // paths are bound before type checking. A UFCS path in value
+                // position is either such a const — exempt from `Copy` exactly
+                // like a free const item — or a function item, whose type is
+                // `Copy` anyway.
+                if (!path->path.data.is_Generic()) {
+                    completed = true;
+                    return;
+                }
             }
 
             bool requireCopy = false;
