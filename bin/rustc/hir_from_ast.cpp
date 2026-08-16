@@ -1802,6 +1802,16 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
 
     ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> args;
     for (const auto& arg : f.args()) {
+        // A parameter is matched unconditionally, so it cannot be a pattern
+        // that only some values reach.
+        if (arg.pat.data().is_Value() || arg.pat.data().is_ValueLeftInc()) {
+            ERROR(arg.pat.span(), E0000, "refutable pattern in function argument");
+        }
+        // Without a body there is nothing to destructure into: a declaration
+        // names its parameters, it does not match them.
+        if (!f.code().isValid() && !(arg.pat.data().is_Any() || arg.pat.data().is_MaybeBind())) {
+            ERROR(arg.pat.span(), E0000, "patterns aren't allowed in functions without bodies");
+        }
         args.push_back(::std::make_pair(LowerHIRPattern(arg.pat), LowerHIRType(arg.ty)));
     }
 
