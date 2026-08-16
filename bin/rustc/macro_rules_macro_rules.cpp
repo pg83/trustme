@@ -3413,6 +3413,13 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
         if (tok.type() == TOK_DOLLAR) {
             GET_TOK(tok, lex);
 
+            // `$$` - an escaped dollar, which the expansion emits literally so
+            // that a macro can define a macro.
+            if (tok.type() == TOK_DOLLAR) {
+                ret.push_back(MacroExpansionEnt(Token(TOK_DOLLAR)));
+                continue;
+            }
+
             // `$(`
             if (tok.type() == TOK_PAREN_OPEN) {
                 ::std::map<unsigned int, ContentLoopVariableUse> varUsage;
