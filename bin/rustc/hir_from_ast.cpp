@@ -1523,9 +1523,6 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
             assert(var.data.is_Unit());
         }
     }
-    if (ent.markings.alignValue != 0) {
-        hasData = true;
-    }
 
     bool isReprC = ent.markings.isReprC;
     auto repr = HIREnum::Repr::Auto;
@@ -1621,6 +1618,10 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
             }
 
             if (var.discriminantValue) {
+                // A fieldless enum only reaches this branch because
+                // `#[repr(align(N))]` forced it to, and its discriminants are as
+                // ordinary as any value enum's -- the alignment says nothing
+                // about the tag.
                 if (repr == HIREnum::Repr::Auto) {
                     ERROR(var.discriminantValue.node().span(), E0000, "Discrimiant value set on enum with no `repr` set");
                 }
@@ -1647,6 +1648,7 @@ HIREnum AST2HIR::LowerHIREnum(HIRItemPath path, const ASTEnum& ent, const ASTAtt
     }
 
     HIREnum rv{mv$(params), isReprC, repr, mv$(data)};
+    rv.forcedAlignment = ent.markings.alignValue;
     rv.mustUse = attrs.has("must_use");
     return rv;
 }

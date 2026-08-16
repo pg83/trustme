@@ -2084,6 +2084,17 @@ namespace {
                 break;
         }
 
+        // `#[repr(align(N))]` raises the alignment of the enum itself, and the
+        // size rounds up to match. A data enum gets this through its variant
+        // structs, but a value enum has only the tag.
+        if (enm.forcedAlignment > 0 && enm.data.is_Value()) {
+            rv.align = std::max(rv.align, static_cast<size_t>(enm.forcedAlignment));
+            while (rv.size % rv.align != 0) {
+                rv.size++;
+            }
+            rv.userAlign = true;
+        }
+
         TU_MATCH_HDRA( (rv.variants), { )
         TU_ARMA(None, e) {
                 DEBUG("rv.variants = None");

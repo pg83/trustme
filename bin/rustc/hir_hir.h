@@ -357,6 +357,9 @@ public:
 
     HIRTraitMarkings markings;
 
+    /// `#[repr(align(N))]`, which raises the alignment without changing the tag.
+    unsigned forcedAlignment = 0;
+
     size_t numVariants() const {
         return (data.is_Data() ? data.as_Data().size() : data.as_Value().variants.size());
     }

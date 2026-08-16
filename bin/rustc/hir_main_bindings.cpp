@@ -1206,7 +1206,13 @@ HIREnum HirDeserialiser::deserialiseEnum() {
         }
     };
 
-    return HIREnum{deserialiseGenericparams(), in.readBool(), static_cast<HIREnum::Repr>(in.readTag()), H::deserialiseEnumclass(*this), true, deserialiseMarkings()};
+    auto params = deserialiseGenericparams();
+    auto isCRepr = in.readBool();
+    auto tagRepr = static_cast<HIREnum::Repr>(in.readTag());
+    auto forcedAlignment = static_cast<unsigned>(in.readCount());
+    auto rv = HIREnum{mv$(params), isCRepr, tagRepr, H::deserialiseEnumclass(*this), true, deserialiseMarkings()};
+    rv.forcedAlignment = forcedAlignment;
+    return rv;
 }
 
 HIREnum::DataVariant HirDeserialiser::deserialiseEnumdatavariant() {
@@ -3594,6 +3600,7 @@ public:
         serialiseGenerics(item.params);
         out.writeBool(item.isCRepr);
         out.writeTag(static_cast<int>(item.tagRepr));
+        out.writeCount(item.forcedAlignment);
         serialise(item.data);
 
         serialise(item.markings);

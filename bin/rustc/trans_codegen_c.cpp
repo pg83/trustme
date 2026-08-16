@@ -1551,7 +1551,13 @@ namespace {
                 TODO(sp, "No common offsets and more than one field, is this possible? - " << itemTy);
             }
 
-            of << "};\n";
+            of << "}";
+            // `#[repr(align(N))]` on the enum itself; C would otherwise derive the
+            // alignment from the tag alone and make the type too small.
+            if (item.forcedAlignment > 0) {
+                of << " __attribute__((__aligned__(" << repr->align << ")))";
+            }
+            of << ";\n";
 
             size_t expSize = (repr->size > 0 ? repr->size : (options.disallowEmptyStructs ? 1 : 0));
             of << "typedef char sizeof_assert_" << TransMangle(p) << "[ (sizeof(struct e_" << TransMangle(p) << ") == " << expSize << ") ? 1 : -1 ];\n";
