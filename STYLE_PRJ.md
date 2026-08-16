@@ -21,18 +21,14 @@ with its own copies of both files.
 
 `bin/rustc` is inherited from mrustc, but the naming migration is done: the
 tree uses house names — `UpperCamelCase` types, `lowerCamelCase` functions and
-methods, `snake_case` filenames. New code follows [STYLE.md](STYLE.md) as
-written; there is no "match the surrounding spelling" exemption.
+methods, `lowerCamelCase_` private data members, unprefixed public fields,
+`snake_case` filenames. No `m` prefix survives. New code follows
+[STYLE.md](STYLE.md) as written; there is no "match the surrounding spelling"
+exemption.
 
-Two residues of that migration are still visible, and neither is a licence to
-add more. Many data members carry an `m`-prefixed camel name (`mParams`,
-`mType`) left by the mechanical rename from `m_params`; a new member uses
-`lowerCamelCase_` when it is private data and an unprefixed name when it is a
-public struct field.
-
-The other residue is the vocabulary: `std::` containers, strings and streams
-are still dominant in most translation units. libstd (`stl::`) is linked in
-and is the preferred choice — use it wherever it does not force conversions at
-the boundary. Reach for `std::` only where the surrounding code is already
-`std::`-heavy and `stl::` would mean converting values back and forth on every
-call.
+One deviation is left, and it is the vocabulary: `std::` containers, strings
+and streams are still dominant in most translation units. libstd (`stl::`) is
+linked in and is the preferred choice — use it wherever it does not force
+conversions at the boundary. Reach for `std::` only where the surrounding code
+is already `std::`-heavy and `stl::` would mean converting values back and
+forth on every call.
