@@ -107,8 +107,10 @@ Seventy-four programs build but execute incorrectly:
 | generated executable SIGABRT | 1 | |
 | compiled, exited 1 | 1 | |
 
-The repeated high-yield areas inside the panic set are type-name behaviour,
-enum/DST/layout, drop order, and coroutine layout. Of the formatting ones,
+The repeated high-yield areas inside the panic set are enum/DST/layout, drop
+order, and coroutine layout. The two type-name tests are blocked on the crate
+name of a root binary, which reads as `bin#` rather than the file name, not on
+how the type itself prints. Of the formatting ones,
 `fmt::num::test_format_debug_hex` and `test_format_int_exp_precision` survive
 the precision fix. The
 128-bit ones left are `intrinsics::carrying_mul_add_fallback` for u128 and
