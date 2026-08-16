@@ -947,6 +947,9 @@ static void makeRefpatAb(const Span& sp, ASTExprNodeBlock& block, ::std::vector<
 
 struct DeriveOpts {
     RcString coreName;
+    /// The item also derives `Copy`, which makes a derived `Clone` a copy
+    /// rather than a field-by-field clone.
+    bool derivesCopy = false;
 };
 
 /// Interface for derive handlers
@@ -1638,6 +1641,14 @@ public:
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTStruct& str) const override {
         const ASTPath& tyPath = *type->data.as_Path();
 
+        // A `Copy` type clones by copying. Cloning field by field would call a
+        // field's own `Clone` impl, which is observable when it does more than
+        // copy. A generic type is left alone: `*self` needs `Self: Copy`, which
+        // the derived `Clone` bounds do not give.
+        if (opts.derivesCopy && p.params.empty()) {
+            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str), NEWNODE(Block, NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)))));
+        }
+
         ASTExprNodeP node;
         TU_MATCH_HDRA( (str.data), {)
         TU_ARMA(Unit, e) {
@@ -1663,6 +1674,9 @@ public:
     }
 
     ASTImpl handleItem(Span sp, const DeriveOpts& opts, const ASTGenericParams& p, ASTType* type, const ASTEnum& enm) const override {
+        if (opts.derivesCopy && p.params.empty()) {
+            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm), NEWNODE(Block, NEWNODE(Deref, NEWNODE(NamedValue, ASTPath(rcstringSelfLower)))));
+        }
         ASTPath basePath = *type->data.as_Path();
         basePath.nodes().back().args() = ASTPathParams();
         ::std::vector<ASTExprNodeMatchArm> arms;
@@ -2800,6 +2814,18 @@ static void deriveItem(const Span& sp, const WireBoard& wb, const ASTCrate& crat
     auto type = makeType(*crate.pool, sp, path, item.params());
 
     DeriveOpts opts = {crate.extCratenameCore};
+    // `#[derive(Copy)]` changes what a derived `Clone` means, and it may be
+    // written in a separate attribute from the `Clone`.
+    for (const auto& a : attrs) {
+        if (a.name() != "derive") {
+            continue;
+        }
+        for (const auto& derived : getDeriveItems(a)) {
+            if (!derived.nodes().empty() && derived.nodes().back().name() == "Copy") {
+                opts.derivesCopy = true;
+            }
+        }
+    }
 
     ::std::vector<ASTPath> missingHandlers;
     for (const auto& traitPath : deriveItems) {
