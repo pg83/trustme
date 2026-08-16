@@ -2544,8 +2544,14 @@ ASTPattern::TuplePat ParsePatternTuple(TokenStream& lex, bool* justParen) {
         *justParen = false;
     }
 
+    // A `..` here is the rest of the tuple only when nothing follows it in this
+    // element: `(.. PAT)` is a half-open range pattern, not a rest.
+    auto atRest = [&]() {
+        return LOOK_AHEAD(lex) == TOK_DOUBLE_DOT && (lex.lookahead(1) == TOK_COMMA || lex.lookahead(1) == TOK_PAREN_CLOSE);
+    };
+
     ::std::vector<ASTPattern> leading;
-    while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE && LOOK_AHEAD(lex) != TOK_DOUBLE_DOT) {
+    while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE && !atRest()) {
         leading.push_back(ParsePattern(lex));
 
         if (GET_TOK(tok, lex) != TOK_COMMA) {
@@ -2558,7 +2564,7 @@ ASTPattern::TuplePat ParsePatternTuple(TokenStream& lex, bool* justParen) {
         }
     }
 
-    if (LOOK_AHEAD(lex) != TOK_DOUBLE_DOT) {
+    if (!atRest()) {
         GET_TOK(tok, lex);
 
         CHECK_TOK(tok, TOK_PAREN_CLOSE);
