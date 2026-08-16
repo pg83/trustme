@@ -35,13 +35,13 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 453 |
-| fixed, or no longer reproducing, since the gate | 178 |
+| still failing on the current tree | 451 |
+| fixed, or no longer reproducing, since the gate | 180 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 199 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 91 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
 | wrong runtime behaviour, panic, abort, or output | 67 |
 | missing rejection or diagnostic | 58 |
 | generated C++ or link failure | 28 |
@@ -81,12 +81,12 @@ fixed.
 
 ## P1: internal compiler failures
 
-There are 91 compiler-internal failures in 72 stable signatures.
+There are 89 compiler-internal failures in 71 stable signatures.
 
 | compiler area | tests |
 |---|---:|
 | type checker | 20 |
-| HIR lowering and conversion | 14 |
+| HIR lowering and conversion | 12 |
 | MIR lowering, CTFE MIR, and optimisation | 10 |
 | parser and macro expansion | 10 |
 | translation and code generation | 9 |
@@ -100,7 +100,7 @@ The multi-test signatures are:
 |---|---:|
 | `ASSERT` with no backtrace | 5 |
 | `BUG hir_conv_constant_evaluation.cpp:4621` | 3 |
-| thirteen other two-test signatures | 26 |
+| twelve other two-test signatures | 24 |
 | fifty-seven one-test signatures | 57 |
 
 `BUG hir_conv_constant_evaluation.cpp:4621` is the polymorphic-constant
