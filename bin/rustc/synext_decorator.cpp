@@ -981,7 +981,7 @@ struct Deriver {
         }
     }
 
-    ASTGenericParams getParamsWithBounds(stl::ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, ::std::vector<ASTType*> additionalBoundedTypes) const {
+    ASTGenericParams getParamsWithBounds(stl::ObjPool& pool, const Span& sp, const ASTGenericParams& p, const ASTPath& traitPath, ::std::vector<ASTType*> additionalBoundedTypes, bool boundTypeParams = true) const {
         ASTGenericParams params = p.clone();
 
         // TODO: Get bounds based on generic (or similar) types used within the type.
@@ -991,7 +991,9 @@ struct Deriver {
         unsigned int i = 0;
         for (const auto& arg : params.params) {
             if (const auto* e = arg.opt_Type()) {
-                params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(pool, sp, e->name(), i), {}, traitPath}));
+                if (boundTypeParams) {
+                    params.addBound(ASTGenericBound::make_IsTrait({sp, {}, mkType(pool, sp, e->name(), i), {}, traitPath}));
+                }
                 i++;
             }
         }
@@ -1794,13 +1796,13 @@ class DeriverDefault: public Deriver {
         return ASTPath::newUfcsTrait(::mkType(pool, Span()), getTraitPath(coreName), {ASTPathNode(RcString::newInterned("default"), {})});
     }
 
-    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node) const {
+    ASTImpl makeRet(Span sp, const RcString& coreName, const ASTGenericParams& p, ASTType* type, ::std::vector<ASTType*> typesToBound, ASTExprNodeP node, bool boundTypeParams = true) const {
         const ASTPath traitPath = this->getTraitPath(coreName);
 
         ASTFunction fcn(sp, mktypeSelf(*type->pool, sp), {});
         fcn.setCode(NEWNODE(Block, mv$(node)));
 
-        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound));
+        ASTGenericParams params = getParamsWithBounds(*type->pool, sp, p, traitPath, mv$(typesToBound), boundTypeParams);
 
         ASTImpl rv(ASTImplDef(mv$(params), makeSpanned(sp, traitPath), type->clone()));
         rv.addFunction(sp, {}, ASTVisibility::makeBarePrivate(), false, RcString::newInterned("default"), mv$(fcn));
@@ -1895,7 +1897,10 @@ public:
                 node = NEWNODE(StructLiteralPattern, std::move(varPath), mv$(vals));
             }
         }
-        return this->makeRet(sp, opts.coreName, p, type, std::move(boundTys), std::move(node));
+        // Only the `#[default]` variant is constructed, so the other variants'
+        // types need no bound -- `MyOption<NotDefault>::default()` is fine when
+        // the default variant carries nothing.
+        return this->makeRet(sp, opts.coreName, p, type, std::move(boundTys), std::move(node), /*boundTypeParams=*/false);
     }
 } gDeriveDefault;
 
