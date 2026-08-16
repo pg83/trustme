@@ -35,12 +35,12 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 542 |
-| fixed, or no longer reproducing, since the gate | 89 |
+| still failing on the current tree | 540 |
+| fixed, or no longer reproducing, since the gate | 91 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 279 |
+| accepted Rust rejected by the compiler or driver | 277 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
 | wrong runtime behaviour, panic, abort, or output | 74 |
 | missing rejection or diagnostic | 57 |
@@ -49,18 +49,18 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 
 ## P0: accepted Rust rejected by the front end
 
-All 279 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 277 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| parser | 118 | 115 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
+| parser | 116 | 113 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
 | type checking, HIR lowering, and resolution | 123 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6694`, `:6696`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 15 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 31 | macro parsing/formatting 10; attributes 8; AST expansion 8; other expansion 5 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; pathless `--extern` 1 |
 
-The 115 parser failures must be regrouped by syntax family before changing the
+The 113 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are `gen` blocks and functions (8),
 `default`/specialization items (6), unsafe binders (5), never patterns (3),
