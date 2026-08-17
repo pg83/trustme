@@ -38,14 +38,14 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 381 |
-| fixed, or no longer reproducing, since the gate | 250 |
+| still failing on the current tree | 379 |
+| fixed, or no longer reproducing, since the gate | 252 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 170 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
-| wrong runtime behaviour, panic, abort, or output | 44 |
+| wrong runtime behaviour, panic, abort, or output | 42 |
 | missing rejection or diagnostic | 54 |
 | generated C++ or link failure | 15 |
 | stable timeout | 10 |
@@ -125,11 +125,11 @@ declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 
-Forty-four programs build but execute incorrectly:
+Forty-two programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 38 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 36 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
@@ -150,7 +150,6 @@ Grouping the panics by the rule they check finds these multi-test families:
 | let-chain drop order | 3 | `drop_order_let_chain`, `drop_order_if_let_rescope`, `drop-order-comparisons-let-chains`: a non-`let` operand's temporary in a chain drops at the end of the chain, a `let` binding's lives for the block |
 | coroutine and future size | 4 | `niche-in-coroutine`, `overlap-locals`, `resume-arg-size`, `future-as-arg`: locals that cannot be live together must share storage |
 | DST prefix alignment | 2 | `issue-36278-prefix-nesting` and `dynamic-size-of-prefix-correctly-36278` are the same bug, from opposite corpora |
-| `-Z fmt-debug` | 2 | `fmt/fmt_debug/full.rs` and `shallow.rs` |
 | `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and the `core::any` library case |
 | `Waker::will_wake` | 2 | two library cases comparing a cloned waker's vtable |
 
