@@ -60,7 +60,14 @@ FloatValue positiveNanFloatValue() {
     // six-digit default: macro fragments are reparsed after expansion.
     ::std::ostringstream os;
     os << ::std::setprecision(36) << value;
-    return os.str();
+    auto rv = os.str();
+    // A float token always carries a decimal point in the source, and must keep
+    // one: `4.0` rendered as `4` reparses as an integer, and `concat!`/
+    // `stringify!` would report the wrong text.
+    if (rv.find_first_of(".eEni") == ::std::string::npos) {
+        rv += ".0";
+    }
+    return rv;
 }
 
 std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value) {

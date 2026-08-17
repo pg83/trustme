@@ -1057,9 +1057,25 @@ class CConcatExpander: public ExpandProcMacro {
                     rv += FMT(vp->value);
                 }
             } else if (auto* vp = cast<ASTExprNodeFloat>(v.get())) {
-                rv += FMT(vp->value);
+                // `concat!` uses the literal as written, which always has a
+                // decimal point.
+                rv += formatFloatValueForToken(vp->value);
             } else if (auto* vp = cast<ASTExprNodeBool>(v.get())) {
                 rv += (vp->value ? "true" : "false");
+            } else if (auto* vp = cast<ASTExprNodeUniOp>(v.get())) {
+                // `concat!(-1.0)`: a negated literal is a unary operation, but
+                // it is still written as one literal.
+                const auto* inner = vp->value.get();
+                if (vp->type != ASTExprNodeUniOp::NEGATE) {
+                    ERROR(sp, E0000, "Unexpected expression type in concat! argument");
+                } else if (const auto* iv = cast<const ASTExprNodeInteger>(inner)) {
+                    rv += FMT("-" << iv->value);
+                } else if (const auto* fv = cast<const ASTExprNodeFloat>(inner)) {
+                    rv += "-";
+                    rv += formatFloatValueForToken(fv->value);
+                } else {
+                    ERROR(sp, E0000, "Unexpected expression type in concat! argument");
+                }
             } else {
                 ERROR(sp, E0000, "Unexpected expression type in concat! argument");
             }
