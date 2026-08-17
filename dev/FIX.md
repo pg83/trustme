@@ -4,7 +4,7 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-Snapshot: 2026-08-17, commit `544a0d06d`. The numbers below come from rerunning
+Snapshot: 2026-08-17, commit `10754f0e0`. The numbers below come from rerunning
 the nodes that failed the last full gate, not from a fresh gate. The gate
 itself ran at commit `79582dd3f` in the clang Nix environment on all 78
 available cores:
@@ -26,65 +26,67 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 ```
 
 All 631 failed nodes were rerun independently inside the same clang Nix
-environment; the 412 that were still red were then rerun again after the fixes
-recorded below. The authoritative rerun data is in
-`/tmp/trustme-reclass-20260817c`; classified records are in
-`/tmp/trustme-classification-20260817c`. These counts are measured, not
-decremented by hand, except for the failures fixed after that rerun: four
-parser ones (two `ergonomic-clones`, two `tokens.md` literal suffixes) and nine
-generated-code ones.
+environment, most recently at the commit above. The authoritative rerun data is
+in `/tmp/trustme-reclass-20260817d`; classified records are in
+`/tmp/trustme-classification-20260817d`. Every count below is measured from
+that rerun, not decremented by hand.
+
+Reruns and the two whole-group sweeps (`rust_ui_compile`, `rust_1_90`) are the
+only regression check there is between full gates, and they earn their keep: the
+sweeps found two regressions from this session's own work (a rejected
+`#![recursion_limit = "0"]`, and a dropped `#[cfg]` on a first parameter).
 
 | result | tests |
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 345 |
-| fixed, or no longer reproducing, since the gate | 286 |
+| still failing on the current tree | 343 |
+| fixed, or no longer reproducing, since the gate | 288 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 144 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 85 |
-| wrong runtime behaviour, panic, abort, or output | 40 |
+| accepted Rust rejected by the compiler or driver | 142 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 84 |
+| wrong runtime behaviour, panic, abort, or output | 41 |
 | missing rejection or diagnostic | 53 |
 | generated C++ or link failure | 15 |
 | stable timeout | 8 |
 
 ## P0: accepted Rust rejected by the front end
 
-All 144 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 142 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| parser | 34 | 31 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
-| type checking, HIR lowering, and resolution | 95 | trait/impl selection 30 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 6 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 13 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
+| parser | 32 | 29 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
+| type checking, HIR lowering, and resolution | 95 | trait/impl selection 30 (`hir_typeck_expr_cs.cpp:6746`, `:6748`); unresolved type/value names 6 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 16 (`hir_typeck_expr_cs.cpp:2471`, `:2482`, `:2487`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; enum repr 1 |
 
-The 31 parser failures must be regrouped by syntax family before changing the
+The 29 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are never patterns (3) and a long tail of
 one- and two-test spellings. Grouping by test directory finds them faster than
 grouping by token: that is how the six associated-const equality bounds turned
 out to be one syntax rule.
 
-The `gen` family is down to the two `for await` tests (`for-await.rs`,
-`for-await-passthrough.rs`). `async gen` is supported: it lowers to the async
-block's coroutine with `isAsyncGen` set, which gives it a generated
-`AsyncIterator` impl (`poll_next` returning `Poll<Option<Item>>`) instead of a
-`Future` one, makes a `yield` return `Poll::Ready(Some(v))` the way `.await`
-returns `Poll::Pending`, and makes the END state return `Poll::Ready(None)` so
-the iterator is fused. `for await pat in it` still needs a desugaring: it awaits
-`AsyncIterator::poll_next` rather than a `Future`, so `awaitFuture`
-(`mir_from_hir.cpp`) needs a sibling that yields `Option<Item>` and breaks the
-loop on `None`. `gen { .. }` as an expression is still only reachable from a
-macro fragment (`parse_common.cpp:1422`): in source `gen` is a contextual
-keyword, so an expression-position `gen {` has to be edition-gated against a
-struct literal.
+The whole `gen` family is fixed. `gen fn` and `gen { .. }` lower to the
+coroutine `iter!` builds, wrapped in `from_coroutine(..).fuse()`. `async gen`
+lowers to the async block's coroutine with `isAsyncGen` set, which gives it a
+generated `AsyncIterator` impl (`poll_next` returning `Poll<Option<Item>>`)
+instead of a `Future` one, makes a `yield` return `Poll::Ready(Some(v))` the way
+`.await` returns `Poll::Pending`, and makes the END state return
+`Poll::Ready(None)` so the iterator is fused. `for await pat in it` desugars
+like `for`, but through `IntoAsyncIterator::into_async_iter` and an await of
+`AsyncIterator::poll_next` (`HIRExprNodeAWait::isNext`). What is left is
+`gen { .. }` as an expression outside a macro fragment
+(`parse_common.cpp:1422`): in source `gen` is a contextual keyword, so an
+expression-position `gen {` has to be edition-gated against a struct literal --
+no corpus test needs it today.
 
-The 48 tests routed through the trait-selection and type-mismatch lines are not
+The 46 tests routed through the trait-selection and type-mismatch lines are not
 one root cause: fixing integer inference through an operator took two of them
 and left the rest untouched. Minimise each before grouping.
 
@@ -127,13 +129,13 @@ item is not affected -- it takes a `$vis` fragment now.
 
 ## P1: internal compiler failures
 
-There are 85 compiler-internal failures in 70 stable signatures.
+There are 84 compiler-internal failures in 69 stable signatures.
 
 | compiler area | tests |
 |---|---:|
-| HIR lowering and conversion | 20 |
 | type checker | 20 |
-| MIR lowering, CTFE MIR, and optimisation | 12 |
+| MIR lowering, CTFE MIR, and optimisation | 17 |
+| HIR lowering and conversion | 14 |
 | parser and macro expansion | 12 |
 | translation and code generation | 10 |
 | name resolution | 4 |
@@ -145,15 +147,22 @@ The multi-test signatures are:
 |---|---:|
 | `ASSERT` with no backtrace | 5 |
 | eleven other two-test signatures | 22 |
-| fifty-eight one-test signatures | 58 |
+| fifty-seven one-test signatures | 57 |
+
+The line numbers in a signature move with every commit that touches the file:
+the ones here are read from the classification named above, and are worth
+re-deriving rather than trusting. Attribution needs the crashing thread's
+frames, which is not thread 1 any more -- the compiler runs on a thread of its
+own for the bigger stack, so `dev/gate_classify.py` now picks the thread that
+took the signal.
 
 ## P1: runtime semantics
 
-Forty programs build but execute incorrectly:
+Forty-one programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 34 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 35 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |

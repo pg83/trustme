@@ -19,11 +19,30 @@ def first_line(text: str, marker: str) -> str | None:
     return next((line for line in text.splitlines() if marker in line), None)
 
 
+# The compiler runs on a thread of its own (for a bigger stack), so the frames
+# that matter are the ones of whichever thread took the signal.
+SIGNALLED_THREAD = re.compile(r"^Thread (\d+) .*received signal", re.MULTILINE)
+THREAD_HEADER = re.compile(r"^Thread \d+ \(", re.MULTILINE)
+
+
+def backtrace(text: str) -> str | None:
+    """The frames of the thread that took the signal, or of the only thread."""
+    signalled = SIGNALLED_THREAD.search(text)
+    if signalled:
+        header = re.compile(r"^Thread " + signalled.group(1) + r" \(", re.MULTILINE)
+        match = header.search(text, signalled.end())
+        if match:
+            end = THREAD_HEADER.search(text, match.end())
+            return text[match.end():end.start() if end else len(text)]
+    match = THREAD_HEADER.search(text)
+    return text[match.end():] if match else None
+
+
 def caller(text: str) -> str:
-    thread = text.find("Thread 1 (process")
-    if thread < 0:
+    frames = backtrace(text)
+    if frames is None:
         return "no-backtrace"
-    for match in FRAME_LOCATION.finditer(text, thread):
+    for match in FRAME_LOCATION.finditer(frames):
         location = match.group(1)
         if not location.startswith(GENERIC_ABORT_SOURCES):
             return location
