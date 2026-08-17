@@ -3175,10 +3175,8 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
             return MetadataType::TraitObject;
         }
         TU_ARMA(Tuple, e) {
-            // TODO: Unsized tuples? are they a thing?
-            //for(const auto& ty : e)
-            //    if( !type_is_sized(sp, ty) )
-            return MetadataType::None;
+            // A tuple is unsized when its last element is, just as a struct is.
+            return e.empty() ? MetadataType::None : this->metadataType(sp, e.back(), errOnUnknown);
         }
     }
     throw "bug";
