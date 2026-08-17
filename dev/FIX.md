@@ -38,12 +38,12 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 370 |
-| fixed, or no longer reproducing, since the gate | 261 |
+| still failing on the current tree | 367 |
+| fixed, or no longer reproducing, since the gate | 264 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 163 |
+| accepted Rust rejected by the compiler or driver | 160 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
 | wrong runtime behaviour, panic, abort, or output | 40 |
 | missing rejection or diagnostic | 54 |
@@ -52,13 +52,13 @@ generated-code ones.
 
 ## P0: accepted Rust rejected by the front end
 
-All 163 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 160 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | parser | 51 | 48 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
-| type checking, HIR lowering, and resolution | 97 | trait/impl selection 30 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 8 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 13 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
+| type checking, HIR lowering, and resolution | 94 | trait/impl selection 29 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 6 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 13 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; enum repr 1 |
@@ -83,13 +83,13 @@ The 48 tests routed through the trait-selection and type-mismatch lines are not
 one root cause: fixing integer inference through an operator took two of them
 and left the rest untouched. Minimise each before grouping.
 
-`IntoIterator for Box<[T]>` is four of them (two `into-iter-on-*-lint`, two
-`into-iter-on-boxed-slices-*`) and one bug: the method probe accepts
-`IntoIterator` for a receiver that is still `Box<_>`, because the impl for
-`Box<[T], A>` matches an unresolved inner type fuzzily, and the edition gate for
-`rustc_skip_during_method_dispatch(boxed_slice)` then cannot tell it is a boxed
-slice. The receiver's `_` only becomes `Box<[i32]>` later, and the committed
-candidate no longer has an impl.
+`IntoIterator for Box<[T]>` is three of them (`into-iter-on-arrays-lint` and the
+two `into-iter-on-boxed-slices-*`). The dispatch gate now fires for a receiver
+that is still `Box<_>`, which is what the fourth needed. What is left is the
+step after it: rustc excludes only the `Box<[T]>` impl and finds `IntoIterator`
+for `&[T]` at the autoref step, while we skip the trait for the whole step and
+reach `[T]` by value, where a probe candidate is accepted and then rejected as
+unsized (`hir_typeck_expr_cs.cpp:4662`).
 
 A `for<T>` binder is only dropped where it quantifies a where predicate. In a
 supertrait list (`trait Foo: for<T> Bar<T>`) or a return type
@@ -103,8 +103,7 @@ expected. The parse error is the better failure until an alias can expand
 to another alias.
 
 What is left of the unresolved-name group splits by rule: two
-`non_lifetime_binders` (the `for<T>` trap above), two identifiers that need NFC
-normalisation (`unicode_norm1`, `idents-normalized`), and four one-offs
+`non_lifetime_binders` (the `for<T>` trap above) and four one-offs
 (`UnitLike` in an enum body, `T` in a const trait bound, `Self` as a
 constructor, a type alias used as a value).
 
