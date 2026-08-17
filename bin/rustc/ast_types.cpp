@@ -427,8 +427,8 @@ ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, ::std::vector<A
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<ASTType*> args, bool isVariadic, ASTType* ret) {
     return mkType(pool, sp, TypeData::make_Function({TypeFunction(mv$(hrbs), isUnsafe, abi, ret, mv$(args), isVariadic)}));
 }
-ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType) {
-    return mkType(pool, sp, TypeData::make_Borrow({mv$(lft), isMut, innerType}));
+ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType, bool isPin) {
+    return mkType(pool, sp, TypeData::make_Borrow({mv$(lft), isMut, innerType, isPin}));
 }
 ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType) {
     return mkType(pool, sp, TypeData::make_Pointer({isMut, innerType}));

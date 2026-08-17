@@ -743,6 +743,10 @@ struct ASTExprNodeUniOp: public ASTExprNode {
         REFMUT, // '&mut <expr>'
         RawBorrow,
         RawBorrowMut,
+        /// `&pin const place` and `&pin mut place`, which pin the place:
+        /// `Pin<&T>` and `Pin<&mut T>`.
+        PinBorrow,
+        PinBorrowMut,
         BOX,    // 'box <expr>'
         INVERT, // '!<expr>'
         NEGATE, // '-<expr>'

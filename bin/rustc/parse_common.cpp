@@ -1112,6 +1112,17 @@ ASTExprNodeP ParseExpr13(TokenStream& lex) {
                     } else {
                     }
                 }
+                // `&pin mut place` / `&pin const place` pin the place.
+                if (tok.ident() == "pin") {
+                    if (lex.lookahead(0) == TOK_RWORD_MUT) {
+                        GET_TOK(tok, lex);
+                        return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::PinBorrowMut, ParseExprUnaryOperand(lex));
+                    } else if (lex.lookahead(0) == TOK_RWORD_CONST) {
+                        GET_TOK(tok, lex);
+                        return NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::PinBorrow, ParseExprUnaryOperand(lex));
+                    } else {
+                    }
+                }
                 PUTBACK(tok, lex);
             }
             if (lex.getTokenIf(TOK_RWORD_MUT)) {
@@ -3335,8 +3346,12 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
         if (lex.lookahead(0) == TOK_LIFETIME) {
             ofs++;
         }
+        // `&pin mut self` / `&pin const self`, which are `Pin<&mut Self>` and
+        // `Pin<&Self>`.
+        const bool selfIsPinned = lex.lookahead(ofs) == TOK_IDENT && lex.lookaheadIdentIs(ofs, "pin")
+            && (lex.lookahead(ofs + 1) == TOK_RWORD_MUT || lex.lookahead(ofs + 1) == TOK_RWORD_CONST) && lex.lookahead(ofs + 2) == TOK_RWORD_SELF;
 
-        if (lex.lookahead(ofs) == TOK_RWORD_SELF || (lex.lookahead(ofs) == TOK_RWORD_MUT && lex.lookahead(ofs + 1) == TOK_RWORD_SELF)) {
+        if (selfIsPinned || lex.lookahead(ofs) == TOK_RWORD_SELF || (lex.lookahead(ofs) == TOK_RWORD_MUT && lex.lookahead(ofs + 1) == TOK_RWORD_SELF)) {
             auto ps = lex.startSpan();
             ASTLifetimeRef lifetime;
             if (GET_TOK(tok, lex) == TOK_LIFETIME) {
@@ -3344,14 +3359,21 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
                 GET_TOK(tok, lex);
             }
 
+            bool isPin = false;
+            if (selfIsPinned) {
+                isPin = true;
+                GET_TOK(tok, lex);
+            }
             bool isMut = false;
             if (tok.type() == TOK_RWORD_MUT) {
                 isMut = true;
                 GET_TOK(tok, lex);
+            } else if (isPin && tok.type() == TOK_RWORD_CONST) {
+                GET_TOK(tok, lex);
             }
             CHECK_TOK(tok, TOK_RWORD_SELF);
             auto sp = lex.endSpan(ps);
-            args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(lex.typePool(), ASTTypeTags::Reference(), sp, ::std::move(lifetime), isMut, mkType(lex.typePool(), sp, rcstringSelf, 0xFFFF))));
+            args.push_back(ASTFunction::Arg(ASTPattern(ASTPattern::TagBind(), sp, rcstringSelfLower), mkType(lex.typePool(), ASTTypeTags::Reference(), sp, ::std::move(lifetime), isMut, mkType(lex.typePool(), sp, rcstringSelf, 0xFFFF), isPin)));
             //if( allow_self == false )
 
             // Prime tok for next step
@@ -5634,13 +5656,21 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
                 }
                 tok = lex.getToken();
             }
+            // `&pin mut T` / `&pin const T`: `pin` is a contextual keyword, so
+            // it only qualifies a reference when `mut` or `const` follows it.
+            bool isPin = false;
+            if (tok.type() == TOK_IDENT && tok.ident().name == "pin" && (lex.lookahead(0) == TOK_RWORD_MUT || lex.lookahead(0) == TOK_RWORD_CONST)) {
+                isPin = true;
+                tok = lex.getToken();
+            }
             bool isMut = false;
             if (tok.type() == TOK_RWORD_MUT) {
                 isMut = true;
+            } else if (isPin && tok.type() == TOK_RWORD_CONST) {
             } else {
                 PUTBACK(tok, lex);
             }
-            return mkType(lex.typePool(), ASTTypeTags::Reference(), lex.endSpan(ps), ::std::move(lifetime), isMut, ParseType(lex, false));
+            return mkType(lex.typePool(), ASTTypeTags::Reference(), lex.endSpan(ps), ::std::move(lifetime), isMut, ParseType(lex, false), isPin);
         }
         // '*' - Raw pointer
         case TOK_STAR:

@@ -122,6 +122,9 @@ TAGGED_UNION(
          ASTLifetimeRef lifetime;
          bool isMut;
          ASTType* inner;
+         /// `&pin mut T` and `&pin const T`, which are `Pin<&mut T>` and
+         /// `Pin<&T>`. Expansion rewrites them, once the core crate is known.
+         bool isPin = false;
      }),
     (Pointer,
      struct {
@@ -258,7 +261,7 @@ extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Primitive, Span sp, enum
 extern ASTType* mkType(stl::ObjPool& pool, Span sp, enum eCoreType type);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Tuple, Span sp, ::std::vector<ASTType*> innerTypes);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Function, Span sp, ASTHigherRankedBounds hrbs, bool isUnsafe, ::std::string abi, ::std::vector<ASTType*> args, bool isVariadic, ASTType* ret);
-extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType);
+extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Reference, Span sp, ASTLifetimeRef lft, bool isMut, ASTType* innerType, bool isPin = false);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::Pointer, Span sp, bool isMut, ASTType* innerType);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::SizedArray, Span sp, ASTType* innerType, ::std::shared_ptr<ASTExprNode> size);
 extern ASTType* mkType(stl::ObjPool& pool, ASTTypeTags::UnsizedArray, Span sp, ASTType* innerType);

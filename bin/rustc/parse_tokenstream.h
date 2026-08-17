@@ -82,6 +82,10 @@ public:
     void putback(Token tok);
     eTokenType lookahead(unsigned int count);
 
+    /// Whether the token at a lookahead position is a given identifier -- for a
+    /// contextual keyword, whose type alone does not say which word it is.
+    bool lookaheadIdentIs(unsigned int count, const char* name);
+
     Ident::Hygiene getHygiene() const;
 
     virtual void pushHygine();

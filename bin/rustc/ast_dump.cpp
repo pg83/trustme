@@ -856,6 +856,12 @@ public:
             case ASTExprNodeUniOp::RawBorrow:
                 os << "&raw const ";
                 break;
+            case ASTExprNodeUniOp::PinBorrow:
+                os << "&pin const ";
+                break;
+            case ASTExprNodeUniOp::PinBorrowMut:
+                os << "&pin mut ";
+                break;
             case ASTExprNodeUniOp::RawBorrowMut:
                 os << "&raw mut ";
                 break;

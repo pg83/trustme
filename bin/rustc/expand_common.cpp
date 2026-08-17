@@ -632,6 +632,13 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
         }
         TU_ARMA(Borrow, e) {
             ExpandType(es, mod, e.inner);
+            if (e.isPin) {
+                // `&pin mut T` is `Pin<&mut T>`; the core crate is known now.
+                auto reference = mkType(*es.crate.pool, ASTTypeTags::Reference(), ty->span(), e.lifetime, e.isMut, e.inner);
+                auto path = ASTPath(ASTAbsolutePath(es.crate.extCratenameCore, {RcString::newInterned("pin"), RcString::newInterned("Pin")}));
+                path.nodes().back().args().entries.push_back(reference);
+                ty = mkType(*es.crate.pool, ASTTypeTags::Path(), ty->span(), mv$(path));
+            }
         }
         TU_ARMA(Pointer, e) {
             ExpandType(es, mod, e.inner);
@@ -1818,6 +1825,23 @@ struct CExpandExpr: public ASTNodeVisitor {
 
     void visit(ASTExprNodeUniOp& node) override {
         this->visitNodelete(node, node.value);
+        // `&pin mut place` pins the place: `Pin::new_unchecked` of a borrow of it.
+        // The borrow is what keeps the place from moving, so the call is sound
+        // wherever the borrow is.
+        if (node.type == ASTExprNodeUniOp::PinBorrow || node.type == ASTExprNodeUniOp::PinBorrowMut) {
+            const bool isMut = node.type == ASTExprNodeUniOp::PinBorrowMut;
+            auto pathNewUnchecked = getPath(crate.extCratenameCore, "pin", "Pin", "new_unchecked");
+            auto borrow = ASTExprNodeP(new ASTExprNodeUniOp(isMut ? ASTExprNodeUniOp::REFMUT : ASTExprNodeUniOp::REF, mv$(node.value)));
+            borrow->setSpan(node.span());
+            auto call = ASTExprNodeP(new ASTExprNodeCallPath(mv$(pathNewUnchecked), ::makeVec1(mv$(borrow))));
+            call->setSpan(node.span());
+            auto block = new ASTExprNodeBlock();
+            block->blockType = ASTExprNodeBlock::Type::Unsafe;
+            block->nodes.push_back({false, mv$(call)});
+            replacement.reset(block);
+            replacement->setSpan(node.span());
+            return;
+        }
         // - Desugar question mark operator before resolve so it can create names
         if (node.type == ASTExprNodeUniOp::QMARK) {
             auto coreCrate = crate.extCratenameCore;
