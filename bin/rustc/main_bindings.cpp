@@ -184,6 +184,10 @@ struct ProgramParams {
     OptimizationLevel optLevel = OptimizationLevel::None;
     bool debugAssertions = false;
     bool debugAssertionsExplicit = false;
+    // `-Zub-checks`: whether the library's UB checks are compiled in. Follows
+    // debug assertions unless it is given.
+    bool ubChecks = false;
+    bool ubChecksExplicit = false;
     bool overflowChecks = false;
     bool overflowChecksExplicit = false;
     // rustc defaults MIR optimisation to 1 at -O0 and to 2 otherwise.
@@ -242,6 +246,10 @@ struct ProgramParams {
 
     bool debugAssertionsEnabled() const {
         return debugAssertionsExplicit ? debugAssertions : optLevel == OptimizationLevel::None;
+    }
+
+    bool ubChecksEnabled() const {
+        return ubChecksExplicit ? ubChecks : debugAssertionsEnabled();
     }
 
     bool overflowChecksEnabled() const {
@@ -339,6 +347,7 @@ int main(int argc, char* argv[]) {
     ProgramParams params(*wb.settings, argc, argv);
     wb.settings->solver = params.traitSolver;
     wb.settings->overflowChecks = params.overflowChecksEnabled();
+    wb.settings->ubChecks = params.ubChecksEnabled();
     const auto mirOptLevel = params.effectiveMirOptLevel();
     const auto enableMirInlining = params.enableMirInlining();
     if (params.codegen.panicType.empty()) {
@@ -362,6 +371,9 @@ int main(int argc, char* argv[]) {
         }
         if (params.overflowChecksEnabled()) {
             CfgSetFlag(*wb.settings, "overflow_checks");
+        }
+        if (params.ubChecksEnabled()) {
+            CfgSetFlag(*wb.settings, "ub_checks");
         }
         CfgSetValueCb(*wb.settings, "feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
@@ -1282,6 +1294,16 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         }
                         this->mirOptLevel = value;
                         this->mirOptLevelExplicit = true;
+                    } else if (optname == "ub-checks" || optname == "ub_checks") {
+                        if (eqPos == ::std::string::npos || optval == "y" || optval == "yes" || optval == "on" || optval == "true") {
+                            this->ubChecks = true;
+                        } else if (optval == "n" || optval == "no" || optval == "off" || optval == "false") {
+                            this->ubChecks = false;
+                        } else {
+                            ::std::cerr << "invalid value for -Z ub-checks: '" << optval << "'" << ::std::endl;
+                            exit(1);
+                        }
+                        this->ubChecksExplicit = true;
                     } else if (optname == "next-solver") {
                         if (eqPos == ::std::string::npos || optval == "globally") {
                             this->traitSolver.coherence = true;

@@ -37,6 +37,9 @@ struct CfgState;
 struct Settings {
     TraitSolverConfig solver;
     bool overflowChecks = false;
+    /// Whether the library's UB checks are compiled in (`-Zub-checks`, which
+    /// follows debug assertions unless it is given).
+    bool ubChecks = false;
 
     // Crate-loading configuration: `-L` search directories, `--extern
     // name=path` overrides, and crates injected without an explicit `extern
