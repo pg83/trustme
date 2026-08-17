@@ -40,12 +40,12 @@ sweeps found two regressions from this session's own work (a rejected
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 343 |
-| fixed, or no longer reproducing, since the gate | 288 |
+| still failing on the current tree | 337 |
+| fixed, or no longer reproducing, since the gate | 294 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 142 |
+| accepted Rust rejected by the compiler or driver | 136 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 84 |
 | wrong runtime behaviour, panic, abort, or output | 41 |
 | missing rejection or diagnostic | 53 |
@@ -54,13 +54,13 @@ sweeps found two regressions from this session's own work (a rejected
 
 ## P0: accepted Rust rejected by the front end
 
-All 142 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 136 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | parser | 32 | 29 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
-| type checking, HIR lowering, and resolution | 95 | trait/impl selection 30 (`hir_typeck_expr_cs.cpp:6746`, `:6748`); unresolved type/value names 6 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 16 (`hir_typeck_expr_cs.cpp:2471`, `:2482`, `:2487`) |
+| type checking, HIR lowering, and resolution | 89 | trait/impl selection 30 (`hir_typeck_expr_cs.cpp:6746`, `:6748`); unresolved type/value names 6 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 16 (`hir_typeck_expr_cs.cpp:2471`, `:2482`, `:2487`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; enum repr 1 |

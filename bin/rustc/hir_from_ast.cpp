@@ -1684,23 +1684,50 @@ HIRUnion AST2HIR::LowerHIRUnion(HIRItemPath path, const ASTUnion& f, const ASTAt
 }
 
 namespace {
+    /// The return-position `impl Trait` types of a signature, outermost first --
+    /// the order the binding pass numbers them in (`hir_conv_main_bindings.cpp`),
+    /// so that the associated type named after a position is that position's.
     class RpititTypeCollector: public HIRVisitor {
-        ::std::function<void(unsigned, HIRTypeRef)> callback;
-        unsigned index = 0;
+        ::std::function<void(HIRTypeRef)> callback;
 
     public:
-        RpititTypeCollector(HIRTypeInterner& types, ::std::function<void(unsigned, HIRTypeRef)> callback)
+        RpititTypeCollector(HIRTypeInterner& types, ::std::function<void(HIRTypeRef)> callback)
             : HIRVisitor(nullptr, types)
             , callback(std::move(callback))
         {
         }
 
         void visitType(HIRTypeRef& ty) override {
-            HIRVisitor::visitType(ty);
             const auto* erased = ty->opt_ErasedType();
             if (erased && erased->inner.is_Fcn()) {
-                callback(index++, ty);
+                callback(ty);
             }
+            HIRVisitor::visitType(ty);
+        }
+    };
+
+    /// Replace each nested `impl Trait` with the associated type that names it.
+    /// A nested one belongs to no function of its own, so it cannot stay an
+    /// erased type once it is copied out into a bound.
+    class RpititNestedRewrite: public HIRVisitor {
+        const ::std::map<HIRTypeRef, size_t>& indices;
+        ::std::function<HIRTypeRef(size_t)> projection;
+
+    public:
+        RpititNestedRewrite(HIRTypeInterner& types, const ::std::map<HIRTypeRef, size_t>& indices, ::std::function<HIRTypeRef(size_t)> projection)
+            : HIRVisitor(nullptr, types)
+            , indices(indices)
+            , projection(std::move(projection))
+        {
+        }
+
+        void visitType(HIRTypeRef& ty) override {
+            const auto index = indices.find(ty);
+            if (index != indices.end()) {
+                ty = projection(index->second);
+                return;
+            }
+            HIRVisitor::visitType(ty);
         }
     };
 }
@@ -1808,16 +1835,31 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
             }
             TU_ARMA(Function, i) {
                 auto fcn = LowerHIRFunction(itemPath, traitPath.parent(), item.attrs, i, crate->types.self());
-                RpititTypeCollector(crate->types, [&](unsigned index, HIRTypeRef type) {
-                    const auto& erased = type->as_ErasedType();
-                    auto name = RcString::newInterned(FMT(ATY_PREFIX_ERASED << item.name << "_" << index));
+                ::std::vector<HIRTypeRef> erasedTypes;
+                RpititTypeCollector(crate->types, [&](HIRTypeRef type) {
+                    erasedTypes.push_back(type);
+                }).visitType(fcn.returnType);
+                ::std::map<HIRTypeRef, size_t> erasedIndices;
+                for (size_t index = 0; index < erasedTypes.size(); index++) {
+                    erasedIndices.insert(::std::make_pair(erasedTypes[index], index));
+                }
+                auto erasedName = [&](size_t index) {
+                    return RcString::newInterned(FMT(ATY_PREFIX_ERASED << item.name << "_" << index));
+                };
+                RpititNestedRewrite rewrite{crate->types, erasedIndices, [&](size_t index) {
+                                                return crate->types.path(
+                                                    HIRPath(crate->types.self(), HIRGenericPath(traitPath, rv.params.makeNopParams(crate->types, 0)), erasedName(index), fcn.params.makeNopParams(crate->types, 1)), {});
+                                            }};
+                for (size_t index = 0; index < erasedTypes.size(); index++) {
+                    const auto& erased = erasedTypes[index]->as_ErasedType();
                     ::std::vector<HIRTraitPath> bounds;
                     for (const auto& bound : erased.traits) {
                         bounds.push_back(bound.clone());
+                        rewrite.visitTraitPath(bounds.back());
                     }
-                    auto inserted = rv.types.insert(std::make_pair(name, HIRAssociatedType{fcn.params.clone(), erased.isSized, std::move(bounds), crate->types.infer()}));
-                    ASSERT_BUG(item.span, inserted.second, "Synthetic RPITIT associated type collides with " << name);
-                }).visitType(fcn.returnType);
+                    auto inserted = rv.types.insert(std::make_pair(erasedName(index), HIRAssociatedType{fcn.params.clone(), erased.isSized, std::move(bounds), crate->types.infer()}));
+                    ASSERT_BUG(item.span, inserted.second, "Synthetic RPITIT associated type collides with " << erasedName(index));
+                }
                 if (rv.isConst) {
                     fcn.isConst = true;
                 }
