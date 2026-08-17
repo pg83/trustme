@@ -1325,6 +1325,9 @@ namespace {
             CMP(sign);
             CMP(alternate);
             CMP(zeroPad);
+            // `{:x?}` differs from `{:?}` only here, and the simple formatting
+            // path ignores everything this comparison does not name.
+            CMP(debugTy);
             CMP(widthIsArg);
             CMP(width);
             CMP(precSet);
@@ -1724,12 +1727,17 @@ namespace {
                         }
                         assert(*s == '}');
                     } else {
+                        // The single-character forms above leave `s` on the
+                        // closing brace; these two must do the same, or the rest
+                        // of the specifier is copied into the output as text.
                         if (strncmp(s, "x?}", 3) == 0) {
                             args.debugTy = FmtArgs::Debug::LowerHex;
                             traitName = "Debug";
+                            s += 2;
                         } else if (strncmp(s, "X?}", 3) == 0) {
                             args.debugTy = FmtArgs::Debug::UpperHex;
                             traitName = "Debug";
+                            s += 2;
                         } else {
                             TODO(sp, "Parse formatting fragment at \"" << fmtFragStr << "\" (long type) - s=...\"" << s << "\"");
                         }
