@@ -3964,6 +3964,15 @@ namespace {
                             of << ".hi = ";
                             emitLvalue(ve.val);
                             of << ".TAG < 0 ? -1 : 0";
+                        } else if (ty == HIRCoreType::F32 || ty == HIRCoreType::F64) {
+                            // A float does not fit the sign-extension the
+                            // integer path below does: its value can need both
+                            // halves, and out of range it saturates.
+                            emitLvalue(dst);
+                            of << " = ";
+                            of << (ve.type == HIRCoreType::I128 ? "cast_float_to_i128(" : "cast_float_to_u128(");
+                            emitLvalue(ve.val);
+                            of << ")";
                         } else {
                             // Cast from small to i128/u128
                             emitLvalue(dst);

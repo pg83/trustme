@@ -127,6 +127,8 @@ typedef struct { uint64_t lo, hi; } uint128_t;
 typedef struct { uint64_t lo, hi; } int128_t;
 
 static inline uint128_t intrinsic_ctlz_u128(uint128_t v);
+static inline uint128_t int128_to_uint128(int128_t a);
+static inline int128_t uint128_to_int128(uint128_t a);
 static inline uint128_t shl128(uint128_t a, uint32_t b);
 static inline uint128_t shr128(uint128_t a, uint32_t b);
 
@@ -254,6 +256,25 @@ static inline int128_t make128s_raw(uint64_t hi, uint64_t lo) { int128_t result 
 static inline int128_t make128s(int64_t value) { return make128s_raw(value < 0 ? UINT64_MAX : 0, (uint64_t)value); }
 static inline int128_t neg128s(int128_t v) { return make128s_raw(~v.hi + (v.lo == 0), ~v.lo + 1); }
 
+/* A float cast to an integer saturates in Rust, and NaN becomes zero. */
+static inline uint128_t cast_float_to_u128(double v) {
+    if (!(v > 0.0)) return make128(0);
+    if (v >= 340282366920938463463374607431768211456.0) return make128_raw(UINT64_MAX, UINT64_MAX);
+    uint64_t hi = (uint64_t)(v / 18446744073709551616.0);
+    uint64_t lo = (uint64_t)(v - (double)hi * 18446744073709551616.0);
+    return make128_raw(hi, lo);
+}
+
+static inline int128_t cast_float_to_i128(double v) {
+    if (!(v == v)) return make128s(0);
+    if (v >= 170141183460469231731687303715884105728.0) return make128s_raw(INT64_MAX, UINT64_MAX);
+    if (v <= -170141183460469231731687303715884105728.0) return make128s_raw((uint64_t)INT64_MIN, 0);
+    const int negative = v < 0.0;
+    uint128_t magnitude = cast_float_to_u128(negative ? -v : v);
+    int128_t result = uint128_to_int128(magnitude);
+    return negative ? neg128s(result) : result;
+}
+
 static inline float cast128_float(uint128_t v) {
     int leading = intrinsic_ctlz_u128(v).lo;
     uint128_t shifted = shl128(v, leading);
@@ -280,14 +301,17 @@ static inline double cast128_double(uint128_t v) {
     return result;
 }
 
+/* The magnitude of a negative value is its negation, not its raw bits. */
 static inline float cast128s_float(int128_t v) {
     bool negative = v.hi >> 63;
-    return (negative ? -1.0f : 1.0f) * cast128_float(make128_raw(v.hi, v.lo));
+    int128_t magnitude = negative ? neg128s(v) : v;
+    return (negative ? -1.0f : 1.0f) * cast128_float(make128_raw(magnitude.hi, magnitude.lo));
 }
 
 static inline double cast128s_double(int128_t v) {
     bool negative = v.hi >> 63;
-    return (negative ? -1.0 : 1.0) * cast128_double(make128_raw(v.hi, v.lo));
+    int128_t magnitude = negative ? neg128s(v) : v;
+    return (negative ? -1.0 : 1.0) * cast128_double(make128_raw(magnitude.hi, magnitude.lo));
 }
 
 static inline int cmp128s(int128_t a, int128_t b) {
@@ -369,6 +393,20 @@ static inline uint128_t intrinsic_ctlz_u128(uint128_t v) {
 
 static inline uint128_t intrinsic_cttz_u128(uint128_t v) {
     return v == 0 ? 128 : (v & UINT64_MAX) == 0 ? __builtin_ctz64(v >> 64) + 64 : __builtin_ctz64(v);
+}
+
+/* A float cast to an integer saturates in Rust, and NaN becomes zero. */
+static inline uint128_t cast_float_to_u128(double v) {
+    if (!(v > 0.0)) return 0;
+    if (v >= 340282366920938463463374607431768211456.0) return ~(uint128_t)0;
+    return (uint128_t)v;
+}
+
+static inline int128_t cast_float_to_i128(double v) {
+    if (!(v == v)) return 0;
+    if (v >= 170141183460469231731687303715884105728.0) return (int128_t)(~(uint128_t)0 >> 1);
+    if (v <= -170141183460469231731687303715884105728.0) return (int128_t)((uint128_t)1 << 127);
+    return (int128_t)v;
 }
 #endif
 

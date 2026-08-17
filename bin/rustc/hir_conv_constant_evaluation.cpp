@@ -860,6 +860,45 @@ public:
 };
 
 /// Reference to a value
+namespace {
+    /// A float cast to an integer saturates in Rust, and NaN becomes zero.
+    U128 floatToUintSaturating(double v, unsigned bits) {
+        const U128 maxValue = bits >= 128 ? U128::max() : (U128(1) << bits) - U128(1);
+        if (!(v > 0.0)) {
+            return U128(0);
+        }
+        static const double twoPow64 = 18446744073709551616.0;
+        if (v >= twoPow64) {
+            const double highPart = v / twoPow64;
+            if (highPart >= twoPow64) {
+                return maxValue;
+            }
+            const uint64_t high = static_cast<uint64_t>(highPart);
+            const uint64_t low = static_cast<uint64_t>(v - static_cast<double>(high) * twoPow64);
+            const U128 value = (U128(high) << 64) | U128(low);
+            return value > maxValue ? maxValue : value;
+        }
+        const U128 value(static_cast<uint64_t>(v));
+        return value > maxValue ? maxValue : value;
+    }
+
+    S128 floatToSintSaturating(double v, unsigned bits) {
+        if (!(v == v)) {
+            return S128(0);
+        }
+        const unsigned magnitudeBits = bits - 1;
+        const U128 maxMagnitude = (U128(1) << magnitudeBits) - U128(1);
+        if (v < 0.0) {
+            // The negative side reaches one further than the positive one.
+            const U128 magnitude = floatToUintSaturating(-v, 128);
+            const U128 limit = maxMagnitude + U128(1);
+            return S128(0) - S128(magnitude >= limit ? limit : magnitude);
+        }
+        const U128 magnitude = floatToUintSaturating(v, 128);
+        return S128(magnitude > maxMagnitude ? maxMagnitude : magnitude);
+    }
+}
+
 class MIREvalValueRef {
     MIREvalRelocPtr storage;
     uint32_t ofs;
@@ -2903,13 +2942,17 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                     MIR_ASSERT(state, !srcTy->is_NamedFunction(), "");
                                     dst.writeUint(state, ti.bits, inval.readUint(state, srcTi.bits));
                                     break;
-                                case TypeInfo::Float:
+                                case TypeInfo::Float: {
+                                    // A 128-bit destination needs both halves,
+                                    // and does not fit the 64-bit writer. The
+                                    // cast saturates, and NaN becomes zero.
+                                    const double f = static_cast<double>(inval.readFloat(state, srcTi.bits));
                                     if (ti.ty == TypeInfo::Signed) {
-                                        dst.writeUint(state, ti.bits, static_cast<int64_t>(inval.readFloat(state, srcTi.bits)));
+                                        dst.writeSint(state, ti.bits, floatToSintSaturating(f, ti.bits));
                                     } else {
-                                        dst.writeUint(state, ti.bits, static_cast<uint64_t>(inval.readFloat(state, srcTi.bits)));
+                                        dst.writeUint(state, ti.bits, floatToUintSaturating(f, ti.bits));
                                     }
-                                    break;
+                                } break;
                                 case TypeInfo::Other: {
                                     MIR_ASSERT(state, TU_TEST1(*srcTy, Path, .binding.is_Enum()), "Constant cast Variant to integer with invalid type - " << srcTy);
                                     MIR_ASSERT(state, srcTy->as_Path().binding.as_Enum(), "Enum binding pointer not set! - " << srcTy);
