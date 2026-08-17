@@ -643,6 +643,11 @@ public:
         os << "c\"" << FmtEscaped(n.value) << "\"";
     }
 
+    virtual void visit(ASTExprNodeSuffixedLiteral& n) override {
+        exprRoot = false;
+        os << n.text;
+    }
+
     virtual void visit(ASTExprNodeStructLiteral& n) override {
         exprRoot = false;
         os << n.path << " {\n";

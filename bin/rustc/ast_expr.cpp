@@ -173,6 +173,10 @@ unsigned int ASTExprNodeCString::nodeKind() const {
     return ASTExprNodeCString::kind;
 }
 
+unsigned int ASTExprNodeSuffixedLiteral::nodeKind() const {
+    return ASTExprNodeSuffixedLiteral::kind;
+}
+
 unsigned int ASTExprNodeClosure::nodeKind() const {
     return ASTExprNodeClosure::kind;
 }
@@ -735,6 +739,7 @@ NODE(ASTExprNodeBool, { os << value; }, { return NEWNODE(ASTExprNodeBool, value)
 NODE(ASTExprNodeString, { os << "\"" << value << "\""; }, { return NEWNODE(ASTExprNodeString, value, hygiene); })
 NODE(ASTExprNodeByteString, { os << "b\"" << value << "\""; }, { return NEWNODE(ASTExprNodeByteString, value); })
 NODE(ASTExprNodeCString, { os << "c\"" << value << "\""; }, { return NEWNODE(ASTExprNodeCString, value); })
+NODE(ASTExprNodeSuffixedLiteral, { os << text; }, { return NEWNODE(ASTExprNodeSuffixedLiteral, text); })
 
 NODE(
     ASTExprNodeClosure,
@@ -1138,6 +1143,7 @@ NV(ASTExprNodeBool, { (void)node; })
 NV(ASTExprNodeString, { (void)node; })
 NV(ASTExprNodeByteString, { (void)node; })
 NV(ASTExprNodeCString, { (void)node; })
+NV(ASTExprNodeSuffixedLiteral, { (void)node; })
 
 NV(ASTExprNodeClosure, { visit(node.code); });
 NV(ASTExprNodeStructLiteral, {
@@ -1384,6 +1390,11 @@ ASTExprNodeByteString::ASTExprNodeByteString(::std::string value)
 
 ASTExprNodeCString::ASTExprNodeCString(::std::string value)
     : value(::std::move(value))
+{
+}
+
+ASTExprNodeSuffixedLiteral::ASTExprNodeSuffixedLiteral(::std::string text)
+    : text(::std::move(text))
 {
 }
 

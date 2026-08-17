@@ -1299,6 +1299,10 @@ struct CExpandExpr: public ASTNodeVisitor {
                     invalid(v);
                 }
 
+                void visit(ASTExprNodeSuffixedLiteral& v) override {
+                    invalid(v);
+                }
+
                 void visit(ASTExprNodeClosure& v) override {
                     invalid(v);
                 }
@@ -1557,6 +1561,9 @@ struct CExpandExpr: public ASTNodeVisitor {
     }
 
     void visit(ASTExprNodeCString& node) override {
+    }
+
+    void visit(ASTExprNodeSuffixedLiteral& node) override {
     }
 
     void visit(ASTExprNodeClosure& node) override {

@@ -3765,6 +3765,10 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_CString({v.value})));
     }
 
+    virtual void visit(ASTExprNodeSuffixedLiteral& v) override {
+        ERROR(v.span(), E0000, "Invalid suffix for literal `" << v.text << "`");
+    }
+
     virtual void visit(ASTExprNodeClosure& v) override {
         HIRExprNodeClosure::argsT args;
         for (const auto& arg : v.args) {

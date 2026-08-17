@@ -490,6 +490,21 @@ struct ASTExprNodeCString: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
+// A literal carrying a suffix that names no type: `0invalidSuffix`, `2.0f80`.
+// The token is well-formed, so it parses; only lowering rejects it, which is
+// what lets it sit inside `#[cfg(false)]` code.
+struct ASTExprNodeSuffixedLiteral: public ASTExprNode {
+    ::std::string text;
+
+    ASTExprNodeSuffixedLiteral(::std::string text);
+
+    static constexpr unsigned int kind = 40;
+    unsigned int nodeKind() const override;
+    void visit(ASTNodeVisitor& nv) override;
+    void print(::std::ostream& os) const override;
+    ASTExprNodeP clone() const override;
+};
+
 // Closure / Lambda
 struct ASTExprNodeClosure: public ASTExprNode {
     typedef ::std::vector<::std::pair<ASTPattern, ASTType*>> argsT;
@@ -798,6 +813,7 @@ public:
     NT(ASTExprNodeString);
     NT(ASTExprNodeByteString);
     NT(ASTExprNodeCString);
+    NT(ASTExprNodeSuffixedLiteral);
     NT(ASTExprNodeClosure);
     NT(ASTExprNodeStructLiteral);
     NT(ASTExprNodeStructLiteralPattern);
@@ -849,6 +865,7 @@ public:
     NT(ASTExprNodeString);
     NT(ASTExprNodeByteString);
     NT(ASTExprNodeCString);
+    NT(ASTExprNodeSuffixedLiteral);
     NT(ASTExprNodeClosure);
     NT(ASTExprNodeStructLiteral);
     NT(ASTExprNodeStructLiteralPattern);

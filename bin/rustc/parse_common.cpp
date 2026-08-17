@@ -1660,6 +1660,10 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
             return NEWNODE(ASTExprNodeByteString, tok.str());
         case TOK_CSTRING:
             return NEWNODE(ASTExprNodeCString, tok.str());
+        // A suffix that names no type keeps the literal a single token: valid
+        // to write, rejected only when the code is lowered.
+        case TOK_LITERAL_SUFFIXED:
+            return NEWNODE(ASTExprNodeSuffixedLiteral, tok.str());
         case TOK_RWORD_TRUE:
             return NEWNODE(ASTExprNodeBool, true);
         case TOK_RWORD_FALSE:
