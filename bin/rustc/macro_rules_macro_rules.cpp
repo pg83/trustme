@@ -1156,6 +1156,38 @@ namespace {
                     }
                     lex.consume();
                     break;
+                // The rest pattern `..`, and a range with no start (`..=10`).
+                case TOK_DOUBLE_DOT:
+                case TOK_DOUBLE_DOT_EQUAL:
+                    lex.consume();
+                    switch (lex.next()) {
+                        case TOK_IDENT:
+                        case TOK_RWORD_SUPER:
+                        case TOK_RWORD_SELF:
+                        case TOK_DOUBLE_COLON:
+                        case TOK_INTERPOLATED_PATH:
+                            consumePath(lex);
+                            break;
+                        case TOK_STRING:
+                        case TOK_INTEGER:
+                        case TOK_FLOAT:
+                            lex.consume();
+                            break;
+                        case TOK_DASH:
+                            lex.consume();
+                            if (lex.next() != TOK_INTEGER && lex.next() != TOK_FLOAT) {
+                                return false;
+                            }
+                            lex.consume();
+                            break;
+                        default:
+                            // A bare `..`
+                            break;
+                    }
+                    if (allowOr && lex.consumeIf(TOK_PIPE)) {
+                        continue;
+                    }
+                    return true;
                 default:
                     return false;
             }

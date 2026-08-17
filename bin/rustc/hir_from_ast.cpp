@@ -457,6 +457,10 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
                 trailing.push_back(LowerHIRPattern(sp));
             }
 
+            if (e.extraRest) {
+                ERROR(pat.span(), E0000, "A slice pattern takes at most one `..`");
+            }
+
             auto extraBind = e.extraBind.isValid() ? HIRPatternBinding(false, convertBindingType(e.extraBind.type), e.extraBind.name.name, e.extraBind.slot) : HIRPatternBinding();
 
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_SplitSlice({mv$(leading), mv$(extraBind), mv$(trailing)})};

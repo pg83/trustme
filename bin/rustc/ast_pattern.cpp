@@ -97,13 +97,21 @@
             os << "&" << (ent.mut ? "mut " : "") << *ent.sub;
         }
         TU_ARMA(Value, ent) {
-            os << ent.start;
+            // A range may have no start (`..=10`), and `..` is the rest pattern,
+            // which has neither.
+            if (!ent.start.is_Invalid()) {
+                os << ent.start;
+            }
             if (!ent.end.is_Invalid()) {
                 os << " ..= " << ent.end;
             }
         }
         TU_ARMA(ValueLeftInc, ent) {
-            os << ent.start << " .. " << ent.end;
+            if (ent.start.is_Invalid() && ent.end.is_Invalid()) {
+                os << "..";
+            } else {
+                os << ent.start << " .. " << ent.end;
+            }
         }
         TU_ARMA(Tuple, ent) {
             os << "(" << ent << ")";
@@ -246,7 +254,7 @@ ASTPattern ASTPattern::clone() const {
             rv.data_ = Data::make_Slice({H::cloneList(e.subPats)});
         }
         TU_ARMA(SplitSlice, e) {
-            rv.data_ = Data::make_SplitSlice({H::cloneList(e.leading), e.extraBind, H::cloneList(e.trailing)});
+            rv.data_ = Data::make_SplitSlice({H::cloneList(e.leading), e.extraBind, H::cloneList(e.trailing), e.extraRest});
         }
         TU_ARMA(Or, e) {
             rv.data_ = Data::make_Or(H::cloneList(e));

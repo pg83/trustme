@@ -109,6 +109,9 @@ public:
              ::std::vector<ASTPattern> leading;
              ASTPatternBinding extraBind;
              ::std::vector<ASTPattern> trailing;
+             /// A second `..`, which parses but means nothing. Only code that is
+             /// kept has to be rejected, so the diagnostic waits for lowering.
+             bool extraRest = false;
          }),
         (Or, std::vector<ASTPattern>)
     );

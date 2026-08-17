@@ -2543,6 +2543,7 @@ ASTPattern ParsePatternRealSlice(TokenStream& lex) {
     ::std::vector<ASTPattern> trailing;
     ASTPatternBinding innerBinding;
     bool isSplit = false;
+    bool extraRest = false;
 
     while (GET_TOK(tok, lex) != TOK_SQUARE_CLOSE) {
         bool hasBinding = true;
@@ -2572,11 +2573,13 @@ ASTPattern ParsePatternRealSlice(TokenStream& lex) {
         }
 
         if (hasBinding) {
+            // A second `..` is a syntactically valid pattern that no program may
+            // use; `ParsePattern` has to get past it either way.
             if (isSplit) {
-                ERROR(lex.endSpan(ps), E0000, "Multiple instances of .. in a slice pattern");
+                extraRest = true;
+            } else {
+                innerBinding = mv$(binding);
             }
-
-            innerBinding = mv$(binding);
             isSplit = true;
             if (lex.lookahead(0) == TOK_AT) {
                 GET_CHECK_TOK(tok, lex, TOK_AT);
@@ -2598,7 +2601,7 @@ ASTPattern ParsePatternRealSlice(TokenStream& lex) {
     CHECK_TOK(tok, TOK_SQUARE_CLOSE);
 
     if (isSplit) {
-        return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_SplitSlice({mv$(leading), mv$(innerBinding), mv$(trailing)}));
+        return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_SplitSlice({mv$(leading), mv$(innerBinding), mv$(trailing), extraRest}));
     } else {
         assert(!innerBinding.isValid());
         assert(trailing.empty());
