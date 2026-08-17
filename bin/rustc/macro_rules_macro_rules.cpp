@@ -460,6 +460,12 @@ class MacroExpander: public TokenStream {
     ::std::unique_ptr<TTStreamO> ttstream;
     ASTEdition sourceEdition;
     bool isMacroItem;
+    /// `#[rustc_macro_transparency = "transparent"]`: the expansion's own names
+    /// stay in the caller's scope rather than the macro's, which is what lets
+    /// `mir!` declare `RET` for the caller's tokens to assign to. The reverse
+    /// direction -- the macro body naming one of the caller's locals -- would
+    /// need the invocation's own scope here, and nothing asks for it yet.
+    bool transparent;
     Ident::Hygiene hygiene_;
     Ident::Hygiene lastHygiene;
 
@@ -468,7 +474,7 @@ public:
 
     MacroExpander(const MacroExpander& x) = delete;
 
-    MacroExpander(stl::ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
+    MacroExpander(stl::ObjPool& pool, const RcString& macroName, const Span& sp, ASTEdition edition, bool isMacroItem, bool transparent, unsigned int definitionId, const Ident::Hygiene& parentHygiene, const ::std::vector<MacroExpansionEnt>& contents, ParameterMappings mappings, RcString crateName, ASTEdition sourceEdition)
         : TokenStream(ParseState())
         , pool(pool)
         , logIndex(sNextLogIndex++)
@@ -480,6 +486,7 @@ public:
         , state(contents, mappings_)
         , sourceEdition(sourceEdition)
         , isMacroItem(isMacroItem)
+        , transparent(transparent)
         , hygiene_(Ident::Hygiene::newScopeChained(pool, parentHygiene, definitionId))
         , lastHygiene(hygiene_)
     {
@@ -628,7 +635,7 @@ InterpolatedFragment MacroHandlePatternCap(TokenStream& lex, MacroPatEnt::Type t
     // Run through the expansion counting the number of times each fragment is used
     MacroInvokeRulesCountSubstUses(boundTts, rule.contents);
 
-    TokenStream* retPtr = new MacroExpander(*crate.pool, name, sp, crate.edition, rules.isMacroItem, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
+    TokenStream* retPtr = new MacroExpander(*crate.pool, name, sp, crate.edition, rules.isMacroItem, rules.transparent, rules.definitionId, rules.hygiene, rule.contents, mv$(boundTts), rules.sourceCrate == "" ? crate.crateNameReal : rules.sourceCrate, rules.edition);
 
     return ::std::unique_ptr<TokenStream>(retPtr);
 }
@@ -2387,7 +2394,9 @@ Token MacroExpander::realGetToken() {
                     case TOK_IDENT:
                     case TOK_LIFETIME: {
                         auto ident = e.ident();
-                        ident.hygiene = ident.hygiene.withTailScope(pool, hygiene_, isMacroItem);
+                        if (!transparent) {
+                            ident.hygiene = ident.hygiene.withTailScope(pool, hygiene_, isMacroItem);
+                        }
                         lastHygiene = ident.hygiene;
                         auto rv = Token(e.type(), std::move(ident));
                         DEBUG("[" << logIndex << "] Updated hygine: " << rv);

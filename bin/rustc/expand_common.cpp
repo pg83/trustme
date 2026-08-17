@@ -2538,6 +2538,12 @@ void Expand_Mod_Early(const WireBoard& wb, ASTCrate& crate, ASTModule& mod, std:
                 }
             } else if (a.name() == "macro_export") {
                 isMacroExport = true;
+            } else if (a.name() == "rustc_macro_transparency") {
+                // Only `transparent` differs from what a macro does anyway: the
+                // expansion's own names behave as if written at the call site.
+                if (i->data.is_Macro() && a.parseEqualsString(wb, crate, mod) == "transparent") {
+                    i->data.as_Macro()->transparent = true;
+                }
             } else {
             }
         }

@@ -166,6 +166,11 @@ public:
 
     bool isMacroItem = false;
 
+    /// `#[rustc_macro_transparency = "transparent"]`: the expansion's own names
+    /// behave as if written at the call site, so `mir!` can declare a local that
+    /// the caller's tokens then assign to.
+    bool transparent = false;
+
     /// Crate that defined this macro
     /// - Populated on deserialise if not already set
     RcString sourceCrate;

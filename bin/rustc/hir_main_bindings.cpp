@@ -390,6 +390,7 @@ public:
         ::MacroRules rv(crateName, edition);
         // NOTE: This is set after loading.
         rv.isMacroItem = in.readBool();
+        rv.transparent = in.readBool();
         rv.rules = deserialiseVecC<::MacroRulesArm>([&]() {
             return deserialiseMacrorulesarm();
         });
@@ -3092,6 +3093,7 @@ public:
         out.writeTag(static_cast<unsigned int>(mac.edition));
         assert(mac.rules.size() > 0);
         out.writeBool(mac.isMacroItem);
+        out.writeBool(mac.transparent);
         serialiseVec(mac.rules);
         serialise(mac.hygiene);
     }
