@@ -174,8 +174,21 @@ from a `let` operand only drops when that operand is the *last* one. For
 `[1..12, 14, 15, 16, 19..22]` where rustc gives `[1..23]`: 13, 17, 18 and 23 are
 the bindings of non-final `let` operands, and their drops never run. The guard
 lowering pushes a variable scope per guard and terminates them all at the end
-(`mir_from_hir.cpp`, the `scopes` stack), so look at what the saved guard code
-(`codeSaveStart`) and `restoreAliases` do to the scheduled drops.
+(`mir_from_hir.cpp`, the `scopes` stack), and the drop *is* emitted -- with a
+drop flag that is cleared in the same basic block, immediately before the check:
+
+```text
+bb14: { df0 = 0; df1 = 0; if(!df0) goto bb18; ... drop var4 ... }
+```
+
+So the question is which scope resets those flags to their defaults there;
+`endSplitArm` and the state merge around `mir_from_hir.cpp:9130` are where the
+arms' variable states are reconciled. Minimal case, which gives `[1, 3]` where
+rustc gives `[1, 3, 2]`:
+
+```rust
+if let Some(_d) = log.loud(2) && log.loud(1).is_some() { log.mark(3); }
+```
 
 Grouping the panics by the rule they check finds these multi-test families:
 
