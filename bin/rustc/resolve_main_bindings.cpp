@@ -1853,6 +1853,18 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
             while (startLen > 0 && mpNodes[startLen - 1].c_str()[0] == '#') {
                 startLen--;
             }
+            // `self::super::..` leaves the module the same way a leading `super`
+            // does; only the spelling puts the `super` after the `self`.
+            while (!e.nodes.empty() && e.nodes.front().name() == "super") {
+                if (startLen == 0) {
+                    ERROR(sp, E0000, "Too many `super` components");
+                }
+                startLen--;
+                while (startLen > 0 && mpNodes[startLen - 1].c_str()[0] == '#') {
+                    startLen--;
+                }
+                e.nodes.erase(e.nodes.begin());
+            }
 
             // - Create a new path
             ASTPath np("", {});
@@ -4468,6 +4480,19 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
         }
         TU_ARMA(Self, e) {
             DEBUG("Self " << path);
+            // `self::super::..` leaves the module the same way a leading `super`
+            // does; only the spelling puts the `super` after the `self`.
+            {
+                unsigned int superCount = 0;
+                while (superCount < path.nodes().size() && path.nodes()[superCount].name() == "super") {
+                    superCount++;
+                }
+                if (superCount > 0) {
+                    ::std::vector<ASTPathNode> nodes(path.nodes().begin() + superCount, path.nodes().end());
+                    auto inner = ASTPath::newSuper(superCount, mv$(nodes));
+                    return ResolveUseAbsolutisePath(span, settings, crate, basePath, mv$(inner));
+                }
+            }
             // EVIL HACK: If the current module is an anon module, refer to the parent
             if (basePath.nodes().size() > 0 && basePath.nodes().back().name().c_str()[0] == '#') {
                 ASTPath np("", {});
