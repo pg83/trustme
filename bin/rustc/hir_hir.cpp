@@ -392,6 +392,15 @@ bool HIREnum::isValue() const {
     return this->data.is_Value();
 }
 
+U128 HIREnum::getDiscriminant(size_t idx) const {
+    if (data.is_Value()) {
+        return this->getValue(idx);
+    }
+    const auto& variants = data.as_Data();
+    assert(idx < variants.size());
+    return variants[idx].discriminantValue;
+}
+
 U128 HIREnum::getValue(size_t idx) const {
     if (data.is_Value()) {
         const auto& e = data.as_Value();

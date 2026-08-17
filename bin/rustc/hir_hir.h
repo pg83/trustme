@@ -385,6 +385,10 @@ public:
     bool isValue() const;
     /// Returns the value for the given variant (onlu for value enums)
     U128 getValue(size_t variant) const;
+    /// The discriminant of a variant, whether or not the enum is a value enum:
+    /// a variant written `Tuple()` or `Struct{}` holds nothing, so the enum can
+    /// still be cast to an integer.
+    U128 getDiscriminant(size_t variant) const;
 
     /// Get a type for the given repr value
     static HIRCoreType getReprType(Repr r);

@@ -500,6 +500,11 @@ public:
                         }
                         // TODO: x86(-64) only
                         options.attSyntax = 1;
+                    } else if (tok.ident().name == "raw") {
+                        if (options.raw) {
+                            ERROR(lex.pointSpan(), E0000, "Duplicate specification of option `" << tok.ident().name << "`");
+                        }
+                        options.raw = 1;
                     } else {
                         ERROR(lex.pointSpan(), E0000, "Unknown asm option - " << tok.ident().name);
                     }

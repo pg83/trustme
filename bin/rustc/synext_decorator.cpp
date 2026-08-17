@@ -253,6 +253,10 @@ class CHandlerRepr: public ExpandDecorator {
                     ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
                     e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
+                } else if (reprStr == "transparent") {
+                    // The enum lays out as its one variant, which is what a
+                    // single-variant enum already does here.
+                    ASSERT_BUG(lex.pointSpan(), e->variants().size() == 1, "#[repr(transparent)] needs exactly one variant");
                 } else {
                     ERROR(lex.pointSpan(), E0000, "Unknown enum repr '" << reprStr << "'");
                 }
@@ -737,6 +741,12 @@ public:
             crate.crateType = ASTCrate::Type::CDylib;
         } else if (name == "proc-macro") {
             crate.crateType = ASTCrate::Type::ProcMacro;
+        } else if (name == "bin") {
+            crate.crateType = ASTCrate::Type::Executable;
+        } else if (name == "staticlib") {
+            // A static library holds the same items as an rlib; what differs is
+            // how it is linked, which the driver decides.
+            crate.crateType = ASTCrate::Type::RustLib;
         } else {
             ERROR(sp, E0000, "Unknown crate type '" << name << "'");
         }
@@ -3256,6 +3266,13 @@ void handleLangItem(const Span& sp, ASTCrate& crate, const ASTAbsolutePath& path
             H::add("unsafe_unpin", Handler(ITEM_TRAIT, handleSave));                // ::core::marker::UnsafeUnpin
             H::add("unsized_const_param_ty", Handler(ITEM_TRAIT, handleSave));      // ::core::marker::UnsizedConstParamTy
             H::add("coerce_pointee_validated", Handler(ITEM_TRAIT, handleSave));    // ::core::marker::CoercePointeeValidated
+            // `-Zexperimental-default-bounds` names auto traits that every type
+            // is bounded by. Nothing here adds those bounds; the names are known
+            // so that a crate declaring them still compiles.
+            H::add("default_trait1", Handler(ITEM_TRAIT, handleSave));
+            H::add("default_trait2", Handler(ITEM_TRAIT, handleSave));
+            H::add("default_trait3", Handler(ITEM_TRAIT, handleSave));
+            H::add("default_trait4", Handler(ITEM_TRAIT, handleSave));
 
             H::add("async_fn", Handler(ITEM_TRAIT, handleSave));
             H::add("async_fn_mut", Handler(ITEM_TRAIT, handleSave));

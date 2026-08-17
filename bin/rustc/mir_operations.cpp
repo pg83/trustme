@@ -4944,7 +4944,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             HIRTypeRef tmp;
                             const auto& srcTy = state.getLvalueType(tmp, se.val);
                             const HIREnum& enm = *srcTy->as_Path().binding.as_Enum();
-                            MIR_ASSERT(state, enm.isValue(), "Casting non-value enum to value");
 
                             // The value has to be evaluated first: reading a
                             // variant before then gives zero. Ask for that
@@ -4954,7 +4953,7 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             if (!enm.discriminantsEvaluated) {
                                 ConvertHIRConstantEvaluateEnum(state.resolve.board(), state.resolve.hirCrate(), srcTy->as_Path().path.data.as_Generic().path, enm);
                             }
-                            auto v = enm.getValue(variantIdx);
+                            auto v = enm.getDiscriminant(variantIdx);
                             // A cast reads the discriminant at the enum's declared
                             // representation, which is `isize` unless one is
                             // given. How narrow the tag ends up in memory is a

@@ -3156,6 +3156,10 @@ public:
                             ty = MacroPatEnt::PAT_PATH;
                         } else if (type == "expr") {
                             ty = MacroPatEnt::PAT_EXPR;
+                        } else if (type == "expr_2021") {
+                            // The 2021 meaning of `expr`, spelled out for when a
+                            // later edition widens what `expr` matches.
+                            ty = MacroPatEnt::PAT_EXPR;
                         } else if (type == "stmt") {
                             ty = MacroPatEnt::PAT_STMT;
                         } else if (type == "ty") {

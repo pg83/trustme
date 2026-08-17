@@ -112,6 +112,8 @@ struct AsmOptions {
     unsigned noreturn : 1;
     unsigned nostack : 1;
     unsigned attSyntax : 1;
+    /// The template is the assembly as written: no `{}` substitution.
+    unsigned raw : 1;
     // Indicates `naked_asm!`
     unsigned naked : 1;
 

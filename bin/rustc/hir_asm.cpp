@@ -14,6 +14,7 @@ AsmOptions::AsmOptions()
     , noreturn(0)
     , nostack(0)
     , attSyntax(0)
+    , raw(0)
     , naked(0)
 {
 }
@@ -29,6 +30,7 @@ bool AsmOptions::any() const {
     _(noreturn);
     _(nostack);
     _(attSyntax);
+    _(raw);
     _(naked);
 #undef _
     return false;
@@ -46,6 +48,7 @@ void AsmOptions::fmt(std::ostream& os) const {
     _(noreturn);
     _(nostack);
     _(attSyntax);
+    _(raw);
     _(naked);
 #undef _
     os << ")";
@@ -62,6 +65,7 @@ bool AsmOptions::operator==(const AsmOptions& x) const {
     _(noreturn);
     _(nostack);
     _(attSyntax);
+    _(raw);
     _(naked);
 #undef _
     return true;

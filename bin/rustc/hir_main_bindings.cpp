@@ -1395,6 +1395,7 @@ AsmOptions HirDeserialiser::deserialiseAsmOptions() {
     BIT(4, o.noreturn);
     BIT(5, o.nostack);
     BIT(6, o.attSyntax);
+    BIT(7, o.raw);
 #undef BIT
     return o;
 }
@@ -3355,6 +3356,7 @@ public:
         BIT(4, o.noreturn);
         BIT(5, o.nostack);
         BIT(6, o.attSyntax);
+        BIT(7, o.raw);
 #undef BIT
         out.writeU16(bitflag1);
     }
