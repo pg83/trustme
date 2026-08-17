@@ -25,6 +25,7 @@
 #include "hir_conv_main_bindings.h"
 #include "hir_expand_main_bindings.h"
 #include "lint_must_use.h"
+#include "lint_unsafe_code.h"
 #include "hir_typeck_main_bindings.h"
 
 #include <std/mem/obj_pool.h>
@@ -730,6 +731,7 @@ int main(int argc, char* argv[]) {
         // Lints that need resolved types, but must see the code as written.
         CompilePhaseV("Lint", [&]() {
             LintUnusedMustUse(wb, *hirCrate);
+            LintUnsafeCode(wb, *hirCrate);
         });
 
         // === HIR Expansion ===

@@ -3,6 +3,7 @@
 #include "hir_expr.h"
 #include "hir_hir.h"
 #include "hir_visitor.h"
+#include "lint_level.h"
 #include "span.h"
 #include "wire_board.h"
 
@@ -122,14 +123,14 @@ namespace {
 
     class MustUseOuterVisitor: public HIRVisitor {
         const HIRCrate& crate_;
-        CfgLintLevel crateLevel_;
+        const Settings& settings_;
         CfgLintLevel level_;
 
     public:
         MustUseOuterVisitor(const WireBoard& wb, CfgLintLevel level)
             : HIRVisitor(nullptr, wb.crate->types)
             , crate_(*wb.crate)
-            , crateLevel_(level)
+            , settings_(*wb.settings)
             , level_(level)
         {
         }
@@ -139,17 +140,7 @@ namespace {
         /// in, which is why the two are recorded apart.
         void visitFunction(HIRItemPath p, HIRFunction& item) override {
             const auto saved = level_;
-            const auto& byName = item.markings.lintLevels;
-            const auto it = byName.find(RcString::newInterned(LINT_NAME));
-            if (it != byName.end()) {
-                level_ = it->second;
-            } else {
-                for (const auto& group : item.markings.lintGroupLevels) {
-                    if (Settings::lintGroupContains(group.first.c_str(), LINT_NAME)) {
-                        level_ = group.second;
-                    }
-                }
-            }
+            level_ = LintLevelForItem(settings_, item.markings.lintLevels, item.markings.lintGroupLevels, LINT_NAME, CfgLintLevel::Warn);
             HIRVisitor::visitFunction(p, item);
             level_ = saved;
         }
