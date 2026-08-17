@@ -1213,7 +1213,7 @@ HIREnum HirDeserialiser::deserialiseEnum() {
     auto tagRepr = static_cast<HIREnum::Repr>(in.readTag());
     auto forcedAlignment = static_cast<unsigned>(in.readCount());
     const bool mustUse = in.readBool();
-    auto rv = HIREnum{mv$(params), isCRepr, tagRepr, H::deserialiseEnumclass(*this), true, deserialiseMarkings()};
+    auto rv = HIREnum{mv$(params), isCRepr, tagRepr, H::deserialiseEnumclass(*this), true, false, deserialiseMarkings()};
     rv.forcedAlignment = forcedAlignment;
     rv.mustUse = mustUse;
     return rv;

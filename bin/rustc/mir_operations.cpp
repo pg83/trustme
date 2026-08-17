@@ -7,6 +7,7 @@
 #include "hir_visitor.h"
 #include "mir_helpers.h"
 #include "trans_target.h"
+#include "hir_conv_main_bindings.h"
 #include "trans_trans_list.h" // Note: This is included for inlining after enumeration and monomorph
 #include "hir_typeck_static.h"
 #include "mir_main_bindings.h"
@@ -4938,28 +4939,33 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             const HIREnum& enm = *srcTy->as_Path().binding.as_Enum();
                             MIR_ASSERT(state, enm.isValue(), "Casting non-value enum to value");
 
-                            // Ask for the layout first: that is what forces the
-                            // discriminants to be evaluated, and reading a
-                            // variant's value before then gives zero.
-                            const auto* repr = TargetGetTypeRepr(state.sp, state.resolve, srcTy);
+                            // The value has to be evaluated first: reading a
+                            // variant before then gives zero. Ask for that
+                            // directly rather than for the layout, which a
+                            // variant naming another variant of the same enum
+                            // would ask for again.
+                            if (!enm.discriminantsEvaluated) {
+                                ConvertHIRConstantEvaluateEnum(state.resolve.board(), state.resolve.hirCrate(), srcTy->as_Path().path.data.as_Generic().path, enm);
+                            }
                             auto v = enm.getValue(variantIdx);
-                            MIR_ASSERT(state, repr && repr->variants.is_Values(), "Value enum without values repr - " << srcTy);
-                            const auto& values = repr->variants.as_Values();
-                            const auto& tagTy = TargetGetInnerType(state.sp, state.resolve, *repr, values.field.index, values.field.subFields);
-                            MIR_ASSERT(state, tagTy->is_Primitive(), "Value enum with non-primitive tag - " << srcTy);
+                            // A cast reads the discriminant at the enum's declared
+                            // representation, which is `isize` unless one is
+                            // given. How narrow the tag ends up in memory is a
+                            // layout choice that says nothing about the value.
+                            const auto tagPrimitive = HIREnum::getReprType(enm.tagRepr);
 
                             auto value = S128(U128(v));
-                            switch (tagTy->as_Primitive()) {
+                            switch (tagPrimitive) {
                                 case HIRCoreType::I8:
                                 case HIRCoreType::I16:
                                 case HIRCoreType::I32:
                                 case HIRCoreType::I64:
                                 case HIRCoreType::I128:
                                 case HIRCoreType::Isize:
-                                    value = H::truncateS(tagTy->as_Primitive(), value);
+                                    value = H::truncateS(tagPrimitive, value);
                                     break;
                                 default:
-                                    value = S128(H::truncateU(tagTy->as_Primitive(), value.getInner()));
+                                    value = S128(H::truncateU(tagPrimitive, value.getInner()));
                                     break;
                             }
 

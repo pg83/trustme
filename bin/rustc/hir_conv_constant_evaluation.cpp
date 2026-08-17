@@ -4997,9 +4997,32 @@ namespace {
         }
 
         static void visitEnumInner(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item) {
-            if (item.discriminantsEvaluated) {
+            if (item.discriminantsEvaluated || item.discriminantsEvaluating) {
                 return;
             }
+            // A variant's expression may name another variant of the same enum,
+            // including one declared later. Evaluate the list repeatedly until
+            // the values stop moving: each pass resolves the references whose
+            // targets the previous pass settled. A cycle never settles, and the
+            // last pass's values are then reported as they stand.
+            item.discriminantsEvaluating = true;
+            struct ClearEvaluating {
+                HIREnum& item;
+                ~ClearEvaluating() {
+                    item.discriminantsEvaluating = false;
+                }
+            } clearEvaluating{item};
+            for (unsigned pass = 0; pass < 16; pass++) {
+                bool changed = false;
+                visitEnumPass(wb, crate, p, mod, modPath, name, item, changed);
+                if (!changed) {
+                    break;
+                }
+            }
+            item.discriminantsEvaluated = true;
+        }
+
+        static void visitEnumPass(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item, bool& changed) {
             auto ty = HIREnum::getReprType(item.tagRepr);
             bool is_signed = false;
             switch (ty) {
@@ -5050,6 +5073,7 @@ namespace {
                                 BUG(var.expr->span(), "`Defer` thrown during evaluation of enum discriminant");
                             }
                         }
+                        changed = changed || var.val != i;
                         var.val = i;
                         if (!var.expr) {
                             DEBUG("enum variant: " << p << "::" << var.name << " = " << var.val << " (auto)");
@@ -5077,13 +5101,13 @@ namespace {
                                 BUG(var.discriminantExpr->span(), "`Defer` thrown during evaluation of enum discriminant");
                             }
                         }
+                        changed = changed || var.discriminantValue != i;
                         var.discriminantValue = i;
                         i += 1;
                     }
                     checkEnumDiscriminants(Span(), ty, e, [](const auto& var) { return var.discriminantValue; });
                 }
             }
-            item.discriminantsEvaluated = true;
         }
     };
 
