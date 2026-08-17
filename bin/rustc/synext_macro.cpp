@@ -1890,6 +1890,23 @@ namespace {
         if (addNewline) {
             tail += "\n";
         }
+        // `-Zfmt-debug=none` prints nothing for a `Debug` placeholder, so the
+        // fragment goes and the literal text before it joins the next one.
+        if (lex.parseState().wb->settings->fmtDebug == Settings::FmtDebug::None) {
+            ::std::vector<FmtFrag> kept;
+            ::std::string pending;
+            for (auto& frag : fragments) {
+                pending += frag.leadingText;
+                if (::std::strcmp(frag.traitName, "Debug") == 0) {
+                    continue;
+                }
+                frag.leadingText = mv$(pending);
+                pending.clear();
+                kept.push_back(mv$(frag));
+            }
+            tail = pending + tail;
+            fragments = mv$(kept);
+        }
 
         bool isSimple = true;
         for (unsigned int i = 0; i < fragments.size(); i++) {
