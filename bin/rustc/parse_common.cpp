@@ -43,6 +43,7 @@ ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime);
 std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStructLiteral = false);
 RcString getOptionalIdent(TokenStream& lex);
 ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRankedBounds hrbs = {});
+bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut = nullptr);
 static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex);
 ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee = ASTExprNodeP());
 ASTExprNodeP ParseExpr1(TokenStream& lex);
@@ -1366,6 +1367,9 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRanked
     } else if (tok == TOK_PIPE) {
         // `|...|` - Arguments present
         while (!lex.getTokenIf(TOK_PIPE, tok)) {
+            // A closure parameter may carry attributes, and a failing `#[cfg]`
+            // removes it.
+            const bool keepArg = ParseParamAttrsKeep(lex);
             // Irrefutable pattern
             ASTPattern pat = ParsePattern(lex, AllowOrPattern::No);
 
@@ -1374,7 +1378,9 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRanked
                 type = ParseType(lex);
             }
 
-            args.push_back(::std::make_pair(::std::move(pat), ::std::move(type)));
+            if (keepArg) {
+                args.push_back(::std::make_pair(::std::move(pat), ::std::move(type)));
+            }
 
             if (!lex.getTokenIf(TOK_COMMA)) {
                 GET_TOK(tok, lex);
@@ -3216,11 +3222,34 @@ void ParseWhereClause(TokenStream& lex, ASTGenericParams& params) {
 }
 
 // Parse a single function argument
-ASTFunction::Arg ParseFunctionArg(TokenStream& lex, bool expectNamed) {
+/// Read a parameter's attributes, and report whether `#[cfg]` keeps the
+/// parameter. Attributes say nothing about a parameter otherwise.
+bool ParseParamAttrsKeep(TokenStream& lex, ASTAttributeList* attrsOut) {
+    auto attrs = ParseItemAttrs(lex);
+    bool keep = true;
+    if (const auto* wb = lex.parseState().wb) {
+        // A `cfg_attr` may itself produce the `cfg` that decides this.
+        static const RcString rcstringCfgAttr = RcString::newInterned("cfg_attr");
+        for (auto it = attrs.items.begin(); it != attrs.items.end();) {
+            if (it->name() == rcstringCfgAttr) {
+                auto produced = checkCfgAttr(*wb->settings, *it);
+                it = attrs.items.erase(it);
+                it = attrs.items.insert(it, ::std::make_move_iterator(produced.begin()), ::std::make_move_iterator(produced.end()));
+            } else {
+                ++it;
+            }
+        }
+        keep = checkCfgAttrs(*wb->settings, attrs);
+    }
+    if (attrsOut) {
+        *attrsOut = mv$(attrs);
+    }
+    return keep;
+}
+
+ASTFunction::Arg ParseFunctionArg(TokenStream& lex, bool expectNamed, ASTAttributeList attrs) {
     TRACE_FUNCTION_F("expect_named = " << expectNamed);
     Token tok;
-
-    auto attrs = ParseItemAttrs(lex);
 
     // If any of the following
     // - Expecting a named parameter (i.e. defining a function in root or impl)
@@ -3254,6 +3283,8 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
     ASTFunction::Arglist args;
 
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+    // A receiver may carry attributes too, and they say nothing about it.
+    (void)ParseParamAttrsKeep(lex);
     GET_TOK(tok, lex);
 
     // Handle self
@@ -3341,6 +3372,12 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
                 GET_TOK(tok, lex);
                 break;
             }
+            // A parameter's attributes are read before deciding what the
+            // parameter is: `#[deny(unused_mut)] ...` puts them on the variadic
+            // marker, which carries nothing else. A `#[cfg]` that fails removes
+            // the parameter, arity and all.
+            ASTAttributeList argAttrs;
+            const bool keepArg = ParseParamAttrsKeep(lex, &argAttrs);
             // `...` need not come last: rustc parses arguments after it and
             // rejects them later. Falling through to the loop condition lets a
             // following `,` continue the list.
@@ -3356,7 +3393,12 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
                 isVariadic = true;
                 continue;
             }
-            args.push_back(ParseFunctionArg(lex, !canBePrototype));
+            {
+                auto arg = ParseFunctionArg(lex, !canBePrototype, mv$(argAttrs));
+                if (keepArg) {
+                    args.push_back(mv$(arg));
+                }
+            }
         } while (GET_TOK(tok, lex) == TOK_COMMA);
         CHECK_TOK(tok, TOK_PAREN_CLOSE);
     } else {
@@ -5644,6 +5686,9 @@ ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
     bool isVariadic = false;
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
     while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE) {
+        // A function type's parameters may carry attributes, which say nothing
+        // about the type itself, except that a failing `#[cfg]` removes one.
+        const bool keepArg = ParseParamAttrsKeep(lex);
         if (LOOK_AHEAD(lex) == TOK_TRIPLE_DOT) {
             GET_TOK(tok, lex);
             isVariadic = true;
@@ -5684,7 +5729,12 @@ ASTType* ParseTypeFn(TokenStream& lex, ASTHigherRankedBounds hrbs) {
                 continue;
             }
         }
-        args.push_back(ParseType(lex));
+        {
+            auto* argTy = ParseType(lex);
+            if (keepArg) {
+                args.push_back(argTy);
+            }
+        }
         if (GET_TOK(tok, lex) != TOK_COMMA) {
             PUTBACK(tok, lex);
             break;

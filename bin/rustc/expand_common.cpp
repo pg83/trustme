@@ -323,8 +323,8 @@ bool ExpandAttrsCfgOnly(const ExpandState& es, ASTAttributeList& attrs) {
                 remove = true;
             }
             return;
-        } else if (a.name() == "allow") {
-            // Lazy allow allow
+        } else if (a.name() == "allow" || a.name() == "warn" || a.name() == "deny" || a.name() == "forbid" || a.name() == "expect") {
+            // A lint level on a parameter changes nothing here.
         } else {
             TODO(sp, "non-cfg attributes - " << a);
         }
