@@ -38,12 +38,12 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 362 |
-| fixed, or no longer reproducing, since the gate | 269 |
+| still failing on the current tree | 357 |
+| fixed, or no longer reproducing, since the gate | 274 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 156 |
+| accepted Rust rejected by the compiler or driver | 151 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
 | wrong runtime behaviour, panic, abort, or output | 40 |
 | missing rejection or diagnostic | 53 |
@@ -52,18 +52,18 @@ generated-code ones.
 
 ## P0: accepted Rust rejected by the front end
 
-All 156 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 151 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| parser | 46 | 43 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
+| parser | 41 | 38 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
 | type checking, HIR lowering, and resolution | 95 | trait/impl selection 30 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 6 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 13 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; enum repr 1 |
 
-The 43 parser failures must be regrouped by syntax family before changing the
+The 38 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are `async gen` blocks and functions (7),
 never patterns (3), and a long tail of one- and two-test spellings. Grouping by test directory finds them faster than
