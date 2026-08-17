@@ -3438,8 +3438,10 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
 
                 GET_TOK(tok, lex);
                 enum eTokenType joiner = TOK_NULL;
-                if (lex.editionAfter(ASTEdition::Rust2018) && tok.type() == TOK_QMARK) {
-                    // 2018 added `?` repetition operator
+                // `?` right after `$(..)` is the repetition operator in every
+                // edition, as it is on the pattern side. What 2018 changed is
+                // that `?` may no longer be a separator.
+                if (tok.type() == TOK_QMARK) {
                 } else if (tok.type() == TOK_PLUS || tok.type() == TOK_STAR) {
                     // `+` and `*` were present at 1.0 (2015)
                 } else {
