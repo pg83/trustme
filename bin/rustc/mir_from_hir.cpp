@@ -234,7 +234,10 @@ namespace {
             builder.markValueAssigned(sp, result);
         }
 
-        MIRLValue awaitFuture(const Span& sp, const HIRTypeData* futureTy, MIRLValue future, const HIRTypeData* outputTy) {
+        /// Poll a future or an async iterator, suspending the coroutine while it
+        /// is not ready. `outputTy` is what the `Poll` carries: the future's
+        /// output, or the iterator's `Option<Item>`.
+        MIRLValue awaitFuture(const Span& sp, const HIRTypeData* futureTy, MIRLValue future, const HIRTypeData* outputTy, bool isNext = false) {
             const auto stateValue = static_cast<unsigned>(generatorState.states.size());
             generatorState.states.back().saved = builder.getActiveLocals(sp, generatorState.savedDropFlags);
             generatorState.states.push_back(builder.newBbUnlinked());
@@ -268,7 +271,7 @@ namespace {
                     bbRet,
                     MIRUnwindAction::make_Cleanup(bbPanic),
                     lvPoll.clone(),
-                    HIRPath(futureTy, builder.resolve().langFuture(), "poll"),
+                    isNext ? HIRPath(futureTy, builder.resolve().langAsyncIterator(), "poll_next") : HIRPath(futureTy, builder.resolve().langFuture(), "poll"),
                     makeVec2(
                         MIRParam(lvPin.clone()),
                         MIRParam::make_Borrow({HIRBorrowType::Unique, MIRLValue::newDeref(MIRLValue::newArgument(1))})
@@ -1212,7 +1215,7 @@ namespace {
             }
             auto lvRes = builder.getResultInLvalue(sp, tyInner);
 
-            builder.setResult(node.span(), awaitFuture(sp, tyInner, std::move(lvRes), node.resType));
+            builder.setResult(node.span(), awaitFuture(sp, tyInner, std::move(lvRes), node.resType, node.isNext));
         }
 
         void visit(HIRExprNodeUse& node) override {

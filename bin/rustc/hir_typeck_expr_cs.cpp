@@ -10393,6 +10393,14 @@ public:
         this->context.addIvars(node.value->resType);
         node.value->visit(*this);
         this->inheritDivergence(node, *node.value);
+        if (node.isNext) {
+            // Require that `return = Option<<[node.value] as `async_iterator`>::Item>`
+            auto itemTy = this->context.ivars.newIvarTr();
+            this->context.equateTypesAssoc(node.span(), itemTy, context.resolve.langAsyncIterator(), {}, node.value->resType, "Item", {});
+            const auto& langOption = context.crate.getLangItemPath(node.span(), "Option");
+            this->context.equateTypes(node.span(), node.resType, context.crate.types.path(HIRGenericPath(langOption, HIRPathParams(itemTy)), &context.crate.getEnumByPath(node.span(), langOption)));
+            return;
+        }
         // Require that `return = <[node.value] as `future_trait`>::Output`
         this->context.equateTypesAssoc(node.span(), node.resType, context.resolve.langFuture(), {}, node.value->resType, "Output", {});
     }

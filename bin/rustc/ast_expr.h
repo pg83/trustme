@@ -329,8 +329,10 @@ struct ASTExprNodeFor: public ASTExprNode {
     ASTPattern pattern;
     ASTExprNodeP value;
     ASTExprNodeP code;
+    /// `for await`: the head is an async iterator, and each item is awaited.
+    bool isAwait;
 
-    ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code);
+    ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code, bool isAwait = false);
 
     static constexpr unsigned int kind = 15;
     unsigned int nodeKind() const override;
@@ -746,6 +748,10 @@ struct ASTExprNodeUniOp: public ASTExprNode {
         NEGATE, // '-<expr>'
         QMARK,  // '<expr>?'
         AWait,  // `.await`
+        /// Await the next item of an async iterator: `Option<Item>`, or nothing
+        /// if the iterator is not ready. Only the `for await` desugaring makes
+        /// this; there is no syntax for it.
+        AWaitNext,
         USE,    // `.use`
     };
 

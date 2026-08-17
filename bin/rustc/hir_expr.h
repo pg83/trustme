@@ -164,6 +164,9 @@ struct HIRExprNodeYield: public HIRExprNode {
 /// @brief Async Wait (the `.await` postfix operator)
 struct HIRExprNodeAWait: public HIRExprNode {
     HIRExprNodeP value;
+    /// Await the next item of an async iterator (`for await`): the value is the
+    /// iterator itself, and the result is `Option<Item>`.
+    bool isNext = false;
 
     HIRExprNodeAWait(Span sp, HIRExprNodeP value);
 

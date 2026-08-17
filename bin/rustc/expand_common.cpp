@@ -1452,13 +1452,14 @@ struct CExpandExpr: public ASTNodeVisitor {
         this->visitNodelete(node, node.code);
 
         static const RcString rcstringIntoIter = RcString::newInterned("into_iter");
+        static const RcString rcstringIntoAsyncIter = RcString::newInterned("into_async_iter");
         static const RcString rcstringNext = RcString::newInterned("next");
         static const RcString rcstringIt = RcString::newInterned("it");
         const auto iteratorHygiene = Ident::Hygiene::newScope(*parentExpandState.crate.pool);
         auto coreCrate = crate.extCratenameCore;
         auto pathSome = getPath(coreCrate, "option", "Option", "Some");
         auto pathNone = getPath(coreCrate, "option", "Option", "None");
-        auto pathIntoIterator = getPath(coreCrate, "iter", "IntoIterator");
+        auto pathIntoIterator = node.isAwait ? getPath(coreCrate, "async_iter", "IntoAsyncIterator") : getPath(coreCrate, "iter", "IntoIterator");
         auto pathIterator = getPath(coreCrate, "iter", "Iterator");
         // Desugar into:
         // {
@@ -1476,12 +1477,15 @@ struct CExpandExpr: public ASTNodeVisitor {
         arms.push_back(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagValue(), node.span(), ASTPattern::Value::make_Named(pathNone))), {}, ASTExprNodeP(new ASTExprNodeFlow(ASTExprNodeFlow::BREAK, node.label, nullptr))));
 
         auto nextReceiver = ASTExprNodeP(new ASTExprNodeNamedValue(ASTPath::newRelative(iteratorHygiene, ::makeVec1(ASTPathNode(rcstringIt)))));
-        auto nextReceiverBorrow = ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, mv$(nextReceiver)));
-        auto nextCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(mv$(nextReceiverBorrow))));
+        // An async iterator is polled where it stands: the await takes the place
+        // itself, and borrows it once per poll.
+        auto nextCall = node.isAwait
+            ? ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::AWaitNext, mv$(nextReceiver)))
+            : ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIterator, {ASTPathNode(rcstringNext)}), ::makeVec1(ASTExprNodeP(new ASTExprNodeUniOp(ASTExprNodeUniOp::REFMUT, mv$(nextReceiver))))));
         auto nextMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(nextCall), mv$(arms)));
         auto loop = ASTExprNodeP(new ASTExprNodeLoop(node.label, mv$(nextMatch)));
 
-        auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIntoIterator, {ASTPathNode(rcstringIntoIter)}), ::makeVec1(mv$(node.value))));
+        auto intoIterCall = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath::newUfcsTrait(::mkType(*parentExpandState.crate.pool, node.span()), pathIntoIterator, {ASTPathNode(node.isAwait ? rcstringIntoAsyncIter : rcstringIntoIter)}), ::makeVec1(mv$(node.value))));
         auto outerMatch = ASTExprNodeP(new ASTExprNodeMatch(mv$(intoIterCall), ::makeVec1(ASTExprNodeMatchArm(::makeVec1(ASTPattern(ASTPattern::TagBind(), node.span(), Ident(iteratorHygiene, rcstringIt))), {}, mv$(loop)))));
 
         // rustc wraps the outer match in `DropTemps`: for always yields (), so

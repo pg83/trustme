@@ -604,7 +604,7 @@ NODE(
         os << "FOR [" << label << "] " << pattern << "in" << *value;
         os << " " << *code;
     },
-    { return NEWNODE(ASTExprNodeFor, label, pattern.clone(), value->clone(), code->clone()); }
+    { return NEWNODE(ASTExprNodeFor, label, pattern.clone(), value->clone(), code->clone(), isAwait); }
 )
 
 namespace {
@@ -1324,11 +1324,12 @@ ASTExprNodeLoop::ASTExprNodeLoop(Ident label, ASTExprNodeP code)
 {
 }
 
-ASTExprNodeFor::ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code)
+ASTExprNodeFor::ASTExprNodeFor(Ident label, ASTPattern pattern, ASTExprNodeP val, ASTExprNodeP code, bool isAwait)
     : label(::std::move(label))
     , pattern(::std::move(pattern))
     , value(::std::move(val))
     , code(::std::move(code))
+    , isAwait(isAwait)
 {
 }
 

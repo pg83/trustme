@@ -765,8 +765,10 @@ public:
         const auto text = mi.parseEqualsString(wb, crate, crate.rootModule_);
         char* end = nullptr;
         const auto value = ::std::strtoul(text.c_str(), &end, 10);
-        if (text.empty() || *end != '\0' || value == 0) {
-            ERROR(sp, E0000, "#![recursion_limit] needs a positive number, got `" << text << "`");
+        // Zero is allowed: it forbids recursion outright rather than being an
+        // error in itself.
+        if (text.empty() || *end != '\0') {
+            ERROR(sp, E0000, "#![recursion_limit] needs a number, got `" << text << "`");
         }
         wb.settings->recursionLimit = static_cast<unsigned int>(value);
     }

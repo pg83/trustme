@@ -607,6 +607,9 @@ ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime) {
     CLEAR_PARSE_FLAGS_EXPR(lex);
     Token tok;
 
+    // `for await x in it`: each item comes from an async iterator.
+    const bool isAwait = lex.getTokenIf(TOK_RWORD_AWAIT);
+
     // Irrefutable pattern
     auto pat = ParsePattern(lex, AllowOrPattern::Yes);
     GET_CHECK_TOK(tok, lex, TOK_RWORD_IN);
@@ -615,7 +618,7 @@ ASTExprNodeP ParseForStmt(TokenStream& lex, Ident lifetime) {
         SET_PARSE_FLAG(lex, disallowStructLiteral);
         val = ParseExpr0(lex);
     }
-    return NEWNODE(ASTExprNodeFor, lifetime, ::std::move(pat), ::std::move(val), ParseExprBlockNode(lex));
+    return NEWNODE(ASTExprNodeFor, lifetime, ::std::move(pat), ::std::move(val), ParseExprBlockNode(lex), isAwait);
 }
 
 /// Parse an 'if' statement
@@ -3291,8 +3294,12 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
     ASTFunction::Arglist args;
 
     GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
-    // A receiver may carry attributes too, and they say nothing about it.
-    (void)ParseParamAttrsKeep(lex);
+    // A receiver may carry attributes too, and they say nothing about it. Only
+    // once the receiver has been read is it known whether these were its
+    // attributes or the first parameter's, so they are kept until then.
+    ASTAttributeList firstAttrs;
+    const bool firstKeep = ParseParamAttrsKeep(lex, &firstAttrs);
+    bool firstAttrsUsed = false;
     GET_TOK(tok, lex);
 
     // Handle self
@@ -3385,7 +3392,16 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
             // marker, which carries nothing else. A `#[cfg]` that fails removes
             // the parameter, arity and all.
             ASTAttributeList argAttrs;
-            const bool keepArg = ParseParamAttrsKeep(lex, &argAttrs);
+            bool keepArg;
+            if (!firstAttrsUsed && args.empty()) {
+                // No receiver was read, so the attributes before it were this
+                // parameter's.
+                firstAttrsUsed = true;
+                argAttrs = mv$(firstAttrs);
+                keepArg = firstKeep;
+            } else {
+                keepArg = ParseParamAttrsKeep(lex, &argAttrs);
+            }
             // `...` need not come last: rustc parses arguments after it and
             // rejects them later. Falling through to the loop condition lets a
             // following `,` continue the list.

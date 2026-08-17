@@ -3535,6 +3535,12 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             case ASTExprNodeUniOp::AWait:
                 rv.reset(ctx.crate->pool->make<HIRExprNodeAWait>(v.span(), lower(v.value)));
                 break;
+            case ASTExprNodeUniOp::AWaitNext: {
+                auto* node = ctx.crate->pool->make<HIRExprNodeAWait>(v.span(), lower(v.value));
+                node->isNext = true;
+                rv.reset(node);
+                break;
+            }
             case ASTExprNodeUniOp::USE:
                 rv.reset(ctx.crate->pool->make<HIRExprNodeUse>(v.span(), lower(v.value)));
                 break;

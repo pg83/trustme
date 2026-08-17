@@ -21,8 +21,14 @@ fn plain(#[allow(unused)] a: u32, #[cfg(FALSE)] gone: u32, #[warn(unused)] b: u3
     a + b
 }
 
+// A failing `#[cfg]` on the *first* parameter removes it too, in every spelling.
+fn first(#[cfg(false)] gone: u32, #[cfg(any())] also_gone: u32, #[cfg(not(all()))] third: u32, kept: u32) -> u32 {
+    kept
+}
+
 fn main() {
     assert_eq!(plain(1, 2), 3);
+    assert_eq!(first(7), 7);
     assert_eq!(Counter(1).get(2), 3);
 
     let closure = |#[allow(unused)] a: u32, #[cfg(FALSE)] gone: u32, #[deny(unused)] b: u32| a + b;
