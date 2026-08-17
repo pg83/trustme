@@ -1478,13 +1478,16 @@ public:
     }
 
     void expandTraitList(const Span& sp, ::std::vector<HIRTraitPath>& list) {
-        for (auto it = list.begin(); it != list.end(); ++it) {
-            auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, *it, inExpr);
-            if (!n.empty()) {
-                it = list.erase(it);
-                it = list.insert(it, std::make_move_iterator(n.begin()), std::make_move_iterator(n.end()));
-                --it;
+        for (auto it = list.begin(); it != list.end();) {
+            // An alias that names no trait (`trait S = ?Sized;`) leaves the list
+            // shorter, so what it expanded to is what decides where to continue.
+            if (!crate.getTypeitemByPath(sp, it->path.path).is_TraitAlias()) {
+                ++it;
+                continue;
             }
+            auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, *it, inExpr);
+            it = list.erase(it);
+            it = list.insert(it, std::make_move_iterator(n.begin()), std::make_move_iterator(n.end()));
         }
     }
 
@@ -1496,9 +1499,39 @@ public:
             if (auto* e = data.opt_ErasedType()) {
                 expandTraitList(sp, e->traits);
             } else if (auto* e = data.opt_TraitObject(); e->trait.path != HIRSimplePath()) {
-                auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, e->trait, inExpr);
-                if (n.size() > 0) {
-                    TODO(sp, "Expand trait alias in TraitObject? (markers only) - " << e->trait);
+                // A marker in a trait object may be an alias too, and an alias
+                // that names no trait at all (`trait S = ?Sized;`) adds nothing.
+                for (auto it = e->markers.begin(); it != e->markers.end();) {
+                    if (!crate.getTypeitemByPath(sp, it->path).is_TraitAlias()) {
+                        ++it;
+                        continue;
+                    }
+                    auto n = ConvertHIRExpandAliasesGetTraitExpansionGP(sp, crate, *it, inExpr);
+                    it = e->markers.erase(it);
+                    for (auto& expanded : n) {
+                        ASSERT_BUG(sp, expanded.traitBounds.empty() && expanded.typeBounds.empty(), "Trait alias with bounds used as a marker - " << expanded);
+                        it = e->markers.insert(it, mv$(expanded.path));
+                        ++it;
+                    }
+                }
+                if (crate.getTypeitemByPath(sp, e->trait.path.path).is_TraitAlias()) {
+                    auto n = ConvertHIRExpandAliasesGetTraitExpansion(sp, crate, e->trait, inExpr);
+                    if (!n.empty()) {
+                        e->trait = mv$(n.front());
+                        for (size_t i = 1; i < n.size(); i++) {
+                            ASSERT_BUG(sp, n[i].traitBounds.empty() && n[i].typeBounds.empty(), "Trait alias with bounds used as a marker - " << n[i]);
+                            e->markers.push_back(mv$(n[i].path));
+                        }
+                    } else if (!e->markers.empty()) {
+                        // The alias named nothing, so the object's principal
+                        // trait is whatever followed it.
+                        e->trait = HIRTraitPath{HIRGenericPath(mv$(e->markers.front())), {}, {}};
+                        e->markers.erase(e->markers.begin());
+                    } else {
+                        // Nothing but markers, which the vtable enumerator knows
+                        // by the empty path.
+                        e->trait = HIRTraitPath();
+                    }
                 }
             }
             ty = crate.types.intern(std::move(data));
@@ -2663,6 +2696,12 @@ public:
         HIRVisitor::visitTrait(p, trait);
         currentTrait = nullptr;
         inTraitDef_ = false;
+    }
+
+    void visitTraitAlias(HIRItemPath p, HIRTraitAlias& item) override {
+        // The alias's own parameters are in scope in the traits it names.
+        auto _ = resolve_.setImplGenerics(MetadataType::Unknown, item.params);
+        HIRVisitor::visitTraitAlias(p, item);
     }
 
     void visitTypeImpl(HIRTypeImpl& impl) override {

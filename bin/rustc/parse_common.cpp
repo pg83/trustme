@@ -5217,6 +5217,10 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
                             auto ps = lex.startSpan();
                             GET_CHECK_TOK(tok, lex, TOK_LIFETIME);
                             rv.lifetimes.push_back(Spanned<ASTLifetimeRef>{lex.endSpan(ps), ASTLifetimeRef(tok.ident())});
+                        } else if (lex.getTokenIf(TOK_QMARK)) {
+                            // `?Sized` relaxes a bound rather than naming a
+                            // trait, so it adds nothing to the alias.
+                            (void)ParsePath(lex, PATH_GENERIC_TYPE);
                         } else {
                             auto ps = lex.startSpan();
                             auto hrbs = ParseHRBOpt(lex);
