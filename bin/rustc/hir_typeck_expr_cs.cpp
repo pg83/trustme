@@ -7835,6 +7835,8 @@ namespace {
                 HIRTypeData::TAG_Borrow,
                 HIRTypeData::TAG_Path, // Strictly speaking, Path == Generic
                 HIRTypeData::TAG_Generic,
+                // An erased type is one concrete type, just not a named one
+                HIRTypeData::TAG_ErasedType,
                 HIRTypeData::TAG_Function,
                 // These two are kinda their own pair
                 HIRTypeData::TAG_NamedFunction,
@@ -7871,6 +7873,12 @@ namespace {
                     }
                     TU_ARMA(NodeType, teL) {
                         // Does this need to care about the different types?
+                        outUnordered = true;
+                        return OrdEqual;
+                    }
+                    TU_ARMA(ErasedType, teL) {
+                        // Two erased types say nothing about each other: neither
+                        // is the more restrictive coercion target.
                         outUnordered = true;
                         return OrdEqual;
                     }

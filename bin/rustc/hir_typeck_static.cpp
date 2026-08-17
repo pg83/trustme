@@ -3447,7 +3447,12 @@ HIRTypeRef StaticTraitResolve::getFieldType(const Span& sp, const HIRTypeData* t
                 }
                 TU_ARMA(Union, pbe) {
                     MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
-                    TODO(sp, "" << ty << " " << name);
+                    for (const auto& f : pbe->variants) {
+                        if (f.name == name) {
+                            return ms.monomorphType(sp, f.ty);
+                        }
+                    }
+                    BUG(sp, "Unknown field `" << name << "` on " << ty);
                 }
         }
         }
