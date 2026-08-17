@@ -93,6 +93,9 @@ public:
         if (n.isMove) {
             os << "move ";
         }
+        if (n.isUse) {
+            os << "use ";
+        }
         ASTNodeVisitor::visit(n.inner);
     }
 

@@ -1081,11 +1081,12 @@ TU_ARMA(Alias, ee) {
         {
         }
 
-        HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, HIRTypeRef returnType, HIRExprNodeP code, bool isMove)
+        HIRExprNodeAsyncBlock::HIRExprNodeAsyncBlock(Span sp, HIRTypeRef returnType, HIRExprNodeP code, bool isMove, bool isUse)
             : HIRExprNode(mv$(sp))
             , returnType(returnType)
             , code(std::move(code))
             , isMove(isMove)
+            , isUse(isUse)
         {
         }
 

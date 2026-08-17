@@ -2188,7 +2188,7 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     if (f.isAsync()) {
         // Wrap the code in an async block
         if (rv.code) {
-            auto* asyncNode = crate->pool->make<HIRExprNodeAsyncBlock>(sp, rv.returnType, rv.code.takeNode(), true);
+            auto* asyncNode = crate->pool->make<HIRExprNodeAsyncBlock>(sp, rv.returnType, rv.code.takeNode(), true, false);
             asyncNode->resType = crate->types.infer();
             rv.code = HIRExprPtr(HIRExprNodeP(asyncNode));
         }
@@ -3114,7 +3114,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
     }
 
     virtual void visit(ASTExprNodeAsyncBlock& v) override {
-        rv.reset(ctx.crate->pool->make<HIRExprNodeAsyncBlock>(v.span(), ctx.crate->types.infer(), lowerIsolated(v.inner), v.isMove));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeAsyncBlock>(v.span(), ctx.crate->types.infer(), lowerIsolated(v.inner), v.isMove, v.isUse));
     }
 
     virtual void visit(ASTExprNodeGeneratorBlock& v) override {

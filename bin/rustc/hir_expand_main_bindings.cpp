@@ -901,7 +901,7 @@ namespace {
             auto scope = std::move(closureStack.back().as_Coroutine());
             closureStack.pop_back();
 
-            applyCoroutine(node.span(), node.isMove, false, node.avuCache, scope.usedVariables);
+            applyCoroutine(node.span(), node.isMove || node.isUse, false, node.avuCache, scope.usedVariables);
         }
 
     private:
@@ -2733,7 +2733,7 @@ namespace {
             vars.structEnts.insert(vars.structEnts.begin(), HIRVisEnt<HIRTypeRef>{HIRPublicity::newNone(), wrapped});
         }
 
-        CrVars coroutineVars(const Span& sp, const HIRExprNodeGenerator::AvuCache& avuCache, unsigned nArgs, const Monomorph& monomorphCb) const {
+        CrVars coroutineVars(const Span& sp, const HIRExprNodeGenerator::AvuCache& avuCache, unsigned nArgs, const Monomorph& monomorphCb, bool useClone = false) const {
             CrVars rv;
             // 3. Classify varibles
             // - Captures: defined outside and need to be captured using closure capture rules (`defined_stack.empty()`)
@@ -2762,7 +2762,17 @@ namespace {
                     case HIRValueUsage::Unknown:
                         BUG(sp, "Unexpected ValueUsage::Unknown on #" << cap.first);
                     case HIRValueUsage::Move: {
-                        // No wrapping needed (drop handled by custom drop glue)
+                        // No wrapping needed (drop handled by custom drop glue), except
+                        // that a `use` capture clones what it cannot copy.
+                        if (useClone && !resolve_.typeIsCopy(sp, sourceCapTy) && typeIsUseCloned(resolve_, sp, sourceCapTy)) {
+                            rv.captureNodes.back()->resType = sourceCapTy;
+                            const auto& langClone = resolve_.hirCrate().getLangItemPath(sp, "clone");
+                            auto borrowTy = resolve_.hirCrate().types.borrow(HIRBorrowType::Shared, sourceCapTy);
+                            auto borrowNode = NEWNODE(borrowTy, Borrow, sp, HIRBorrowType::Shared, std::move(rv.captureNodes.back()));
+                            auto* cloneCall = pool->make<HIRExprNodeCallPath>(sp, HIRPath(sourceCapTy, HIRGenericPath(langClone), rcstringClone), makeVec1(mv$(borrowNode)));
+                            cloneCall->cache.argTypes = makeVec2(mv$(borrowTy), sourceCapTy);
+                            rv.captureNodes.back() = closureMkExprnodep(cloneCall, sourceCapTy);
+                        }
                     } break;
                     case HIRValueUsage::Borrow:
                         rv.captureNodes.back()->resType = sourceCapTy;
@@ -2992,7 +3002,7 @@ namespace {
             // once, before the generated future's impl parameters are frozen.
             auto returnTy = monomorphCb.monomorphType(sp, node.returnType);
 
-            auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb);
+            auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb, node.isUse);
             fixCoroutineVarTypes(sp, params, monomorphCb, crVars);
 
             {

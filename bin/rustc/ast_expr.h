@@ -83,8 +83,9 @@ struct ASTExprNodeBlock: public ASTExprNode {
 struct ASTExprNodeAsyncBlock: public ASTExprNode {
     ASTExprNodeP inner;
     bool isMove;
+    bool isUse;    //< The block copies, clones, or moves each captured value
 
-    ASTExprNodeAsyncBlock(ASTExprNodeP inner, bool isMove);
+    ASTExprNodeAsyncBlock(ASTExprNodeP inner, bool isMove, bool isUse);
 
     static constexpr unsigned int kind = 2;
     unsigned int nodeKind() const override;

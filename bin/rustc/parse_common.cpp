@@ -1314,6 +1314,18 @@ ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
     return NEWNODE(ASTExprNodeStructLiteral, path, ::std::move(baseVal), ::std::move(items));
 }
 
+/// Whether the tokens ahead open a closure: `[static] [move | use] (`|`...`|` | `||`)`.
+static bool isClosureStart(TokenStream& lex) {
+    unsigned int ofs = 0;
+    if (lex.lookahead(ofs) == TOK_RWORD_STATIC) {
+        ofs++;
+    }
+    if (lex.lookahead(ofs) == TOK_RWORD_MOVE || lex.lookahead(ofs) == TOK_RWORD_USE) {
+        ofs++;
+    }
+    return lex.lookahead(ofs) == TOK_PIPE || lex.lookahead(ofs) == TOK_DOUBLE_PIPE;
+}
+
 /// `for<'a> |x| ...` and `for<'a> async || ...`: a closure whose lifetimes it
 /// binds itself. The caller has put `for` back.
 static ASTExprNodeP ParseExprValClosureBinder(TokenStream& lex) {
@@ -1385,7 +1397,7 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRanked
 
     auto code = ParseExpr0(lex);
     if (isAsync) {
-        code = NEWNODE(ASTExprNodeAsyncBlock, ::std::move(code), isMove);
+        code = NEWNODE(ASTExprNodeAsyncBlock, ::std::move(code), isMove, isUse);
     }
 
     if (isAsync) {
@@ -1468,15 +1480,22 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
         case TOK_RWORD_IF:
             return ParseIfStmt(lex);
         case TOK_RWORD_ASYNC: {
-            if (lex.lookahead(0) == TOK_PIPE || lex.lookahead(0) == TOK_DOUBLE_PIPE || (lex.lookahead(0) == TOK_RWORD_MOVE && (lex.lookahead(1) == TOK_PIPE || lex.lookahead(1) == TOK_DOUBLE_PIPE))) {
+            if (isClosureStart(lex)) {
                 return ParseExprValClosure(lex, true);
             }
-            bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
-            return NEWNODE(ASTExprNodeAsyncBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), isMove);
+            // `async use { .. }` captures the same way an `use` closure does.
+            const bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
+            const bool isUse = !isMove && lex.getTokenIf(TOK_RWORD_USE);
+            return NEWNODE(ASTExprNodeAsyncBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), isMove, isUse);
         }
         case TOK_RWORD_UNSAFE:
             return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Unsafe);
         case TOK_RWORD_CONST:
+            // `const |..| ..` is a closure that may also be called in a constant.
+            // Nothing checks that yet, so it parses as an ordinary closure.
+            if (isClosureStart(lex)) {
+                return ParseExprValClosure(lex, false);
+            }
             return ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Const);
 
         // Paths

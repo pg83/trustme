@@ -311,7 +311,7 @@ NODE(
     }
 )
 
-NODE(ASTExprNodeAsyncBlock, { os << "async " << (isMove ? "move " : "") << *inner; }, { return NEWNODE(ASTExprNodeAsyncBlock, inner->clone(), isMove); })
+NODE(ASTExprNodeAsyncBlock, { os << "async " << (isMove ? "move " : "") << (isUse ? "use " : "") << *inner; }, { return NEWNODE(ASTExprNodeAsyncBlock, inner->clone(), isMove, isUse); })
 NODE(ASTExprNodeGeneratorBlock, { os << "gen " << (isMove ? "move " : "") << *inner; }, { return NEWNODE(ASTExprNodeGeneratorBlock, inner->clone(), returnType->clone(), isMove, isCoroutineClosureBody); })
 NODE(ASTExprNodeTry, { os << "try " << *inner; }, { return NEWNODE(ASTExprNodeTry, inner->clone()); })
 
@@ -1214,9 +1214,10 @@ ASTExprNodeBlock::ASTExprNodeBlock(Type type, ::std::vector<Line> nodes, ::std::
 {
 }
 
-ASTExprNodeAsyncBlock::ASTExprNodeAsyncBlock(ASTExprNodeP inner, bool isMove)
+ASTExprNodeAsyncBlock::ASTExprNodeAsyncBlock(ASTExprNodeP inner, bool isMove, bool isUse)
     : inner(std::move(inner))
     , isMove(isMove)
+    , isUse(isUse)
 {
 }
 

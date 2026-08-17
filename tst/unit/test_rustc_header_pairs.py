@@ -36,8 +36,14 @@ class RustcHeaderPairsTest(unittest.TestCase):
     def test_every_unit_test_has_a_module(self):
         for source in sorted(RUSTC.glob("*_ut.cpp")):
             with self.subTest(source=source.name):
-                module = source.with_name(source.name.removesuffix("_ut.cpp") + ".h")
-                self.assertTrue(module.is_file(), f"missing {module.name}")
+                stem = source.name.removesuffix("_ut.cpp")
+                # A module is a header, or an included fragment such as the
+                # C prelude the compiler emits.
+                modules = [source.with_name(stem + suffix) for suffix in (".h", ".inc")]
+                self.assertTrue(
+                    any(module.is_file() for module in modules),
+                    f"missing {' or '.join(module.name for module in modules)}",
+                )
 
     def test_sources_have_no_upstream_branding(self):
         sources = sorted(

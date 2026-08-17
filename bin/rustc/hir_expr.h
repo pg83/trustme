@@ -811,6 +811,7 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
     HIRTypeRef returnType;
     HIRExprNodeP code;
     bool isMove;
+    bool isUse;
 
     HIRExprNodeGenerator::AvuCache avuCache;
 
@@ -823,7 +824,7 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
     // State data type (needed for initialising)
     HIRTypeRef stateDataType;
 
-    HIRExprNodeAsyncBlock(Span sp, HIRTypeRef returnType, HIRExprNodeP code, bool isMove);
+    HIRExprNodeAsyncBlock(Span sp, HIRTypeRef returnType, HIRExprNodeP code, bool isMove, bool isUse);
 
     static constexpr unsigned int kind = 39;
     unsigned int nodeKind() const override;
