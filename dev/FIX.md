@@ -38,12 +38,12 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 377 |
-| fixed, or no longer reproducing, since the gate | 254 |
+| still failing on the current tree | 376 |
+| fixed, or no longer reproducing, since the gate | 255 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 170 |
+| accepted Rust rejected by the compiler or driver | 169 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
 | wrong runtime behaviour, panic, abort, or output | 40 |
 | missing rejection or diagnostic | 54 |
@@ -52,13 +52,13 @@ generated-code ones.
 
 ## P0: accepted Rust rejected by the front end
 
-All 170 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 169 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | parser | 51 | 48 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
-| type checking, HIR lowering, and resolution | 104 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 13 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
+| type checking, HIR lowering, and resolution | 103 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 12 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; enum repr 1 |
@@ -151,6 +151,14 @@ Grouping the panics by the rule they check finds these multi-test families:
 | coroutine and future size | 4 | `niche-in-coroutine`, `overlap-locals`, `resume-arg-size`, `future-as-arg`: locals that cannot be live together must share storage |
 | `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and the `core::any` library case |
 | `Waker::will_wake` | 2 | two library cases comparing a cloned waker's vtable |
+
+`will_wake` is a trap: it compares vtable *addresses*, and `alloc::task`
+promotes the same `RawWakerVTable` value in two functions (`const#0` and
+`const#1`), which we emit as two weak symbols. rustc relies on the backend
+merging them and documents the check as best-effort -- upstream even skips the
+tests under Miri. Merging equal promoted constants (never `static` items, whose
+addresses Rust does keep distinct) is the fix, and it has to survive separate
+translation units.
 
 `glossary__L232` reached this class from the generated-code one: an enum with a
 single unit variant needs no tag, so `size_of` of it is 0 and we say 1. The
