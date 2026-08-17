@@ -4,8 +4,8 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-Snapshot: 2026-08-17, commit `ac039798e`. The numbers below come from rerunning
-every node that failed the last full gate, not from a fresh gate. The gate
+Snapshot: 2026-08-17, commit `544a0d06d`. The numbers below come from rerunning
+the nodes that failed the last full gate, not from a fresh gate. The gate
 itself ran at commit `79582dd3f` in the clang Nix environment on all 78
 available cores:
 
@@ -25,42 +25,44 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
   rustc cargo libstd rust_test_helpers rust_lib_dependencies
 ```
 
-All 631 failed nodes were then rerun independently inside the same clang Nix
-environment. The authoritative rerun data is in
-`/tmp/trustme-reclass-20260817b`; classified records are in
-`/tmp/trustme-classification-20260817b`. Both were regenerated after the
-fixes recorded below, so these counts are measured, not decremented by hand.
+All 631 failed nodes were rerun independently inside the same clang Nix
+environment; the 412 that were still red were then rerun again after the fixes
+recorded below. The authoritative rerun data is in
+`/tmp/trustme-reclass-20260817c`; classified records are in
+`/tmp/trustme-classification-20260817c`. These counts are measured, not
+decremented by hand, except for the two `ergonomic-clones` parser failures
+fixed after that rerun.
 
 | result | tests |
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 395 |
-| fixed, or no longer reproducing, since the gate | 236 |
+| still failing on the current tree | 394 |
+| fixed, or no longer reproducing, since the gate | 237 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 176 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
-| wrong runtime behaviour, panic, abort, or output | 41 |
-| missing rejection or diagnostic | 55 |
+| accepted Rust rejected by the compiler or driver | 174 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
+| wrong runtime behaviour, panic, abort, or output | 43 |
+| missing rejection or diagnostic | 54 |
 | generated C++ or link failure | 25 |
-| stable timeout | 9 |
+| stable timeout | 10 |
 
 ## P0: accepted Rust rejected by the front end
 
-All 176 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 174 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| parser | 57 | 54 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
-| type checking, HIR lowering, and resolution | 103 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 18 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
+| parser | 55 | 52 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
+| type checking, HIR lowering, and resolution | 104 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 13 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
-| crate/driver handling | 3 | missing external crate path 1; pathless `--extern` 1; enum repr 1 |
+| crate/driver handling | 2 | missing external crate path 1; enum repr 1 |
 
-The 54 parser failures must be regrouped by syntax family before changing the
+The 52 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are `gen` blocks and functions (8),
 unsafe binders (5), never patterns (3), and a long tail of one- and two-test spellings. Grouping by test directory finds them faster than
@@ -86,38 +88,38 @@ item is not affected -- it takes a `$vis` fragment now.
 
 ## P1: internal compiler failures
 
-There are 89 compiler-internal failures in 72 stable signatures.
+There are 88 compiler-internal failures in 71 stable signatures.
 
 | compiler area | tests |
 |---|---:|
+| HIR lowering and conversion | 23 |
 | type checker | 20 |
-| HIR lowering and conversion | 12 |
-| parser and macro expansion | 11 |
-| MIR lowering, CTFE MIR, and optimisation | 11 |
-| translation and code generation | 9 |
+| MIR lowering, CTFE MIR, and optimisation | 12 |
+| parser and macro expansion | 12 |
+| translation and code generation | 10 |
 | name resolution | 4 |
-| routed by a bare `ERROR`/`TODO`/signal line with no file attribution | 22 |
+| routed by a bare `ASSERT`/signal line with no file attribution | 7 |
 
 The multi-test signatures are:
 
 | signature | tests |
 |---|---:|
 | `ASSERT` with no backtrace | 5 |
-| `BUG hir_conv_constant_evaluation.cpp:4627` | 3 |
-| twelve other two-test signatures | 24 |
-| fifty-nine one-test signatures | 59 |
+| `BUG hir_conv_constant_evaluation.cpp:4670` | 3 |
+| eleven other two-test signatures | 22 |
+| fifty-eight one-test signatures | 58 |
 
-`BUG hir_conv_constant_evaluation.cpp:4627` is the polymorphic-constant
+`BUG hir_conv_constant_evaluation.cpp:4670` is the polymorphic-constant
 assertion `[T; Generic(N)]`: the three `generic_const_parameter_types` tests
 declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 
-Forty-one programs build but execute incorrectly:
+Forty-three programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 35 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 37 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
@@ -133,7 +135,7 @@ assertions as one root cause.
 
 ## P2: missing language checks
 
-Fifty-five negative tests compile successfully. The largest source areas are:
+Fifty-four negative tests compile successfully. The largest source areas are:
 
 | language area | tests |
 |---|---:|
@@ -145,7 +147,7 @@ Fifty-five negative tests compile successfully. The largest source areas are:
 | trait bounds | 3 |
 | closure restrictions | 3 |
 | drop checking | 3 |
-| all smaller areas | 26 |
+| all smaller areas | 23 |
 
 Source chapters are routing information. Group the concrete examples by the
 missing language rule before implementing diagnostics.
@@ -167,7 +169,7 @@ to intentional native test symbols, and one exercises native-link directives.
 
 ## P3: performance and flakes
 
-Nine nodes still time out in isolated reruns:
+Ten nodes still time out in isolated reruns:
 
 - Exercism `palindrome-products`;
 - `enum-discriminant/discriminant_value.rs`;
@@ -177,9 +179,11 @@ Nine nodes still time out in isolated reruns:
 - `impl-trait/recursive-type-alias-impl-trait-declaration-too-subtle-2.rs`;
 - `for-loop-while/label_break_value.rs`;
 - `deriving/issue-58319.rs`;
+- `parser/survive-peano-lesson-queue.rs`, which used to die on a stack
+  overflow instead;
 - RustSmith seed 7.
 
-One hundred and ninety of the gate's failures pass when rerun on the
+Two hundred and thirty-seven of the gate's failures pass when rerun on the
 current tree. Most are the fixes recorded above; the rest were parallel-only,
 RustSmith seed 36 among them.
 
