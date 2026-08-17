@@ -3115,7 +3115,16 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         }
 
         if (label != "") {
-            if (rv->valueNode) {
+            // A labelled block runs once: it is a loop that always breaks at the
+            // end, carrying the block's tail value if it has one. Without that
+            // break a block that just runs off its end would repeat forever --
+            // but a block whose last statement leaves the block already has no
+            // end to reach, and a valueless break there would type the label as
+            // `()`.
+            const bool endIsReachable = rv->valueNode
+                || rv->nodes.empty()
+                || !(cast<HIRExprNodeLoopControl>(rv->nodes.back().get()) || cast<HIRExprNodeReturn>(rv->nodes.back().get()));
+            if (endIsReachable) {
                 auto* breakNode = ctx.crate->pool->make<HIRExprNodeLoopControl>(v.span(), label, /*cont=*/false, ::std::move(rv->valueNode));
                 rv->nodes.push_back(HIRExprNodeP(breakNode));
                 rv->valueNode.reset();
