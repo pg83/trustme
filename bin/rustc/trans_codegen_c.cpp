@@ -2921,6 +2921,25 @@ namespace {
             return options.emulatedI128 && (ty == HIRCoreType::I128 || ty == HIRCoreType::U128);
         }
 
+        /// Whether the type becomes a C scalar, so `volatile` can qualify it in
+        /// place. C++ gives a `volatile` aggregate no assignment operator, so a
+        /// struct has to be copied byte by byte instead.
+        bool typeIsCScalar(const HIRTypeData* ty) const {
+            if (ty->is_Primitive()) {
+                return ty->as_Primitive() != HIRCoreType::Str && !typeIsEmulatedI128(ty);
+            }
+            if (ty->is_Function()) {
+                return true;
+            }
+            if (const auto* te = ty->opt_Pointer()) {
+                return metadataType(te->inner) == MetadataType::None;
+            }
+            if (const auto* te = ty->opt_Borrow()) {
+                return metadataType(te->inner) == MetadataType::None;
+            }
+            return false;
+        }
+
         // Returns true if the input type is a ZST and ZSTs are not being emitted
         bool typeIsBadZst(const HIRTypeData* ty) const {
             if (options.disallowEmptyStructs) {
@@ -7294,11 +7313,21 @@ namespace {
                 // these operations with a dangling ZST pointer, so emitting a
                 // C volatile dereference would invent an observable access.
                 if (!this->typeIsBadZst(params.types.at(0))) {
-                    emitLvalue(e.retVal);
-                    of << " = *(volatile ";
-                    emitCtype(params.types.at(0));
-                    of << "*)";
-                    emitParam(e.args.at(0));
+                    if (this->typeIsCScalar(params.types.at(0))) {
+                        emitLvalue(e.retVal);
+                        of << " = *(volatile ";
+                        emitCtype(params.types.at(0));
+                        of << "*)";
+                        emitParam(e.args.at(0));
+                    } else {
+                        size_t valueSize = 0;
+                        MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, params.types.at(0), valueSize), "Can't get size of " << params.types.at(0));
+                        of << "__trustme_unaligned_volatile_load((void*)&";
+                        emitLvalue(e.retVal);
+                        of << ", (const void*)";
+                        emitParam(e.args.at(0));
+                        of << ", " << valueSize << ")";
+                    }
                 }
             } else if (name == "unaligned_volatile_load") {
                 size_t valueSize = 0;
@@ -7314,12 +7343,24 @@ namespace {
                 of << ", " << valueSize << ")";
             } else if (name == "volatile_store") {
                 if (!this->typeIsBadZst(params.types.at(0))) {
-                    of << "*(volatile ";
-                    emitCtype(params.types.at(0));
-                    of << "*)";
-                    emitParam(e.args.at(0));
-                    of << " = ";
-                    emitParam(e.args.at(1));
+                    if (this->typeIsCScalar(params.types.at(0))) {
+                        of << "*(volatile ";
+                        emitCtype(params.types.at(0));
+                        of << "*)";
+                        emitParam(e.args.at(0));
+                        of << " = ";
+                        emitParam(e.args.at(1));
+                    } else {
+                        size_t valueSize = 0;
+                        MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, params.types.at(0), valueSize), "Can't get size of " << params.types.at(0));
+                        of << "{ ";
+                        emitCtype(params.types.at(0));
+                        of << " trustme_value = ";
+                        emitParam(e.args.at(1));
+                        of << "; __trustme_unaligned_volatile_store((void*)";
+                        emitParam(e.args.at(0));
+                        of << ", (const void*)&trustme_value, " << valueSize << "); }";
+                    }
                 }
             } else if (name == "unaligned_volatile_store") {
                 size_t valueSize = 0;
@@ -7368,12 +7409,24 @@ namespace {
                 // TODO: Actually do a non-temporal store
                 // GCC: _mm_stream_* (depending on input type, which must be `repr(simd)`)
                 if (!this->typeIsBadZst(params.types.at(0))) {
-                    of << "*(volatile ";
-                    emitCtype(params.types.at(0));
-                    of << "*)";
-                    emitParam(e.args.at(0));
-                    of << " = ";
-                    emitParam(e.args.at(1));
+                    if (this->typeIsCScalar(params.types.at(0))) {
+                        of << "*(volatile ";
+                        emitCtype(params.types.at(0));
+                        of << "*)";
+                        emitParam(e.args.at(0));
+                        of << " = ";
+                        emitParam(e.args.at(1));
+                    } else {
+                        size_t valueSize = 0;
+                        MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, params.types.at(0), valueSize), "Can't get size of " << params.types.at(0));
+                        of << "{ ";
+                        emitCtype(params.types.at(0));
+                        of << " trustme_value = ";
+                        emitParam(e.args.at(1));
+                        of << "; __trustme_unaligned_volatile_store((void*)";
+                        emitParam(e.args.at(0));
+                        of << ", (const void*)&trustme_value, " << valueSize << "); }";
+                    }
                 }
             }
             // --- Atomics!
