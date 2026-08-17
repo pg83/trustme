@@ -10496,6 +10496,16 @@ public:
             DEBUG("Empty match");
             this->context.equateTypes(node.span(), node.resType, this->context.crate.types.diverge());
         }
+        // A match always selects an arm, so if every arm diverges so does the
+        // match. Record that on the node: an arm's type may still be an
+        // inference variable, which never-type fallback later settles on `()`,
+        // and the enclosing block would then no longer look diverging.
+        else if (::std::all_of(node.arms.begin(), node.arms.end(), [&](const HIRExprNodeMatch::Arm& arm) {
+                     return this->nodeDiverges(*arm.code);
+                 })) {
+            DEBUG("Every arm diverges");
+            node.diverges = true;
+        }
     }
 
     void visit(HIRExprNodeAssign& node) override {
