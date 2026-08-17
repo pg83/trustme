@@ -215,8 +215,10 @@ to intentional native test symbols, and one exercises native-link directives.
 ## Regressions since the gate
 
 The gate is the baseline, so a node that passed then and fails now is a
-regression, not an old failure. A full rerun of the corpora at commit `d2d0065e1`
-found eight, all since fixed:
+regression, not an old failure. A rerun of every corpus at commit `6de2b19ef`
+found none, and 371 failures in total: the 370 counted above plus RustSmith seed
+36, which is parallel-only. An earlier rerun at commit `d2d0065e1` had found
+eight regressions, all since fixed:
 
 - `builtin_macro_concat` printed `2.15` with every digit binary128 can need;
 - `irrefutable-path`, `issue-34751` and `unpretty-expr-fn-arg` were rejected by
