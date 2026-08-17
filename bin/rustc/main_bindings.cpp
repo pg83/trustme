@@ -24,6 +24,7 @@
 #include "resolve_main_bindings.h"
 #include "hir_conv_main_bindings.h"
 #include "hir_expand_main_bindings.h"
+#include "lint_forbid.h"
 #include "lint_must_use.h"
 #include "lint_unsafe_code.h"
 #include "hir_typeck_main_bindings.h"
@@ -442,6 +443,11 @@ int main(int argc, char* argv[]) {
             if (params.testHarness) {
                 ExpandTestHarness(crate);
             }
+        });
+        // Once `cfg` has removed what it removes, the lint attributes that are
+        // left have to agree with each other.
+        CompilePhaseV("Lint Forbid", [&]() {
+            LintCheckForbid(wb, crate);
         });
 
         // Extract the crate type and name from the crate attributes
