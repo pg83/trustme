@@ -40,14 +40,14 @@ sweeps found two regressions from this session's own work (a rejected
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 313 |
-| fixed, or no longer reproducing, since the gate | 318 |
+| still failing on the current tree | 310 |
+| fixed, or no longer reproducing, since the gate | 321 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 116 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 80 |
-| wrong runtime behaviour, panic, abort, or output | 41 |
+| wrong runtime behaviour, panic, abort, or output | 38 |
 | missing rejection or diagnostic | 53 |
 | generated C++ or link failure | 15 |
 | stable timeout | 8 |
@@ -166,11 +166,11 @@ took the signal.
 
 ## P1: runtime semantics
 
-Forty-one programs build but execute incorrectly:
+Thirty-eight programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 35 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 32 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
@@ -184,34 +184,20 @@ impl is not reconstructed. Of the formatting ones, `test_format_int_exp_precisio
 fix. No 128-bit ones are left. Minimise representatives before treating nearby
 assertions as one root cause.
 
-The let-chain family is now one bug, and a measured one. Each `&&` operand has
-its own temporary scope, which it did not before; what is left is that a binding
-from a `let` operand only drops when that operand is the *last* one. For
-`drop_order_let_chain` the collected order is
-`[1..12, 14, 15, 16, 19..22]` where rustc gives `[1..23]`: 13, 17, 18 and 23 are
-the bindings of non-final `let` operands, and their drops never run. The guard
-lowering pushes a variable scope per guard and terminates them all at the end
-(`mir_from_hir.cpp`, the `scopes` stack), and the drop *is* emitted -- with a
-drop flag that is cleared in the same basic block, immediately before the check:
-
-```text
-bb14: { df0 = 0; df1 = 0; if(!df0) goto bb18; ... drop var4 ... }
-```
-
-So the question is which scope resets those flags to their defaults there;
-`endSplitArm` and the state merge around `mir_from_hir.cpp:9130` are where the
-arms' variable states are reconciled. Minimal case, which gives `[1, 3]` where
-rustc gives `[1, 3, 2]`:
-
-```rust
-if let Some(_d) = log.loud(2) && log.loud(1).is_some() { log.mark(3); }
-```
+The let-chain family is fixed. Each `&&` operand has its own temporary scope, and
+a binding from a `let` operand now drops at the end of the body whether or not
+another operand follows it. What was wrong is worth remembering, because it is a
+trap the next state bug will look like: the operand that fails drops what the
+operands before it bound, and that exit is a *branch* -- the value states it left
+behind were the ones the body then saw, so the body's own drop was emitted with a
+flag the exit had already cleared. `terminateScopeEarly` now keeps the states when
+the exit crosses a conditional, which is what a frozen scope already did for the
+same reason.
 
 Grouping the panics by the rule they check finds these multi-test families:
 
 | family | tests | rule |
 |---|---:|---|
-| let-chain drop order | 3 | `drop_order_let_chain`, `drop_order_if_let_rescope`, `drop-order-comparisons-let-chains`: a binding from a `let` operand that is followed by another operand is never dropped at all |
 | coroutine and future size | 4 | `niche-in-coroutine`, `overlap-locals`, `resume-arg-size`, `future-as-arg`: locals that cannot be live together must share storage |
 | `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and the `core::any` library case: not reachable, see below |
 | `Waker::will_wake` | 2 | two library cases comparing a cloned waker's vtable |
