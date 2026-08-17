@@ -1275,6 +1275,11 @@ class CExpanderUnstableColumn: public ExpandProcMacro {
 class CExpanderModulePath: public ExpandProcMacro {
     ::std::unique_ptr<TokenStream> expand(const Span& sp, const WireBoard& wb, const ASTCrate& crate, const TokenTree& tt, ASTModule& mod) override {
         ::std::string pathStr;
+        // A crate may be named after a reserved word, and the path names it the
+        // only way it could be written: `r#override`.
+        if (LexFindReservedWord(crate.crateNameSet, crate.edition) != TOK_NULL) {
+            pathStr += "r#";
+        }
         pathStr += crate.crateNameSet;
         for (const auto& comp : mod.path().nodes) {
             pathStr += "::";

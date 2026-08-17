@@ -3,7 +3,11 @@
 // happened after expansion -- by which time `module_path!` had already been
 // expanded with an empty name.
 //
-// Same shape as the upstream test issues/issue-18859.rs.
+// A crate named after a reserved word is written the only way it can be, as a
+// raw identifier.
+//
+// Same shape as the upstream tests issues/issue-18859.rs and
+// attributes/z-crate-attr/respect-existing-attrs.rs.
 mod foo {
     pub mod bar {
         pub mod baz {
