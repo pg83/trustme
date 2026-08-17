@@ -30,23 +30,24 @@ environment; the 412 that were still red were then rerun again after the fixes
 recorded below. The authoritative rerun data is in
 `/tmp/trustme-reclass-20260817c`; classified records are in
 `/tmp/trustme-classification-20260817c`. These counts are measured, not
-decremented by hand, except for the four parser failures fixed after that
-rerun (two `ergonomic-clones`, two `tokens.md` literal suffixes).
+decremented by hand, except for the failures fixed after that rerun: four
+parser ones (two `ergonomic-clones`, two `tokens.md` literal suffixes) and nine
+generated-code ones.
 
 | result | tests |
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 392 |
-| fixed, or no longer reproducing, since the gate | 239 |
+| still failing on the current tree | 383 |
+| fixed, or no longer reproducing, since the gate | 248 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 172 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
-| wrong runtime behaviour, panic, abort, or output | 43 |
+| wrong runtime behaviour, panic, abort, or output | 44 |
 | missing rejection or diagnostic | 54 |
-| generated C++ or link failure | 25 |
+| generated C++ or link failure | 15 |
 | stable timeout | 10 |
 
 ## P0: accepted Rust rejected by the front end
@@ -115,11 +116,11 @@ declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 
-Forty-three programs build but execute incorrectly:
+Forty-four programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 37 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 38 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
@@ -132,6 +133,12 @@ which still prints as `fn{::"bin#"::#0::f}` -- the path of a function inside an
 impl is not reconstructed. Of the formatting ones, `test_format_int_exp_precision` survives the precision
 fix. No 128-bit ones are left. Minimise representatives before treating nearby
 assertions as one root cause.
+
+`glossary__L232` reached this class from the generated-code one: an enum with a
+single unit variant needs no tag, so `size_of` of it is 0 and we say 1. The
+data-enum path already collapses a lone variant (`trans_target.cpp`, the
+`e.size() <= 1` branch); the value-enum path beside it still emits a tag. Only
+`repr(Rust)` collapses -- `#[repr(u8)]` keeps one byte and `#[repr(C)]` four.
 
 ## P2: missing language checks
 
@@ -154,15 +161,9 @@ missing language rule before implementing diagnostics.
 
 ## P2: generated code and linking
 
-Nineteen tests emit C++ rejected by clang:
-
-| generated-code family | tests |
-|---|---:|
-| incomplete, missing, or wrongly ordered generated types | 10 |
-| invalid aggregate or value assignment | 5 |
-| enum-discriminant narrowing | 2 |
-| inline assembly lowering | 3 |
-| malformed generated filename `-.cpp` | 1 |
+Nine tests emit C++ rejected by clang: three inline-assembly lowerings, two
+enum-discriminant narrowings, one malformed generated filename `-.cpp`, and
+three remaining incomplete or wrongly ordered generated types.
 
 Six tests reach the linker: three miss generated constant symbols, two refer
 to intentional native test symbols, and one exercises native-link directives.
