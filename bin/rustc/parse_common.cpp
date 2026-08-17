@@ -71,6 +71,7 @@ ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty /*=B
     ::std::vector<ASTExprNodeBlock::Line> lines;
     ASTAttributeList attrs;
 
+    auto ps = lex.startSpan();
     auto origModule = lex.parseState().module;
     ::std::shared_ptr<ASTModule> localMod;
 
@@ -114,6 +115,7 @@ ASTExprNodeP ParseExprBlockNode(TokenStream& lex, ASTExprNodeBlock::Type ty /*=B
     auto* rvBlk = new ASTExprNodeBlock(ty, mv$(lines), mv$(localMod));
     rvBlk->label = label;
     auto rv = ASTExprNodeP(rvBlk);
+    rv->setSpan(lex.endSpan(ps));
     rv->setAttrs(mv$(attrs));
     return rv;
 }
