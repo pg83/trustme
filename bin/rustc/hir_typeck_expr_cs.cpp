@@ -252,6 +252,15 @@ namespace {
             );
         }
 
+        /// Equate what a cast between function pointers must agree on. The types
+        /// themselves may still differ: a safe function casts to an unsafe one.
+        void equateFunctionSignature(const Span& sp, const HIRTypeDataFunctionPointer& dst, const HIRTypeDataFunctionPointer& src) {
+            this->context.equateTypes(sp, dst.rettype, src.rettype);
+            for (size_t i = 0; i < dst.argTypes.size(); i++) {
+                this->context.equateTypes(sp, dst.argTypes[i], src.argTypes[i]);
+            }
+        }
+
         void visit(HIRExprNodeCast& node) override {
             const auto& sp = node.span();
             const auto& tgtTy = this->context.getType(node.resType);
@@ -511,7 +520,7 @@ namespace {
                             if (sE.abi != e.abi || (sE.isUnsafe && sE.isUnsafe != e.isUnsafe) || sE.argTypes.size() != e.argTypes.size()) {
                                 bad_cast(sp, srcTy, tgtTy, "fcn nargs");
                             }
-                            this->context.equateTypes(sp, tgtTy, srcTy);
+                            equateFunctionSignature(sp, e, sE);
                             this->completed = true;
                         }
                         TU_ARMA(NamedFunction, f) {
@@ -521,7 +530,7 @@ namespace {
                             if (sE.abi != e.abi || (sE.isUnsafe && sE.isUnsafe != e.isUnsafe) || sE.argTypes.size() != e.argTypes.size()) {
                                 bad_cast(sp, srcTy, tgtTy, "fcn nargs");
                             }
-                            this->context.equateTypes(sp, tgtTy, ft);
+                            equateFunctionSignature(sp, e, sE);
                             this->completed = true;
                         }
                 }
