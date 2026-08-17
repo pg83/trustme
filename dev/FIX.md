@@ -4,7 +4,7 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-Snapshot: 2026-08-17, commit `d6cadc979`. The numbers below come from rerunning
+Snapshot: 2026-08-17, commit `ac039798e`. The numbers below come from rerunning
 every node that failed the last full gate, not from a fresh gate. The gate
 itself ran at commit `79582dd3f` in the clang Nix environment on all 78
 available cores:
@@ -27,23 +27,23 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 
 All 631 failed nodes were then rerun independently inside the same clang Nix
 environment. The authoritative rerun data is in
-`/tmp/trustme-reclass-20260817`; classified records are in
-`/tmp/trustme-classification-20260817`. Both were regenerated after the
+`/tmp/trustme-reclass-20260817b`; classified records are in
+`/tmp/trustme-classification-20260817b`. Both were regenerated after the
 fixes recorded below, so these counts are measured, not decremented by hand.
 
 | result | tests |
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 411 |
-| fixed, or no longer reproducing, since the gate | 220 |
+| still failing on the current tree | 410 |
+| fixed, or no longer reproducing, since the gate | 221 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 177 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
 | wrong runtime behaviour, panic, abort, or output | 52 |
-| missing rejection or diagnostic | 58 |
+| missing rejection or diagnostic | 57 |
 | generated C++ or link failure | 26 |
 | stable timeout | 9 |
 
@@ -134,7 +134,7 @@ assertions as one root cause.
 
 ## P2: missing language checks
 
-Fifty-eight negative tests compile successfully. The largest source areas are:
+Fifty-seven negative tests compile successfully. The largest source areas are:
 
 | language area | tests |
 |---|---:|
@@ -152,9 +152,9 @@ Fifty-eight negative tests compile successfully. The largest source areas are:
 Source chapters are routing information. Group the concrete examples by the
 missing language rule before implementing diagnostics.
 
-The three `diagnostics` survivors need what `unused_must_use` did not bring:
-`#[deny]`/`#[allow]` on an item rather than the crate (`:235`), the
-`unsafe_code` lint (`:256`), and the error for lifting a `forbid` (`:92`).
+The two `diagnostics` survivors need what item-level lint levels did not
+bring: the `unsafe_code` lint (`:256`) and the error for lifting a `forbid`
+(`:92`).
 
 ## P2: generated code and linking
 
