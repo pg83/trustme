@@ -35,14 +35,14 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 400 |
-| fixed, or no longer reproducing, since the gate | 231 |
+| still failing on the current tree | 398 |
+| fixed, or no longer reproducing, since the gate | 233 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 177 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
-| wrong runtime behaviour, panic, abort, or output | 45 |
+| wrong runtime behaviour, panic, abort, or output | 43 |
 | missing rejection or diagnostic | 55 |
 | generated C++ or link failure | 25 |
 | stable timeout | 9 |
@@ -113,11 +113,11 @@ declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 
-Forty-five programs build but execute incorrectly:
+Forty-three programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 39 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 37 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
