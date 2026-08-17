@@ -3117,8 +3117,17 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                         if (te.binding.is_Struct()) {
                             const HIRStruct& str = *te.binding.as_Struct();
                             if (srcTy->is_Path() && srcTy->as_Path().binding.is_Struct() && srcTy->as_Path().binding.as_Struct() == &str) {
-                                if (str.structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None) {
+                                const auto& markings = str.structMarkings;
+                                if (markings.coerceUnsized != HIRStructMarkings::Coerce::None) {
                                     done = true;
+                                }
+                                // The coerced pointer starts the value, so its
+                                // metadata follows it, and the parameter the
+                                // coercion runs through names the pointee.
+                                if (markings.coerceUnsized == HIRStructMarkings::Coerce::Pointer && markings.coerceParam != ~0u) {
+                                    const auto& paramsD = te.path.data.as_Generic().params;
+                                    const auto& paramsS = srcTy->as_Path().path.data.as_Generic().params;
+                                    writeCtfeUnsizeMetadata(localState, dst, paramsD.types.at(markings.coerceParam), paramsS.types.at(markings.coerceParam));
                                 }
                             }
                         }

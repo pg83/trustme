@@ -482,7 +482,19 @@ MIRRValue MIRCleanupLiteralToRValue(const MIRTypeResolve& state, MirMutator& mut
                 auto lval = mutator.inTemporary(mv$(tyBorrow), mv$(rval));
                 return MIRRValue::make_Cast({mv$(lval), mv$(ty)});
             } else {
-                auto v = lit.readUint(TargetGetPointerBits() / 8);
+                const auto ptrSize = TargetGetPointerBits() / 8;
+                auto v = lit.readUint(ptrSize);
+                // A raw pointer to a slice carries a length that the address
+                // alone cannot supply, so it is built rather than cast.
+                if (state.resolve.metadataType(state.sp, te.inner) == MetadataType::Slice) {
+                    const auto* slice = te.inner->opt_Slice();
+                    MIR_ASSERT(state, slice || te.inner == HIRCoreType::Str, "Slice metadata on non-slice type " << te.inner);
+                    auto thinTy = state.crate.types.pointer(te.type, slice ? slice->inner : state.crate.types.primitive(HIRCoreType::U8));
+                    auto addr = mutator.inTemporary(state.crate.types.primitive(HIRCoreType::Usize), MIRConstant::make_Uint({v, HIRCoreType::Usize}));
+                    auto ptr = mutator.inTemporary(thinTy, MIRRValue::make_Cast({mv$(addr), thinTy}));
+                    auto size = MIRConstant::make_Uint({lit.slice(ptrSize).readUint(ptrSize), HIRCoreType::Usize});
+                    return MIRRValue::make_MakeDst({mv$(ptr), mv$(size)});
+                }
                 auto lval = mutator.inTemporary(state.crate.types.primitive(HIRCoreType::Usize), MIRRValue(MIRConstant::make_Uint({v, HIRCoreType::Usize})));
                 return MIRRValue::make_Cast({mv$(lval), mv$(ty)});
             }
