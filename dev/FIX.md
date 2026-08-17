@@ -35,15 +35,15 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 409 |
-| fixed, or no longer reproducing, since the gate | 222 |
+| still failing on the current tree | 408 |
+| fixed, or no longer reproducing, since the gate | 223 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 177 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
 | wrong runtime behaviour, panic, abort, or output | 52 |
-| missing rejection or diagnostic | 56 |
+| missing rejection or diagnostic | 55 |
 | generated C++ or link failure | 26 |
 | stable timeout | 9 |
 
@@ -134,11 +134,10 @@ assertions as one root cause.
 
 ## P2: missing language checks
 
-Fifty-six negative tests compile successfully. The largest source areas are:
+Fifty-five negative tests compile successfully. The largest source areas are:
 
 | language area | tests |
 |---|---:|
-| diagnostic attributes | 1 |
 | name resolution | 7 |
 | destructor restrictions | 7 |
 | trait items | 2 |
@@ -151,9 +150,6 @@ Fifty-six negative tests compile successfully. The largest source areas are:
 
 Source chapters are routing information. Group the concrete examples by the
 missing language rule before implementing diagnostics.
-
-The last `diagnostics` survivor (`:92`) needs the error raised when an inner
-`allow` tries to lift an outer `forbid`.
 
 ## P2: generated code and linking
 
