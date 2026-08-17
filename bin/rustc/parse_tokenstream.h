@@ -6,6 +6,7 @@
 #include "ast_edition.h"
 #include "parse_token.h"
 
+#include <algorithm>
 #include <vector>
 #include <iostream>
 
@@ -28,6 +29,14 @@ public:
     bool disallowCallOrIndex = false;
     // A debugging hook that disables expansion of macros
     bool noExpandMacros = false;
+    // Lifetimes an `unsafe<..>` binder hides. This compiler erases lifetimes, so
+    // a reference to one of them inside the binder is an elided lifetime rather
+    // than a name to resolve.
+    ::std::vector<RcString> erasedLifetimes;
+
+    bool lifetimeIsErased(const RcString& name) const {
+        return ::std::find(erasedLifetimes.begin(), erasedLifetimes.end(), name) != erasedLifetimes.end();
+    }
 
     const ASTCrate* crate = nullptr; // TODO: Remove this (needed for MetaItem)
     const WireBoard* wb = nullptr;   // cfg!() evaluation and expansion read components through the board

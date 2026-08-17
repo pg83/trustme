@@ -1624,6 +1624,20 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                             path = ASTPath(RcString::newInterned("#intrinsics"), {ASTPathNode("offset_of")});
                             path.nodes().back().args().entries.push_back(std::move(ty));
                             return NEWNODE(ASTExprNodeCallPath, std::move(path), std::move(args));
+                        } else if (tok.ident() == "wrap_binder" || tok.ident() == "unwrap_binder") {
+                            // An unsafe binder only hides the lifetimes it
+                            // binds, which this compiler erases, so wrapping and
+                            // unwrapping a value leave the value alone. The
+                            // optional second argument is the binder type.
+                            GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
+                            auto value = ParseExpr0(lex);
+                            if (lex.getTokenIf(TOK_COMMA)) {
+                                auto ty = ParseType(lex);
+                                GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+                                return NEWNODE(ASTExprNodeTypeAnnotation, std::move(value), std::move(ty));
+                            }
+                            GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+                            return value;
                         } else if (tok.ident() == "type_ascribe") {
                             GET_CHECK_TOK(tok, lex, TOK_PAREN_OPEN);
                             auto value = ParseExpr0(lex);
@@ -2052,7 +2066,7 @@ ASTPathParams ParsePathGenericList(TokenStream& lex) {
         }
         switch (GET_TOK(tok, lex)) {
             case TOK_LIFETIME:
-                rv.entries.push_back(ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
+                rv.entries.push_back(lex.parseState().lifetimeIsErased(tok.ident().name) ? ASTLifetimeRef() : ASTLifetimeRef(/*lex.point_span(),*/ tok.ident()));
                 break;
             case TOK_RWORD_TRUE:
             case TOK_RWORD_FALSE:
@@ -5429,8 +5443,20 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
         case TOK_UNDERSCORE:
             return mkType(lex.typePool(), lex.subSpan(tok.getPos()));
 
-        // 'unsafe' - An unsafe function type
+        // 'unsafe' - An unsafe function type, or an unsafe binder
         case TOK_RWORD_UNSAFE:
+            // `unsafe<'a> &'a T` hides the lifetimes it binds. This compiler
+            // erases lifetimes, so the binder is its own inner type.
+            if (LOOK_AHEAD(lex) == TOK_LT) {
+                const auto binder = ParseHRB(lex);
+                const auto savedErased = lex.parseState().erasedLifetimes;
+                for (const auto& lifetime : binder.lifetimes) {
+                    lex.parseState().erasedLifetimes.push_back(lifetime.name().name);
+                }
+                auto* inner = ParseTypeInt(lex, allowTraitList);
+                lex.parseState().erasedLifetimes = savedErased;
+                return inner;
+            }
         // 'extern' - A function type with an ABI
         case TOK_RWORD_EXTERN:
         // 'fn' - Rust function
@@ -5500,7 +5526,9 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             // Reference
             tok = lex.getToken();
             if (tok.type() == TOK_LIFETIME) {
-                lifetime = ASTLifetimeRef(/*lex.point_span(), */ tok.ident());
+                if (!lex.parseState().lifetimeIsErased(tok.ident().name)) {
+                    lifetime = ASTLifetimeRef(/*lex.point_span(), */ tok.ident());
+                }
                 tok = lex.getToken();
             }
             bool isMut = false;
