@@ -2847,8 +2847,17 @@ namespace {
         for (size_t i = 0; i < params.values.size(); i++) {
             auto& value = params.values[i];
             if (value.is_Unevaluated()) {
-                const auto& type = defs->values[i].type;
-                ASSERT_BUG(sp, !monomorphiseTypeNeeded(type), "Generic const parameter type " << type << " in " << defs->fmtArgs());
+                const HIRTypeData* type = defs->values[i].type;
+                HIRTypeRef tmp;
+                if (monomorphiseTypeNeeded(type)) {
+                    // A const parameter's type may name the parameters before it
+                    // (`const M: [T; N]`), and those are concrete by now. The
+                    // list fills both slots because a definition indexes its own
+                    // parameters as `I:n` or as `M:n` depending on the item.
+                    MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
+                    type = tmp = ms.monomorphType(sp, type);
+                    ASSERT_BUG(sp, !monomorphiseTypeNeeded(type), "Generic const parameter type " << type << " in " << defs->fmtArgs());
+                }
                 ConvertHIRConstantEvaluateConstGeneric(sp, wb, crate, type, value);
             }
             ASSERT_BUG(sp, value.is_Evaluated(), "Const parameter was not concrete at translation: " << value);

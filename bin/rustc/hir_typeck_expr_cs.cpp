@@ -9474,6 +9474,32 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 }
             }
 
+            void visit(HIRExprNodeCallPath& node) override {
+                HIRExprVisitorDef::visit(node);
+
+                HIRPathParams* paramsPtr = nullptr;
+                TU_MATCH_HDRA( (node.path.data), {)
+                TU_ARMA(Generic, pe) paramsPtr = &pe.params;
+                    TU_ARMA(UfcsKnown, pe) paramsPtr = &pe.params;
+                    TU_ARMA(UfcsInherent, pe) paramsPtr = &pe.params;
+                    TU_ARMA(UfcsUnknown, _pe) BUG(node.span(), "Unresolved call path " << node.path);
+                }
+
+                const bool hasUnevaluated = ::std::any_of(paramsPtr->values.begin(), paramsPtr->values.end(), [](const HIRConstGeneric& value) {
+                    return value.is_Unevaluated();
+                });
+                if (!hasUnevaluated) {
+                    return;
+                }
+
+                TRACE_FUNCTION_FR("Call const params: " << node.path, "Call const params");
+                MonomorphState outParams(ms.crate.types);
+                auto valRef = staticResolve.getValue(node.span(), node.path, outParams, /*signatureOnly=*/true, nullptr);
+                const auto* fcn = valRef.opt_Function();
+                ASSERT_BUG(node.span(), fcn, "Call path resolved to " << valRef.tagStr() << ": " << node.path);
+                ConvertHIRConstantEvaluateMethodParams(node.span(), ms.wb, ms.crate, &(*fcn)->params, *paramsPtr);
+            }
+
             void visit(HIRExprNodeCallMethod& node) override {
                 HIRExprVisitorDef::visit(node);
 

@@ -707,7 +707,7 @@ MIRConstant MIRCloner::cloneConstant(const MIRConstant& src) const {
         TU_ARMA(Bool, ce) return MIRConstant(ce);
         TU_ARMA(Bytes, ce) return MIRConstant(ce);
         TU_ARMA(StaticString, ce) return MIRConstant(ce);
-        TU_ARMA(Encoded, ce) return MIRConstant::make_Encoded({ce.type, ce.value.clone()});
+        TU_ARMA(Encoded, ce) return MIRConstant::make_Encoded({this->monomorph(ce.type), ce.value.clone()});
         TU_ARMA(Const, ce) {
             return MIRConstant::make_Const({box$(this->monomorph(*ce.p))});
         }
@@ -723,7 +723,9 @@ MIRConstant MIRCloner::cloneConstant(const MIRConstant& src) const {
                     return ve;
                 }
                 TU_ARMA(Evaluated, ve) {
-                    const auto& ty = this->valueGenericType(ce);
+                    // The parameter's declared type can name other generics
+                    // (`const M: [T; N]`), so it needs monomorphising too.
+                    const auto ty = this->monomorph(this->valueGenericType(ce));
                     auto v = EncodedLiteralSlice(*ve);
                     if (!ty->is_Primitive()) {
                         return MIRConstant::make_Encoded({ty, ve->clone()});

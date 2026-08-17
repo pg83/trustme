@@ -38,13 +38,13 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 354 |
-| fixed, or no longer reproducing, since the gate | 277 |
+| still failing on the current tree | 351 |
+| fixed, or no longer reproducing, since the gate | 280 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 150 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 85 |
 | wrong runtime behaviour, panic, abort, or output | 40 |
 | missing rejection or diagnostic | 53 |
 | generated C++ or link failure | 15 |
@@ -122,11 +122,11 @@ item is not affected -- it takes a `$vis` fragment now.
 
 ## P1: internal compiler failures
 
-There are 88 compiler-internal failures in 71 stable signatures.
+There are 85 compiler-internal failures in 70 stable signatures.
 
 | compiler area | tests |
 |---|---:|
-| HIR lowering and conversion | 23 |
+| HIR lowering and conversion | 20 |
 | type checker | 20 |
 | MIR lowering, CTFE MIR, and optimisation | 12 |
 | parser and macro expansion | 12 |
@@ -139,13 +139,8 @@ The multi-test signatures are:
 | signature | tests |
 |---|---:|
 | `ASSERT` with no backtrace | 5 |
-| `BUG hir_conv_constant_evaluation.cpp:4670` | 3 |
 | eleven other two-test signatures | 22 |
 | fifty-eight one-test signatures | 58 |
-
-`BUG hir_conv_constant_evaluation.cpp:4670` is the polymorphic-constant
-assertion `[T; Generic(N)]`: the three `generic_const_parameter_types` tests
-declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 

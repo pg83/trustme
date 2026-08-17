@@ -4676,7 +4676,12 @@ namespace {
                         auto idx = static_cast<size_t>(&v - &p.values.front());
                         ASSERT_BUG(sp, idx < paramsDef.values.size(), "");
                         const auto& ty = paramsDef.values[idx].type;
-                        ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
+                        // A const parameter's own type may be generic
+                        // (`const M: [T; N]`), and the value cannot be evaluated
+                        // before the type is known. Leave it for monomorphisation.
+                        if (monomorphiseTypeNeeded(ty)) {
+                            continue;
+                        }
                         evalulateConstGeneric(sp, ty, v);
                     } catch (const Defer&) {
                         // Deferred - no update
@@ -5347,8 +5352,17 @@ void ConvertHIRConstantEvaluateMethodParams(const Span& sp, const WireBoard& wb,
                 ASSERT_BUG(sp, paramsDef, "Missing generic parameter definitions for " << params);
                 auto idx = static_cast<size_t>(&v - &params.values.front());
                 ASSERT_BUG(sp, idx < paramsDef->values.size(), "");
-                const auto& ty = paramsDef->values[idx].type;
-                ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
+                const HIRTypeData* ty = paramsDef->values[idx].type;
+                HIRTypeRef tmp;
+                if (monomorphiseTypeNeeded(ty)) {
+                    // A const parameter's type may name the parameters before it
+                    // (`const M: [u8; N]`), and those are already known here. The
+                    // list fills both slots because a definition indexes its own
+                    // parameters as `I:n` or as `M:n` depending on the item.
+                    MonomorphStatePtr ms(crate.types, nullptr, &params, &params);
+                    ty = tmp = ms.monomorphType(sp, ty);
+                    ASSERT_BUG(sp, !monomorphiseTypeNeeded(ty), "" << ty);
+                }
                 v = HIRConstGeneric::make_Evaluated(evaluateConstgeneric(sp, wb, crate, ty, ue));
             } catch (const Defer&) {
                 // Deferred - no update
