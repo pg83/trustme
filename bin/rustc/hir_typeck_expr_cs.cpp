@@ -6369,6 +6369,47 @@ namespace {
             });
         }
 
+        // An integer literal can only become a primitive integer, and shifting
+        // one yields that same type whatever is on the right. Linking the two
+        // without waiting for an impl is what lets an enclosing operator reach
+        // the literal in `value & (1 << i)`.
+        if (v.name != ""
+            && (v.operatorKind == TypeckPrimitiveOperator::Shl || v.operatorKind == TypeckPrimitiveOperator::Shr
+                || v.operatorKind == TypeckPrimitiveOperator::ShlAssign || v.operatorKind == TypeckPrimitiveOperator::ShrAssign)) {
+            const auto* leftInfer = context.getType(v.implTy)->opt_Infer();
+            if (leftInfer && leftInfer->tyClass == HIRInferClass::Integer) {
+                DEBUG("- Shift of an integer literal yields its own type");
+                context.equateTypes(sp, v.leftTy, v.implTy);
+            }
+        }
+
+        // `b & 1` with `b: &u8` goes through the standard library's forwarding
+        // impls, and only those: an impl for `&u8` cannot be written elsewhere.
+        // They take the value type on the right and yield it, so a borrowed
+        // primitive says as much as a bare one -- including for a shift, whose
+        // right side stays free.
+        if (v.isOperator && v.params.types.size() == 1 && !context.ivars.typeContainsIvars(v.implTy, /*only_unbound=*/true)) {
+            if (const auto* borrow = context.getType(v.implTy)->opt_Borrow()) {
+                const auto& valueTy = context.getType(borrow->inner);
+                const auto& rightTy = context.getType(v.params.types.front());
+                // An unresolved right side may still turn out to be a
+                // reference, which the forwarding impls also accept, so only a
+                // value -- a literal included -- is enough to go on.
+                if (H::typeIsNum(valueTy) && !valueTy->is_Infer() && H::typeIsNum(rightTy)) {
+                    DEBUG("- Magic inferrence link through a borrowed primitive");
+                    if (v.name != "") {
+                        context.equateTypes(sp, v.leftTy, valueTy);
+                    }
+                    // A comparison forwards as `PartialEq<&B> for &A`, so its
+                    // right side stays a reference and this says nothing about it.
+                    const bool isComparison = v.operatorKind == TypeckPrimitiveOperator::Equal || v.operatorKind == TypeckPrimitiveOperator::Order;
+                    if (!isComparison && primitiveOperatorLhsDeterminesRhs(v.operatorKind, valueTy)) {
+                        context.equateTypes(sp, v.params.types.front(), valueTy);
+                    }
+                }
+            }
+        }
+
         // A raw inference placeholder can be the result of a lazy expression
         // (for example, a generic call), rather than an impl candidate.  A
         // language primitive whose known lhs determines the rhs type gives
@@ -6408,6 +6449,8 @@ namespace {
                 const auto& rightTy = context.getType(right);
                 const bool primitiveOrLiteralPair = H::typeIsNum(leftTy) && H::typeIsNum(rightTy);
                 const bool languagePrimitiveCandidate = primitiveOperatorHasLanguageCandidate(v.operatorKind, leftTy, rightTy);
+                const bool isShiftOperator = v.operatorKind == TypeckPrimitiveOperator::Shl || v.operatorKind == TypeckPrimitiveOperator::Shr
+                    || v.operatorKind == TypeckPrimitiveOperator::ShlAssign || v.operatorKind == TypeckPrimitiveOperator::ShrAssign;
                 if (primitiveOrLiteralPair || languagePrimitiveCandidate) {
                     DEBUG("- Magic inferrence link for primitive binops");
                     if (v.name == "") {
@@ -6415,8 +6458,7 @@ namespace {
                     } else {
                         context.equateTypes(sp, res, left);
                     }
-                    const bool isShift = v.operatorKind == TypeckPrimitiveOperator::Shl || v.operatorKind == TypeckPrimitiveOperator::Shr || v.operatorKind == TypeckPrimitiveOperator::ShlAssign || v.operatorKind == TypeckPrimitiveOperator::ShrAssign;
-                    if (isShift) {
+                    if (isShiftOperator) {
                         // Shifts can have mismatched types on each side.
                     } else {
                         // NOTE: This only holds if not a shift
