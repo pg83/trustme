@@ -3503,7 +3503,10 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                                 default: break;
                             }
                             if (bits != 0 && lit->value == (U128(1) << (bits - 1))) {
-                                rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Integer({type, lit->value})));
+                                // A literal carries its value sign-extended to
+                                // 128 bits, so a cast that widens it reads the
+                                // sign rather than a positive magnitude.
+                                rv.reset(ctx.crate->pool->make<HIRExprNodeLiteral>(v.span(), HIRExprNodeLiteral::Data::make_Integer({type, ~U128(0) << (bits - 1)})));
                                 break;
                             }
                         }
