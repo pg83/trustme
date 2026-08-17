@@ -40,13 +40,13 @@ sweeps found two regressions from this session's own work (a rejected
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 337 |
-| fixed, or no longer reproducing, since the gate | 294 |
+| still failing on the current tree | 323 |
+| fixed, or no longer reproducing, since the gate | 308 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 136 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 84 |
+| accepted Rust rejected by the compiler or driver | 126 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 80 |
 | wrong runtime behaviour, panic, abort, or output | 41 |
 | missing rejection or diagnostic | 53 |
 | generated C++ or link failure | 15 |
@@ -54,7 +54,7 @@ sweeps found two regressions from this session's own work (a rejected
 
 ## P0: accepted Rust rejected by the front end
 
-All 136 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 126 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
@@ -85,6 +85,13 @@ like `for`, but through `IntoAsyncIterator::into_async_iter` and an await of
 (`parse_common.cpp:1422`): in source `gen` is a contextual keyword, so an
 expression-position `gen {` has to be edition-gated against a struct literal --
 no corpus test needs it today.
+
+An async closure's future now takes the captures with it instead of borrowing
+the frame of the call that made it, which is what made a capture read freed
+stack. What is still wrong is a capture the closure holds by *reference*: the
+future takes a copy of the referent rather than the reference, so a write
+through it is lost (`async |i| { seen += i; i }` leaves `seen` untouched).
+rustc solves this with a second, by-reference coroutine body; we have one body.
 
 The 46 tests routed through the trait-selection and type-mismatch lines are not
 one root cause: fixing integer inference through an operator took two of them
@@ -129,7 +136,7 @@ item is not affected -- it takes a `$vis` fragment now.
 
 ## P1: internal compiler failures
 
-There are 84 compiler-internal failures in 69 stable signatures.
+There are 80 compiler-internal failures in 67 stable signatures.
 
 | compiler area | tests |
 |---|---:|
@@ -240,6 +247,15 @@ Fifty-three negative tests compile successfully. The largest source areas are:
 
 Source chapters are routing information. Group the concrete examples by the
 missing language rule before implementing diagnostics.
+
+Most of this class is one missing pass. Roughly twenty of the fifty-three want
+a borrow checker: the seven `destructors` ones are temporaries dropped while
+still borrowed, and the Rustonomicon ones (`lifetime-mismatch`, `subtyping`,
+`dropck`, `borrow-splitting`, `ownership`) are region and drop-order rules. No
+diagnostic in that group is reachable without one, so do not count them as
+independent work. The next largest group is reachable: eight `name-resolution`
+and `scopes` tests want an ambiguity error, raised when a name that two glob
+imports (or a glob and an outer item) both provide is *used*.
 
 `abi/variadic-ffi` is the other `...` test and needs more than parsing: a named
 variadic parameter (`mut ap: ...`) is a `VaListImpl` the body then reads, so
