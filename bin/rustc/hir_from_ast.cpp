@@ -353,6 +353,11 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
         }
         TU_ARMA(Any, e)
         return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
+        // `!` matches a value of a type that has none. Every use of it is
+        // either dropped as an unreachable alternative or made to diverge, so
+        // what is left to lower only has to read the place it names.
+        TU_ARMA(Never, e)
+        return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
         TU_ARMA(Box, e)
         return HIRPattern{mv$(bindings), HIRPattern::Data::make_Box({box$(LowerHIRPattern(*e.sub))})};
         TU_ARMA(Deref, e)
@@ -2243,6 +2248,22 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     rv.returnType = LowerHIRType(f.rettype());
     rv.source = SourceLocation(f.sp());
     rv.code = LowerHIRExpr(f.code());
+    // A parameter matched by `!` takes a value of a type that has none, so the
+    // function is never entered. Its body is unreachable whatever it says, and
+    // whatever the return type is: replace it with a body that diverges.
+    if (rv.code) {
+        bool neverArg = false;
+        for (const auto& arg : f.args()) {
+            neverArg |= PatternContainsNever(arg.pat);
+        }
+        if (neverArg) {
+            auto* body = crate->pool->make<HIRExprNodeBlock>(f.sp());
+            body->resType = crate->types.unit();
+            auto* loop = crate->pool->make<HIRExprNodeLoop>(f.sp(), RcString(), HIRExprNodeP(body));
+            loop->resType = crate->types.infer();
+            rv.code = HIRExprPtr(loop);
+        }
+    }
     rv.defineOpaque = ::std::move(defineOpaque);
     rv.markings = markings;
 

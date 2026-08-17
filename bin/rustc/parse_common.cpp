@@ -692,6 +692,29 @@ ASTExprNodeP ParseExprMatch(TokenStream& lex, ASTExprNodeP scrutinee) {
             arm.patterns.push_back(ParsePattern(lex, AllowOrPattern::No));
         } while (GET_TOK(tok, lex) == TOK_PIPE);
 
+        // An alternative holding a `!` matches no value. If that leaves the arm
+        // with no alternative at all it carries no body either: it contributes
+        // nothing to the match but the read of the scrutinee, which every arm
+        // already performs.
+        {
+            ::std::vector<ASTPattern> reachable;
+            for (auto& p : arm.patterns) {
+                if (!PatternContainsNever(p)) {
+                    reachable.push_back(mv$(p));
+                }
+            }
+            arm.patterns = mv$(reachable);
+        }
+        if (arm.patterns.empty()) {
+            if (tok.type() == TOK_FATARROW) {
+                (void)ParseStmt(lex);
+            } else {
+                PUTBACK(tok, lex);
+            }
+            lex.getTokenIf(TOK_COMMA);
+            continue;
+        }
+
         if (tok.type() == TOK_RWORD_IF) {
             arm.guard = ParseIfLetChain(lex, /*allowStructLiteral=*/true);
             GET_TOK(tok, lex);
@@ -2233,7 +2256,22 @@ ASTPattern ParsePattern(TokenStream& lex, AllowOrPattern allowOr) {
             lex.getToken();
             pats.push_back(ParsePattern1(lex, allowOr));
         }
-        return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Or(mv$(pats)));
+        // An alternative holding a `!` matches no value, so it neither binds
+        // anything nor contributes a case. Dropping it here keeps the binding
+        // lists of the remaining alternatives the ones that have to agree.
+        std::vector<ASTPattern> reachable;
+        for (auto& p : pats) {
+            if (!PatternContainsNever(p)) {
+                reachable.push_back(mv$(p));
+            }
+        }
+        if (reachable.empty()) {
+            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Never({}));
+        }
+        if (reachable.size() == 1) {
+            return mv$(reachable.front());
+        }
+        return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Or(mv$(reachable)));
     } else {
         return rv;
     }
@@ -2470,6 +2508,8 @@ ASTPattern ParsePatternReal1(TokenStream& lex, AllowOrPattern allowOr) {
     switch (GET_TOK(tok, lex)) {
         case TOK_UNDERSCORE:
             return ASTPattern(lex.endSpan(ps), ASTPattern::Data());
+        case TOK_EXCLAM:
+            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Never({}));
         //case TOK_DOUBLE_DOT:
         case TOK_RWORD_BOX:
             return ASTPattern(ASTPattern::TagBox(), lex.endSpan(ps), ParsePattern1(lex, allowOr));
@@ -4461,6 +4501,15 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
         if (auto* p = path.cls.opt_Super()) {
             if (p->nodes.empty()) {
                 p->count += 1;
+            } else {
+                p->nodes.pop_back();
+            }
+        }
+        // `self::super::` leaves the module the same way a leading `super`
+        // does; only the spelling puts the `super` after the `self`.
+        else if (auto* p = path.cls.opt_Self()) {
+            if (p->nodes.empty()) {
+                path = ASTPath::newSuper(1, {});
             } else {
                 p->nodes.pop_back();
             }

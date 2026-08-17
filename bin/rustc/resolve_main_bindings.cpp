@@ -2432,7 +2432,10 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
     }
 
     TU_MATCH_HDRA( (pat.data()), {)
-    TU_ARMA(MaybeBind, e) {
+    TU_ARMA(Never, e) {
+            // `!` names nothing and binds nothing.
+        }
+        TU_ARMA(MaybeBind, e) {
             auto name = mv$(e.name);
             // Attempt to resolve the name in the current namespace, and if it fails, it's a binding
             auto p = context.lookupOpt(name.name, name.hygiene, Context::LookupMode::PatternValue);

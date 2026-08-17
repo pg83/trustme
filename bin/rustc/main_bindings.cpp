@@ -1412,6 +1412,22 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                         }
                     } else if (optname == "pause-after-start") {
                         this->debug.pause = true;
+                    } else if (optname == "unpretty") {
+                        // A pretty-printer selects how far the compiler runs
+                        // before printing.  `normal` prints the parsed source
+                        // and `expanded`/`ast-tree` the expanded crate, so
+                        // neither reaches name resolution -- code that only
+                        // makes sense before it is still a valid input.
+                        getOptval();
+                        auto form = optval.substr(0, optval.find(','));
+                        if (form == "normal" || form == "identified") {
+                            this->lastStage = STAGE_PARSE;
+                        } else if (form == "expanded" || form == "ast-tree") {
+                            this->lastStage = STAGE_EXPAND;
+                        } else {
+                            // `hir`, `thir` and `mir` forms need the passes
+                            // that build them, so they run the whole compiler.
+                        }
                     } else if (optname == "print-cfgs") {
                         noOptval();
                         this->printCfgs = true;

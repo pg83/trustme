@@ -40,6 +40,11 @@ public:
 };
 
 struct ASTStructPatternEntry;
+class ASTPattern;
+
+/// True if `!` appears anywhere in the pattern, which makes the alternative it
+/// belongs to unmatchable.
+extern bool PatternContainsNever(const ASTPattern& pat);
 
 class ASTPattern {
 public:
@@ -74,6 +79,9 @@ public:
         (MaybeBind, struct { Ident name; }),
         (Macro, struct { unique_ptr<ASTMacroInvocation> inv; }),
         (Any, struct {}),
+        /// `!`, which matches a value of an uninhabited type. No such value
+        /// exists, so the arm or binding it appears in is never reached.
+        (Never, struct {}),
         (Box, struct { unique_ptr<ASTPattern> sub; }),
         (Deref, struct { unique_ptr<ASTPattern> sub; }),
         (Ref,

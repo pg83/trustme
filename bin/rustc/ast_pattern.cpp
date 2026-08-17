@@ -88,6 +88,9 @@
         TU_ARMA(Any, ent) {
             os << "_";
         }
+        TU_ARMA(Never, ent) {
+            os << "!";
+        }
         TU_ARMA(Box, ent) {
             os << "box " << *ent.sub;
         }
@@ -179,6 +182,67 @@
 ASTPattern::~ASTPattern() {
 }
 
+bool PatternContainsNever(const ASTPattern& pat) {
+    struct H {
+        static bool any(const ::std::vector<ASTPattern>& list) {
+            for (const auto& p : list) {
+                if (PatternContainsNever(p)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+
+        static bool tup(const ASTPattern::TuplePat& p) {
+            return any(p.start) || any(p.end);
+        }
+    };
+
+    TU_MATCH_HDRA( (pat.data()), {)
+    default:
+        return false;
+        TU_ARMA(Never, e) {
+            return true;
+        }
+        TU_ARMA(Box, e) {
+            return PatternContainsNever(*e.sub);
+        }
+        TU_ARMA(Deref, e) {
+            return PatternContainsNever(*e.sub);
+        }
+        TU_ARMA(Ref, e) {
+            return PatternContainsNever(*e.sub);
+        }
+        TU_ARMA(Guard, e) {
+            return PatternContainsNever(*e.sub);
+        }
+        TU_ARMA(Tuple, e) {
+            return H::tup(e);
+        }
+        TU_ARMA(StructTuple, e) {
+            return H::tup(e.tupPat);
+        }
+        TU_ARMA(Struct, e) {
+            for (const auto& sp : e.subPatterns) {
+                if (PatternContainsNever(sp.pat)) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        TU_ARMA(Slice, e) {
+            return H::any(e.subPats);
+        }
+        TU_ARMA(SplitSlice, e) {
+            return H::any(e.leading) || H::any(e.trailing);
+        }
+        TU_ARMA(Or, e) {
+            return H::any(e);
+        }
+    }
+    return false;
+}
+
 ASTPattern::ASTPattern(TagStruct, Span sp, ASTPath path, ::std::vector<ASTStructPatternEntry> subPatterns, bool isExhaustive)
     : span_(mv$(sp))
     , data_(Data::make_Struct({::std::move(path), ::std::move(subPatterns), isExhaustive}))
@@ -219,6 +283,9 @@ ASTPattern ASTPattern::clone() const {
     TU_MATCH_HDRA( (data_), {)
     TU_ARMA(Any, e) {
             rv.data_ = Data::make_Any(e);
+        }
+        TU_ARMA(Never, e) {
+            rv.data_ = Data::make_Never(e);
         }
         TU_ARMA(MaybeBind, e) {
             rv.data_ = Data::make_MaybeBind(e);
@@ -387,6 +454,7 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
         (MaybeBind, return ::ord(ae.name.name, be.name.name);),
         (Macro, throw CompileErrorBugCheck("ord on unexpanded pattern macro");),
         (Any, return OrdEqual;),
+        (Never, return OrdEqual;),
         (Box, return ::ord(*ae.sub, *be.sub);),
         (Guard, throw CompileErrorBugCheck("ord on a guard pattern");),
         (Deref, return ::ord(*ae.sub, *be.sub);),

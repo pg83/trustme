@@ -496,6 +496,8 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
     TU_MATCH_HDRA( (pat.data()), {)
     TU_ARMA(MaybeBind, e) {
         }
+        TU_ARMA(Never, e) {
+        }
         TU_ARMA(Macro, e) {
             const auto span = e.inv->span();
 
