@@ -94,6 +94,17 @@ SRC = build.glob("$(S)/bin/rustc/*.cpp")
 UT_SRC = sorted(s for s in SRC if s.endswith("_ut.cpp"))
 SRC = [s for s in SRC if not s.endswith("_ut.cpp")]
 
+# The Unicode tables canonical composition needs come from Python's own data,
+# generated rather than checked in.
+UNICODE_NFC_TABLES = "$(B)/gen/unicode_nfc_tables.inc"
+unicode_nfc_tables = command(
+    name="unicode_nfc_tables",
+    inputs=["$(S)/dev/gen_unicode_nfc.py"],
+    outputs=[UNICODE_NFC_TABLES],
+    cmd=["python3", "$(S)/dev/gen_unicode_nfc.py", UNICODE_NFC_TABLES],
+    descr="GN",
+)
+
 CODEGEN_C_PRELUDE = "$(B)/gen/codegen_c_prelude.h"
 codegen_c_prelude = command(
     name="codegen_c_prelude",
@@ -115,6 +126,8 @@ def compiler_source(source, *generated_inputs):
     inputs = list(generated_inputs)
     if source.endswith("/trans_codegen_c.cpp"):
         inputs.append(CODEGEN_C_PRELUDE)
+    if source.endswith("/unicode_nfc.cpp"):
+        inputs.append(UNICODE_NFC_TABLES)
     return {"src": source, "inputs": inputs} if inputs else source
 
 if system_rustc_mode:
@@ -135,7 +148,7 @@ else:
         srcs=[compiler_source(source) for source in SRC],
         name="rustc",
         output="$(B)/bin/rustc",
-        deps=[platform_libstd, codegen_c_prelude],
+        deps=[platform_libstd, codegen_c_prelude, unicode_nfc_tables],
         ldflags=["-lz"],
     )
 
@@ -170,7 +183,7 @@ rustc_ut = program(
         ],
     ],
     output="$(B)/tst/unit/rustc_ut",
-    deps=[platform_libstd, float128_ut_vectors, codegen_c_prelude],
+    deps=[platform_libstd, float128_ut_vectors, codegen_c_prelude, unicode_nfc_tables],
     ldflags=["-lz"],
 )
 

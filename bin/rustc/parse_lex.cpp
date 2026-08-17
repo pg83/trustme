@@ -4,6 +4,7 @@
 #include "common.h"
 #include "parse_tokentree.h"
 #include "parse_parseerror.h"
+#include "unicode_nfc.h"
 
 #include <cctype>
 #include <limits> // std::numeric_limits
@@ -1223,7 +1224,9 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
             return Token(v);
         }
     }
-    return Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::newInterned(str)));
+    // Rust normalises identifiers, so `Résumé` written with a precomposed `é`
+    // and with `e` plus a combining acute are the same name.
+    return Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::newInterned(unicodeNormaliseNfc(str))));
 }
 
 /// Parse an integer from the input stream
