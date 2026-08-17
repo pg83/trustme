@@ -2888,6 +2888,7 @@ ASTHigherRankedBounds ParseHRB(TokenStream& lex) {
                 // Type parameters in higher-ranked binders are accepted by the
                 // parser so macro `ty` fragments can capture them.  They are
                 // feature-gated before they can have semantic meaning.
+                rv.types.push_back(tok.ident().name);
                 if (lex.getTokenIf(TOK_EQUAL)) {
                     ParseType(lex);
                 }
@@ -3146,10 +3147,20 @@ void ParseWhereClause(TokenStream& lex, ASTGenericParams& params) {
         // Higher-ranked types/lifetimes
         else if (lex.getTokenIf(TOK_RWORD_FOR)) {
             auto hrbs = ParseHRB(lex);
+            const bool bindsTypes = !hrbs.types.empty();
 
             ASTType* type = ParseType(lex);
             GET_CHECK_TOK(tok, lex, TOK_COLON);
-            ParseTypeBound(lex, params, mv$(type), mv$(hrbs), /*retainBareType=*/true);
+            if (bindsTypes) {
+                // `for<T> T: Trait` quantifies the predicate over a type that
+                // exists only inside it. Nothing here models that, so the
+                // predicate is parsed and dropped rather than left with a name
+                // that cannot resolve.
+                ASTGenericParams dropped;
+                ParseTypeBound(lex, dropped, mv$(type), mv$(hrbs), /*retainBareType=*/false);
+            } else {
+                ParseTypeBound(lex, params, mv$(type), mv$(hrbs), /*retainBareType=*/true);
+            }
         } else {
             ASTType* type = ParseType(lex);
             GET_CHECK_TOK(tok, lex, TOK_COLON);
