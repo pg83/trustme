@@ -188,6 +188,7 @@ struct ProgramParams {
     // debug assertions unless it is given.
     bool ubChecks = false;
     bool ubChecksExplicit = false;
+    Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
     bool overflowChecks = false;
     bool overflowChecksExplicit = false;
     // rustc defaults MIR optimisation to 1 at -O0 and to 2 otherwise.
@@ -372,6 +373,7 @@ int main(int argc, char* argv[]) {
     wb.settings->solver = params.traitSolver;
     wb.settings->overflowChecks = params.overflowChecksEnabled();
     wb.settings->ubChecks = params.ubChecksEnabled();
+    wb.settings->fmtDebug = params.fmtDebug;
     const auto mirOptLevel = params.effectiveMirOptLevel();
     const auto enableMirInlining = params.enableMirInlining();
     if (params.codegen.panicType.empty()) {
@@ -399,6 +401,10 @@ int main(int argc, char* argv[]) {
         if (params.ubChecksEnabled()) {
             CfgSetFlag(*wb.settings, "ub_checks");
         }
+        CfgSetValue(*wb.settings, "fmt_debug",
+            params.fmtDebug == Settings::FmtDebug::Shallow ? "shallow"
+                : params.fmtDebug == Settings::FmtDebug::None ? "none"
+                                                             : "full");
         CfgSetValueCb(*wb.settings, "feature", [&params](const ::std::string& s) {
             return params.features.count(s) != 0;
         });
@@ -1304,6 +1310,18 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             exit(1);
                         }
                         this->ubChecksExplicit = true;
+                    } else if (optname == "fmt-debug") {
+                        getOptval();
+                        if (optval == "full") {
+                            this->fmtDebug = Settings::FmtDebug::Full;
+                        } else if (optval == "shallow") {
+                            this->fmtDebug = Settings::FmtDebug::Shallow;
+                        } else if (optval == "none") {
+                            this->fmtDebug = Settings::FmtDebug::None;
+                        } else {
+                            ::std::cerr << "invalid value for -Z fmt-debug: '" << optval << "' (expected 'full', 'shallow', or 'none')" << ::std::endl;
+                            exit(1);
+                        }
                     } else if (optname == "next-solver") {
                         if (eqPos == ::std::string::npos || optval == "globally") {
                             this->traitSolver.coherence = true;

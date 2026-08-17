@@ -964,6 +964,8 @@ struct DeriveOpts {
     /// The item also derives `Copy`, which makes a derived `Clone` a copy
     /// rather than a field-by-field clone.
     bool derivesCopy = false;
+    /// How much a derived `Debug` prints (`-Zfmt-debug`).
+    Settings::FmtDebug fmtDebug = Settings::FmtDebug::Full;
 };
 
 /// Interface for derive handlers
@@ -1198,6 +1200,13 @@ public:
 
         // Generate code for Debug
         ASTExprNodeP node;
+        // `-Zfmt-debug` cuts the output down: `shallow` keeps only the name,
+        // `none` prints nothing at all.
+        if (opts.fmtDebug != Settings::FmtDebug::Full) {
+            const char* text = opts.fmtDebug == Settings::FmtDebug::Shallow ? name.c_str() : "";
+            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(str),
+                callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, ::std::string(text)))));
+        }
         TU_MATCH_HDRA((str.data), {)
         TU_ARMA(Unit, e) {
                 node = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, name)));
@@ -1232,12 +1241,39 @@ public:
         const ASTPath pathDebugStruct = getPath(opts.coreName, "fmt", "DebugStruct");
         const ASTPath pathDebugTuple = getPath(opts.coreName, "fmt", "DebugTuple");
 
+        // `-Zfmt-debug=none` prints nothing, so the variant does not matter.
+        if (opts.fmtDebug == Settings::FmtDebug::None) {
+            return this->makeRet(sp, opts.coreName, p, type, this->getFieldBounds(enm),
+                callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, ::std::string()))));
+        }
+
         ::std::vector<ASTExprNodeMatchArm> arms;
         for (const auto& v : enm.variants()) {
             ASTExprNodeP code;
             ASTPattern patA;
 
             ASTPath variantPath = basePath + v.name;
+
+            // `-Zfmt-debug=shallow` keeps only the variant name, so the fields
+            // are not bound at all.
+            if (opts.fmtDebug == Settings::FmtDebug::Shallow) {
+                code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())));
+                TU_MATCH_HDRA((v.data), {)
+                TU_ARMA(Unit, e) {
+                        patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
+                    }
+                    TU_ARMA(Tuple, e) {
+                        patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, ASTPattern::TuplePat{{}, true, {}});
+                    }
+                    TU_ARMA(Struct, e) {
+                        patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, {}, false);
+                    }
+                }
+                ::std::vector<ASTPattern> pats;
+                pats.push_back(ASTPattern(ASTPattern::TagReference(), sp, false, mv$(patA)));
+                arms.push_back(ASTExprNodeMatchArm(mv$(pats), {}, mv$(code)));
+                continue;
+            }
 
             TU_MATCH_HDRA( (v.data), {)
             TU_ARMA(Unit, e) {
@@ -2878,6 +2914,7 @@ static void deriveItem(const Span& sp, const WireBoard& wb, const ASTCrate& crat
     auto type = makeType(*crate.pool, sp, path, item.params());
 
     DeriveOpts opts = {crate.extCratenameCore};
+    opts.fmtDebug = wb.settings->fmtDebug;
     // `#[derive(Copy)]` changes what a derived `Clone` means, and it may be
     // written in a separate attribute from the `Clone`.
     for (const auto& a : attrs) {

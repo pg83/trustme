@@ -41,6 +41,14 @@ struct Settings {
     /// follows debug assertions unless it is given).
     bool ubChecks = false;
 
+    /// How much a derived `Debug` prints (`-Zfmt-debug`). `Shallow` prints only
+    /// the type or variant name, `None` prints nothing at all.
+    enum class FmtDebug {
+        Full,
+        Shallow,
+        None,
+    } fmtDebug = FmtDebug::Full;
+
     // Crate-loading configuration: `-L` search directories, `--extern
     // name=path` overrides, and crates injected without an explicit `extern
     // crate` item (loadExternCrate records those as it resolves them).
