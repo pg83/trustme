@@ -260,7 +260,7 @@ load a crash or a hang reads as a timeout. Measured at commit `ae3b4ed4b`:
 | `consts/large-zst-array-77062.rs` | over 300s | genuinely slow |
 | `enum-discriminant/discriminant_value.rs` | aborts after 33s | `cannot infer a type satisfying _: Debug` inside `assert_eq!` |
 | `deriving/issue-58319.rs` | aborts after 24s | MIR optimisation does not converge (`mir_operations.cpp:1677`, 100 passes) on a derived `Clone` |
-| `consts/const-eval/enum_discr.rs` | SIGSEGV in 4s | unbounded recursion, not stack depth |
+| `consts/const-eval/enum_discr.rs` | runs, asserts | no longer recurses; a variant that names a *later* variant still reads zero, because the expression's MIR is const-folded in place and a second pass sees the folded value |
 | `impl-trait/recursive-type-alias-impl-trait-declaration-too-subtle-2.rs` | SIGSEGV in 3s | unbounded recursion resolving a type alias that names itself |
 | Exercism `palindrome-products` | not measured | |
 | RustSmith seed 7 | not measured | |
