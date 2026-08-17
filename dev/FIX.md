@@ -38,12 +38,12 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 376 |
-| fixed, or no longer reproducing, since the gate | 255 |
+| still failing on the current tree | 372 |
+| fixed, or no longer reproducing, since the gate | 259 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 169 |
+| accepted Rust rejected by the compiler or driver | 165 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
 | wrong runtime behaviour, panic, abort, or output | 40 |
 | missing rejection or diagnostic | 54 |
@@ -52,13 +52,13 @@ generated-code ones.
 
 ## P0: accepted Rust rejected by the front end
 
-All 169 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 165 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | parser | 51 | 48 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
-| type checking, HIR lowering, and resolution | 103 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 12 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
+| type checking, HIR lowering, and resolution | 99 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 8 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; enum repr 1 |
@@ -89,6 +89,12 @@ gets past the parser and then asserts in `hir_conv_main_bindings.cpp:1539`,
 because an alias that names no trait is not expandable where a trait is
 expected. The parse error is the better failure until an alias can expand
 to another alias.
+
+What is left of the unresolved-name group splits by rule: two
+`non_lifetime_binders` (the `for<T>` trap above), two identifiers that need NFC
+normalisation (`unicode_norm1`, `idents-normalized`), and four one-offs
+(`UnitLike` in an enum body, `T` in a const trait bound, `Self` as a
+constructor, a type alias used as a value).
 
 The two `issue-65041-empty-vis-matcher` tests are a trap: accepting a
 visibility on an *enum variant* lets them parse further and then crash inside
