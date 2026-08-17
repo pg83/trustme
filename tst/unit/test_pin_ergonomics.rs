@@ -33,6 +33,12 @@ fn takes_pin(value: Pin<&Counter>) -> u32 {
     value.read()
 }
 
+/// A pinned mutable reference is passed twice, and once as a shared one: each use
+/// reborrows rather than moving.
+fn reborrows(value: &pin mut Counter) -> u32 {
+    bump_pinned(value) + bump_pinned(value) + read_pinned(value) + takes_pin(value)
+}
+
 fn main() {
     let counter = Counter(7);
     let pinned: Pin<&Counter> = &pin const counter;
@@ -43,4 +49,7 @@ fn main() {
     let mut other = Counter(9);
     let pinned_mut: Pin<&mut Counter> = &pin mut other;
     assert_eq!(bump_pinned(pinned_mut), 9);
+
+    let mut third = Counter(2);
+    assert_eq!(reborrows(&pin mut third), 8);
 }

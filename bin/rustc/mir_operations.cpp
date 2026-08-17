@@ -955,7 +955,14 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
 
     if (dstTy->is_Borrow()) {
         MIR_ASSERT(state, srcTy->is_Borrow(), "CoerceUnsized to Borrow must have a Borrow source - " << srcTy << " to " << dstTy);
+        const auto& dte = dstTy->as_Borrow();
         const auto& ste = srcTy->as_Borrow();
+
+        // Only the mutability differs (`Pin<&mut T>` to `Pin<&T>`, say): that is
+        // a reborrow, and the pointer is unchanged.
+        if (dte.inner == ste.inner && dte.type != ste.type) {
+            return MIRRValue::make_Borrow({dte.type, false, MIRLValue::newDeref(mv$(value))});
+        }
 
         return MIRCleanupUnsize(state, mutator, dstTy, ste.inner, mv$(value));
     }
