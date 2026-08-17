@@ -167,11 +167,21 @@ impl is not reconstructed. Of the formatting ones, `test_format_int_exp_precisio
 fix. No 128-bit ones are left. Minimise representatives before treating nearby
 assertions as one root cause.
 
+The let-chain family is now one bug, and a measured one. Each `&&` operand has
+its own temporary scope, which it did not before; what is left is that a binding
+from a `let` operand only drops when that operand is the *last* one. For
+`drop_order_let_chain` the collected order is
+`[1..12, 14, 15, 16, 19..22]` where rustc gives `[1..23]`: 13, 17, 18 and 23 are
+the bindings of non-final `let` operands, and their drops never run. The guard
+lowering pushes a variable scope per guard and terminates them all at the end
+(`mir_from_hir.cpp`, the `scopes` stack), so look at what the saved guard code
+(`codeSaveStart`) and `restoreAliases` do to the scheduled drops.
+
 Grouping the panics by the rule they check finds these multi-test families:
 
 | family | tests | rule |
 |---|---:|---|
-| let-chain drop order | 3 | `drop_order_let_chain`, `drop_order_if_let_rescope`, `drop-order-comparisons-let-chains`: a non-`let` operand's temporary in a chain drops at the end of the chain, a `let` binding's lives for the block |
+| let-chain drop order | 3 | `drop_order_let_chain`, `drop_order_if_let_rescope`, `drop-order-comparisons-let-chains`: a binding from a `let` operand that is followed by another operand is never dropped at all |
 | coroutine and future size | 4 | `niche-in-coroutine`, `overlap-locals`, `resume-arg-size`, `future-as-arg`: locals that cannot be live together must share storage |
 | `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and the `core::any` library case |
 | `Waker::will_wake` | 2 | two library cases comparing a cloned waker's vtable |
