@@ -38,15 +38,15 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 368 |
-| fixed, or no longer reproducing, since the gate | 263 |
+| still failing on the current tree | 367 |
+| fixed, or no longer reproducing, since the gate | 264 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 161 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
 | wrong runtime behaviour, panic, abort, or output | 40 |
-| missing rejection or diagnostic | 54 |
+| missing rejection or diagnostic | 53 |
 | generated C++ or link failure | 15 |
 | stable timeout | 10 |
 
@@ -192,7 +192,7 @@ data-enum path already collapses a lone variant (`trans_target.cpp`, the
 
 ## P2: missing language checks
 
-Fifty-four negative tests compile successfully. The largest source areas are:
+Fifty-three negative tests compile successfully. The largest source areas are:
 
 | language area | tests |
 |---|---:|
@@ -208,6 +208,10 @@ Fifty-four negative tests compile successfully. The largest source areas are:
 
 Source chapters are routing information. Group the concrete examples by the
 missing language rule before implementing diagnostics.
+
+`limits__L37` is the other half of `#![recursion_limit]`: the limit now bounds
+macro expansion, and that test needs it to bound auto-dereferencing as well
+(`(|_: &u8| {})(&&&1)` with a limit of 1).
 
 ## P2: generated code and linking
 
