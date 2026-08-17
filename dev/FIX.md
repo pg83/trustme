@@ -38,8 +38,8 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 356 |
-| fixed, or no longer reproducing, since the gate | 275 |
+| still failing on the current tree | 354 |
+| fixed, or no longer reproducing, since the gate | 277 |
 
 | priority class | tests |
 |---|---:|
@@ -48,7 +48,7 @@ generated-code ones.
 | wrong runtime behaviour, panic, abort, or output | 40 |
 | missing rejection or diagnostic | 53 |
 | generated C++ or link failure | 15 |
-| stable timeout | 10 |
+| stable timeout | 8 |
 
 ## P0: accepted Rust rejected by the front end
 
@@ -250,19 +250,23 @@ the unit and libstd checks passed.
 
 ## P3: performance and flakes
 
-Ten nodes still time out in isolated reruns:
+Eight nodes still time out, but timing each one alone shows that most are not
+slow -- the harness gives compile and run 60 seconds each, and under the gate's
+load a crash or a hang reads as a timeout. Measured at commit `ae3b4ed4b`:
 
-- Exercism `palindrome-products`;
-- `enum-discriminant/discriminant_value.rs`;
-- `consts/large-zst-array-77062.rs`;
-- `consts/const-eval/enum_discr.rs`;
-- `mir/mir_heavy_promoted.rs`;
-- `impl-trait/recursive-type-alias-impl-trait-declaration-too-subtle-2.rs`;
-- `for-loop-while/label_break_value.rs`;
-- `deriving/issue-58319.rs`;
-- `parser/survive-peano-lesson-queue.rs`, which used to die on a stack
-  overflow instead;
-- RustSmith seed 7.
+| node | measured | what it really is |
+|---|---|---|
+| `mir/mir_heavy_promoted.rs` | 93s compile, runs fine | genuinely slow |
+| `consts/large-zst-array-77062.rs` | over 300s | genuinely slow |
+| `enum-discriminant/discriminant_value.rs` | aborts after 33s | `cannot infer a type satisfying _: Debug` inside `assert_eq!` |
+| `deriving/issue-58319.rs` | aborts after 24s | MIR optimisation does not converge (`mir_operations.cpp:1677`, 100 passes) on a derived `Clone` |
+| `consts/const-eval/enum_discr.rs` | SIGSEGV in 4s | unbounded recursion, not stack depth |
+| `impl-trait/recursive-type-alias-impl-trait-declaration-too-subtle-2.rs` | SIGSEGV in 3s | unbounded recursion resolving a type alias that names itself |
+| Exercism `palindrome-products` | not measured | |
+| RustSmith seed 7 | not measured | |
+
+`for-loop-while/label_break_value.rs` was a runtime hang, and
+`parser/survive-peano-lesson-queue.rs` a stack overflow; both are fixed.
 
 Two hundred and thirty-seven of the gate's failures pass when rerun on the
 current tree. Most are the fixes recorded above; the rest were parallel-only,
