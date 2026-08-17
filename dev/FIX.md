@@ -35,8 +35,8 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 404 |
-| fixed, or no longer reproducing, since the gate | 227 |
+| still failing on the current tree | 403 |
+| fixed, or no longer reproducing, since the gate | 228 |
 
 | priority class | tests |
 |---|---:|
@@ -44,7 +44,7 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
 | wrong runtime behaviour, panic, abort, or output | 48 |
 | missing rejection or diagnostic | 55 |
-| generated C++ or link failure | 26 |
+| generated C++ or link failure | 25 |
 | stable timeout | 9 |
 
 ## P0: accepted Rust rejected by the front end
@@ -153,7 +153,7 @@ missing language rule before implementing diagnostics.
 
 ## P2: generated code and linking
 
-Twenty tests emit C++ rejected by clang:
+Nineteen tests emit C++ rejected by clang:
 
 | generated-code family | tests |
 |---|---:|
@@ -161,7 +161,6 @@ Twenty tests emit C++ rejected by clang:
 | invalid aggregate or value assignment | 5 |
 | enum-discriminant narrowing | 2 |
 | inline assembly lowering | 3 |
-| missing 128-bit intrinsic lowering | 1 |
 | malformed generated filename `-.cpp` | 1 |
 
 Six tests reach the linker: three miss generated constant symbols, two refer
