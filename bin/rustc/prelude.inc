@@ -157,30 +157,36 @@ static inline int cmp128(uint128_t a, uint128_t b) {
     return 0;
 }
 
+/* The carry out cannot be read off the high word alone: adding a carry into it
+ * can leave it equal to what it was. Compare the whole values instead. */
 static inline bool add128_o(uint128_t a, uint128_t b, uint128_t* out) {
     out->lo = a.lo + b.lo;
     out->hi = a.hi + b.hi + (out->lo < a.lo ? 1 : 0);
-    return out->hi < a.hi;
+    return cmp128(*out, a) < 0;
 }
 
 static inline bool sub128_o(uint128_t a, uint128_t b, uint128_t* out) {
+    const bool borrow = cmp128(a, b) < 0;
     out->lo = a.lo - b.lo;
     out->hi = a.hi - b.hi - (a.lo < b.lo ? 1 : 0);
-    return out->hi > a.hi;
+    return borrow;
 }
 
+/* Shift-and-add. A bit shifted off the top of `b` is a lost product term, and
+ * so an overflow, whenever `a` still has a bit left to multiply it by. */
 static inline bool mul128_o(uint128_t a, uint128_t b, uint128_t* out) {
     bool overflow = false;
-    out->hi = 0;
-    out->lo = 0;
+    uint128_t result = make128(0);
     for (int i = 0; i < 128; i++) {
-        uint64_t mask = 1ull << (i % 64);
-        if (a.hi == 0 && a.lo < mask) break;
-        if (i >= 64 && a.hi < mask) break;
-        if (mask & (i >= 64 ? a.hi : a.lo)) overflow |= add128_o(*out, b, out);
+        if (a.lo & 1) overflow |= add128_o(result, b, &result);
+        a.lo = (a.lo >> 1) | (a.hi << 63);
+        a.hi >>= 1;
+        if (a.lo == 0 && a.hi == 0) break;
+        if (b.hi >> 63) overflow = true;
         b.hi = (b.hi << 1) | (b.lo >> 63);
         b.lo <<= 1;
     }
+    *out = result;
     return overflow;
 }
 
