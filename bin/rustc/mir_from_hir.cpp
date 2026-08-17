@@ -2125,9 +2125,13 @@ namespace {
             const auto& tyOut = node.resType;
             const auto& tyIn = node.value->resType;
 
-            // TODO: The correct behavior is to do the cast (into a rvalue) no matter what.
-            // See test run-pass/issue-36936
+            // A cast produces a new value even when the type does not change:
+            // `&(a as i32)` borrows a copy, not `a` itself.
             if (tyOut == tyIn) {
+                auto sameVal = builder.getResultInLvalue(node.value->span(), node.value->resType);
+                auto sameRes = builder.newTemporary(node.resType);
+                builder.pushStmtAssign(node.span(), sameRes.clone(), MIRRValue::make_Use(mv$(sameVal)));
+                builder.setResult(node.span(), mv$(sameRes));
                 return;
             }
 
