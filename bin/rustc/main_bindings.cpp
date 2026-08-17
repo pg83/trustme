@@ -1327,6 +1327,10 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                     } else if (optname == "dump-mir") {
                         noOptval();
                         this->debug.dumpMir = true;
+                    } else if (optname == "parse-crate-root-only") {
+                        // rustc's spelling of "stop once the crate root parses".
+                        noOptval();
+                        this->lastStage = STAGE_PARSE;
                     } else if (optname == "stop-after") {
                         getOptval();
                         if (optval == "parse") {

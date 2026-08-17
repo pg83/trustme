@@ -2883,6 +2883,13 @@ ASTHigherRankedBounds ParseHRB(TokenStream& lex) {
         switch (GET_TOK(tok, lex)) {
             case TOK_LIFETIME:
                 rv.lifetimes.push_back(ASTLifetimeParam(lex.pointSpan(), ::std::move(attrs), tok.ident()));
+                // `for<'a: 'b>` bounds the bound lifetime. Nothing here checks
+                // regions, so the bound list is read and dropped.
+                if (lex.getTokenIf(TOK_COLON)) {
+                    do {
+                        lex.getTokenCheck(TOK_LIFETIME);
+                    } while (lex.getTokenIf(TOK_PLUS));
+                }
                 break;
             case TOK_IDENT:
                 // Type parameters in higher-ranked binders are accepted by the
