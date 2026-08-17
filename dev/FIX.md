@@ -38,12 +38,12 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 372 |
-| fixed, or no longer reproducing, since the gate | 259 |
+| still failing on the current tree | 370 |
+| fixed, or no longer reproducing, since the gate | 261 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 165 |
+| accepted Rust rejected by the compiler or driver | 163 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 88 |
 | wrong runtime behaviour, panic, abort, or output | 40 |
 | missing rejection or diagnostic | 54 |
@@ -52,13 +52,13 @@ generated-code ones.
 
 ## P0: accepted Rust rejected by the front end
 
-All 165 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 163 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | parser | 51 | 48 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
-| type checking, HIR lowering, and resolution | 99 | trait/impl selection 31 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 8 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 14 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
+| type checking, HIR lowering, and resolution | 97 | trait/impl selection 30 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 8 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 13 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; enum repr 1 |
@@ -78,6 +78,18 @@ needs a generated `AsyncIterator` impl beside the generated `Coroutine` one
 `gen { .. }` as an expression is still only reachable from a macro fragment
 (`parse_common.cpp:1422`): in source `gen` is a contextual keyword, so an
 expression-position `gen {` has to be edition-gated against a struct literal.
+
+The 48 tests routed through the trait-selection and type-mismatch lines are not
+one root cause: fixing integer inference through an operator took two of them
+and left the rest untouched. Minimise each before grouping.
+
+`IntoIterator for Box<[T]>` is four of them (two `into-iter-on-*-lint`, two
+`into-iter-on-boxed-slices-*`) and one bug: the method probe accepts
+`IntoIterator` for a receiver that is still `Box<_>`, because the impl for
+`Box<[T], A>` matches an unresolved inner type fuzzily, and the edition gate for
+`rustc_skip_during_method_dispatch(boxed_slice)` then cannot tell it is a boxed
+slice. The receiver's `_` only becomes `Box<[i32]>` later, and the committed
+candidate no longer has an impl.
 
 A `for<T>` binder is only dropped where it quantifies a where predicate. In a
 supertrait list (`trait Foo: for<T> Bar<T>`) or a return type
