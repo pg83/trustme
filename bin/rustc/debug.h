@@ -14,8 +14,10 @@ extern bool gDebugEnabled;
 #endif
 
 #ifndef DISABLE_DEBUG
-    // Note: Set for `curl-sys-0_4_82` build script, which has a log chain of method calls
-    #define MAX_INDENT_LEVEL 450
+    // A backstop against runaway recursion, not a limit on legitimate nesting:
+    // the compiler runs on a stack far larger than the default (see `main`), and
+    // generated code can nest thousands of levels deep.
+    #define MAX_INDENT_LEVEL 40000
     #define INDENT()                                         \
         do {                                                 \
             gDebugIndentLevel += 1;                       \

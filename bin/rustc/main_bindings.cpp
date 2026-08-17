@@ -1,5 +1,7 @@
 #include "main_bindings.h"
 
+#include <pthread.h>
+
 #include "ast_ast.h"
 #include "hir_hir.h" // ABI_RUST
 #include "version.h"
@@ -355,7 +357,7 @@ namespace {
     }
 }
 
-int main(int argc, char* argv[]) {
+static int compile(int argc, char* argv[]) {
     initDebugList();
 #if TRUSTME_SANITIZER_BUILD
     // Keep teardown out of production, but make sanitizer builds destroy every
@@ -995,6 +997,49 @@ int main(int argc, char* argv[]) {
     //}
 
     return 0;
+}
+
+namespace {
+    struct CompileArgs {
+        int argc;
+        char** argv;
+        int result;
+    };
+
+    void* compileOnThread(void* raw) {
+        auto& args = *static_cast<CompileArgs*>(raw);
+        args.result = compile(args.argc, args.argv);
+        return nullptr;
+    }
+}
+
+/// The compiler recurses over the syntax tree, so its stack depth follows how
+/// deeply the input nests -- generated code can nest very deeply. Run the work on
+/// a thread with a stack far larger than the usual 8MB default, which is what
+/// rustc does for the same reason. `TRUSTME_MIN_STACK` overrides the size, as
+/// `RUST_MIN_STACK` does there.
+int main(int argc, char* argv[]) {
+    size_t stackSize = 1024u * 1024 * 1024;
+    if (const char* text = ::std::getenv("TRUSTME_MIN_STACK")) {
+        char* end = nullptr;
+        const auto value = ::std::strtoull(text, &end, 10);
+        if (*end == '\0' && value > 0) {
+            stackSize = static_cast<size_t>(value);
+        }
+    }
+
+    pthread_attr_t attr;
+    CompileArgs args{argc, argv, 1};
+    pthread_t thread;
+    if (pthread_attr_init(&attr) != 0 || pthread_attr_setstacksize(&attr, stackSize) != 0
+        || pthread_create(&thread, &attr, compileOnThread, &args) != 0) {
+        // No thread to be had: the work still has to happen, just with whatever
+        // stack this one has.
+        return compile(argc, argv);
+    }
+    pthread_join(thread, nullptr);
+    pthread_attr_destroy(&attr);
+    return args.result;
 }
 
 ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
