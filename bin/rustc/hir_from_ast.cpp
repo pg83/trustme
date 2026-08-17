@@ -1907,9 +1907,13 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     ::std::vector<::std::pair<HIRPattern, HIRTypeRef>> args;
     for (const auto& arg : f.args()) {
         // A parameter is matched unconditionally, so it cannot be a pattern
-        // that only some values reach.
-        if (arg.pat.data().is_Value() || arg.pat.data().is_ValueLeftInc()) {
-            ERROR(arg.pat.span(), E0000, "refutable pattern in function argument");
+        // that only some values reach. A path names a variant or a unit struct,
+        // which for a one-variant type is every value, and a range can cover a
+        // whole integer type -- both are decided by exhaustiveness, not here.
+        if (const auto* value = arg.pat.data().opt_Value()) {
+            if (!value->start.is_Named() && value->end.is_Invalid()) {
+                ERROR(arg.pat.span(), E0000, "refutable pattern in function argument");
+            }
         }
         // Without a body there is nothing to destructure into: a declaration
         // names its parameters, it does not match them.
