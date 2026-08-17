@@ -41,6 +41,10 @@ struct Settings {
     /// follows debug assertions unless it is given).
     bool ubChecks = false;
 
+    /// How deep macro expansion may nest (`#![recursion_limit]`). rustc's
+    /// default is 128.
+    unsigned int recursionLimit = 128;
+
     /// How much a derived `Debug` prints (`-Zfmt-debug`). `Shallow` prints only
     /// the type or variant name, `None` prints nothing at all.
     enum class FmtDebug {

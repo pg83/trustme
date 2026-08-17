@@ -18,8 +18,6 @@
 
 #include <map>
 
-// TODO: Respect the crate attribute #![recursion_limit]
-#define MAX_MACRO_RECURSION 256
 
 DecoratorDef* gDecoratorsList = nullptr;
 MacroDef* gMacrosList = nullptr;
@@ -850,6 +848,18 @@ struct CExpandExpr: public ASTNodeVisitor {
         }
 
         const bool definesMacro = node.path.isTrivial() && node.path.asTrivial() == "macro_rules";
+
+        // How deep this invocation already is: each expansion adds a frame to
+        // the span naming the macro that produced the tokens.
+        unsigned int depth = 0;
+        for (Span frame = node.span(); frame; frame = frame->parentSpan) {
+            if (cast<const SpanInnerMacro>(frame.get())) {
+                depth++;
+            }
+        }
+        if (depth >= expandState.wb.settings->recursionLimit) {
+            ERROR(node.span(), E0000, "recursion limit reached while expanding `" << node.path << "!`");
+        }
 
         ASTExprNodeP rv;
         auto& mod = this->curMod();
@@ -2168,8 +2178,8 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
             TU_ARMA(MacroInv, e) {
                 // Move out of the module to avoid invalidation if a new macro invocation is added
 
-                if (macroRecursionStack.size() > MAX_MACRO_RECURSION) {
-                    ERROR(i.span, E0000, "Exceeded macro recusion limit of " << MAX_MACRO_RECURSION);
+                if (macroRecursionStack.size() > es.wb.settings->recursionLimit) {
+                    ERROR(i.span, E0000, "Exceeded macro recusion limit of " << es.wb.settings->recursionLimit);
                 }
                 auto miOwned = mv$(e);
 

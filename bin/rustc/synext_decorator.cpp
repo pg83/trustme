@@ -755,6 +755,24 @@ public:
     }
 };
 
+class DecoratorRecursionLimit: public ExpandDecorator {
+public:
+    AttrStage stage() const override {
+        return AttrStage::Pre;
+    }
+
+    void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate) const override {
+        const auto text = mi.parseEqualsString(wb, crate, crate.rootModule_);
+        char* end = nullptr;
+        const auto value = ::std::strtoul(text.c_str(), &end, 10);
+        if (text.empty() || *end != '\0' || value == 0) {
+            ERROR(sp, E0000, "#![recursion_limit] needs a positive number, got `" << text << "`");
+        }
+        wb.settings->recursionLimit = static_cast<unsigned int>(value);
+    }
+};
+STATIC_DECORATOR("recursion_limit", DecoratorRecursionLimit)
+
 class DecoratorFeature: public ExpandDecorator {
 public:
     AttrStage stage() const override {
