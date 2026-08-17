@@ -3001,6 +3001,8 @@ namespace {
             // The root result type belongs to the surrounding item.  Map it
             // once, before the generated future's impl parameters are frozen.
             auto returnTy = monomorphCb.monomorphType(sp, node.returnType);
+            // `async gen` hands out items instead of one value.
+            auto itemTy = node.isAsyncGen ? monomorphCb.monomorphType(sp, node.yieldTy) : HIRTypeRef();
 
             auto crVars = coroutineVars(node.span(), node.avuCache, 2, monomorphCb, node.isUse);
             fixCoroutineVarTypes(sp, params, monomorphCb, crVars);
@@ -3098,15 +3100,21 @@ namespace {
             fcnResume.args.push_back(std::make_pair(HIRPattern(), selfArgTy));
             // - `context: &mut Context<'_>`
             fcnResume.args.push_back(std::make_pair(HIRPattern(), contextArgTy));
-            // - `-> Poll<{Return}>`
+            // - `-> Poll<{Return}>`, or `-> Poll<Option<{Item}>>` for `async gen`
             HIRPathParams retParams;
-            retParams.types.push_back(returnTy);
             auto langPoll = resolve_.hirCrate().getLangItemPath(sp, "Poll");
+            if (node.isAsyncGen) {
+                auto langOption = resolve_.hirCrate().getLangItemPath(sp, "Option");
+                retParams.types.push_back(resolve_.hirCrate().types.path(HIRGenericPath(langOption, HIRPathParams(itemTy)), &resolve_.hirCrate().getEnumByPath(sp, langOption)));
+            } else {
+                retParams.types.push_back(returnTy);
+            }
             fcnResume.returnType = resolve_.hirCrate().types.path(HIRGenericPath(langPoll, std::move(retParams)), &resolve_.hirCrate().getEnumByPath(sp, langPoll));
             // - ` { ... }`
             // Emit as a top-level generator
             // - It has a populated body, non-zero `m_obj_ptr`, and unset `m_obj_path`
-            auto* v = pool->make<HIRExprNodeGeneratorWrapper>(sp, returnTy, resolve_.hirCrate().types.unit(), std::move(bodyNode), true);
+            auto* v = pool->make<HIRExprNodeGeneratorWrapper>(sp, returnTy, node.isAsyncGen ? itemTy : resolve_.hirCrate().types.unit(), std::move(bodyNode), true);
+            v->isAsyncGen = node.isAsyncGen;
             v->captureUsages = std::move(crVars.captureUsages);
             v->resType = fcnResume.returnType;
             v->objPtr = node.objPtr;
@@ -3120,6 +3128,13 @@ namespace {
             // -- Create impl
             HIRTraitImpl impl;
             impl.type = resolve_.hirCrate().types.path(HIRGenericPath(genStructPath, params.makeNopParams(resolve_.hirCrate().types, 0)), &genStructRef);
+            if (node.isAsyncGen) {
+                impl.types.insert(std::make_pair(RcString::newInterned("Item"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, itemTy}));
+                impl.methods.insert(std::make_pair(RcString::newInterned("poll_next"), HIRTraitImpl::ImplEnt<HIRFunction>{false, std::move(fcnResume)}));
+                impl.params = std::move(params);
+                out.traitImpls.push_back(std::make_pair("async_iterator", std::move(impl)));
+                return;
+            }
             impl.types.insert(std::make_pair(RcString::newInterned("Output"), HIRTraitImpl::ImplEnt<HIRTypeRef>{false, returnTy}));
             impl.methods.insert(std::make_pair(RcString::newInterned("poll"), HIRTraitImpl::ImplEnt<HIRFunction>{false, std::move(fcnResume)}));
             impl.params = std::move(params);

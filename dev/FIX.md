@@ -38,12 +38,12 @@ generated-code ones.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 351 |
-| fixed, or no longer reproducing, since the gate | 280 |
+| still failing on the current tree | 345 |
+| fixed, or no longer reproducing, since the gate | 286 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 150 |
+| accepted Rust rejected by the compiler or driver | 144 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 85 |
 | wrong runtime behaviour, panic, abort, or output | 40 |
 | missing rejection or diagnostic | 53 |
@@ -52,32 +52,37 @@ generated-code ones.
 
 ## P0: accepted Rust rejected by the front end
 
-All 150 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 144 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| parser | 40 | 37 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
+| parser | 34 | 31 unexpected-token failures through the three `parse_parseerror.cpp` routes; 3 `parse_common.cpp` failures |
 | type checking, HIR lowering, and resolution | 95 | trait/impl selection 30 (`hir_typeck_expr_cs.cpp:6701`, `:6703`); unresolved type/value names 6 (`resolve_main_bindings.cpp:395`, `:403`); type mismatch 13 (`hir_typeck_expr_cs.cpp:2468`, `:2479`) |
 | macro and attribute expansion | 7 | attributes 4; macro parsing 3 |
 | CTFE and MIR lowering | 6 | constant evaluation 4; move/scope lowering 2 |
 | crate/driver handling | 2 | missing external crate path 1; enum repr 1 |
 
-The 37 parser failures must be regrouped by syntax family before changing the
+The 31 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
-unexpected token the largest families are `async gen` blocks and functions (7),
-never patterns (3), and a long tail of one- and two-test spellings. Grouping by test directory finds them faster than
+unexpected token the largest families are never patterns (3) and a long tail of
+one- and two-test spellings. Grouping by test directory finds them faster than
 grouping by token: that is how the six associated-const equality bounds turned
 out to be one syntax rule.
 
-The `gen` family is down to the 7 tests that need `async gen`. `gen fn` and
-`gen { .. }` lower to the coroutine `iter!` already builds, wrapped in
-`from_coroutine(..).fuse()`; `async gen` has no such wrapper in core, so it
-needs a generated `AsyncIterator` impl beside the generated `Coroutine` one
-(`hir_expand_main_bindings.cpp`, where the coroutine struct is made).
-`gen { .. }` as an expression is still only reachable from a macro fragment
-(`parse_common.cpp:1422`): in source `gen` is a contextual keyword, so an
-expression-position `gen {` has to be edition-gated against a struct literal.
+The `gen` family is down to the two `for await` tests (`for-await.rs`,
+`for-await-passthrough.rs`). `async gen` is supported: it lowers to the async
+block's coroutine with `isAsyncGen` set, which gives it a generated
+`AsyncIterator` impl (`poll_next` returning `Poll<Option<Item>>`) instead of a
+`Future` one, makes a `yield` return `Poll::Ready(Some(v))` the way `.await`
+returns `Poll::Pending`, and makes the END state return `Poll::Ready(None)` so
+the iterator is fused. `for await pat in it` still needs a desugaring: it awaits
+`AsyncIterator::poll_next` rather than a `Future`, so `awaitFuture`
+(`mir_from_hir.cpp`) needs a sibling that yields `Option<Item>` and breaks the
+loop on `None`. `gen { .. }` as an expression is still only reachable from a
+macro fragment (`parse_common.cpp:1422`): in source `gen` is a contextual
+keyword, so an expression-position `gen {` has to be edition-gated against a
+struct literal.
 
 The 48 tests routed through the trait-selection and type-mismatch lines are not
 one root cause: fixing integer inference through an operator took two of them

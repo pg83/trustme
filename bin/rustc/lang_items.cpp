@@ -27,6 +27,7 @@ namespace {
         HIRSimplePath metaSized_;
         HIRSimplePath destruct_;
         HIRSimplePath future_;
+        HIRSimplePath asyncIterator_;
 
     public:
         explicit LangItemsImpl(const HIRCrate& crate)
@@ -51,6 +52,7 @@ namespace {
             , metaSized_(crate.getLangItemPathOpt("meta_sized"))
             , destruct_(crate.getLangItemPathOpt("destruct"))
             , future_(crate.getLangItemPathOpt("future_trait"))
+            , asyncIterator_(crate.getLangItemPathOpt("async_iterator"))
         {
         }
 
@@ -136,6 +138,10 @@ namespace {
 
         const HIRSimplePath& future() const override {
             return future_;
+        }
+
+        const HIRSimplePath& asyncIterator() const override {
+            return asyncIterator_;
         }
     };
 }

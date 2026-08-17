@@ -433,7 +433,14 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     }
                 }
                 TU_ARMA(Async, nodeP) {
-                    if (traitPath == langFuture()) {
+                    if (nodeP->isAsyncGen) {
+                        // An `async gen` block is an AsyncIterator, not a Future.
+                        if (traitPath == langAsyncIterator()) {
+                            HIRTraitPath::assocListT assoc;
+                            assoc.insert(::std::make_pair("Item", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->yieldTy}));
+                            return foundCb(ImplRef(type, HIRPathParams(), mv$(assoc)), HIRCompare::Equal);
+                        }
+                    } else if (traitPath == langFuture()) {
                         HIRTraitPath::assocListT assoc;
                         assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{traitPath.clone(), {}, nodeP->code->resType}));
                         HIRPathParams params;

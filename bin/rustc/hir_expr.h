@@ -785,6 +785,9 @@ struct HIRExprNodeGenerator: public HIRExprNode {
 struct HIRExprNodeGeneratorWrapper: public HIRExprNode {
     //ExprNodeClosure::args_t    m_args;
     bool isFuture;
+    /// The future is an `async gen` body: it returns `Poll<Option<Item>>`, and
+    /// a `yield` returns from it just as an `await` does.
+    bool isAsyncGen = false;
     HIRTypeRef returnType;
     HIRTypeRef yieldTy;
     HIRExprNodeP code;
@@ -812,6 +815,12 @@ struct HIRExprNodeAsyncBlock: public HIRExprNode {
     HIRExprNodeP code;
     bool isMove;
     bool isUse;
+
+    /// `async gen`: the block yields items instead of resolving to one value,
+    /// so it is an AsyncIterator and not a Future. `returnType` is then unit
+    /// and `yieldTy` is the item type.
+    bool isAsyncGen = false;
+    HIRTypeRef yieldTy;
 
     HIRExprNodeGenerator::AvuCache avuCache;
 

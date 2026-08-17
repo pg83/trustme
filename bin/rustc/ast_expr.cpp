@@ -316,7 +316,7 @@ NODE(
 )
 
 NODE(ASTExprNodeAsyncBlock, { os << "async " << (isMove ? "move " : "") << (isUse ? "use " : "") << *inner; }, { return NEWNODE(ASTExprNodeAsyncBlock, inner->clone(), isMove, isUse); })
-NODE(ASTExprNodeGeneratorBlock, { os << "gen " << (isMove ? "move " : "") << *inner; }, { return NEWNODE(ASTExprNodeGeneratorBlock, inner->clone(), returnType->clone(), isMove, isCoroutineClosureBody); })
+NODE(ASTExprNodeGeneratorBlock, { os << (isAsync ? "async gen " : "gen ") << (isMove ? "move " : "") << *inner; }, { return NEWNODE(ASTExprNodeGeneratorBlock, inner->clone(), returnType->clone(), isMove, isCoroutineClosureBody, isAsync); })
 NODE(ASTExprNodeTry, { os << "try " << *inner; }, { return NEWNODE(ASTExprNodeTry, inner->clone()); })
 
 NODE(
@@ -1227,11 +1227,12 @@ ASTExprNodeAsyncBlock::ASTExprNodeAsyncBlock(ASTExprNodeP inner, bool isMove, bo
 {
 }
 
-ASTExprNodeGeneratorBlock::ASTExprNodeGeneratorBlock(ASTExprNodeP inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody)
+ASTExprNodeGeneratorBlock::ASTExprNodeGeneratorBlock(ASTExprNodeP inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody, bool isAsync)
     : inner(std::move(inner))
     , returnType(returnType)
     , isMove(isMove)
     , isCoroutineClosureBody(isCoroutineClosureBody)
+    , isAsync(isAsync)
 {
 }
 

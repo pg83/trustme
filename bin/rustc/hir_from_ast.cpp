@@ -2189,6 +2189,25 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     rv.defineOpaque = ::std::move(defineOpaque);
     rv.markings = markings;
 
+    if (f.isGen() && f.isAsync()) {
+        // `async gen fn`: the declared type is the item type, and the body is a
+        // coroutine that awaits and yields instead of returning a value.
+        auto itemType = rv.returnType;
+        if (rv.code) {
+            auto* asyncNode = crate->pool->make<HIRExprNodeAsyncBlock>(sp, crate->types.unit(), rv.code.takeNode(), true, false);
+            asyncNode->isAsyncGen = true;
+            asyncNode->yieldTy = itemType;
+            asyncNode->resType = crate->types.infer();
+            rv.code = HIRExprPtr(HIRExprNodeP(asyncNode));
+        }
+        // Make the return type be `impl AsyncIterator<Item=Ret>`
+        HIRTraitPath iteratorPath;
+        iteratorPath.path.path = crate->getLangItemPath(sp, "async_iterator");
+        iteratorPath.typeBounds.insert(std::make_pair(RcString::newInterned("Item"), HIRTraitPath::AtyEqual{iteratorPath.path.clone(), {}, itemType}));
+        rv.returnType = crate->types.intern(HIRTypeData::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+        return rv;
+    }
+
     if (f.isGen()) {
         // The body is the coroutine, and the function hands back the iterator
         // over it -- the same shape a `gen { .. }` block lowers to. A coroutine
@@ -3156,6 +3175,16 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         hasYield = false;
         auto inner = lowerIsolated(v.inner);
         hasYield = origHasYield;
+
+        if (v.isAsync) {
+            // An `async gen` block is an async block that yields: the body
+            // returns nothing and each `yield` hands out an item.
+            auto* node = ctx.crate->pool->make<HIRExprNodeAsyncBlock>(v.span(), ctx.crate->types.unit(), mv$(inner), v.isMove, false);
+            node->isAsyncGen = true;
+            node->yieldTy = ctx.LowerHIRType(v.returnType);
+            rv.reset(node);
+            return;
+        }
 
         rv.reset(ctx.crate->pool->make<HIRExprNodeGenerator>(v.span(), ctx.LowerHIRType(v.returnType), ctx.crate->types.infer(), HIRPattern(), false, ctx.crate->types.infer(), mv$(inner), v.isMove, false, v.isCoroutineClosureBody));
         rv.reset(ctx.crate->pool->make<HIRExprNodeCallPath>(v.span(), HIRSimplePath(ctx.coreCrate, {"iter", "sources", "from_coroutine", "from_coroutine"}), makeVec1(mv$(rv))));

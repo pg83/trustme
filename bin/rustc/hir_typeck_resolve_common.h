@@ -104,6 +104,10 @@ struct TraitResolveCommon {
         return wb.langItems->future();
     }
 
+    const HIRSimplePath& langAsyncIterator() const {
+        return wb.langItems->asyncIterator();
+    }
+
     // Nullable views of the current generics context (the non-Ptr overloads
     // below assert they are set).
     const HIRGenericParams* implGenericsPtr() const {

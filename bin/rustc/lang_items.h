@@ -36,6 +36,7 @@ public:
     virtual const HIRSimplePath& metaSized() const = 0;
     virtual const HIRSimplePath& destruct() const = 0;
     virtual const HIRSimplePath& future() const = 0;
+    virtual const HIRSimplePath& asyncIterator() const = 0;
 
     static LangItems* create(stl::ObjPool& pool, const HIRCrate& crate);
 };

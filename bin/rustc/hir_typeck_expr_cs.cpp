@@ -1535,6 +1535,9 @@ namespace {
 
         void visit(HIRExprNodeAsyncBlock& node) override {
             this->checkTypeResolvedTop(node.span(), node.returnType);
+            if (node.isAsyncGen) {
+                this->checkTypeResolvedTop(node.span(), node.yieldTy);
+            }
             HIRExprVisitorDef::visit(node);
         }
 
@@ -11853,7 +11856,13 @@ public:
 
         // TODO: Save/clear/restore loop labels
         auto _ = this->pushInnerCoerceScoped(true);
-        this->closureRetTypes.push_back(RetTarget(node.returnType));
+        if (node.isAsyncGen) {
+            // A `yield` hands out an item and evaluates to `()`.
+            this->context.addIvars(node.yieldTy);
+            this->closureRetTypes.push_back(RetTarget(node.returnType, this->context.crate.types.unit(), node.yieldTy));
+        } else {
+            this->closureRetTypes.push_back(RetTarget(node.returnType));
+        }
         node.code->visit(*this);
         this->closureRetTypes.pop_back();
     }

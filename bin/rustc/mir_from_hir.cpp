@@ -80,6 +80,9 @@ namespace {
 
             /// Is this coroutine a future? (as opposed to a generator)
             bool isFuture = false;
+            /// Is this coroutine an `async gen` body? It is a future that also
+            /// yields: it returns `Poll<Option<Item>>`.
+            bool isAsyncGen = false;
         } generatorState;
 
     public:
@@ -90,6 +93,7 @@ namespace {
         {
             if (isGenerator) {
                 generatorState.isFuture = isGenerator->isFuture;
+                generatorState.isAsyncGen = isGenerator->isAsyncGen;
                 generatorState.stateIdxEnmPath = isGenerator->stateIdxEnum;
                 generatorState.bbOpen = builder.pauseCurBlock();
                 generatorState.states.push_back(GeneratorState::State(builder.newBbUnlinked()));
@@ -504,7 +508,14 @@ namespace {
             // Final arm is the end/panic state - it's a bug to reach this
             armTargets.push_back(builder.newBbUnlinked());
             builder.setCurBlock(armTargets.back());
-            builder.endBlock(MIRTerminator::make_Unreachable({}));
+            if (generatorState.isAsyncGen) {
+                // An `async gen` iterator is fused: once the body has run out it
+                // keeps handing back `Poll::Ready(None)`.
+                asyncGenPollReady(sp, "None", {});
+                builder.endBlock(MIRTerminator::make_Return({}));
+            } else {
+                builder.endBlock(MIRTerminator::make_Unreachable({}));
+            }
 
             enumVariants.push_back(HIREnum::ValueVariant{RcString::newInterned("END"), HIRExprPtr(), U128(armTargets.size() - 1)});
             stateEnm.data = HIREnum::Class::make_Value({mv$(enumVariants)});
@@ -1016,10 +1027,47 @@ namespace {
             }
         }
 
+        /// The `Poll<Option<Item>>` return type of an `async gen` body, split
+        /// into the two enum paths a return value needs.
+        struct AsyncGenReturn {
+            HIRGenericPath poll;
+            const HIRTypeData* optionTy;
+        };
+
+        AsyncGenReturn asyncGenReturnType(const Span& sp) {
+            AsyncGenReturn rv{HIRGenericPath(), nullptr};
+            builder.withValType(sp, MIRLValue::newReturn(), [&](const HIRTypeData* ty) {
+                const auto& gp = ty->as_Path().path.data.as_Generic();
+                ASSERT_BUG(sp, ty->as_Path().binding.as_Enum()->findVariant("Ready") == 0, "");
+                ASSERT_BUG(sp, gp.params.types.size() == 1, "`async gen` return type " << ty);
+                rv.poll = gp.clone();
+                rv.optionTy = gp.params.types.at(0);
+            });
+            return rv;
+        }
+
+        /// `RETURN = Poll::Ready(<Option variant>(values))`
+        void asyncGenPollReady(const Span& sp, const char* variant, ::std::vector<MIRParam> values) {
+            auto ret = asyncGenReturnType(sp);
+            const auto& optionEnum = *ret.optionTy->as_Path().binding.as_Enum();
+            const auto variantIdx = optionEnum.findVariant(variant);
+            ASSERT_BUG(sp, variantIdx != SIZE_MAX, "Unable to find variant " << variant << " in " << ret.optionTy);
+            auto item = builder.newTemporary(ret.optionTy);
+            builder.pushStmtAssign(sp, item.clone(), MIRRValue::make_EnumVariant({ret.optionTy->as_Path().path.data.as_Generic().clone(), static_cast<unsigned>(variantIdx), std::move(values)}));
+            builder.pushStmtAssign(sp, MIRLValue::newReturn(), MIRRValue::make_EnumVariant({std::move(ret.poll), 0, ::makeVec1(MIRParam(std::move(item)))}));
+        }
+
         // Common code used by both `ExprNodeReturn` and the final return of a GeneratorWrapper
         void coroutineReturn(const Span& sp, const HIRTypeData* valueTy) {
             static RcString rcstringComplete = RcString::newInterned("Complete");
             static RcString rcstringReady = RcString::newInterned("Ready"); // TODO: This is a lang item
+            if (generatorState.isAsyncGen) {
+                // An `async gen` body ends the sequence: `Poll::Ready(None)`.
+                // Its own value is unit, and is dropped here.
+                builder.getResultInParam(sp, valueTy);
+                asyncGenPollReady(sp, "None", {});
+                return;
+            }
             const auto& variantName = generatorState.isFuture ? rcstringReady : rcstringComplete;
             // TODO: Handle difference between generators and futures (different return/yield types)
             HIRGenericPath enmPath;
@@ -1098,6 +1146,26 @@ namespace {
 
         void visit(HIRExprNodeYield& node) override {
             TRACE_FUNCTION_F("_Yield");
+            if (isGenerator && generatorState.isAsyncGen) {
+                // `yield v` in an `async gen` body returns `Poll::Ready(Some(v))`
+                // and resumes at the next state, the same way `.await` returns
+                // `Poll::Pending`.
+                this->visitNodePtr(node.value);
+                if (!builder.blockActive()) {
+                    return;
+                }
+                asyncGenPollReady(node.span(), "Some", ::makeVec1(builder.getResultInParam(node.span(), node.value->resType)));
+                builder.pushStmtAssign(node.span(), generatorStateLv(), MIRRValue::make_EnumVariant({generatorState.stateIdxEnmPath.clone(), static_cast<unsigned>(generatorState.states.size()), {}}));
+                // NOTE: No scope terminate
+                builder.endBlock(MIRTerminator::make_Return({}));
+
+                generatorState.states.back().saved = builder.getActiveLocals(node.span(), generatorState.savedDropFlags);
+                generatorState.states.push_back(builder.newBbUnlinked());
+                builder.setCurBlock(generatorState.states.back().entrypoint);
+
+                builder.setResult(node.span(), MIRRValue::make_Tuple({}));
+                return;
+            }
             if (isGenerator) {
                 ASSERT_BUG(node.span(), !generatorState.isFuture, "");
 

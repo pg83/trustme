@@ -1490,6 +1490,15 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
             if (isClosureStart(lex)) {
                 return ParseExprValClosure(lex, true);
             }
+            // `async gen { .. }`: a coroutine that both awaits and yields.
+            {
+                Token genTok;
+                if (GET_TOK(genTok, lex) == TOK_IDENT && genTok.ident().name == "gen") {
+                    const bool genIsMove = lex.getTokenIf(TOK_RWORD_MOVE);
+                    return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), genIsMove, false, /*isAsync=*/true);
+                }
+                PUTBACK(genTok, lex);
+            }
             // `async use { .. }` captures the same way an `use` closure does.
             const bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
             const bool isUse = !isMove && lex.getTokenIf(TOK_RWORD_USE);
@@ -5063,6 +5072,15 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
             ;
             if (lex.getTokenIf(TOK_RWORD_UNSAFE)) {
                 flags.isUnsafe = true;
+            }
+            // `async gen fn`: `gen` is contextual, so it is matched by name.
+            {
+                Token genTok;
+                if (GET_TOK(genTok, lex) == TOK_IDENT && genTok.ident().name == "gen") {
+                    flags.isGen = true;
+                } else {
+                    PUTBACK(genTok, lex);
+                }
             }
             GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
             auto definitionSpan = lex.tokenStartSpan(tok);

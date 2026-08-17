@@ -1795,7 +1795,15 @@ TU_ARMA(Alias, ee) {
                     }
                 }
                 TU_ARMA(Async, nodeP) {
-                    if (trait == langFuture()) {
+                    if (nodeP->isAsyncGen) {
+                        // An `async gen` block is an AsyncIterator, not a Future.
+                        if (trait == langAsyncIterator()) {
+                            static const RcString rcstringItem = RcString::newInterned("Item");
+                            HIRTraitPath::assocListT assoc;
+                            assoc.insert(::std::make_pair(rcstringItem, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->yieldTy}));
+                            return callback(ImplRef(type, {}, mv$(assoc)), HIRCompare::Equal);
+                        }
+                    } else if (trait == langFuture()) {
                         static const RcString rcstringOutput = RcString::newInterned("Output");
                         HIRTraitPath::assocListT assoc;
                         assoc.insert(::std::make_pair(rcstringOutput, HIRTraitPath::AtyEqual{trait.clone(), {}, nodeP->returnType}));

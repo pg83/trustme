@@ -100,8 +100,10 @@ struct ASTExprNodeGeneratorBlock: public ASTExprNode {
     bool isMove;
     // The inner coroutine synthesized for a coroutine-closure (`iter!`).
     bool isCoroutineClosureBody;
+    /// `async gen`: the coroutine also awaits, and yields into an AsyncIterator.
+    bool isAsync;
 
-    ASTExprNodeGeneratorBlock(ASTExprNodeP inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody);
+    ASTExprNodeGeneratorBlock(ASTExprNodeP inner, ASTType* returnType, bool isMove, bool isCoroutineClosureBody, bool isAsync = false);
 
     static constexpr unsigned int kind = 3;
     unsigned int nodeKind() const override;
