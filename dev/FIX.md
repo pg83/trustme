@@ -40,12 +40,12 @@ sweeps found two regressions from this session's own work (a rejected
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 323 |
-| fixed, or no longer reproducing, since the gate | 308 |
+| still failing on the current tree | 316 |
+| fixed, or no longer reproducing, since the gate | 315 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 126 |
+| accepted Rust rejected by the compiler or driver | 119 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 80 |
 | wrong runtime behaviour, panic, abort, or output | 41 |
 | missing rejection or diagnostic | 53 |
@@ -54,7 +54,7 @@ sweeps found two regressions from this session's own work (a rejected
 
 ## P0: accepted Rust rejected by the front end
 
-All 126 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 119 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
