@@ -349,8 +349,9 @@ static inline int128_t shr128s(int128_t a, uint32_t b) {
     return make128s((int64_t)a.hi >> (b - 64));
 }
 
-static inline uint128_t int128_to_uint128(int128_t a) { return make128_raw(a.lo, a.hi); }
-static inline int128_t uint128_to_int128(uint128_t a) { return make128s_raw(a.lo, a.hi); }
+/* Both takers are (hi, lo): the halves must not be exchanged. */
+static inline uint128_t int128_to_uint128(int128_t a) { return make128_raw(a.hi, a.lo); }
+static inline int128_t uint128_to_int128(uint128_t a) { return make128s_raw(a.hi, a.lo); }
 
 #else
 typedef unsigned __int128 uint128_t;
@@ -408,8 +409,10 @@ static inline uint64_t __trustme_bitrev64(uint64_t v) { return v == 0 ? 0 : (uin
 
 #if TRUSTME_TARGET_EMULATED_I128
 static inline uint128_t __trustme_bitrev128(uint128_t v) { return make128_raw(__trustme_bitrev64(v.lo), __trustme_bitrev64(v.hi)); }
+static inline uint128_t __trustme_bswap128(uint128_t v) { return make128_raw(__builtin_bswap64(v.lo), __builtin_bswap64(v.hi)); }
 #else
 static inline uint128_t __trustme_bitrev128(uint128_t v) { return v == 0 ? 0 : (uint128_t)__trustme_bitrev64(v >> 64) | ((uint128_t)__trustme_bitrev64(v) << 64); }
+static inline uint128_t __trustme_bswap128(uint128_t v) { return ((uint128_t)__builtin_bswap64((uint64_t)v) << 64) | (uint128_t)__builtin_bswap64((uint64_t)(v >> 64)); }
 #endif
 
 static inline uint8_t __trustme_op_umax8(uint8_t a, uint8_t b) { return a > b ? a : b; }

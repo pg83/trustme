@@ -6228,6 +6228,12 @@ namespace {
                     emitLvalue(e.retVal);
                     of << " = ";
                     emitParam(e.args.at(0));
+                } else if (getPrimSize(ty) == 128) {
+                    // There is no `__builtin_bswap128`, and a signed 128-bit
+                    // value has its own type here.
+                    emitLvalue(e.retVal);
+                    of << " = ";
+                    emitWide128Call(ty, "__trustme_bswap128", e.args.at(0));
                 } else {
                     emitLvalue(e.retVal);
                     of << " = ";
@@ -6240,9 +6246,6 @@ namespace {
                             break;
                         case 64:
                             of << "__builtin_bswap64";
-                            break;
-                        case 128:
-                            of << "__builtin_bswap128";
                             break;
                         default:
                             MIR_TODO(localMirRes, "bswap<" << ty << ">");
@@ -6257,28 +6260,29 @@ namespace {
                 MIR_ASSERT(localMirRes, ty->is_Primitive(), "Invalid type passed to bitreverse. Must be a primitive, got " << ty);
                 emitLvalue(e.retVal);
                 of << " = ";
-                switch (getPrimSize(ty)) {
-                    case 8:
-                        of << "__trustme_bitrev8";
-                        break;
-                    case 16:
-                        of << "__trustme_bitrev16";
-                        break;
-                    case 32:
-                        of << "__trustme_bitrev32";
-                        break;
-                    case 64:
-                        of << "__trustme_bitrev64";
-                        break;
-                    case 128:
-                        of << "__trustme_bitrev128";
-                        break;
-                    default:
-                        MIR_TODO(localMirRes, "bswap<" << ty << ">");
+                if (getPrimSize(ty) == 128) {
+                    emitWide128Call(ty, "__trustme_bitrev128", e.args.at(0));
+                } else {
+                    switch (getPrimSize(ty)) {
+                        case 8:
+                            of << "__trustme_bitrev8";
+                            break;
+                        case 16:
+                            of << "__trustme_bitrev16";
+                            break;
+                        case 32:
+                            of << "__trustme_bitrev32";
+                            break;
+                        case 64:
+                            of << "__trustme_bitrev64";
+                            break;
+                        default:
+                            MIR_TODO(localMirRes, "bitreverse<" << ty << ">");
+                    }
+                    of << "(";
+                    emitParam(e.args.at(0));
+                    of << ")";
                 }
-                of << "(";
-                emitParam(e.args.at(0));
-                of << ")";
             }
             // > Obtain the discriminane of a &T as u64
             else if (name == "discriminant_value") {
@@ -7024,7 +7028,11 @@ namespace {
                     }
                     of << ";";
                     return;
-                } else if (ty == HIRCoreType::U64 || (ty == HIRCoreType::Usize && TargetGetPointerBits() > 32)) {
+                } else if (ty == HIRCoreType::U64 || ty == HIRCoreType::I64
+                    || ((ty == HIRCoreType::Usize || ty == HIRCoreType::Isize) && TargetGetPointerBits() > 32)) {
+                    // Counting bits does not care about the sign, but the width
+                    // does: a signed 64-bit value used to fall through to the
+                    // 32-bit builtin.
                     emitParam(e.args.at(0));
                     of << " != 0 ? ";
                     if (name == "ctlz" || name == "ctlz_nonzero") {
@@ -8563,6 +8571,27 @@ namespace {
                         of << " + 0x" << ::std::hex << c.offset.truncateU64() << ::std::dec << "))";
                     }
                 }
+            }
+        }
+
+        /// Call a helper that takes and returns an unsigned 128-bit value, for a
+        /// type that may be the signed one -- which is a distinct type here.
+        void emitWide128Call(const HIRTypeData* ty, const char* helper, const MIRParam& arg) {
+            const bool isSigned = (ty == HIRCoreType::I128);
+            if (isSigned) {
+                of << (options.emulatedI128 ? "uint128_to_int128(" : "(int128_t)");
+            }
+            of << helper << "(";
+            if (isSigned) {
+                of << (options.emulatedI128 ? "int128_to_uint128(" : "(uint128_t)");
+            }
+            emitParam(arg);
+            if (isSigned && options.emulatedI128) {
+                of << ")";
+            }
+            of << ")";
+            if (isSigned && options.emulatedI128) {
+                of << ")";
             }
         }
 
