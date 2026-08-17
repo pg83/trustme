@@ -7899,11 +7899,7 @@ TU_ARMA(Alias, ee) {
                 }
                 if (crate.edition < ASTEdition::Rust2024 && traitRef.second->skipBoxedSliceDuringMethodDispatch) {
                     const auto* boxedInner = this->typeIsOwnedBox(sp, ty);
-                    // An inner type that is not known yet cannot be ruled out as
-                    // a slice, and skipping costs nothing either way: before
-                    // edition 2024 the only impl this gate covers is the one for
-                    // a boxed slice.
-                    if (boxedInner && (boxedInner->is_Slice() || boxedInner->is_Infer())) {
+                    if (boxedInner && boxedInner->is_Slice()) {
                         continue;
                     }
                 }
