@@ -65,10 +65,16 @@ error is a compiler deficiency, not an expected corpus result.
 
 The 50 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
-unexpected token the largest families are `gen` blocks and functions (8),
+unexpected token the largest families are `gen` blocks and functions (9),
 unsafe binders (5), never patterns (3), and a long tail of one- and two-test spellings. Grouping by test directory finds them faster than
 grouping by token: that is how the six associated-const equality bounds turned
 out to be one syntax rule.
+
+The `gen` family is 9 tests and one feature: `gen fn`, `async gen fn`,
+`gen { .. }` and `async gen { .. }`. `ASTExprNodeGeneratorBlock` exists but is
+only reachable from a macro fragment (`parse_common.cpp:1422`), and it models
+the `Coroutine` trait; `gen` needs `Iterator`, and `async gen` needs
+`AsyncIterator`.
 
 A `for<T>` binder is only dropped where it quantifies a where predicate. In a
 supertrait list (`trait Foo: for<T> Bar<T>`) or a return type
@@ -133,6 +139,17 @@ which still prints as `fn{::"bin#"::#0::f}` -- the path of a function inside an
 impl is not reconstructed. Of the formatting ones, `test_format_int_exp_precision` survives the precision
 fix. No 128-bit ones are left. Minimise representatives before treating nearby
 assertions as one root cause.
+
+Grouping the panics by the rule they check finds these multi-test families:
+
+| family | tests | rule |
+|---|---:|---|
+| let-chain drop order | 3 | `drop_order_let_chain`, `drop_order_if_let_rescope`, `drop-order-comparisons-let-chains`: a non-`let` operand's temporary in a chain drops at the end of the chain, a `let` binding's lives for the block |
+| coroutine and future size | 4 | `niche-in-coroutine`, `overlap-locals`, `resume-arg-size`, `future-as-arg`: locals that cannot be live together must share storage |
+| DST prefix alignment | 2 | `issue-36278-prefix-nesting` and `dynamic-size-of-prefix-correctly-36278` are the same bug, from opposite corpora |
+| `-Z fmt-debug` | 2 | `fmt/fmt_debug/full.rs` and `shallow.rs` |
+| `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and the `core::any` library case |
+| `Waker::will_wake` | 2 | two library cases comparing a cloned waker's vtable |
 
 `glossary__L232` reached this class from the generated-code one: an enum with a
 single unit variant needs no tag, so `size_of` of it is 0 and we say 1. The
