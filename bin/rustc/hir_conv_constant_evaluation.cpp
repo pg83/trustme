@@ -1622,7 +1622,9 @@ public:
                 if (!markings) {
                     return true;
                 }
-                if (markings->hasDropImpl) {
+                // A `impl const Drop` destructor may run at compile time; the
+                // fields still have to be droppable there too.
+                if (markings->hasDropImpl && !markings->hasConstDropImpl) {
                     return true;
                 }
 
@@ -3383,8 +3385,17 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
             HIRTypeRef tmp;
             const auto& ty = state.getLvalueType(tmp, e.slot);
             auto value = localState.getLval(e.slot);
-            if (!localState.valueReachableFromReturn(value) && localState.valueNeedsNonConstDrop(ty, value)) {
-                ERROR(this->rootSpan, E0000, "destructor of `" << ty << "` cannot be evaluated at compile-time");
+            if (!localState.valueReachableFromReturn(value)) {
+                if (localState.valueNeedsNonConstDrop(ty, value)) {
+                    ERROR(this->rootSpan, E0000, "destructor of `" << ty << "` cannot be evaluated at compile-time");
+                }
+                // A `impl const Drop` destructor is observable -- `RefCell`'s
+                // borrow guards are the reason `borrow` works in a `const` block
+                // -- so it has to actually run. A shallow drop only frees a box,
+                // which constant evaluation does not model.
+                if (e.kind == MIRDropKind::DEEP) {
+                    this->runConstDrop(localState, ty, e.slot);
+                }
             }
             return e.target;
         }
@@ -4405,6 +4416,93 @@ bool HIREvaluator::callFunction(MIREvalCallStackEntry& localState, const MIRLVal
         return false;
     } else {
         MIR_TODO(state, "Could not find function for " << path << " - " << rv.tagStr());
+    }
+}
+
+void HIREvaluator::callConstDestructor(MIREvalCallStackEntry& localState, HIRTypeRef ty, const MIRLValue& slot) {
+    const auto& state = localState.state;
+    auto& types = resolve.hirCrate().types;
+    DEBUG("Const drop of " << ty << " at " << slot);
+
+    ::std::vector<MIREvalAllocationPtr> callArgs;
+    callArgs.push_back(MIREvalAllocationPtr::allocate(localState.valuePool, resolve, state, types.borrow(HIRBorrowType::Unique, ty)));
+    localState.writeParam(MIREvalValueRef(callArgs.back()), MIRParam::make_Borrow({HIRBorrowType::Unique, slot.clone()}));
+    auto path = ::std::make_shared<HIRPath>(ty, HIRGenericPath(resolve.langDrop()), RcString::newInterned("drop"), HIRPathParams{});
+
+    // The destructor runs to completion on a stack of its own: a `Drop`
+    // terminator has no return slot for the evaluator to resume into.
+    auto saved = ::std::move(this->callStack);
+    this->callStack.clear();
+    try {
+        if (this->callFunction(localState, MIRLValue::newReturn(), ::std::move(path), ::std::move(callArgs), localState.callerLocation, false)) {
+            this->runUntilStackEmpty();
+        }
+    } catch (...) {
+        this->callStack = ::std::move(saved);
+        throw;
+    }
+    this->callStack = ::std::move(saved);
+}
+
+/// Run the destructors of a value going out of scope during constant
+/// evaluation. Only `impl const Drop` ones exist here: any other destructor was
+/// rejected by `valueNeedsNonConstDrop` before this point.
+void HIREvaluator::runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty, const MIRLValue& slot) {
+    const auto& state = localState.state;
+    if (!localState.rootResolve.typeNeedsDropGlue(state.sp, ty)) {
+        return;
+    }
+
+    TU_MATCH_HDRA( (*ty), {)
+    default:
+        // Nothing else can carry a destructor.
+        return;
+    TU_ARMA(Path, te) {
+            const auto* markings = te.binding.getTraitMarkings();
+            if (!markings) {
+                return;
+            }
+            if (markings->hasDropImpl) {
+                if (!markings->hasConstDropImpl) {
+                    return;
+                }
+                this->callConstDestructor(localState, ty, slot);
+            }
+            TU_MATCH_HDRA( (te.binding), {)
+            default:
+                return;
+            TU_ARMA(Struct, pbe) {
+                    const auto* repr = TargetGetTypeRepr(state.sp, localState.rootResolve, ty);
+                    MIR_ASSERT(state, repr, "No representation for struct " << ty);
+                    for (size_t i = 0; i < repr->fields.size(); i++) {
+                        this->runConstDrop(localState, repr->fields[i].ty, MIRLValue::newField(slot.clone(), static_cast<unsigned>(i)));
+                    }
+                }
+                TU_ARMA(Enum, pbe) {
+                    if (!pbe->data.is_Data()) {
+                        return;
+                    }
+                    const auto variant = localState.readEnumVariant(ty, localState.getLval(slot));
+                    const auto* repr = TargetGetTypeRepr(state.sp, localState.rootResolve, ty);
+                    MIR_ASSERT(state, repr, "No representation for enum " << ty);
+                    MIR_ASSERT(state, variant < repr->fields.size(), "Enum representation has no variant " << variant << " for " << ty);
+                    this->runConstDrop(localState, repr->fields[variant].ty, MIRLValue::newDowncast(slot.clone(), variant));
+                }
+            }
+        }
+        TU_ARMA(Array, te) {
+            if (!te.size.is_Known()) {
+                return;
+            }
+            for (size_t i = 0; i < te.size.as_Known(); i++) {
+                this->runConstDrop(localState, te.inner, MIRLValue::newField(slot.clone(), static_cast<unsigned>(i)));
+            }
+        }
+        TU_ARMA(Tuple, te) {
+            for (size_t i = 0; i < te.size(); i++) {
+                this->runConstDrop(localState, te.at(i), MIRLValue::newField(slot.clone(), static_cast<unsigned>(i)));
+            }
+        }
     }
 }
 

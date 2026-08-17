@@ -851,6 +851,7 @@ public:
         BIT(0, m.hasADeref)
         BIT(1, m.isCopy)
         BIT(2, m.hasDropImpl)
+        BIT(3, m.hasConstDropImpl)
 #undef BIT
         // TODO: auto_impls
         return m;
@@ -3649,6 +3650,7 @@ public:
         BIT(0, m.hasADeref)
         BIT(1, m.isCopy)
         BIT(2, m.hasDropImpl)
+        BIT(3, m.hasConstDropImpl)
 #undef BIT
         out.writeU8(bitflag1);
 

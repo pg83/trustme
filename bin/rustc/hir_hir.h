@@ -255,6 +255,10 @@ struct HIRTraitMarkings {
     /// - If there is an impl, there must be an applicable impl to every instance.
     bool hasDropImpl = false;
 
+    /// `true` if the Drop impl is `impl const Drop`, so the destructor may run
+    /// during constant evaluation.
+    bool hasConstDropImpl = false;
+
     /// `true` if there is a Copy impl
     bool isCopy = false;
 

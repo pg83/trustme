@@ -86,6 +86,8 @@ private:
     // Returns UINT_MAX on return
     unsigned runTerminator(MIREvalCallStackEntry& localState, const MIRTerminator& stmt);
     bool callFunction(MIREvalCallStackEntry& localState, const MIRLValue& rvSlot, ::std::shared_ptr<HIRPath> path, ::std::vector<MIREvalAllocationPtr> callArgs, const SourceLocation& callsite, bool indirect);
+    void callConstDestructor(MIREvalCallStackEntry& localState, HIRTypeRef ty, const MIRLValue& slot);
+    void runConstDrop(MIREvalCallStackEntry& localState, HIRTypeRef ty, const MIRLValue& slot);
 
     EncodedLiteral allocationToEncoded(const HIRTypeData* ty, const MIREvalAllocation& a);
 };

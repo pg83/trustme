@@ -2307,6 +2307,7 @@ namespace {
                     } else if (traitPath == langDrop_) {
                         // TODO: Check that there's only one impl, and that it covers the same set as the type.
                         markings.hasDropImpl = true;
+                        markings.hasConstDropImpl = markings.hasConstDropImpl || impl.isConst;
                     } else if (traitPath == langCoerceUnsized_) {
                         auto& structMarkings = const_cast<HIRStruct*>(te.binding.as_Struct())->structMarkings;
                         if (structMarkings.coerceUnsizedIndex != ~0u) {
