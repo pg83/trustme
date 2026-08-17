@@ -5844,27 +5844,20 @@ namespace {
                             itemAlign = 1;
                         }
                         if (!ty->is_Slice() && !ty->is_Primitive()) {
-                            // TODO: What if the wrapper has no other fields?
-                            // Get the alignment and check if it's higher than the item alignment
-                            size_t wrapperAlign = 0, wrapperSizeIgnore = 0;
-                            MIR_ASSERT(localMirRes, TargetGetSizeAndAlignOf(sp, resolve_, ty, wrapperSizeIgnore, wrapperAlign), "Can't get align of " << ty);
-                            if (wrapperAlign > itemAlign) {
-                                itemAlign = wrapperAlign;
-                                alignNeeded = true;
-                                of << "ALIGN_TO(";
-                            }
-                            const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
-                            of << repr->fields.back().offset << " + ";
-                        }
-                        emitParam(e.args.at(0));
-                        of << ".META * " << itemSize;
-                        if (alignNeeded) {
-                            of << ", " << itemAlign << ")";
+                            // A wrapper's own prefix is only part of the size:
+                            // the tail may be another wrapper, whose prefix
+                            // counts too.
+                            (void)alignNeeded;
+                            (void)itemAlign;
+                            emitDstSize(ty, e.args.at(0));
+                        } else {
+                            emitParam(e.args.at(0));
+                            of << ".META * " << itemSize;
                         }
                     }
                     // Trait object metadata.
                     else if (innerTy->is_TraitObject()) {
-                        emitTraitObjectDstSize(ty, e.args.at(0));
+                        emitDstSize(ty, e.args.at(0));
                     } else {
                         MIR_BUG(localMirRes, "Unknown inner unsized type " << innerTy << " for " << ty);
                     }
@@ -5899,7 +5892,7 @@ namespace {
                             of << "1";
                         }
                     } else if (innerTy->is_TraitObject()) {
-                        emitTraitObjectDstAlign(ty, e.args.at(0));
+                        emitDstAlign(ty, e.args.at(0));
                     } else {
                         MIR_BUG(localMirRes, "Unknown inner unsized type " << innerTy << " for " << ty);
                     }
@@ -8928,33 +8921,58 @@ namespace {
             of << ".META)->align";
         }
 
-        void emitTraitObjectDstTailAlign(const HIRTypeData* outerTy, const HIRTypeData* tailTy, const MIRParam& value) {
+        void emitDstTailAlign(const HIRTypeData* outerTy, const HIRTypeData* tailTy, const MIRParam& value) {
             const auto maxAlign = getPackingMaxAlign(outerTy);
             if (maxAlign != 0) {
                 of << "trustme_min(";
             }
-            emitTraitObjectDstAlign(tailTy, value);
+            emitDstAlign(tailTy, value);
             if (maxAlign != 0) {
                 of << ", " << maxAlign << ")";
             }
         }
 
-        void emitTraitObjectDstAlign(const HIRTypeData* ty, const MIRParam& value) {
+        /// Alignment of an unsized type, which the metadata may be needed for.
+        void emitDstAlign(const HIRTypeData* ty, const MIRParam& value) {
             if (ty->is_TraitObject()) {
                 emitTraitObjectVtableAlign(value);
+                return;
+            }
+            if (const auto* te = ty->opt_Slice()) {
+                of << "ALIGNOF(";
+                emitCtype(te->inner);
+                of << ")";
+                return;
+            }
+            if (ty == HIRCoreType::Str) {
+                of << "1";
                 return;
             }
 
             const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
             MIR_ASSERT(*mirRes, repr && repr->size == SIZE_MAX && !repr->fields.empty(), "Expected a DST wrapper - " << ty);
             of << "trustme_max(" << repr->align << ", ";
-            emitTraitObjectDstTailAlign(ty, repr->fields.back().ty, value);
+            emitDstTailAlign(ty, repr->fields.back().ty, value);
             of << ")";
         }
 
-        void emitTraitObjectDstSize(const HIRTypeData* ty, const MIRParam& value) {
+        /// Size of an unsized type. A wrapper's own prefix is only part of it:
+        /// the tail may be another wrapper, whose prefix counts as well.
+        void emitDstSize(const HIRTypeData* ty, const MIRParam& value) {
             if (ty->is_TraitObject()) {
                 emitTraitObjectVtableSize(value);
+                return;
+            }
+            if (const auto* te = ty->opt_Slice()) {
+                size_t itemSize = 0, itemAlign = 0;
+                MIR_ASSERT(*mirRes, TargetGetSizeAndAlignOf(sp, resolve_, te->inner, itemSize, itemAlign), "Can't get size of " << te->inner);
+                emitParam(value);
+                of << ".META * " << itemSize;
+                return;
+            }
+            if (ty == HIRCoreType::Str) {
+                emitParam(value);
+                of << ".META";
                 return;
             }
 
@@ -8962,22 +8980,22 @@ namespace {
             MIR_ASSERT(*mirRes, repr && repr->size == SIZE_MAX && !repr->fields.empty(), "Expected a DST wrapper - " << ty);
             const auto& tail = repr->fields.back();
             of << "ALIGN_TO(ALIGN_TO(" << tail.offset << ", ";
-            emitTraitObjectDstTailAlign(ty, tail.ty, value);
+            emitDstTailAlign(ty, tail.ty, value);
             of << ") + ";
-            emitTraitObjectDstSize(tail.ty, value);
+            emitDstSize(tail.ty, value);
             of << ", ";
-            emitTraitObjectDstAlign(ty, value);
+            emitDstAlign(ty, value);
             of << ")";
         }
 
-        void emitTraitObjectDstFieldOffset(const HIRTypeData* ty, size_t fieldIdx, const MIRParam& value) {
+        void emitDstFieldOffset(const HIRTypeData* ty, size_t fieldIdx, const MIRParam& value) {
             const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
             MIR_ASSERT(*mirRes, repr && fieldIdx < repr->fields.size(), "Invalid DST field " << fieldIdx << " on " << ty);
             const auto& field = repr->fields[fieldIdx];
             auto innerTy = getInnerUnsizedType(field.ty);
             MIR_ASSERT(*mirRes, fieldIdx + 1 == repr->fields.size() && innerTy->is_TraitObject(), "Expected final trait object field on " << ty);
             of << "ALIGN_TO(" << field.offset << ", ";
-            emitTraitObjectDstTailAlign(ty, field.ty, value);
+            emitDstTailAlign(ty, field.ty, value);
             of << ")";
         }
 
@@ -9073,7 +9091,7 @@ namespace {
 
                 of << " + ";
                 if (this->metadataType(field.ty) == MetadataType::TraitObject) {
-                    emitTraitObjectDstFieldOffset(parentTy, wrapper.as_Field(), baseParam);
+                    emitDstFieldOffset(parentTy, wrapper.as_Field(), baseParam);
                 } else {
                     of << field.offset;
                 }
