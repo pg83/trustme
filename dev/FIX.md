@@ -35,14 +35,14 @@ fixes recorded below, so these counts are measured, not decremented by hand.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 397 |
-| fixed, or no longer reproducing, since the gate | 234 |
+| still failing on the current tree | 395 |
+| fixed, or no longer reproducing, since the gate | 236 |
 
 | priority class | tests |
 |---|---:|
 | accepted Rust rejected by the compiler or driver | 176 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 89 |
-| wrong runtime behaviour, panic, abort, or output | 43 |
+| wrong runtime behaviour, panic, abort, or output | 41 |
 | missing rejection or diagnostic | 55 |
 | generated C++ or link failure | 25 |
 | stable timeout | 9 |
@@ -113,11 +113,11 @@ declare a const parameter whose own type is generic.
 
 ## P1: runtime semantics
 
-Forty-three programs build but execute incorrectly:
+Forty-one programs build but execute incorrectly:
 
 | runtime result | tests | note |
 |---|---:|---|
-| Rust panic, exit 101 | 37 | group by the failed semantic assertion, never by exit code |
+| Rust panic, exit 101 | 35 | group by the failed semantic assertion, never by exit code |
 | stdout mismatch | 3 | RustSmith seeds 19 and 102; async-drop ordering |
 | abort with no backtrace | 2 | packed-drop double panic, library allocation failure |
 | generated executable SIGABRT | 1 | |
@@ -128,8 +128,7 @@ order, and coroutine layout. `macro-doc-raw-str-hashes` is the last
 the attribute it holds. `issue-61894` is the type name of a function item,
 which still prints as `fn{::"bin#"::#0::f}` -- the path of a function inside an
 impl is not reconstructed. Of the formatting ones, `test_format_int_exp_precision` survives the precision
-fix. The 128-bit ones left are `intrinsics::carrying_mul_add_fallback` for u128 and
-i128, which is arithmetic rather than layout. Minimise representatives before treating nearby
+fix. No 128-bit ones are left. Minimise representatives before treating nearby
 assertions as one root cause.
 
 ## P2: missing language checks
