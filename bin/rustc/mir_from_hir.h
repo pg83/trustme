@@ -473,7 +473,10 @@ private:
     void terminateLoopEarly(const Span& sp, ScopeType::Data_Loop& sdLoop);
 
     void dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv);
-    void dropScopeValues(ScopeDef& sd);
+    /// Emit the drops a scope owns. `preserveStates` leaves the value states
+    /// alone, for a path that branches away: what it drops is dropped only on
+    /// that branch, so the states the fall-through sees must not change.
+    void dropScopeValues(ScopeDef& sd, bool preserveStates = false);
     MIRUnwindAction makeUnwindAction(const Span& sp, const MIRLValue* consumedValue = nullptr);
     void pushDropTerminator(const Span& sp, MIRDropKind kind, MIRLValue val, unsigned int dropFlag);
     /// Finalise a scope before it's fully destroyed. Doesn't emit destructors (already done by `drop_scope_values`)

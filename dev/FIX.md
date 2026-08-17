@@ -213,8 +213,14 @@ Grouping the panics by the rule they check finds these multi-test families:
 |---|---:|---|
 | let-chain drop order | 3 | `drop_order_let_chain`, `drop_order_if_let_rescope`, `drop-order-comparisons-let-chains`: a binding from a `let` operand that is followed by another operand is never dropped at all |
 | coroutine and future size | 4 | `niche-in-coroutine`, `overlap-locals`, `resume-arg-size`, `future-as-arg`: locals that cannot be live together must share storage |
-| `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and the `core::any` library case |
+| `TypeId` of a higher-ranked type | 2 | `type-id-higher-rank` and the `core::any` library case: not reachable, see below |
 | `Waker::will_wake` | 2 | two library cases comparing a cloned waker's vtable |
+
+The two `TypeId` ones are not reachable at all: they require `fn(&'static isize)`
+and `for<'a> fn(&'a isize)` to have different type ids, and this compiler erases
+lifetimes -- `HIRPathParams` has no lifetime list to carry them. Nothing short of
+carrying lifetimes through HIR would separate those types, so do not count these
+two as independent work.
 
 `will_wake` is a trap: it compares vtable *addresses*, and `alloc::task`
 promotes the same `RawWakerVTable` value in two functions (`const#0` and

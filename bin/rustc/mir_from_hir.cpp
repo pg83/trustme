@@ -9104,8 +9104,14 @@ void MirBuilder::terminateScopeEarly(const Span& sp, const ScopeHandle& scope, b
 
     bool useFrozenExitState = false;
     for (unsigned int i = scopeStack.size(); i-- > slot;) {
-        const auto* freeze = scopes.at(scopeStack[i]).data.opt_Freeze();
+        const auto& data = scopes.at(scopeStack[i]).data;
+        const auto* freeze = data.opt_Freeze();
         useFrozenExitState |= freeze && !freeze->unfrozen;
+        // An exit that crosses a conditional is a branch of its own: what it
+        // drops is dropped only on that branch, so the states the fall-through
+        // sees must not change. The drops within the exit still see each other's
+        // effect, which is what keeps its own unwind edges right.
+        useFrozenExitState |= data.is_Split() || data.is_Loop();
     }
     ASSERT_BUG(sp, !useFrozenExitState || !frozenExitStateActive, "Nested frozen early-exit state");
     if (useFrozenExitState) {
@@ -10442,7 +10448,7 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
     )
 }
 
-void MirBuilder::dropScopeValues(ScopeDef& sd) {
+void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
     TU_MATCHA(
         (sd.data),
         (e),
@@ -10457,6 +10463,10 @@ void MirBuilder::dropScopeValues(ScopeDef& sd) {
                  }
                  auto state = getSlotState(sd.span, slot.index, slotType).clone();
                  DEBUG(lvalue << " - " << state);
+                 dropValueFromState(sd.span, state, mv$(lvalue));
+             } else if (preserveStates) {
+                 auto state = getSlotState(sd.span, slot.index, slotType).clone();
+                 DEBUG(lvalue << " - " << state << " (branch)");
                  dropValueFromState(sd.span, state, mv$(lvalue));
              } else {
                  auto& state = getSlotStateMut(sd.span, slot.index, slotType);
