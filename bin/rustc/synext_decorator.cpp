@@ -3684,7 +3684,21 @@ class CMultiHandlerLint: public ExpandDecorator {
         });
     }
 
+    /// A lint attribute on an item applies to that item only. A group and an
+    /// exact name are recorded apart, because the exact name wins whichever
+    /// order they were written in.
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
+        auto* fcn = i.opt_Function();
+        if (!fcn) {
+            return;
+        }
+        collectLintNames(mi, [&](const RcString& name) {
+            if (name == "warnings" || name == "unused") {
+                fcn->markings.lintGroupLevels[name] = this->level();
+            } else {
+                fcn->markings.lintLevels[name] = this->level();
+            }
+        });
     }
 
     void handle(const Span& sp, const ASTAttribute& mi, const WireBoard& wb, ASTCrate& crate, ASTImpl& impl, const RcString& name, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {

@@ -22,9 +22,6 @@ namespace {
     }
 
     /// `#[must_use]` on the type of the discarded value.
-    ///
-    /// NOTE: The marking is not serialised into crate metadata, so this only
-    /// sees types defined in the crate being compiled.
     bool typeIsMustUse(const HIRTypeData* ty) {
         if (const auto* pe = ty->opt_Path()) {
             TU_MATCH_HDRA( (pe->binding), {)
@@ -46,12 +43,7 @@ namespace {
 
     /// `#[must_use]` on a trait named by `impl Trait` or `dyn Trait`.
     bool traitIsMustUse(const HIRCrate& crate, const HIRTypeData* ty) {
-        // Only the crate being compiled: the marking is not serialised, and a
-        // lookup that misses is a hard error.
         auto check = [&](const HIRSimplePath& path) {
-            if (path.crateName() != crate.crateName) {
-                return false;
-            }
             return crate.getTraitByPath(Span(), path).mustUse;
         };
         if (const auto* te = ty->opt_TraitObject()) {
@@ -130,14 +122,36 @@ namespace {
 
     class MustUseOuterVisitor: public HIRVisitor {
         const HIRCrate& crate_;
+        CfgLintLevel crateLevel_;
         CfgLintLevel level_;
 
     public:
         MustUseOuterVisitor(const WireBoard& wb, CfgLintLevel level)
             : HIRVisitor(nullptr, wb.crate->types)
             , crate_(*wb.crate)
+            , crateLevel_(level)
             , level_(level)
         {
+        }
+
+        /// A lint attribute on the function overrides the crate's level for its
+        /// body. An exact name beats a group whichever order they were written
+        /// in, which is why the two are recorded apart.
+        void visitFunction(HIRItemPath p, HIRFunction& item) override {
+            const auto saved = level_;
+            const auto& byName = item.markings.lintLevels;
+            const auto it = byName.find(RcString::newInterned(LINT_NAME));
+            if (it != byName.end()) {
+                level_ = it->second;
+            } else {
+                for (const auto& group : item.markings.lintGroupLevels) {
+                    if (Settings::lintGroupContains(group.first.c_str(), LINT_NAME)) {
+                        level_ = group.second;
+                    }
+                }
+            }
+            HIRVisitor::visitFunction(p, item);
+            level_ = saved;
         }
 
         void visitExpr(HIRExprPtr& exp) override {
@@ -155,9 +169,9 @@ CfgLintLevel LintUnusedMustUseLevel(const Settings& settings) {
 
 void LintUnusedMustUse(const WireBoard& wb, HIRCrate& crate) {
     const auto level = LintUnusedMustUseLevel(*wb.settings);
-    if (level == CfgLintLevel::Allow) {
-        return;
-    }
+    // A function may still raise the level for its own body, so the walk runs
+    // even when the crate allows the lint.
+    (void)level;
     MustUseOuterVisitor visitor(wb, level);
     visitor.visitCrate(crate);
 }

@@ -59,6 +59,20 @@ struct Settings {
     ::std::map<::std::string, CfgLintLevel> lintLevels;
     ::std::optional<CfgLintLevel> lintCap;
 
+    /// Does the lint group `group` contain the lint `name`?
+    ///
+    /// `warnings` is every lint; the others are the small groups this compiler
+    /// actually reports from.
+    static bool lintGroupContains(const ::std::string& group, const ::std::string& name) {
+        if (group == "warnings") {
+            return true;
+        }
+        if (group == "unused") {
+            return name == "unused_must_use" || name == "unused_variables" || name == "unused_imports" || name == "unused_mut" || name == "unused_parens";
+        }
+        return false;
+    }
+
     /// The level a lint reports at, after its own setting and the cap.
     CfgLintLevel lintLevel(const ::std::string& name, CfgLintLevel builtin) const {
         auto it = lintLevels.find(name);

@@ -8,6 +8,7 @@
 #include "hir_pattern.h"
 #include "hir_expr_ptr.h"
 #include "tagged_union.h"
+#include "settings.h"
 #include "target_version.h"
 #include "hir_generic_params.h"
 #include "hir_encoded_literal.h"
@@ -188,8 +189,8 @@ public:
     struct Markings {
         std::vector<unsigned> rustcLegacyConstGenerics;
         bool trackCaller = false;
-        /// `#[must_use]`. NOTE: not serialised, so only meaningful for
-        /// functions defined in the crate being compiled.
+        /// `#[must_use]`: reported at the call site, which may be in another
+        /// crate, so it travels with the item.
         bool mustUse = false;
         bool isNaked = false;
         // Calls to functions with #[rustc_intrinsic] must remain visible to
@@ -203,6 +204,12 @@ public:
             Normal, // #[inline]
             Always  // #[inline(always)]
         } inlineType = Inline::Auto;
+
+        /// Lint levels set on this function by `#[allow]` and friends, by exact
+        /// name and by group. NOTE: not serialised, so only meaningful for a
+        /// function defined in the crate being compiled.
+        ::std::map<RcString, CfgLintLevel> lintLevels;
+        ::std::map<RcString, CfgLintLevel> lintGroupLevels;
     } markings;
 
     HIRFunction();
@@ -374,8 +381,8 @@ public:
     /// Get a type for the given repr value
     static HIRCoreType getReprType(Repr r);
 
-    /// `#[must_use]`. NOTE: not serialised, so only meaningful for a
-    /// type defined in the crate being compiled.
+    /// `#[must_use]`: reported at the use site, which may be in another crate,
+    /// so it travels with the item.
     bool mustUse = false;
 };
 
@@ -413,8 +420,8 @@ public:
 
     HIRConstEvalState constEvalState = HIRConstEvalState::None;
 
-    /// `#[must_use]`. NOTE: not serialised, so only meaningful for a
-    /// type defined in the crate being compiled.
+    /// `#[must_use]`: reported at the use site, which may be in another crate,
+    /// so it travels with the item.
     bool mustUse = false;
 };
 
@@ -437,8 +444,8 @@ public:
     /// `#[repr(align(N))]`, which raises the alignment past any member's.
     unsigned forcedAlignment = 0;
 
-    /// `#[must_use]`. NOTE: not serialised, so only meaningful for a
-    /// type defined in the crate being compiled.
+    /// `#[must_use]`: reported at the use site, which may be in another crate,
+    /// so it travels with the item.
     bool mustUse = false;
 };
 
@@ -496,8 +503,8 @@ public:
     unsigned getVtableParentIndex(HIRTypeInterner& types, const Span& sp, const HIRPathParams& thisParams, const HIRGenericPath& traitPath) const;
     ::std::pair<const HIRAssociatedType*, const HIRPathParams*> getAtyDef(const RcString& name) const;
 
-    /// `#[must_use]`. NOTE: not serialised, so only meaningful for a
-    /// type defined in the crate being compiled.
+    /// `#[must_use]`: reported at the use site, which may be in another crate,
+    /// so it travels with the item.
     bool mustUse = false;
 };
 

@@ -777,6 +777,7 @@ public:
         rv.trackCaller = in.readBool();
         rv.isRustcIntrinsic = in.readBool();
         rv.isRustcPromotable = in.readBool();
+        rv.mustUse = in.readBool();
         return rv;
     }
 
@@ -1210,8 +1211,10 @@ HIREnum HirDeserialiser::deserialiseEnum() {
     auto isCRepr = in.readBool();
     auto tagRepr = static_cast<HIREnum::Repr>(in.readTag());
     auto forcedAlignment = static_cast<unsigned>(in.readCount());
+    const bool mustUse = in.readBool();
     auto rv = HIREnum{mv$(params), isCRepr, tagRepr, H::deserialiseEnumclass(*this), true, deserialiseMarkings()};
     rv.forcedAlignment = forcedAlignment;
+    rv.mustUse = mustUse;
     return rv;
 }
 
@@ -1233,10 +1236,12 @@ HIRUnion HirDeserialiser::deserialiseUnion() {
     auto repr = static_cast<HIRUnion::Repr>(in.readTag());
     auto variants = deserialiseVec<HIRStructField>();
     auto forcedAlignment = static_cast<unsigned>(in.readCount());
+    const bool mustUse = in.readBool();
     auto markings = deserialiseMarkings();
 
     auto rv = HIRUnion{mv$(params), repr, mv$(variants), mv$(markings)};
     rv.forcedAlignment = forcedAlignment;
+    rv.mustUse = mustUse;
     return rv;
 }
 
@@ -1267,11 +1272,13 @@ HIRStruct HirDeserialiser::deserialiseStruct() {
     unsigned forcedAlignment = in.readCount();
     unsigned maxFieldAlignment = in.readCount();
     DEBUG("align = " << forcedAlignment);
+    const bool mustUse = in.readBool();
     auto markings = deserialiseMarkings();
     auto strMarkings = deserialiseStrMarkings();
 
     auto rv = HIRStruct{mv$(params), repr, mv$(data), forcedAlignment, mv$(markings), mv$(strMarkings)};
     rv.maxFieldAlignment = maxFieldAlignment;
+    rv.mustUse = mustUse;
     return rv;
 }
 
@@ -1291,6 +1298,7 @@ HIRTrait HirDeserialiser::deserialiseTrait() {
     rv.isConst = traitFlags & 8;
     rv.skipArrayDuringMethodDispatch = traitFlags & 16;
     rv.skipBoxedSliceDuringMethodDispatch = traitFlags & 32;
+    rv.mustUse = traitFlags & 64;
     rv.types = deserialiseIstrumap<HIRAssociatedType>();
     rv.values = deserialiseIstrumap<HIRTraitValueItem>();
     rv.valueIndexes = deserialiseIstrummap<::std::pair<unsigned int, HIRGenericPath>>();
@@ -3542,6 +3550,9 @@ public:
         out.writeBool(m.trackCaller);
         out.writeBool(m.isRustcIntrinsic);
         out.writeBool(m.isRustcPromotable);
+        // `#[must_use]` is reported at the call site, which may be in another
+        // crate, so it has to travel with the function.
+        out.writeBool(m.mustUse);
     }
 
     void serialise(const HIRConstant& item) {
@@ -3604,6 +3615,7 @@ public:
         out.writeBool(item.isCRepr);
         out.writeTag(static_cast<int>(item.tagRepr));
         out.writeCount(item.forcedAlignment);
+        out.writeBool(item.mustUse);
         serialise(item.data);
 
         serialise(item.markings);
@@ -3678,6 +3690,7 @@ public:
 
         out.writeCount(item.forcedAlignment);
         out.writeCount(item.maxFieldAlignment);
+        out.writeBool(item.mustUse);
         serialise(item.markings);
         serialise(item.structMarkings);
     }
@@ -3700,6 +3713,7 @@ public:
 
         serialiseVec(item.variants);
         out.writeCount(item.forcedAlignment);
+        out.writeBool(item.mustUse);
 
         serialise(item.markings);
     }
@@ -3716,7 +3730,7 @@ public:
         serialiseGenerics(item.params);
         // Kept as one byte for compatibility with metadata written before
         // the fundamental bit was represented in HIR.
-        out.writeU8((item.isMarker ? 1u : 0u) | (item.isFundamental ? 2u : 0u) | (item.isCoinductive ? 4u : 0u) | (item.isConst ? 8u : 0u) | (item.skipArrayDuringMethodDispatch ? 16u : 0u) | (item.skipBoxedSliceDuringMethodDispatch ? 32u : 0u));
+        out.writeU8((item.isMarker ? 1u : 0u) | (item.isFundamental ? 2u : 0u) | (item.isCoinductive ? 4u : 0u) | (item.isConst ? 8u : 0u) | (item.skipArrayDuringMethodDispatch ? 16u : 0u) | (item.skipBoxedSliceDuringMethodDispatch ? 32u : 0u) | (item.mustUse ? 64u : 0u));
         serialiseStrmap(item.types);
         serialiseStrmap(item.values);
         serialiseStrmap(item.valueIndexes);

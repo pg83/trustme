@@ -10,6 +10,7 @@
 #include "ast_expr_ptr.h"
 #include "ast_generics.h"
 #include "expand_common.h"
+#include "settings.h"
 #include "target_version.h"
 #include "parse_tokentree.h"
 #include "macro_rules_macro_rules_ptr.h"
@@ -238,6 +239,12 @@ public:
         std::string linkName;
         std::string linkSection;
         ASTLinkage linkage = ASTLinkage::Default;
+
+        /// Lint levels set on this function by `#[allow]` and friends, by exact
+        /// name and by group. Only the crate being compiled is linted, so these
+        /// never leave it.
+        ::std::map<RcString, CfgLintLevel> lintLevels;
+        ::std::map<RcString, CfgLintLevel> lintGroupLevels;
     } markings;
 
     ASTFunction(const ASTFunction&) = delete;
