@@ -566,12 +566,11 @@ std::vector<ASTIfLetCondition> ParseIfLetChain(TokenStream& lex, bool allowStruc
                 val = ParseExpr3(lex); // This is just after `||` and `&&`
             }
 
-            // Chain boolean expressions to simplify downstream representation
-            if (conditions.size() > 0 && !conditions.back().optPat) {
-                conditions.back().value = NEWNODE(ASTExprNodeBinOp, ASTExprNodeBinOp::BOOLAND, ::std::move(conditions.back().value), ::std::move(val));
-            } else {
-                conditions.push_back(ASTIfLetCondition{std::unique_ptr<ASTPattern>(), std::move(val)});
-            }
+            // Each `&&` operand is its own condition, and its own temporary
+            // scope: the left one's temporaries drop before the right one is
+            // evaluated. Chaining them into a single `&&` expression would keep
+            // them all to the end of the chain, and drop them in reverse.
+            conditions.push_back(ASTIfLetCondition{std::unique_ptr<ASTPattern>(), std::move(val)});
         }
     } while (lex.getTokenIf(TOK_DOUBLE_AMP));
 
