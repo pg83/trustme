@@ -40,12 +40,12 @@ sweeps found two regressions from this session's own work (a rejected
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 316 |
-| fixed, or no longer reproducing, since the gate | 315 |
+| still failing on the current tree | 313 |
+| fixed, or no longer reproducing, since the gate | 318 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 119 |
+| accepted Rust rejected by the compiler or driver | 116 |
 | compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 80 |
 | wrong runtime behaviour, panic, abort, or output | 41 |
 | missing rejection or diagnostic | 53 |
@@ -54,7 +54,7 @@ sweeps found two regressions from this session's own work (a rejected
 
 ## P0: accepted Rust rejected by the front end
 
-All 119 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 116 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
@@ -117,11 +117,12 @@ supertrait list (`trait Foo: for<T> Bar<T>`) or a return type
 (`impl for<T> Trait<T>`) the bound is the item's whole meaning, so
 `non_lifetime_binders/method-probe.rs` and `on-rpit.rs` still fail.
 
-`trait S = ?Sized;` is a trap of the same kind: parsing the relaxed bound
-gets past the parser and then asserts in `hir_conv_main_bindings.cpp:1539`,
-because an alias that names no trait is not expandable where a trait is
-expected. The parse error is the better failure until an alias can expand
-to another alias.
+`trait S = ?Sized;` is supported: the relaxed bound adds nothing to the alias,
+so expanding the alias shortens the list it was in, and a trait object whose
+principal trait was such an alias takes the trait that followed it. Note that
+Rust 1.97 rejects a relaxed bound in a trait alias outright ("nothing to
+relax"), so the reference compiler cannot confirm the 1.90 behaviour these tests
+want -- the unit test covers the expansion with a lifetime-only alias instead.
 
 What is left of the unresolved-name group splits by rule: two
 `non_lifetime_binders` (the `for<T>` trap above) and four one-offs
