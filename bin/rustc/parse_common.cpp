@@ -2623,9 +2623,20 @@ ASTPattern::TuplePat ParsePatternTuple(TokenStream& lex, bool* justParen) {
         return LOOK_AHEAD(lex) == TOK_DOUBLE_DOT && (lex.lookahead(1) == TOK_COMMA || lex.lookahead(1) == TOK_PAREN_CLOSE);
     };
 
+    // `(pat if expr)`: the guard belongs to the pattern it follows.
+    auto parseElement = [&]() {
+        auto ps = lex.startSpan();
+        auto pat = ParsePattern(lex);
+        if (lex.getTokenIf(TOK_RWORD_IF)) {
+            auto cond = ParseExpr0(lex);
+            return ASTPattern(lex.endSpan(ps), ASTPattern::Data::make_Guard({::std::unique_ptr<ASTPattern>(new ASTPattern(mv$(pat))), mv$(cond)}));
+        }
+        return pat;
+    };
+
     ::std::vector<ASTPattern> leading;
     while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE && !atRest()) {
-        leading.push_back(ParsePattern(lex));
+        leading.push_back(parseElement());
 
         if (GET_TOK(tok, lex) != TOK_COMMA) {
             CHECK_TOK(tok, TOK_PAREN_CLOSE);
@@ -2648,7 +2659,7 @@ ASTPattern::TuplePat ParsePatternTuple(TokenStream& lex, bool* justParen) {
     ::std::vector<ASTPattern> trailing;
     if (GET_TOK(tok, lex) == TOK_COMMA) {
         while (LOOK_AHEAD(lex) != TOK_PAREN_CLOSE) {
-            trailing.push_back(ParsePattern(lex));
+            trailing.push_back(parseElement());
 
             if (GET_TOK(tok, lex) != TOK_COMMA) {
                 PUTBACK(tok, lex);

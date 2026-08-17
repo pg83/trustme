@@ -2,6 +2,7 @@
 
 #include "common.h"
 #include "ast_ast.h"
+#include "ast_expr.h" // A guard pattern holds an expression
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val) {
     TU_MATCH(
@@ -89,6 +90,9 @@
         }
         TU_ARMA(Box, ent) {
             os << "box " << *ent.sub;
+        }
+        TU_ARMA(Guard, ent) {
+            os << "(" << *ent.sub << " if " << *ent.cond << ")";
         }
         TU_ARMA(Deref, ent) {
             os << "deref!(" << *ent.sub << ")";
@@ -224,6 +228,9 @@ ASTPattern ASTPattern::clone() const {
         }
         TU_ARMA(Box, e) {
             rv.data_ = Data::make_Box({H::cloneSp(e.sub)});
+        }
+        TU_ARMA(Guard, e) {
+            rv.data_ = Data::make_Guard({H::cloneSp(e.sub), e.cond->clone()});
         }
         TU_ARMA(Deref, e) {
             rv.data_ = Data::make_Deref({H::cloneSp(e.sub)});
@@ -381,6 +388,7 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
         (Macro, throw CompileErrorBugCheck("ord on unexpanded pattern macro");),
         (Any, return OrdEqual;),
         (Box, return ::ord(*ae.sub, *be.sub);),
+        (Guard, throw CompileErrorBugCheck("ord on a guard pattern");),
         (Deref, return ::ord(*ae.sub, *be.sub);),
         (Ref, rv = ::ord(ae.mut, be.mut); if (rv != OrdEqual) return rv; return ::ord(*ae.sub, *be.sub);),
         (Tuple, throw CompileErrorBugCheck("ord on unsupported tuple pattern type");),

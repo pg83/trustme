@@ -525,6 +525,9 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
         TU_ARMA(Box, e) {
             ExpandPattern(es, mod, *e.sub, isRefutable);
         }
+        TU_ARMA(Guard, e) {
+            ExpandPattern(es, mod, *e.sub, isRefutable);
+        }
         TU_ARMA(Deref, e) {
             ExpandPattern(es, mod, *e.sub, isRefutable);
         }
@@ -1508,6 +1511,75 @@ struct CExpandExpr: public ASTNodeVisitor {
         this->visitNodelete(node, node.code);
     }
 
+    /// Lift each `pat if expr` out of a pattern, leaving the pattern it guards
+    /// behind. The conditions become the arm's own guards, which is where they
+    /// are evaluated: after every binding of the arm is in scope.
+    static void liftGuardPatterns(ASTPattern& pat, ::std::vector<ASTIfLetCondition>& out) {
+        TU_MATCH_HDRA( (pat.data()), {)
+        default:
+            break;
+        TU_ARMA(Guard, e) {
+                auto sub = mv$(*e.sub);
+                auto cond = mv$(e.cond);
+                for (auto& b : pat.bindings()) {
+                    sub.bindings().push_back(mv$(b));
+                }
+                pat = mv$(sub);
+                liftGuardPatterns(pat, out);
+                out.push_back(ASTIfLetCondition{nullptr, mv$(cond)});
+                return;
+            }
+            TU_ARMA(Box, e) {
+                liftGuardPatterns(*e.sub, out);
+            }
+            TU_ARMA(Deref, e) {
+                liftGuardPatterns(*e.sub, out);
+            }
+            TU_ARMA(Ref, e) {
+                liftGuardPatterns(*e.sub, out);
+            }
+            TU_ARMA(Tuple, e) {
+                for (auto& sub : e.start) {
+                    liftGuardPatterns(sub, out);
+                }
+                for (auto& sub : e.end) {
+                    liftGuardPatterns(sub, out);
+                }
+            }
+            TU_ARMA(StructTuple, e) {
+                for (auto& sub : e.tupPat.start) {
+                    liftGuardPatterns(sub, out);
+                }
+                for (auto& sub : e.tupPat.end) {
+                    liftGuardPatterns(sub, out);
+                }
+            }
+            TU_ARMA(Struct, e) {
+                for (auto& sub : e.subPatterns) {
+                    liftGuardPatterns(sub.pat, out);
+                }
+            }
+            TU_ARMA(Slice, e) {
+                for (auto& sub : e.subPats) {
+                    liftGuardPatterns(sub, out);
+                }
+            }
+            TU_ARMA(SplitSlice, e) {
+                for (auto& sub : e.leading) {
+                    liftGuardPatterns(sub, out);
+                }
+                for (auto& sub : e.trailing) {
+                    liftGuardPatterns(sub, out);
+                }
+            }
+            TU_ARMA(Or, e) {
+                for (auto& sub : e) {
+                    liftGuardPatterns(sub, out);
+                }
+            }
+        }
+    }
+
     void visit(ASTExprNodeMatch& node) override {
         this->visitNodelete(node, node.val);
         for (auto& arm : node.arms) {
@@ -1520,6 +1592,15 @@ struct CExpandExpr: public ASTNodeVisitor {
             }
             for (auto& pat : arm.patterns) {
                 ExpandPattern(this->expandState, this->curMod(), pat, true);
+            }
+            {
+                ::std::vector<ASTIfLetCondition> patternGuards;
+                for (auto& pat : arm.patterns) {
+                    liftGuardPatterns(pat, patternGuards);
+                }
+                for (auto& guard : patternGuards) {
+                    arm.guard.push_back(mv$(guard));
+                }
             }
             for (auto& cond : arm.guard) {
                 if (cond.optPat) {

@@ -81,6 +81,13 @@ public:
              bool mut;
              unique_ptr<ASTPattern> sub;
          }),
+        /// `pat if expr`, which matches only when the expression holds. It is
+        /// lifted into the arm's guard before anything but expansion sees it.
+        (Guard,
+         struct {
+             unique_ptr<ASTPattern> sub;
+             ASTExprNodeP cond;
+         }),
         (Value,
          struct {
              Value start;
