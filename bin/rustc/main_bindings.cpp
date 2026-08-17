@@ -330,6 +330,30 @@ void initDebugList() {
 }
 
 /// main!
+namespace {
+    /// The crate name rustc derives from the input file when none is given: the
+    /// stem, with `-` written as `_`.
+    ::std::string CrateNameFromFile(const ::std::string& infile) {
+        auto s = infile.find_last_of('/');
+        s = (s == ::std::string::npos ? 0 : s + 1);
+        auto s2 = infile.find_last_of('\\');
+        s2 = (s2 == ::std::string::npos ? 0 : s2 + 1);
+        s = ::std::max(s, s2);
+        auto e = infile.find_first_of('.', s);
+        if (e == ::std::string::npos) {
+            e = infile.size();
+        }
+
+        ::std::string rv(infile.begin() + s, infile.begin() + e);
+        for (auto& b : rv) {
+            if (b == '-') {
+                b = '_';
+            }
+        }
+        return rv;
+    }
+}
+
 int main(int argc, char* argv[]) {
     initDebugList();
 #if TRUSTME_SANITIZER_BUILD
@@ -432,7 +456,7 @@ int main(int argc, char* argv[]) {
             }
         });
 
-        if (params.crateName != "") {
+        {
             // Extract the crate type and name from the crate attributes
             auto crateType = params.crateType;
             if (crateType == ASTCrate::Type::Unknown) {
@@ -444,7 +468,11 @@ int main(int argc, char* argv[]) {
             }
             crate.crateType = crateType;
 
-            crate.setCrateName(params.crateName);
+            // `module_path!` is expanded below and needs the name already, so
+            // the file-stem fallback is applied here rather than only once the
+            // expansion is done. A `#![crate_name]` attribute is seen during
+            // that expansion and overrides this.
+            crate.setCrateName(params.crateName != "" ? params.crateName : CrateNameFromFile(params.infile));
             crate.crateType = ASTCrate::Type::Unknown;
         }
 
@@ -482,35 +510,7 @@ int main(int argc, char* argv[]) {
             crateName = crate.crateNameSet;
         }
         if (crateName == "") {
-            auto s = params.infile.find_last_of('/');
-            if (s == ::std::string::npos) {
-                s = 0;
-            } else {
-                s += 1;
-            }
-            auto s2 = params.infile.find_last_of('\\');
-            if (s2 == ::std::string::npos) {
-                s2 = 0;
-            } else {
-                s2 += 1;
-            }
-            s = std::max(s, s2);
-            auto e = params.infile.find_first_of('.', s);
-            if (e == ::std::string::npos) {
-                e = params.infile.size() - s;
-            }
-
-            crateName = ::std::string(params.infile.begin() + s, params.infile.begin() + e);
-            for (auto& b : crateName) {
-                if ('0' <= b && b <= '9') {
-                } else if ('A' <= b && b <= 'Z') {
-                } else if (b == '_') {
-                } else if (b == '-') {
-                    b = '_';
-                } else {
-                    // TODO: Error?
-                }
-            }
+            crateName = CrateNameFromFile(params.infile);
         }
         if (params.testHarness) {
             crateName += "$test";
