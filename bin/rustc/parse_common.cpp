@@ -3510,6 +3510,15 @@ static void ParseFunctionQualifiers(TokenStream& lex, Token& tok, ASTFunction::F
                 flags.isAsync = true;
                 GET_TOK(tok, lex);
                 break;
+            // `gen` is a contextual keyword, so it only qualifies a function
+            // when one follows it.
+            case TOK_IDENT:
+                if (tok.ident().name != "gen" || lex.lookahead(0) != TOK_RWORD_FN) {
+                    return;
+                }
+                flags.isGen = true;
+                GET_TOK(tok, lex);
+                break;
             case TOK_RWORD_UNSAFE:
                 flags.isUnsafe = true;
                 GET_TOK(tok, lex);
@@ -5038,7 +5047,14 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
 
         // Contextual keywords
         case TOK_IDENT:
-            if (tok.ident().name == "union") {
+            // `gen fn`
+            if (tok.ident().name == "gen" && lex.lookahead(0) == TOK_RWORD_FN) {
+                GET_CHECK_TOK(tok, lex, TOK_RWORD_FN);
+                auto definitionSpan = lex.tokenStartSpan(tok);
+                GET_CHECK_TOK(tok, lex, TOK_IDENT);
+                itemName = tok.ident().name;
+                itemData = ASTItem(ParseFunctionDefWithCode(lex, std::move(definitionSpan), false, ABI_RUST, ASTFunction::Flags().setGen()));
+            } else if (tok.ident().name == "union") {
                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
                 itemName = tok.ident().name;
                 itemData = ASTItem(ParseUnion(lex, metaItems));

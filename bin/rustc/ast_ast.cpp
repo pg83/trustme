@@ -691,6 +691,7 @@ ASTFunction::Flags::Flags()
     : isConst(false)
     , isUnsafe(false)
     , isAsync(false)
+    , isGen(false)
 {
 }
 
@@ -709,6 +710,12 @@ ASTFunction::Flags ASTFunction::Flags::setConst() const {
 ASTFunction::Flags ASTFunction::Flags::setAsync() const {
     auto rv = *this;
     rv.isAsync = true;
+    return rv;
+}
+
+ASTFunction::Flags ASTFunction::Flags::setGen() const {
+    auto rv = *this;
+    rv.isGen = true;
     return rv;
 }
 

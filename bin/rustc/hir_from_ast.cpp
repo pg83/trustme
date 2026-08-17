@@ -2189,6 +2189,27 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
     rv.defineOpaque = ::std::move(defineOpaque);
     rv.markings = markings;
 
+    if (f.isGen()) {
+        // The body is the coroutine, and the function hands back the iterator
+        // over it -- the same shape a `gen { .. }` block lowers to. A coroutine
+        // body yields, so it returns nothing itself.
+        if (rv.code) {
+            auto* coroutine = crate->pool->make<HIRExprNodeGenerator>(sp, crate->types.unit(), crate->types.infer(), HIRPattern(), false, crate->types.infer(), rv.code.takeNode(), true, false, false);
+            coroutine->resType = crate->types.infer();
+            HIRExprNodeP node(coroutine);
+            node.reset(crate->pool->make<HIRExprNodeCallPath>(sp, HIRSimplePath(coreCrate, {"iter", "sources", "from_coroutine", "from_coroutine"}), makeVec1(mv$(node))));
+            node->resType = crate->types.infer();
+            node.reset(crate->pool->make<HIRExprNodeCallMethod>(sp, mv$(node), RcString::newInterned("fuse"), HIRPathParams(), ::std::vector<HIRExprNodeP>()));
+            node->resType = crate->types.infer();
+            rv.code = HIRExprPtr(mv$(node));
+        }
+        // Make the return type be `impl Iterator<Item=Ret>`
+        HIRTraitPath iteratorPath;
+        iteratorPath.path.path = crate->getLangItemPath(sp, "iterator");
+        iteratorPath.typeBounds.insert(std::make_pair(RcString::newInterned("Item"), HIRTraitPath::AtyEqual{iteratorPath.path.clone(), {}, std::move(rv.returnType)}));
+        rv.returnType = crate->types.intern(HIRTypeData::make_ErasedType(HIRTypeDataErasedType{true, ::makeVec1(std::move(iteratorPath)), TypeDataErasedTypeInner::Data_Fcn{HIRPath(HIRSimplePath()), 0}}));
+    }
+
     if (f.isAsync()) {
         // Wrap the code in an async block
         if (rv.code) {

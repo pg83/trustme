@@ -197,6 +197,8 @@ public:
         bool isConst;
         bool isUnsafe;
         bool isAsync;
+        /// `gen fn`: the body is a coroutine and the function returns an iterator.
+        bool isGen;
 
         Flags();
 
@@ -209,6 +211,8 @@ public:
         Flags setConst() const;
 
         Flags setAsync() const;
+
+        Flags setGen() const;
     };
 
 private:
@@ -283,6 +287,10 @@ public:
 
     bool isAsync() const {
         return flags.isAsync;
+    }
+
+    bool isGen() const {
+        return flags.isGen;
     }
 
     const ASTGenericParams& params() const {

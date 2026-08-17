@@ -1434,6 +1434,9 @@ void RustPrinter::handleFunction(const ASTVisibility& vis, const RcString& name,
     if (f.isAsync()) {
         os << "async ";
     }
+    if (f.isGen()) {
+        os << "gen ";
+    }
     if (f.abi() != ABI_RUST) {
         os << "extern \"" << f.abi() << "\" ";
     }
