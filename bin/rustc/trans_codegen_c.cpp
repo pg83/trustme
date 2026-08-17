@@ -3433,13 +3433,15 @@ namespace {
                                 }
                                 break;
                             } else if (ve.op == MIRBinOp::MOD && (ty == HIRCoreType::F16 || ty == HIRCoreType::F32 || ty == HIRCoreType::F64)) {
+                                // Rust's `%` on floats truncates the quotient and
+                                // keeps the dividend's sign, which is `fmod`.
+                                // `remainder` rounds the quotient to nearest, so
+                                // `7.0 % 4.0` came out as -1.0 rather than 3.0.
                                 of << "__builtin_";
-                                if (ty == HIRCoreType::F16) {
-                                    of << "fmodf";
-                                } else if (ty == HIRCoreType::F32) {
-                                    of << "remainderf";
+                                if (ty == HIRCoreType::F64) {
+                                    of << "fmod";
                                 } else {
-                                    of << "remainder";
+                                    of << "fmodf";
                                 }
                                 of << "(";
                                 emitParam(ve.valL);
