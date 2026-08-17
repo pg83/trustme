@@ -752,6 +752,55 @@ namespace {
             this->completed = true;
         }
 
+        /// A value may be callable only through the async callable traits (a
+        /// generic bounded by `AsyncFnOnce()`, say). The call then evaluates to
+        /// the future the trait names, and the most permissive of the three
+        /// traits decides how the callee is passed.
+        bool callAsyncCallable(HIRExprNodeCallValue& node, HIRTypeRef ty, const HIRPathParams& traitPp) {
+            struct Candidate {
+                const HIRSimplePath& trait;
+                const char* future;
+                HIRExprNodeCallValue::TraitUsed used;
+            };
+            const Candidate candidates[] = {
+                {this->context.resolve.langAsyncFn(), "CallRefFuture", HIRExprNodeCallValue::TraitUsed::AsyncFn},
+                {this->context.resolve.langAsyncFnMut(), "CallRefFuture", HIRExprNodeCallValue::TraitUsed::AsyncFnMut},
+                {this->context.resolve.langAsyncFnOnce(), "CallOnceFuture", HIRExprNodeCallValue::TraitUsed::AsyncFnOnce},
+            };
+            for (const auto& candidate : candidates) {
+                if (candidate.trait.components().empty()) {
+                    continue;
+                }
+                HIRTypeRef fcnArgsTup;
+                unsigned int count = 0;
+                this->context.resolve.findTraitImpls(node.span(), candidate.trait, traitPp, ty, [&](auto impl, auto cmp) -> bool {
+                    count++;
+                    auto tup = impl.getTraitTyParam(context.crate.types, 0);
+                    if (!tup->is_Tuple()) {
+                        ERROR(node.span(), E0000, "AsyncFn* expects a tuple argument, got " << tup);
+                    }
+                    fcnArgsTup = mv$(tup);
+                    return cmp == HIRCompare::Equal;
+                });
+                if (count != 1) {
+                    continue;
+                }
+                DEBUG("-- Using " << candidate.trait << " for " << ty);
+                // `CallRefFuture` is a generic associated type, but its only
+                // parameter is a lifetime -- which HIR does not carry.
+                const auto futureName = RcString::newInterned(candidate.future);
+                const auto& futureTrait = candidate.used == HIRExprNodeCallValue::TraitUsed::AsyncFnOnce
+                    ? this->context.resolve.langAsyncFnOnce()
+                    : this->context.resolve.langAsyncFnMut();
+                this->context.equateTypesAssoc(node.span(), node.resType, futureTrait, HIRPathParams(fcnArgsTup), ty, futureName.c_str(), {});
+                node.argTypes = fcnArgsTup->as_Tuple();
+                node.argTypes.push_back(node.resType);
+                node.traitUsed = candidate.used;
+                return true;
+            }
+            return false;
+        }
+
         void visit(HIRExprNodeCallValue& node) override {
             // A for-loop (and other desugarings) can leave the callee as an
             // associated projection until the surrounding IntoIterator/
@@ -920,6 +969,13 @@ namespace {
                             ty = nextTyP;
                             keepLooping = true;
                             continue;
+                        }
+
+                        // A value may be callable through the async callable
+                        // traits only (`impl AsyncFnOnce()`); the call then
+                        // evaluates to the future, not to the output.
+                        if (this->callAsyncCallable(node, ty, traitPp)) {
+                            break; // leaves TU_MATCH
                         }
 
                         // Didn't find anything. Error?
@@ -1572,6 +1628,17 @@ namespace {
 
             {
                 const auto& ty = context.getType(node.value->resType);
+                switch (node.traitUsed) {
+                    // An async callable target was chosen during inference, and
+                    // its future is already the result type.
+                    case HIRExprNodeCallValue::TraitUsed::AsyncFn:
+                    case HIRExprNodeCallValue::TraitUsed::AsyncFnMut:
+                    case HIRExprNodeCallValue::TraitUsed::AsyncFnOnce:
+                        HIRExprVisitorDef::visit(node);
+                        return;
+                    default:
+                        break;
+                }
                 if (ty->is_NodeType() && ty->as_NodeType().is_Closure()) {
                     node.traitUsed = HIRExprNodeCallValue::TraitUsed::Unknown;
                 } else if (/*const auto* e =*/ty->opt_Function()) {

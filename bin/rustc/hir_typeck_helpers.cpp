@@ -1716,6 +1716,9 @@ TU_ARMA(Alias, ee) {
         HIRTraitPath::assocListT assoc;
         assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{oncePath.clone(), {}, outputType}));
         assoc.insert(::std::make_pair("CallOnceFuture", HIRTraitPath::AtyEqual{mv$(oncePath), {}, futureType}));
+        // A by-reference call hands back the same future; its lifetime parameter
+        // is not carried in HIR.
+        assoc.insert(::std::make_pair("CallRefFuture", HIRTraitPath::AtyEqual{HIRGenericPath(langAsyncFnMut(), actualParams.clone()), {}, futureType}));
         return callback(ImplRef(type, mv$(actualParams), mv$(assoc)), cmp);
     };
 

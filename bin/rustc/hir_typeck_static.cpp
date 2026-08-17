@@ -289,6 +289,9 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
         HIRTraitPath::assocListT assoc;
         assoc.insert(::std::make_pair("Output", HIRTraitPath::AtyEqual{oncePath.clone(), {}, outputType}));
         assoc.insert(::std::make_pair("CallOnceFuture", HIRTraitPath::AtyEqual{mv$(oncePath), {}, futureType}));
+        // A by-reference call hands back the same future; its lifetime parameter
+        // is not carried in HIR.
+        assoc.insert(::std::make_pair("CallRefFuture", HIRTraitPath::AtyEqual{HIRGenericPath(langAsyncFnMut(), actualParams.clone()), {}, futureType}));
         return foundCb(ImplRef(type, mv$(actualParams), mv$(assoc)), futureUnknown);
     };
 
@@ -792,6 +795,29 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             return this->findImplCheckCrate(sp, traitPath, traitParams, type, foundCb, impl);
         });
         if (ret) {
+            return true;
+        }
+    }
+
+    // A closure that returns a future is async-callable. The closure's own
+    // `Fn*` impls are generated (so the magic impl above no longer applies once
+    // the closure is a struct), and each async callable trait forwards to the
+    // `Fn*` trait that passes the closure the same way.
+    if (isAsyncCallableTrait && type->is_Path() && type->as_Path().isClosure() && traitParams && traitParams->types.size() == 1 && traitParams->types[0]->is_Tuple()) {
+        const auto& fnTrait = traitPath == langAsyncFn() ? langFn() : (traitPath == langAsyncFnMut() ? langFnMut() : langFnOnce());
+        // `Output` lives on `FnOnce`, so the returned future comes from there
+        // whichever of the three traits decides how the closure is passed.
+        HIRTypeRef futureType;
+        this->findImpl(sp, langFnOnce(), traitParams, type, [&](ImplRef impl, bool unknown) {
+            futureType = impl.getType(crate.types, "Output", {});
+            return futureType != HIRTypeRef();
+        });
+        const bool callable = fnTrait == langFnOnce() || this->findImpl(sp, fnTrait, traitParams, type, [](ImplRef, bool) {
+            return true;
+        });
+        DEBUG("Closure " << type << " callable through " << fnTrait << " = " << callable << ", returning " << futureType);
+        if (callable && futureType != HIRTypeRef() && findAsyncCallable(traitParams->types[0]->as_Tuple(), futureType, true, true)) {
+            DEBUG("Success");
             return true;
         }
     }

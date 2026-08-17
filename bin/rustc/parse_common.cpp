@@ -1407,7 +1407,10 @@ ASTExprNodeP ParseExprValClosure(TokenStream& lex, bool isAsync, ASTHigherRanked
 
     auto code = ParseExpr0(lex);
     if (isAsync) {
-        code = NEWNODE(ASTExprNodeAsyncBlock, ::std::move(code), isMove, isUse);
+        // The future an async closure returns outlives the call that made it, so
+        // it takes the captures with it rather than borrowing the closure's own
+        // frame. What the closure captured by reference stays a reference.
+        code = NEWNODE(ASTExprNodeAsyncBlock, ::std::move(code), /*isMove=*/true, isUse);
     }
 
     if (isAsync) {

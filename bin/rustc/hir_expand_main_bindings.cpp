@@ -609,12 +609,15 @@ namespace {
                     BUG(node.span(), "Annotate usage when CallValue trait is unknown");
                     break;
                 case HIRExprNodeCallValue::TraitUsed::Fn:
+                case HIRExprNodeCallValue::TraitUsed::AsyncFn:
                     vu = HIRValueUsage::Borrow;
                     break;
                 case HIRExprNodeCallValue::TraitUsed::FnMut:
+                case HIRExprNodeCallValue::TraitUsed::AsyncFnMut:
                     vu = HIRValueUsage::Mutate;
                     break;
                 case HIRExprNodeCallValue::TraitUsed::FnOnce:
+                case HIRExprNodeCallValue::TraitUsed::AsyncFnOnce:
                     vu = HIRValueUsage::Move;
                     break;
             }
@@ -5314,6 +5317,24 @@ namespace {
                     methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn_mut"), mv$(traitArgs)), RcString::newInterned("call_mut"), HIRPathParams());
                     break;
                 case HIRExprNodeCallValue::TraitUsed::FnOnce:
+                    selfArgType = tyVal;
+                    methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn_once"), mv$(traitArgs)), RcString::newInterned("call_once"));
+                    break;
+                // An async callable is a callable that returns a future, and
+                // that is exactly what a closure with an async body is here. The
+                // call goes through the matching `Fn*` trait, whose impl the
+                // closure has; `async_call*` has no body to call.
+                case HIRExprNodeCallValue::TraitUsed::AsyncFn:
+                    selfArgType = crate.types.borrow(HIRBorrowType::Shared, tyVal);
+                    node.value = NEWNODE(selfArgType, Borrow, sp, HIRBorrowType::Shared, mv$(node.value));
+                    methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn"), mv$(traitArgs)), RcString::newInterned("call"), HIRPathParams());
+                    break;
+                case HIRExprNodeCallValue::TraitUsed::AsyncFnMut:
+                    selfArgType = crate.types.borrow(HIRBorrowType::Unique, tyVal);
+                    node.value = NEWNODE(selfArgType, Borrow, sp, HIRBorrowType::Unique, mv$(node.value));
+                    methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn_mut"), mv$(traitArgs)), RcString::newInterned("call_mut"), HIRPathParams());
+                    break;
+                case HIRExprNodeCallValue::TraitUsed::AsyncFnOnce:
                     selfArgType = tyVal;
                     methodPath = HIRPath(tyVal, HIRGenericPath(crate.getLangItemPath(sp, "fn_once"), mv$(traitArgs)), RcString::newInterned("call_once"));
                     break;

@@ -506,6 +506,11 @@ struct HIRExprNodeCallValue: public HIRExprNode {
         Fn,
         FnMut,
         FnOnce,
+        /// Calling a value whose only bound is an async callable one: the call
+        /// evaluates to a future rather than to the output.
+        AsyncFn,
+        AsyncFnMut,
+        AsyncFnOnce,
     };
     TraitUsed traitUsed = TraitUsed::Unknown;
 
