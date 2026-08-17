@@ -55,12 +55,19 @@ FloatValue positiveNanFloatValue() {
 }
 
 ::std::string formatFloatValueForToken(FloatValue value) {
-    // binary128 has 113 significand bits, requiring 36 decimal digits for a
-    // guaranteed round trip. Token rendering must not inherit iostream's
-    // six-digit default: macro fragments are reparsed after expansion.
-    ::std::ostringstream os;
-    os << ::std::setprecision(36) << value;
-    auto rv = os.str();
+    // A macro fragment is reparsed after expansion, so the text has to read
+    // back as the same value -- but no more than that: `2.15` printed with the
+    // 36 digits binary128 can need becomes `2.14999999999999999999999999999999992`,
+    // and `concat!` would report that. Take the shortest that round-trips.
+    ::std::string rv;
+    for (int precision = 1; precision <= 36; precision++) {
+        ::std::ostringstream os;
+        os << ::std::setprecision(precision) << value;
+        rv = os.str();
+        if (parseFloatValue(rv.c_str()) == value) {
+            break;
+        }
+    }
     // A float token always carries a decimal point in the source, and must keep
     // one: `4.0` rendered as `4` reparses as an integer, and `concat!`/
     // `stringify!` would report the wrong text.
