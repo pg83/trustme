@@ -2585,6 +2585,13 @@ ASTPattern ParsePatternRealSlice(TokenStream& lex) {
                 GET_CHECK_TOK(tok, lex, TOK_AT);
             }
             GET_CHECK_TOK(tok, lex, TOK_DOUBLE_DOT);
+            // `[.. | ..]` parses: the rest may be written as an alternative of an
+            // or-pattern. No program may keep one, so the alternatives are read
+            // and dropped, and the pattern is marked as having more than one.
+            while (lex.getTokenIf(TOK_PIPE)) {
+                extraRest = true;
+                (void)ParsePattern(lex, AllowOrPattern::No);
+            }
         } else {
             PUTBACK(tok, lex);
             if (!isSplit) {

@@ -21,6 +21,8 @@ macro_rules! first_of {
 fn never_compiled(xs: [u8; 3]) {
     let [.., ..] = xs;
     let (.., ..) = (1, 2);
+    // The rest may even be written as an alternative of an or-pattern.
+    let [A | B, .. | ..] = xs;
 }
 
 fn main() {

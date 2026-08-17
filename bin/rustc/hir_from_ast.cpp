@@ -2042,7 +2042,10 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                             return false;
                         }
                         if (pe->params.types.size() == 0) {
-                            ERROR(sp, E0000, "Receiver type should have one type param - " << ty);
+                            // A receiver that names no type reaches `Self`
+                            // through its `Receiver`/`Deref` impl instead, which
+                            // is not known until impls are indexed.
+                            return true;
                         }
                         //   TODO(sp, "Receiver types with more than one param - " << arg_self_ty);
                         //}
@@ -2070,6 +2073,10 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                         return false;
                     }
                     ty = ctx.crate->types.pointer(e.type, inner);
+                    return true;
+                } else if (ty->is_Generic()) {
+                    // `self: T` (or `self: &T`) is a receiver by way of
+                    // `T: Deref<Target = Self>`, a bound that is checked later.
                     return true;
                 } else {
                     return false;
@@ -2127,6 +2134,10 @@ HIRFunction AST2HIR::LowerHIRFunction(HIRItemPath p, const HIRSimplePath& source
                 // their receiver relation is checked after HIR lowering.
                 receiver = HIRFunction::Receiver::Custom;
             }
+        } else if (argSelfTy->is_Generic()) {
+            // `fn f(self: T)` is a receiver by way of `T: Deref<Target = Self>`,
+            // and bounds are checked after lowering.
+            receiver = HIRFunction::Receiver::Custom;
         } else if (ivcr.isValidCustomReceiver(argSelfTy)) {
             receiver = HIRFunction::Receiver::Custom;
         } else {

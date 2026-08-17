@@ -2001,10 +2001,19 @@ namespace {
                 ty = crate.types.self();
                 return true;
             }
+            if (ty->is_Generic()) {
+                // `fn f(self: T)`: the bound on `T` is what makes it a receiver.
+                return true;
+            }
             if (const auto* path = ty->opt_Path()) {
                 const auto* generic = path->path.data.opt_Generic();
-                if (!generic || generic->params.types.empty()) {
+                if (!generic) {
                     return false;
+                }
+                if (generic->params.types.empty()) {
+                    // A receiver that names no type reaches `Self` through its
+                    // `Receiver`/`Deref` impl; there is nothing to rewrite.
+                    return true;
                 }
                 auto data = ty->cloneData();
                 auto& inner = data.as_Path().path.data.as_Generic().params.types[0];

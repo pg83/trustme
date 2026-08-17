@@ -38,6 +38,9 @@ namespace {
             std::unique_ptr<Inner> ptrMut;
             std::unique_ptr<Inner> ptrMove;
             std::map<HIRSimplePath, Inner> path;
+            /// Receivers that name no `Self` at all (`fn f(self: Bar)`), which
+            /// reach it through their own `Receiver`/`Deref` impl.
+            std::map<HIRSimplePath, Lowest::listT> concrete;
 
             void insert(const Span& sp, const HIRTypeData* receiver, const HIRTypeImpl& impl);
             void find(const Span& sp, const HIRTypeData* curTy, tCbResolveType tyRes, innerCallbackT& cb) const;
@@ -131,7 +134,11 @@ void InherentCacheImpl::Inner::insert(const Span& sp, const HIRTypeData* curTy, 
         TU_ARMA(Path, te) {
             ASSERT_BUG(sp, te.path.data.is_Generic(), "Receiver path not a generic path - " << curTy);
             const auto& gp = te.path.data.as_Generic();
-            ASSERT_BUG(sp, gp.params.types.size() > 0, "Receiver path has no type params (needs at least one) - " << curTy);
+            if (gp.params.types.empty()) {
+                DEBUG("m_concrete[" << gp.path << "] += impl" << impl.params.fmtArgs() << " " << impl.type);
+                concrete[gp.path].push_back(&impl);
+                return;
+            }
             DEBUG("m_path[" << gp.path << "] += " << gp.params.types.at(0) << " impl" << impl.params.fmtArgs() << " " << impl.type);
             path[gp.path].insert(sp, gp.params.types.at(0), impl);
         }
@@ -180,6 +187,12 @@ void InherentCacheImpl::Inner::find(const Span& sp, const HIRTypeData* curTyAct,
         TU_ARMA(Path, te) {
             if (te.path.data.is_Generic()) {
                 const auto& gp = te.path.data.as_Generic();
+                auto ci = concrete.find(gp.path);
+                if (ci != concrete.end()) {
+                    for (const HIRTypeImpl* implPtr : ci->second) {
+                        cb(curTy, *implPtr);
+                    }
+                }
                 if (gp.params.types.size() > 0) {
                     auto it = path.find(gp.path);
                     if (it != path.end()) {
@@ -269,8 +282,9 @@ void InherentCacheImpl::find(const Span& sp, const RcString& name, const HIRType
         if (fcn.receiver == HIRFunction::Receiver::Custom) {
             ASSERT_BUG(sp, fcn.receiverType, "Custom receiver without a receiver type");
             if ((*fcn.receiverType)->matchTestGenerics(sp, ty, HIRResolvePlaceholdersNop(), getself)) {
-                ASSERT_BUG(sp, getself.detectedSelfTy, "Unable to determine receiver type when matching " << *fcn.receiverType << " and " << ty);
-                cb(*getself.detectedSelfTy, impl);
+                // A receiver that names no `Self` says nothing about it, and the
+                // impl it belongs to is the answer.
+                cb(getself.detectedSelfTy ? *getself.detectedSelfTy : impl.type, impl);
             }
         } else {
             // No extra checks required?
