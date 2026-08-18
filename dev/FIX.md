@@ -4,7 +4,7 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-Snapshot: 2026-08-18, commit `4669fe2b9`. The numbers below come from rerunning
+Snapshot: 2026-08-18, commit `4094b67bc`. The numbers below come from rerunning
 the nodes that failed the last full gate, not from a fresh gate. The gate
 itself ran at commit `79582dd3f` in the clang Nix environment on all 78
 available cores:
@@ -27,8 +27,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 
 All 631 failed nodes were rerun independently inside the same clang Nix
 environment, most recently at the commit above. The authoritative rerun data is
-in `/tmp/trustme-reclass-20260818e`; classified records are in
-`/tmp/trustme-classification-20260818e`. Every count below is measured from
+in `/tmp/trustme-reclass-20260818g`; classified records are in
+`/tmp/trustme-classification-20260818g`. Every count below is measured from
 that rerun, not decremented by hand.
 
 Reruns and the whole-group sweeps are the only regression check there is
@@ -41,13 +41,13 @@ read as a qualified path), which a rerun of the failing set could not have.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 251 |
-| fixed, or no longer reproducing, since the gate | 380 |
+| still failing on the current tree | 236 |
+| fixed, or no longer reproducing, since the gate | 395 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 84 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 58 |
+| accepted Rust rejected by the compiler or driver | 72 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 55 |
 | wrong runtime behaviour, panic, abort, or output | 38 |
 | missing rejection or diagnostic | 53 |
 | generated C++ or link failure | 10 |
@@ -55,18 +55,18 @@ read as a qualified path), which a rerun of the failing set could not have.
 
 ## P0: accepted Rust rejected by the front end
 
-All 84 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 72 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 69 | trait/impl selection 30; type mismatch 15; unresolved type/value names 5 |
-| parser | 11 | unexpected-token failures through the three `parse_parseerror.cpp` routes |
+| type checking, HIR lowering, and resolution | 61 | trait/impl selection 26; type mismatch 14; unresolved type/value names 5 |
+| parser | 7 | unexpected-token failures through the three `parse_parseerror.cpp` routes |
 | macro and attribute expansion | 1 | |
 | CTFE and MIR lowering | 2 | |
 | crate/driver handling | 1 | |
 
-The 11 parser failures must be regrouped by syntax family before changing the
+The 7 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are never patterns (3) and a long tail of
 one- and two-test spellings. Grouping by test directory finds them faster than
@@ -94,7 +94,7 @@ future takes a copy of the referent rather than the reference, so a write
 through it is lost (`async |i| { seen += i; i }` leaves `seen` untouched).
 rustc solves this with a second, by-reference coroutine body; we have one body.
 
-The 46 tests routed through the trait-selection and type-mismatch lines are not
+The 40 tests routed through the trait-selection and type-mismatch lines are not
 one root cause: fixing integer inference through an operator took two of them
 and left the rest untouched. Minimise each before grouping.
 
@@ -147,25 +147,24 @@ item is not affected -- it takes a `$vis` fragment now.
 
 ## P1: internal compiler failures
 
-There are 58 compiler-internal failures in 54 stable signatures.
+There are 55 compiler-internal failures in 53 stable signatures.
 
 | compiler area | tests |
 |---|---:|
 | type checking, HIR lowering, and name resolution | 24 |
 | MIR lowering, CTFE MIR, and optimisation | 17 |
 | translation and code generation | 7 |
-| macro expansion | 5 |
-| routed by a bare `ASSERT`/signal line with no file attribution | 4 |
+| macro expansion | 4 |
+| routed by a bare `ASSERT` line with no file attribution | 2 |
 | parser | 1 |
 
-Only two signatures now cover more than one test, so the class is a long tail:
+Only two signatures cover more than one test, so the class is a long tail:
 
 | signature | tests |
 |---|---:|
 | `ASSERT` with no backtrace | 2 |
-| `SIGSEGV` with no backtrace | 2 |
 | two two-test signatures | 4 |
-| fifty one-test signatures | 50 |
+| forty-nine one-test signatures | 49 |
 
 The line numbers in a signature move with every commit that touches the file:
 the ones here are read from the classification named above, and are worth
