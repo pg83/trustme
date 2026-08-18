@@ -325,6 +325,8 @@ bool ExpandAttrsCfgOnly(const ExpandState& es, ASTAttributeList& attrs) {
             return;
         } else if (a.name() == "allow" || a.name() == "warn" || a.name() == "deny" || a.name() == "forbid" || a.name() == "expect") {
             // A lint level on a parameter changes nothing here.
+        } else if (a.name() == "doc") {
+            // Documentation is not code.
         } else {
             TODO(sp, "non-cfg attributes - " << a);
         }

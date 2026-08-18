@@ -2488,6 +2488,19 @@ ASTPattern::Value ParsePatternValue(TokenStream& lex) {
                 return ASTPattern::Value::make_Integer({n->datatype, n->value});
             } else if (auto* n = cast<ASTExprNodeFloat>(e.get())) {
                 return ASTPattern::Value::make_Float({n->datatype, n->value});
+            }
+            // A negative literal parses as a negation of a positive one, and a
+            // pattern takes it as the one literal it denotes.
+            else if (auto* n = cast<ASTExprNodeUniOp>(e.get())) {
+                if (n->type == ASTExprNodeUniOp::NEGATE) {
+                    if (auto* v = cast<ASTExprNodeInteger>(n->value.get())) {
+                        return ASTPattern::Value::make_Integer({v->datatype, ~v->value + 1u});
+                    }
+                    if (auto* v = cast<ASTExprNodeFloat>(n->value.get())) {
+                        return ASTPattern::Value::make_Float({v->datatype, -v->value});
+                    }
+                }
+                TODO(lex.pointSpan(), "Convert :expr into a pattern value - " << *e);
             } else {
                 TODO(lex.pointSpan(), "Convert :expr into a pattern value - " << *e);
             }
