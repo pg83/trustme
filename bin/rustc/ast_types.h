@@ -84,6 +84,9 @@ struct TypeTraitPath {
     ASTHigherRankedBounds hrbs;
     ::std::unique_ptr<ASTPath> path;
     ASTBoundConstness constness = ASTBoundConstness::Never;
+    /// `async Fn(..)`, which is the async callable trait of the same shape.
+    /// Expansion rewrites it, once the core crate is known.
+    bool isAsync = false;
 
     TypeTraitPath();
     TypeTraitPath(ASTHigherRankedBounds hrbs, ASTPath path, ASTBoundConstness constness = ASTBoundConstness::Never);

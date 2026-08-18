@@ -215,6 +215,7 @@ TypeTraitPath::TypeTraitPath(const TypeTraitPath& x)
     : hrbs(x.hrbs)
     , path(std::make_unique<ASTPath>(*x.path))
     , constness(x.constness)
+    , isAsync(x.isAsync)
 {
 }
 

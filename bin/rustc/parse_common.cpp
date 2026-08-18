@@ -6129,7 +6129,10 @@ ASTType* ParseTypeErasedType(TokenStream& lex, bool allowTraitList) {
             if (postHrbConstness != ASTBoundConstness::Never) {
                 constness = postHrbConstness;
             }
+            // `async Fn(..)` names the async callable trait of the same shape.
+            const bool isAsyncBound = lex.getTokenIf(TOK_RWORD_ASYNC);
             rvData.traits.push_back({mv$(hrbs), ParsePath(lex, PATH_GENERIC_TYPE), constness});
+            rvData.traits.back().isAsync = isAsyncBound;
         }
     } while (lex.getTokenIf(TOK_PLUS));
 

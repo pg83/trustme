@@ -593,6 +593,30 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
     }
 }
 
+/// `async Fn(..)` is the async callable trait of the same shape, whose path
+/// only becomes writable once the core crate is known.
+static void ExpandAsyncCallableTrait(const ExpandState& es, TypeTraitPath& tp) {
+    if (!tp.isAsync) {
+        return;
+    }
+    const auto& name = tp.path->nodes().back().name();
+    const char* replacement = nullptr;
+    if (name == "Fn") {
+        replacement = "AsyncFn";
+    } else if (name == "FnMut") {
+        replacement = "AsyncFnMut";
+    } else if (name == "FnOnce") {
+        replacement = "AsyncFnOnce";
+    } else {
+        ERROR(Span(), E0000, "`async` is only valid on the callable traits, not " << *tp.path);
+    }
+    auto args = mv$(tp.path->nodes().back().args());
+    auto path = ASTPath(ASTAbsolutePath(es.crate.extCratenameCore, {RcString::newInterned("ops"), RcString::newInterned(replacement)}));
+    path.nodes().back().args() = mv$(args);
+    *tp.path = mv$(path);
+    tp.isAsync = false;
+}
+
 void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
     TU_MATCH_HDRA( (ty->data), {)
     TU_ARMA(None, e) {
@@ -668,12 +692,14 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
         TU_ARMA(TraitObject, e) {
             for (auto& p : e.traits) {
                 // TODO: p.hrbs? Not needed until types are in those
+                ExpandAsyncCallableTrait(es, p);
                 ExpandPath(es, mod, *p.path);
             }
         }
         TU_ARMA(ErasedType, e) {
             for (auto& p : e->traits) {
                 // TODO: p.hrbs?
+                ExpandAsyncCallableTrait(es, p);
                 ExpandPath(es, mod, *p.path);
             }
             for (auto& p : e->maybeTraits) {
