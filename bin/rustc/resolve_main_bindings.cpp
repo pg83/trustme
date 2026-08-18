@@ -105,7 +105,45 @@ namespace {
             nameContext.push_back(mv$(e));
         }
 
-        void push(/*const */ ASTGenericParams& params, GenericSlot::Level level, bool hasSelf = false) {
+        /// A generic parameter of an item may not shadow one of the item around
+        /// it: `trait T<'a> { fn f<'a>(); }` is an error, not a new `'a`.
+        void checkGenericNotShadowed(const Span& sp, const RcString& name, const char* what) const {
+            for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
+                const auto* g = it->opt_Generic();
+                if (!g) {
+                    continue;
+                }
+                if (g->level == GenericSlot::Level::Hrb) {
+                    // A `for<..>` binder is its own scope, and shadowing one is
+                    // a lint in rustc rather than an error.
+                    continue;
+                }
+                // The lists spell their names differently: a lifetime and a
+                // const keep the identifier they were written with, a type just
+                // its name.
+                auto namedI = [&](const auto& list) {
+                    for (const auto& v : list) {
+                        if (v.name.name == name) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                auto named = [&](const auto& list) {
+                    for (const auto& v : list) {
+                        if (v.name == name) {
+                            return true;
+                        }
+                    }
+                    return false;
+                };
+                if (namedI(g->lifetimes) || named(g->types) || namedI(g->constants)) {
+                    ERROR(sp, E0000, "the name `" << name << "` is already used for a generic parameter in this item's generic parameters");
+                }
+            }
+        }
+
+        void push(/*const */ ASTGenericParams& params, GenericSlot::Level level, bool hasSelf = false, bool allowShadowing = false) {
             auto e = Ent::make_Generic({level, &params});
             auto& data = e.as_Generic();
 
@@ -124,18 +162,27 @@ namespace {
                         }
                         case GenericParam::TAG_Lifetime: {
                             auto& lft = e.as_Lifetime();
+                            if (!allowShadowing) {
+                                checkGenericNotShadowed(Span(), lft.name().name, "lifetime");
+                            }
                             data.lifetimes.push_back(NamedI<GenericSlot>{lft.name(), GenericSlot{level, lftIdx}});
                             lftIdx += 1;
                             break;
                         }
                         case GenericParam::TAG_Type: {
                             auto& tyDef = e.as_Type();
+                            if (!allowShadowing) {
+                                checkGenericNotShadowed(Span(), tyDef.name(), "type");
+                            }
                             data.types.push_back(Named<GenericSlot>{tyDef.name(), GenericSlot{level, tyIdx}});
                             tyIdx += 1;
                             break;
                         }
                         case GenericParam::TAG_Value: {
                             auto& valDef = e.as_Value();
+                            if (!allowShadowing) {
+                                checkGenericNotShadowed(Span(), valDef.name().name, "const");
+                            }
                             data.constants.push_back(NamedI<GenericSlot>{valDef.name(), GenericSlot{level, valIdx}});
                             valIdx += 1;
                             break;
@@ -3563,6 +3610,9 @@ void ResolveAbsoluteFunction(
     bool isTraitImpl
 ) {
     TRACE_FUNCTION_F("");
+    // A `reuse` delegation copies the generic parameters of the function it
+    // stands for, so those may repeat what the impl around it already named.
+    const bool fromDelegation = fcn.delegation() != nullptr;
     if (auto delegation = fcn.takeDelegation()) {
         ASSERT_BUG(fcn.sp(), delegation->targets.size() == 1, "TODO: Expand delegation lists before name resolution");
         auto target = mv$(delegation->targets.front().path);
@@ -3691,7 +3741,7 @@ void ResolveAbsoluteFunction(
         replacement.setCode(ASTExpr(new ASTExprNodeCallPath(mv$(target), mv$(args))));
         fcn = mv$(replacement);
     }
-    itemContext.push(fcn.params(), GenericSlot::Level::Method);
+    itemContext.push(fcn.params(), GenericSlot::Level::Method, /*hasSelf=*/false, /*allowShadowing=*/fromDelegation);
     itemContext.iblTargetGenerics = &fcn.params();
     DEBUG("- Generics");
     ResolveAbsoluteGeneric(itemContext, fcn.params());

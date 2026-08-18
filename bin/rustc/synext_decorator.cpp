@@ -866,7 +866,10 @@ STATIC_DECORATOR("needs_panic_runtime", DecoratorNeedsPanicRuntime)
 
 namespace {
     const RcString rcstringSelf = RcString::newInterned("Self");
-    const RcString rcstringH = RcString::newInterned("H");
+    // The `Hash` derive's hasher parameter takes a name no source can write, so
+    // it never collides with a parameter of the type it is derived on. rustc
+    // gets the same from hygiene.
+    const RcString rcstringH = RcString::newInterned("#H");
     const RcString rcstringSelfLower = RcString::newInterned("self");
     const RcString rcstringV = RcString::newInterned("v");
     const RcString rcstringS = RcString::newInterned("s");
