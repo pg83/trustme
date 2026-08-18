@@ -1649,7 +1649,7 @@ namespace {
                         // - Needed because all items are visited (regardless of
                         // visibility)
                         if (e.type->is_Infer()) {
-                            continue;
+                            break;
                         }
                         auto* ptr = state.rv.addStatic(state.crate.types, getPath());
                         if (ptr) {

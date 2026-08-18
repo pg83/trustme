@@ -4726,7 +4726,7 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                 TU_ARMA(Macro, e) {
                 }
                 TU_ARMA(Use, e) {
-                    continue; // Skip for now
+                    break; // Skip for now
                 }
                 TU_ARMA(Impl, e) {
                     BUG(span, "Hit Impl in use resolution");

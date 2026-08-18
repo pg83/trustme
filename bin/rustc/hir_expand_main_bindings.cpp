@@ -6185,13 +6185,13 @@ namespace {
                         TU_ARMA(Function, ve) {
                                 if (ve.receiver == HIRFunction::Receiver::Free) {
                                     DEBUG("- '" << vi.first << "' Skip free function"); // ?
-                                    continue;
+                                    break;
                                 }
                                 if (::std::any_of(ve.params.bounds.begin(), ve.params.bounds.end(), [&](const auto& b) {
                                     return b.is_TraitBound() && b.as_TraitBound().type == types.self() && b.as_TraitBound().trait.path.path == outer->langSized_;
                                 })) {
                                     DEBUG("- '" << vi.first << "' Skip where `Self: Sized`");
-                                    continue;
+                                    break;
                                 }
                                 if (ve.params.isGeneric()) {
                                     DEBUG("- '" << vi.first << "' NOT object safe (generic), not creating vtable");

@@ -1013,7 +1013,7 @@ namespace {
                             break;
                             TU_ARM(stmt, ScopeEnd, se) {
                                 (void)se;
-                                continue;
+                                break;
                             }
                             break;
                     }

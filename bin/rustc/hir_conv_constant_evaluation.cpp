@@ -1840,7 +1840,7 @@ public:
                             MIR_ASSERT(state, index < size, "LValue::Index index out of range - " << index << " >= " << size);
                             val = val.slice(index * sz, sz);
                         }
-                        continue;
+                        break;
                     }
                     auto* repr = TargetGetTypeRepr(state.sp, this->rootResolve, typ);
                     MIR_ASSERT(state, repr, "No repr for " << typ);
@@ -1902,7 +1902,7 @@ public:
                         MIR_ASSERT(state, &w == &lv.wrappers.back(), "Raw pointer deref followed by an lvalue projection");
                         *rawAddress = p.first;
                         val = MIREvalValueRef();
-                        continue;
+                        break;
                     }
                     DEBUG("> " << MIREvalValueRef(p.second) << " - o=" << (p.first - EncodedLiteral::PTR_BASE) << " sz=" << sz << " " << typ);
                     // TODO: Determine size using metadata?

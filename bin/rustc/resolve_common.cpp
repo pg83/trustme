@@ -652,7 +652,7 @@ namespace {
                             TU_MATCH_HDRA( (srcMod), {)
                             TU_ARMA(None, _) {
                                     DEBUG("Unable to find " << e.path);
-                                    continue;
+                                    break;
                                 }
                                 TU_ARMA(ImplicitPrelude, _e) {
                                     TODO(sp, "ImplicitPrelude? " << e.path);
