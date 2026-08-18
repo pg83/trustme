@@ -1209,7 +1209,14 @@ class BuildContext:
                 ]],
                 deps=deps,
                 descr="CC", color="green", include_roots=include_roots,
-                scan_sources=src.startswith(S + "/") or os.path.isabs(src),
+                # Generated sources cannot be scanned (they may not exist at
+                # graph time), but their declared source-tree inputs can: a
+                # generated .cpp that includes a source header lists it via
+                # the srcs dict and gets the header's include closure here.
+                scan_sources=any(
+                    path.startswith(S + "/") or os.path.isabs(path)
+                    for path in inputs
+                ),
             )
             for source_input in inputs:
                 if source_input.startswith(S + "/") or os.path.isabs(source_input):

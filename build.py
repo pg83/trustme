@@ -94,6 +94,11 @@ SRC = build.glob("$(S)/bin/rustc/*.cpp")
 UT_SRC = sorted(s for s in SRC if s.endswith("_ut.cpp"))
 SRC = [s for s in SRC if not s.endswith("_ut.cpp")]
 
+# The tu_gen.py sample fixture is exercised by tagged_union_sample_ut.cpp in
+# the rustc_ut runner; it is not part of the compiler.
+TU_SAMPLE_SRC = "$(S)/bin/rustc/tagged_union_sample.cpp"
+SRC = [s for s in SRC if s != TU_SAMPLE_SRC]
+
 # The Unicode tables canonical composition needs come from Python's own data,
 # generated rather than checked in.
 UNICODE_NFC_TABLES = "$(B)/gen/unicode_nfc_tables.inc"
@@ -120,6 +125,28 @@ codegen_c_prelude = command(
     ],
     descr="GN",
 )
+
+
+# Tagged unions are generated: each bin/rustc/xxx.tu yields $(B)/gen/xxx_tu.h
+# (thin class definitions, included mid-file by the hand-written xxx.h) and
+# $(B)/gen/xxx_tu.cpp (every method body; includes xxx.h for context, listed
+# here as a scanned input so header changes rebuild it).
+TU_GEN_TOOL = "$(S)/dev/tu_gen.py"
+tu_generated_srcs = []
+for tu_src in sorted(build.glob("$(S)/bin/rustc/*.tu")):
+    tu_stem = tu_src.rsplit("/", 1)[1][:-len(".tu")]
+    tu_gen_h = f"$(B)/gen/{tu_stem}_tu.h"
+    tu_gen_cpp = f"$(B)/gen/{tu_stem}_tu.cpp"
+    command(
+        name=f"{tu_stem}_tu",
+        inputs=[tu_src, TU_GEN_TOOL],
+        outputs=[tu_gen_h, tu_gen_cpp],
+        cmd=["python3", TU_GEN_TOOL, tu_src, tu_gen_h, tu_gen_cpp],
+        descr="TU",
+    )
+    tu_generated_srcs.append(
+        {"src": tu_gen_cpp, "inputs": [f"$(S)/bin/rustc/{tu_stem}.h"]}
+    )
 
 
 def compiler_source(source, *generated_inputs):
@@ -170,6 +197,12 @@ rustc_ut = program(
     name="rustc_ut",
     srcs=[
         "$(S)/tst/unit/rustc_ut_main.cpp",
+        # The tu_gen.py sample fixture and its generated bodies. Every .tu in
+        # the tree today is a sample; once real compiler unions migrate to
+        # .tu, their generated sources join SRC and this list keeps only the
+        # sample.
+        TU_SAMPLE_SRC,
+        *tu_generated_srcs,
         *[
             compiler_source(
                 s,
