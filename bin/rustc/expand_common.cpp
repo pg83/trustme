@@ -2071,8 +2071,10 @@ void Expand_Impl(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTImpl
                     // Move out of the module to avoid invalidation if a new macro invocation is added
                     auto miOwned = mv$(e);
 
+                    // A macro that is not in scope yet (one a `macro_rules!`
+                    // later in the enclosing block defines) is left where it is
+                    // and retried on the next pass.
                     auto ttl = ExpandMacro(es, mod, miOwned);
-                    ASSERT_BUG(miOwned.span(), ttl, "TODO: Unexpanded macro?");
 
                     if (ttl) {
                         // Re-parse tt
@@ -2608,8 +2610,9 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                                 // Move out of the module to avoid invalidation if a new macro invocation is added
                                 auto miOwned = mv$(e);
 
+                                // As in an impl block: a macro that is not in
+                                // scope yet is retried on the next pass.
                                 auto ttl = ExpandMacro(es, mod, miOwned);
-                                ASSERT_BUG(miOwned.span(), ttl, "TODO: Unexpanded macro");
 
                                 if (ttl.get()) {
                                     // Re-parse tt
