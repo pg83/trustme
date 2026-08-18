@@ -4,7 +4,7 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-Snapshot: 2026-08-18, commit `23a249303`. The numbers below come from rerunning
+Snapshot: 2026-08-18, commit `5550f1479`. The numbers below come from rerunning
 the nodes that failed the last full gate, not from a fresh gate. The gate
 itself ran at commit `79582dd3f` in the clang Nix environment on all 78
 available cores:
@@ -27,8 +27,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 
 All 631 failed nodes were rerun independently inside the same clang Nix
 environment, most recently at the commit above. The authoritative rerun data is
-in `/tmp/trustme-reclass-20260818c`; classified records are in
-`/tmp/trustme-classification-20260818c`. Every count below is measured from
+in `/tmp/trustme-reclass-20260818d`; classified records are in
+`/tmp/trustme-classification-20260818d`. Every count below is measured from
 that rerun, not decremented by hand.
 
 Reruns and the whole-group sweeps are the only regression check there is
@@ -41,32 +41,32 @@ read as a qualified path), which a rerun of the failing set could not have.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 266 |
-| fixed, or no longer reproducing, since the gate | 365 |
+| still failing on the current tree | 256 |
+| fixed, or no longer reproducing, since the gate | 375 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 92 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 62 |
+| accepted Rust rejected by the compiler or driver | 84 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 61 |
 | wrong runtime behaviour, panic, abort, or output | 38 |
 | missing rejection or diagnostic | 53 |
-| generated C++ or link failure | 13 |
+| generated C++ or link failure | 12 |
 | stable timeout | 8 |
 
 ## P0: accepted Rust rejected by the front end
 
-All 92 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 84 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 74 | trait/impl selection 30; type mismatch 16; unresolved type/value names 5 |
-| parser | 14 | unexpected-token failures through the three `parse_parseerror.cpp` routes |
+| type checking, HIR lowering, and resolution | 69 | trait/impl selection 30; type mismatch 15; unresolved type/value names 5 |
+| parser | 11 | unexpected-token failures through the three `parse_parseerror.cpp` routes |
 | macro and attribute expansion | 1 | |
 | CTFE and MIR lowering | 2 | |
 | crate/driver handling | 1 | |
 
-The 14 parser failures must be regrouped by syntax family before changing the
+The 11 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are never patterns (3) and a long tail of
 one- and two-test spellings. Grouping by test directory finds them faster than
@@ -142,11 +142,11 @@ item is not affected -- it takes a `$vis` fragment now.
 
 ## P1: internal compiler failures
 
-There are 62 compiler-internal failures in 53 stable signatures.
+There are 61 compiler-internal failures in 53 stable signatures.
 
 | compiler area | tests |
 |---|---:|
-| type checking, HIR lowering, and name resolution | 29 |
+| type checking, HIR lowering, and name resolution | 28 |
 | MIR lowering, CTFE MIR, and optimisation | 16 |
 | translation and code generation | 7 |
 | macro expansion | 5 |
@@ -159,8 +159,8 @@ The multi-test signatures are:
 |---|---:|
 | `ASSERT` with no backtrace | 2 |
 | `SIGSEGV` with no backtrace | 2 |
-| five two-test signatures | 10 |
-| forty-eight one-test signatures | 48 |
+| four two-test signatures | 8 |
+| forty-nine one-test signatures | 49 |
 
 The line numbers in a signature move with every commit that touches the file:
 the ones here are read from the classification named above, and are worth
