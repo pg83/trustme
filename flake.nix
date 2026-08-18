@@ -41,6 +41,7 @@
 
           buildInputs = with pkgs; [
             zlib
+            xxHash
           ];
 
           GOFLAGS = "-mod=vendor";
