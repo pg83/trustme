@@ -7299,6 +7299,7 @@ default: {
                 return HIRCompare::Unequal;
             }
         }
+        break;
         case HIRTypeData::TAG_Infer: {
             auto& e = (*type).as_Infer();
             switch (e.tyClass) {
@@ -7410,6 +7411,7 @@ default: {
                 return HIRCompare::Unequal;
             }
         }
+        break;
         case HIRTypeData::TAG_Infer: {
             auto& e = (*type).as_Infer();
             switch (e.tyClass) {

@@ -147,6 +147,7 @@ namespace {
 default: {
                                             // Ignore, keep going
                                         }
+                                break;
                                 case ASTItem::TAG_Crate: {
                                     auto& c = (*iData).as_Crate();
                                     if (outPath) {

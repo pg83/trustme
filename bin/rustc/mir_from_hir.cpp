@@ -2400,6 +2400,7 @@ default: {
                             //TODO(node.span(), "MIR _Unsize to " << ty_out);
                         }
                     }
+                    break;
                     case HIRTypeData::TAG_Slice: {
                         auto& e = (*tyOut).as_Slice();
                         (void)e;

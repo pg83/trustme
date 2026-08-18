@@ -746,6 +746,7 @@ default: {
                         useTrait();
                     }
                 }
+                break;
                 case HIRTypeData::TAG_Infer: {
                     auto& e = (*ty).as_Infer();
                     (void)e;
