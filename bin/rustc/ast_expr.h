@@ -162,27 +162,12 @@ struct ASTExprNodeAsm: public ASTExprNode {
     ASTExprNodeP clone() const override;
 };
 
+// Definitions generated from ast_expr.tu.
+#include "ast_expr_tu.h"
+
 // asm! macro
 struct ASTExprNodeAsm2: public ASTExprNode {
-    TAGGED_UNION(
-        Param,
-        Const,
-        (Const, ASTExprNodeP),
-        (Sym, ASTPath),
-        (Label, struct { ASTExprNodeP code; }),
-        (RegSingle,
-         struct {
-             AsmDirection dir;
-             AsmRegisterSpec spec;
-             ASTExprNodeP val;
-         }),
-        (Reg, struct {
-            AsmDirection dir;
-            AsmRegisterSpec spec;
-            ASTExprNodeP valIn;
-            ASTExprNodeP valOut;
-        })
-    );
+    using Param = ASTAsmParam;
 
     AsmOptions options;
     std::vector<AsmLine> lines;

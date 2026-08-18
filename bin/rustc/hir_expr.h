@@ -107,26 +107,11 @@ struct HIRExprNodeAsm: public HIRExprNode {
     void visit(HIRExprVisitor& nv) override;
 };
 
+// Definitions generated from hir_expr.tu.
+#include "hir_expr_tu.h"
+
 struct HIRExprNodeAsm2: public HIRExprNode {
-    TAGGED_UNION(
-        Param,
-        Const,
-        (Const, HIRExprNodeP),
-        (Sym, HIRPath),
-        (Label, struct { HIRExprNodeP code; }),
-        (RegSingle,
-         struct {
-             AsmDirection dir;
-             AsmRegisterSpec spec;
-             HIRExprNodeP val;
-         }),
-        (Reg, struct {
-            AsmDirection dir;
-            AsmRegisterSpec spec;
-            HIRExprNodeP valIn;
-            HIRExprNodeP valOut;
-        })
-    );
+    using Param = HIRAsmParam;
 
     AsmOptions options;
     std::vector<AsmLine> lines;
@@ -563,24 +548,7 @@ struct HIRExprNodeField: public HIRExprNode {
 };
 
 struct HIRExprNodeLiteral: public HIRExprNode {
-    TAGGED_UNION(
-        Data,
-        Integer,
-        (Integer,
-         struct {
-             HIRCoreType type; // if not an integer type, it's unknown
-             U128 value;
-         }),
-        (Float,
-         struct {
-             HIRCoreType type; // If not a float type, it's unknown
-             FloatValue value;
-         }),
-        (Boolean, bool),
-        (String, ::std::string),
-        (CString, struct { ::std::string v; }),
-        (ByteString, ::std::vector<char>)
-    );
+    using Data = HIRExprLiteral;
 
     Data data;
 
