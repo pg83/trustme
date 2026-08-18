@@ -727,11 +727,17 @@ Token Lexer::getTokenInt() {
                         // Single dot followed by a non-digit, could be a float or an integer with a method/field access
                         // NOTE: `1.e1` is not a float
                         if (!ch.isdigit()) {
+                            bool sawSpace = false;
                             while (ch.isspace()) {
+                                sawSpace = true;
                                 ch = this->getc();
                             }
                             this->ungetc();
-                            if (ch.isdigit() || issym(ch)) {
+                            // A digit after the dot is a tuple index however it
+                            // is spaced, but a name is a field or a method only
+                            // when it is written right after the dot: `1.min(2)`
+                            // is a call, while `1. as u16` is a float and a cast.
+                            if (ch.isdigit() || (issym(ch) && !sawSpace)) {
                                 this->nextTokens.push_back(TOK_DOT);
                                 return Token(val, CORETYPE_ANY);
                             } else {

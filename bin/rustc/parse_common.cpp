@@ -770,6 +770,9 @@ ASTExprNodeP ParseFlowControl(TokenStream& lex, ASTExprNodeFlow::Type type) {
         case TOK_BRACE_CLOSE:
         case TOK_PAREN_CLOSE:
         case TOK_SQUARE_CLOSE:
+        // `match x { p if let true = return => .. }`: the arm's `=>` ends the
+        // guard, so there is no value here.
+        case TOK_FATARROW:
             break;
         default:
             val = ParseExpr0(lex);
