@@ -2771,6 +2771,13 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
         }
         // TODO: See code for `m_namespace_items` above
         if (ie.second.isImport) { //&& ie.second.is_pub ) {
+            // An associated item of a trait (`use A::new;`) resolved to a UFCS
+            // path, which is not a simple path and so is not an import HIR can
+            // record. Every use of the name resolved to that path already.
+            if (!ie.second.path.cls.is_Absolute()) {
+                DEBUG("Import VAL " << ie.first << " = " << ie.second.path << " (not a simple path)");
+                continue;
+            }
             auto hirPath = LowerHIRSimplePath(sp, ie.second.path, FromASTPathClass::Value);
             assert(!hirPath.components().empty());
             assert(hirPath.components().back() != "");

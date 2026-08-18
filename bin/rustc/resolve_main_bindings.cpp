@@ -1975,6 +1975,12 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                         p.nodes().back().args() = mv$(e.nodes.back().args());
                     }
                 }
+                // A name imported from a trait (`use A::new;`) stands for the
+                // path through the trait, which is what resolution knows how to
+                // turn into a UFCS path -- so hand it back to resolution.
+                if (p.cls.is_Relative() && p.cls.as_Relative().nodes.size() > 1) {
+                    ResolveAbsolutePath(context, sp, mode, p);
+                }
                 path = mv$(p);
             }
 
@@ -4730,6 +4736,39 @@ void ResolveIndexModuleWildcardUseStmt(ASTCrate& crate, ASTModule& dstMod, const
                 }
             }
         }
+    } else if (const auto* tp = b.binding.opt_Trait()) {
+        // `use A::*;` brings in the associated items of a trait
+        // (`import_trait_associated_functions`). Each stands for the path
+        // through the trait, which resolution turns into a UFCS path.
+        DEBUG("Glob trait " << iData.path);
+        auto addValue = [&](const RcString& name) {
+            ASTPathBinding<ASTPathBindingValue> pb;
+            pb.path = b.path + name;
+            pb.binding = ASTPathBindingValue::make_Static({nullptr, nullptr});
+            _add_item_value(sp, dstMod, name, vis, mv$(pb), false, fromPrelude);
+        };
+        auto addType = [&](const RcString& name) {
+            ASTPathBinding<ASTPathBindingType> pb;
+            pb.path = b.path + name;
+            pb.binding = ASTPathBindingType::make_TypeAlias({nullptr});
+            _add_item_type(sp, dstMod, name, vis, mv$(pb), false, fromPrelude);
+        };
+        if (tp->hir) {
+            for (const auto& v : tp->hir->values) {
+                addValue(v.first);
+            }
+            for (const auto& t : tp->hir->types) {
+                addType(t.first);
+            }
+        } else {
+            for (const auto& item : tp->trait_->items()) {
+                if (item.data.is_Function() || item.data.is_Static()) {
+                    addValue(item.name);
+                } else if (item.data.is_Type()) {
+                    addType(item.name);
+                }
+            }
+        }
     } else {
         BUG(sp, "Invalid path binding for glob import: " << b.binding.tagStr() << " - " << iData.path);
     }
@@ -4812,6 +4851,12 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
             case HIRTypeItem::TAG_Enum: {
                 if (i != info.nodes.size() - 2) { BUG(sp, "Path " << path << " pointed to non-module in component " << i); }
                 // Lazy, not checking
+                return;
+            }
+            case HIRTypeItem::TAG_Trait: {
+                // An associated item of a trait, which resolution handles where
+                // the path is written out.
+                if (i != info.nodes.size() - 2) { BUG(sp, "Path " << path << " pointed to non-module in component " << i); }
                 return;
             }
             case HIRTypeItem::TAG_Module: {
@@ -4923,6 +4968,11 @@ default:
                 }
                 case ASTPathBindingType::TAG_Enum: {
                     // NOTE: Just assuming that if an Enum is hit, it's sane
+                    return false;
+                }
+                case ASTPathBindingType::TAG_Trait: {
+                    // An associated item of a trait, which resolution handles
+                    // where the path is written out.
                     return false;
                 }
             }
@@ -5294,6 +5344,11 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
                         break;
                     }
                     case ASTPathBindingType::TAG_Module: {
+                        break;
+                    }
+                    case ASTPathBindingType::TAG_Trait: {
+                        // `use A::*;` brings in the trait's associated items
+                        // (`import_trait_associated_functions`).
                         break;
                     }
                     default: {
@@ -5767,6 +5822,38 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                         }
                         break;
                     }
+                    case ASTPathBindingType::TAG_Trait: {
+                        // `use A::*;` brings in the associated items of a trait
+                        // (`import_trait_associated_functions`).
+                        auto& e = bindings->type.binding.as_Trait();
+                        assert(e.trait_ || e.hir);
+                        bool isValue = false;
+                        bool isType = false;
+                        if (e.hir) {
+                            isValue = e.hir->values.count(desItemName) != 0;
+                            isType = e.hir->types.count(desItemName) != 0;
+                        } else {
+                            for (const auto& item : e.trait_->items()) {
+                                if (item.name != desItemName) {
+                                    continue;
+                                }
+                                isValue = item.data.is_Function() || item.data.is_Static();
+                                isType = item.data.is_Type();
+                                break;
+                            }
+                        }
+                        if (isValue || isType) {
+                            ASTPath::Bindings tmpRv;
+                            if (isValue) {
+                                tmpRv.value.set(bindings->type.path + desItemName, ASTPathBindingValue::make_Static({nullptr, nullptr}));
+                            }
+                            if (isType) {
+                                tmpRv.type.set(bindings->type.path + desItemName, ASTPathBindingType::make_TypeAlias({nullptr}));
+                            }
+                            rv.mergeFrom(tmpRv);
+                        }
+                        break;
+                    }
                     case ASTPathBindingType::TAG_Enum: {
                         auto& e = bindings->type.binding.as_Enum();
                         assert(e.enum_ || e.hir);
@@ -5936,6 +6023,30 @@ default:
                 auto& e = it->second->ent.as_Module();
                 hmod = &e;
                 break;
+            }
+            case HIRTypeItem::TAG_Trait: {
+                // `use std::default::Default::default;` names an associated item
+                // of a trait from another crate.
+                auto& e = it->second->ent.as_Trait();
+                i += 1;
+                if (i != nodes.size() - 1) {
+                    ERROR(span, E0000, "Encountered trait at unexpected location in import");
+                }
+                const auto& name = nodes[i].name();
+                ap.nodes.push_back(name);
+
+                const bool isValue = e.values.count(name) != 0;
+                const bool isType = e.types.count(name) != 0;
+                if (!isValue && !isType) {
+                    ERROR(span, E0000, "Unable to find associated item " << name << " of trait in " << path);
+                }
+                if (isValue) {
+                    rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr, nullptr}));
+                }
+                if (isType) {
+                    rv.type.set(ap, ASTPathBindingType::make_TypeAlias({nullptr}));
+                }
+                return rv;
             }
             case HIRTypeItem::TAG_Enum: {
                 auto& e = it->second->ent.as_Enum();
@@ -6245,6 +6356,70 @@ default:
                 // TODO: Mangle the original path (or return a new path somehow)
                 DEBUG("Extern - Call _ext with remainder");
                 return ResolveUseGetBindingExt(span, crate, path, *e.crate_, i + 1);
+            }
+            case ASTPathBindingType::TAG_Trait: {
+                // `use A::new;` imports an associated item of a trait
+                // (`import_trait_associated_functions`). The import stands for
+                // the path through the trait, which resolution already handles
+                // where it is written out.
+                auto& e = b.type.binding.as_Trait();
+                ASSERT_BUG(span, e.trait_ || e.hir, "nullptr trait pointer in node " << i << " of " << path);
+                i += 1;
+                if (i != nodes.size() - 1) {
+                    ERROR(span, E0000, "Encountered trait at unexpected location in import");
+                }
+                const auto& node2 = nodes[i];
+
+                bool isValue = false;
+                bool isType = false;
+                const ASTFunction* astFunc = nullptr;
+                if (e.hir) {
+                    if (e.hir->values.count(node2.name())) {
+                        isValue = true;
+                    }
+                    if (e.hir->types.count(node2.name())) {
+                        isType = true;
+                    }
+                } else {
+                    for (const auto& item : e.trait_->items()) {
+                        if (item.name != node2.name()) {
+                            continue;
+                        }
+                        switch (item.data.tag()) {
+                            case ASTItem::TAG_Function:
+                                isValue = true;
+                                astFunc = &item.data.as_Function();
+                                break;
+                            case ASTItem::TAG_Static:
+                                isValue = true;
+                                break;
+                            case ASTItem::TAG_Type:
+                                isType = true;
+                                break;
+                            default:
+                                break;
+                        }
+                        break;
+                    }
+                }
+                if (!isValue && !isType) {
+                    if (softFail) {
+                        return ASTPath::Bindings();
+                    }
+                    ERROR(span, E0000, "Unknown associated item " << node2.name() << " of trait in " << path);
+                }
+                auto itemPath = b.type.path + node2.name();
+                if (isValue) {
+                    if (astFunc) {
+                        rv.value.set(itemPath, ASTPathBindingValue::make_Function({astFunc}));
+                    } else {
+                        rv.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr, nullptr}));
+                    }
+                }
+                if (isType) {
+                    rv.type.set(itemPath, ASTPathBindingType::make_TypeAlias({nullptr}));
+                }
+                return rv;
             }
             case ASTPathBindingType::TAG_Enum: {
                 auto& e = b.type.binding.as_Enum();
