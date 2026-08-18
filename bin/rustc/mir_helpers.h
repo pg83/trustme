@@ -505,7 +505,7 @@ public:
                 state.setCurStmt(blockIdx, (&stmt - &block.statements.front()));
                 visitStmt(stmt);
             }
-            if (block.terminator.tag() == MIRTerminator::TAGDEAD) {
+            if (block.terminator.isDead()) {
                 continue;
             }
             state.setCurStmtTerm(blockIdx);

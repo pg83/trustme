@@ -2,7 +2,7 @@
 
 // Match-side macros for the generated tagged unions (see dev/tu_gen.py and
 // the .tu descriptions next to each header). They rely only on the generated
-// member surface: `tag()`, `TAG_*`, `TAGDEAD`, `is_*`/`as_*`.
+// member surface: `tag()`, `TAG_*`, `is_*`/`as_*`.
 
 #include <cassert>
 
@@ -63,19 +63,13 @@
 #define TU_MATCH(CLASS, VAR, NAME, ...)                        \
     switch ((TU_FIRST VAR).tag()) { /*
 */                         \
-        case CLASS::TAGDEAD:                                   \
-            assert(!"ERROR: destructed tagged union used"); /*
-*/ \
-            TU_MATCH_ARMS(CLASS, VAR, NAME, __VA_ARGS__)    /*
+        TU_MATCH_ARMS(CLASS, VAR, NAME, __VA_ARGS__)    /*
 */ \
     }
 #define TU_MATCH_DEF(CLASS, VAR, NAME, DEF, ...)               \
     switch ((TU_FIRST VAR).tag()) { /*
 */                         \
-        case CLASS::TAGDEAD:                                   \
-            assert(!"ERROR: destructed tagged union used"); /*
-*/ \
-            TU_MATCH_ARMS(CLASS, VAR, NAME, __VA_ARGS__)       \
+        TU_MATCH_ARMS(CLASS, VAR, NAME, __VA_ARGS__)       \
         /*
 */                                                     \
         default: {                                             \
@@ -111,8 +105,7 @@
 #define TU_MATCH_HDR(VARS, brace) TU_MATCH_HDR_(::std::remove_reference<decltype(TU_FIRST VARS)>::type, VARS, brace)
 #define TU_MATCH_HDR_(CLASS, VARS, brace) \
     switch ((TU_FIRST VARS).tag())        \
-    brace case CLASS::TAGDEAD:            \
-        assert(!"ERROR: destructed tagged union used");
+    brace
 // Nested single-iteration loops provide a declaration scope for the arm binding.
 #define TU_ARM(VAR, TAG, NAME)                                    \
     break;                                                        \
@@ -127,10 +120,7 @@
         for (TU_EXP1(TUMATCHHDRADecl VARS); tuLc; tuLc = false) /*
         */ \
             switch (tuMatchHdr2V.tag())                              \
-            brace /*
-        */                                                    \
-                case CLASS::TAGDEAD:                                    \
-                assert(!"ERROR: destructed tagged union used");
+            brace
 #define TUMATCHHDRADeclRest1(v1) &tuMatchHdr2V = v1
 #define TUMATCHHDRADeclRest2(v1, v2) TUMATCHHDRADeclRest1(v1), &tuMatchHdr2V2 = v2
 #define TUMATCHHDRADeclRest3(v1, v2, v3) TUMATCHHDRADeclRest2(_, v2), &tuMatchHdr2V3 = v3

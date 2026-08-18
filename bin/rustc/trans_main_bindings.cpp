@@ -1608,8 +1608,6 @@ namespace {
         TRACE_FUNCTION_F(getPath() << " : " << vi.tagStr() << " is_visible=" << isVisible);
         const Span sp;
         switch (vi.tag()) {
-            case HIRValueItem::TAGDEAD:
-                throw "";
                 TU_ARM(vi, Import, e) {
                     // TODO: If visible, ensure that target is visited.
                     if (isVisible) {

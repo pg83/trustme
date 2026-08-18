@@ -144,8 +144,6 @@ namespace {
             bool prevWasNum = wasNum;
             wasNum = false;
             switch (w.tag()) {
-                case MIRLValue::Wrapper::TAGDEAD:
-                    throw "";
                     TU_ARM(w, Deref, e)
                     os << ")";
                     break;
@@ -183,8 +181,6 @@ namespace {
 
         const auto& e = x.e;
         switch (e.tag()) {
-            case MIRConstant::TAGDEAD:
-                throw "";
                 TU_ARM(e, Int, v) {
                     os << (v.v < 0 ? "" : "+") << v.v << " " << v.t;
                 }
@@ -222,8 +218,6 @@ namespace {
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<MIRParam>& x) {
         switch (x.e.tag()) {
-            case MIRParam::TAGDEAD:
-                throw "";
                 TU_ARM(x.e, LValue, e)
                 os << fmt(e);
                 break;
@@ -607,8 +601,6 @@ namespace {
             };
 
             switch (repr->variants.tag()) {
-                case TypeRepr::VariantMode::TAGDEAD:
-                    throw "";
                     TU_ARM(repr->variants, None, _e) {
                     }
                     TU_ARM(repr->variants, Linear, e) {
@@ -792,13 +784,9 @@ namespace {
                     localMirRes.setCurStmt(i, (&stmt - &code->blocks[i].statements.front()));
                     DEBUG(stmt);
                     switch (stmt.tag()) {
-                        case MIRStatement::TAGDEAD:
-                            throw "";
                             TU_ARM(stmt, Assign, se) {
                                 of << "ASSIGN " << fmt(se.dst) << " = ";
                                 switch (se.src.tag()) {
-                                    case MIRRValue::TAGDEAD:
-                                        throw "";
                                         TU_ARM(se.src, Use, e)
                                         of << "=" << fmt(e);
                                         break;
@@ -1037,8 +1025,6 @@ namespace {
                 DEBUG("- " << term);
                 of << "\t\t";
                 switch (term.tag()) {
-                    case MIRTerminator::TAGDEAD:
-                        throw "";
                         TU_ARM(term, Incomplete, _e)(void) _e;
                         of << "INCOMPLETE\n";
                         break;
@@ -1086,8 +1072,6 @@ namespace {
                         TU_ARM(term, SwitchValue, e) {
                             of << "SWITCHVALUE " << fmt(e.val) << " { ";
                             switch (e.values.tag()) {
-                                case MIRSwitchValues::TAGDEAD:
-                                    throw "";
                                     TU_ARM(e.values, String, ve)
                                     for (size_t i = 0; i < ve.size(); i++) {
                                         of << "\"" << FmtEscaped(ve[i]) << "\" = " << e.targets[i] << ",";
@@ -1161,8 +1145,6 @@ namespace {
                             }
                             of << "CALL " << fmt(e.retVal) << " = ";
                             switch (e.fcn.tag()) {
-                                case MIRCallTarget::TAGDEAD:
-                                    throw "";
                                     TU_ARM(e.fcn, Intrinsic, f) {
                                         of << "\"" << f.name << "\"";
                                         if (f.params.types.size() > 0) {

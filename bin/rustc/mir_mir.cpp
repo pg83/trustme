@@ -1062,8 +1062,6 @@ bool MIRLValue::RefCommon::tryUnwrap() {
 MIRLValue::RefCommon::Tag MIRLValue::RefCommon::tag() const {
     if (wrapperCount_ == 0) {
         switch (lv_->root.tag()) {
-            case Storage::TAGDEAD:
-                return TAGDEAD;
             case Storage::TAG_Return:
                 return TAG_Return;
             case Storage::TAG_Argument:
@@ -1075,8 +1073,6 @@ MIRLValue::RefCommon::Tag MIRLValue::RefCommon::tag() const {
         }
     } else {
         switch (lv_->wrappers[wrapperCount_ - 1].tag()) {
-            case Wrapper::TAGDEAD:
-                return TAGDEAD;
             case Wrapper::TAG_Deref:
                 return TAG_Deref;
             case Wrapper::TAG_Field:
@@ -1087,7 +1083,7 @@ MIRLValue::RefCommon::Tag MIRLValue::RefCommon::tag() const {
                 return TAG_Index;
         }
     }
-    return TAGDEAD;
+    throw "";
 }
 
 unsigned MIRLValue::RefCommon::as_Local() const {

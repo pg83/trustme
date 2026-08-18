@@ -9162,12 +9162,8 @@ namespace {
     static void mergeState(const Span& sp, MirBuilder& builder, const MIRLValue& lv, VarState& oldState, const VarState& newState) {
         TRACE_FUNCTION_FR(lv << " : " << oldState << " <= " << newState, lv << " : " << oldState);
         switch (oldState.tag()) {
-            case VarState::TAGDEAD:
-                throw "";
             case VarState::TAG_Invalid:
                 switch (newState.tag()) {
-                    case VarState::TAGDEAD:
-                        throw "";
                     case VarState::TAG_Invalid:
                         // Invalid->Invalid :: Choose the highest of the invalid types (TODO)
                         return;
@@ -9272,8 +9268,6 @@ namespace {
             // Valid <= ...
             case VarState::TAG_Valid:
                 switch (newState.tag()) {
-                    case VarState::TAGDEAD:
-                        throw "";
                     // Valid <= Invalid
                     case VarState::TAG_Invalid:
                         oldState = VarState::make_Optional(builder.newDropFlagAndSet(sp, false));
@@ -9385,8 +9379,6 @@ namespace {
             // Optional <= ...
             case VarState::TAG_Optional:
                 switch (newState.tag()) {
-                    case VarState::TAGDEAD:
-                        throw "";
                     case VarState::TAG_Invalid:
                         builder.pushStmtSetDropflagVal(sp, oldState.as_Optional(), false);
                         return;
@@ -9504,8 +9496,6 @@ namespace {
                     BUG(sp, "MovedOut on non-Box");
                 }
                 switch (newState.tag()) {
-                    case VarState::TAGDEAD:
-                        throw "";
                     case VarState::TAG_Invalid:
                     case VarState::TAG_Valid: {
                         bool isValid = newState.is_Valid();
@@ -9567,8 +9557,6 @@ namespace {
                 // Need to tag for conditional shallow drop? Or just do that at the end of the split?
                 // - End of the split means that the only optional state is outer drop.
                 switch (newState.tag()) {
-                    case VarState::TAGDEAD:
-                        throw "";
                     case VarState::TAG_Invalid:
                     case VarState::TAG_Valid:
                     case VarState::TAG_Optional:
@@ -9617,8 +9605,6 @@ namespace {
             case VarState::TAG_PartialArray: {
                 auto& ose = oldState.as_PartialArray();
                 switch (newState.tag()) {
-                    case VarState::TAGDEAD:
-                        throw "";
                     // PartialArray <= scalar: fold the scalar into the fill and every exception
                     case VarState::TAG_Invalid:
                     case VarState::TAG_Valid:

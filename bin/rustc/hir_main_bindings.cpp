@@ -1492,8 +1492,6 @@ MIRTerminator HirDeserialiser::deserialise_mir_terminator_() {
 #define _(x, ...)                \
     case MIRTerminator::TAG_##x: \
         return MIRTerminator::make_##x(__VA_ARGS__);
-        case MIRTerminator::TAGDEAD:
-            BUG(Span(), "MIR::Terminator::TAGDEAD found");
             _(Incomplete, {})
             _(Return, {})
             _(UnwindResume, {})
@@ -3199,8 +3197,6 @@ public:
     void serialise(const ::Token::Data& td) {
         out.writeTag(td.tag());
         switch (td.tag()) {
-            case ::Token::Data::TAGDEAD:
-                throw "";
                 TU_ARM(td, None, _e) {
                 }
                 break;

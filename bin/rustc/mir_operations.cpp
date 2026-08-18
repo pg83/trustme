@@ -2129,7 +2129,7 @@ namespace {
                 state.setCurStmt(blockIdx, (&stmt - &block.statements.front()));
                 optVisitMirLvaluesMut(stmt, cb);
             }
-            if (block.terminator.tag() == MIRTerminator::TAGDEAD) {
+            if (block.terminator.isDead()) {
                 continue;
             }
             state.setCurStmtTerm(blockIdx);
@@ -2426,7 +2426,7 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
                     DEBUG("Append bb " << tgt << " to bb" << i);
 
                     assert(&fcn.blocks[tgt] != &block);
-                    // Move contents of source block, then set the TAGDEAD terminator to Incomplete
+                    // Move contents of source block, then revive the dead terminator as Incomplete
                     auto srcBlock = mv$(fcn.blocks[tgt]);
                     fcn.blocks[tgt].terminator = MIRTerminator::make_Incomplete({});
 
@@ -4315,7 +4315,7 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
     ::std::map<unsigned int, unsigned int> replacements;
     ::std::unordered_map<size_t, ::std::vector<unsigned int>> candidates;
     for (unsigned int bbIdx = 0; bbIdx < fcn.blocks.size(); bbIdx++) {
-        if (fcn.blocks[bbIdx].terminator.tag() == MIRTerminator::TAGDEAD) {
+        if (fcn.blocks[bbIdx].terminator.isDead()) {
             continue;
         }
         if (fcn.blocks[bbIdx].terminator.is_Incomplete() && fcn.blocks[bbIdx].statements.size() == 0) {
@@ -4345,7 +4345,7 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
             }
         };
         for (auto& bb : fcn.blocks) {
-            if (bb.terminator.tag() == MIRTerminator::TAGDEAD) {
+            if (bb.terminator.isDead()) {
                 continue;
             }
             visitTerminatorTargetMut(bb.terminator, [&](auto& te) {
@@ -5577,8 +5577,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
         }
         optVisitMirLvaluesMut(bb.terminator, editLval);
         switch (bb.terminator.tag()) {
-            case MIRTerminator::TAGDEAD:
-                throw "";
                 TU_ARM(bb.terminator, Switch, te) {
                     auto it = knownValuesVar.find(te.val);
                     if (it != knownValuesVar.end()) {
@@ -5975,7 +5973,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
             });
         };
         for (const auto& block : fcn.blocks) {
-            if (block.terminator.tag() == MIRTerminator::TAGDEAD) {
+            if (block.terminator.isDead()) {
                 continue;
             }
 
@@ -6136,7 +6134,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     if (vu == MIRValUsage::Read || vu == MIRValUsage::Move) {
                         auto it = replacementsFind(lv);
                         if (it != replacements.end()) {
-                            MIR_ASSERT(state, it->second.tag() != MIRRValue::TAGDEAD, "Replacement of  " << lv << " fired twice");
+                            MIR_ASSERT(state, !it->second.isDead(), "Replacement of  " << lv << " fired twice");
                             MIR_ASSERT(state, it->second.is_Use(), "Replacing a lvalue with a rvalue - " << lv << " with " << it->second);
                             auto rval = ::std::move(it->second);
                             DEBUG("> Do replace " << lv << " => " << rval);
@@ -6149,7 +6147,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
             };
             for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
                 auto& block = fcn.blocks[blockIdx];
-                if (block.terminator.tag() == MIRTerminator::TAGDEAD) {
+                if (block.terminator.isDead()) {
                     continue;
                 }
                 for (auto& stmt : block.statements) {
@@ -6174,7 +6172,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     DEBUG(state << "Delete " << *it);
                     it = block.statements.erase(it);
                 } else {
-                    MIR_ASSERT(state, !(it->is_Assign() && it->as_Assign().src.tag() == MIRRValue::TAGDEAD), "");
+                    MIR_ASSERT(state, !(it->is_Assign() && it->as_Assign().src.isDead()), "");
                     ++it;
                 }
             }
@@ -6190,7 +6188,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                 if (!it->is_Assign()) {
                     continue;
                 }
-                if (it->as_Assign().src.tag() == MIRRValue::TAGDEAD) {
+                if (it->as_Assign().src.isDead()) {
                     continue;
                 }
                 auto& toReplaceLval = it->as_Assign().dst;
@@ -6209,7 +6207,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     if (!it2->is_Assign()) {
                         continue;
                     }
-                    if (it2->as_Assign().src.tag() == MIRRValue::TAGDEAD) {
+                    if (it2->as_Assign().src.isDead()) {
                         continue;
                     }
                     if (!it2->as_Assign().src.is_Use()) {
@@ -6270,7 +6268,7 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
     {
         DEBUG("- Returns");
         for (auto& block : fcn.blocks) {
-            if (block.terminator.tag() == MIRTerminator::TAGDEAD) {
+            if (block.terminator.isDead()) {
                 continue;
             }
 

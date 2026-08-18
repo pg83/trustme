@@ -3224,8 +3224,6 @@ namespace {
             DEBUG(stmt);
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             switch (stmt.tag()) {
-                case MIRStatement::TAGDEAD:
-                    throw "";
                 case MIRStatement::TAG_ScopeEnd:
                     of << indent << "// " << stmt << "\n";
                     break;
@@ -6351,8 +6349,6 @@ namespace {
                     const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
                     MIR_ASSERT(localMirRes, repr, "No repr for enum " << ty);
                     switch (repr->variants.tag()) {
-                        case TypeRepr::VariantMode::TAGDEAD:
-                            throw "";
                             TU_ARM(repr->variants, None, _e)
                             of << "0";
                             break;

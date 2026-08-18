@@ -1574,8 +1574,6 @@ namespace {
 
         TypeRepr rv;
         switch (enm.data.tag()) {
-            case HIREnum::Class::TAGDEAD:
-                throw "";
                 TU_ARM(enm.data, Data, e) {
                     // repr(C) enums - they have different rules
                     // - A data enum with `repr(C)` puts the tag before the data
@@ -2163,14 +2161,10 @@ namespace {
 
     ::std::unique_ptr<TypeRepr> make_type_repr_(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty) {
         switch (ty->tag()) {
-            case HIRTypeData::TAGDEAD:
-                abort();
             case HIRTypeData::TAG_Tuple:
                 return makeTypeReprStruct(sp, resolve, ty);
             case HIRTypeData::TAG_Path:
                 switch (ty->as_Path().binding.tag()) {
-                    case HIRTypePathBinding::TAGDEAD:
-                        abort();
                     case HIRTypePathBinding::TAG_Struct:
                         return makeTypeReprStruct(sp, resolve, ty);
                     case HIRTypePathBinding::TAG_Union:

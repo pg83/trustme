@@ -64,13 +64,13 @@ STD_TEST_SUITE(TaggedUnionValue) {
         STD_INSIST(w.is_Name());
         STD_INSIST(w.as_Name() == "payload");
         STD_INSIST(w.flags == 9);
-        STD_INSIST(v.tag() == SampleValue::TAGDEAD);
+        STD_INSIST(v.isDead());
         STD_INSIST(std::strcmp(v.tagStr(), "ERR:DEAD") == 0);
 
         SampleValue u;
         u = std::move(w);
         STD_INSIST(u.is_Name() && u.as_Name() == "payload" && u.flags == 9);
-        STD_INSIST(w.tag() == SampleValue::TAGDEAD);
+        STD_INSIST(w.isDead());
     }
 
     STD_TEST(selfMoveAssignIsANoOp) {
@@ -93,7 +93,7 @@ STD_TEST_SUITE(TaggedUnionValue) {
 
     STD_TEST(movedFromHuskIsNotDestructed) {
         // Historical TAGGED_UNION semantics, preserved deliberately: moving
-        // marks the source TAGDEAD without destructing the moved-from husk.
+        // marks the source dead without destructing the moved-from husk.
         // Resources travel to the destination, so nothing leaks, but the
         // husk's destructor never runs and the instance count shows it.
         STD_INSIST(SampleCounted::liveCount == 0);
@@ -165,7 +165,7 @@ STD_TEST_SUITE(TaggedUnionIncomplete) {
         // The payload does not move in memory: addresses taken before the
         // move stay valid, unlike the in-place storage.
         STD_INSIST(&u.as_Node() == payload);
-        STD_INSIST(t.tag() == SampleTree::TAGDEAD);
+        STD_INSIST(t.isDead());
         SampleTree w;
         w = std::move(u);
         STD_INSIST(&w.as_Node() == payload);

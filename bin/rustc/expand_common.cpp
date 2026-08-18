@@ -2636,7 +2636,7 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
 
         {
             auto& i = *mod.items[idx];
-            if (i.data.tag() == ASTItem::TAGDEAD) {
+            if (i.data.isDead()) {
                 i.data = mv$(dat);
             }
             // TODO: When would this _not_ be empty?

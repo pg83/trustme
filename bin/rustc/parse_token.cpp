@@ -200,7 +200,7 @@ Token::Token(const Token& t)
     , hygiene_(t.hygiene_)
     , isDocComment_(t.isDocComment_)
 {
-    assert(t.data_.tag() != Data::TAGDEAD);
+    assert(!t.data_.isDead());
     TU_MATCH_HDRA( (t.data_), {)
     TU_ARMA(None, e) {
         }
@@ -228,7 +228,7 @@ Token Token::clone() const {
     rv.hygiene_ = hygiene_;
     rv.isDocComment_ = isDocComment_;
 
-    assert(data_.tag() != Data::TAGDEAD);
+    assert(!data_.isDead());
     TU_MATCH(Data, (data_), (e), (None, ), (Ident, rv.data_ = Data::make_Ident(e);), (String, rv.data_ = Data::make_String(e);), (Integer, rv.data_ = Data::make_Integer(e);), (Float, rv.data_ = Data::make_Float(e);), (Fragment, assert(e); switch (type_) {
                  case TOK_INTERPOLATED_TYPE:
                      rv.data_ = new ASTType*((*reinterpret_cast<ASTType**>(e))->clone());

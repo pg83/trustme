@@ -409,9 +409,10 @@ namespace {
         }
 
         static bool matchingNamespace(const ASTItem& i, ResolveNamespace ns) {
+            if (i.isDead()) {
+                return false;
+            }
             switch (i.tag()) {
-                case ASTItem::TAGDEAD:
-                    return false;
                 case ASTItem::TAG_Crate:
                 case ASTItem::TAG_Module:
                 case ASTItem::TAG_Type:

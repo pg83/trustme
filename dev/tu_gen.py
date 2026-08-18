@@ -33,7 +33,7 @@ not allocated at all: they share one static instance per variant.
 
 The generated member surface matches the historical TAGGED_UNION macros
 (`TAG_X`, `is_X`, `as_X`, `opt_X`, `make_X`, `unwrap_X`, `tag()`,
-`tagStr()`, `tagToStr()`, `Data_X`, `TAGDEAD` as the moved-from state), so
+`tagStr()`, `tagToStr()`, `Data_X`; `isDead()` reports the moved-from state), so
 match-side macros and call sites do not change.
 """
 
@@ -213,14 +213,17 @@ def emit_header_union(out, union):
             out.close("};")
     out.line()
     out.open("enum Tag {")
-    out.line("TAGDEAD,")
+    first = True
     for variant in union.variants:
-        out.line(f"TAG_{variant.tag},")
+        out.line(f"TAG_{variant.tag}{' = 1' if first else ''},")
+        first = False
     out.close("};")
     out.line()
     out.depth -= 1
     out.line("private:")
     out.depth += 1
+    out.line("// The reserved value 0: the moved-from state, outside the enum.")
+    out.line("static constexpr Tag deadTag = static_cast<Tag>(0);")
     out.line("Tag tag_;")
     if union.allow_incomplete:
         out.line("void* ptr_;")
@@ -244,6 +247,7 @@ def emit_header_union(out, union):
     out.line(f"{union.name}& operator=({union.name}&& x);")
     out.line(f"~{union.name}();")
     out.line()
+    out.line("bool isDead() const;")
     out.line("Tag tag() const;")
     out.line("const char* tagStr() const;")
     out.line("static const char* tagToStr(Tag tag);")
@@ -278,7 +282,7 @@ def emit_header_union(out, union):
 def emit_payload_switch(out, union, per_variant):
     """A switch over tag_ running per_variant(variant) for live payloads."""
     out.open("switch (tag_) {")
-    out.open("case TAGDEAD: {")
+    out.open("default: { // deadTag")
     out.line("break;")
     out.close()
     for variant in union.variants:
@@ -382,7 +386,7 @@ def emit_cpp_union(out, union):
             out, union,
             lambda v: f"new (&data_.{v.tag}) {v.data_name}"
                       f"(::std::move(x.data_.{v.tag}));")
-    out.line("x.tag_ = TAGDEAD;")
+    out.line("x.tag_ = deadTag;")
     out.close()
     out.line()
 
@@ -400,7 +404,7 @@ def emit_cpp_union(out, union):
             out, union,
             lambda v: f"new (&data_.{v.tag}) {v.data_name}"
                       f"(::std::move(x.data_.{v.tag}));")
-    out.line("x.tag_ = TAGDEAD;")
+    out.line("x.tag_ = deadTag;")
     out.close()
     out.line("return *this;")
     out.close()
@@ -422,15 +426,23 @@ def emit_cpp_union(out, union):
 
     out.open(f"{name}::~{name}() {{")
     out.line("dropPayload();")
-    out.line("tag_ = TAGDEAD;")
+    out.line("tag_ = deadTag;")
     out.close()
     out.line()
 
+    out.open(f"bool {name}::isDead() const {{")
+    out.line("return tag_ == deadTag;")
+    out.close()
+    out.line()
     out.open(f"{name}::Tag {name}::tag() const {{")
+    out.line('assert(!isDead() && "destructed tagged union used");')
     out.line("return tag_;")
     out.close()
     out.line()
     out.open(f"const char* {name}::tagStr() const {{")
+    out.open("if (isDead()) {")
+    out.line('return "ERR:DEAD";')
+    out.close()
     out.line("return tagToStr(tag_);")
     out.close()
     out.line()
@@ -438,7 +450,7 @@ def emit_cpp_union(out, union):
         out.open(f"{name} {name}::clone() const {{")
         out.line(f"{name} result;")
         out.open("switch (tag_) {")
-        out.open("case TAGDEAD: {")
+        out.open("default: { // deadTag")
         out.line("break;")
         out.close()
         for variant in union.variants:
@@ -459,9 +471,6 @@ def emit_cpp_union(out, union):
 
     out.open(f"const char* {name}::tagToStr(Tag tag) {{")
     out.open("switch (tag) {")
-    out.open("case TAGDEAD: {")
-    out.line('return "ERR:DEAD";')
-    out.close()
     for variant in union.variants:
         out.open(f"case TAG_{variant.tag}: {{")
         out.line(f'return "{variant.tag}";')

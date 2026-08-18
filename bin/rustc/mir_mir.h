@@ -62,7 +62,6 @@ struct MIRLValue {
             TAG_Local,
             TAG_Static,
             TAG_Return,
-            TAGDEAD,
         };
 
         Tag tag() const;
@@ -137,7 +136,6 @@ struct MIRLValue {
             TAG_Field,
             TAG_Downcast,
             TAG_Index,
-            TAGDEAD,
         };
 
         Tag tag() const {
@@ -303,7 +301,6 @@ struct MIRLValue {
         bool tryUnwrap();
 
         enum Tag {
-            TAGDEAD,
             TAG_Return,
             TAG_Argument,
             TAG_Local,

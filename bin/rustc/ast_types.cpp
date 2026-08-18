@@ -166,8 +166,6 @@ ASTType* ASTType::clone() const {
 
     auto& p = *this->pool;
     switch (data.tag()) {
-        case TypeData::TAGDEAD:
-            assert(!"Copying a destructed type");
 #define _COPY(VAR)                                                        \
     case TypeData::TAG_##VAR:                                             \
         return mkType(p, span_, TypeData::make_##VAR(data.as_##VAR())); \
@@ -267,8 +265,6 @@ void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
         const auto& ent = this->data.as_##VAR(); \
         (void)&ent;
     switch (this->data.tag()) {
-        case TypeData::TAGDEAD:
-            throw "";
             _(None, os << "!/*none*/!";)
             _(Any, os << "_";)
             _(Bang, os << "!";)
