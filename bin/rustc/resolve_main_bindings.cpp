@@ -69,6 +69,11 @@ namespace {
         unsigned int varCount;
         unsigned int blockLevel;
 
+        /// Index of the `Self` carried in from a method around this item, if
+        /// any: it names a constructor here, but not a type. Anything pushed
+        /// above it is a `Self` of this item's own and names both.
+        size_t selfCtorOnlyIdx = ~size_t(0);
+
         // Destination `GenericParams` for in_band_lifetimes
         ASTGenericParams* iblTargetGenerics;
 
@@ -663,6 +668,9 @@ default:
                                 case LookupMode::PatternType:
                                 case LookupMode::Type:
                                 case LookupMode::Namespace: {
+                                    if (static_cast<size_t>(nameContext.rend() - it) - 1 == this->selfCtorOnlyIdx) {
+                                        break;
+                                    }
                                     ASTPath rv(name);
                                     rv.bindings.type.set(ASTAbsolutePath(), ASTPathBindingType::make_TypeParameter({0xFFFF}));
                                     return rv;
@@ -846,6 +854,27 @@ default:
             for (const auto& v : nameContext) {
                 if (const auto* e = v.opt_Module()) {
                     rv.nameContext.push_back(Ent::make_Module(*e));
+                }
+            }
+            // An item nested in a method still reaches the `Self` constructor:
+            // rustc deprecated that but still accepts it, and only where the
+            // outer item is not generic -- a generic there would name a
+            // parameter this item does not have. `Self` as a type is not
+            // carried over, so only a value lookup answers here.
+            if (const auto* selfTy = this->getSelfOpt()) {
+                if (*selfTy && (*selfTy)->isPath()) {
+                    const auto& path = (*selfTy)->path();
+                    bool isConcrete = true;
+                    // A local path is a bare name, so it carries no arguments.
+                    if (!path.cls.is_Local()) {
+                        for (const auto& node : path.nodes()) {
+                            isConcrete = isConcrete && node.args().isEmpty();
+                        }
+                    }
+                    if (isConcrete) {
+                        rv.selfCtorOnlyIdx = rv.nameContext.size();
+                        rv.nameContext.push_back(Ent::make_ConcreteSelf(const_cast<ASTType**>(selfTy)));
+                    }
                 }
             }
             return rv;

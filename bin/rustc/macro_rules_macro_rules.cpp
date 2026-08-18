@@ -3182,10 +3182,14 @@ struct RuleParseState {
     struct NameState {
         unsigned idx;
         std::vector<unsigned> loops;
+        /// Where the name was written. Two metavariables of the same name are
+        /// only distinct if they came from different expansions.
+        Ident::Hygiene hygiene;
     };
 
 private:
-    std::map<RcString, NameState> names;
+    std::map<RcString, std::vector<NameState>> names;
+    unsigned nextNameIndex;
 
     /// Next loop identifier
     unsigned nextLoopIndex;
@@ -3195,27 +3199,38 @@ private:
 public:
     RuleParseState()
         : names()
+        , nextNameIndex(0)
         , nextLoopIndex(0)
         , loopStack()
     {
     }
 
-    unsigned addName(const RcString& name) {
-        unsigned idx = this->names.size();
-        assert(this->names.count(name) == 0);
-        DEBUG(name << " #" << idx << " @ [" << loopStack << "]");
-        auto& e = this->names[name];
-        e.idx = idx;
-        e.loops = this->loopStack;
+    unsigned addName(const Ident& ident) {
+        unsigned idx = this->nextNameIndex++;
+        auto& list = this->names[ident.name];
+        for (const auto& e : list) {
+            // The same name from the same place twice really is a duplicate.
+            assert(e.hygiene != ident.hygiene);
+        }
+        DEBUG(ident.name << " #" << idx << " @ [" << loopStack << "]");
+        list.push_back(NameState{idx, this->loopStack, ident.hygiene});
         return idx;
     }
 
-    const NameState* findName(const RcString& name) const {
-        auto it = this->names.find(name);
-        if (it == this->names.end()) {
+    const NameState* findName(const Ident& ident) const {
+        auto it = this->names.find(ident.name);
+        if (it == this->names.end() || it->second.empty()) {
             return nullptr;
         }
-        return &it->second;
+        // Prefer the one written in the same place; a single candidate answers
+        // whatever context asks, which is what a name that never came through
+        // another macro needs.
+        for (const auto& e : it->second) {
+            if (e.hygiene == ident.hygiene) {
+                return &e;
+            }
+        }
+        return &it->second.front();
     }
 
     unsigned openLoop() {
@@ -3276,12 +3291,13 @@ public:
                         }
                     case TOK_UNDERSCORE:
                     case TOK_IDENT: {
-                        auto name = tok.type() == TOK_IDENT ? tok.ident().name : (tok.type() == TOK_UNDERSCORE ? RcString() : RcString::newInterned(tok.toStr()));
+                        auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(tok.type() == TOK_UNDERSCORE ? RcString() : RcString::newInterned(tok.toStr()));
+                        const auto& name = nameIdent.name;
                         GET_CHECK_TOK(tok, lex, TOK_COLON);
                         GET_CHECK_TOK(tok, lex, TOK_IDENT);
                         RcString type = tok.ident().name;
 
-                        auto idx = state.addName(name);
+                        auto idx = state.addName(nameIdent);
 
                         auto sp = lex.endSpan(ps);
                         MacroPatEnt::Type ty;
@@ -3701,9 +3717,10 @@ default:
                     if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
                         CHECK_TOK(tok, TOK_IDENT);
                     }
-                    auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
+                    auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
+                    const auto& name = nameIdent.name;
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    const auto* ns = state.findName(name);
+                    const auto* ns = state.findName(nameIdent);
                     if (!ns) {
                         TODO(lex.pointSpan(), "Handle ${ignore(" << name << ")} - Missing");
                     }
@@ -3725,7 +3742,8 @@ default:
                     if (!(tok.type() == TOK_IDENT || Token::typeIsRword(tok.type()))) {
                         CHECK_TOK(tok, TOK_IDENT);
                     }
-                    auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
+                    auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
+                    const auto& name = nameIdent.name;
                     // `${count($x, depth)}` counts the repetitions `depth`
                     // levels above the values rather than the values.
                     unsigned int countDepth = 0;
@@ -3733,7 +3751,7 @@ default:
                         countDepth = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
                     }
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    const auto* ns = state.findName(name);
+                    const auto* ns = state.findName(nameIdent);
                     if (!ns) {
                         TODO(lex.pointSpan(), "Handle ${count(" << name << ")} - Missing");
                     }
@@ -3768,8 +3786,9 @@ default:
                                 ents.push_back(MacroExpansionConcatEnt(NAMEDVALUE_MAGIC_CRATE));
                             } else {
                                 GET_CHECK_TOK(tok, lex, TOK_IDENT);
-                                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
-                                const auto* ns = state.findName(name);
+                                auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
+                                const auto& name = nameIdent.name;
+                                const auto* ns = state.findName(nameIdent);
                                 if (!ns) {
                                     TODO(lex.pointSpan(), "concat - unmapped name");
                                 } else {
@@ -3812,8 +3831,9 @@ default:
                 ret.push_back(MacroExpansionEnt(NAMEDVALUE_MAGIC_CRATE));
             } else if (tok.type() == TOK_IDENT || Token::typeIsRword(tok.type())) {
                 // Look up the named parameter in the list of param names for this arm
-                auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
-                const auto* ns = state.findName(name);
+                auto nameIdent = tok.type() == TOK_IDENT ? tok.ident() : Ident(RcString::newInterned(tok.toStr()));
+                const auto& name = nameIdent.name;
+                const auto* ns = state.findName(nameIdent);
                 if (!ns) {
                     // NOTE: `error-chain`'s quick_error macro has an arm which refers to an undefined metavar.
                     // - Would emit a warning and use a marker index, but that's FAR too noisy
