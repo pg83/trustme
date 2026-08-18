@@ -1514,13 +1514,11 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 }
                 const char* desc = argv[++i];
                 const char* pos = ::std::strchr(desc, '=');
-                if (pos == nullptr) {
-                    ::std::cerr << "--extern takes an argument of the format name=path" << ::std::endl;
-                    exit(1);
-                }
-
-                auto name = ::std::string(desc, pos);
-                auto path = ::std::string(pos + 1);
+                // `--extern name` with no path names a crate to load from the
+                // search directories, the sysroot included; only `name=path`
+                // says where it is.
+                auto name = pos ? ::std::string(desc, pos) : ::std::string(desc);
+                auto path = pos ? ::std::string(pos + 1) : ::std::string();
                 this->crateOverrides.insert(::std::make_pair(mv$(name), mv$(path)));
             }
             // --crate-tag <name>  >> Specify a version/identifier suffix for the crate

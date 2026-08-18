@@ -114,7 +114,7 @@ RcString ASTCrate::loadExternCrate(Settings& settings, Span sp, const RcString& 
     ::std::string path;
     auto it = settings.crateOverrides.find(name.c_str());
     // If there's no filename, and this crate name is in the override list - use an the explicit path
-    if (basename == "" && it != settings.crateOverrides.end()) {
+    if (basename == "" && it != settings.crateOverrides.end() && it->second != "") {
         path = it->second;
         if (!::std::ifstream(path).good()) {
             ERROR(sp, E0000, "Unable to open crate '" << name << "' at path " << path);
