@@ -86,7 +86,7 @@ public:
     /// <summary>
     /// Return the number of times this level of a given name/variable will loop
     /// </summary>
-    unsigned int getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) const;
+    unsigned int getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth = 0) const;
 
     /// Increment the number of times a particular fragment will be used
     void incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
@@ -262,7 +262,42 @@ unsigned int ParameterMappings::getLoopRepeats(const Span& sp, const ::std::vect
     BUG(sp, "Loop " << loopIdx << " cannot find an iteration count for path [" << iterations << "]");
 }
 
-unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) const {
+namespace {
+    /// The number of levels between a layer and the values under it, counting
+    /// the layer of values itself as one.
+    template <typename Layer>
+    unsigned int captureLayerDepth(const Layer& layer) {
+        unsigned int rv = 1;
+        if (const auto* nested = layer.opt_Nested()) {
+            unsigned int deepest = 0;
+            for (const auto& child : *nested) {
+                deepest = ::std::max(deepest, captureLayerDepth(child));
+            }
+            rv += deepest;
+        }
+        return rv;
+    }
+
+    /// The number of nodes `level` levels below a layer, where the layer's own
+    /// entries are level one.
+    template <typename Layer>
+    unsigned int captureLayerNodesAt(const Layer& layer, unsigned int level) {
+        if (const auto* vals = layer.opt_Vals()) {
+            return level == 1 ? static_cast<unsigned int>(vals->size()) : 0;
+        }
+        const auto& nested = layer.as_Nested();
+        if (level == 1) {
+            return static_cast<unsigned int>(nested.size());
+        }
+        unsigned int rv = 0;
+        for (const auto& child : nested) {
+            rv += captureLayerNodesAt(child, level - 1);
+        }
+        return rv;
+    }
+}
+
+unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx, unsigned int depth) const {
     DEBUG("(iterations=[" << iterations << "], name_idx=" << nameIdx << ")");
     auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
@@ -289,15 +324,14 @@ unsigned int ParameterMappings::getVariableCount(const Span& sp, const ::std::ve
             }
         }
     }
-    TU_MATCH_HDRA( (*layer), { )
-    TU_ARMA(Vals, e) {
-            return e.size();
-        }
-        TU_ARMA(Nested, e) {
-            return e.size();
-        }
+    // `${count($x, depth)}` counts the repetitions `depth` levels above the
+    // values: at depth zero every value, and at the deepest level the entries
+    // of this layer.
+    const unsigned int levels = captureLayerDepth(*layer);
+    if (depth >= levels) {
+        depth = levels - 1;
     }
-    throw "";
+    return captureLayerNodesAt(*layer, levels - depth);
 }
 
 void ParameterMappings::incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
@@ -428,6 +462,23 @@ public:
 
     const ::std::vector<unsigned int> iterations() const {
         return iterations_;
+    }
+
+    /// The iteration index of the loop `depth` levels out from the innermost
+    /// one, or `~0u` if there is no such loop.
+    unsigned int loopIndexAt(unsigned int depth) const {
+        if (depth >= iterations_.size()) {
+            return ~0u;
+        }
+        return iterations_[iterations_.size() - 1 - depth];
+    }
+
+    /// How many times that loop runs.
+    unsigned int loopLengthAt(unsigned int depth) const {
+        if (depth + 1 >= offsets.size()) {
+            return ~0u;
+        }
+        return offsets[offsets.size() - 1 - depth].maxIndex;
     }
 
     unsigned int topPos() const {
@@ -2346,10 +2397,12 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
             TU_ARMA(NamedValue, e) {
                 switch (e & ~NAMEDVALUE_VALMASK) {
                     case 0:
-                    case NAMEDVALUE_TY_IGNORE:
                         // Increment a counter in `bound_tts`
                         boundTts.incCount(Span(), state.iterations(), e & NAMEDVALUE_VALMASK);
                         break;
+                    // `${ignore($x)}` expands to nothing and takes no fragment
+                    // with it, so it uses none.
+                    case NAMEDVALUE_TY_IGNORE:
                     case NAMEDVALUE_TY_MAGIC:
                     default:
                         break;
@@ -2453,15 +2506,16 @@ Token MacroExpander::realGetToken() {
                 switch (e & ~NAMEDVALUE_VALMASK) {
                     default:
                         BUG(this->pointSpan(), "Unknown macro metavar - 0x" << std::hex << e);
-                    case NAMEDVALUE_TY_COUNT: { // `${count(VarName)}`
-                        auto count = mappings_.getVariableCount(this->pointSpan(), state.iterations(), e & NAMEDVALUE_VALMASK);
+                    case NAMEDVALUE_TY_COUNT: { // `${count(VarName[, depth])}`
+                        const auto value = e & NAMEDVALUE_VALMASK;
+                        auto count = mappings_.getVariableCount(this->pointSpan(), state.iterations(), value & NAMEDVALUE_COUNT_IDXMASK, value >> NAMEDVALUE_COUNT_DEPTHSHIFT);
                         return Token(U128(count), CORETYPE_ANY);
                         break;
                     }
                     case NAMEDVALUE_TY_IGNORE: { // `${ignore(VarName)}`
-                        auto* frag = mappings_.get(this->pointSpan(), state.iterations(), e & NAMEDVALUE_VALMASK);
-                        ASSERT_BUG(this->pointSpan(), frag, "Cannot find '" << (e & NAMEDVALUE_VALMASK) << "' for " << state.iterations());
-                        // - Ignore
+                        // Expands to nothing: it only says which variable
+                        // drives the repetition it is in, and a variable that
+                        // repeats deeper than here still names one.
                         break;
                     }
                     case NAMEDVALUE_TY_MAGIC: // NAMEDVALUE_TY_MAGIC
@@ -2481,8 +2535,21 @@ Token MacroExpander::realGetToken() {
                             case NAMEDVALUE_MAGIC_INDEX:
                                 ASSERT_BUG(this->pointSpan(), !state.iterations().empty(), "${index()} with no active loop");
                                 return Token(U128(state.iterations().back()), CORETYPE_ANY);
-                            default:
+                            default: {
+                                const auto kind = e & ~NAMEDVALUE_MAGIC_DEPTHMASK;
+                                const auto depth = e & NAMEDVALUE_MAGIC_DEPTHMASK;
+                                if (kind == NAMEDVALUE_MAGIC_INDEX_AT) {
+                                    auto idx = state.loopIndexAt(depth);
+                                    ASSERT_BUG(this->pointSpan(), idx != ~0u, "${index(" << depth << ")} with no such loop");
+                                    return Token(U128(idx), CORETYPE_ANY);
+                                }
+                                if (kind == NAMEDVALUE_MAGIC_LEN_AT) {
+                                    auto len = state.loopLengthAt(depth);
+                                    ASSERT_BUG(this->pointSpan(), len != ~0u, "${len(" << depth << ")} with no such loop");
+                                    return Token(U128(len), CORETYPE_ANY);
+                                }
                                 BUG(this->pointSpan(), "Unknown macro metavar - 0x" << std::hex << e);
+                            }
                         }
                         break;
                     case 0: {
@@ -3565,10 +3632,9 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
 
                     DEBUG("$" << name << " #" << ns->idx << " [" << ns->loops << "]");
 
-                    // If the current loop depth is smaller than the stack for this variable, then error
-                    if (loopDepth < ns->loops.size()) {
-                        ERROR(lex.pointSpan(), E0000, "Variable $" << name << " is still repeating at this depth (" << loopDepth << " < " << ns->loops.size() << ")");
-                    }
+                    // `${ignore($x)}` expands to nothing: it only says which
+                    // variable drives the repetition it is in, so a variable
+                    // that repeats deeper than here is still a valid answer.
 
                     if (varUsagePtr) {
                         varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
@@ -3582,6 +3648,12 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                         CHECK_TOK(tok, TOK_IDENT);
                     }
                     auto name = tok.type() == TOK_IDENT ? tok.ident().name : RcString::newInterned(tok.toStr());
+                    // `${count($x, depth)}` counts the repetitions `depth`
+                    // levels above the values rather than the values.
+                    unsigned int countDepth = 0;
+                    if (lex.getTokenIf(TOK_COMMA)) {
+                        countDepth = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
+                    }
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
                     const auto* ns = state.findName(name);
                     if (!ns) {
@@ -3597,11 +3669,17 @@ void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpans
                     if (varUsagePtr) {
                         varUsagePtr->insert(::std::make_pair(ns->idx, ContentLoopVariableUse(ns->loops)));
                     }
-                    ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | ns->idx));
-                } else if (ident == "index") {
+                    ret.push_back(MacroExpansionEnt(NAMEDVALUE_TY_COUNT | (countDepth << NAMEDVALUE_COUNT_DEPTHSHIFT) | ns->idx));
+                } else if (ident == "index" || ident == "len") {
+                    // Both name a loop: `${index()}` and `${len()}` the
+                    // innermost one, and an argument counts levels out from it.
                     lex.getTokenCheck(TOK_PAREN_OPEN);
-                    lex.getTokenCheck(TOK_PAREN_CLOSE);
-                    ret.push_back(MacroExpansionEnt(NAMEDVALUE_MAGIC_INDEX));
+                    unsigned int loopDepthArg = 0;
+                    if (!lex.getTokenIf(TOK_PAREN_CLOSE)) {
+                        loopDepthArg = static_cast<unsigned int>(lex.getTokenCheck(TOK_INTEGER).intval().truncateU64());
+                        lex.getTokenCheck(TOK_PAREN_CLOSE);
+                    }
+                    ret.push_back(MacroExpansionEnt((ident == "index" ? NAMEDVALUE_MAGIC_INDEX_AT : NAMEDVALUE_MAGIC_LEN_AT) + loopDepthArg));
                 } else if (ident == "concat") {
                     ::std::vector<MacroExpansionConcatEnt> ents;
                     lex.getTokenCheck(TOK_PAREN_OPEN);

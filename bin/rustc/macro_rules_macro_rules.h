@@ -39,8 +39,16 @@ static const unsigned int NAMEDVALUE_VALMASK = ((1 << 30) - 1);
 static const unsigned int NAMEDVALUE_TY_MAGIC = 1 << 30;
 static const unsigned int NAMEDVALUE_MAGIC_CRATE = NAMEDVALUE_TY_MAGIC | 0;
 static const unsigned int NAMEDVALUE_MAGIC_INDEX = NAMEDVALUE_TY_MAGIC | 1;
+/// `${index(depth)}` and `${len(depth)}`, which name the loop `depth` levels
+/// out from the innermost active one. The depth is the low byte.
+static const unsigned int NAMEDVALUE_MAGIC_INDEX_AT = NAMEDVALUE_TY_MAGIC | 0x100;
+static const unsigned int NAMEDVALUE_MAGIC_LEN_AT = NAMEDVALUE_TY_MAGIC | 0x200;
+static const unsigned int NAMEDVALUE_MAGIC_DEPTHMASK = 0xFF;
 static const unsigned int NAMEDVALUE_TY_IGNORE = 2 << 30;
 static const unsigned int NAMEDVALUE_TY_COUNT = 3 << 30;
+/// `${count($x, depth)}` keeps the depth above the variable index.
+static const unsigned int NAMEDVALUE_COUNT_DEPTHSHIFT = 22;
+static const unsigned int NAMEDVALUE_COUNT_IDXMASK = (1u << NAMEDVALUE_COUNT_DEPTHSHIFT) - 1;
 
 /// Matching pattern entry
 struct MacroPatEnt {
