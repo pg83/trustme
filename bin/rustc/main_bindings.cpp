@@ -168,6 +168,7 @@ struct ProgramParams {
         STAGE_RESOLVE,
         STAGE_TYPECK,
         STAGE_BORROWCK,
+        STAGE_HIR,
         STAGE_MIR,
         STAGE_ALL,
     } lastStage = STAGE_ALL;
@@ -734,6 +735,10 @@ static int compile(int argc, char* argv[]) {
         // TODO: Expand vtables here?
         // - Some parts of constant evaluate require it
         // Basic constant evalulation (intergers/floats only)
+        if (params.lastStage == ProgramParams::STAGE_HIR) {
+            return 0;
+        }
+
         CompilePhaseV("Constant Evaluate", [&]() {
             ConvertHIRConstantEvaluate(wb, *hirCrate);
         });
@@ -1418,6 +1423,8 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             this->lastStage = STAGE_RESOLVE;
                         } else if (optval == "typeck") {
                             this->lastStage = STAGE_TYPECK;
+                        } else if (optval == "hir") {
+                            this->lastStage = STAGE_HIR;
                         } else if (optval == "mir") {
                             this->lastStage = STAGE_MIR;
                         } else {
@@ -1438,6 +1445,10 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                             this->lastStage = STAGE_PARSE;
                         } else if (form == "expanded" || form == "ast-tree") {
                             this->lastStage = STAGE_EXPAND;
+                        } else if ((form == "hir" || form == "hir-tree") && optval.find("typed") == ::std::string::npos) {
+                            // The HIR is printed once names are resolved; only
+                            // the `typed` variant needs the types as well.
+                            this->lastStage = STAGE_HIR;
                         } else {
                             // `hir`, `thir` and `mir` forms need the passes
                             // that build them, so they run the whole compiler.
