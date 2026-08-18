@@ -4,7 +4,7 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-Snapshot: 2026-08-18, commit `1b17e3320`. The numbers below come from rerunning
+Snapshot: 2026-08-18, commit `23a249303`. The numbers below come from rerunning
 the nodes that failed the last full gate, not from a fresh gate. The gate
 itself ran at commit `79582dd3f` in the clang Nix environment on all 78
 available cores:
@@ -27,45 +27,46 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 
 All 631 failed nodes were rerun independently inside the same clang Nix
 environment, most recently at the commit above. The authoritative rerun data is
-in `/tmp/trustme-reclass-20260818b`; classified records are in
-`/tmp/trustme-classification-20260818b`. Every count below is measured from
+in `/tmp/trustme-reclass-20260818c`; classified records are in
+`/tmp/trustme-classification-20260818c`. Every count below is measured from
 that rerun, not decremented by hand.
 
-Reruns and the two whole-group sweeps (`rust_ui_compile`, `rust_1_90`) are the
-only regression check there is between full gates, and they earn their keep: the
-sweeps found two regressions from this session's own work (a rejected
-`#![recursion_limit = "0"]`, and a dropped `#[cfg]` on a first parameter).
+Reruns and the whole-group sweeps are the only regression check there is
+between full gates, and they earn their keep: a sweep of `rust_ui_compile
+rust_1_90 rust_reference rust_by_example gccrs gccrs_compile miri` found the
+one regression this session's parser work introduced (`impl<T> ::path::Trait`
+read as a qualified path), which a rerun of the failing set could not have.
 
 | result | tests |
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 277 |
-| fixed, or no longer reproducing, since the gate | 354 |
+| still failing on the current tree | 266 |
+| fixed, or no longer reproducing, since the gate | 365 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 97 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 66 |
+| accepted Rust rejected by the compiler or driver | 92 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 62 |
 | wrong runtime behaviour, panic, abort, or output | 38 |
 | missing rejection or diagnostic | 53 |
-| generated C++ or link failure | 15 |
+| generated C++ or link failure | 13 |
 | stable timeout | 8 |
 
 ## P0: accepted Rust rejected by the front end
 
-All 97 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 92 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
 | type checking, HIR lowering, and resolution | 74 | trait/impl selection 30; type mismatch 16; unresolved type/value names 5 |
-| parser | 19 | unexpected-token failures through the three `parse_parseerror.cpp` routes |
+| parser | 14 | unexpected-token failures through the three `parse_parseerror.cpp` routes |
 | macro and attribute expansion | 1 | |
 | CTFE and MIR lowering | 2 | |
 | crate/driver handling | 1 | |
 
-The 19 parser failures must be regrouped by syntax family before changing the
+The 14 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are never patterns (3) and a long tail of
 one- and two-test spellings. Grouping by test directory finds them faster than
@@ -141,13 +142,13 @@ item is not affected -- it takes a `$vis` fragment now.
 
 ## P1: internal compiler failures
 
-There are 66 compiler-internal failures in 54 stable signatures.
+There are 62 compiler-internal failures in 53 stable signatures.
 
 | compiler area | tests |
 |---|---:|
-| type checking, HIR lowering, and name resolution | 30 |
+| type checking, HIR lowering, and name resolution | 29 |
 | MIR lowering, CTFE MIR, and optimisation | 16 |
-| translation and code generation | 10 |
+| translation and code generation | 7 |
 | macro expansion | 5 |
 | routed by a bare `ASSERT`/signal line with no file attribution | 4 |
 | parser | 1 |
@@ -158,8 +159,8 @@ The multi-test signatures are:
 |---|---:|
 | `ASSERT` with no backtrace | 2 |
 | `SIGSEGV` with no backtrace | 2 |
-| eight two-test signatures | 16 |
-| forty-six one-test signatures | 46 |
+| five two-test signatures | 10 |
+| forty-eight one-test signatures | 48 |
 
 The line numbers in a signature move with every commit that touches the file:
 the ones here are read from the classification named above, and are worth
