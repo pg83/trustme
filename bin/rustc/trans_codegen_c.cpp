@@ -5947,6 +5947,18 @@ namespace {
                 };
                 if (this->typeIsBadZst(tyDst)) {
                     of << "/* zst */";
+                }
+                // A transmute keeps the size, so a zero-sized source has a
+                // zero-sized destination and no bytes to copy. The source has
+                // no storage to copy them from either, but C++ gives an empty
+                // struct a byte, so clear the destination rather than leave it
+                // holding whatever was in that byte.
+                else if (this->typeIsBadZst(tySrc)) {
+                    of << "memset( &";
+                    emitLvalue(e.retVal);
+                    of << ", 0, sizeof(";
+                    emitCtype(tyDst);
+                    of << "))";
                 } else if (e.args.at(0).is_Constant()) {
                     of << "{ ";
                     emitCtype(tySrc, FMT_CB(s, s << "v";));
