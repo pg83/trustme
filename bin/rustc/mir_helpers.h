@@ -191,8 +191,20 @@ extern bool visitMirLvalues(const MIRRValue& rval, ::std::function<bool(const MI
 extern bool visitMirLvalues(const MIRStatement& stmt, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
 extern bool visitMirLvalues(const MIRTerminator& term, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb);
 
-extern void visitTerminatorTargetMut(MIRTerminator& term, ::std::function<void(MIRBasicBlockId&)> cb);
-extern void visitTerminatorTarget(const MIRTerminator& term, ::std::function<void(const MIRBasicBlockId&)> cb);
+/// Callbacks for visitTerminatorTarget(Mut): invoked once per branch target
+/// of the terminator. An interface instead of std::function - the visit is
+/// called for every terminator of every block in several optimise passes,
+/// and a std::function wrapper heap-allocates on each call.
+struct MIRTargetVisitorMut {
+    virtual void visitTarget(MIRBasicBlockId& target) = 0;
+};
+
+struct MIRTargetVisitor {
+    virtual void visitTarget(const MIRBasicBlockId& target) = 0;
+};
+
+extern void visitTerminatorTargetMut(MIRTerminator& term, MIRTargetVisitorMut& cb);
+extern void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb);
 
 template <typename Inner>
 class MIRDecMut {

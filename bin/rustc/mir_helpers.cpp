@@ -646,22 +646,39 @@ bool visitMirLvalues(const MIRTerminator& term, ::std::function<bool(const MIRLV
     return v.visitTerminator(term);
 }
 
-void visitTerminatorTargetMut(MIRTerminator& term, ::std::function<void(MIRBasicBlockId&)> cb) {
+void visitTerminatorTargetMut(MIRTerminator& term, MIRTargetVisitorMut& cb) {
     struct TermCbVisitorMut: public MIRVisitorMut {
-        ::std::function<void(MIRBasicBlockId&)> cb;
+        MIRTargetVisitorMut& cb;
+
+        explicit TermCbVisitorMut(MIRTargetVisitorMut& cb)
+            : cb(cb)
+        {
+        }
 
         bool visitBlockId(MIRBasicBlockId& x) override {
-            cb(x);
+            cb.visitTarget(x);
             return false;
         }
-    } v;
+    } v{cb};
 
-    v.cb = std::move(cb);
     v.visitTerminator(term);
 }
 
-void visitTerminatorTarget(const MIRTerminator& term, ::std::function<void(const MIRBasicBlockId&)> cb) {
-    visitTerminatorTargetMut(const_cast<MIRTerminator&>(term), cb);
+void visitTerminatorTarget(const MIRTerminator& term, MIRTargetVisitor& cb) {
+    struct ConstAdapter final: public MIRTargetVisitorMut {
+        MIRTargetVisitor& cb;
+
+        explicit ConstAdapter(MIRTargetVisitor& cb)
+            : cb(cb)
+        {
+        }
+
+        void visitTarget(MIRBasicBlockId& target) override {
+            cb.visitTarget(target);
+        }
+    } adapter{cb};
+
+    visitTerminatorTargetMut(const_cast<MIRTerminator&>(term), adapter);
 }
 
 // --------------------------------------------------------------------

@@ -2485,11 +2485,23 @@ default:
 
             cb(bb, block);
 
-            visitTerminatorTarget(block.terminator, [&](auto e) {
-                if (!visited[e]) {
-                    toVisit.push_back(e);
+            struct QueueUnvisited final: public MIRTargetVisitor {
+                const ::std::vector<bool>& visited;
+                ::std::vector<MIRBasicBlockId>& toVisit;
+
+                QueueUnvisited(const ::std::vector<bool>& visited, ::std::vector<MIRBasicBlockId>& toVisit)
+                    : visited(visited)
+                    , toVisit(toVisit)
+                {
                 }
-            });
+
+                void visitTarget(const MIRBasicBlockId& target) override {
+                    if (!visited[target]) {
+                        toVisit.push_back(target);
+                    }
+                }
+            } queueUnvisited{visited, toVisit};
+            visitTerminatorTarget(block.terminator, queueUnvisited);
         }
     }
 
@@ -2546,16 +2558,32 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
 
     // >> Replace targets that point to a block that is just a goto
     for (auto& block : fcn.blocks) {
-        visitTerminatorTargetMut(block.terminator, [&](auto& e) {
-            if (&fcn.blocks[e] != &block) {
-                auto newBb = H::getNewTarget(state, e);
-                if (newBb != e) {
-                    DEBUG("BB" << &block - fcn.blocks.data() << "/TERM: Rewrite bb reference " << e << " => " << newBb);
-                    e = newBb;
-                    changed = true;
+        struct RewriteGotoChains final: public MIRTargetVisitorMut {
+            const MIRTypeResolve& state;
+            MIRFunction& fcn;
+            const MIRBasicBlock& block;
+            bool& changed;
+
+            RewriteGotoChains(const MIRTypeResolve& state, MIRFunction& fcn, const MIRBasicBlock& block, bool& changed)
+                : state(state)
+                , fcn(fcn)
+                , block(block)
+                , changed(changed)
+            {
+            }
+
+            void visitTarget(MIRBasicBlockId& target) override {
+                if (&fcn.blocks[target] != &block) {
+                    auto newBb = H::getNewTarget(state, target);
+                    if (newBb != target) {
+                        DEBUG("BB" << &block - fcn.blocks.data() << "/TERM: Rewrite bb reference " << target << " => " << newBb);
+                        target = newBb;
+                        changed = true;
+                    }
                 }
             }
-        });
+        } rewriteGotoChains{state, fcn, block, changed};
+        visitTerminatorTargetMut(block.terminator, rewriteGotoChains);
 
         // Handle chained switches of the same value
         // - Happens in libcore's atomics
@@ -2616,12 +2644,26 @@ bool MIROptimiseBlockSimplify(MIRTypeResolve& state, MIRFunction& fcn) {
             visited[bb] = true;
             const auto& block = fcn.blocks[bb];
 
-            visitTerminatorTarget(block.terminator, [&](const auto& e) {
-                if (!visited[e]) {
-                    toVisit.push_back(e);
+            struct CountUses final: public MIRTargetVisitor {
+                const ::std::vector<bool>& visited;
+                ::std::vector<MIRBasicBlockId>& toVisit;
+                ::std::vector<unsigned>& uses;
+
+                CountUses(const ::std::vector<bool>& visited, ::std::vector<MIRBasicBlockId>& toVisit, ::std::vector<unsigned>& uses)
+                    : visited(visited)
+                    , toVisit(toVisit)
+                    , uses(uses)
+                {
                 }
-                uses[e]++;
-            });
+
+                void visitTarget(const MIRBasicBlockId& target) override {
+                    if (!visited[target]) {
+                        toVisit.push_back(target);
+                    }
+                    uses[target]++;
+                }
+            } countUses{visited, toVisit, uses};
+            visitTerminatorTarget(block.terminator, countUses);
         }
 
         unsigned int i = 0;
@@ -3892,9 +3934,19 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
     {
         std::vector<unsigned int> incomingEdges(fcn.blocks.size());
         for (const auto& block : fcn.blocks) {
-            visitTerminatorTarget(block.terminator, [&](const auto& target) {
-                incomingEdges[target]++;
-            });
+            struct CountIncoming final: public MIRTargetVisitor {
+                ::std::vector<unsigned int>& incomingEdges;
+
+                explicit CountIncoming(::std::vector<unsigned int>& incomingEdges)
+                    : incomingEdges(incomingEdges)
+                {
+                }
+
+                void visitTarget(const MIRBasicBlockId& target) override {
+                    incomingEdges[target]++;
+                }
+            } countIncoming{incomingEdges};
+            visitTerminatorTarget(block.terminator, countIncoming);
         }
         std::vector<unsigned int> acyclicBlocks;
         acyclicBlocks.reserve(fcn.blocks.size());
@@ -3904,11 +3956,23 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
             }
         }
         for (size_t i = 0; i < acyclicBlocks.size(); i++) {
-            visitTerminatorTarget(fcn.blocks[acyclicBlocks[i]].terminator, [&](const auto& target) {
-                if (--incomingEdges[target] == 0) {
-                    acyclicBlocks.push_back(target);
+            struct PeelAcyclic final: public MIRTargetVisitor {
+                ::std::vector<unsigned int>& incomingEdges;
+                ::std::vector<unsigned int>& acyclicBlocks;
+
+                PeelAcyclic(::std::vector<unsigned int>& incomingEdges, ::std::vector<unsigned int>& acyclicBlocks)
+                    : incomingEdges(incomingEdges)
+                    , acyclicBlocks(acyclicBlocks)
+                {
                 }
-            });
+
+                void visitTarget(const MIRBasicBlockId& target) override {
+                    if (--incomingEdges[target] == 0) {
+                        acyclicBlocks.push_back(target);
+                    }
+                }
+            } peelAcyclic{incomingEdges, acyclicBlocks};
+            visitTerminatorTarget(fcn.blocks[acyclicBlocks[i]].terminator, peelAcyclic);
         }
 
         if (acyclicBlocks.size() != fcn.blocks.size()) {
@@ -3930,14 +3994,30 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                 std::vector<std::vector<unsigned>> succs(nBlocks);
                 for (const auto& block : fcn.blocks) {
                     unsigned bbIdx = &block - fcn.blocks.data();
-                    visitTerminatorTarget(block.terminator, [&](const auto& target) {
-                        if (target < nBlocks) {
-                            succs[bbIdx].push_back(target);
-                            if (target == bbIdx) {
-                                loops[bbIdx] = true; // self-edge
+                    struct CollectSuccs final: public MIRTargetVisitor {
+                        size_t nBlocks;
+                        unsigned bbIdx;
+                        ::std::vector<::std::vector<unsigned>>& succs;
+                        ::std::vector<bool>& loops;
+
+                        CollectSuccs(size_t nBlocks, unsigned bbIdx, ::std::vector<::std::vector<unsigned>>& succs, ::std::vector<bool>& loops)
+                            : nBlocks(nBlocks)
+                            , bbIdx(bbIdx)
+                            , succs(succs)
+                            , loops(loops)
+                        {
+                        }
+
+                        void visitTarget(const MIRBasicBlockId& target) override {
+                            if (target < nBlocks) {
+                                succs[bbIdx].push_back(target);
+                                if (target == bbIdx) {
+                                    loops[bbIdx] = true; // self-edge
+                                }
                             }
                         }
-                    });
+                    } collectSuccs{nBlocks, bbIdx, succs, loops};
+                    visitTerminatorTarget(block.terminator, collectSuccs);
                 }
 
                 struct Frame {
@@ -4311,13 +4391,31 @@ bool MIROptimiseCommonStatements(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
                 sources.push_back(bb2Idx);
             } else {
-                visitTerminatorTarget(blk.terminator, [&](const auto& dstIdx) {
-                    // If this terminator points to the current BB, don't attempt to merge
-                    if (dstIdx == bbIdx) {
-                        DEBUG(state << " BB" << bb2Idx << " doesn't end Goto - instead " << blk.terminator);
-                        skip = true;
+                struct CheckPointsBack final: public MIRTargetVisitor {
+                    const MIRTypeResolve& state;
+                    const MIRBasicBlock& blk;
+                    size_t bbIdx;
+                    size_t bb2Idx;
+                    bool& skip;
+
+                    CheckPointsBack(const MIRTypeResolve& state, const MIRBasicBlock& blk, size_t bbIdx, size_t bb2Idx, bool& skip)
+                        : state(state)
+                        , blk(blk)
+                        , bbIdx(bbIdx)
+                        , bb2Idx(bb2Idx)
+                        , skip(skip)
+                    {
                     }
-                });
+
+                    void visitTarget(const MIRBasicBlockId& target) override {
+                        // If this terminator points to the current BB, don't attempt to merge
+                        if (target == bbIdx) {
+                            DEBUG(state << " BB" << bb2Idx << " doesn't end Goto - instead " << blk.terminator);
+                            skip = true;
+                        }
+                    }
+                } checkPointsBack{state, blk, bbIdx, bb2Idx, skip};
+                visitTerminatorTarget(blk.terminator, checkPointsBack);
             }
         }
 
@@ -4444,9 +4542,19 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
                 add(statement.tag());
             }
             add(block.terminator.tag());
-            visitTerminatorTarget(block.terminator, [&](const auto& target) {
-                add(target);
-            });
+            struct HashTargets final: public MIRTargetVisitor {
+                decltype(add)& add;
+
+                explicit HashTargets(decltype(add)& add)
+                    : add(add)
+                {
+                }
+
+                void visitTarget(const MIRBasicBlockId& target) override {
+                    add(target);
+                }
+            } hashTargets{add};
+            visitTerminatorTarget(block.terminator, hashTargets);
             return rv;
         }
 
@@ -4604,9 +4712,19 @@ bool MIROptimiseUnifyBlocks(MIRTypeResolve& state, MIRFunction& fcn) {
             if (bb.terminator.isDead()) {
                 continue;
             }
-            visitTerminatorTargetMut(bb.terminator, [&](auto& te) {
-                patchTgt(te);
-            });
+            struct PatchTargets final: public MIRTargetVisitorMut {
+                decltype(patchTgt)& patchTgt;
+
+                explicit PatchTargets(decltype(patchTgt)& patchTgt)
+                    : patchTgt(patchTgt)
+                {
+                }
+
+                void visitTarget(MIRBasicBlockId& target) override {
+                    patchTgt(target);
+                }
+            } patchTargets{patchTgt};
+            visitTerminatorTargetMut(bb.terminator, patchTargets);
         }
 
         for (const auto& r : replacements) {
@@ -4642,17 +4760,35 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
             visited[bb] = true;
             const auto& block = fcn.blocks[bb];
 
-            visitTerminatorTarget(block.terminator, [&](const auto& idx) {
-                if (!visited[idx]) {
-                    toVisit.push_back(idx);
+            struct RecordOrigins final: public MIRTargetVisitor {
+                const ::std::vector<bool>& visited;
+                ::std::vector<MIRBasicBlockId>& toVisit;
+                ::std::vector<unsigned int>& blockUses;
+                ::std::vector<size_t>& blockOrigins;
+                MIRBasicBlockId bb;
+
+                RecordOrigins(const ::std::vector<bool>& visited, ::std::vector<MIRBasicBlockId>& toVisit, ::std::vector<unsigned int>& blockUses, ::std::vector<size_t>& blockOrigins, MIRBasicBlockId bb)
+                    : visited(visited)
+                    , toVisit(toVisit)
+                    , blockUses(blockUses)
+                    , blockOrigins(blockOrigins)
+                    , bb(bb)
+                {
                 }
-                if (blockUses[idx] == 0) {
-                    blockOrigins[idx] = bb;
-                } else {
-                    blockOrigins[idx] = SIZE_MAX;
+
+                void visitTarget(const MIRBasicBlockId& idx) override {
+                    if (!visited[idx]) {
+                        toVisit.push_back(idx);
+                    }
+                    if (blockUses[idx] == 0) {
+                        blockOrigins[idx] = bb;
+                    } else {
+                        blockOrigins[idx] = SIZE_MAX;
+                    }
+                    blockUses[idx]++;
                 }
-                blockUses[idx]++;
-            });
+            } recordOrigins{visited, toVisit, blockUses, blockOrigins, bb};
+            visitTerminatorTarget(block.terminator, recordOrigins);
         }
     }
 
@@ -7174,11 +7310,23 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
     ::std::vector<::std::vector<unsigned>> blockPreds(fcn.blocks.size());
     for (const auto& srcBb : fcn.blocks) {
         unsigned srcIdx = &srcBb - fcn.blocks.data();
-        visitTerminatorTarget(srcBb.terminator, [&](const auto& tgt) {
-            if (tgt < blockPreds.size()) {
-                blockPreds[tgt].push_back(srcIdx);
+        struct CollectPreds final: public MIRTargetVisitor {
+            ::std::vector<::std::vector<unsigned>>& blockPreds;
+            unsigned srcIdx;
+
+            CollectPreds(::std::vector<::std::vector<unsigned>>& blockPreds, unsigned srcIdx)
+                : blockPreds(blockPreds)
+                , srcIdx(srcIdx)
+            {
             }
-        });
+
+            void visitTarget(const MIRBasicBlockId& target) override {
+                if (target < blockPreds.size()) {
+                    blockPreds[target].push_back(srcIdx);
+                }
+            }
+        } collectPreds{blockPreds, srcIdx};
+        visitTerminatorTarget(srcBb.terminator, collectPreds);
     }
 
     ::std::vector<unsigned> localReads(fcn.locals.size(), 0);
@@ -7581,11 +7729,23 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         if (!visited[i]) {
             continue;
         }
-        visitTerminatorTargetMut(fcn.blocks[i].terminator, [&](auto& target) {
-            MIR_ASSERT(state, target < blockRewriteTable.size(), "Block target out of range - bb" << target);
-            MIR_ASSERT(state, blockRewriteTable[target] != ~0u, "Reachable block targets unreachable bb" << target);
-            target = blockRewriteTable[target];
-        });
+        struct ApplyRewriteTable final: public MIRTargetVisitorMut {
+            const MIRTypeResolve& state;
+            const ::std::vector<unsigned int>& blockRewriteTable;
+
+            ApplyRewriteTable(const MIRTypeResolve& state, const ::std::vector<unsigned int>& blockRewriteTable)
+                : state(state)
+                , blockRewriteTable(blockRewriteTable)
+            {
+            }
+
+            void visitTarget(MIRBasicBlockId& target) override {
+                MIR_ASSERT(state, target < blockRewriteTable.size(), "Block target out of range - bb" << target);
+                MIR_ASSERT(state, blockRewriteTable[target] != ~0u, "Reachable block targets unreachable bb" << target);
+                target = blockRewriteTable[target];
+            }
+        } applyRewriteTable{state, blockRewriteTable};
+        visitTerminatorTargetMut(fcn.blocks[i].terminator, applyRewriteTable);
     }
 
     auto newBlocksEnd = ::std::remove_if(fcn.blocks.begin(), fcn.blocks.end(), [&](const auto& bb) {
@@ -7719,9 +7879,19 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
         };
         newBlockList.push_back(mv$(fcn.blocks[idx]));
         newBlockList.back().statements.shrink_to_fit(); // Save some memory
-        visitTerminatorTargetMut(newBlockList.back().terminator, [&](auto& te) {
-            te = fixBbIdx(te);
-        });
+        struct Renumber final: public MIRTargetVisitorMut {
+            decltype(fixBbIdx)& fixBbIdx;
+
+            explicit Renumber(decltype(fixBbIdx)& fixBbIdx)
+                : fixBbIdx(fixBbIdx)
+            {
+            }
+
+            void visitTarget(MIRBasicBlockId& target) override {
+                target = fixBbIdx(target);
+            }
+        } renumber{fixBbIdx};
+        visitTerminatorTargetMut(newBlockList.back().terminator, renumber);
     }
     fcn.blocks = mv$(newBlockList);
 }

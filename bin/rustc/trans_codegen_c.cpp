@@ -2782,9 +2782,19 @@ default:
                 if (!cleanupBlocks.insert(blockIndex).second) {
                     continue;
                 }
-                visitTerminatorTarget(code->blocks[blockIndex].terminator, [&](const auto& target) {
-                    pendingCleanupBlocks.push_back(target);
-                });
+                struct QueueTargets final: public MIRTargetVisitor {
+                    ::std::vector<MIRBasicBlockId>& pending;
+
+                    explicit QueueTargets(::std::vector<MIRBasicBlockId>& pending)
+                        : pending(pending)
+                    {
+                    }
+
+                    void visitTarget(const MIRBasicBlockId& target) override {
+                        pending.push_back(target);
+                    }
+                } queueTargets{pendingCleanupBlocks};
+                visitTerminatorTarget(code->blocks[blockIndex].terminator, queueTargets);
             }
             if (!cleanupBlocks.empty()) {
                 emitCleanupRunner(localMirRes, cleanupBlocks);
