@@ -51,4 +51,6 @@ struct SampleTreeNode {
     int value = 0;
     SampleTree left;
     SampleTree right;
+
+    SampleTreeNode clone() const;
 };

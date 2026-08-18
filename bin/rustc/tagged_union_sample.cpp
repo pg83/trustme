@@ -7,3 +7,13 @@ int SampleCounted::liveCount = 0;
 int SampleValue::extraProbe() const {
     return static_cast<int>(tag()) * 100 + flags;
 }
+
+// The house clone() convention the generated SampleTree::clone() recurses
+// through.
+SampleTreeNode SampleTreeNode::clone() const {
+    SampleTreeNode out;
+    out.value = value;
+    out.left = left.clone();
+    out.right = right.clone();
+    return out;
+}

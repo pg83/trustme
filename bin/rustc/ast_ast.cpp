@@ -544,20 +544,6 @@ ASTItem ASTItem::clone() const {
     return os;
 }
 
-GenericParam GenericParam::clone() const {
-    TU_MATCH_HDRA( (*this), {)
-    TU_ARMA(None, e)
-        return e;
-        TU_ARMA(Lifetime, e)
-        return ASTLifetimeParam(e);
-        TU_ARMA(Type, e)
-        return ASTTypeParam(e);
-        TU_ARMA(Value, e)
-        return ASTValueParam(e);
-    }
-    throw "";
-}
-
 std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
     TU_MATCH_HDRA( (x), {)
     TU_ARMA(None, e)

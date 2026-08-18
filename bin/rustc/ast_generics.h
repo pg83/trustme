@@ -119,77 +119,8 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTValueParam& p);
 };
 
-TAGGED_UNION_EX(
-    GenericParam,
-    (),
-    None,
-    ((None, struct {}), (Lifetime, ASTLifetimeParam), (Type, ASTTypeParam), (Value, ASTValueParam)),
-    (, boundsStart(x.boundsStart), boundsEnd(x.boundsEnd)),
-    (boundsStart = x.boundsStart; boundsEnd = x.boundsEnd;),
-    (size_t boundsStart = 0; size_t boundsEnd = 0; GenericParam clone() const;
-
-     friend std::ostream & operator<<(std::ostream & os, const GenericParam & x);)
-);
-
-// HigherRankedBounds is defined in `types.h`
-
-TAGGED_UNION_EX(
-    ASTGenericBound,
-    (),
-    None,
-    ((None, struct {}),
-     // Lifetime bound: 'test must be valid for 'bound
-     (Lifetime,
-      struct {
-          ASTLifetimeRef test;
-          ASTLifetimeRef bound;
-      }),
-     // Type lifetime bound
-     (TypeLifetime,
-      struct {
-          ASTType* type;
-          ASTLifetimeRef bound;
-      }),
-     // Standard trait bound: "Type: [for<'a>] Trait"
-     (IsTrait,
-      struct {
-          Span span;
-          ASTHigherRankedBounds outerHrbs;
-          ASTType* type;
-          ASTHigherRankedBounds innerHrbs;
-          ASTPath trait;
-          ASTBoundConstness constness = ASTBoundConstness::Never;
-      }),
-     // Removed trait bound: "Type: ?Trait"
-     (MaybeTrait,
-      struct {
-          ASTType* type;
-          ASTPath trait;
-      }),
-     // Negative trait bound: "Type: !Trait"
-     (NotTrait,
-      struct {
-          ASTType* type;
-          ASTPath trait;
-      }),
-     // Type equality: "Type = Replacement"
-     (Equality,
-      struct {
-          ASTType* type;
-          ASTType* replacement;
-      })),
-
-    (, span(x.span)),
-    (span = x.span;),
-    (public :
-
-     Span span;
-
-     ASTGenericBound clone() const {
-         TU_MATCH(ASTGenericBound, ((*this)), (ent), (None, return make_None({});), (Lifetime, return make_Lifetime({ent.test, ent.bound});), (TypeLifetime, return make_TypeLifetime({ent.type->clone(), ent.bound});), (IsTrait, return make_IsTrait({ent.span, ent.outerHrbs, ent.type->clone(), ent.innerHrbs, ent.trait, ent.constness});), (MaybeTrait, return make_MaybeTrait({ent.type->clone(), ent.trait});), (NotTrait, return make_NotTrait({ent.type->clone(), ent.trait});), (Equality, return make_Equality({ent.type->clone(), ent.replacement->clone()});))
-         return ASTGenericBound();
-     })
-);
+// Definitions generated from ast_generics.tu.
+#include "ast_generics_tu.h"
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTGenericBound& x);
 

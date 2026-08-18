@@ -171,6 +171,31 @@ STD_TEST_SUITE(TaggedUnionIncomplete) {
         STD_INSIST(&w.as_Node() == payload);
     }
 
+    STD_TEST(generatedCloneIsDeep) {
+        SampleTreeNode leaf;
+        leaf.value = 7;
+        SampleTreeNode root;
+        root.value = 1;
+        root.left = SampleTree::make_Node(std::move(leaf));
+        SampleTree original = SampleTree::make_Node(std::move(root));
+
+        SampleTree copy = original.clone();
+        original.as_Node().value = 99;
+        original.as_Node().left.as_Node().value = 98;
+        STD_INSIST(copy.is_Node());
+        STD_INSIST(copy.as_Node().value == 1);
+        STD_INSIST(copy.as_Node().left.as_Node().value == 7);
+        STD_INSIST(copy.as_Node().right.is_Nil());
+
+        STD_INSIST(SampleTree().clone().is_Nil());
+
+        int before = SampleCounted::liveCount;
+        SampleTree marked = SampleTree::make_Mark(SampleCounted(3));
+        SampleTree markedCopy = marked.clone();
+        STD_INSIST(SampleCounted::liveCount == before + 2);
+        STD_INSIST(markedCopy.as_Mark().value == 3);
+    }
+
     STD_TEST(payloadIsDestructedWithTheUnion) {
         STD_INSIST(SampleCounted::liveCount == 0);
         {

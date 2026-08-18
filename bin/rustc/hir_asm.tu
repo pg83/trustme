@@ -7,7 +7,4 @@ generate(
         v("Class", "AsmRegisterClass"),
         v("Explicit", "std::string"),
     ],
-    extra="""
-        AsmRegisterSpec clone() const;
-    """,
 )

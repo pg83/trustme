@@ -1,17 +1,5 @@
 #include "hir_asm.h"
 
-AsmRegisterSpec AsmRegisterSpec::clone() const {
-    TU_MATCH_HDRA((*this), {)
-    TU_ARMA(Class, e) {
-        return e;
-    }
-    TU_ARMA(Explicit, e) {
-        return e;
-    }
-    }
-    throw "";
-}
-
 AsmLineFragment::AsmLineFragment()
     : index(UINT_MAX)
     , modifier('\0')

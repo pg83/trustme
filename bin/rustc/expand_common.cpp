@@ -1,26 +1,5 @@
 #include "expand_common.h"
 
-MacroRef MacroRef::clone() const {
-    switch (tag()) {
-        case TAGDEAD: {
-            abort();
-        }
-        case TAG_None: {
-            return make_None({});
-        }
-        case TAG_MacroRules: {
-            return as_MacroRules();
-        }
-        case TAG_BuiltinProcMacro: {
-            return as_BuiltinProcMacro();
-        }
-        case TAG_ExternalProcMacro: {
-            return as_ExternalProcMacro();
-        }
-    }
-    abort();
-}
-
 #include "synext.h"
 #include "ast_ast.h"
 #include "hir_hir.h" // For macro lookup

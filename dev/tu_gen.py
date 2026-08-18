@@ -49,7 +49,8 @@ class TuError(RuntimeError):
 
 
 class Variant:
-    def __init__(self, tag, type=None, *, fields=None, copy=True, doc=None):
+    def __init__(self, tag, type=None, *, fields=None, copy=True, deep=False,
+                 doc=None):
         if not IDENT.match(tag):
             raise TuError(f"variant tag {tag!r} is not an identifier")
         if type is not None and fields is not None:
@@ -59,10 +60,19 @@ class Variant:
                 if len(field) not in (2, 3) or not IDENT.match(field[1]):
                     raise TuError(f"variant {tag}: field {field!r} must be"
                                   " (type, name) or (type, name, init)")
+        if isinstance(deep, list):
+            names = {field[1] for field in (fields or [])}
+            for name in deep:
+                if name not in names:
+                    raise TuError(f"variant {tag}: deep field {name!r} unknown")
+        elif deep is True and fields is not None:
+            raise TuError(f"variant {tag}: deep=True is for single payloads;"
+                          " use deep=[names] with fields")
         self.tag = tag
         self.type = type
         self.fields = fields
         self.copy = copy
+        self.deep = deep
         self.doc = doc
 
     @property
@@ -76,7 +86,7 @@ class Variant:
 
 class Union:
     def __init__(self, *, name, default, variants, extra="", extra_fields=(),
-                 allow_incomplete=False, doc=None):
+                 allow_incomplete=False, clone=True, doc=None):
         if not IDENT.match(name):
             raise TuError(f"union name {name!r} is not an identifier")
         if not variants:
@@ -96,6 +106,7 @@ class Union:
         self.extra = extra
         self.extra_fields = list(extra_fields)
         self.allow_incomplete = allow_incomplete
+        self.clone = clone
         self.doc = doc
 
 
@@ -212,6 +223,8 @@ def emit_header_union(out, union):
     out.line("Tag tag() const;")
     out.line("const char* tagStr() const;")
     out.line("static const char* tagToStr(Tag tag);")
+    if union.clone:
+        out.line(f"{union.name} clone() const;")
     for variant in union.variants:
         data = variant.data_name
         out.line()
@@ -251,6 +264,58 @@ def emit_payload_switch(out, union, per_variant):
             out.line(body)
         out.line("break;")
         out.close()
+    out.close()
+
+
+def clone_expr(variant, source):
+    """The expression cloning `source` (the live payload of `variant`)."""
+    if variant.is_empty:
+        return "{}"
+    if variant.fields is None:
+        if variant.deep is True:
+            return f"{source}->clone()"
+        return f"tuClone({source})"
+    parts = []
+    deep = variant.deep if isinstance(variant.deep, list) else []
+    for field in variant.fields:
+        field_name = field[1]
+        if field_name in deep:
+            parts.append(f"{source}.{field_name}->clone()")
+        else:
+            parts.append(f"tuClone({source}.{field_name})")
+    return f"{variant.data_name}{{{', '.join(parts)}}}"
+
+
+def emit_clone_helper(out):
+    # Per-value clone: prefer the house clone() member, recurse through
+    # vectors, and fall back to copy construction (direct-init, so explicit
+    # copy constructors qualify).
+    out.open("namespace {")
+    out.line("template <typename T>")
+    out.line("T tuClone(const T& v);")
+    out.line("template <typename E>")
+    out.line("::std::vector<E> tuClone(const ::std::vector<E>& v);")
+    out.line()
+    out.line("template <typename T>")
+    out.open("T tuClone(const T& v) {")
+    out.open("if constexpr (requires { { v.clone() } -> ::std::convertible_to<T>; }) {")
+    out.line("return v.clone();")
+    out.close("} else {")
+    out.depth += 1
+    out.line("T out(v);")
+    out.line("return out;")
+    out.close()
+    out.close()
+    out.line()
+    out.line("template <typename E>")
+    out.open("::std::vector<E> tuClone(const ::std::vector<E>& v) {")
+    out.line("::std::vector<E> out;")
+    out.line("out.reserve(v.size());")
+    out.open("for (const E& e : v) {")
+    out.line("out.push_back(tuClone(e));")
+    out.close()
+    out.line("return out;")
+    out.close()
     out.close()
 
 
@@ -345,6 +410,29 @@ def emit_cpp_union(out, union):
     out.line("return tagToStr(tag_);")
     out.close()
     out.line()
+    if union.clone:
+        out.open(f"{name} {name}::clone() const {{")
+        out.line(f"{name} result;")
+        out.open("switch (tag_) {")
+        out.open("case TAGDEAD: {")
+        out.line("break;")
+        out.close()
+        for variant in union.variants:
+            out.open(f"case TAG_{variant.tag}: {{")
+            if variant.is_empty:
+                out.line(f"result = make_{variant.tag}({{}});")
+            else:
+                out.line(f"const {variant.data_name}& e = as_{variant.tag}();")
+                out.line(f"result = make_{variant.tag}({clone_expr(variant, 'e')});")
+            out.line("break;")
+            out.close()
+        out.close()
+        for _, field_name, *rest in union.extra_fields:
+            out.line(f"result.{field_name} = {field_name};")
+        out.line("return result;")
+        out.close()
+        out.line()
+
     out.open(f"const char* {name}::tagToStr(Tag tag) {{")
     out.open("switch (tag) {")
     out.open("case TAGDEAD: {")
@@ -469,6 +557,11 @@ def main():
     cpp.line("#include <cassert>")
     cpp.line("#include <new>")
     cpp.line("#include <utility>")
+    if any(union.clone for union in unions):
+        cpp.line("#include <concepts>")
+        cpp.line("#include <vector>")
+        cpp.line()
+        emit_clone_helper(cpp)
     for union in unions:
         cpp.line()
         emit_cpp_union(cpp, union)

@@ -3,6 +3,7 @@
 generate(
     name="ASTAttributeData",
     default="None",
+    clone=False,  # ASTExprNodeP::clone() returns ASTExpr, not a new node ptr
     variants=[
         v("None"),
         v("ValueUnexpanded", "ASTExprNodeP", copy=False),

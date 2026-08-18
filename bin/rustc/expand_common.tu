@@ -9,7 +9,4 @@ generate(
         v("BuiltinProcMacro", "ExpandProcMacro*"),
         v("ExternalProcMacro", "const HIRProcMacro*"),
     ],
-    extra="""
-        MacroRef clone() const;
-    """,
 )
