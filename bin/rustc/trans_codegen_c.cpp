@@ -1663,12 +1663,33 @@ namespace {
         }
 
         // Returns `true` if the type is pointer-aligned (i.e. it could contain a pointer)
+        /// An `extern type` naming a symbol may not be used anywhere else, and
+        /// so may never have been declared. It is opaque either way, so an
+        /// empty definition says all there is to say about it.
+        void emitExternTypeDefinition(const HIRTypeData* type) {
+            if (type->is_Path() && type->as_Path().binding.is_ExternType()) {
+                of << "struct x_" << TransMangle(type->as_Path().path) << " { };\n";
+            }
+        }
+
         bool emitStaticTy(const HIRTypeData* type, const HIRPath& p, bool isProto, size_t explicitAlignment) {
             size_t size = 0, align = 0;
-            TargetGetSizeAndAlignOf(sp, resolve_, type, size, align);
+            const bool sized = TargetGetSizeAndAlignOf(sp, resolve_, type, size, align);
             align = std::max(align, explicitAlignment);
             bool rv = (align * 8 >= TargetGetPointerBits());
             of << "union u_static_" << TransMangle(p);
+            // An `extern type` has no size here, and a value of one cannot be
+            // read: only its address is ever taken. The symbol still needs a
+            // declaration that stands on its own, so give it one byte.
+            if (!sized || size == SIZE_MAX) {
+                if (isProto) {
+                    of << "{ ";
+                    emitCtype(type, FMT_CB(ss, ss << "val";));
+                    of << "; uint8_t raw[1]; }";
+                }
+                of << " " << TransMangle(p);
+                return false;
+            }
             if (isProto) {
                 of << "{ ";
                 emitCtype(type, FMT_CB(ss, ss << "val";));
@@ -1720,6 +1741,7 @@ namespace {
                 // Handled with asm() later
             }
 
+            emitExternTypeDefinition(type);
             of << "extern ";
             emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
             if (linkageName != "") {
@@ -1765,6 +1787,7 @@ namespace {
             if (item.params.isGeneric()) {
                 of << "__attribute__((weak)) ";
             }
+            emitExternTypeDefinition(type);
             of << "extern ";
             emitStaticTy(type, p, /*is_proto=*/true, item.explicitAlignment);
             if (item.explicitAlignment != 0) {
