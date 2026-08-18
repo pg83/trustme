@@ -1,5 +1,6 @@
 import hashlib
 import json
+import re
 from pathlib import Path
 
 import build
@@ -133,10 +134,16 @@ codegen_c_prelude = command(
 # here as a scanned input so header changes rebuild it).
 TU_GEN_TOOL = "$(S)/dev/tu_gen.py"
 tu_generated_srcs = []
+tu_context_re = re.compile(r'^\s*context\(\s*["\']([^"\']+)["\']', re.M)
 for tu_src in sorted(build.glob("$(S)/bin/rustc/*.tu")):
     tu_stem = tu_src.rsplit("/", 1)[1][:-len(".tu")]
     tu_gen_h = f"$(B)/gen/{tu_stem}_tu.h"
     tu_gen_cpp = f"$(B)/gen/{tu_stem}_tu.cpp"
+    # The generated cpp includes its context header (see tu_gen.py): xxx.h by
+    # default, or the header a context("...") call names for sub-units.
+    tu_text = Path(__file__).parent.joinpath("bin/rustc", f"{tu_stem}.tu").read_text()
+    tu_context_match = tu_context_re.search(tu_text)
+    tu_context = tu_context_match.group(1) if tu_context_match else f"{tu_stem}.h"
     command(
         name=f"{tu_stem}_tu",
         inputs=[tu_src, TU_GEN_TOOL],
@@ -145,7 +152,7 @@ for tu_src in sorted(build.glob("$(S)/bin/rustc/*.tu")):
         descr="TU",
     )
     tu_generated_srcs.append(
-        {"src": tu_gen_cpp, "inputs": [f"$(S)/bin/rustc/{tu_stem}.h"]}
+        {"src": tu_gen_cpp, "inputs": [f"$(S)/bin/rustc/{tu_context}"]}
     )
 
 # Real compiler unions link into the compiler (and, via SRC, into rustc_ut);
