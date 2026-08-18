@@ -1300,6 +1300,16 @@ ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
                 break;
             }
             CHECK_TOK(tok, TOK_COMMA);
+            if (LOOK_AHEAD(lex) != TOK_INTEGER) {
+                GET_TOK(tok, lex);
+                break;
+            }
+        }
+        // `..base` fills in whatever indexes were not named.
+        ASTExprNodeP baseVal;
+        if (tok.type() == TOK_DOUBLE_DOT) {
+            baseVal = ParseExpr0(lex);
+            GET_TOK(tok, lex);
         }
         CHECK_TOK(tok, TOK_BRACE_CLOSE);
 
@@ -1310,14 +1320,14 @@ ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
         ASTExprNodeStructLiteral::tValues items;
         unsigned int i = 0;
         for (auto& p : nodes) {
-            if (p.first != i) {
+            if (!baseVal && p.first != i) {
                 ERROR(lex.pointSpan(), E0000, "Missing index " << i);
             }
             items.push_back(ASTExprNodeStructLiteral::Ent{ASTAttributeList(), RcString::newInterned(FMT(p.first)), mv$(p.second)});
             i++;
         }
 
-        return NEWNODE(ASTExprNodeStructLiteral, mv$(path), ASTExprNodeP(), mv$(items));
+        return NEWNODE(ASTExprNodeStructLiteral, mv$(path), mv$(baseVal), mv$(items));
     }
 
     // Braced structure literal
@@ -2963,7 +2973,12 @@ ASTVisibility ParsePublicity(TokenStream& lex, bool allowRestricted /*=true*/) {
                     return ASTVisibility::makeRestricted(ASTVisibility::Ty::PubSelf, std::move(path));
                 case TOK_RWORD_SUPER:
                     path = lex.parseState().getCurrentMod().path();
-                    path.nodes.pop_back();
+                    // At the crate root there is nothing above to be visible to.
+                    // A `cfg` may still remove the item, so parsing it is not an
+                    // error.
+                    if (!path.nodes.empty()) {
+                        path.nodes.pop_back();
+                    }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return ASTVisibility::makeRestricted(ASTVisibility::Ty::PubSuper, std::move(path));
                     break;
@@ -4025,6 +4040,16 @@ ASTEnum ParseEnumDef(TokenStream& lex, const ASTAttributeList& metaItems) {
 
         auto itemAttrs = ParseItemAttrs(lex);
         SET_ATTRS(lex, itemAttrs);
+
+        // An enum variant is as public as its enum, but the grammar still
+        // accepts a visibility here -- rustc rejects it after parsing, which
+        // matters because the variant may be stripped by a `cfg` before that
+        // point. A `$vis` fragment stands here too, and expands to nothing when
+        // empty.
+        // TODO: reject a non-default visibility on a variant that survives cfg.
+        if (lex.lookahead(0) == TOK_RWORD_PUB || lex.lookahead(0) == TOK_INTERPOLATED_VIS) {
+            (void)ParsePublicity(lex);
+        }
 
         GET_CHECK_TOK(tok, lex, TOK_IDENT);
         auto name = tok.ident().name;

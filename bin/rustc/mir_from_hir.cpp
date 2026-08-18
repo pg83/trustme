@@ -3347,8 +3347,17 @@ namespace {
                         return;
                     }
                     if (e->data.is_Tuple()) {
-                        ASSERT_BUG(node.span(), node.values.empty(), "Named values provided in tuple struct update");
                         ASSERT_BUG(node.span(), node.baseValue, "Tuple struct literal has no values or base");
+                        // `S { 0: a, ..base }` names the tuple fields by index:
+                        // those come from the expression, the rest from the base.
+                        ::std::map<unsigned, MIRParam> provided;
+                        for (auto& val : node.values) {
+                            this->visitNodePtr(val.second);
+                            if (!builder.blockActive()) {
+                                return;
+                            }
+                            provided.insert(::std::make_pair(static_cast<unsigned>(::std::atoi(val.first.c_str())), builder.getResultInParam(val.second->span(), val.second->resType)));
+                        }
                         this->visitNodePtr(node.baseValue);
                         if (!builder.blockActive()) {
                             return;
@@ -3357,7 +3366,12 @@ namespace {
                         std::vector<MIRParam> values;
                         values.reserve(e->data.as_Tuple().size());
                         for (size_t i = 0; i < e->data.as_Tuple().size(); i++) {
-                            values.push_back(MIRLValue::newField(baseValue.clone(), static_cast<unsigned>(i)));
+                            auto it = provided.find(static_cast<unsigned>(i));
+                            if (it != provided.end()) {
+                                values.push_back(mv$(it->second));
+                            } else {
+                                values.push_back(MIRLValue::newField(baseValue.clone(), static_cast<unsigned>(i)));
+                            }
                         }
                         builder.setResult(node.span(), MIRRValue::make_Struct({tyPath.clone(), std::move(values)}));
                         return;

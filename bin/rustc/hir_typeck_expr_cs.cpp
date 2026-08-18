@@ -1753,7 +1753,7 @@ namespace {
                         return;
                     }
                     if (e->data.is_Tuple()) {
-                        ASSERT_BUG(node.span(), node.values.empty(), "Named values provided in tuple struct update");
+                        // `S { 0: a, ..base }` names the tuple fields by index.
                         ASSERT_BUG(node.span(), node.baseValue, "Tuple struct literal has no values or base");
                         HIRExprVisitorDef::visit(node);
                         return;
@@ -11253,6 +11253,11 @@ public:
 
         const tStructFields* fieldsPtr = nullptr;
         const HIRGenericParams* generics = nullptr;
+        // A tuple struct written as `S { 0: a, ..base }` names its fields by
+        // index, so give the tuple fields those names and treat it as any other
+        // braced literal. Without a base it is the tuple constructor and never
+        // reaches here.
+        tStructFields tupleFields;
             TU_MATCH_HDRA( (ty->as_Path().binding), {)
             TU_ARMA(Unbound, e) {
             }
@@ -11289,6 +11294,15 @@ public:
                 ASSERT_BUG(node.span(), node.values.size() == 1, "Union literal with multiple values");
             }
             TU_ARMA(Struct, e) {
+                if (e->data.is_Tuple() && !node.values.empty()) {
+                    const auto& tuple = e->data.as_Tuple();
+                    for (size_t i = 0; i < tuple.size(); i++) {
+                        tupleFields.push_back(HIRStructField{RcString::newInterned(FMT(i)), tuple[i].publicity, tuple[i].ent, nullptr});
+                    }
+                    fieldsPtr = &tupleFields;
+                    generics = &e->params;
+                    break;
+                }
                 if (e->data.is_Unit() || e->data.is_Tuple()) {
                     ASSERT_BUG(node.span(), node.values.size() == 0, "Values provided for " << e->data.tagStr() << "-like struct");
 

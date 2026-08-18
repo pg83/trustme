@@ -693,6 +693,10 @@ namespace {
                 bool isMoved = false;
                 const auto& tpb = node.baseValue->resType->as_Path().binding;
                 const tStructFields* fieldsPtr;
+                // `S { 0: a, ..base }` names the tuple fields by index, so give
+                // them those names and the shared code below reads which of them
+                // the base still has to provide.
+                tStructFields tupleFields;
                 if (tpb.is_Enum()) {
                     const auto& enm = *tpb.as_Enum();
                     auto idx = enm.findVariant(tyPath.path.components().back());
@@ -706,22 +710,15 @@ namespace {
                 } else {
                     const auto& str = *tpb.as_Struct();
                     if (str.data.is_Tuple()) {
-                        ASSERT_BUG(sp, node.values.empty(), "Named values provided in tuple struct update");
-                        const auto monomorphCb = MonomorphStatePtr(resolve_.hirCrate().types, nullptr, &tyPath.params, nullptr);
-                        for (const auto& field : str.data.as_Tuple()) {
-                            HIRTypeRef tmp;
-                            const auto& fieldType = monomorphiseTypeWithOpt(node.span(), tmp, field.ent, monomorphCb);
-                            if (!resolve_.typeIsCopy(node.span(), fieldType)) {
-                                isMoved = true;
-                                break;
-                            }
+                        const auto& tuple = str.data.as_Tuple();
+                        for (size_t i = 0; i < tuple.size(); i++) {
+                            tupleFields.push_back(HIRStructField{RcString::newInterned(FMT(i)), tuple[i].publicity, tuple[i].ent, nullptr});
                         }
-                        auto _ = pushUsage(isMoved ? HIRValueUsage::Move : HIRValueUsage::Borrow);
-                        this->visitNodePtr(node.baseValue);
-                        return;
+                        fieldsPtr = &tupleFields;
+                    } else {
+                        ASSERT_BUG(sp, str.data.is_Named(), "");
+                        fieldsPtr = &str.data.as_Named();
                     }
-                    ASSERT_BUG(sp, str.data.is_Named(), "");
-                    fieldsPtr = &str.data.as_Named();
                 }
                 const auto& fields = *fieldsPtr;
 
