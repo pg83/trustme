@@ -47,28 +47,14 @@ struct ASTNamed;
 
 class InterpolatedFragment;
 
+// Definitions generated from parse_token.tu.
+#include "parse_token_tu.h"
+
 class Token {
     friend class HirSerialiser;
     friend class HirDeserialiser;
 
-    TAGGED_UNION(
-        Data,
-        None,
-        (None, struct {}),
-        (Ident, Ident),
-        (String, ::std::string),
-        (Integer,
-         struct {
-             enum eCoreType datatype;
-             U128 intval;
-         }),
-        (Float,
-         struct {
-             enum eCoreType datatype;
-             FloatValue floatval;
-         }),
-        (Fragment, void*)
-    );
+    using Data = TokenData;
 
     enum eTokenType type_;
     Data data_;

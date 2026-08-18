@@ -52,73 +52,63 @@ struct TargetSpec {
     TargetArch arch;
 };
 
+struct TypeReprFieldPath {
+    static constexpr size_t ARRAY_ELEMENT = static_cast<size_t>(-1);
+
+    size_t index;
+    size_t size;
+    ::std::vector<size_t> subFields;
+};
+
+/// Variants numbered 0 to N (potentially offset).  If `field.subFields` has
+/// entries, then this is a niche optimisation.
+struct TypeReprVariantLinear {
+    // Note: If `field.sub_fields` has entries, then this is a niche optimisation.
+    // Path of the variant
+    TypeReprFieldPath field;
+    // Offset for variants (when in a niche)
+    size_t offset;
+    size_t numVariants;
+
+    bool usesNiche() const {
+    return !field.subFields.empty();
+    }
+    bool isNiche(unsigned varIdx) const {
+    return usesNiche() && varIdx == field.index;
+    }
+    bool isTag(unsigned varIdx) const {
+    return !usesNiche() && varIdx == field.index;
+    }
+
+    size_t nicheVariantStart() const;
+    size_t nicheVariantCount() const;
+    size_t tagValue(unsigned varIdx) const;
+    unsigned decodeTag(U128 tag) const;
+};
+
+/// Tag is a fixed set of values in a field.  `field.subFields` should always
+/// be empty.
+struct TypeReprVariantValues {
+    // NOTE: `field.sub_path` should always be empty?
+    TypeReprFieldPath field;
+    ::std::vector<U128> values;
+    bool isTag(unsigned varIdx) const {
+    return varIdx == field.index;
+    }
+};
+
+// Definitions generated from trans_target.tu.
+#include "trans_target_tu.h"
+
 struct TypeRepr {
     size_t align = 0;
     size_t size = 0;
     /// gcc's `TYPE_USER_ALIGN`: `align` came from an explicit `repr(align(N))` somewhere inside, so it's exempt from a member-alignment cap
     bool userAlign = false;
 
-    struct FieldPath {
-        static constexpr size_t ARRAY_ELEMENT = static_cast<size_t>(-1);
+    using FieldPath = TypeReprFieldPath;
 
-        size_t index;
-        size_t size;
-        ::std::vector<size_t> subFields;
-    };
-
-    TAGGED_UNION(
-        VariantMode,
-        None,
-        (None, struct {}),
-        // Variants numbered 0 to N (potentially offset)
-        (Linear,
-         struct {
-             // Note: If `field.sub_fields` has entries, then this is a niche optimisation.
-             // Path of the variant
-             FieldPath field;
-             // Offset for variants (when in a niche)
-             size_t offset;
-             size_t numVariants;
-
-             bool usesNiche() const {
-                 return !field.subFields.empty();
-             }
-             bool isNiche(unsigned varIdx) const {
-                 return usesNiche() && varIdx == field.index;
-             }
-             bool isTag(unsigned varIdx) const {
-                 return !usesNiche() && varIdx == field.index;
-             }
-
-             size_t nicheVariantStart() const;
-             size_t nicheVariantCount() const;
-             size_t tagValue(unsigned varIdx) const;
-             unsigned decodeTag(U128 tag) const;
-         }),
-        // Tag is a fixed set of values in a field.
-        // TODO: Encode niche in here too?
-        (Values,
-         struct {
-             // NOTE: `field.sub_path` should always be empty?
-             FieldPath field;
-             ::std::vector<U128> values;
-             bool isTag(unsigned varIdx) const {
-                 return varIdx == field.index;
-             }
-         }),
-        // Tag is based on a range of values
-        //(Ranges, struct {
-        //    size_t  offset;
-        //    size_t  size;
-        //    ::std::vector<::std::pair<uint64_t,uint64_t>> values;
-        //    }),
-        // Tag is a boolean based on if a region is zero/non-zero
-        // Only valid for two-element enums
-        (NonZero, struct {
-            FieldPath field;
-            unsigned zeroVariant;
-        })
-    );
+    using VariantMode = TypeReprVariantMode;
     VariantMode variants;
 
     struct Field {
