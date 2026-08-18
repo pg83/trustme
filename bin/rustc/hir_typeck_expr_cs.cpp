@@ -5075,7 +5075,7 @@ default:
                     break;
                 }
                 case HIRPatternPathBinding::TAG_Struct: {
-                    assert(str->data.is_Unit());
+                    assert(e.binding.as_Struct()->data.is_Unit());
                     break;
                 }
                 case HIRPatternPathBinding::TAG_Union: {

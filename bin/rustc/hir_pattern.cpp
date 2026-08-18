@@ -337,7 +337,8 @@ namespace {
                     break;
                 }
                 case HIRPatternData::TAG_Or: {
-                    assert(!e.empty()); deferredOrPatterns.push_back(&current);
+                    assert(!current.data.as_Or().empty());
+                    deferredOrPatterns.push_back(&current);
                     break;
                 }
             }
