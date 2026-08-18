@@ -7717,6 +7717,65 @@ namespace {
                     emitParam(e.args.at(1));
                     of << ")[i]";
                 };
+                // A one-argument reduction folds the lanes left to right with a
+                // single operator, starting from the first lane.
+                auto simdReduceFold = [&](const char* op) {
+                    auto info = SimdInfo::forTy(*this, params.types.at(0));
+                    MIR_ASSERT(localMirRes, e.args.size() == 1, name << " requires a vector");
+                    emitLvalue(e.retVal);
+                    of << " = ((";
+                    info.emitValTy(*this);
+                    of << "*)&";
+                    emitParam(e.args.at(0));
+                    of << ")[0]; ";
+                    of << "for(int i = 1; i < " << info.count << "; i++) ";
+                    emitLvalue(e.retVal);
+                    of << " " << op << "= ((";
+                    info.emitValTy(*this);
+                    of << "*)&";
+                    emitParam(e.args.at(0));
+                    of << ")[i]";
+                };
+                // `min` and `max` keep the lane that compares smaller/larger.
+                auto simdReduceMinMax = [&](const char* cmp) {
+                    auto info = SimdInfo::forTy(*this, params.types.at(0));
+                    MIR_ASSERT(localMirRes, e.args.size() == 1, name << " requires a vector");
+                    emitLvalue(e.retVal);
+                    of << " = ((";
+                    info.emitValTy(*this);
+                    of << "*)&";
+                    emitParam(e.args.at(0));
+                    of << ")[0]; ";
+                    of << "for(int i = 1; i < " << info.count << "; i++) if( ((";
+                    info.emitValTy(*this);
+                    of << "*)&";
+                    emitParam(e.args.at(0));
+                    of << ")[i] " << cmp << " ";
+                    emitLvalue(e.retVal);
+                    of << " ) ";
+                    emitLvalue(e.retVal);
+                    of << " = ((";
+                    info.emitValTy(*this);
+                    of << "*)&";
+                    emitParam(e.args.at(0));
+                    of << ")[i]";
+                };
+                // `all` and `any` reduce a mask, whose lanes are all-ones or zero.
+                auto simdReduceMask = [&](bool isAll) {
+                    auto info = SimdInfo::forTy(*this, params.types.at(0));
+                    MIR_ASSERT(localMirRes, e.args.size() == 1, name << " requires a mask vector");
+                    emitLvalue(e.retVal);
+                    of << " = " << (isAll ? "true" : "false") << "; ";
+                    of << "for(int i = 0; i < " << info.count << "; i++) ";
+                    emitLvalue(e.retVal);
+                    of << " = ";
+                    emitLvalue(e.retVal);
+                    of << (isAll ? " && " : " || ") << "( ((";
+                    info.emitValTy(*this);
+                    of << "*)&";
+                    emitParam(e.args.at(0));
+                    of << ")[i] != 0 )";
+                };
                 auto simdCall = [&](const char* op) {
                     auto info = SimdInfo::forTy(*this, params.types.at(0));
                     // Emulate!
@@ -8000,18 +8059,36 @@ namespace {
                         of << ")";
                     }
                 }
-                // platform:simd_reduce_and
-                // platform:simd_reduce_max
-                // platform:simd_reduce_min
-                // platform:simd_reduce_mul_unordered
-                // platform:simd_reduce_add_unordered
-                // platform:simd_reduce_or
                 // platform:simd_saturating_add
                 // platform:simd_saturating_sub
-                else if (nameStrip == "simd_ceil") {
+                else if (nameStrip == "simd_reduce_add_unordered") {
+                    simdReduceFold("+");
+                } else if (nameStrip == "simd_reduce_mul_unordered") {
+                    simdReduceFold("*");
+                } else if (nameStrip == "simd_reduce_and") {
+                    simdReduceFold("&");
+                } else if (nameStrip == "simd_reduce_or") {
+                    simdReduceFold("|");
+                } else if (nameStrip == "simd_reduce_xor") {
+                    simdReduceFold("^");
+                } else if (nameStrip == "simd_reduce_min") {
+                    simdReduceMinMax("<");
+                } else if (nameStrip == "simd_reduce_max") {
+                    simdReduceMinMax(">");
+                } else if (nameStrip == "simd_reduce_all") {
+                    simdReduceMask(true);
+                } else if (nameStrip == "simd_reduce_any") {
+                    simdReduceMask(false);
+                } else if (nameStrip == "simd_ceil") {
                     simdCall("ceil");
                 } else if (nameStrip == "simd_floor") {
                     simdCall("floor");
+                } else if (nameStrip == "simd_round") {
+                    simdCall("round");
+                } else if (nameStrip == "simd_trunc") {
+                    simdCall("trunc");
+                } else if (nameStrip == "simd_fabs") {
+                    simdCall("fabs");
                 } else if (nameStrip == "simd_fsqrt") {
                     simdCall("sqrt");
                 }

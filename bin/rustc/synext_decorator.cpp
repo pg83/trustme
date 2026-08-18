@@ -193,6 +193,9 @@ class CHandlerRepr: public ExpandDecorator {
                     ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
                     s->markings.alignValue = std::max(s->markings.alignValue, v.truncateU64());
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
+                } else if (reprType == "Rust") {
+                    // The default representation, which is what a struct with
+                    // no `repr` already has.
                 } else if (reprType == "no_niche") {
                     // TODO: rust-lang/rust#68303 happens with UnsafeCell and niche optionisations
                     // - Would trustme also have this?
@@ -253,6 +256,8 @@ class CHandlerRepr: public ExpandDecorator {
                     ASSERT_BUG(lex.pointSpan(), (v & (v - 1)) == U128(0), "#[repr(align(" << v << "))] - alignment must be a power of two");
                     e->markings.alignValue = std::max(e->markings.alignValue, v.truncateU64());
                     lex.getTokenCheck(TOK_PAREN_CLOSE);
+                } else if (reprStr == "Rust") {
+                    // The default representation.
                 } else if (reprStr == "transparent") {
                     // The enum lays out as its one variant, which is what a
                     // single-variant enum already does here.
@@ -278,6 +283,8 @@ class CHandlerRepr: public ExpandDecorator {
                 auto reprStr = getReprName(lex);
                 if (reprStr == "C") {
                     e->markings.repr = ASTUnion::Markings::Repr::C;
+                } else if (reprStr == "Rust") {
+                    // The default representation.
                 } else if (reprStr == "transparent") {
                     e->markings.repr = ASTUnion::Markings::Repr::Transparent;
                 } else if (reprStr == "packed") {
