@@ -553,6 +553,27 @@ unit_tests.append(command(
     color="green",
 ))
 unit_tests.append(command(
+    name="unit_std_ratchet",
+    inputs=[
+        "$(S)/dev/std_ratchet.py",
+        "$(S)/dev/std_ratchet.baseline",
+        *build.glob("$(S)/bin/rustc/**/*.h"),
+        *build.glob("$(S)/bin/rustc/**/*.cpp"),
+    ],
+    outputs=["$(B)/tst/unit/std_ratchet.stamp"],
+    cmd=[
+        *TEST_TIMEOUT,
+        "python3", "$(S)/dev/std_ratchet.py",
+        "--baseline", "$(S)/dev/std_ratchet.baseline",
+        "--stamp", "$(B)/tst/unit/std_ratchet.stamp",
+        *build.glob("$(S)/bin/rustc/**/*.h"),
+        *build.glob("$(S)/bin/rustc/**/*.cpp"),
+    ],
+    descr="UT",
+    color="green",
+))
+
+unit_tests.append(command(
     name="unit_ident_ordering",
     inputs=["$(S)/tst/unit/test_ident_ordering.cpp"],
     outputs=["$(B)/tst/unit/ident_ordering.stamp"],
