@@ -1,5 +1,7 @@
 #include "expand_cfg.h"
 
+#include "target_version.h"
+
 #include "synext.h"
 #include "ast_expr.h" // Needed to clear a ExprNodeP
 #include "settings.h"
@@ -13,6 +15,9 @@
 
 #include <std/mem/obj_pool.h>
 
+#include <array>
+#include <cctype>
+#include <cstdlib>
 #include <map>
 #include <set>
 #include <optional>
@@ -311,6 +316,7 @@ namespace {
                 static const RcString rcstringNot = RcString::newInterned("not");
                 static const RcString rcstringAll = RcString::newInterned("all");
                 static const RcString rcstringTarget = RcString::newInterned("target");
+                static const RcString rcstringVersion = RcString::newInterned("version");
                 if (name == rcstringAny || name == rcstringCfg) {
                     bool rv = false;
                     while (lex.lookahead(0) != TOK_PAREN_CLOSE) {
@@ -356,6 +362,39 @@ namespace {
                     }
                     GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
                     return rv;
+                }
+                // `version("1.49.0")` holds when the compiler is at least that
+                // version. `RUSTC_OVERRIDE_VERSION_STRING` replaces the version
+                // it compares against, which is how upstream tests pin it.
+                else if (name == rcstringVersion) {
+                    auto wanted = lex.getTokenCheck(TOK_STRING).str();
+                    GET_CHECK_TOK(tok, lex, TOK_PAREN_CLOSE);
+
+                    struct H {
+                        static ::std::array<unsigned, 3> parse(const ::std::string& v) {
+                            ::std::array<unsigned, 3> rv = {0, 0, 0};
+                            size_t pos = 0;
+                            for (unsigned i = 0; i < 3 && pos < v.size(); i++) {
+                                unsigned val = 0;
+                                while (pos < v.size() && ::std::isdigit(static_cast<unsigned char>(v[pos]))) {
+                                    val = val * 10 + static_cast<unsigned>(v[pos] - '0');
+                                    pos++;
+                                }
+                                rv[i] = val;
+                                if (pos < v.size() && v[pos] == '.') {
+                                    pos++;
+                                } else {
+                                    break;
+                                }
+                            }
+                            return rv;
+                        }
+                    };
+
+                    const char* override = ::std::getenv("RUSTC_OVERRIDE_VERSION_STRING");
+                    auto have = H::parse(override ? ::std::string(override) : ::std::string(RUSTC_TARGET_VERSION) + ".100");
+                    auto want = H::parse(wanted);
+                    return have >= want;
                 } else {
                     // oops
                     ERROR(lex.pointSpan(), E0000, "Unknown cfg() function - " << name);

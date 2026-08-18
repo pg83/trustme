@@ -2333,13 +2333,15 @@ void ResolveAbsoluteExprNode(Context& context, ASTExprNode& node) {
 
         void visit(ASTExprNodeStructLiteral& node) override {
             DEBUG("ExprNode_StructLiteral");
-            ResolveAbsolutePath(this->context, node.span(), Context::LookupMode::Type, node.path);
+            // A unit or tuple variant lives in the value namespace, and naming
+            // one in a struct expression is as valid as naming it in a pattern.
+            ResolveAbsolutePath(this->context, node.span(), Context::LookupMode::PatternType, node.path);
             ASTNodeVisitorDef::visit(node);
         }
 
         void visit(ASTExprNodeStructLiteralPattern& node) override {
             DEBUG("ExprNode_StructLiteralPattern");
-            ResolveAbsolutePath(this->context, node.span(), Context::LookupMode::Type, node.path);
+            ResolveAbsolutePath(this->context, node.span(), Context::LookupMode::PatternType, node.path);
             ASTNodeVisitorDef::visit(node);
         }
 

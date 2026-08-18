@@ -3961,6 +3961,57 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
             }
         }
 
+        // `T { 0: a, 1: b }` names the fields of a tuple type by their index,
+        // which is the tuple constructor written as a struct expression. The
+        // path is bound by now, so which one it is can be read off it.
+        if (!v.values.empty() && !v.baseValue) {
+            bool allNumeric = true;
+            for (const auto& val : v.values) {
+                for (const char* c = val.name.c_str(); *c; c++) {
+                    allNumeric &= (*c >= '0' && *c <= '9');
+                }
+            }
+            bool isTuple = false;
+            bool isStruct = false;
+            // An alias is another name for the type, so look through it for
+            // the constructor the expression names.
+            const ASTPath* ctorPath = &v.path;
+            {
+                const ASTPath* p = &v.path;
+                for (unsigned int i = 0; i < 32; i++) {
+                    const auto* alias = p->bindings.type.binding.opt_TypeAlias();
+                    if (!alias || !alias->alias_ || !alias->alias_->type_ || !alias->alias_->type_->isPath()) {
+                        break;
+                    }
+                    p = &alias->alias_->type_->path();
+                    ctorPath = p;
+                }
+            }
+            if (const auto* binding = ctorPath->bindings.type.binding.opt_EnumVar()) {
+                if (binding->enum_) {
+                    isTuple = binding->enum_->variants().at(binding->idx).data.is_Tuple();
+                } else if (binding->hir && binding->hir->data.is_Data()) {
+                    const auto& var = binding->hir->data.as_Data().at(binding->idx);
+                    isTuple = !var.isStruct && var.type != ctx.crate->types.unit();
+                }
+            } else if (const auto* binding = ctorPath->bindings.type.binding.opt_Struct()) {
+                isStruct = true;
+                if (binding->struct_) {
+                    isTuple = binding->struct_->data.is_Tuple();
+                } else if (binding->hir) {
+                    isTuple = binding->hir->data.is_Tuple();
+                }
+            }
+            if (allNumeric && isTuple) {
+                ::std::vector<HIRExprNodeP> args;
+                for (auto& val : v.values) {
+                    args.push_back(lower(val.value));
+                }
+                rv.reset(ctx.crate->pool->make<HIRExprNodeTupleVariant>(v.span(), ctx.LowerHIRGenericPath(v.span(), *ctorPath, FromASTPathClass::Type), isStruct, mv$(args)));
+                return;
+            }
+        }
+
         HIRExprNodeStructLiteral::tValues values;
         for (auto& val : v.values) {
             values.push_back(::std::make_pair(val.name, lower(val.value)));

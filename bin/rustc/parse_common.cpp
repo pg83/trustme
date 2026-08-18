@@ -1296,17 +1296,21 @@ ASTExprNodeP ParseExprValStructLiteral(TokenStream& lex, ASTPath path) {
         }
         CHECK_TOK(tok, TOK_BRACE_CLOSE);
 
-        ::std::vector<ASTExprNodeP> items;
+        // The fields of a tuple type are named by their index, so this is a
+        // struct expression -- not a call, which would need the path to name a
+        // constructor and so would reject a type alias. Lowering turns it back
+        // into the tuple constructor once the path is bound.
+        ASTExprNodeStructLiteral::tValues items;
         unsigned int i = 0;
         for (auto& p : nodes) {
             if (p.first != i) {
                 ERROR(lex.pointSpan(), E0000, "Missing index " << i);
             }
-            items.push_back(mv$(p.second));
+            items.push_back(ASTExprNodeStructLiteral::Ent{ASTAttributeList(), RcString::newInterned(FMT(p.first)), mv$(p.second)});
             i++;
         }
 
-        return NEWNODE(ASTExprNodeCallPath, mv$(path), mv$(items));
+        return NEWNODE(ASTExprNodeStructLiteral, mv$(path), ASTExprNodeP(), mv$(items));
     }
 
     // Braced structure literal
