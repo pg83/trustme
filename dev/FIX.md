@@ -113,6 +113,14 @@ The probe accepts a by-value `into_iter(self)` candidate on `[T]`, which then
 fails `requireSized` (`hir_typeck_expr_cs.cpp:4662`) instead of the probe moving
 on to the autoref step where `IntoIterator for &[T]` waits.
 
+The same shape stops `self: SmartPtr<Self>` from being found
+(`arbitrary_self_types_lifetime_elision.rs`, `_niche_deshadowing.rs`): the
+receiver is `SmartPtr<_>` when the probe runs, so the inherent-method cache is
+asked for a path it cannot key on. Offering every impl under that path instead
+was tried: the method is then found, but its `Self` is still an ivar and the
+path cannot be resolved (`Failed to locate function <_>::m`). Both need the
+probe to run again once the receiver is known.
+
 What makes the candidate acceptable is the receiver still holding inference
 variables when the probe runs: `Box::new(boxed_slice).into_iter()` probes
 `Box<_>`, and `Box<_>: IntoIterator` is only fuzzily false. The same bound asked
