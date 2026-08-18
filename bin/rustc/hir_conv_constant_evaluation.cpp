@@ -5492,6 +5492,58 @@ namespace {
             }
         }
 
+        /// Does this expression read a variant of an enum? Only such an
+        /// expression can have been folded against a value that later moved.
+        static bool namesAVariant(const HIRCrate& crate, const HIRExprPtr& expr) {
+            if (!expr) {
+                return false;
+            }
+            struct Finder: public HIRExprVisitorDef {
+                bool found = false;
+                Finder(HIRTypeInterner& types)
+                    : HIRExprVisitorDef(types)
+                {
+                }
+                void visit(HIRExprNodeUnitVariant& node) override {
+                    found = true;
+                    HIRExprVisitorDef::visit(node);
+                }
+            };
+            Finder f{crate.types};
+            const_cast<HIRExprPtr&>(expr)->visit(f);
+            return f.found;
+        }
+
+        /// Drop the MIR of every variant before `lastChanged`: it was built while
+        /// that variant still read zero, and a cast of it was folded to what it
+        /// was then. A variant that names no variant cannot have been folded
+        /// that way, and regenerating its MIR would redo the statics it
+        /// promotes.
+        static void discardDiscriminantMir(const HIRCrate& crate, HIREnum& item, size_t lastChanged) {
+            auto drop = [&](HIRExprPtr& expr) {
+                expr.mir.reset();
+                if (expr.state && expr.state->stage > HIRExprState::Stage::Expand) {
+                    expr.state->stage = HIRExprState::Stage::Expand;
+                }
+            };
+            TU_MATCH_HDRA((item.data), {)
+            TU_ARMA(Value, e) {
+                    for (size_t i = 0; i < e.variants.size() && i < lastChanged; i++) {
+                        if (namesAVariant(crate, e.variants[i].expr)) {
+                            drop(e.variants[i].expr);
+                        }
+                    }
+                }
+                TU_ARMA(Data, e) {
+                    for (size_t i = 0; i < e.size() && i < lastChanged; i++) {
+                        if (namesAVariant(crate, e[i].discriminantExpr)) {
+                            drop(e[i].discriminantExpr);
+                        }
+                    }
+                }
+            }
+        }
+
         static void visitEnumInner(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item) {
             if (item.discriminantsEvaluated || item.discriminantsEvaluating) {
                 return;
@@ -5510,15 +5562,25 @@ namespace {
             } clearEvaluating{item};
             for (unsigned pass = 0; pass < 16; pass++) {
                 bool changed = false;
-                visitEnumPass(wb, crate, p, mod, modPath, name, item, changed);
+                size_t lastChanged = 0;
+                // Only the pass that settles the values may judge them: a
+                // half-resolved list has variants still reading zero, which
+                // would look like a duplicate.
+                visitEnumPass(wb, crate, p, mod, modPath, name, item, changed, /*doCheck=*/false, lastChanged);
                 if (!changed) {
+                    visitEnumPass(wb, crate, p, mod, modPath, name, item, changed, /*doCheck=*/true, lastChanged);
                     break;
                 }
+                // A variant's MIR is cached, and it was generated while another
+                // variant's value was still zero -- a cast of that variant was
+                // folded to the value it had then. Drop it so the next pass
+                // builds it again from the values this one settled.
+                discardDiscriminantMir(crate, item, lastChanged);
             }
             item.discriminantsEvaluated = true;
         }
 
-        static void visitEnumPass(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item, bool& changed) {
+        static void visitEnumPass(const WireBoard& wb, const HIRCrate& crate, const HIRItemPath& p, const HIRModule& mod, const HIRItemPath& modPath, const char* name, HIREnum& item, bool& changed, bool doCheck, size_t& lastChanged) {
             auto ty = HIREnum::getReprType(item.tagRepr);
             bool is_signed = false;
             switch (ty) {
@@ -5570,14 +5632,19 @@ namespace {
                                 BUG(var.expr->span(), "`Defer` thrown during evaluation of enum discriminant");
                             }
                         }
-                        changed = changed || var.val != i;
+                        if (var.val != i) {
+                            changed = true;
+                            lastChanged = static_cast<size_t>(&var - &e.variants.front());
+                        }
                         var.val = i;
                         if (!var.expr) {
                             DEBUG("enum variant: " << p << "::" << var.name << " = " << var.val << " (auto)");
                         }
                         i += 1;
                     }
-                    checkEnumDiscriminants(Span(), ty, e.variants, [](const auto& var) { return var.val; });
+                    if (doCheck) {
+                        checkEnumDiscriminants(Span(), ty, e.variants, [](const auto& var) { return var.val; });
+                    }
                     break;
                 }
                 case HIREnumClass::TAG_Data: {
@@ -5600,11 +5667,16 @@ namespace {
                                 BUG(var.discriminantExpr->span(), "`Defer` thrown during evaluation of enum discriminant");
                             }
                         }
-                        changed = changed || var.discriminantValue != i;
+                        if (var.discriminantValue != i) {
+                            changed = true;
+                            lastChanged = static_cast<size_t>(&var - &e.front());
+                        }
                         var.discriminantValue = i;
                         i += 1;
                     }
-                    checkEnumDiscriminants(Span(), ty, e, [](const auto& var) { return var.discriminantValue; });
+                    if (doCheck) {
+                        checkEnumDiscriminants(Span(), ty, e, [](const auto& var) { return var.discriminantValue; });
+                    }
                     break;
                 }
             }
