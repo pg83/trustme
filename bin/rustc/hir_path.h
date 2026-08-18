@@ -265,36 +265,12 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const HIRTraitPath& x);
 };
 
+// Definitions generated from hir_path_data.tu.
+#include "hir_path_data_tu.h"
+
 class HIRPath {
 public:
-    // Two possibilities
-    // - UFCS
-    // - Generic path
-    TAGGED_UNION(
-        Data,
-        Generic,
-        (Generic, HIRGenericPath),
-        (UfcsInherent,
-         struct {
-             HIRTypeRef type;
-             RcString item;
-             HIRPathParams params;
-             HIRPathParams implParams;
-         }),
-        (UfcsKnown,
-         struct {
-             HIRTypeRef type;
-             HIRGenericPath trait;
-             RcString item;
-             HIRPathParams params;
-         }),
-        (UfcsUnknown, struct {
-            HIRTypeRef type;
-            //GenericPath ??;
-            RcString item;
-            HIRPathParams params;
-        })
-    );
+    using Data = HIRPathData;
 
     Data data;
 

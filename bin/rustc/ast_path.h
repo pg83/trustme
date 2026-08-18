@@ -188,41 +188,12 @@ public:
 * - Resolve uses append methods etc
 */
 
+// Definitions generated from ast_path_class.tu.
+#include "ast_path_class_tu.h"
+
 class ASTPath {
 public:
-    TAGGED_UNION(
-        Class,
-        Invalid,
-        (Invalid, struct {}),
-        (Local,
-         struct { // Variable / Type param (resolved)
-             RcString name;
-         }),
-        (Relative,
-         struct { // General relative
-             Ident::Hygiene hygiene;
-             ::std::vector<ASTPathNode> nodes;
-         }),
-        (Self,
-         struct { // Module-relative
-             ::std::vector<ASTPathNode> nodes;
-         }),
-        (Super,
-         struct {                // Parent-relative
-             unsigned int count; // Number of `super` keywords, must be >= 1
-             ::std::vector<ASTPathNode> nodes;
-         }),
-        (Absolute,
-         struct { // Absolute
-             RcString crate;
-             ::std::vector<ASTPathNode> nodes;
-         }),
-        (UFCS, struct {                       // Type-relative
-            ASTType* type;  // always non-null
-            ::std::unique_ptr<ASTPath> trait; // nullptr = inherent, Invalid = unknown trait
-            ::std::vector<ASTPathNode> nodes;
-        })
-    );
+    using Class = ASTPathClass;
 
     struct Bindings {
         ASTPathBinding<ASTPathBindingValue> value;

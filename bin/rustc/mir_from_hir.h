@@ -60,38 +60,8 @@ struct ScopeDropSlot {
     unsigned int index;
 };
 
-TAGGED_UNION(
-    ScopeType,
-    Owning,
-    (Owning,
-     struct {
-         bool isTemporary;
-         ::std::vector<unsigned int> slots;      // Locals whose state is owned by this scope
-         ::std::vector<ScopeDropSlot> dropSlots; // Locals and arguments in scheduled drop order
-     }),
-    (Split,
-     struct {
-         bool endStateValid = false;
-         SplitEnd condState;
-         SplitEnd endState;
-         ::std::vector<SplitArm> arms;
-     }),
-    (Loop,
-     struct {
-         // NOTE: This contains the original state for variables changed after `exit_state_valid` is true
-         ::std::map<unsigned int, VarState> changedSlots;
-         ::std::map<unsigned int, VarState> changedArgs;
-         bool exitStateValid;
-         SplitEnd exitState;
-         // TODO: Any drop flags allocated in the loop must be re-initialised at the start of the loop (or before a loopback)
-         MIRBasicBlockId entryBb;
-         ::std::vector<unsigned> dropFlags;
-     }),
-    (Freeze, struct {
-        /// Has `unfreeze_scope` been called on this entry?
-        bool unfrozen = false;
-    })
-);
+// Definitions generated from mir_from_hir_scope.tu.
+#include "mir_from_hir_scope_tu.h"
 
 #define FIELD_DEREF 0xFFFF
 #define FIELD_INDEX_MAX 0x8000 // Above this is a negative field offset
