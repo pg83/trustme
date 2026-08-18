@@ -248,10 +248,8 @@ namespace {
         }
     };
 
-    TAGGED_UNION(EntPtr, NotFound, (NotFound, struct {}), (Function, const HIRFunction*), (Static, const HIRStatic*), (Constant, const HIRConstant*), (Struct, const HIRStruct*), (Enum, struct {
-                     const HIREnum* p;
-                     size_t idx;
-                 }));
+// Definitions generated from hir_conv_ent_ptr.tu.
+#include "hir_conv_ent_ptr_tu.h"
     enum class EntNS {
         //Type,
         Value
@@ -5506,3 +5504,6 @@ HIREvaluator::HIREvaluator(const Span& sp, const WireBoard& wb, Newval& nvs)
     , requireConstCalls(false)
 {
 }
+
+// Bodies of the generated local unions (see hir_conv_ent_ptr.tu).
+#include "hir_conv_ent_ptr_tu.cpp"

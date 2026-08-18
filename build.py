@@ -144,6 +144,10 @@ for tu_src in sorted(build.glob("$(S)/bin/rustc/*.tu")):
     tu_text = Path(__file__).parent.joinpath("bin/rustc", f"{tu_stem}.tu").read_text()
     tu_context_match = tu_context_re.search(tu_text)
     tu_context = tu_context_match.group(1) if tu_context_match else f"{tu_stem}.h"
+    # local() units are textually included by their client cpp (header at the
+    # union's spot, bodies at the end of the file) and are not compiled
+    # separately.
+    tu_local = re.search(r"^\s*local\(\)", tu_text, re.M) is not None
     command(
         name=f"{tu_stem}_tu",
         inputs=[tu_src, TU_GEN_TOOL],
@@ -151,15 +155,17 @@ for tu_src in sorted(build.glob("$(S)/bin/rustc/*.tu")):
         cmd=["python3", TU_GEN_TOOL, tu_src, tu_gen_h, tu_gen_cpp],
         descr="TU",
     )
-    tu_generated_srcs.append(
-        {"src": tu_gen_cpp, "inputs": [f"$(S)/bin/rustc/{tu_context}"]}
-    )
+    if not tu_local:
+        tu_generated_srcs.append(
+            {"src": tu_gen_cpp, "inputs": [f"$(S)/bin/rustc/{tu_context}"]}
+        )
 
 # Real compiler unions link into the compiler (and, via SRC, into rustc_ut);
 # the tagged_union_sample fixture stays out of the compiler binary.
 tu_compiler_srcs = [
     entry for entry in tu_generated_srcs
-    if not entry["src"].endswith("/tagged_union_sample_tu.cpp")
+    if not (entry if isinstance(entry, str) else entry["src"]).endswith(
+        "/tagged_union_sample_tu.cpp")
 ]
 
 

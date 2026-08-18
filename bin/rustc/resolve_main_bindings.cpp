@@ -50,35 +50,10 @@ namespace {
         Val value;
     };
 
+    // Definitions generated from resolve_ctx_ent.tu.
+    #include "resolve_ctx_ent_tu.h"
+
     struct Context {
-        TAGGED_UNION(
-            Ent,
-            Module,
-            (Module, struct { const ASTModule* mod; }),
-            (ConcreteSelf, ASTType* const*),
-            (VarBlock,
-             struct {
-                 unsigned int level;
-                 // "Map" of names to function-level variable slots
-                 ::std::vector<::std::pair<Ident, unsigned int>> variables;
-             }),
-            (MacroDefinition,
-             struct {
-                 unsigned int level;
-                 unsigned int definitionId;
-                 Ident::Hygiene tokenHygiene;
-                 Ident::Hygiene definitionHygiene;
-             }),
-            (Generic, struct {
-                // Map of names to slots
-                GenericSlot::Level level;
-                ASTGenericParams* paramsDef; // TODO: What if it's HRBs?, they have a different type
-                //::AST::HigherRankedBounds*  hrbs_def;
-                ::std::vector<Named<GenericSlot>> types;
-                ::std::vector<NamedI<GenericSlot>> constants;
-                ::std::vector<NamedI<GenericSlot>> lifetimes;
-            })
-        );
 
         const ASTCrate& crate;
         const ASTModule& mod;
@@ -5484,3 +5459,6 @@ ASTPath::Bindings ResolveUseGetBinding(
 //{
 //    throw "";
 //}
+
+// Bodies of the generated local unions (see resolve_ctx_ent.tu).
+#include "resolve_ctx_ent_tu.cpp"

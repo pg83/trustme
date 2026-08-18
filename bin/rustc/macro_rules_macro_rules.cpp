@@ -18,16 +18,27 @@
 // Map of: LoopIndex=>(Path=>Count)
 typedef std::map<unsigned, std::map<std::vector<unsigned>, unsigned>> loopCountsT;
 
-class ParameterMappings {
-    /// A particular captured fragment
-    struct CapturedVal {
-        unsigned int numUses; // Number of times this var will be used
-        unsigned int numUsed; // Number of times it has been used
-        InterpolatedFragment frag;
-    };
+/// A particular captured fragment
+struct CapturedVal {
+    unsigned int numUses; // Number of times this var will be used
+    unsigned int numUsed; // Number of times it has been used
+    InterpolatedFragment frag;
+};
 
-    /// A single layer of the capture set
-    TAGGED_UNION(CaptureLayer, Vals, (Vals, ::std::vector<CapturedVal>), (Nested, ::std::vector<CaptureLayer>));
+// A single layer of the capture set; generated from macro_rules_capture.tu.
+#include "macro_rules_capture_tu.h"
+
+inline ::std::ostream& operator<<(::std::ostream& os, const CapturedVal& x) {
+    os << x.frag;
+    return os;
+}
+
+inline ::std::ostream& operator<<(::std::ostream& os, const CaptureLayer& x) {
+    TU_MATCH(CaptureLayer, (x), (e), (Vals, os << "[" << e << "]";), (Nested, os << "{" << e << "}";))
+    return os;
+}
+
+class ParameterMappings {
 
     /// Represents the fragments captured for a name
     struct CapturedVar {
@@ -92,16 +103,6 @@ public:
     void incCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
     /// Decrement the number of times a particular fragment is used (returns true if there are still usages remaining)
     bool decCount(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
-
-    friend ::std::ostream& operator<<(::std::ostream& os, const CapturedVal& x) {
-        os << x.frag;
-        return os;
-    }
-
-    friend ::std::ostream& operator<<(::std::ostream& os, const CaptureLayer& x) {
-        TU_MATCH(CaptureLayer, (x), (e), (Vals, os << "[" << e << "]";), (Nested, os << "{" << e << "}";))
-        return os;
-    }
 
 private:
     CapturedVal& getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx);
@@ -214,7 +215,7 @@ void ParameterMappings::insert(unsigned int nameIndex, const ::std::vector<unsig
     layer->as_Vals().push_back(CapturedVal{0, 0, mv$(data)});
 }
 
-ParameterMappings::CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
+CapturedVal& ParameterMappings::getCap(const Span& sp, const ::std::vector<unsigned int>& iterations, unsigned int nameIdx) {
     DEBUG("(iterations=[" << iterations << "], name_idx=" << nameIdx << ")");
     auto& e = mappings_.at(nameIdx);
     auto* layer = &e.topLayer;
@@ -4388,3 +4389,6 @@ MacroRules::MacroRules(RcString sourceCrate, ASTEdition edition)
     }
     return os;
 }
+
+// Bodies of the generated local unions (see macro_rules_capture.tu).
+#include "macro_rules_capture_tu.cpp"

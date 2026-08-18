@@ -3810,51 +3810,8 @@ void MIRLowerHIRGetTypeValueForPath(
     getTyAndVal(sp, builder, topTy, topVal, fieldPath, 0, outTy, outVal);
 }
 
-TAGGED_UNION_EX(
-    PatternRule,
-    (),
-    Any,
-    (
-        // Enum variant
-        (Variant,
-         struct {
-             unsigned int idx;
-             ::std::vector<PatternRule> subRules;
-         }),
-        // Slice (includes desired length)
-        (Slice,
-         struct {
-             unsigned int len;
-             ::std::vector<PatternRule> subRules;
-         }),
-        // SplitSlice
-        // TODO: How can the negative offsets in the `trailing` be handled correctly? (both here and in the destructure)
-        (SplitSlice,
-         struct {
-             unsigned int minLen;
-             unsigned int trailingLen;
-             ::std::vector<PatternRule> leading, trailing;
-         }),
-        // Boolean (different to Constant because of how restricted it is)
-        (Bool, bool),
-        // General value
-        (Value, MIRConstant),
-        (ValueRange,
-         struct {
-             MIRConstant first, last;
-             bool isInclusive;
-         }),
-        // _ pattern
-        (Any, struct {})
-    ),
-    (, fieldPath(mv$(x.fieldPath)), rootIndex(x.rootIndex)),
-    (fieldPath = mv$(x.fieldPath); rootIndex = x.rootIndex;),
-    (fieldPathT fieldPath;
-     unsigned rootIndex = 0;
-
-     bool operator<(const PatternRule & x) const { return this->ord(x) == OrdLess; } bool operator==(const PatternRule & x) const { return this->ord(x) == OrdEqual; } bool operator!=(const PatternRule & x) const { return this->ord(x) != OrdEqual; } Ordering ord(const PatternRule& x) const;
-     PatternRule clone() const;)
-);
+// Definitions generated from mir_from_hir_pattern.tu.
+#include "mir_from_hir_pattern_tu.h"
 ::std::ostream& operator<<(::std::ostream& os, const PatternRule& x);
 
 /// Constructed set of rules from a pattern
@@ -10810,3 +10767,6 @@ MirBuilder::SavedActiveLocal::SavedActiveLocal(VarState vs)
     }
     return os;
 }
+
+// Bodies of the generated local unions (see mir_from_hir_pattern.tu).
+#include "mir_from_hir_pattern_tu.cpp"

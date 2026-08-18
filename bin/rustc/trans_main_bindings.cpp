@@ -2831,7 +2831,8 @@ void TransEnumerateTypes(EnumState& state) {
 }
 
 namespace {
-    TAGGED_UNION(EntPtr, NotFound, (NotFound, struct {}), (AutoGenerate, struct {}), (Function, const HIRFunction*), (Static, const HIRStatic*), (Constant, const HIRConstant*));
+// Definitions generated from trans_ent_ptr.tu.
+#include "trans_ent_ptr_tu.h"
 
     bool pathAlreadyEnumerated(const EnumState& state, const HIRPath& path) {
         return state.rv.functions.count(path) || state.rv.statics.count(path) || state.rv.constants.count(path) || state.rv.vtables.count(path);
@@ -3409,3 +3410,6 @@ void TransEnumerateFillFromStatic(EnumState& state, const HIRStatic& item, Trans
     outStat.ptr = &item;
     outStat.pp = mv$(pp);
 }
+
+// Bodies of the generated local unions (see trans_ent_ptr.tu).
+#include "trans_ent_ptr_tu.cpp"
