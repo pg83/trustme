@@ -1268,11 +1268,21 @@ namespace {
                     }
                 }
 
+                // A `*mut T` receiver taken as `*const T` is a cast, not a borrow.
+                if (adBorrow == TraitResolution::AutoderefBorrow::RawShared) {
+                    const auto& srcTy = this->context.getType(node.value->resType);
+                    ASSERT_BUG(sp, srcTy->is_Pointer(), "RawShared adjustment on " << srcTy);
+                    auto ty = context.crate.types.pointer(HIRBorrowType::Shared, srcTy->as_Pointer().inner);
+                    DEBUG("- Raw cast (cmd) " << &*node.value << " -> " << ty);
+                    auto span = node.value->span();
+                    node.value = NEWNODE(ty, span, Cast, mv$(node.value), ty);
+                }
                 // Autoref
-                if (adBorrow != TraitResolution::AutoderefBorrow::None) {
+                else if (adBorrow != TraitResolution::AutoderefBorrow::None) {
                     HIRBorrowType bt = HIRBorrowType::Shared;
                     switch (adBorrow) {
                         case TraitResolution::AutoderefBorrow::None:
+                        case TraitResolution::AutoderefBorrow::RawShared:
                             throw "";
                         case TraitResolution::AutoderefBorrow::Shared:
                             bt = HIRBorrowType::Shared;

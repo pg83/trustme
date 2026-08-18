@@ -7385,6 +7385,21 @@ TU_ARMA(Alias, ee) {
                         DEBUG("FOUND *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
                     }
 
+                    // `*mut T` coerces to `*const T`, so a method written for
+                    // the shared pointer applies to the mutable one. Only look
+                    // when the mutable pointer has none of its own, so that a
+                    // method on it still wins.
+                    if (possibilities.empty()) {
+                        if (const auto* ptr = ty->opt_Pointer()) {
+                            if (ptr->type != HIRBorrowType::Shared) {
+                                auto constTy = crate.types.pointer(HIRBorrowType::Shared, ptr->inner);
+                                if (this->findMethod(sp, traits, ivars, typeIvarCount, constTy, methodName, curAccess, AutoderefBorrow::RawShared, possibilities)) {
+                                    DEBUG("FOUND *const *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
+                                }
+                            }
+                        }
+                    }
+
                     // Auto-ref
                     auto borrowTy = crate.types.borrow(HIRBorrowType::Shared, ty);
                     if (this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Shared, possibilities)) {
@@ -7443,6 +7458,9 @@ TU_ARMA(Alias, ee) {
                     break;
                 case TraitResolution::AutoderefBorrow::Unique:
                     os << "Unique";
+                    break;
+                case TraitResolution::AutoderefBorrow::RawShared:
+                    os << "RawShared";
                     break;
                 case TraitResolution::AutoderefBorrow::Owned:
                     os << "Owned";

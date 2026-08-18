@@ -98,11 +98,6 @@ The 46 tests routed through the trait-selection and type-mismatch lines are not
 one root cause: fixing integer inference through an operator took two of them
 and left the rest untouched. Minimise each before grouping.
 
-A method reached through a raw pointer's mutability (`(p: *mut u16).try_into()`
-finding an impl for `*const u16`) needs a receiver adjustment that does not
-exist here. Adding the candidate to the probe is not enough: confirmation then
-rejects the receiver, because nothing turns the mutable pointer into the shared
-one. `future-prelude-collision.rs` is the test.
 
 `IntoIterator for Box<[T]>` is four of them (two `into-iter-on-*-lint`, two
 `into-iter-on-boxed-slices-*`) and one bug in the method probe. Two attempts
