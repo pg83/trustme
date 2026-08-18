@@ -53,8 +53,6 @@ namespace {
                         };
                         switch (str.data.tag()) {
                             case HIRStructData::TAG_Unit: {
-                                auto& se = str.data.as_Unit();
-                                (void)se;
                                 MIR_BUG(state, "Unit-like struct with DstType::Possible - " << unsizedTy);
                                 break;
                             }
@@ -263,8 +261,6 @@ default:
         DEBUG("Unknown type " << ty << ", but a path was provided - Return ItemAddr " << path);
         return MIRConstant::make_ItemAddr(box$(path));
         case HIRTypeData::TAG_Tuple: {
-            auto& te = (*ty).as_Tuple();
-            (void)te;
             auto* repr = TargetGetTypeRepr(state.sp, state.resolve, ty);
             MIR_ASSERT(state, repr, "No type repr, but encoded value available? " << ty);
 
@@ -662,8 +658,6 @@ default:
             return MIRConstant::make_Function({box$(te.path.clone())});
         }
         case HIRTypeData::TAG_Function: {
-            auto& te = (*ty).as_Function();
-            (void)te;
             const auto* dataReloc = lit.getReloc();
             MIR_ASSERT(state, dataReloc, "Function with no relocation?!");
             MIR_ASSERT(state, dataReloc->p, "");
@@ -719,8 +713,6 @@ MIRLValue MIRCleanupVirtualize(const Span& sp, const MIRTypeResolve& state, MirM
                 ::std::vector<MIRParam> vals;
                 switch (str.data.tag()) {
                     case HIRStructData::TAG_Unit: {
-                        auto& se = str.data.as_Unit();
-                        (void)se;
                         break;
                     }
                     case HIRStructData::TAG_Tuple: {
@@ -795,8 +787,6 @@ default:
         MIR_TODO(state, "Obtain metadata converting to " << dstTy);
         break;
         case HIRTypeData::TAG_Generic: {
-            auto& de = (*dstTy).as_Generic();
-            (void)de;
             // TODO: What should be returned to indicate "no conversion"
             return false;
         }
@@ -821,8 +811,6 @@ default:
                 // Return GetMetadata on the inner type
             switch (str.data.tag()) {
                 case HIRStructData::TAG_Unit: {
-                    auto& se = str.data.as_Unit();
-                    (void)se;
                     MIR_BUG(state, "Unit-like struct Unsize is impossible - " << srcTy);
                     break;
                 }
@@ -846,8 +834,6 @@ default:
             throw "";
         }
         case HIRTypeData::TAG_Slice: {
-            auto& de = (*dstTy).as_Slice();
-            (void)de;
             // Source must be an array (or generic)
             if (srcTy->is_Array()) {
                 const auto& inArray = srcTy->as_Array();
@@ -950,8 +936,6 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
         ::std::vector<MIRParam> ents;
         switch (str.data.tag()) {
             case HIRStructData::TAG_Unit: {
-                auto& se = str.data.as_Unit();
-                (void)se;
                 MIR_BUG(state, "Unit-like struct CoerceUnsized is impossible - " << srcTy);
                 break;
             }
@@ -1047,23 +1031,15 @@ MIRRValue MIRCleanupCoerceUnsized(const MIRTypeResolve& state, MirMutator& mutat
 void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValue& lval) {
     switch (lval.root.tag()) {
         case MIRLValue::Storage::TAG_Return: {
-            decltype(lval.root.as_Return()) le = lval.root.as_Return();
-            (void)le;
             break;
         }
         case MIRLValue::Storage::TAG_Argument: {
-            decltype(lval.root.as_Argument()) le = lval.root.as_Argument();
-            (void)le;
             break;
         }
         case MIRLValue::Storage::TAG_Local: {
-            decltype(lval.root.as_Local()) le = lval.root.as_Local();
-            (void)le;
             break;
         }
         case MIRLValue::Storage::TAG_Static: {
-            decltype(lval.root.as_Static()) le = lval.root.as_Static();
-            (void)le;
             break;
         }
     }
@@ -1092,8 +1068,6 @@ void MIRCleanupLValue(const MIRTypeResolve& state, MirMutator& mutator, MIRLValu
                 const HIRTypeData* tyTpl = nullptr;
                 switch (str.data.tag()) {
                     case HIRStructData::TAG_Unit: {
-                        auto& se = str.data.as_Unit();
-                        (void)se;
                         MIR_BUG(state, "Box contained a unit-like struct");
                         break;
                     }
@@ -1218,8 +1192,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
             DEBUG(state << stmt);
             switch (stmt.tag()) {
                 case MIRStatement::TAG_SetDropFlag: {
-                    auto& se = stmt.as_SetDropFlag();
-                    (void)se;
                     break;
                 }
                 case MIRStatement::TAG_SaveDropFlag: {
@@ -1233,8 +1205,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     break;
                 }
                 case MIRStatement::TAG_ScopeEnd: {
-                    auto& se = stmt.as_ScopeEnd();
-                    (void)se;
                     break;
                 }
                 case MIRStatement::TAG_Asm: {
@@ -1252,13 +1222,9 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                     for (auto& p : e.params) {
                     switch (p.tag()) {
                         case MIRAsmParam::TAG_Const: {
-                            auto& v = p.as_Const();
-                            (void)v;
                             break;
                         }
                         case MIRAsmParam::TAG_Sym: {
-                            auto& v = p.as_Sym();
-                            (void)v;
                             break;
                         }
                         case MIRAsmParam::TAG_Reg: {
@@ -1272,8 +1238,6 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                             break;
                         }
                         case MIRAsmParam::TAG_Label: {
-                            auto& v = p.as_Label();
-                            (void)v;
                             break;
                         }
                     }
@@ -1506,33 +1470,21 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
 
         switch (block.terminator.tag()) {
             case MIRTerminator::TAG_Incomplete: {
-                auto& e = block.terminator.as_Incomplete();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Return: {
-                auto& e = block.terminator.as_Return();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_UnwindResume: {
-                auto& e = block.terminator.as_UnwindResume();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_UnwindTerminate: {
-                auto& e = block.terminator.as_UnwindTerminate();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Unreachable: {
-                auto& e = block.terminator.as_Unreachable();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Goto: {
-                auto& e = block.terminator.as_Goto();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_If: {
@@ -1653,14 +1605,10 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         }
                         switch (fcnTy.def.tag()) {
                             case HIRTypeDataNamedFunctionTy::TAG_Function: {
-                                auto& ve = fcnTy.def.as_Function();
-                                (void)ve;
                                 e.fcn = fcnTy.path.clone();
                                 break;
                             }
                             case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
-                                auto& ve = fcnTy.def.as_StructConstructor();
-                                (void)ve;
                                 block.statements.push_back(MIRStatement::make_Assign({std::move(e.retVal), MIRRValue::make_Struct({fcnTy.path.data.as_Generic().clone(), std::move(e.args)})}));
                                 block.terminator = MIRTerminator::make_Goto(e.retBlock);
                                 break;
@@ -1740,19 +1688,16 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                         switch (fcnTy.def.tag()) {
                             case HIRTypeDataNamedFunctionTy::TAG_Function: {
                                 auto& _ = fcnTy.def.as_Function();
-                                (void)_;
                                 e.fcn = fcnTy.path.clone();
                                 break;
                             }
                             case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
                                 auto& _ = fcnTy.def.as_StructConstructor();
-                                (void)_;
                                 MIR_BUG(state, "Struct constructor used as an explicit tail-call target");
                                 break;
                             }
                             case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
                                 auto& _ = fcnTy.def.as_EnumConstructor();
-                                (void)_;
                                 MIR_BUG(state, "Enum constructor used as an explicit tail-call target");
                                 break;
                             }
@@ -2131,8 +2076,6 @@ namespace {
                 break;
             }
             case MIRRValue::TAG_Constant: {
-                auto& se = rval.as_Constant();
-                (void)se;
                 break;
             }
             case MIRRValue::TAG_SizedArray: {
@@ -2244,13 +2187,9 @@ namespace {
                 for (auto& p : e.params) {
                 switch (p.tag()) {
                     case MIRAsmParam::TAG_Const: {
-                        auto& v = p.as_Const();
-                        (void)v;
                         break;
                     }
                     case MIRAsmParam::TAG_Sym: {
-                        auto& v = p.as_Sym();
-                        (void)v;
                         break;
                     }
                     case MIRAsmParam::TAG_Reg: {
@@ -2264,8 +2203,6 @@ namespace {
                         break;
                     }
                     case MIRAsmParam::TAG_Label: {
-                        auto& v = p.as_Label();
-                        (void)v;
                         break;
                     }
                 }
@@ -2273,8 +2210,6 @@ namespace {
                 break;
             }
             case MIRStatement::TAG_SetDropFlag: {
-                auto& e = stmt.as_SetDropFlag();
-                (void)e;
                 break;
             }
             case MIRStatement::TAG_SaveDropFlag: {
@@ -2288,8 +2223,6 @@ namespace {
                 break;
             }
             case MIRStatement::TAG_ScopeEnd: {
-                auto& e = stmt.as_ScopeEnd();
-                (void)e;
                 break;
             }
         }
@@ -2306,33 +2239,21 @@ namespace {
         bool rv = false;
         switch (term.tag()) {
             case MIRTerminator::TAG_Incomplete: {
-                auto& e = term.as_Incomplete();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Return: {
-                auto& e = term.as_Return();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_UnwindResume: {
-                auto& e = term.as_UnwindResume();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_UnwindTerminate: {
-                auto& e = term.as_UnwindTerminate();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Unreachable: {
-                auto& e = term.as_Unreachable();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Goto: {
-                auto& e = term.as_Goto();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_If: {
@@ -2509,8 +2430,6 @@ namespace {
 
         switch (path.data.tag()) {
             case HIRPathData::TAG_Generic: {
-                auto& pe = path.data.as_Generic();
-                (void)pe;
                 params.selfTy = nullptr;
                 break;
             }
@@ -2525,8 +2444,6 @@ namespace {
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
-                auto& pe = path.data.as_UfcsUnknown();
-                (void)pe;
                 MIR_BUG(state, "UfcsUnknown hit - " << path);
                 break;
             }
@@ -2538,12 +2455,10 @@ default:
             break;
             case TypeckValuePtr::TAG_NotFound: {
                 auto& _ = e.as_NotFound();
-                (void)_;
                 return nullptr;
             }
             case TypeckValuePtr::TAG_NotYetKnown: {
                 auto& _ = e.as_NotYetKnown();
-                (void)_;
                 return nullptr;
             }
             case TypeckValuePtr::TAG_Function: {
@@ -3098,8 +3013,6 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             } else if (src.is_UnwindResume()) {
                 switch (this->te.unwind.tag()) {
                     case MIRUnwindAction::TAG_Continue: {
-                        auto& ue = this->te.unwind.as_Continue();
-                        (void)ue;
                         return MIRTerminator::make_UnwindResume({});
                     }
                     case MIRUnwindAction::TAG_Cleanup: {
@@ -3107,13 +3020,9 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
                         return MIRTerminator::make_Goto(ue);
                     }
                     case MIRUnwindAction::TAG_Terminate: {
-                        auto& ue = this->te.unwind.as_Terminate();
-                        (void)ue;
                         return MIRTerminator::make_UnwindTerminate({});
                     }
                     case MIRUnwindAction::TAG_Unreachable: {
-                        auto& ue = this->te.unwind.as_Unreachable();
-                        (void)ue;
                         return MIRTerminator::make_Unreachable({});
                     }
                 }
@@ -3540,8 +3449,6 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
                                 break;
                             }
                             case MIRStatement::TAG_Asm: {
-                                auto& se = setStmt.as_Asm();
-                                (void)se;
                                 // Initialised from an ASM statement, find the variable in the output parameters
                                 break;
                             }
@@ -5212,8 +5119,6 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                         break;
                     }
                     case MIRRValue::TAG_Constant: {
-                        auto& se = e->src.as_Constant();
-                        (void)se;
                         // Ignore (knowledge done below)
                         break;
                     }
@@ -5793,7 +5698,6 @@ default:
                                 }
                                 case MIRParam::TAG_Borrow: {
                                     auto& _ = newValue.as_Borrow();
-                                    (void)_;
                                     throw "";
                                 }
                                 case MIRParam::TAG_Constant: {
@@ -5873,8 +5777,6 @@ default:
                                     break;
                                 }
                                 case MIRConstant::TAG_Float: {
-                                    auto& ve = val.as_Float();
-                                    (void)ve;
                                     // Not valid?
                                     break;
                                 }
@@ -5885,39 +5787,25 @@ default:
                                     break;
                                 }
                                 case MIRConstant::TAG_Bytes: {
-                                    auto& ve = val.as_Bytes();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_StaticString: {
-                                    auto& ve = val.as_StaticString();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_Encoded: {
-                                    auto& ve = val.as_Encoded();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_Const: {
-                                    auto& ve = val.as_Const();
-                                    (void)ve;
                                     // TODO:
                                     break;
                                 }
                                 case MIRConstant::TAG_Generic: {
-                                    auto& ve = val.as_Generic();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_Function: {
-                                    auto& ve = val.as_Function();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_ItemAddr: {
-                                    auto& ve = val.as_ItemAddr();
-                                    (void)ve;
                                     break;
                                 }
                             }
@@ -5925,8 +5813,6 @@ default:
                         case MIRUniOp::NEG:
                             switch (val.tag()) {
                                 case MIRConstant::TAG_Uint: {
-                                    auto& ve = val.as_Uint();
-                                    (void)ve;
                                     // Not valid?
                                     break;
                                 }
@@ -5945,45 +5831,29 @@ default:
                                     break;
                                 }
                                 case MIRConstant::TAG_Bool: {
-                                    auto& ve = val.as_Bool();
-                                    (void)ve;
                                     // Not valid?
                                     break;
                                 }
                                 case MIRConstant::TAG_Bytes: {
-                                    auto& ve = val.as_Bytes();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_StaticString: {
-                                    auto& ve = val.as_StaticString();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_Encoded: {
-                                    auto& ve = val.as_Encoded();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_Const: {
-                                    auto& ve = val.as_Const();
-                                    (void)ve;
                                     // TODO:
                                     break;
                                 }
                                 case MIRConstant::TAG_Generic: {
-                                    auto& ve = val.as_Generic();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_Function: {
-                                    auto& ve = val.as_Function();
-                                    (void)ve;
                                     break;
                                 }
                                 case MIRConstant::TAG_ItemAddr: {
-                                    auto& ve = val.as_ItemAddr();
-                                    (void)ve;
                                     break;
                                 }
                             }
@@ -5998,13 +5868,9 @@ default:
                         break;
                     }
                     case MIRRValue::TAG_DstMeta: {
-                        auto& se = e->src.as_DstMeta();
-                        (void)se;
                         break;
                     }
                     case MIRRValue::TAG_DstPtr: {
-                        auto& se = e->src.as_DstPtr();
-                        (void)se;
                         break;
                     }
                     case MIRRValue::TAG_MakeDst: {
@@ -6644,75 +6510,49 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     }
                     switch (block.terminator.tag()) {
                         case MIRTerminator::TAG_Incomplete: {
-                            auto& e = block.terminator.as_Incomplete();
-                            (void)e;
                             break;
                         }
                         case MIRTerminator::TAG_Return: {
-                            auto& e = block.terminator.as_Return();
-                            (void)e;
                             break;
                         }
                         case MIRTerminator::TAG_UnwindResume: {
-                            auto& e = block.terminator.as_UnwindResume();
-                            (void)e;
                             break;
                         }
                         case MIRTerminator::TAG_UnwindTerminate: {
-                            auto& e = block.terminator.as_UnwindTerminate();
-                            (void)e;
                             break;
                         }
                         case MIRTerminator::TAG_Unreachable: {
-                            auto& e = block.terminator.as_Unreachable();
-                            (void)e;
                             break;
                         }
                         case MIRTerminator::TAG_Goto: {
-                            auto& e = block.terminator.as_Goto();
-                            (void)e;
                             DEBUG("TODO: Chain");
                             break;
                         }
                         case MIRTerminator::TAG_If: {
-                            auto& e = block.terminator.as_If();
-                            (void)e;
                             stop = true;
                             break;
                         }
                         case MIRTerminator::TAG_Switch: {
-                            auto& e = block.terminator.as_Switch();
-                            (void)e;
                             stop = true;
                             break;
                         }
                         case MIRTerminator::TAG_SwitchValue: {
-                            auto& e = block.terminator.as_SwitchValue();
-                            (void)e;
                             stop = true;
                             break;
                         }
                         case MIRTerminator::TAG_Drop: {
-                            auto& e = block.terminator.as_Drop();
-                            (void)e;
                             stop = true;
                             break;
                         }
                         case MIRTerminator::TAG_Call: {
-                            auto& e = block.terminator.as_Call();
-                            (void)e;
                             stop = true;
                             break;
                         }
                         case MIRTerminator::TAG_TailCall: {
-                            auto& e = block.terminator.as_TailCall();
-                            (void)e;
                             stop = true;
                             break;
                         }
                         case MIRTerminator::TAG_Asm2: {
-                            auto& e = block.terminator.as_Asm2();
-                            (void)e;
                             stop = true;
                             break;
                         }
@@ -7413,8 +7253,6 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
             {
                 switch (srcBb.terminator.tag()) {
                     case MIRTerminator::TAG_Goto: {
-                        auto& e = srcBb.terminator.as_Goto();
-                        (void)e;
                         if (srcBb.statements.empty()) {
                             DEBUG(state << "BB" << bbIdx << " empty");
                         } else if ((srcBb.statements.back().is_Assign() && (srcBb.statements.back().as_Assign().dst == src))) {
@@ -7800,28 +7638,18 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
 
         switch (bb.terminator.tag()) {
             case MIRTerminator::TAG_Incomplete: {
-                auto& te = bb.terminator.as_Incomplete();
-                (void)te;
                 break;
             }
             case MIRTerminator::TAG_Return: {
-                auto& te = bb.terminator.as_Return();
-                (void)te;
                 break;
             }
             case MIRTerminator::TAG_UnwindResume: {
-                auto& te = bb.terminator.as_UnwindResume();
-                (void)te;
                 break;
             }
             case MIRTerminator::TAG_UnwindTerminate: {
-                auto& te = bb.terminator.as_UnwindTerminate();
-                (void)te;
                 break;
             }
             case MIRTerminator::TAG_Unreachable: {
-                auto& te = bb.terminator.as_Unreachable();
-                (void)te;
                 break;
             }
             case MIRTerminator::TAG_Goto: {
@@ -7861,8 +7689,6 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
                 break;
             }
             case MIRTerminator::TAG_TailCall: {
-                auto& te = bb.terminator.as_TailCall();
-                (void)te;
                 break;
             }
             case MIRTerminator::TAG_Asm2: {

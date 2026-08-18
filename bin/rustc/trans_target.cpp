@@ -538,16 +538,12 @@ namespace {
 bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t& outSize, size_t& outAlign) {
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& te = (*ty).as_Infer();
-            (void)te;
             // Layout queries are also used while relating unevaluated generic
             // constants.  An inference variable has no layout yet; report the
             // query as deferred, just like a generic or unresolved opaque type.
             return false;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& te = (*ty).as_Diverge();
-            (void)te;
             outSize = 0;
             outAlign = 1;
             return true;
@@ -637,23 +633,17 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             return true;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& te = (*ty).as_Generic();
-            (void)te;
             // Unknown - return false
             DEBUG("No repr for Generic - " << ty);
             return false;
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& te = (*ty).as_TraitObject();
-            (void)te;
             outAlign = 0;
             outSize = SIZE_MAX;
             DEBUG("sizeof on a trait object - unsized");
             return true;
         }
         case HIRTypeData::TAG_ErasedType: {
-            auto& te = (*ty).as_ErasedType();
-            (void)te;
             BUG(sp, "sizeof on an erased type - shouldn't exist");
             break;
         }
@@ -693,8 +683,6 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             return true;
         }
         case HIRTypeData::TAG_Tuple: {
-            auto& te = (*ty).as_Tuple();
-            (void)te;
             const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
             if (!repr) {
                 DEBUG("Cannot get type repr for " << ty);
@@ -744,16 +732,12 @@ bool TargetGetSizeAndAlignOf(const Span& sp, const StaticTraitResolve& resolve, 
             return true;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& te = (*ty).as_NamedFunction();
-            (void)te;
             // Zero size
             outSize = 0;
             outAlign = 1;
             return true;
         }
         case HIRTypeData::TAG_Function: {
-            auto& te = (*ty).as_Function();
-            (void)te;
             // Pointer size
             outSize = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
             outAlign = TargetGetCurSpec(resolve.board()).arch.pointerBits / 8;
@@ -833,8 +817,6 @@ namespace {
         };
         switch (str.data.tag()) {
             case HIRStructData::TAG_Unit: {
-                auto& se = str.data.as_Unit();
-                (void)se;
                 break;
             }
             case HIRStructData::TAG_Tuple: {
@@ -1168,8 +1150,6 @@ namespace {
         switch (ty->tag()) {
             break;
             case HIRTypeData::TAG_Tuple: {
-                auto& te = (*ty).as_Tuple();
-                (void)te;
                 const TypeRepr* repr = TargetGetTypeRepr(sp, resolve, ty);
                 if (!repr) {
                     return false;
@@ -1248,8 +1228,6 @@ namespace {
             break;
             break;
             case HIRTypeData::TAG_Borrow: {
-                auto& _te = (*ty).as_Borrow();
-                (void)_te;
                 // TODO: Only return a single-pointer size
                 outPath.size = TargetGetPointerBits() / 8;
                 return true;
@@ -1320,8 +1298,6 @@ namespace {
         switch (ty->tag()) {
             break;
             case HIRTypeData::TAG_Tuple: {
-                auto& te = (*ty).as_Tuple();
-                (void)te;
                 const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                 if (!r) {
                     return false;
@@ -1418,8 +1394,6 @@ namespace {
 
                 switch (r->variants.tag()) {
                     case TypeReprVariantMode::TAG_None: {
-                        auto& ve = r->variants.as_None();
-                        (void)ve;
                         // If there is no discriminator, recurse into the only field
                         if (r->fields.empty()) {
                             return false;
@@ -1546,8 +1520,6 @@ namespace {
                         return false;
                     }
                     case TypeReprVariantMode::TAG_NonZero: {
-                        auto& _ve = r->variants.as_NonZero();
-                        (void)_ve;
                         DEBUG("Non-zero enum, can't niche");
                         return false;
                     }
@@ -1614,8 +1586,6 @@ namespace {
             }
             break;
             case HIRTypeData::TAG_Borrow: {
-                auto& te = (*ty).as_Borrow();
-                (void)te;
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
                     nicheStart = 0;
@@ -1625,8 +1595,6 @@ namespace {
             }
             break;
             case HIRTypeData::TAG_Function: {
-                auto& te = (*ty).as_Function();
-                (void)te;
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
                     nicheStart = 0;
@@ -2184,8 +2152,6 @@ namespace {
 
         switch (rv.variants.tag()) {
             case TypeReprVariantMode::TAG_None: {
-                auto& e = rv.variants.as_None();
-                (void)e;
                 DEBUG("rv.variants = None");
                 break;
             }
@@ -2475,8 +2441,6 @@ std::pair<unsigned, bool> TypeRepr::getEnumVariant(const Span& sp, const StaticT
     bool subHasTag = false;
     switch (this->variants.tag()) {
         case TypeReprVariantMode::TAG_None: {
-            auto& ve = this->variants.as_None();
-            (void)ve;
             break;
         }
         case TypeReprVariantMode::TAG_Linear: {
@@ -2860,7 +2824,6 @@ namespace {
                 return number(size);
             }
             if (const auto* tuple = ty->opt_Tuple()) {
-                (void)tuple;
                 const auto* repr = TargetGetTypeRepr(sp, resolve, ty);
                 if (!repr) {
                     supported = false;
@@ -3202,7 +3165,6 @@ bool TargetTypesAreTransmutable(
     bool assumeSafety,
     bool assumeValidity
 ) {
-    (void)assumeLifetimes;
     return TransmuteTypeChecker(sp, resolve, assumeAlignment, assumeSafety, assumeValidity).check(src, dst);
 }
 

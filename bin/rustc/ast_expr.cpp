@@ -1067,8 +1067,6 @@ NV(ASTExprNodeAsm2, {
                 break;
             }
             case ASTAsmParam::TAG_Sym: {
-                auto& e = v.as_Sym();
-                (void)e;
                 break;
             }
             case ASTAsmParam::TAG_Label: {
@@ -1200,7 +1198,6 @@ NV(ASTExprNodeTuple, {
     }
 })
 NV(ASTExprNodeNamedValue, {
-    (void)node;
     // LEAF
 })
 

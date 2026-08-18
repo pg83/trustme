@@ -7,8 +7,6 @@
 ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val) {
     switch (val.tag()) {
         case ASTPattern::Value::TAG_Invalid: {
-            auto& e = val.as_Invalid();
-            (void)e;
             os << "/*BAD PAT VAL*/";
             break;
         }
@@ -110,14 +108,10 @@
             break;
         }
         case ASTPatternData::TAG_Any: {
-            auto& ent = pat.data_.as_Any();
-            (void)ent;
             os << "_";
             break;
         }
         case ASTPatternData::TAG_Never: {
-            auto& ent = pat.data_.as_Never();
-            (void)ent;
             os << "!";
             break;
         }
@@ -256,8 +250,6 @@ bool PatternContainsNever(const ASTPattern& pat) {
 default:
         return false;
         case ASTPatternData::TAG_Never: {
-            auto& e = pat.data().as_Never();
-            (void)e;
             return true;
         }
         case ASTPatternData::TAG_Box: {
@@ -557,10 +549,6 @@ namespace {
         if (rv != OrdEqual) return rv;
         switch (a.tag()) {
             case ASTPattern::Value::TAG_Invalid: {
-                auto& ae = a.as_Invalid();
-                (void)ae;
-                auto& be = b.as_Invalid();
-                (void)be;
                 return OrdEqual;
             }
             case ASTPattern::Value::TAG_Integer: {
@@ -623,24 +611,12 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
             return ::ord(ae.name.name, be.name.name);
         }
         case ASTPattern::Data::TAG_Macro: {
-            auto& ae = a.data().as_Macro();
-            (void)ae;
-            auto& be = b.data().as_Macro();
-            (void)be;
             throw CompileErrorBugCheck("ord on unexpanded pattern macro");
         }
         case ASTPattern::Data::TAG_Any: {
-            auto& ae = a.data().as_Any();
-            (void)ae;
-            auto& be = b.data().as_Any();
-            (void)be;
             return OrdEqual;
         }
         case ASTPattern::Data::TAG_Never: {
-            auto& ae = a.data().as_Never();
-            (void)ae;
-            auto& be = b.data().as_Never();
-            (void)be;
             return OrdEqual;
         }
         case ASTPattern::Data::TAG_Box: {
@@ -649,10 +625,6 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
             return ::ord(*ae.sub, *be.sub);
         }
         case ASTPattern::Data::TAG_Guard: {
-            auto& ae = a.data().as_Guard();
-            (void)ae;
-            auto& be = b.data().as_Guard();
-            (void)be;
             throw CompileErrorBugCheck("ord on a guard pattern");
         }
         case ASTPattern::Data::TAG_Deref: {
@@ -667,38 +639,18 @@ Ordering ord(const ASTPattern& a, const ASTPattern& b) {
             break;
         }
         case ASTPattern::Data::TAG_Tuple: {
-            auto& ae = a.data().as_Tuple();
-            (void)ae;
-            auto& be = b.data().as_Tuple();
-            (void)be;
             throw CompileErrorBugCheck("ord on unsupported tuple pattern type");
         }
         case ASTPattern::Data::TAG_StructTuple: {
-            auto& ae = a.data().as_StructTuple();
-            (void)ae;
-            auto& be = b.data().as_StructTuple();
-            (void)be;
             throw CompileErrorBugCheck("ord on unsupported tuple-struct pattern type");
         }
         case ASTPattern::Data::TAG_Struct: {
-            auto& ae = a.data().as_Struct();
-            (void)ae;
-            auto& be = b.data().as_Struct();
-            (void)be;
             throw CompileErrorBugCheck("ord on unsupported struct pattern type");
         }
         case ASTPattern::Data::TAG_Slice: {
-            auto& ae = a.data().as_Slice();
-            (void)ae;
-            auto& be = b.data().as_Slice();
-            (void)be;
             throw CompileErrorBugCheck("ord on unsupported slice pattern type");
         }
         case ASTPattern::Data::TAG_SplitSlice: {
-            auto& ae = a.data().as_SplitSlice();
-            (void)ae;
-            auto& be = b.data().as_SplitSlice();
-            (void)be;
             throw CompileErrorBugCheck("ord on unsupported split-slice pattern type");
         }
     }

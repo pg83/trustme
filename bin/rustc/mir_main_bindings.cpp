@@ -153,8 +153,6 @@ namespace {
                 auto fmtUnwind = [this](const MIRUnwindAction& action) {
                     switch (action.tag()) {
                         case MIRUnwindAction::TAG_Continue: {
-                            auto& ue = action.as_Continue();
-                            (void)ue;
                             os << "continue";
                             break;
                         }
@@ -164,14 +162,10 @@ namespace {
                             break;
                         }
                         case MIRUnwindAction::TAG_Terminate: {
-                            auto& ue = action.as_Terminate();
-                            (void)ue;
                             os << "terminate";
                             break;
                         }
                         case MIRUnwindAction::TAG_Unreachable: {
-                            auto& ue = action.as_Unreachable();
-                            (void)ue;
                             os << "unreachable";
                             break;
                         }
@@ -179,32 +173,22 @@ namespace {
                 };
                 switch (block.terminator.tag()) {
                     case MIRTerminator::TAG_Incomplete: {
-                        auto& e = block.terminator.as_Incomplete();
-                        (void)e;
                         os << "INVALID;\n";
                         break;
                     }
                     case MIRTerminator::TAG_Return: {
-                        auto& e = block.terminator.as_Return();
-                        (void)e;
                         os << "return;\n";
                         break;
                     }
                     case MIRTerminator::TAG_UnwindResume: {
-                        auto& e = block.terminator.as_UnwindResume();
-                        (void)e;
                         os << "unwind resume;\n";
                         break;
                     }
                     case MIRTerminator::TAG_UnwindTerminate: {
-                        auto& e = block.terminator.as_UnwindTerminate();
-                        (void)e;
                         os << "unwind terminate;\n";
                         break;
                     }
                     case MIRTerminator::TAG_Unreachable: {
-                        auto& e = block.terminator.as_Unreachable();
-                        (void)e;
                         os << "unreachable;\n";
                         break;
                     }

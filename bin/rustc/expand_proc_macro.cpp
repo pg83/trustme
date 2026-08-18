@@ -941,8 +941,6 @@ namespace {
 default:
                 TODO(sp, "visit_pattern " << pat.data().tagStr() << " - " << pat);
                 case ASTPatternData::TAG_Any: {
-                    auto& e = pat.data().as_Any();
-                    (void)e;
                     pmi.sendRword("_");
                     break;
                 }
@@ -1022,26 +1020,18 @@ default:
             // TODO: Correct handling of visit_type
             switch (ty->data.tag()) {
                 case TypeData::TAG_None: {
-                    auto& te = ty->data.as_None();
-                    (void)te;
                     BUG(sp, ty);
                     break;
                 }
                 case TypeData::TAG_Any: {
-                    auto& te = ty->data.as_Any();
-                    (void)te;
                     pmi.sendRword("_");
                     break;
                 }
                 case TypeData::TAG_Bang: {
-                    auto& te = ty->data.as_Bang();
-                    (void)te;
                     pmi.sendSymbol("!");
                     break;
                 }
                 case TypeData::TAG_Unit: {
-                    auto& te = ty->data.as_Unit();
-                    (void)te;
                     pmi.sendSymbol("("); pmi.sendSymbol(")");
                     break;
                 }
@@ -1051,14 +1041,10 @@ default:
                     break;
                 }
                 case TypeData::TAG_Primitive: {
-                    auto& te = ty->data.as_Primitive();
-                    (void)te;
                     TODO(sp, "proc_macro send primitive - " << ty);
                     break;
                 }
                 case TypeData::TAG_Function: {
-                    auto& te = ty->data.as_Function();
-                    (void)te;
                     ::std::stringstream ss; ss << ty << " "; DEBUG("STRING: " << ss.str());
 
                     parseString(ss.str());
@@ -1193,7 +1179,6 @@ default:
                     switch (ent.tag()) {
                         case ASTPathParamEnt::TAG_Null: {
                             auto& _ = ent.as_Null();
-                            (void)_;
                             break;
                         }
                         case ASTPathParamEnt::TAG_Lifetime: {
@@ -1249,8 +1234,6 @@ default:
             const ::std::vector<ASTPathNode>* nodes = nullptr;
             switch (path.cls.tag()) {
                 case ASTPathClass::TAG_Invalid: {
-                    auto& pe = path.cls.as_Invalid();
-                    (void)pe;
                     BUG(sp, "Invalid path");
                     break;
                 }
@@ -1337,8 +1320,6 @@ default:
                     }
                     switch (param.tag()) {
                         case GenericParam::TAG_None: {
-                            auto& p = param.as_None();
-                            (void)p;
                             // Uh... oops?
                             BUG(sp, "Enountered GenericParam::None");
                             break;
@@ -1362,8 +1343,6 @@ default:
 default:
                                 BUG(sp, "");
                                     case ASTGenericBound::TAG_None: {
-                                        auto& be = tuMatch.as_None();
-                                        (void)be;
                                         break;
                                     }
                                     case ASTGenericBound::TAG_Lifetime: {
@@ -1396,8 +1375,6 @@ default:
 default:
                                 BUG(sp, "Unhandled bound type - " << params.bounds[i]);
                                     case ASTGenericBound::TAG_None: {
-                                        auto& be = tuMatch.as_None();
-                                        (void)be;
                                         break;
                                     }
                                     case ASTGenericBound::TAG_TypeLifetime: {
@@ -1484,8 +1461,6 @@ default:
                     }
                     switch (e.tag()) {
                         case ASTGenericBound::TAG_None: {
-                            auto& be = e.as_None();
-                            (void)be;
                             continue;
                         }
                         case ASTGenericBound::TAG_Lifetime: {
@@ -1667,8 +1642,6 @@ default:
             this->visitParams(str.params());
             switch (str.data.tag()) {
                 case ASTStructData::TAG_Unit: {
-                    auto& se = str.data.as_Unit();
-                    (void)se;
                     this->visitBounds(str.params());
                     pmi.sendSymbol(";");
                     break;
@@ -1723,8 +1696,6 @@ default:
                 pmi.sendIdent(v.name.c_str());
                 switch (v.data.tag()) {
                     case ASTEnumVariantData::TAG_Unit: {
-                        auto& e = v.data.as_Unit();
-                        (void)e;
                         break;
                     }
                     case ASTEnumVariantData::TAG_Tuple: {

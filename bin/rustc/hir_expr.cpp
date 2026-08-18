@@ -523,8 +523,6 @@ DEF_VISIT_H(HIRExprNodeAsyncBlock, node) {
 void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
     switch (pat.data.tag()) {
         case HIRPatternData::TAG_Any: {
-            auto& e = pat.data.as_Any();
-            (void)e;
             break;
         }
         case HIRPatternData::TAG_Box: {
@@ -586,13 +584,9 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
             break;
         }
         case HIRPatternData::TAG_Value: {
-            auto& e = pat.data.as_Value();
-            (void)e;
             break;
         }
         case HIRPatternData::TAG_Range: {
-            auto& e = pat.data.as_Range();
-            (void)e;
             break;
         }
         case HIRPatternData::TAG_Slice: {
@@ -626,18 +620,12 @@ void HIRExprVisitorDef::visitType(HIRTypeRef& ty) {
     auto data = ty->cloneData();
     switch (data.tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = data.as_Infer();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = data.as_Diverge();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = data.as_Primitive();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Path: {
@@ -646,8 +634,6 @@ void HIRExprVisitorDef::visitType(HIRTypeRef& ty) {
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = data.as_Generic();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
@@ -675,8 +661,6 @@ void HIRExprVisitorDef::visitType(HIRTypeRef& ty) {
                             break;
                         }
                         case TypeDataErasedTypeInner::TAG_Alias: {
-                            auto& ee = e.inner.as_Alias();
-                            (void)ee;
                             break;
                         }
                     }
@@ -728,8 +712,6 @@ void HIRExprVisitorDef::visitType(HIRTypeRef& ty) {
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = data.as_NodeType();
-            (void)e;
             break;
         }
     }

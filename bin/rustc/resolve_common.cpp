@@ -58,22 +58,16 @@ namespace {
             const auto& baseNodes = basePath.nodes();
             switch (path.cls.tag()) {
                 case ASTPathClass::TAG_Invalid: {
-                    auto& e = path.cls.as_Invalid();
-                    (void)e;
                     // Should never happen
                     BUG(sp, "Invalid path class encountered");
                     break;
                 }
                 case ASTPathClass::TAG_Local: {
-                    auto& e = path.cls.as_Local();
-                    (void)e;
                     // Wait, how is this already known?
                     BUG(sp, "Local path class in use statement");
                     break;
                 }
                 case ASTPathClass::TAG_UFCS: {
-                    auto& e = path.cls.as_UFCS();
-                    (void)e;
                     // Wait, how is this already known?
                     BUG(sp, "UFCS path class in use statement");
                     break;
@@ -192,8 +186,6 @@ default: {
                             break;
                         }
                         case ResolveItemRefType::TAG_None: {
-                            auto& e = realMod.as_None();
-                            (void)e;
                             // Not found in this module, keep searching
                             DEBUG("Keep searching (" << i << "/" << baseNodes.size() << ")");
                             break;
@@ -231,8 +223,6 @@ default: {
                     return ResolveModuleRef();
                 }
                 case ASTPathClass::TAG_Self: {
-                    auto& e = path.cls.as_Self();
-                    (void)e;
                     DEBUG("Self " << path);
                     // Look up within the non-anon module
                     size_t i = 0;
@@ -243,8 +233,6 @@ default: {
                     return getModuleAst(startMod, path, 0, ignoreLast, outPath);
                 }
                 case ASTPathClass::TAG_Super: {
-                    auto& e = path.cls.as_Super();
-                    (void)e;
                     DEBUG("Super " << path);
                     // Pop current non-anon module, then look up in anon modules
                     size_t i = 0;
@@ -316,8 +304,6 @@ default: {
                 const auto& r = res.as_Namespace();
                 switch (r.tag()) {
                     case ResolveItemRefType::TAG_None: {
-                        auto& e = r.as_None();
-                        (void)e;
                         DEBUG("Not found (Namespace::None)");
                         return ResolveModuleRef();
                     }
@@ -531,8 +517,6 @@ default:
                         }
                         switch (mac.ref.tag()) {
                             case MacroRef::TAG_None: {
-                                auto& me = mac.ref.as_None();
-                                (void)me;
                                 BUG(sp, "macro_imports_res had a None entry");
                                 break;
                             }
@@ -625,22 +609,16 @@ default:
                                             return ResolveItemRefType::make_AstRoot(modPtr);
                                         }
                                         case ResolveModuleRef::TAG_Hir: {
-                                            auto& modPtr = tgtMod.as_Hir();
-                                            (void)modPtr;
                                             if (outPath) {
                                                 *outPath = tmp;
                                             }
                                             return ResolveItemRefType::make_HirRoot(&*crate.externCrates.at(tmp.crate).hir);
                                         }
                                         case ResolveModuleRef::TAG_ImplicitPrelude: {
-                                            auto& _e = tgtMod.as_ImplicitPrelude();
-                                            (void)_e;
                                             TODO(sp, "ImplicitPrelude?");
                                             break;
                                         }
                                         case ResolveModuleRef::TAG_None: {
-                                            auto& _e = tgtMod.as_None();
-                                            (void)_e;
                                             break;
                                         }
                                     }
@@ -675,8 +653,6 @@ default:
                                     break;
                                 }
                                 case ResolveModuleRef::TAG_ImplicitPrelude: {
-                                    auto& _e = tgtMod.as_ImplicitPrelude();
-                                    (void)_e;
                                     if (ns == ResolveNamespace::Namespace) {
                                         auto ecIt = settings.implicitCrates.find(itemName);
                                         if (ecIt != settings.implicitCrates.end()) {
@@ -691,8 +667,6 @@ default:
                                     break;
                                 }
                                 case ResolveModuleRef::TAG_None: {
-                                    auto& _e = tgtMod.as_None();
-                                    (void)_e;
                                     // Ignore for now?
                                     break;
                                 }
@@ -716,13 +690,10 @@ default:
                             switch (srcMod.tag()) {
                                 case ResolveModuleRef::TAG_None: {
                                     auto& _ = srcMod.as_None();
-                                    (void)_;
                                     DEBUG("Unable to find " << e.path);
                                     break;
                                 }
                                 case ResolveModuleRef::TAG_ImplicitPrelude: {
-                                    auto& _e = srcMod.as_ImplicitPrelude();
-                                    (void)_e;
                                     TODO(sp, "ImplicitPrelude? " << e.path);
                                     break;
                                 }
@@ -957,14 +928,10 @@ ResolveItemRefMacro ResolveLookupMacro(const Span& span, const Settings& setting
             return std::move(rv.as_Macro());
         }
         case ResolveModuleRef::TAG_ImplicitPrelude: {
-            auto& _e = mod.as_ImplicitPrelude();
-            (void)_e;
             // This isn't a macro, so return `None`
             return ResolveItemRefMacro::make_None({});
         }
         case ResolveModuleRef::TAG_None: {
-            auto& e = mod.as_None();
-            (void)e;
             return ResolveItemRefMacro::make_None({});
         }
     }
@@ -995,20 +962,14 @@ ResolveModuleRef ResolveLookupGetModuleForName(const Span& sp, const Settings& s
             break;
         }
         case ResolveModuleRef::TAG_Hir: {
-            auto& modPtr = mod.as_Hir();
-            (void)modPtr;
             // If `get_module` provided a HIR module, then this is right?
             // - What if it's an alias? (not critical)
             return mod;
         }
         case ResolveModuleRef::TAG_ImplicitPrelude: {
-            auto& _e = mod.as_ImplicitPrelude();
-            (void)_e;
             return mod;
         }
         case ResolveModuleRef::TAG_None: {
-            auto& e = mod.as_None();
-            (void)e;
             BUG(sp, "Unable to find " << path << " (starting from " << basePath << ")");
             break;
         }

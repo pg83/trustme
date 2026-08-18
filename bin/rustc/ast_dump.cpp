@@ -1123,14 +1123,10 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         for (const auto& it : i.items()) {
             switch ((*it.data).tag()) {
                 case ASTItem::TAG_None: {
-                    auto& e = (*it.data).as_None();
-                    (void)e;
                     // Ignore, it's been deleted by #[cfg]
                     break;
                 }
                 case ASTItem::TAG_MacroInv: {
-                    auto& e = (*it.data).as_MacroInv();
-                    (void)e;
                     // TODO: Dump macro invocations
                     break;
                 }
@@ -1171,8 +1167,6 @@ void RustPrinter::printParams(const ASTGenericParams& params) {
                 auto& tuMatch = p;
                 switch (tuMatch.tag()) {
                     case GenericParam::TAG_None: {
-                        auto& p = tuMatch.as_None();
-                        (void)p;
                         os << "/*-*/";
                         break;
                     }
@@ -1224,8 +1218,6 @@ void RustPrinter::printBounds(const ASTGenericParams& params) {
             os << indent();
             switch (b.tag()) {
                 case ASTGenericBound::TAG_None: {
-                    auto& ent = b.as_None();
-                    (void)ent;
                     os << "/*-*/";
                     break;
                 }
@@ -1305,8 +1297,6 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
     }
     switch (p.data().tag()) {
         case ASTPattern::Data::TAG_Any: {
-            auto& v = p.data().as_Any();
-            (void)v;
             os << "_";
             break;
         }
@@ -1321,7 +1311,6 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
             break;
         }
         case ASTPattern::Data::TAG_Box: {
-            auto& v = p.data().as_Box();
             {
                 const auto& v = p.data().as_Box();
                 os << "box ";
@@ -1339,7 +1328,6 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
             break;
         }
         case ASTPattern::Data::TAG_Ref: {
-            auto& v = p.data().as_Ref();
             {
                 const auto& v = p.data().as_Ref();
                 if (v.mut) {
@@ -1370,7 +1358,6 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
             break;
         }
         case ASTPattern::Data::TAG_Struct: {
-            auto& v = p.data().as_Struct();
             {
                 const auto& v = p.data().as_Struct();
                 os << v.path << "{";
@@ -1458,8 +1445,6 @@ void RustPrinter::handleStruct(const ASTStruct& s) {
 
     switch (s.data.tag()) {
         case ASTStructData::TAG_Unit: {
-            auto& e = s.data.as_Unit();
-            (void)e;
             os << " /* unit-like */\n"; printBounds(s.params()); os << indent() << ";\n";
             break;
         }
@@ -1494,8 +1479,6 @@ void RustPrinter::handleEnum(const ASTEnum& s) {
         os << indent() << "/*" << idx << "*/" << i.name;
         switch (i.data.tag()) {
             case ASTEnumVariantData::TAG_Unit: {
-                auto& e = i.data.as_Unit();
-                (void)e;
                 break;
             }
             case ASTEnumVariantData::TAG_Tuple: {
@@ -1542,8 +1525,6 @@ void RustPrinter::handleTrait(const ASTTrait& s) {
     for (const auto& i : s.items()) {
         switch (i.data.tag()) {
             case ASTItem::TAG_Type: {
-                auto& e = i.data.as_Type();
-                (void)e;
                 os << indent() << "type " << i.name << ";\n";
                 break;
             }

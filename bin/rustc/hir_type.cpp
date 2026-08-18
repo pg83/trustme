@@ -242,8 +242,6 @@ HIRTypeDataFunctionPointer HIRTypeData::Data_NamedFunction::decay(HIRTypeInterne
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& pe = this->path.data.as_UfcsUnknown();
-                    (void)pe;
                     BUG(sp, "UfcsUnknown seen");
                     break;
                 }
@@ -337,8 +335,6 @@ void HIRTypeData::fmt(::std::ostream& os) const {
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*this).as_Diverge();
-            (void)e;
             os << "!";
             break;
         }
@@ -352,38 +348,26 @@ void HIRTypeData::fmt(::std::ostream& os) const {
             os << e.path;
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& be = e.binding.as_Unbound();
-                    (void)be;
                     os << "/*?*/";
                     break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& be = e.binding.as_Opaque();
-                    (void)be;
                     os << "/*O*/";
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& be = e.binding.as_ExternType();
-                    (void)be;
                     os << "/*X*/";
                     break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& be = e.binding.as_Struct();
-                    (void)be;
                     os << "/*S*/";
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& be = e.binding.as_Union();
-                    (void)be;
                     os << "/*U*/";
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& be = e.binding.as_Enum();
-                    (void)be;
                     os << "/*E*/";
                     break;
                 }
@@ -763,17 +747,9 @@ namespace {
         }
         switch (a.tag()) {
             case HIRTypePathBinding::TAG_Unbound: {
-                auto& ae = a.as_Unbound();
-                (void)ae;
-                auto& be = b.as_Unbound();
-                (void)be;
                 return true;
             }
             case HIRTypePathBinding::TAG_Opaque: {
-                auto& ae = a.as_Opaque();
-                (void)ae;
-                auto& be = b.as_Opaque();
-                (void)be;
                 return true;
             }
             case HIRTypePathBinding::TAG_ExternType: {
@@ -854,10 +830,6 @@ namespace {
                 return ae.index == be.index && ae.tyClass == be.tyClass;
             }
             case HIRTypeData::TAG_Diverge: {
-                auto& ae = a.as_Diverge();
-                (void)ae;
-                auto& be = b.as_Diverge();
-                (void)be;
                 return true;
             }
             case HIRTypeData::TAG_Primitive: {
@@ -1048,19 +1020,13 @@ namespace {
         uint32_t flags = 0;
         switch (type.tag()) {
             case HIRTypeData::TAG_Infer: {
-                auto& e = type.as_Infer();
-                (void)e;
                 flags |= HIRTypeData::HAS_TYPE_INFER;
                 break;
             }
             case HIRTypeData::TAG_Diverge: {
-                auto& e = type.as_Diverge();
-                (void)e;
                 break;
             }
             case HIRTypeData::TAG_Primitive: {
-                auto& e = type.as_Primitive();
-                (void)e;
                 break;
             }
             case HIRTypeData::TAG_Path: {
@@ -1072,8 +1038,6 @@ namespace {
                 break;
             }
             case HIRTypeData::TAG_Generic: {
-                auto& e = type.as_Generic();
-                (void)e;
                 flags |= HIRTypeData::HAS_TYPE_PARAM;
                 break;
             }
@@ -1168,8 +1132,6 @@ namespace {
                 break;
             }
             case HIRTypeData::TAG_NodeType: {
-                auto& e = type.as_NodeType();
-                (void)e;
                 break;
             }
         }
@@ -1216,8 +1178,6 @@ namespace {
                 break;
             }
             case HIRConstGeneric::TAG_Evaluated: {
-                auto& e = value.as_Evaluated();
-                (void)e;
                 // The evaluated value does not expose a cheap scalar hash for
                 // every representation.  Its tag still separates it from the
                 // overwhelmingly more common generic and inferred constants.
@@ -1289,13 +1249,9 @@ namespace {
         size_t h = static_cast<size_t>(binding.tag());
         switch (binding.tag()) {
             case HIRTypePathBinding::TAG_Unbound: {
-                auto& e = binding.as_Unbound();
-                (void)e;
                 break;
             }
             case HIRTypePathBinding::TAG_Opaque: {
-                auto& e = binding.as_Opaque();
-                (void)e;
                 break;
             }
             case HIRTypePathBinding::TAG_ExternType: {
@@ -1332,8 +1288,6 @@ namespace {
                 break;
             }
             case HIRTypeData::TAG_Diverge: {
-                auto& e = type.as_Diverge();
-                (void)e;
                 break;
             }
             case HIRTypeData::TAG_Primitive: {
@@ -1612,10 +1566,6 @@ bool HIRTypeData::equalsIgnoringRegions(HIRTypeRef x) const {
             return te.index == xe.index;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& te = (*this).as_Diverge();
-            (void)te;
-            auto& xe = (*x).as_Diverge();
-            (void)xe;
             return true;
         }
         case HIRTypeData::TAG_Primitive: {
@@ -1780,10 +1730,6 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
             return ::ord(te.index, xe.index);
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& te = (*this).as_Diverge();
-            (void)te;
-            auto& xe = (*x).as_Diverge();
-            (void)xe;
             return OrdEqual;
         }
         case HIRTypeData::TAG_Primitive: {
@@ -1901,10 +1847,6 @@ namespace {
 
         switch (t.tag()) {
             case HIRConstGeneric::TAG_Infer: {
-                auto& te = t.as_Infer();
-                (void)te;
-                auto& xe = x.as_Infer();
-                (void)xe;
                 throw "Unreachable";
             }
             case HIRConstGeneric::TAG_Unevaluated: {
@@ -1913,10 +1855,6 @@ namespace {
                 return te->equivalent(*xe) ? HIRCompare::Equal : HIRCompare::Unequal;
             }
             case HIRConstGeneric::TAG_Generic: {
-                auto& te = t.as_Generic();
-                (void)te;
-                auto& xe = x.as_Generic();
-                (void)xe;
                 throw "Unreachable";
             }
             case HIRConstGeneric::TAG_Evaluated: {
@@ -2168,10 +2106,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& te = (*v).as_Generic();
-            (void)te;
-            auto& xe = (*x).as_Generic();
-            (void)xe;
             throw "";
         }
         case HIRTypeData::TAG_Primitive: {
@@ -2180,10 +2114,6 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
             return (te == xe ? HIRCompare::Equal : HIRCompare::Unequal);
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& te = (*v).as_Diverge();
-            (void)te;
-            auto& xe = (*x).as_Diverge();
-            (void)xe;
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_Path: {
@@ -2368,13 +2298,9 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
 HIRTypePathBinding HIRTypePathBinding::clone() const {
     switch ((*this).tag()) {
         case HIRTypePathBinding::TAG_Unbound: {
-            auto& e = (*this).as_Unbound();
-            (void)e;
             return HIRTypePathBinding::make_Unbound({});
         }
         case HIRTypePathBinding::TAG_Opaque: {
-            auto& e = (*this).as_Opaque();
-            (void)e;
             return HIRTypePathBinding::make_Opaque({});
         }
         case HIRTypePathBinding::TAG_ExternType: {
@@ -2404,17 +2330,9 @@ bool HIRTypePathBinding::operator==(const HIRTypePathBinding& x) const {
     }
     switch ((*this).tag()) {
         case HIRTypePathBinding::TAG_Unbound: {
-            auto& te = (*this).as_Unbound();
-            (void)te;
-            auto& xe = x.as_Unbound();
-            (void)xe;
             return true;
         }
         case HIRTypePathBinding::TAG_Opaque: {
-            auto& te = (*this).as_Opaque();
-            (void)te;
-            auto& xe = x.as_Opaque();
-            (void)xe;
             return true;
         }
         case HIRTypePathBinding::TAG_ExternType: {
@@ -2447,13 +2365,9 @@ const HIRTraitMarkings* HIRTypePathBinding::getTraitMarkings() const {
     const HIRTraitMarkings* markingsPtr = nullptr;
     switch ((*this).tag()) {
         case HIRTypePathBinding::TAG_Unbound: {
-            auto& tpb = (*this).as_Unbound();
-            (void)tpb;
             break;
         }
         case HIRTypePathBinding::TAG_Opaque: {
-            auto& tpb = (*this).as_Opaque();
-            (void)tpb;
             break;
         }
         case HIRTypePathBinding::TAG_ExternType: {
@@ -2484,18 +2398,12 @@ const HIRGenericParams* HIRTypePathBinding::getGenerics() const {
     const HIRGenericParams* rv = nullptr;
     switch ((*this).tag()) {
         case HIRTypePathBinding::TAG_Unbound: {
-            auto& tpb = (*this).as_Unbound();
-            (void)tpb;
             break;
         }
         case HIRTypePathBinding::TAG_Opaque: {
-            auto& tpb = (*this).as_Opaque();
-            (void)tpb;
             break;
         }
         case HIRTypePathBinding::TAG_ExternType: {
-            auto& tpb = (*this).as_ExternType();
-            (void)tpb;
             break;
         }
         case HIRTypePathBinding::TAG_Struct: {
@@ -2542,8 +2450,6 @@ HIRTypeData HIRTypeData::cloneData() const {
             return HIRTypeData::make_Infer(e);
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*this).as_Diverge();
-            (void)e;
             return HIRTypeData::make_Diverge({});
         }
         case HIRTypeData::TAG_Primitive: {
@@ -2827,18 +2733,10 @@ default:
     }
     switch ((*left).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& le = (*left).as_Infer();
-            (void)le;
-            auto& re = (*right).as_Infer();
-            (void)re;
             assert(!"infer");
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& le = (*left).as_Diverge();
-            (void)le;
-            auto& re = (*right).as_Diverge();
-            (void)re;
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_Primitive: {

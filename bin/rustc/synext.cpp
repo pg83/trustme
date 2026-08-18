@@ -76,10 +76,6 @@ class CMacroUseHandler: public ExpandDecorator {
                 bool rv;
                 switch (imp.ref.tag()) {
                     case MacroRef::TAG_None: {
-                        auto& a = imp.ref.as_None();
-                        (void)a;
-                        auto& b = mr.as_None();
-                        (void)b;
                         rv = true;
                         break;
                     }
@@ -153,8 +149,6 @@ class CMacroUseHandler: public ExpandDecorator {
                 MacroRef mr;
                 switch (e->ent.tag()) {
                     case HIRMacroItem::TAG_Import: {
-                        auto& imp = e->ent.as_Import();
-                        (void)imp;
                         throw "Unexpected";
                     }
                     case HIRMacroItem::TAG_MacroRules: {

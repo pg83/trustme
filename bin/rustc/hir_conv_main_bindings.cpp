@@ -253,8 +253,6 @@ default:
                                 break;
                             }
                             case HIRValueItem::TAG_StructConstant: {
-                                auto& e2 = it->second->ent.as_StructConstant();
-                                (void)e2;
                                 const auto& str = mod->modItems.find(pc)->second->ent.as_Struct();
                                 // Convert into a dedicated pattern type
                                 if (!isSingleValue) {
@@ -299,18 +297,12 @@ default:
                     break;
                 }
                 case HIRPatternData::TAG_PathValue: {
-                    auto& e = pat.data.as_PathValue();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_PathTuple: {
-                    auto& e = pat.data.as_PathTuple();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_PathNamed: {
-                    auto& e = pat.data.as_PathNamed();
-                    (void)e;
                     break;
                 }
             }
@@ -382,8 +374,6 @@ default:
                         const auto& item = *reinterpret_cast<const HIRTypeItem*>(getTypePointer(sp, crate, pe.path, Target::TypeItem));
                         switch (item.tag()) {
                             case HIRTypeItem::TAG_TypeAlias: {
-                                auto& e3 = item.as_TypeAlias();
-                                (void)e3;
                                 BUG(sp, "TypeAlias encountered after `Resolve Type Aliases` - " << ty);
                                 // Assume it'll be filled out, with the correct binding
                                 break;
@@ -409,8 +399,6 @@ default:
                                 break;
                             }
                             case HIRTypeItem::TAG_Trait: {
-                                auto& e3 = item.as_Trait();
-                                (void)e3;
                                 // TODO: Should this reassign instead?
                                 data = HIRTypeData::make_TraitObject({HIRTraitPath{mv$(pe), {}, {}}, {}});
                                 break;
@@ -423,14 +411,10 @@ default:
                         break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
-                        auto& pe = e->path.data.as_UfcsUnknown();
-                        (void)pe;
                         //TODO(sp, "Should UfcsKnown be encountered here?");
                         break;
                     }
                     case HIRPathData::TAG_UfcsInherent: {
-                        auto& pe = e->path.data.as_UfcsInherent();
-                        (void)pe;
                         break;
                     }
                     case HIRPathData::TAG_UfcsKnown: {
@@ -494,8 +478,6 @@ default:
                                 break;
                             }
                             case HIRPathData::TAG_UfcsUnknown: {
-                                auto& e2 = ee->origin.data.as_UfcsUnknown();
-                                (void)e2;
                                 throw "";
                             }
                         }
@@ -1474,20 +1456,14 @@ HIRTypeRef ConvertHIRExpandAliasesGetExpansion(const HIRCrate& crate, const HIRP
             return ConvertHIRExpandTypeAlias(sp, crate, e, isExpr);
         }
         case HIRPath::Data::TAG_UfcsInherent: {
-            auto& e = path.data.as_UfcsInherent();
-            (void)e;
             DEBUG("TODO: Locate impl blocks for types - path=" << path);
             break;
         }
         case HIRPath::Data::TAG_UfcsKnown: {
-            auto& e = path.data.as_UfcsKnown();
-            (void)e;
             DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);
             break;
         }
         case HIRPath::Data::TAG_UfcsUnknown: {
-            auto& e = path.data.as_UfcsUnknown();
-            (void)e;
             DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);
             break;
         }
@@ -2438,8 +2414,6 @@ namespace {
         HIRStructMarkings::DstType getStructDstType(const HIRStruct& str, const HIRGenericParams& def, const HIRPathParams* params) {
         switch (str.data.tag()) {
             case HIRStructData::TAG_Unit: {
-                auto& se = str.data.as_Unit();
-                (void)se;
                 break;
             }
             case HIRStructData::TAG_Tuple: {
@@ -2523,8 +2497,6 @@ namespace {
 
                     switch (str->data.tag()) {
                         case HIRStructData::TAG_Unit: {
-                            auto& se = str->data.as_Unit();
-                            (void)se;
                             break;
                         }
                         case HIRStructData::TAG_Tuple: {
@@ -2619,8 +2591,6 @@ namespace {
             const HIRTypeData* fieldTy = nullptr;
             switch (str.data.tag()) {
                 case HIRStructData::TAG_Unit: {
-                    auto& se = str.data.as_Unit();
-                    (void)se;
                     break;
                 }
                 case HIRStructData::TAG_Tuple: {
@@ -3711,14 +3681,10 @@ default:
             TRACE_FUNCTION_F(ve.path);
                 switch (ve.path.data.tag()) {
                     case HIRPathData::TAG_Generic: {
-                        auto& pe = ve.path.data.as_Generic();
-                        (void)pe;
                         // Already done
                         break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
-                        auto& pe = ve.path.data.as_UfcsUnknown();
-                        (void)pe;
                         BUG(sp, "UfcsUnknown still in pattern value - " << pat);
                         break;
                     }
@@ -3740,8 +3706,6 @@ default:
                         break;
                     }
                     case HIRPathData::TAG_UfcsKnown: {
-                        auto& pe = ve.path.data.as_UfcsKnown();
-                        (void)pe;
                         // The pattern's expected type participates in selecting `Self` for a
                         // trait-associated constant.  Keep the trait declaration here instead of
                         // committing to the first fuzzy impl before expression type checking.

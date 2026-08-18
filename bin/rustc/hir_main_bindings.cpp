@@ -1793,8 +1793,6 @@ namespace {
             os << indent() << "struct " << p.getName() << item.params.fmtArgs();
             switch (item.data.tag()) {
                 case HIRStructData::TAG_Unit: {
-                    auto& flds = item.data.as_Unit();
-                    (void)flds;
                     if (item.params.bounds.empty()) {
                         os << ";\n";
                     } else {
@@ -2744,14 +2742,10 @@ public:
         out.writeTag(ty->tag());
             switch ((*ty).tag()) {
                 case HIRTypeData::TAG_Infer: {
-                    auto& e = (*ty).as_Infer();
-                    (void)e;
                     // BAAD
                     break;
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    auto& e = (*ty).as_Diverge();
-                    (void)e;
                     break;
                 }
                 case HIRTypeData::TAG_Primitive: {
@@ -2917,8 +2911,6 @@ break;
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& e = path.data.as_UfcsUnknown();
-                    (void)e;
                     DEBUG("-- UfcsUnknown - " << path);
                     assert(!"Unexpected UfcsUnknown");
                     break;
@@ -3187,8 +3179,6 @@ break;
         out.writeTag(pe.tag());
             switch (pe.tag()) {
                 case SimplePatEnt::TAG_End: {
-                    auto& _e = pe.as_End();
-                    (void)_e;
                     break;
                 }
                 case SimplePatEnt::TAG_LoopStart: {
@@ -3197,13 +3187,9 @@ break;
                     break;
                 }
                 case SimplePatEnt::TAG_LoopNext: {
-                    auto& _e = pe.as_LoopNext();
-                    (void)_e;
                     break;
                 }
                 case SimplePatEnt::TAG_LoopEnd: {
-                    auto& _e = pe.as_LoopEnd();
-                    (void)_e;
                     break;
                 }
                 case SimplePatEnt::TAG_Jump: {
@@ -3298,8 +3284,6 @@ break;
         switch (td.tag()) {
                 break;
                 case TokenData::TAG_None: {
-                    auto& _e = td.as_None();
-                    (void)_e;
 
                 }
                 break;
@@ -3336,8 +3320,6 @@ break;
                 break;
                 break;
                 case TokenData::TAG_Fragment: {
-                    auto& e = td.as_Fragment();
-                    (void)e;
                     assert(!"Serialising interpolated macro fragment - should have been handled in HIR lowering");
                 }
         }
@@ -3375,8 +3357,6 @@ break;
         out.writeTag(v.tag());
             switch (v.tag()) {
                 case HIRConstGeneric::TAG_Infer: {
-                    auto& e = v.as_Infer();
-                    (void)e;
                     break;
                 }
                 case HIRConstGeneric::TAG_Unevaluated: {
@@ -3571,29 +3551,19 @@ break;
         out.writeTag(static_cast<int>(term.tag()));
         switch (term.tag()) {
             case MIRTerminator::TAG_Incomplete: {
-                auto& e = term.as_Incomplete();
-                (void)e;
                 // NOTE: loops that diverge (don't break) leave a dangling bb
                 break;
             }
             case MIRTerminator::TAG_Return: {
-                auto& e = term.as_Return();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_UnwindResume: {
-                auto& e = term.as_UnwindResume();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_UnwindTerminate: {
-                auto& e = term.as_UnwindTerminate();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Unreachable: {
-                auto& e = term.as_Unreachable();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Goto: {
@@ -4163,8 +4133,6 @@ break;
         out.writeTag(item.data.tag());
         switch (item.data.tag()) {
             case HIRStructData::TAG_Unit: {
-                auto& e = item.data.as_Unit();
-                (void)e;
                 break;
             }
             case HIRStructData::TAG_Tuple: {

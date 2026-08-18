@@ -174,8 +174,6 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                         const HIRTypeData* tailTpl = nullptr;
                         switch (str.data.tag()) {
                             case HIRStructData::TAG_Unit: {
-                                auto& se = str.data.as_Unit();
-                                (void)se;
                                 BUG(sp, "Unsized unit struct in Pointee lookup - " << type);
                                 break;
                             }
@@ -267,8 +265,6 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             if (const auto* e = t->opt_Path()) {
                 switch (e->path.data.tag()) {
                     case HIRPathData::TAG_Generic: {
-                        auto& ee = e->path.data.as_Generic();
-                        (void)ee;
                         break;
                     }
                     case HIRPathData::TAG_UfcsKnown: {
@@ -345,8 +341,6 @@ default:
         // Nothing magic
         break;
         case HIRTypeData::TAG_Tuple: {
-            auto& e = (*type).as_Tuple();
-            (void)e;
             if (traitPath == crate.getLangItemPath(sp, "tuple_trait")) {
                 return foundCb(ImplRef(type, HIRPathParams(), HIRTraitPath::assocListT()), false);
             }
@@ -1389,14 +1383,10 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
 
                 switch (e.binding.tag()) {
                     case HIRTypePathBinding::TAG_Opaque: {
-                        auto& tpb = e.binding.as_Opaque();
-                        (void)tpb;
                         BUG(sp, "Opaque binding on generic path - " << type);
                         break;
                     }
                     case HIRTypePathBinding::TAG_Unbound: {
-                        auto& tpb = e.binding.as_Unbound();
-                        (void)tpb;
                         BUG(sp, "Unbound binding on generic path - " << type);
                         break;
                     }
@@ -1409,8 +1399,6 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                         // - Problems occur with type parameters
                         switch (str.data.tag()) {
                             case HIRStruct::Data::TAG_Unit: {
-                                auto& se = str.data.as_Unit();
-                                (void)se;
                                 break;
                             }
                             case HIRStruct::Data::TAG_Tuple: {
@@ -1468,8 +1456,6 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                         break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
-                        auto& tpb = e.binding.as_ExternType();
-                        (void)tpb;
                         TODO(sp, "Check auto trait destructure on extern type " << type);
                         break;
                     }
@@ -1478,21 +1464,15 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
-                auto& pe = e.path.data.as_UfcsUnknown();
-                (void)pe;
                 BUG(sp, "UfcsUnknown in typeck - " << type);
                 break;
             }
             case HIRPathData::TAG_UfcsKnown: {
-                auto& pe = e.path.data.as_UfcsKnown();
-                (void)pe;
                 return HIRCompare::Unequal;
                 //TODO(sp, "Check trait bounds for bound on UfcsKnown " << type);
                 break;
             }
             case HIRPathData::TAG_UfcsInherent: {
-                auto& pe = e.path.data.as_UfcsInherent();
-                (void)pe;
                 TODO(sp, "Auto trait lookup on UFCS Inherent type");
                 break;
             }
@@ -1800,19 +1780,13 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
     auto data = input->cloneData();
     switch (data.tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = data.as_Infer();
-            (void)e;
             //}
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = data.as_Diverge();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = data.as_Primitive();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Path: {
@@ -1839,8 +1813,6 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
                     return;
                 }
                 case HIRPathData::TAG_UfcsKnown: {
-                    auto& e2 = e.path.data.as_UfcsKnown();
-                    (void)e2;
                     // An opaque associated type is not a resolved type. It only records
                     // that an earlier normalization attempt couldn't make progress. In a
                     // later (static) context more bounds can be available, so retry it.
@@ -1880,8 +1852,6 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = data.as_Generic();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
@@ -1998,8 +1968,6 @@ void StaticTraitResolve::expandAssociatedTypesInner(const Span& sp, HIRTypeRef& 
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = data.as_NodeType();
-            (void)e;
             break;
         }
     }
@@ -2171,8 +2139,6 @@ default:
         // Nothing special
         break;
         case HIRTypeData::TAG_Infer: {
-            auto& te = (*e2.type).as_Infer();
-            (void)te;
             DEBUG("Infer seen in static EAT, leaving as-is");
             return false;
         }
@@ -2197,21 +2163,15 @@ default:
                     break;
                 }
                 case HIRTypeDataNodeType::TAG_Generator: {
-                    auto& nodeP = te.as_Generator();
-                    (void)nodeP;
                     break;
                 }
                 case HIRTypeDataNodeType::TAG_Async: {
-                    auto& nodeP = te.as_Async();
-                    (void)nodeP;
                     break;
                 }
             }
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& te = (*e2.type).as_TraitObject();
-            (void)te;
             //    if( e2.trait.m_params == data_trait.m_params )
             //    {
             //            // TODO: Mark as opaque and return.
@@ -2574,8 +2534,6 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
 
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*ty).as_Generic();
-            (void)e;
             copyCache.insert(::std::make_pair(ty, false));
             return false;
         }
@@ -2602,8 +2560,6 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             return rv;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*ty).as_Diverge();
-            (void)e;
             // The ! type is kinda Copy ...
             return true;
         }
@@ -2615,14 +2571,10 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
                     return nodeP->isCopy;
                 }
                 case HIRTypeDataNodeType::TAG_Generator: {
-                    auto& nodeP = e.as_Generator();
-                    (void)nodeP;
                     // NOTE: Generators aren't Copy
                     return false;
                 }
                 case HIRTypeDataNodeType::TAG_Async: {
-                    auto& nodeP = e.as_Async();
-                    (void)nodeP;
                     // NOTE: Async blocks aren't Copy? Can they be?
                     return false;
                 }
@@ -2630,8 +2582,6 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             break;
         }
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*ty).as_Infer();
-            (void)e;
             // Shouldn't be hit
             return false;
         }
@@ -2641,20 +2591,14 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             return (e.type == HIRBorrowType::Shared);
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = (*ty).as_Pointer();
-            (void)e;
             // All raw pointers are Copy
             return true;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*ty).as_NamedFunction();
-            (void)e;
             // All function pointers are Copy/Clone
             return true;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*ty).as_Function();
-            (void)e;
             // All function pointers are Copy
             return true;
         }
@@ -2672,8 +2616,6 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             return typeIsCopy(sp, e.inner);
         }
         case HIRTypeData::TAG_Slice: {
-            auto& e = (*ty).as_Slice();
-            (void)e;
             // [T] isn't Sized, so isn't Copy ether
             return false;
         }
@@ -2682,8 +2624,6 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
             return typeIsCopy(sp, e.inner);
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*ty).as_TraitObject();
-            (void)e;
             // (Trait) isn't Sized, so isn't Copy ether
             return false;
         }
@@ -2714,8 +2654,6 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
 bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) const {
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*ty).as_Generic();
-            (void)e;
             {
                 auto it = cloneCache.find(ty);
                 if (it != cloneCache.end()) {
@@ -2751,8 +2689,6 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
             return rv;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*ty).as_Diverge();
-            (void)e;
             // The ! type is kinda Copy/Clone ...
             return true;
         }
@@ -2764,14 +2700,10 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
                     return nodeP->isCopy;
                 }
                 case HIRTypeDataNodeType::TAG_Generator: {
-                    auto& nodeP = e.as_Generator();
-                    (void)nodeP;
                     TODO(sp, "type_is_clone - Generator");
                     break;
                 }
                 case HIRTypeDataNodeType::TAG_Async: {
-                    auto& nodeP = e.as_Async();
-                    (void)nodeP;
                     TODO(sp, "type_is_clone - Async");
                     break;
                 }
@@ -2779,8 +2711,6 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
             break;
         }
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*ty).as_Infer();
-            (void)e;
             // Shouldn't be hit
             return false;
         }
@@ -2790,20 +2720,14 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
             return (e.type == HIRBorrowType::Shared);
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = (*ty).as_Pointer();
-            (void)e;
             // All raw pointers are Copy/Clone
             return true;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*ty).as_NamedFunction();
-            (void)e;
             // All function pointers are Copy/Clone
             return true;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*ty).as_Function();
-            (void)e;
             // All function pointers are Copy/Clone
             return true;
         }
@@ -2817,8 +2741,6 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
             return (e.size.is_Known() && e.size.as_Known() == 0) || typeIsClone(sp, e.inner);
         }
         case HIRTypeData::TAG_Slice: {
-            auto& e = (*ty).as_Slice();
-            (void)e;
             // [T] isn't Sized, so isn't Copy ether
             return false;
         }
@@ -2827,8 +2749,6 @@ bool StaticTraitResolve::typeIsClone(const Span& sp, const HIRTypeData* ty) cons
             return typeIsClone(sp, e.inner);
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*ty).as_TraitObject();
-            (void)e;
             // (Trait) isn't Sized, so isn't Copy ether
             return false;
         }
@@ -2871,22 +2791,16 @@ break;
         default:
             return false;
         case HIRTypeData::TAG_Diverge: {
-            auto& _e = (*ty).as_Diverge();
-            (void)_e;
             return true;
         }
         case HIRTypeData::TAG_Path: {
             auto& e = (*ty).as_Path();
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& pbe = e.binding.as_Unbound();
-                    (void)pbe;
                     // BUG?
                     return false;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& pbe = e.binding.as_Opaque();
-                    (void)pbe;
                     // TODO: This can only be with UfcsKnown, so check if the trait specifies ?Sized
                     return false;
                 }
@@ -2896,8 +2810,6 @@ break;
                                 const auto& str = *pbe;
                     switch (str.data.tag()) {
                         case HIRStructData::TAG_Unit: {
-                            auto& e = str.data.as_Unit();
-                            (void)e;
                             return false;
                         }
                         case HIRStructData::TAG_Tuple: {
@@ -2952,15 +2864,11 @@ break;
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& pbe = e.binding.as_Union();
-                    (void)pbe;
                     // TODO: Check all variants? Or just one?
                     TODO(sp, "type_is_impossible for union " << ty);
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& pbe = e.binding.as_ExternType();
-                    (void)pbe;
                     // Extern types are possible, just not usable
                     return false;
                 }
@@ -2972,13 +2880,9 @@ break;
             return typeIsImpossible(sp, e.inner);
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = (*ty).as_Pointer();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*ty).as_Function();
-            (void)e;
             // TODO: Check all arguments?
             return true;
         }
@@ -3200,19 +3104,13 @@ bool StaticTraitResolve::canUnsize(const Span& sp, const HIRTypeData* dstTy, con
 HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTypeData* ty) const {
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*ty).as_Infer();
-            (void)e;
             // Is this a bug?
             return HIRCompare::Fuzzy;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*ty).as_Diverge();
-            (void)e;
             return HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = (*ty).as_Primitive();
-            (void)e;
             return HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_Path: {
@@ -3224,18 +3122,12 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                 };
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& pbe = e.binding.as_Unbound();
-                    (void)pbe;
                     return HIRCompare::Fuzzy;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& pbe = e.binding.as_Opaque();
-                    (void)pbe;
                     return HIRCompare::Fuzzy;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& pbe = e.binding.as_ExternType();
-                    (void)pbe;
                     return HIRCompare::Unequal;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
@@ -3248,7 +3140,6 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                     switch (pbe->data.tag()) {
                         case HIRStructData::TAG_Unit: {
                             auto& _ = pbe->data.as_Unit();
-                            (void)_;
                             return HIRCompare::Unequal;
                         }
                         case HIRStructData::TAG_Tuple: {
@@ -3287,7 +3178,6 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                     switch (pbe->data.tag()) {
                         case HIREnumClass::TAG_Value: {
                             auto& _ = pbe->data.as_Value();
-                            (void)_;
                             return HIRCompare::Unequal;
                         }
                         case HIREnumClass::TAG_Data: {
@@ -3325,19 +3215,13 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*ty).as_Generic();
-            (void)e;
             return HIRCompare::Fuzzy;
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*ty).as_TraitObject();
-            (void)e;
             // Can't know with a trait object
             return HIRCompare::Fuzzy;
         }
         case HIRTypeData::TAG_ErasedType: {
-            auto& e = (*ty).as_ErasedType();
-            (void)e;
             // Can't know with an erased type (effectively a generic)
             return HIRCompare::Fuzzy;
         }
@@ -3399,8 +3283,6 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
                     return HIRCompare::Unequal;
                 }
                 case HIRTypeDataNodeType::TAG_Async: {
-                    auto& nodeP = e.as_Async();
-                    (void)nodeP;
                     TODO(sp, "type_is_interior_mutable on async");
                     break;
                 }
@@ -3408,23 +3290,15 @@ HIRCompare StaticTraitResolve::typeIsInteriorMutable(const Span& sp, const HIRTy
             break;
         }
         case HIRTypeData::TAG_Borrow: {
-            auto& e = (*ty).as_Borrow();
-            (void)e;
             return HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = (*ty).as_Pointer();
-            (void)e;
             return HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*ty).as_NamedFunction();
-            (void)e;
             return HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*ty).as_Function();
-            (void)e;
             return HIRCompare::Unequal;
         }
     }
@@ -3486,14 +3360,10 @@ default:
             auto& e = (*ty).as_Path();
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& pbe = e.binding.as_Unbound();
-                    (void)pbe;
                     // TODO: Should this return something else?
                     return MetadataType::Unknown;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& pbe = e.binding.as_Opaque();
-                    (void)pbe;
                     // TODO: This can only be with UfcsKnown, so check if the trait specifies ?Sized
                     return MetadataType::None;
                 }
@@ -3512,8 +3382,6 @@ default:
                             };
                             switch (pbe->data.tag()) {
                                 case HIRStructData::TAG_Unit: {
-                                    auto& se = pbe->data.as_Unit();
-                                    (void)se;
                                     return MetadataType::None;
                                 }
                                 case HIRStructData::TAG_Tuple: {
@@ -3531,33 +3399,23 @@ default:
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& pbe = e.binding.as_ExternType();
-                    (void)pbe;
                     // Extern types aren't Sized, but have no metadata
                     return MetadataType::Zero;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pbe = e.binding.as_Enum();
-                    (void)pbe;
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& pbe = e.binding.as_Union();
-                    (void)pbe;
                     break;
                 }
             }
             return MetadataType::None;
         }
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*ty).as_Infer();
-            (void)e;
             // Shouldn't be hit? but can early on
             return MetadataType::Unknown;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*ty).as_Diverge();
-            (void)e;
             // The ! type is kinda Sized ...
             return MetadataType::None;
         }
@@ -3572,8 +3430,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_Slice: {
-            auto& e = (*ty).as_Slice();
-            (void)e;
             return MetadataType::Slice;
         }
         case HIRTypeData::TAG_Pattern: {
@@ -3581,8 +3437,6 @@ default:
             return this->metadataType(sp, e.inner, errOnUnknown);
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*ty).as_TraitObject();
-            (void)e;
             return MetadataType::TraitObject;
         }
         case HIRTypeData::TAG_Tuple: {
@@ -3609,8 +3463,6 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
 
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*ty).as_Generic();
-            (void)e;
             // TODO: Is this an error?
             return true;
         }
@@ -3647,14 +3499,10 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             bool needsDropGlue = false;
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& pbe = e.binding.as_Unbound();
-                    (void)pbe;
                     BUG(sp, "Unbound path");
                     break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& pbe = e.binding.as_Opaque();
-                    (void)pbe;
                     // Technically a bug, checked above
                     return true;
                 }
@@ -3662,8 +3510,6 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
                     auto& pbe = e.binding.as_Struct();
                     switch (pbe->data.tag()) {
                         case HIRStructData::TAG_Unit: {
-                            auto& se = pbe->data.as_Unit();
-                            (void)se;
                             break;
                         }
                         case HIRStructData::TAG_Tuple: {
@@ -3702,15 +3548,11 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& pbe = e.binding.as_Union();
-                    (void)pbe;
                     // Unions don't have drop glue unless they impl Drop
                     needsDropGlue = false;
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& pbe = e.binding.as_ExternType();
-                    (void)pbe;
                     // Extern types don't have drop glue
                     needsDropGlue = false;
                     break;
@@ -3720,19 +3562,13 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             return needsDropGlue;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*ty).as_Diverge();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = (*ty).as_NodeType();
-            (void)e;
             // All magic node types need glue
             return true;
         }
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*ty).as_Infer();
-            (void)e;
             BUG(sp, "type_needs_drop_glue on _");
             return false;
         }
@@ -3745,23 +3581,15 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             return typeNeedsDropGlue(sp, e.inner);
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = (*ty).as_Pointer();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*ty).as_NamedFunction();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*ty).as_Function();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = (*ty).as_Primitive();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_Array: {
@@ -3777,13 +3605,9 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
             return typeNeedsDropGlue(sp, e.inner);
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*ty).as_TraitObject();
-            (void)e;
             return true;
         }
         case HIRTypeData::TAG_ErasedType: {
-            auto& e = (*ty).as_ErasedType();
-            (void)e;
             // Is this an error?
             return true;
         }
@@ -3881,8 +3705,6 @@ default:
                             return ms.monomorphType(sp, se.at(index).ent);
                         }
                         case HIRStructData::TAG_Unit: {
-                            auto& se = pbe->data.as_Unit();
-                            (void)se;
                             BUG(sp, "Getting field from unit-like struct - " << ty);
                             break;
                         }
@@ -3932,8 +3754,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             const auto& v = crate.getValitemByPath(sp, pe.path);
             switch (v.tag()) {
                 case HIRValueItem::TAG_Import: {
-                    auto& ve = v.as_Import();
-                    (void)ve;
                     BUG(sp, "Module Import");
                     break;
                 }
@@ -3953,8 +3773,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                     break;
                 }
                 case HIRValueItem::TAG_StructConstant: {
-                    auto& ve = v.as_StructConstant();
-                    (void)ve;
                     outParams.ppImpl = &pe.params; TODO(sp, "StructConstant - " << p);
                     break;
                 }
@@ -4088,8 +3906,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                             break;
                         }
                         case HIRTraitValueItem::TAG_Static: {
-                            auto& ve = v.as_Static();
-                            (void)ve;
                             // Statics?
                             break;
                         }
@@ -4184,8 +4000,6 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
             return rv;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            auto& pe = p.data.as_UfcsUnknown();
-            (void)pe;
             BUG(sp, "UfcsUnknown - " << p);
             break;
         }

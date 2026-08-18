@@ -174,8 +174,6 @@ namespace {
                     if (const auto* str = pathTy->binding.opt_Struct()) {
                         switch (((*str)->data).tag()) {
                             case HIRStructData::TAG_Unit: {
-                                auto& fields = ((*str)->data).as_Unit();
-                                (void)fields;
                                 break;
                             }
                             case HIRStructData::TAG_Tuple: {
@@ -349,8 +347,6 @@ namespace {
             auto monomorph = MonomorphStatePtr(builder.crate().types, ty, &generic.params, nullptr);
             switch (((*str)->data).tag()) {
                 case HIRStructData::TAG_Unit: {
-                    auto& fields = ((*str)->data).as_Unit();
-                    (void)fields;
                     break;
                 }
                 case HIRStructData::TAG_Tuple: {
@@ -629,21 +625,18 @@ namespace {
         }
 
         void schedulePatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
-            (void)sp;
             visitPatternSlots(pat, order, [&](unsigned slot) {
                 builder.scheduleVariableDrop(slot);
             });
         }
 
         void registerPatternVariables(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
-            (void)sp;
             visitPatternSlots(pat, order, [&](unsigned slot) {
                 builder.registerVariableState(slot);
             });
         }
 
         void scheduleRegisteredPatternDrops(const Span& sp, const HIRPattern& pat, PatternDropOrder order) override {
-            (void)sp;
             visitPatternSlots(pat, order, [&](unsigned slot) {
                 builder.scheduleRegisteredVariableDrop(slot);
             });
@@ -1765,8 +1758,6 @@ namespace {
 default:
                     BUG(sp, "Invalid type in comparison - " << tyL);
                     case HIRTypeData::TAG_Pointer: {
-                        auto& e = (*tyL).as_Pointer();
-                        (void)e;
                         // Valid
                         break;
                     }
@@ -2402,8 +2393,6 @@ default: {
                     }
                     break;
                     case HIRTypeData::TAG_Slice: {
-                        auto& e = (*tyOut).as_Slice();
-                        (void)e;
                         if (tyIn->is_Array()) {
                             const auto& inArray = tyIn->as_Array();
                             MIRConstant sizeVal;
@@ -2444,8 +2433,6 @@ default:
                         break;
                     }
                     case HIRTypeData::TAG_TraitObject: {
-                        auto& e = (*tyOut).as_TraitObject();
-                        (void)e;
                         // NOTE: This pattern (an empty ItemAddr) is detected by cleanup, which populates the vtable properly
                         builder.setResult(node.span(), MIRRValue::make_MakeDst({mv$(ptrLval), MIRConstant::make_ItemAddr({})}));
                         break;
@@ -2576,8 +2563,6 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Slice: {
-                    auto& e = (*tyVal).as_Slice();
-                    (void)e;
                     limitVal = MIRRValue::make_DstMeta({builder.getPtrToDst(node.value->span(), value)});
                     break;
                 }
@@ -2903,8 +2888,6 @@ default:
                                     break;
                                 }
                                 case MIRParam::TAG_Constant: {
-                                    auto& c = tuMatch.as_Constant();
-                                    (void)c;
                                     TODO(node.span(), "");
                                     break;
                                 }
@@ -2930,8 +2913,6 @@ default:
                                     break;
                                 }
                                 case MIRParam::TAG_Borrow: {
-                                    auto& v = tuMatch.as_Borrow();
-                                    (void)v;
                                     TODO(node.span(), "Borrow index?");
                                     break;
                                 }
@@ -2990,8 +2971,6 @@ default:
                                     break;
                                 }
                                 case MIRParam::TAG_Borrow: {
-                                    auto& v = tuMatch.as_Borrow();
-                                    (void)v;
                                     TODO(node.span(), "box_new with a borrow input?");
                                     break;
                                 }
@@ -3241,8 +3220,6 @@ default:
                         const auto& vi = builder.crate().getValitemByPath(node.span(), pe.path);
                     switch (vi.tag()) {
                         case HIRValueItem::TAG_Import: {
-                            auto& e = vi.as_Import();
-                            (void)e;
                             BUG(sp, "All references via imports should be replaced");
                             break;
                         }
@@ -3255,27 +3232,19 @@ default:
                             break;
                         }
                         case HIRValueItem::TAG_Static: {
-                            auto& e = vi.as_Static();
-                            (void)e;
                             builder.setResult(node.span(), MIRLValue::newStatic(node.path.clone()));
                             break;
                         }
                         case HIRValueItem::TAG_StructConstant: {
-                            auto& e = vi.as_StructConstant();
-                            (void)e;
                             // TODO: Why is this still a PathValue?
                             builder.setResult(node.span(), MIRRValue::make_Struct({pe.clone(), {}}));
                             break;
                         }
                         case HIRValueItem::TAG_Function: {
-                            auto& e = vi.as_Function();
-                            (void)e;
                             BUG(node.span(), "Should have produced a NamedFunction type and have been handled above");
                             break;
                         }
                         case HIRValueItem::TAG_StructConstructor: {
-                            auto& e = vi.as_StructConstructor();
-                            (void)e;
                             BUG(node.span(), "Should have produced a NamedFunction type and have been handled above");
                             break;
                         }
@@ -3290,20 +3259,14 @@ default:
                     ASSERT_BUG(sp, it != tr.values.end(), "Cannot find trait item for " << node.path);
                     switch (it->second.tag()) {
                         case HIRTraitValueItem::TAG_Constant: {
-                            auto& e = it->second.as_Constant();
-                            (void)e;
                             builder.setResult(sp, MIRConstant::make_Const({box$(node.path.clone())}));
                             break;
                         }
                         case HIRTraitValueItem::TAG_Static: {
-                            auto& e = it->second.as_Static();
-                            (void)e;
                             TODO(sp, "Associated statics (non-rustc) - " << node.path);
                             break;
                         }
                         case HIRTraitValueItem::TAG_Function: {
-                            auto& e = it->second.as_Function();
-                            (void)e;
                             BUG(node.span(), "Should have produced a NamedFunction type and have been handled above");
                             break;
                         }
@@ -3311,8 +3274,6 @@ default:
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& pe = node.path.data.as_UfcsUnknown();
-                    (void)pe;
                     BUG(sp, "PathValue - Encountered UfcsUnknown - " << node.path);
                     break;
                 }
@@ -3445,13 +3406,9 @@ default:
                 auto& tuMatch = node.resType->as_Path().binding;
                 switch (tuMatch.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
-                        auto& _e = tuMatch.as_Unbound();
-                        (void)_e;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
-                        auto& _e = tuMatch.as_Opaque();
-                        (void)_e;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Enum: {
@@ -3501,8 +3458,6 @@ default:
                         break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
-                        auto& e = tuMatch.as_ExternType();
-                        (void)e;
                         BUG(node.span(), "_StructLiteral ExternType isn't valid?");
                         break;
                     }
@@ -4849,8 +4804,6 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
     os << "{root" << x.rootIndex << ":" << x.fieldPath << "}=";
     switch (x.tag()) {
         case PatternRule::TAG_Any: {
-            auto& e = x.as_Any();
-            (void)e;
             os << "_";
             break;
         }
@@ -4913,10 +4866,6 @@ namespace {
 
     switch ((*this).tag()) {
         case PatternRule::TAG_Any: {
-            auto& te = (*this).as_Any();
-            (void)te;
-            auto& xe = x.as_Any();
-            (void)xe;
             return OrdEqual;
         }
         case PatternRule::TAG_Variant: {
@@ -5026,10 +4975,6 @@ PatternRule PatternRule::clone() const {
 
     switch (l.tag()) {
         case PatternRule::TAG_Any: {
-            auto& le = l.as_Any();
-            (void)le;
-            auto& re = r.as_Any();
-            (void)re;
             return ::OrdEqual;
         }
         case PatternRule::TAG_Variant: {
@@ -5064,10 +5009,6 @@ PatternRule PatternRule::clone() const {
             return ::OrdEqual;
         }
         case PatternRule::TAG_SplitSlice: {
-            auto& le = l.as_SplitSlice();
-            (void)le;
-            auto& re = r.as_SplitSlice();
-            (void)re;
             TODO(Span(), "Order PatternRule::SplitSlice");
             break;
         }
@@ -5077,18 +5018,10 @@ PatternRule PatternRule::clone() const {
             return ::ord(le, re);
         }
         case PatternRule::TAG_Value: {
-            auto& le = l.as_Value();
-            (void)le;
-            auto& re = r.as_Value();
-            (void)re;
             TODO(Span(), "Order PatternRule::Value");
             break;
         }
         case PatternRule::TAG_ValueRange: {
-            auto& le = l.as_ValueRange();
-            (void)le;
-            auto& re = r.as_ValueRange();
-            (void)re;
             TODO(Span(), "Order PatternRule::ValueRange");
             break;
         }
@@ -5229,14 +5162,10 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
 
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*ty).as_Infer();
-            (void)e;
             BUG(sp, "Ivar for in match type");
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*ty).as_Diverge();
-            (void)e;
             BUG(sp, "Diverge in match type");
             break;
         }
@@ -5331,21 +5260,15 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             // This is either a struct destructure or an enum
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& pbe = e.binding.as_Unbound();
-                    (void)pbe;
                     BUG(sp, "Encounterd unbound path - " << e.path);
                     break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& pbe = e.binding.as_Opaque();
-                    (void)pbe;
                     TODO(sp, "Can an opaque path type be matched with a literal?");
                     this->pushRule(PatternRule::make_Any({}));
                     break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = e.binding.as_Struct();
-                    (void)pbe;
                     auto* repr = TargetGetTypeRepr(sp, resolve, ty);
                     ASSERT_BUG(sp, repr, "Matching with generic constant type not valid - " << ty);
 
@@ -5358,20 +5281,14 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& pbe = e.binding.as_ExternType();
-                    (void)pbe;
                     TODO(sp, "Match extern type");
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& pbe = e.binding.as_Union();
-                    (void)pbe;
                     TODO(sp, "Match union");
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pbe = e.binding.as_Enum();
-                    (void)pbe;
                     auto* enmRepr = TargetGetTypeRepr(sp, resolve, ty);
                     ASSERT_BUG(sp, enmRepr, "Matching with generic constant type not valid - " << ty);
 
@@ -5414,22 +5331,16 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*ty).as_Generic();
-            (void)e;
             // Generics don't destructure, so the only valid pattern is `_`
             TODO(sp, "Match generic with literal?");
             this->pushRule(PatternRule::make_Any({}));
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*ty).as_TraitObject();
-            (void)e;
             TODO(sp, "Match trait object with literal?");
             break;
         }
         case HIRTypeData::TAG_ErasedType: {
-            auto& e = (*ty).as_ErasedType();
-            (void)e;
             TODO(sp, "Match erased type with literal?");
             break;
         }
@@ -5449,8 +5360,6 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             break;
         }
         case HIRTypeData::TAG_Slice: {
-            auto& e = (*ty).as_Slice();
-            (void)e;
             TODO(sp, "Match literal Slice");
             break;
         }
@@ -5540,28 +5449,20 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             break;
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = (*ty).as_Pointer();
-            (void)e;
             // Need to be able to tell downstream to cast to integer before comparison?
             this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({lit.readUint(TargetGetPointerBits() / 8), HIRCoreType::Usize})));
             //TODO(sp, "Match literal with pointer? " << lit);
             break;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*ty).as_NamedFunction();
-            (void)e;
             ERROR(sp, E0000, "Attempting to match over a functon pointer");
             break;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*ty).as_Function();
-            (void)e;
             ERROR(sp, E0000, "Attempting to match over a functon pointer");
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = (*ty).as_NodeType();
-            (void)e;
             ERROR(sp, E0000, "Attempting to match over a magic type");
             break;
         }
@@ -5838,14 +5739,10 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
 
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*ty).as_Infer();
-            (void)e;
             BUG(sp, "Ivar for in match type");
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*ty).as_Diverge();
-            (void)e;
             // Since ! can never exist, mark this arm as impossible.
             // TODO: Marking as impossible (and not emitting) leads to exhuaustiveness failure.
             break;
@@ -5856,8 +5753,6 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
 default:
                 BUG(sp, "Matching primitive with invalid pattern - " << pat);
                 case HIRPatternData::TAG_Any: {
-                    auto& pe = pat.data.as_Any();
-                    (void)pe;
                     this->pushRule(PatternRule::make_Any({}));
                     break;
                 }
@@ -5902,8 +5797,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_Pattern: {
-            auto& e = (*ty).as_Pattern();
-            (void)e;
             BUG(sp, "Pattern type was not reduced to its base type");
             break;
         }
@@ -5912,8 +5805,6 @@ default:
             fieldPath.push_back(0);
             switch (pat.data.tag()) {
                 case HIRPattern::Data::TAG_Any: {
-                    auto& pe = pat.data.as_Any();
-                    (void)pe;
                     // TODO: Avoid storing the empty patterns, to save on space/cost
                     for (const auto& sty : e) {
                         this->appendFrom(sp, emptyPattern, sty);
@@ -6002,18 +5893,12 @@ default:
                 // This is either a struct destructure or an enum
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& pbe = e.binding.as_Unbound();
-                    (void)pbe;
                     BUG(sp, "Encounterd unbound path - " << e.path);
                     break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& be = e.binding.as_Opaque();
-                    (void)be;
                     switch (pat.data.tag()) {
                         case HIRPattern::Data::TAG_Any: {
-                            auto& pe = pat.data.as_Any();
-                            (void)pe;
                             this->pushRule(PatternRule::make_Any({}));
                             break;
                         }
@@ -6032,8 +5917,6 @@ default:
                                 const auto& innerTy = e.path.data.as_Generic().params.types.at(0);
                                 switch (pat.data.tag()) {
                                     case HIRPattern::Data::TAG_Any: {
-                                        auto& pe = pat.data.as_Any();
-                                        (void)pe;
                                         // _ on a box, recurse into the box type.
                                         fieldPath.push_back(FIELD_DEREF);
                                         this->appendFrom(sp, emptyPattern, innerTy);
@@ -6054,26 +5937,18 @@ default:
                             }
                     switch (strData.tag()) {
                         case HIRStructData::TAG_Unit: {
-                            auto& sd = strData.as_Unit();
-                            (void)sd;
                             switch (pat.data.tag()) {
 default:
                                 BUG(sp, "Match not allowed, " << ty <<  " with " << pat);
                                 case HIRPatternData::TAG_Any: {
-                                    auto& pe = pat.data.as_Any();
-                                    (void)pe;
                                     // _ on a unit-like type, unconditional
                                     break;
                                 }
                                 case HIRPatternData::TAG_PathValue: {
-                                    auto& pe = pat.data.as_PathValue();
-                                    (void)pe;
                                     // Unit-like struct value, nothing to match (it's unconditional)
                                     break;
                                 }
                                 case HIRPatternData::TAG_Value: {
-                                    auto& pe = pat.data.as_Value();
-                                    (void)pe;
                                     // Unit-like struct value, nothing to match (it's unconditional)
                                     break;
                                 }
@@ -6092,8 +5967,6 @@ default:
 default:
                                 BUG(sp, "Match not allowed, " << ty <<  " with " << pat);
                                 case HIRPatternData::TAG_Any: {
-                                    auto& pe = pat.data.as_Any();
-                                    (void)pe;
                                     // - Recurse into type using an empty pattern
                                     for (const auto& fld : sd) {
                                         ASSERT_BUG(sp, fieldPath.back() < FIELD_INDEX_MAX, "Too-large struct field index");
@@ -6131,8 +6004,6 @@ default:
 default:
                                 BUG(sp, "Match not allowed, " << ty <<  " with " << pat);
                                 case HIRPatternData::TAG_Any: {
-                                    auto& pe = pat.data.as_Any();
-                                    (void)pe;
                                     fieldPath.push_back(0);
                                     for (const auto& fld : sd) {
                                         ASSERT_BUG(sp, fieldPath.back() < FIELD_INDEX_MAX, "Too-large struct field index");
@@ -6162,8 +6033,6 @@ default:
 default:
                         TODO(sp, "Match over union - " << ty << " with " << pat);
                         case HIRPatternData::TAG_Any: {
-                            auto& pe = pat.data.as_Any();
-                            (void)pe;
                             this->pushRule(PatternRule::make_Any({}));
                             break;
                         }
@@ -6189,14 +6058,10 @@ default:
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& pbe = e.binding.as_ExternType();
-                    (void)pbe;
                     switch (pat.data.tag()) {
 default:
                         BUG(sp, "Match not allowed, " << ty <<  " with " << pat);
                         case HIRPatternData::TAG_Any: {
-                            auto& pe = pat.data.as_Any();
-                            (void)pe;
                             this->pushRule(PatternRule::make_Any({}));
                             break;
                         }
@@ -6204,14 +6069,10 @@ default:
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pbe = e.binding.as_Enum();
-                    (void)pbe;
                     switch (pat.data.tag()) {
 default:
                         BUG(sp, "Match not allowed, " << ty <<  " with " << pat);
                         case HIRPatternData::TAG_Any: {
-                            auto& pe = pat.data.as_Any();
-                            (void)pe;
                             this->pushRule(PatternRule::make_Any({}));
                             break;
                         }
@@ -6303,13 +6164,9 @@ default:
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*ty).as_Generic();
-            (void)e;
             // Generics don't destructure, so the only valid pattern is `_`
             switch (pat.data.tag()) {
                 case HIRPattern::Data::TAG_Any: {
-                    auto& pe = pat.data.as_Any();
-                    (void)pe;
                     this->pushRule(PatternRule::make_Any({}));
                     break;
                 }
@@ -6321,8 +6178,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*ty).as_TraitObject();
-            (void)e;
             if (pat.data.is_Any()) {
             } else {
                 ERROR(sp, E0000, "Attempting to match over a trait object");
@@ -6330,8 +6185,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_ErasedType: {
-            auto& e = (*ty).as_ErasedType();
-            (void)e;
             if (pat.data.is_Any()) {
             } else {
                 ERROR(sp, E0000, "Attempting to match over an erased type");
@@ -6354,8 +6207,6 @@ default:
 default:
                 BUG(sp, "Matching array with invalid pattern - " << pat);
                 case HIRPatternData::TAG_Any: {
-                    auto& pe = pat.data.as_Any();
-                    (void)pe;
                     for (unsigned int i = 0; i < e.size.as_Known(); i++) {
                         this->appendFrom(sp, emptyPattern, e.inner);
                         fieldPath.back()++;
@@ -6438,8 +6289,6 @@ default:
 default:
                 BUG(sp, "Matching over [T] with invalid pattern - " << pat);
                 case HIRPatternData::TAG_Any: {
-                    auto& pe = pat.data.as_Any();
-                    (void)pe;
                     this->pushRule(PatternRule::make_Any({}));
                     break;
                 }
@@ -6544,8 +6393,6 @@ default:
 default:
                 BUG(sp, "Matching borrow invalid pattern - " << ty << " with " << pat);
                 case HIRPatternData::TAG_Any: {
-                    auto& pe = pat.data.as_Any();
-                    (void)pe;
                     this->appendFrom(sp, emptyPattern, e.inner);
                     break;
                 }
@@ -6594,8 +6441,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = (*ty).as_Pointer();
-            (void)e;
             if (pat.data.is_Any()) {
                 this->pushRule(PatternRule::make_Any({}));
             } else {
@@ -6604,8 +6449,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*ty).as_NamedFunction();
-            (void)e;
             if (pat.data.is_Any()) {
             } else {
                 ERROR(sp, E0000, "Attempting to match over a functon pointer");
@@ -6613,8 +6456,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*ty).as_Function();
-            (void)e;
             if (pat.data.is_Any()) {
             } else {
                 ERROR(sp, E0000, "Attempting to match over a functon pointer");
@@ -6622,8 +6463,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = (*ty).as_NodeType();
-            (void)e;
             if (pat.data.is_Any()) {
             } else {
                 ERROR(sp, E0000, "Attempting to match over a closure/generator/async");
@@ -6646,10 +6485,6 @@ namespace {
 
         switch (a.tag()) {
             case PatternRule::TAG_Any: {
-                auto& ae = a.as_Any();
-                (void)ae;
-                auto& be = b.as_Any();
-                (void)be;
                 return OrdEqual;
             }
             case PatternRule::TAG_Variant: {
@@ -6906,26 +6741,18 @@ namespace {
 
             switch ((*curTy).tag()) {
                 case HIRTypeData::TAG_Infer: {
-                    auto& e = (*curTy).as_Infer();
-                    (void)e;
                     BUG(sp, "Ivar for in match type");
                     break;
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    auto& e = (*curTy).as_Diverge();
-                    (void)e;
                     BUG(sp, "Diverge in match type");
                     break;
                 }
                 case HIRTypeData::TAG_Primitive: {
-                    auto& e = (*curTy).as_Primitive();
-                    (void)e;
                     BUG(sp, "Destructuring a primitive");
                     break;
                 }
                 case HIRTypeData::TAG_Pattern: {
-                    auto& e = (*curTy).as_Pattern();
-                    (void)e;
                     BUG(sp, "Destructuring a pattern type");
                     break;
                 }
@@ -6957,20 +6784,14 @@ namespace {
                         };
                     switch (e.binding.tag()) {
                         case HIRTypePathBinding::TAG_Unbound: {
-                            auto& pbe = e.binding.as_Unbound();
-                            (void)pbe;
                             BUG(sp, "Encounterd unbound path - " << e.path);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Opaque: {
-                            auto& pbe = e.binding.as_Opaque();
-                            (void)pbe;
                             BUG(sp, "Destructuring an opaque type - " << curTy);
                             break;
                         }
                         case HIRTypePathBinding::TAG_ExternType: {
-                            auto& pbe = e.binding.as_ExternType();
-                            (void)pbe;
                             BUG(sp, "Destructuring an extern type - " << curTy);
                             break;
                         }
@@ -6978,8 +6799,6 @@ namespace {
                             auto& pbe = e.binding.as_Struct();
                             switch (pbe->data.tag()) {
                                 case HIRStructData::TAG_Unit: {
-                                    auto& fields = pbe->data.as_Unit();
-                                    (void)fields;
                                     BUG(sp, "Destructuring an unit-like tuple - " << curTy);
                                     break;
                                 }
@@ -7025,20 +6844,14 @@ namespace {
                     break;
                 }
                 case HIRTypeData::TAG_Generic: {
-                    auto& e = (*curTy).as_Generic();
-                    (void)e;
                     BUG(sp, "Destructuring a generic - " << curTy);
                     break;
                 }
                 case HIRTypeData::TAG_TraitObject: {
-                    auto& e = (*curTy).as_TraitObject();
-                    (void)e;
                     BUG(sp, "Destructuring a trait object - " << curTy);
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    auto& e = (*curTy).as_ErasedType();
-                    (void)e;
                     BUG(sp, "Destructuring an erased type - " << curTy);
                     break;
                 }
@@ -7081,26 +6894,18 @@ namespace {
                     break;
                 }
                 case HIRTypeData::TAG_Pointer: {
-                    auto& e = (*curTy).as_Pointer();
-                    (void)e;
                     ERROR(sp, E0000, "Attempting to match over a pointer");
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
-                    auto& e = (*curTy).as_NamedFunction();
-                    (void)e;
                     ERROR(sp, E0000, "Attempting to match over a functon pointer");
                     break;
                 }
                 case HIRTypeData::TAG_Function: {
-                    auto& e = (*curTy).as_Function();
-                    (void)e;
                     ERROR(sp, E0000, "Attempting to match over a functon pointer");
                     break;
                 }
                 case HIRTypeData::TAG_NodeType: {
-                    auto& e = (*curTy).as_NodeType();
-                    (void)e;
                     ERROR(sp, E0000, "Attempting to match over a magic type");
                     break;
                 }
@@ -7275,14 +7080,10 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
         const auto& ty = ity;
         switch ((*ty).tag()) {
             case HIRTypeData::TAG_Infer: {
-                auto& _te = (*ty).as_Infer();
-                (void)_te;
                 BUG(sp, "Hit _ in type - " << ty);
                 break;
             }
             case HIRTypeData::TAG_Diverge: {
-                auto& _te = (*ty).as_Diverge();
-                (void)_te;
                 BUG(sp, "Matching over !");
                 break;
             }
@@ -7517,8 +7318,6 @@ default:
                 break;
             }
             case HIRTypeData::TAG_Pattern: {
-                auto& te = (*ty).as_Pattern();
-                (void)te;
                 BUG(sp, "Pattern type was not reduced to its base type");
                 break;
             }
@@ -7526,14 +7325,10 @@ default:
                 auto& te = (*ty).as_Path();
                 switch (te.binding.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
-                        auto& pbe = te.binding.as_Unbound();
-                        (void)pbe;
                         BUG(sp, "Encounterd unbound path - " << te.path);
                         break;
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
-                        auto& pbe = te.binding.as_Opaque();
-                        (void)pbe;
                         BUG(sp, "Attempting to match over opaque type - " << ty);
                         break;
                     }
@@ -7542,20 +7337,14 @@ default:
                         const auto& strData = pbe->data;
                         switch (strData.tag()) {
                             case HIRStructData::TAG_Unit: {
-                                auto& sd = strData.as_Unit();
-                                (void)sd;
                                 BUG(sp, "Attempting to match over unit type - " << ty);
                                 break;
                             }
                             case HIRStructData::TAG_Tuple: {
-                                auto& sd = strData.as_Tuple();
-                                (void)sd;
                                 TODO(sp, "Matching on tuple-like struct?");
                                 break;
                             }
                             case HIRStructData::TAG_Named: {
-                                auto& sd = strData.as_Named();
-                                (void)sd;
                                 TODO(sp, "Matching on struct?");
                                 break;
                             }
@@ -7563,14 +7352,10 @@ default:
                         break;
                     }
                     case HIRTypePathBinding::TAG_Union: {
-                        auto& pbe = te.binding.as_Union();
-                        (void)pbe;
                         TODO(sp, "Match over Union");
                         break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
-                        auto& pbe = te.binding.as_ExternType();
-                        (void)pbe;
                         TODO(sp, "Match over ExternType");
                         break;
                     }
@@ -7611,26 +7396,18 @@ default:
                 break;
             }
             case HIRTypeData::TAG_Generic: {
-                auto& _te = (*ty).as_Generic();
-                (void)_te;
                 BUG(sp, "Attempting to match a generic");
                 break;
             }
             case HIRTypeData::TAG_TraitObject: {
-                auto& te = (*ty).as_TraitObject();
-                (void)te;
                 BUG(sp, "Attempting to match a trait object");
                 break;
             }
             case HIRTypeData::TAG_ErasedType: {
-                auto& te = (*ty).as_ErasedType();
-                (void)te;
                 BUG(sp, "Attempting to match an erased type");
                 break;
             }
             case HIRTypeData::TAG_Array: {
-                auto& te = (*ty).as_Array();
-                (void)te;
                 TODO(sp, "Match directly on array?");
                 break;
             }
@@ -7687,38 +7464,26 @@ default:
                 break;
             }
             case HIRTypeData::TAG_Tuple: {
-                auto& te = (*ty).as_Tuple();
-                (void)te;
                 TODO(sp, "Match directly on tuple?");
                 break;
             }
             case HIRTypeData::TAG_Borrow: {
-                auto& te = (*ty).as_Borrow();
-                (void)te;
                 TODO(sp, "Match directly on borrow?");
                 break;
             }
             case HIRTypeData::TAG_Pointer: {
-                auto& te = (*ty).as_Pointer();
-                (void)te;
                 BUG(sp, "Attempting to match a pointer - " << rule << " against " << ty);
                 break;
             }
             case HIRTypeData::TAG_NamedFunction: {
-                auto& te = (*ty).as_NamedFunction();
-                (void)te;
                 BUG(sp, "Attempting to match a function pointer - " << rule << " against " << ty);
                 break;
             }
             case HIRTypeData::TAG_Function: {
-                auto& te = (*ty).as_Function();
-                (void)te;
                 BUG(sp, "Attempting to match a function pointer - " << rule << " against " << ty);
                 break;
             }
             case HIRTypeData::TAG_NodeType: {
-                auto& te = (*ty).as_NodeType();
-                (void)te;
                 BUG(sp, "Attempting to match a magic type - " << rule << " against " << ty);
                 break;
             }
@@ -7924,26 +7689,18 @@ namespace {
                 break;
             }
             case PatternRule::TAG_Bool: {
-                auto& e = rule.as_Bool();
-                (void)e;
                 outRules.push_back(mv$(rule));
                 break;
             }
             case PatternRule::TAG_Value: {
-                auto& e = rule.as_Value();
-                (void)e;
                 outRules.push_back(mv$(rule));
                 break;
             }
             case PatternRule::TAG_ValueRange: {
-                auto& e = rule.as_ValueRange();
-                (void)e;
                 outRules.push_back(mv$(rule));
                 break;
             }
             case PatternRule::TAG_Any: {
-                auto& e = rule.as_Any();
-                (void)e;
                 outRules.push_back(mv$(rule));
                 break;
             }
@@ -8216,26 +7973,18 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
 
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& te = (*ty).as_Infer();
-            (void)te;
             BUG(sp, "Hit _ in type - " << ty);
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& te = (*ty).as_Diverge();
-            (void)te;
             BUG(sp, "Matching over !");
             break;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& te = (*ty).as_Primitive();
-            (void)te;
             this->genDispatchPrimitive(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
             break;
         }
         case HIRTypeData::TAG_Pattern: {
-            auto& te = (*ty).as_Pattern();
-            (void)te;
             BUG(sp, "Pattern type was not reduced to its base type");
             break;
         }
@@ -8246,14 +7995,10 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
                 // - They're handled via hidden derefs
             switch (te.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& pbe = te.binding.as_Unbound();
-                    (void)pbe;
                     BUG(sp, "Encounterd unbound path - " << te.path);
                     break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& pbe = te.binding.as_Opaque();
-                    (void)pbe;
                     BUG(sp, "Attempting to match over opaque type - " << ty);
                     break;
                 }
@@ -8262,20 +8007,14 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
                     const auto& strData = pbe->data;
                     switch (strData.tag()) {
                         case HIRStructData::TAG_Unit: {
-                            auto& sd = strData.as_Unit();
-                            (void)sd;
                             BUG(sp, "Attempting to match over unit type - " << ty);
                             break;
                         }
                         case HIRStructData::TAG_Tuple: {
-                            auto& sd = strData.as_Tuple();
-                            (void)sd;
                             TODO(sp, "Matching on tuple-like struct?");
                             break;
                         }
                         case HIRStructData::TAG_Named: {
-                            auto& sd = strData.as_Named();
-                            (void)sd;
                             TODO(sp, "Matching on struct? - " << ty);
                             break;
                         }
@@ -8283,20 +8022,14 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& pbe = te.binding.as_Union();
-                    (void)pbe;
                     TODO(sp, "Match over Union");
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& pbe = te.binding.as_ExternType();
-                    (void)pbe;
                     TODO(sp, "Match over ExternType - " << ty);
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pbe = te.binding.as_Enum();
-                    (void)pbe;
                     this->genDispatchEnum(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
                     break;
                 }
@@ -8304,26 +8037,18 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& te = (*ty).as_Generic();
-            (void)te;
             BUG(sp, "Attempting to match a generic");
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& te = (*ty).as_TraitObject();
-            (void)te;
             BUG(sp, "Attempting to match a trait object");
             break;
         }
         case HIRTypeData::TAG_ErasedType: {
-            auto& te = (*ty).as_ErasedType();
-            (void)te;
             BUG(sp, "Attempting to match an erased type");
             break;
         }
         case HIRTypeData::TAG_Array: {
-            auto& te = (*ty).as_Array();
-            (void)te;
             // Byte strings?
             // Remove the deref on the &str
             ASSERT_BUG(sp, !val.wrappers.empty() && val.wrappers.back().is_Deref(), "&[T; N] match on non-Deref lvalue - " << val);
@@ -8353,47 +8078,33 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
             break;
         }
         case HIRTypeData::TAG_Slice: {
-            auto& te = (*ty).as_Slice();
-            (void)te;
             this->genDispatchSlice(mv$(ty), mv$(val), rules, ofs, armTargets, defBlk);
             break;
         }
         case HIRTypeData::TAG_Tuple: {
-            auto& te = (*ty).as_Tuple();
-            (void)te;
             BUG(sp, "Match directly on tuple");
             break;
         }
         case HIRTypeData::TAG_Borrow: {
-            auto& te = (*ty).as_Borrow();
-            (void)te;
             BUG(sp, "Match directly on borrow");
             break;
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& te = (*ty).as_Pointer();
-            (void)te;
             auto valUsize = builder.newTemporary(builder.resolve().crate.types.primitive(HIRCoreType::Usize));
             builder.pushStmtAssign(sp, valUsize.clone(), MIRRValue::make_Cast({mv$(val), builder.resolve().crate.types.primitive(HIRCoreType::Usize)}));
             this->genDispatchPrimitive(builder.resolve().crate.types.primitive(HIRCoreType::Usize), mv$(valUsize), rules, ofs, armTargets, defBlk);
             break;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& te = (*ty).as_NamedFunction();
-            (void)te;
             BUG(sp, "Attempting to match a function pointer - " << ty);
             break;
         }
         case HIRTypeData::TAG_Function: {
-            auto& te = (*ty).as_Function();
-            (void)te;
             // TODO: Could this actually be valid?
             BUG(sp, "Attempting to match a function pointer - " << ty);
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& te = (*ty).as_NodeType();
-            (void)te;
             BUG(sp, "Attempting to match a magic type - " << ty);
             break;
         }
@@ -8965,8 +8676,6 @@ void MirBuilder::registerVariableState(unsigned int idx) {
                 break;
             }
             case ScopeType::TAG_Split: {
-                auto& e = scopeDef.data.as_Split();
-                (void)e;
                 BUG(Span(), "Variable " << idx << " introduced within a Split");
                 break;
             }
@@ -8998,8 +8707,6 @@ void MirBuilder::scheduleRegisteredVariableDrop(unsigned int idx) {
                 break;
             }
             case ScopeType::TAG_Split: {
-                auto& e = scopeDef.data.as_Split();
-                (void)e;
                 BUG(Span(), "Variable " << idx << " scheduled within a Split");
                 break;
             }
@@ -9029,8 +8736,6 @@ void MirBuilder::scheduleArgumentDrop(unsigned int idx) {
                 break;
             }
             case ScopeType::TAG_Split: {
-                auto& e = scopeDef.data.as_Split();
-                (void)e;
                 BUG(Span(), "Argument " << idx << " introduced within a Split");
                 break;
             }
@@ -9263,8 +8968,6 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
             break;
         }
         case MIRRValue::TAG_Constant: {
-            auto& e = val.as_Constant();
-            (void)e;
             break;
         }
         case MIRRValue::TAG_SizedArray: {
@@ -9312,14 +9015,10 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
             break;
         }
         case MIRRValue::TAG_DstMeta: {
-            auto& e = val.as_DstMeta();
-            (void)e;
             // Doesn't move
             break;
         }
         case MIRRValue::TAG_DstPtr: {
-            auto& e = val.as_DstPtr();
-            (void)e;
             // Doesn't move
             break;
         }
@@ -9612,8 +9311,6 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRRValue& rval, const S
             break;
         }
         case MIRRValue::TAG_Constant: {
-            auto& e = rval.as_Constant();
-            (void)e;
             break;
         }
         case MIRRValue::TAG_SizedArray: {
@@ -10805,13 +10502,9 @@ void MirBuilder::completeScope(ScopeDef& sd) {
 
     switch (sd.data.tag()) {
         case ScopeType::TAG_Owning: {
-            auto& e = sd.data.as_Owning();
-            (void)e;
             break;
         }
         case ScopeType::TAG_Freeze: {
-            auto& e = sd.data.as_Freeze();
-            (void)e;
             break;
         }
         case ScopeType::TAG_Loop: {
@@ -10852,8 +10545,6 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
     };
     switch (val.root.tag()) {
         case MIRLValue::Storage::TAG_Return: {
-            decltype(val.root.as_Return()) e = val.root.as_Return();
-            (void)e;
             ty = retTy;
             break;
         }
@@ -10876,20 +10567,14 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
                     break;
                 }
                 case HIRPathData::TAG_UfcsKnown: {
-                    auto& pe = e.data.as_UfcsKnown();
-                    (void)pe;
                     TODO(sp, "Static - UfcsKnown - " << e);
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& pe = e.data.as_UfcsUnknown();
-                    (void)pe;
                     BUG(sp, "Encountered UfcsUnknown in Static - " << e);
                     break;
                 }
                 case HIRPathData::TAG_UfcsInherent: {
-                    auto& pe = e.data.as_UfcsInherent();
-                    (void)pe;
                     TODO(sp, "Static - UfcsInherent - " << e);
                     break;
                 }
@@ -10936,8 +10621,6 @@ default:
                             const auto& str = **tep;
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Unit: {
-                                    auto& se = str.data.as_Unit();
-                                    (void)se;
                                     BUG(sp, "Field on unit-like struct - " << currentTy);
                                     break;
                                 }
@@ -10969,14 +10652,10 @@ default:
                 break;
             }
             case MIRLValue::Wrapper::TAG_Deref: {
-                decltype(w.as_Deref()) _e = w.as_Deref();
-                (void)_e;
                 switch ((*currentTy).tag()) {
 default:
                     BUG(sp, "Deref on unexpected type - " << currentTy);
                     case HIRTypeData::TAG_Path: {
-                        auto& te = (*currentTy).as_Path();
-                        (void)te;
                         if (const auto* inner = this->isTypeOwnedBox(currentTy)) {
                             ty = inner;
                         } else {
@@ -10998,8 +10677,6 @@ default:
                 break;
             }
             case MIRLValue::Wrapper::TAG_Index: {
-                decltype(w.as_Index()) _index_val = w.as_Index();
-                (void)_index_val;
                 switch ((*currentTy).tag()) {
                     case HIRTypeData::TAG_Slice: {
                         auto& te = (*currentTy).as_Slice();
@@ -11222,8 +10899,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
     VarState* vs = nullptr;
     switch (lv.root.tag()) {
         case MIRLValue::Storage::TAG_Return: {
-            decltype(lv.root.as_Return()) e = lv.root.as_Return();
-            (void)e;
             BUG(sp, "Move of return value"); vs = &getSlotStateMut(sp, ~0u, SlotType::Local);
             break;
         }
@@ -11238,8 +10913,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
             break;
         }
         case MIRLValue::Storage::TAG_Static: {
-            decltype(lv.root.as_Static()) e = lv.root.as_Static();
-            (void)e;
             return nullptr;
         }
     }
@@ -11258,36 +10931,24 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                 VarState tpl;
                 switch (ivs.tag()) {
                     case VarState::TAG_Invalid: {
-                        auto& ivse = ivs.as_Invalid();
-                        (void)ivse;
                         tpl = VarState::make_Valid({});
                         break;
                     }
                     case VarState::TAG_MovedOut: {
-                        auto& ivse = ivs.as_MovedOut();
-                        (void)ivse;
                         BUG(sp, "Field on value with MovedOut state - " << lv);
                         break;
                     }
                     case VarState::TAG_Partial: {
-                        auto& ivse = ivs.as_Partial();
-                        (void)ivse;
                         break;
                     }
                     case VarState::TAG_PartialArray: {
-                        auto& ivse = ivs.as_PartialArray();
-                        (void)ivse;
                         break;
                     }
                     case VarState::TAG_Optional: {
-                        auto& ivse = ivs.as_Optional();
-                        (void)ivse;
                         tpl = ivs.clone();
                         break;
                     }
                     case VarState::TAG_Valid: {
-                        auto& ivse = ivs.as_Valid();
-                        (void)ivse;
                         tpl = VarState::make_Valid({});
                         break;
                     }
@@ -11302,8 +10963,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                             const auto& str = *e->binding.as_Struct();
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Unit: {
-                                    auto& se = str.data.as_Unit();
-                                    (void)se;
                                     BUG(sp, "Field access of unit-like struct");
                                     break;
                                 }
@@ -11353,8 +11012,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                 break;
             }
             case MIRLValue::Wrapper::TAG_Deref: {
-                decltype(w.as_Deref()) _e = w.as_Deref();
-                (void)_e;
                 // A Box dereference is a move path: track its pointee separately so a
                 // later shallow drop deallocates the Box without dropping moved data.
                 bool isBox = false;
@@ -11379,8 +11036,6 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                 break;
             }
             case MIRLValue::Wrapper::TAG_Index: {
-                decltype(w.as_Index()) e = w.as_Index();
-                (void)e;
                 return nullptr;
             }
             case MIRLValue::Wrapper::TAG_Downcast: {
@@ -11461,13 +11116,9 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
     TRACE_FUNCTION_F(lv << " " << vs);
     switch (vs.tag()) {
         case VarState::TAG_Invalid: {
-            auto& vse = vs.as_Invalid();
-            (void)vse;
             break;
         }
         case VarState::TAG_Valid: {
-            auto& vse = vs.as_Valid();
-            (void)vse;
             vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv));
             break;
         }
@@ -11488,8 +11139,6 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
             break;
         }
         case VarState::TAG_Partial: {
-            auto& vse = vs.as_Partial();
-            (void)vse;
             auto partialState = vs.clone(); vs = VarState::make_Invalid(InvalidType::Moved); auto& partial = partialState.as_Partial(); bool is_enum = false; bool isUnion = false; withValType(
                         sp,
                         lv,
@@ -11545,8 +11194,6 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
             break;
         }
         case VarState::TAG_PartialArray: {
-            auto& vse = vs.as_PartialArray();
-            (void)vse;
             auto arrayState = vs.clone(); vs = VarState::make_Invalid(InvalidType::Moved); auto& array = arrayState.as_PartialArray();
                 unsigned int fillFlag = ~0u;
                 bool fillDrop = true;
@@ -11554,13 +11201,9 @@ void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) 
 default:
                     BUG(sp, "Composite fill state in PartialArray drop - " << *array.fillState);
                     case VarState::TAG_Valid: {
-                        auto& fe = (*array.fillState).as_Valid();
-                        (void)fe;
                         break;
                     }
                     case VarState::TAG_Invalid: {
-                        auto& fe = (*array.fillState).as_Invalid();
-                        (void)fe;
                         fillDrop = false;
                         break;
                     }
@@ -11614,20 +11257,14 @@ void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
             break;
         }
         case ScopeType::TAG_Split: {
-            auto& e = sd.data.as_Split();
-            (void)e;
             // No values, controls parent
             break;
         }
         case ScopeType::TAG_Loop: {
-            auto& e = sd.data.as_Loop();
-            (void)e;
             // No values
             break;
         }
         case ScopeType::TAG_Freeze: {
-            auto& e = sd.data.as_Freeze();
-            (void)e;
             // No values
             break;
         }
@@ -11681,13 +11318,9 @@ default:
             rv.insert(std::make_pair(static_cast<unsigned>(i), SavedActiveLocal(s.clone())));
             break;
             case VarState::TAG_Invalid: {
-                auto& e = s.as_Invalid();
-                (void)e;
                 break;
             }
             case VarState::TAG_MovedOut: {
-                auto& e = s.as_MovedOut();
-                (void)e;
                 break;
             }
         }
@@ -11783,10 +11416,6 @@ bool VarState::operator==(const VarState& x) const {
             return te == xe;
         }
         case VarState::TAG_Valid: {
-            auto& te = (*this).as_Valid();
-            (void)te;
-            auto& xe = x.as_Valid();
-            (void)xe;
             return true;
         }
         case VarState::TAG_Optional: {
@@ -11842,8 +11471,6 @@ bool VarState::operator==(const VarState& x) const {
             break;
         }
         case VarState::TAG_Valid: {
-            auto& e = x.as_Valid();
-            (void)e;
             os << "Valid";
             break;
         }
@@ -11883,13 +11510,9 @@ bool VarState::getUsedDropFlags(std::set<unsigned>* out) const {
             break;
         }
         case VarState::TAG_Invalid: {
-            auto& ve = (*this).as_Invalid();
-            (void)ve;
             break;
         }
         case VarState::TAG_Valid: {
-            auto& ve = (*this).as_Valid();
-            (void)ve;
             break;
         }
         case VarState::TAG_Partial: {

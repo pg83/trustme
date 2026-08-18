@@ -318,8 +318,6 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
-                auto& pe = path.data.as_UfcsUnknown();
-                (void)pe;
                 BUG(Span(), "UfcsUnknown");
                 break;
             }
@@ -328,26 +326,18 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
 
     switch ((*ty).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*ty).as_Infer();
-            (void)e;
             os << ty;
             break;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = (*ty).as_Primitive();
-            (void)e;
             os << ty;
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*ty).as_Diverge();
-            (void)e;
             os << ty;
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*ty).as_Generic();
-            (void)e;
             os << ty;
             break;
         }
@@ -426,13 +416,9 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
                     break;
                 }
                 case HIRTypeDataNodeType::TAG_Generator: {
-                    auto& nodeP = e.as_Generator();
-                    (void)nodeP;
                     break;
                 }
                 case HIRTypeDataNodeType::TAG_Async: {
-                    auto& nodeP = e.as_Async();
-                    (void)nodeP;
                     break;
                 }
             }
@@ -499,8 +485,6 @@ void HMTypeInferrence::printType(::std::ostream& os, const HIRTypeData* tr, LLis
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
-                    auto& ee = e.inner.as_Alias();
-                    (void)ee;
                     break;
                 }
             }
@@ -596,18 +580,12 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
 
     switch (data.tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = data.as_Infer();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = data.as_Diverge();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = data.as_Primitive();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Path: {
@@ -617,8 +595,6 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = data.as_Generic();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
@@ -643,8 +619,6 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
-                    auto& ee = e.inner.as_Alias();
-                    (void)ee;
                     break;
                 }
             }
@@ -710,8 +684,6 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = data.as_NodeType();
-            (void)e;
             break;
         }
     }
@@ -773,18 +745,12 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
     auto data = type->cloneData();
     switch (data.tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = data.as_Infer();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = data.as_Diverge();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = data.as_Primitive();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Path: {
@@ -815,8 +781,6 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = data.as_Generic();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
@@ -829,8 +793,6 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
             break;
         }
         case HIRTypeData::TAG_ErasedType: {
-            auto& e = data.as_ErasedType();
-            (void)e;
             if (typeContainsIvars(type, /*only_unbound=*/true)) {
                 BUG(Span(), "ErasedType getting ivars added - " << type);
             }
@@ -876,8 +838,6 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
             break;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = data.as_NamedFunction();
-            (void)e;
             // Shouldn't be possible?
             // Even if it is seen, it shouldn't have any empty ivars
             break;
@@ -891,8 +851,6 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = data.as_NodeType();
-            (void)e;
             // Shouldn't be possible
             break;
         }
@@ -1273,8 +1231,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                 break;
             }
             case HIRPath::Data::TAG_UfcsUnknown: {
-                auto& pe = path.data.as_UfcsUnknown();
-                (void)pe;
                 BUG(Span(), "UfcsUnknown");
                 break;
             }
@@ -1291,18 +1247,12 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             return true;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = (*ty).as_Primitive();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*ty).as_Diverge();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*ty).as_Generic();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_Path: {
@@ -1330,8 +1280,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             return typeContainsIvars(e.inner, onlyUnbound);
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = (*ty).as_NodeType();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_NamedFunction: {
@@ -1364,8 +1312,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                     return typeContainsIvars(ee, onlyUnbound);
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
-                    auto& ee = e.inner.as_Alias();
-                    (void)ee;
                     return false;
                 }
             }
@@ -1446,10 +1392,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                             break;
                         }
                         case HIRPath::Data::TAG_UfcsUnknown: {
-                            auto& lpe = l.data.as_UfcsUnknown();
-                            (void)lpe;
-                            auto& rpe = r.data.as_UfcsUnknown();
-                            (void)rpe;
                             BUG(Span(), "UfcsUnknown");
                             break;
                         }
@@ -1470,10 +1412,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
             return le == re;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& le = (*l).as_Diverge();
-            (void)le;
-            auto& re = (*r).as_Diverge();
-            (void)re;
             return true;
         }
         case HIRTypeData::TAG_Generic: {
@@ -1865,8 +1803,6 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
                             const HIRTypeData* tailTpl = nullptr;
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Unit: {
-                                    auto& se = str.data.as_Unit();
-                                    (void)se;
                                     BUG(sp, "Unsized unit struct in Pointee lookup - " << type);
                                     break;
                                 }
@@ -2269,8 +2205,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_Array: {
-            auto& e = (*type).as_Array();
-            (void)e;
             break;
         }
     }
@@ -3828,8 +3762,6 @@ default:
                             const auto& str = **strPtr;
                             switch (str.data.tag()) {
                                 case HIRStruct::Data::TAG_Unit: {
-                                    auto& se = str.data.as_Unit();
-                                    (void)se;
                                     break;
                                 }
                                 case HIRStruct::Data::TAG_Tuple: {
@@ -3882,8 +3814,6 @@ default:
                     return Certainty::Ambiguous;
                 }
                 case HIRTypeData::TAG_Generic: {
-                    auto& e = (*type).as_Generic();
-                    (void)e;
                     return evaluateInner(type);
                 }
                 case HIRTypeData::TAG_Tuple: {
@@ -4982,8 +4912,6 @@ default:
                             break;
                         }
                         case HIRPath::Data::TAG_UfcsUnknown: {
-                            auto& e2 = p.data.as_UfcsUnknown();
-                            (void)e2;
                             BUG(Span(), "Encountered UfcsUnknown - " << p);
                             break;
                         }
@@ -4994,8 +4922,6 @@ default:
 
     switch ((*input).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*input).as_Infer();
-            (void)e;
             const auto& ty = this->ivars.getType(input);
             if (ty != input) {
                 return this->hasAssociatedType(ty);
@@ -5003,13 +4929,9 @@ default:
             return false;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*input).as_Diverge();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = (*input).as_Primitive();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_Path: {
@@ -5023,8 +4945,6 @@ default:
             return H::checkPath(*this, e.path);
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*input).as_Generic();
-            (void)e;
             return false;
         }
         case HIRTypeData::TAG_TraitObject: {
@@ -5058,8 +4978,6 @@ default:
                     break;
                 }
                 case TypeDataErasedTypeInner::TAG_Alias: {
-                    auto& ee = e.inner.as_Alias();
-                    (void)ee;
                     break;
                 }
             }
@@ -5103,14 +5021,10 @@ default:
             return H::checkPath(*this, e.path);
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*input).as_Function();
-            (void)e;
             // Recurse?
             return false;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = (*input).as_NodeType();
-            (void)e;
             // Recurse?
             return false;
         }
@@ -5150,8 +5064,6 @@ default:
             auto data = input->cloneData();
     switch (data.tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = data.as_Infer();
-            (void)e;
             const auto* ty = this->ivars.getType(input);
             if (ty != input) {
                 input = ty;
@@ -5161,13 +5073,9 @@ default:
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = data.as_Diverge();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = data.as_Primitive();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Path: {
@@ -5247,8 +5155,6 @@ default:
                     return;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& pe = e.path.data.as_UfcsUnknown();
-                    (void)pe;
                     BUG(sp, "Encountered UfcsUnknown");
                     break;
                 }
@@ -5256,8 +5162,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = data.as_Generic();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
@@ -5270,8 +5174,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_ErasedType: {
-            auto& e = data.as_ErasedType();
-            (void)e;
             // Recurse?
             break;
         }
@@ -5336,8 +5238,6 @@ default:
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& pe = e.path.data.as_UfcsUnknown();
-                    (void)pe;
                     BUG(sp, "Encountered UfcsUnknown");
                     break;
                 }
@@ -5354,8 +5254,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = data.as_NodeType();
-            (void)e;
             // Recurse? Nah.
             break;
         }
@@ -5535,8 +5433,6 @@ default:
                     break;
                 }
                 case HIRTypeDataNodeType::TAG_Async: {
-                    auto& nodeP = te.as_Async();
-                    (void)nodeP;
                     // TODO: `Future` impl
                     break;
                 }
@@ -6434,14 +6330,10 @@ default:
 
                     switch (e.binding.tag()) {
                         case HIRTypePathBinding::TAG_Opaque: {
-                            auto& tpb = e.binding.as_Opaque();
-                            (void)tpb;
                             BUG(sp, "Opaque binding on generic path - " << type);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Unbound: {
-                            auto& tpb = e.binding.as_Unbound();
-                            (void)tpb;
                             BUG(sp, "Unbound binding on generic path - " << type);
                             break;
                         }
@@ -6454,8 +6346,6 @@ default:
                             // - Problems occur with type parameters
                             switch (str.data.tag()) {
                                 case HIRStruct::Data::TAG_Unit: {
-                                    auto& se = str.data.as_Unit();
-                                    (void)se;
                                     break;
                                 }
                                 case HIRStruct::Data::TAG_Tuple: {
@@ -6514,8 +6404,6 @@ default:
                             break;
                         }
                         case HIRTypePathBinding::TAG_ExternType: {
-                            auto& tpb = e.binding.as_ExternType();
-                            (void)tpb;
                             TODO(sp, "Check auto trait destructure on extern type " << type);
                             break;
                         }
@@ -6524,8 +6412,6 @@ default:
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& pe = e.path.data.as_UfcsUnknown();
-                    (void)pe;
                     BUG(sp, "UfcsUnknown in typeck - " << type);
                     break;
                 }
@@ -6545,8 +6431,6 @@ default:
                     break;
                 }
                 case HIRPathData::TAG_UfcsInherent: {
-                    auto& pe = e.path.data.as_UfcsInherent();
-                    (void)pe;
                     TODO(sp, "Auto trait lookup on UFCS Inherent type");
                     break;
                 }
@@ -6554,8 +6438,6 @@ default:
             return res;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*type).as_Generic();
-            (void)e;
             auto lRes = HIRCompare::Unequal;
             this->findTraitImpls(sp, trait, *paramsPtr, type, [&](auto, auto cmp) {
                 lRes = cmp;
@@ -7190,8 +7072,6 @@ default:
             break;
         }
         case HIRTypeData::TAG_Slice: {
-            auto& e = (*type).as_Slice();
-            (void)e;
             return HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_Path: {
@@ -7199,31 +7079,21 @@ default:
             // TODO: Check that only ?Sized parameters are !Sized
             switch (e.binding.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& pb = e.binding.as_Unbound();
-                    (void)pb;
                     break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& pb = e.binding.as_Opaque();
-                    (void)pb;
                     // TODO: Check bounds
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& pb = e.binding.as_ExternType();
-                    (void)pb;
                     // Is it sized? No.
                     return HIRCompare::Unequal;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
-                    auto& pb = e.binding.as_Enum();
-                    (void)pb;
                     // HAS to be Sized
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& pb = e.binding.as_Union();
-                    (void)pb;
                     // Pretty sure unions are Sized
                     break;
                 }
@@ -7263,8 +7133,6 @@ default:
             return e.isSized ? HIRCompare::Equal : HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_TraitObject: {
-            auto& e = (*type).as_TraitObject();
-            (void)e;
             return HIRCompare::Unequal;
         }
     }
@@ -7313,8 +7181,6 @@ default: {
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*type).as_Generic();
-            (void)e;
             // TODO: Store this result - or even pre-calculate it.
             return this->iterateBoundsTraits(
                        sp,
@@ -7340,8 +7206,6 @@ default: {
             return e.type == HIRBorrowType::Shared ? HIRCompare::Equal : HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = (*type).as_Pointer();
-            (void)e;
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_Tuple: {
@@ -7353,23 +7217,15 @@ default: {
             return rv;
         }
         case HIRTypeData::TAG_Slice: {
-            auto& e = (*type).as_Slice();
-            (void)e;
             return HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*type).as_NamedFunction();
-            (void)e;
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*type).as_Function();
-            (void)e;
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = (*type).as_NodeType();
-            (void)e;
             // NOTE: This isn't strictly true, we're leaving the actual checking up to the validate pass
             return HIRCompare::Equal;
         }
@@ -7425,8 +7281,6 @@ default: {
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = (*type).as_Generic();
-            (void)e;
             // TODO: Store this result - or even pre-calculate it.
             return this->iterateBoundsTraits(
                        sp,
@@ -7452,8 +7306,6 @@ default: {
             return e.type == HIRBorrowType::Shared ? HIRCompare::Equal : HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_Pointer: {
-            auto& e = (*type).as_Pointer();
-            (void)e;
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_Tuple: {
@@ -7465,23 +7317,15 @@ default: {
             return rv;
         }
         case HIRTypeData::TAG_Slice: {
-            auto& e = (*type).as_Slice();
-            (void)e;
             return HIRCompare::Unequal;
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*type).as_NamedFunction();
-            (void)e;
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_Function: {
-            auto& e = (*type).as_Function();
-            (void)e;
             return HIRCompare::Equal;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = (*type).as_NodeType();
-            (void)e;
             // NOTE: This isn't strictly true, we're leaving the actual checking up to the validate pass
             // TODO: Determine captures earlier and check captures here
             return HIRCompare::Equal;
@@ -8707,15 +8551,11 @@ default: {
             if (const auto* e = ty->opt_Path()) {
         switch (e->binding.tag()) {
             case HIRTypePathBinding::TAG_Unbound: {
-                auto& be = e->binding.as_Unbound();
-                (void)be;
                 // Wut?
                 TODO(sp, "Handle TypePathBinding::Unbound - " << ty);
                 break;
             }
             case HIRTypePathBinding::TAG_Opaque: {
-                auto& be = e->binding.as_Opaque();
-                (void)be;
                 // Ignore, no fields on an opaque
                 break;
             }
@@ -8727,8 +8567,6 @@ default: {
                     auto monomorph = MonomorphStatePtr(crate.types, ty, &params, nullptr);
                 switch (str.data.tag()) {
                     case HIRStructData::TAG_Unit: {
-                        auto& se = str.data.as_Unit();
-                        (void)se;
                         // No fields on a unit struct
                         break;
                     }
@@ -8758,14 +8596,10 @@ default: {
                 break;
             }
             case HIRTypePathBinding::TAG_Enum: {
-                auto& be = e->binding.as_Enum();
-                (void)be;
                 // No fields on enums either
                 break;
             }
             case HIRTypePathBinding::TAG_ExternType: {
-                auto& be = e->binding.as_ExternType();
-                (void)be;
                 // No fields on extern types
                 break;
             }

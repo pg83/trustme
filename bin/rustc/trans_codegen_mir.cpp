@@ -50,14 +50,10 @@ namespace {
             auto& tuMatch = (*x.e);
             switch (tuMatch.tag()) {
                 case HIRTypeData::TAG_Infer: {
-                    auto& te = tuMatch.as_Infer();
-                    (void)te;
                     BUG(Span(), "" << x.e);
                     break;
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    auto& te = tuMatch.as_Diverge();
-                    (void)te;
                     os << "!";
                     break;
                 }
@@ -72,8 +68,6 @@ namespace {
                     break;
                 }
                 case HIRTypeData::TAG_Generic: {
-                    auto& te = tuMatch.as_Generic();
-                    (void)te;
                     BUG(Span(), "" << x.e);
                     break;
                 }
@@ -84,8 +78,6 @@ namespace {
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    auto& te = tuMatch.as_ErasedType();
-                    (void)te;
                     BUG(Span(), "" << x.e);
                     break;
                 }
@@ -177,8 +169,6 @@ break;
         }
         switch (x.e.root.tag()) {
             case MIRLValue::Storage::TAG_Return: {
-                decltype(x.e.root.as_Return()) e = x.e.root.as_Return();
-                (void)e;
                 os << "RETURN";
                 break;
             }
@@ -205,8 +195,6 @@ break;
             switch (w.tag()) {
                     break;
                     case MIRLValue::Wrapper::TAG_Deref: {
-                        decltype(w.as_Deref()) e = w.as_Deref();
-                        (void)e;
                         os << ")";
                     }
                     break;
@@ -291,8 +279,6 @@ break;
                 break;
                 break;
                 case MIRConstant::TAG_Const: {
-                    auto& v = e.as_Const();
-                    (void)v;
                     BUG(Span(), "Stray named constant in MIR after cleanup - " << e);
 
                 }
@@ -484,8 +470,6 @@ break;
                                 };
                                 switch (str.data.tag()) {
                                     case HIRStructData::TAG_Unit: {
-                                        auto& se = str.data.as_Unit();
-                                        (void)se;
                                         MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");
                                         break;
                                     }
@@ -511,13 +495,9 @@ break;
                     }
                     break;
                     case HIRTypePathBinding::TAG_Union: {
-                        auto& tpb = te.binding.as_Union();
-                        (void)tpb;
                         return MetadataType::None;
                     }
                     case HIRTypePathBinding::TAG_Enum: {
-                        auto& tpb = te.binding.as_Enum();
-                        (void)tpb;
                         return MetadataType::None;
                     }
                     default:
@@ -725,8 +705,6 @@ break;
             switch (repr->variants.tag()) {
                     break;
                     case TypeReprVariantMode::TAG_None: {
-                        auto& _e = repr->variants.as_None();
-                        (void)_e;
 
                     }
                     break;
@@ -1221,8 +1199,6 @@ break;
                             break;
                             break;
                             case MIRStatement::TAG_ScopeEnd: {
-                                auto& se = stmt.as_ScopeEnd();
-                                (void)se;
                                 break;
 
                             }

@@ -116,12 +116,9 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
         switch (param.tag()) {
             case GenericParam::TAG_None: {
                 auto& _ = param.as_None();
-                (void)_;
                 break;
             }
             case GenericParam::TAG_Lifetime: {
-                auto& lftDef = param.as_Lifetime();
-                (void)lftDef;
                 break;
             }
             case GenericParam::TAG_Type: {
@@ -140,19 +137,13 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
     for (const auto& bound : gp.bounds) {
         switch (bound.tag()) {
             case ASTGenericBound::TAG_None: {
-                auto& e = bound.as_None();
-                (void)e;
                 break;
             }
             case ASTGenericBound::TAG_Lifetime: {
-                auto& e = bound.as_Lifetime();
-                (void)e;
                 // Lifetimes are erased in HIR
                 break;
             }
             case ASTGenericBound::TAG_TypeLifetime: {
-                auto& e = bound.as_TypeLifetime();
-                (void)e;
                 // Lifetimes are erased in HIR
                 break;
             }
@@ -233,8 +224,6 @@ HIRGenericParams AST2HIR::LowerHIRGenericParams(const ASTGenericParams& gp, bool
                 break;
             }
             case ASTGenericBound::TAG_NotTrait: {
-                auto& e = bound.as_NotTrait();
-                (void)e;
                 TODO(bound.span, "Negative trait bounds");
                 break;
             }
@@ -350,8 +339,6 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
         HIRPattern::Value lowerhirPatternValue(const Span& sp, const ASTPattern::Value& v) {
             switch (v.tag()) {
                 case ASTPatternValue::TAG_Invalid: {
-                    auto& e = v.as_Invalid();
-                    (void)e;
                     BUG(sp, "Encountered Invalid value in Pattern");
                     break;
                 }
@@ -382,25 +369,17 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
 
     switch (pat.data().tag()) {
         case ASTPatternData::TAG_MaybeBind: {
-            auto& e = pat.data().as_MaybeBind();
-            (void)e;
             BUG(pat.span(), "Encountered MaybeBind pattern");
             break;
         }
         case ASTPatternData::TAG_Macro: {
-            auto& e = pat.data().as_Macro();
-            (void)e;
             BUG(pat.span(), "Encountered Macro pattern");
             break;
         }
         case ASTPatternData::TAG_Any: {
-            auto& e = pat.data().as_Any();
-            (void)e;
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
         }
         case ASTPatternData::TAG_Never: {
-            auto& e = pat.data().as_Never();
-            (void)e;
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
         }
         case ASTPatternData::TAG_Box: {
@@ -590,41 +569,27 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
     for (const auto& param : srcParams.entries) {
         switch (param.tag()) {
             case ASTPathParamEnt::TAG_Null: {
-                auto& ty = param.as_Null();
-                (void)ty;
                 break;
             }
             case ASTPathParamEnt::TAG_Lifetime: {
-                auto& lft = param.as_Lifetime();
-                (void)lft;
                 numLft++;
                 break;
             }
             case ASTPathParamEnt::TAG_Type: {
-                auto& ty = param.as_Type();
-                (void)ty;
                 numTy++;
                 break;
             }
             case ASTPathParamEnt::TAG_Value: {
-                auto& iv = param.as_Value();
-                (void)iv;
                 numVal++;
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedTyEqual: {
-                auto& ty = param.as_AssociatedTyEqual();
-                (void)ty;
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedValueEqual: {
-                auto& ty = param.as_AssociatedValueEqual();
-                (void)ty;
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedTyBound: {
-                auto& ty = param.as_AssociatedTyBound();
-                (void)ty;
                 break;
             }
         }
@@ -635,13 +600,9 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
     for (const auto& param : srcParams.entries) {
         switch (param.tag()) {
             case ASTPathParamEnt::TAG_Null: {
-                auto& ty = param.as_Null();
-                (void)ty;
                 break;
             }
             case ASTPathParamEnt::TAG_Lifetime: {
-                auto& lft = param.as_Lifetime();
-                (void)lft;
                 break;
             }
             case ASTPathParamEnt::TAG_Type: {
@@ -656,16 +617,12 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedTyEqual: {
-                auto& ty = param.as_AssociatedTyEqual();
-                (void)ty;
                 if (!allowAssoc) {
                     BUG(sp, "Encountered path parameters with associated type bounds where they are not allowed");
                 }
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedValueEqual: {
-                auto& ty = param.as_AssociatedValueEqual();
-                (void)ty;
                 if (!allowAssoc) {
                     BUG(sp, "Encountered path parameters with associated type bounds where they are not allowed");
                 }
@@ -675,8 +632,6 @@ HIRPathParams AST2HIR::LowerHIRPathParams(const Span& sp, const ASTPathParams& s
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedTyBound: {
-                auto& ty = param.as_AssociatedTyBound();
-                (void)ty;
                 if (!allowAssoc) {
                     BUG(sp, "Encountered path parameters with associated type bounds where they are not allowed");
                 }
@@ -856,22 +811,18 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
         switch (e.tag()) {
             case ASTPathParamEnt::TAG_Null: {
                 auto& _ = e.as_Null();
-                (void)_;
                 break;
             }
             case ASTPathParamEnt::TAG_Lifetime: {
                 auto& _ = e.as_Lifetime();
-                (void)_;
                 break;
             }
             case ASTPathParamEnt::TAG_Type: {
                 auto& _ = e.as_Type();
-                (void)_;
                 break;
             }
             case ASTPathParamEnt::TAG_Value: {
                 auto& _ = e.as_Value();
-                (void)_;
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedTyEqual: {
@@ -915,38 +866,26 @@ HIRTraitPath AST2HIR::LowerHIRTraitPath(const Span& sp, const ASTPath& path, con
 HIRPath AST2HIR::LowerHIRPath(const Span& sp, const ASTPath& path, FromASTPathClass pc) {
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
-            auto& e = path.cls.as_Invalid();
-            (void)e;
             BUG(sp, "BUG: Encountered Invalid path in LowerHIR_Path");
             break;
         }
         case ASTPathClass::TAG_Local: {
-            auto& e = path.cls.as_Local();
-            (void)e;
             TODO(sp, "What to do with Path::Class::Local in LowerHIR_Path - " << path);
             break;
         }
         case ASTPathClass::TAG_Relative: {
-            auto& e = path.cls.as_Relative();
-            (void)e;
             BUG(sp, "Encountered `Relative` path in LowerHIR_Path - " << path);
             break;
         }
         case ASTPathClass::TAG_Self: {
-            auto& e = path.cls.as_Self();
-            (void)e;
             BUG(sp, "Encountered `Self` path in LowerHIR_Path - " << path);
             break;
         }
         case ASTPathClass::TAG_Super: {
-            auto& e = path.cls.as_Super();
-            (void)e;
             BUG(sp, "Encountered `Super` path in LowerHIR_Path - " << path);
             break;
         }
         case ASTPathClass::TAG_Absolute: {
-            auto& e = path.cls.as_Absolute();
-            (void)e;
             return HIRPath(LowerHIRGenericPath(sp, path, pc));
         }
         case ASTPathClass::TAG_UFCS: {
@@ -1116,29 +1055,19 @@ namespace {
 HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
     switch (ty->data.tag()) {
         case TypeData::TAG_None: {
-            auto& e = ty->data.as_None();
-            (void)e;
             BUG(ty->span(), "TypeData::None");
             break;
         }
         case TypeData::TAG_Bang: {
-            auto& e = ty->data.as_Bang();
-            (void)e;
             return crate->types.diverge();
         }
         case TypeData::TAG_Any: {
-            auto& e = ty->data.as_Any();
-            (void)e;
             return crate->types.infer();
         }
         case TypeData::TAG_Unit: {
-            auto& e = ty->data.as_Unit();
-            (void)e;
             return crate->types.unit();
         }
         case TypeData::TAG_Macro: {
-            auto& e = ty->data.as_Macro();
-            (void)e;
             BUG(ty->span(), "TypeData::Macro");
             break;
         }
@@ -1265,26 +1194,18 @@ HIRTypeRef AST2HIR::LowerHIRType(::ASTType* ty) {
                         return LowerHIRConstGeneric(node);
                     }
                     case ASTPatternValue::TAG_Invalid: {
-                        auto& v = value.as_Invalid();
-                        (void)v;
                         BUG(sp, "invalid pattern endpoint");
                         break;
                     }
                     case ASTPatternValue::TAG_Float: {
-                        auto& v = value.as_Float();
-                        (void)v;
                         ERROR(sp, E0000, "float pattern types are not supported");
                         break;
                     }
                     case ASTPatternValue::TAG_String: {
-                        auto& v = value.as_String();
-                        (void)v;
                         ERROR(sp, E0000, "string pattern types are not supported");
                         break;
                     }
                     case ASTPatternValue::TAG_ByteString: {
-                        auto& v = value.as_ByteString();
-                        (void)v;
                         ERROR(sp, E0000, "byte-string pattern types are not supported");
                         break;
                     }
@@ -1536,8 +1457,6 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
 
     switch (ent.data.tag()) {
         case ASTStructData::TAG_Unit: {
-            auto& e = ent.data.as_Unit();
-            (void)e;
             rv.data = HIRStruct::Data::make_Unit({});
             break;
         }
@@ -1595,8 +1514,6 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
         bool opaque = false;
         switch (rv.data.tag()) {
             case HIRStructData::TAG_Unit: {
-                auto& de = rv.data.as_Unit();
-                (void)de;
                 break;
             }
             case HIRStructData::TAG_Tuple: {
@@ -1992,14 +1909,10 @@ HIRTrait AST2HIR::LowerHIRTrait(HIRSimplePath traitPath, const ASTTrait& f, cons
 default:
             BUG(item.span, "Encountered unexpected item type in trait");
             case ASTItem::TAG_None: {
-                auto& i = item.data.as_None();
-                (void)i;
                 // Ignore.
                 break;
             }
             case ASTItem::TAG_MacroInv: {
-                auto& i = item.data.as_MacroInv();
-                (void)i;
                 // Ignore.
                 break;
             }
@@ -2017,17 +1930,14 @@ default:
                 switch (bound.tag()) {
                     case ASTGenericBound::TAG_None: {
                         auto& _ = bound.as_None();
-                        (void)_;
                         break;
                     }
                     case ASTGenericBound::TAG_Lifetime: {
                         auto& _ = bound.as_Lifetime();
-                        (void)_;
                         break;
                     }
                     case ASTGenericBound::TAG_TypeLifetime: {
                         auto& _ = bound.as_TypeLifetime();
-                        (void)_;
                         break;
                     }
                     case ASTGenericBound::TAG_IsTrait: {
@@ -2056,13 +1966,11 @@ default:
                     }
                     case ASTGenericBound::TAG_NotTrait: {
                         auto& _ = bound.as_NotTrait();
-                        (void)_;
                         TODO(item.span, "Negative associated type bound");
                         break;
                     }
                     case ASTGenericBound::TAG_Equality: {
                         auto& _ = bound.as_Equality();
-                        (void)_;
                         BUG(item.span, "Unexpected type equality bound on associated type");
                         break;
                     }
@@ -2696,19 +2604,13 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
         DEBUG(itemPath << " " << item.data.tagStr());
         switch (item.data.tag()) {
             case ASTItem::TAG_None: {
-                auto& e = item.data.as_None();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_Macro: {
-                auto& e = item.data.as_Macro();
-                (void)e;
                 // NOTE: These are in `m_macros`
                 break;
             }
             case ASTItem::TAG_MacroInv: {
-                auto& e = item.data.as_MacroInv();
-                (void)e;
                 // Valid.
                 break;
             }
@@ -2750,20 +2652,14 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
                 break;
             }
             case ASTItem::TAG_Impl: {
-                auto& e = item.data.as_Impl();
-                (void)e;
                 // NOTE: impl blocks are handled in a second pass
                 break;
             }
             case ASTItem::TAG_NegImpl: {
-                auto& e = item.data.as_NegImpl();
-                (void)e;
                 // NOTE: impl blocks are handled in a second pass
                 break;
             }
             case ASTItem::TAG_Use: {
-                auto& e = item.data.as_Use();
-                (void)e;
                 // Ignore - The index is used to add `Import`s
                 break;
             }
@@ -2968,13 +2864,9 @@ void AST2HIR::LowerHIRModuleImpls(const ASTModule& astMod, HIRCrate& hirCrate) {
 default:
                         BUG(item.sp, "Unexpected item type in trait impl - " << item.data->tagStr());
                         case ASTItem::TAG_None: {
-                            auto& e = (*item.data).as_None();
-                            (void)e;
                             break;
                         }
                         case ASTItem::TAG_MacroInv: {
-                            auto& e = (*item.data).as_MacroInv();
-                            (void)e;
                             break;
                         }
                         case ASTItem::TAG_Static: {
@@ -3067,13 +2959,9 @@ default:
 default:
                     BUG(item.sp, "Unexpected item type in inherent impl - " << item.data->tagStr());
                     case ASTItem::TAG_None: {
-                        auto& e = (*item.data).as_None();
-                        (void)e;
                         break;
                     }
                     case ASTItem::TAG_MacroInv: {
-                        auto& e = (*item.data).as_MacroInv();
-                        (void)e;
                         break;
                     }
                     case ASTItem::TAG_Static: {
@@ -4571,8 +4459,6 @@ default:
                     break;
                 }
                 case ASTPathBindingValue::TAG_Function: {
-                    auto& e = v.path.bindings.value.binding.as_Function();
-                    (void)e;
                     rv.reset(ctx.crate->pool->make<HIRExprNodePathValue>(v.span(), ctx.LowerHIRPath(v.span(), v.path, FromASTPathClass::Value), HIRExprNodePathValue::FUNCTION));
                     break;
                 }

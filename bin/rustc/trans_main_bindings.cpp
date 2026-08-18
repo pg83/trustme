@@ -394,8 +394,6 @@ namespace {
             ::std::vector<MIRParam> vals;
             switch (str.data.tag()) {
                 case HIRStructData::TAG_Unit: {
-                    auto& se = str.data.as_Unit();
-                    (void)se;
                     break;
                 }
                 case HIRStructData::TAG_Tuple: {
@@ -1019,73 +1017,49 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
             if (state.resolve.typeNeedsDropGlue(sp, ty)) {
                 switch ((*ty).tag()) {
                     case HIRTypeData::TAG_Infer: {
-                        auto& _te = (*ty).as_Infer();
-                        (void)_te;
                         throw "";
                     }
                     case HIRTypeData::TAG_Generic: {
-                        auto& _te = (*ty).as_Generic();
-                        (void)_te;
                         throw "";
                     }
                     case HIRTypeData::TAG_ErasedType: {
-                        auto& _te = (*ty).as_ErasedType();
-                        (void)_te;
                         throw "";
                     }
                     case HIRTypeData::TAG_TraitObject: {
-                        auto& _te = (*ty).as_TraitObject();
-                        (void)_te;
                         TODO(sp, "Drop glue for TraitObject? " << ty);
                         break;
                     }
                     case HIRTypeData::TAG_Slice: {
-                        auto& _te = (*ty).as_Slice();
-                        (void)_te;
                         TODO(sp, "Drop glue for Slice? " << ty);
                         break;
                     }
                     case HIRTypeData::TAG_NodeType: {
-                        auto& _te = (*ty).as_NodeType();
-                        (void)_te;
                         TODO(sp, "Drop glue for NodeType? " << ty);
                         break;
                     }
                     case HIRTypeData::TAG_Diverge: {
-                        auto& te = (*ty).as_Diverge();
-                        (void)te;
                         // Exists for reasons...
                         builder.terminateBlock(MIRTerminator::make_Unreachable({}));
                         break;
                     }
                     case HIRTypeData::TAG_Primitive: {
-                        auto& te = (*ty).as_Primitive();
-                        (void)te;
                         // Nothing to do
                         break;
                     }
                     case HIRTypeData::TAG_Pattern: {
-                        auto& te = (*ty).as_Pattern();
-                        (void)te;
                         // Pattern types are restricted scalars and have no
                         // independent drop glue beyond their base type.
                         break;
                     }
                     case HIRTypeData::TAG_NamedFunction: {
-                        auto& te = (*ty).as_NamedFunction();
-                        (void)te;
                         // Nothing to do
                         break;
                     }
                     case HIRTypeData::TAG_Function: {
-                        auto& te = (*ty).as_Function();
-                        (void)te;
                         // Nothing to do
                         break;
                     }
                     case HIRTypeData::TAG_Pointer: {
-                        auto& te = (*ty).as_Pointer();
-                        (void)te;
                         // Nothing to do
                         break;
                     }
@@ -1129,18 +1103,12 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                         bool hasDrop = false;
                         switch (te.binding.tag()) {
                             case HIRTypePathBinding::TAG_Unbound: {
-                                auto& pbe = te.binding.as_Unbound();
-                                (void)pbe;
                                 throw "";
                             }
                             case HIRTypePathBinding::TAG_Opaque: {
-                                auto& pbe = te.binding.as_Opaque();
-                                (void)pbe;
                                 throw "";
                             }
                             case HIRTypePathBinding::TAG_ExternType: {
-                                auto& pbe = te.binding.as_ExternType();
-                                (void)pbe;
                                 // Why is this trying to be dropped?
                                 break;
                             }
@@ -1195,8 +1163,6 @@ void TransAutoImpls(const WireBoard& wb, HIRCrate& crate, TransList& transList) 
                                         const HIREnum& enm = *pbe;
                                 switch (enm.data.tag()) {
                                     case HIREnumClass::TAG_Value: {
-                                        auto& ee = enm.data.as_Value();
-                                        (void)ee;
                                         builder.terminateBlock(MIRTerminator::make_Return({}));
                                         break;
                                     }
@@ -1714,15 +1680,11 @@ namespace {
                 break;
                 break;
                 case HIRValueItem::TAG_StructConstant: {
-                    auto& e = vi.as_StructConstant();
-                    (void)e;
 
                 }
                 break;
                 break;
                 case HIRValueItem::TAG_StructConstructor: {
-                    auto& e = vi.as_StructConstructor();
-                    (void)e;
 
                 }
                 break;
@@ -2147,8 +2109,6 @@ void TransEnumerateCleanup(const WireBoard& wb, const HIRCrate& crate, TransList
 default:
                 break;
                 case HIRPathData::TAG_Generic: {
-                    auto& e = path.data.as_Generic();
-                    (void)e;
                     break;
                 }
             }
@@ -2419,8 +2379,6 @@ namespace {
             };
             switch (item.data.tag()) {
                 case HIRStructData::TAG_Unit: {
-                    auto& e = item.data.as_Unit();
-                    (void)e;
                     break;
                 }
                 case HIRStructData::TAG_Tuple: {
@@ -2481,8 +2439,6 @@ namespace {
 default:
                     break;
                     case HIRTypeData::TAG_Infer: {
-                        auto& te = (*ty).as_Infer();
-                        (void)te;
                         BUG(sp, "`_` type hit in enumeration");
                         break;
                     }
@@ -2490,35 +2446,23 @@ default:
                         auto& te = (*ty).as_Path();
                         switch (te.binding.tag()) {
                             case HIRTypePathBinding::TAG_Unbound: {
-                                auto& tpb = te.binding.as_Unbound();
-                                (void)tpb;
                                 BUG(sp, "Unbound type hit in enumeration - " << ty);
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Opaque: {
-                                auto& tpb = te.binding.as_Opaque();
-                                (void)tpb;
                                 BUG(sp, "Opaque type hit in enumeration - " << ty);
                                 break;
                             }
                             case HIRTypePathBinding::TAG_ExternType: {
-                                auto& tpb = te.binding.as_ExternType();
-                                (void)tpb;
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Struct: {
-                                auto& tpb = te.binding.as_Struct();
-                                (void)tpb;
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Union: {
-                                auto& tpb = te.binding.as_Union();
-                                (void)tpb;
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Enum: {
-                                auto& tpb = te.binding.as_Enum();
-                                (void)tpb;
                                 break;
                             }
                         }
@@ -2562,56 +2506,38 @@ default:
 
                 switch ((*ty).tag()) {
                     case HIRTypeData::TAG_Infer: {
-                        auto& te = (*ty).as_Infer();
-                        (void)te;
                         BUG(sp, "`_` type hit in enumeration");
                         break;
                     }
                     case HIRTypeData::TAG_Generic: {
-                        auto& te = (*ty).as_Generic();
-                        (void)te;
                         BUG(sp, "Generic type hit in enumeration - " << ty);
                         break;
                     }
                     case HIRTypeData::TAG_ErasedType: {
-                        auto& te = (*ty).as_ErasedType();
-                        (void)te;
                         break;
                     }
                     case HIRTypeData::TAG_NodeType: {
-                        auto& te = (*ty).as_NodeType();
-                        (void)te;
                         BUG(sp, "NodeType type hit in enumeration - " << ty);
                         break;
                     }
                     case HIRTypeData::TAG_Diverge: {
-                        auto& te = (*ty).as_Diverge();
-                        (void)te;
                         break;
                     }
                     case HIRTypeData::TAG_Primitive: {
-                        auto& te = (*ty).as_Primitive();
-                        (void)te;
                         break;
                     }
                     case HIRTypeData::TAG_Path: {
                         auto& te = (*ty).as_Path();
                         switch (te.binding.tag()) {
                             case HIRTypePathBinding::TAG_Unbound: {
-                                auto& tpb = te.binding.as_Unbound();
-                                (void)tpb;
                                 BUG(sp, "Unbound type hit in enumeration - " << ty);
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Opaque: {
-                                auto& tpb = te.binding.as_Opaque();
-                                (void)tpb;
                                 BUG(sp, "Opaque type hit in enumeration - " << ty);
                                 break;
                             }
                             case HIRTypePathBinding::TAG_ExternType: {
-                                auto& tpb = te.binding.as_ExternType();
-                                (void)tpb;
                                 // No innards to visit
                                 break;
                             }
@@ -2685,8 +2611,6 @@ default:
                         break;
                     }
                     case HIRTypeData::TAG_NamedFunction: {
-                        auto& te = (*ty).as_NamedFunction();
-                        (void)te;
                         break;
                     }
                     case HIRTypeData::TAG_Function: {
@@ -2805,8 +2729,6 @@ default:
                             // Recurse, if Deref get the type and add it to the visitor
                             switch (lv.root.tag()) {
                                 case MIRLValue::Storage::TAG_Return: {
-                                    decltype(lv.root.as_Return()) e = lv.root.as_Return();
-                                    (void)e;
                                     MIR_TODO(localMirRes, "Get return type for MIR type enumeration");
                                     break;
                                 }
@@ -3108,8 +3030,6 @@ namespace {
 
         switch (path.data.tag()) {
             case HIRPathData::TAG_Generic: {
-                auto& _pe = path.data.as_Generic();
-                (void)_pe;
                 break;
             }
             case HIRPathData::TAG_UfcsKnown: {
@@ -3129,8 +3049,6 @@ namespace {
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
-                auto& _pe = path.data.as_UfcsUnknown();
-                (void)_pe;
                 BUG(sp, "UfcsUnknown at translation: " << path);
                 break;
             }
@@ -3157,8 +3075,6 @@ namespace {
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
-                auto& _pe = path.data.as_UfcsUnknown();
-                (void)_pe;
                 BUG(sp, "UfcsUnknown at translation: " << path);
                 break;
             }
@@ -3195,8 +3111,6 @@ namespace {
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
-                auto& pe = path.data.as_UfcsUnknown();
-                (void)pe;
                 break;
             }
         }
@@ -3224,8 +3138,6 @@ namespace {
 default:
             TODO(sp, path << " was " << ent.tagStr());
             case TypeckValuePtr::TAG_NotYetKnown: {
-                auto& _e = ent.as_NotYetKnown();
-                (void)_e;
                 const auto* pe = &path.data.as_UfcsKnown();
                 // Options:
                 // - VTable
@@ -3277,12 +3189,10 @@ default:
             }
             case TypeckValuePtr::TAG_StructConstructor: {
                 auto& _ = ent.as_StructConstructor();
-                (void)_;
                 return EntPtr::make_AutoGenerate({});
             }
             case TypeckValuePtr::TAG_EnumConstructor: {
                 auto& _ = ent.as_EnumConstructor();
-                (void)_;
                 return EntPtr::make_AutoGenerate({});
             }
         }
@@ -3327,8 +3237,6 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            auto& pe = pathMono.data.as_UfcsUnknown();
-            (void)pe;
             BUG(sp, "UfcsUnknown - " << pathMono);
             break;
         }
@@ -3377,14 +3285,10 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
     enumerateConstRelocations(state, pathMono, subPp);
     switch (itemRef.tag()) {
         case EntPtr::TAG_NotFound: {
-            auto& e = itemRef.as_NotFound();
-            (void)e;
             BUG(sp, "Item not found for " << pathMono);
             break;
         }
         case EntPtr::TAG_AutoGenerate: {
-            auto& e = itemRef.as_AutoGenerate();
-            (void)e;
             if (pathAlreadyEnumerated(state, pathMono)) {
                 DEBUG("> Already enumerated after const evaluation");
                 return;
@@ -3524,33 +3428,21 @@ void TransEnumerateFillFromMIRLValue(MIREnumCache& state, const MIRLValue& lv) {
 void TransEnumerateFillFromMIRConstant(MIREnumCache& state, const MIRConstant& c) {
     switch (c.tag()) {
         case MIRConstant::TAG_Int: {
-            auto& ce = c.as_Int();
-            (void)ce;
             break;
         }
         case MIRConstant::TAG_Uint: {
-            auto& ce = c.as_Uint();
-            (void)ce;
             break;
         }
         case MIRConstant::TAG_Float: {
-            auto& ce = c.as_Float();
-            (void)ce;
             break;
         }
         case MIRConstant::TAG_Bool: {
-            auto& ce = c.as_Bool();
-            (void)ce;
             break;
         }
         case MIRConstant::TAG_Bytes: {
-            auto& ce = c.as_Bytes();
-            (void)ce;
             break;
         }
         case MIRConstant::TAG_StaticString: {
-            auto& ce = c.as_StaticString();
-            (void)ce;
             break;
         }
         // String
@@ -3566,8 +3458,6 @@ void TransEnumerateFillFromMIRConstant(MIREnumCache& state, const MIRConstant& c
             break;
         }
         case MIRConstant::TAG_Generic: {
-            auto& ce = c.as_Generic();
-            (void)ce;
             break;
         }
         case MIRConstant::TAG_Function: {
@@ -3724,8 +3614,6 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
                             break;
                         }
                         case MIRAsmParam::TAG_Label: {
-                            auto& v = p.as_Label();
-                            (void)v;
                             break;
                         }
                     }
@@ -3744,8 +3632,6 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
                     break;
                 }
                 case MIRStatement::TAG_SetDropFlag: {
-                    auto& se = stmt.as_SetDropFlag();
-                    (void)se;
                     break;
                 }
                 case MIRStatement::TAG_SaveDropFlag: {
@@ -3759,8 +3645,6 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
                     break;
                 }
                 case MIRStatement::TAG_ScopeEnd: {
-                    auto& se = stmt.as_ScopeEnd();
-                    (void)se;
                     break;
                 }
             }
@@ -3768,33 +3652,21 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
         DEBUG("> " << bb.terminator);
         switch (bb.terminator.tag()) {
             case MIRTerminator::TAG_Incomplete: {
-                auto& e = bb.terminator.as_Incomplete();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Return: {
-                auto& e = bb.terminator.as_Return();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_UnwindResume: {
-                auto& e = bb.terminator.as_UnwindResume();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_UnwindTerminate: {
-                auto& e = bb.terminator.as_UnwindTerminate();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Unreachable: {
-                auto& e = bb.terminator.as_Unreachable();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_Goto: {
-                auto& e = bb.terminator.as_Goto();
-                (void)e;
                 break;
             }
             case MIRTerminator::TAG_If: {

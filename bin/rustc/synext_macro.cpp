@@ -912,20 +912,14 @@ public:
                     break;
                 }
                 case ASTAsmParam::TAG_Label: {
-                    auto& _param = param.as_Label();
-                    (void)_param;
                     ERROR(sp, E0000, "`label` is not allowed in `global_asm!`");
                     break;
                 }
                 case ASTAsmParam::TAG_RegSingle: {
-                    auto& _param = param.as_RegSingle();
-                    (void)_param;
                     ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
                     break;
                 }
                 case ASTAsmParam::TAG_Reg: {
-                    auto& _param = param.as_Reg();
-                    (void)_param;
                     ERROR(sp, E0000, "Only `sym` and `const` are allowed in `global_asm!`");
                     break;
                 }

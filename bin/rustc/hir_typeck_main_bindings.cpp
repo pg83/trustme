@@ -39,8 +39,6 @@ namespace {
                         return e.params;
                     }
                     case HIRValueItem::TAG_Static: {
-                        auto& e = item.as_Static();
-                        (void)e;
                         // TODO: Return an empty set?
                         BUG(sp, "Attepted to get parameters for static " << path);
                         break;
@@ -62,32 +60,22 @@ namespace {
 
                 switch (item.tag()) {
                     case HIRTypeItem::TAG_Import: {
-                        auto& e = item.as_Import();
-                        (void)e;
                         BUG(sp, "Type path pointed to import - " << path);
                         break;
                     }
                     case HIRTypeItem::TAG_TypeAlias: {
-                        auto& e = item.as_TypeAlias();
-                        (void)e;
                         BUG(sp, "Type path pointed to type alias - " << path);
                         break;
                     }
                     case HIRTypeItem::TAG_TraitAlias: {
-                        auto& e = item.as_TraitAlias();
-                        (void)e;
                         BUG(sp, "Type path pointed to trait alias - " << path);
                         break;
                     }
                     case HIRTypeItem::TAG_ExternType: {
-                        auto& e = item.as_ExternType();
-                        (void)e;
                         static HIRGenericParams emptyParams; return emptyParams;
                         break;
                     }
                     case HIRTypeItem::TAG_Module: {
-                        auto& e = item.as_Module();
-                        (void)e;
                         BUG(sp, "Type path pointed to module - " << path);
                         break;
                     }
@@ -233,23 +221,15 @@ namespace {
 
             switch (data.tag()) {
                 case HIRTypeData::TAG_Infer: {
-                    auto& e = data.as_Infer();
-                    (void)e;
                     break;
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    auto& e = data.as_Diverge();
-                    (void)e;
                     break;
                 }
                 case HIRTypeData::TAG_Primitive: {
-                    auto& e = data.as_Primitive();
-                    (void)e;
                     break;
                 }
                 case HIRTypeData::TAG_Generic: {
-                    auto& e = data.as_Generic();
-                    (void)e;
                     break;
                 }
                 case HIRTypeData::TAG_Path: {
@@ -335,8 +315,6 @@ namespace {
                     break;
                 }
                 case HIRTypeData::TAG_NodeType: {
-                    auto& e = data.as_NodeType();
-                    (void)e;
                     break;
                 }
             }
@@ -353,25 +331,17 @@ namespace {
             if (const auto* e = ty->opt_Path()) {
                 switch (e->path.data.tag()) {
                     case HIRPath::Data::TAG_Generic: {
-                        auto& pe = e->path.data.as_Generic();
-                        (void)pe;
                         break;
                     }
                     case HIRPath::Data::TAG_UfcsUnknown: {
-                        auto& pe = e->path.data.as_UfcsUnknown();
-                        (void)pe;
                         TODO(sp, "Should UfcsKnown be encountered here?");
                         break;
                     }
                     case HIRPath::Data::TAG_UfcsInherent: {
-                        auto& pe = e->path.data.as_UfcsInherent();
-                        (void)pe;
                         TRACE_FUNCTION_FR("UfcsInherent - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);
                         break;
                     }
                     case HIRPath::Data::TAG_UfcsKnown: {
-                        auto& pe = e->path.data.as_UfcsKnown();
-                        (void)pe;
                         TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);
                         break;
                     }
@@ -616,8 +586,6 @@ namespace {
                     break;
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
-                    auto& e = p.data.as_UfcsUnknown();
-                    (void)e;
                     BUG(Span(), "Encountered unknown-trait UFCS path during outer typeck - " << p);
                     break;
                 }

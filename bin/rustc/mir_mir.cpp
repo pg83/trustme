@@ -169,8 +169,6 @@ void MIRLValue::RefCommon::fmt(::std::ostream& os) const {
 ::std::ostream& operator<<(::std::ostream& os, const MIRLValue::Storage& r) {
     switch (r.tag()) {
         case MIRLValue::Storage::TAG_Return: {
-            decltype(r.as_Return()) e = r.as_Return();
-            (void)e;
             os << "retval";
             break;
         }
@@ -201,8 +199,6 @@ void MIRLValue::RefCommon::fmt(::std::ostream& os) const {
             break;
         }
         case MIRLValue::Wrapper::TAG_Deref: {
-            decltype(w.as_Deref()) e = w.as_Deref();
-            (void)e;
             os << "*";
             break;
         }
@@ -553,8 +549,6 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
     auto fmtUnwind = [&os](const MIRUnwindAction& action) {
         switch (action.tag()) {
             case MIRUnwindAction::TAG_Continue: {
-                auto& ue = action.as_Continue();
-                (void)ue;
                 os << "continue";
                 break;
             }
@@ -564,14 +558,10 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
                 break;
             }
             case MIRUnwindAction::TAG_Terminate: {
-                auto& ue = action.as_Terminate();
-                (void)ue;
                 os << "terminate";
                 break;
             }
             case MIRUnwindAction::TAG_Unreachable: {
-                auto& ue = action.as_Unreachable();
-                (void)ue;
                 os << "unreachable";
                 break;
             }
@@ -579,32 +569,22 @@ bool operator==(const MIRRValue& a, const MIRRValue& b) {
     };
     switch (x.tag()) {
         case MIRTerminator::TAG_Incomplete: {
-            auto& e = x.as_Incomplete();
-            (void)e;
             os << "Invalid";
             break;
         }
         case MIRTerminator::TAG_Return: {
-            auto& e = x.as_Return();
-            (void)e;
             os << "Return";
             break;
         }
         case MIRTerminator::TAG_UnwindResume: {
-            auto& e = x.as_UnwindResume();
-            (void)e;
             os << "UnwindResume";
             break;
         }
         case MIRTerminator::TAG_UnwindTerminate: {
-            auto& e = x.as_UnwindTerminate();
-            (void)e;
             os << "UnwindTerminate";
             break;
         }
         case MIRTerminator::TAG_Unreachable: {
-            auto& e = x.as_Unreachable();
-            (void)e;
             os << "Unreachable";
             break;
         }
@@ -716,10 +696,6 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
         }
         switch (lhs.tag()) {
             case MIRUnwindAction::TAG_Continue: {
-                auto& le = lhs.as_Continue();
-                (void)le;
-                auto& re = rhs.as_Continue();
-                (void)re;
                 return true;
             }
             case MIRUnwindAction::TAG_Cleanup: {
@@ -728,17 +704,9 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
                 return le == re;
             }
             case MIRUnwindAction::TAG_Terminate: {
-                auto& le = lhs.as_Terminate();
-                (void)le;
-                auto& re = rhs.as_Terminate();
-                (void)re;
                 return true;
             }
             case MIRUnwindAction::TAG_Unreachable: {
-                auto& le = lhs.as_Unreachable();
-                (void)le;
-                auto& re = rhs.as_Unreachable();
-                (void)re;
                 return true;
             }
         }
@@ -746,38 +714,18 @@ bool operator==(const MIRTerminator& a, const MIRTerminator& b) {
     };
     switch (a.tag()) {
         case MIRTerminator::TAG_Incomplete: {
-            auto& ae = a.as_Incomplete();
-            (void)ae;
-            auto& be = b.as_Incomplete();
-            (void)be;
             break;
         }
         case MIRTerminator::TAG_Return: {
-            auto& ae = a.as_Return();
-            (void)ae;
-            auto& be = b.as_Return();
-            (void)be;
             break;
         }
         case MIRTerminator::TAG_UnwindResume: {
-            auto& ae = a.as_UnwindResume();
-            (void)ae;
-            auto& be = b.as_UnwindResume();
-            (void)be;
             break;
         }
         case MIRTerminator::TAG_UnwindTerminate: {
-            auto& ae = a.as_UnwindTerminate();
-            (void)ae;
-            auto& be = b.as_UnwindTerminate();
-            (void)be;
             break;
         }
         case MIRTerminator::TAG_Unreachable: {
-            auto& ae = a.as_Unreachable();
-            (void)ae;
-            auto& be = b.as_Unreachable();
-            (void)be;
             break;
         }
         case MIRTerminator::TAG_Goto: {
@@ -1000,14 +948,10 @@ bool operator==(const MIRAsmParam& a, const MIRAsmParam& b) {
                 break;
             }
             case MIRStatement::TAG_SaveDropFlag: {
-                auto& e = x.as_SaveDropFlag();
-                (void)e;
                 os << "SaveDropFlag()";
                 break;
             }
             case MIRStatement::TAG_LoadDropFlag: {
-                auto& e = x.as_LoadDropFlag();
-                (void)e;
                 os << "LoadDropFlag()";
                 break;
             }
@@ -1335,8 +1279,6 @@ HIRPath MIRCloner::monomorph(const HIRPath& ty) const {
                 break;
             }
             case HIRPath::Data::TAG_UfcsUnknown: {
-                auto& e2 = rv.data.as_UfcsUnknown();
-                (void)e2;
                 BUG(sp, "Encountered UfcsUnknown");
                 break;
             }
@@ -1405,14 +1347,10 @@ MIRStatement MIRCloner::cloneStmt(const MIRStatement& src) const {
             return MIRStatement::make_SetDropFlag({mapDropFlag(se.idx), se.newVal, se.other == ~0u ? ~0u : mapDropFlag(se.other)});
         }
         case MIRStatement::TAG_SaveDropFlag: {
-            auto& se = src.as_SaveDropFlag();
-            (void)se;
             TODO(Span(), "clone_bb SaveDropFlag");
             break;
         }
         case MIRStatement::TAG_LoadDropFlag: {
-            auto& se = src.as_LoadDropFlag();
-            (void)se;
             TODO(Span(), "clone_bb LoadDropFlag");
             break;
         }
@@ -1432,28 +1370,18 @@ MIRStatement MIRCloner::cloneStmt(const MIRStatement& src) const {
 MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
     switch (src.tag()) {
         case MIRTerminator::TAG_Incomplete: {
-            auto& se = src.as_Incomplete();
-            (void)se;
             return MIRTerminator::make_Incomplete({});
         }
         case MIRTerminator::TAG_Return: {
-            auto& se = src.as_Return();
-            (void)se;
             return MIRTerminator::make_Return({});
         }
         case MIRTerminator::TAG_UnwindResume: {
-            auto& se = src.as_UnwindResume();
-            (void)se;
             return MIRTerminator::make_UnwindResume({});
         }
         case MIRTerminator::TAG_UnwindTerminate: {
-            auto& se = src.as_UnwindTerminate();
-            (void)se;
             return MIRTerminator::make_UnwindTerminate({});
         }
         case MIRTerminator::TAG_Unreachable: {
-            auto& se = src.as_Unreachable();
-            (void)se;
             return MIRTerminator::make_Unreachable({});
         }
         case MIRTerminator::TAG_Goto: {
@@ -1487,8 +1415,6 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
             MIRUnwindAction unwind;
             switch (se.unwind.tag()) {
                 case MIRUnwindAction::TAG_Continue: {
-                    auto& ue = se.unwind.as_Continue();
-                    (void)ue;
                     unwind = MIRUnwindAction::make_Continue({});
                     break;
                 }
@@ -1498,14 +1424,10 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
                     break;
                 }
                 case MIRUnwindAction::TAG_Terminate: {
-                    auto& ue = se.unwind.as_Terminate();
-                    (void)ue;
                     unwind = MIRUnwindAction::make_Terminate({});
                     break;
                 }
                 case MIRUnwindAction::TAG_Unreachable: {
-                    auto& ue = se.unwind.as_Unreachable();
-                    (void)ue;
                     unwind = MIRUnwindAction::make_Unreachable({});
                     break;
                 }
@@ -1535,8 +1457,6 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
             MIRUnwindAction unwind;
             switch (se.unwind.tag()) {
                 case MIRUnwindAction::TAG_Continue: {
-                    auto& ue = se.unwind.as_Continue();
-                    (void)ue;
                     unwind = MIRUnwindAction::make_Continue({});
                     break;
                 }
@@ -1546,14 +1466,10 @@ MIRTerminator MIRCloner::cloneTerm(const MIRTerminator& src) const {
                     break;
                 }
                 case MIRUnwindAction::TAG_Terminate: {
-                    auto& ue = se.unwind.as_Terminate();
-                    (void)ue;
                     unwind = MIRUnwindAction::make_Terminate({});
                     break;
                 }
                 case MIRUnwindAction::TAG_Unreachable: {
-                    auto& ue = se.unwind.as_Unreachable();
-                    (void)ue;
                     unwind = MIRUnwindAction::make_Unreachable({});
                     break;
                 }
@@ -1626,8 +1542,6 @@ MIRLValue MIRCloner::cloneLval(const MIRLValue& src) const {
     }
     switch (src.root.tag()) {
         case MIRLValue::Storage::TAG_Return: {
-            decltype(src.root.as_Return()) se = src.root.as_Return();
-            (void)se;
             return MIRLValue(MIRLValue::Storage::newReturn(), mv$(wrappers));
         }
         case MIRLValue::Storage::TAG_Argument: {

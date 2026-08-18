@@ -408,8 +408,6 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     auto rv = ResolveLookupMacro(miSpan, *wb.settings, crate, modstack.item->path(), path, /*out_path=*/nullptr);
     switch (rv.tag()) {
         case ResolveItemRefMacro::TAG_None: {
-            auto& _e = rv.as_None();
-            (void)_e;
             return MacroRef();
         }
         case ResolveItemRefMacro::TAG_InternalMacro: {
@@ -452,8 +450,6 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
     ::std::unique_ptr<TokenStream> rv;
     switch (mac.tag()) {
         case MacroRef::TAG_None: {
-            auto& e = mac.as_None();
-            (void)e;
             DEBUG("Unknown macro " << path);
             return ::std::unique_ptr<TokenStream>();
         }
@@ -513,13 +509,9 @@ MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCra
 void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool isRefutable) {
     switch (pat.data().tag()) {
         case ASTPatternData::TAG_MaybeBind: {
-            auto& e = pat.data().as_MaybeBind();
-            (void)e;
             break;
         }
         case ASTPatternData::TAG_Never: {
-            auto& e = pat.data().as_Never();
-            (void)e;
             break;
         }
         case ASTPatternData::TAG_Macro: {
@@ -549,8 +541,6 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
             break;
         }
         case ASTPatternData::TAG_Any: {
-            auto& e = pat.data().as_Any();
-            (void)e;
             break;
         }
         case ASTPatternData::TAG_Box: {
@@ -574,13 +564,9 @@ void ExpandPattern(const ExpandState& es, ASTModule& mod, ASTPattern& pat, bool 
             break;
         }
         case ASTPatternData::TAG_Value: {
-            auto& e = pat.data().as_Value();
-            (void)e;
             break;
         }
         case ASTPatternData::TAG_ValueLeftInc: {
-            auto& e = pat.data().as_ValueLeftInc();
-            (void)e;
             break;
         }
         case ASTPatternData::TAG_Tuple: {
@@ -673,23 +659,15 @@ static void ExpandAsyncCallableTrait(const ExpandState& es, TypeTraitPath& tp) {
 void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
     switch (ty->data.tag()) {
         case TypeData::TAG_None: {
-            auto& e = ty->data.as_None();
-            (void)e;
             break;
         }
         case TypeData::TAG_Any: {
-            auto& e = ty->data.as_Any();
-            (void)e;
             break;
         }
         case TypeData::TAG_Unit: {
-            auto& e = ty->data.as_Unit();
-            (void)e;
             break;
         }
         case TypeData::TAG_Bang: {
-            auto& e = ty->data.as_Bang();
-            (void)e;
             break;
         }
         case TypeData::TAG_Macro: {
@@ -712,8 +690,6 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
             break;
         }
         case TypeData::TAG_Primitive: {
-            auto& e = ty->data.as_Primitive();
-            (void)e;
             break;
         }
         case TypeData::TAG_Function: {
@@ -769,8 +745,6 @@ void ExpandType(const ExpandState& es, ASTModule& mod, ::ASTType*& ty) {
             break;
         }
         case TypeData::TAG_Generic: {
-            auto& e = ty->data.as_Generic();
-            (void)e;
             break;
         }
         case TypeData::TAG_Path: {
@@ -811,12 +785,10 @@ void ExpandPathParams(const ExpandState& es, ASTModule& mod, ASTPathParams& para
         switch (e.tag()) {
             case ASTPathParamEnt::TAG_Null: {
                 auto& _ = e.as_Null();
-                (void)_;
                 break;
             }
             case ASTPathParamEnt::TAG_Lifetime: {
                 auto& _ = e.as_Lifetime();
-                (void)_;
                 break;
             }
             case ASTPathParamEnt::TAG_Type: {
@@ -856,13 +828,9 @@ void ExpandPath(const ExpandState& es, ASTModule& mod, ASTPath& p) {
 
     switch (p.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
-            auto& pe = p.cls.as_Invalid();
-            (void)pe;
             break;
         }
         case ASTPathClass::TAG_Local: {
-            auto& pe = p.cls.as_Local();
-            (void)pe;
             break;
         }
         case ASTPathClass::TAG_Relative: {
@@ -2098,14 +2066,10 @@ void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams
     for (auto& paramDef : params.params) {
         switch (paramDef.tag()) {
             case GenericParam::TAG_None: {
-                auto& e = paramDef.as_None();
-                (void)e;
                 // Ignore
                 break;
             }
             case GenericParam::TAG_Lifetime: {
-                auto& e = paramDef.as_Lifetime();
-                (void)e;
                 break;
             }
             case GenericParam::TAG_Type: {
@@ -2123,13 +2087,9 @@ void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams
     for (auto& bound : params.bounds) {
         switch (bound.tag()) {
             case ASTGenericBound::TAG_None: {
-                auto& be = bound.as_None();
-                (void)be;
                 break;
             }
             case ASTGenericBound::TAG_Lifetime: {
-                auto& be = bound.as_Lifetime();
-                (void)be;
                 break;
             }
             case ASTGenericBound::TAG_TypeLifetime: {
@@ -2227,8 +2187,6 @@ void Expand_Impl(const ExpandState& es, ASTPath modpath, ASTModule& mod, ASTImpl
 default:
             BUG(Span(), "Unknown item type in impl block - " << i.data->tagStr());
             case ASTItem::TAG_None: {
-                auto& e = (*i.data).as_None();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_MacroInv: {
@@ -2316,8 +2274,6 @@ void Expand_ExternBlock(const ExpandState& es, ASTModule& mod, ASTExternBlock& b
 default:
             BUG(Span(), "Unexpected item type - " << dat.tagStr());
             case ASTItem::TAG_None: {
-                auto& e = dat.as_None();
-                (void)e;
                 // Skip: nothing
                 break;
             }
@@ -2465,8 +2421,6 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                     auto& str = i.data.as_Struct();
                     switch (str.data.tag()) {
                         case ASTStructData::TAG_Unit: {
-                            auto& e = str.data.as_Unit();
-                            (void)e;
                             break;
                         }
                         case ASTStructData::TAG_Struct: {
@@ -2495,8 +2449,6 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
                         } else {
                         switch (it->data.tag()) {
                             case ASTEnumVariantData::TAG_Unit: {
-                                auto& e = it->data.as_Unit();
-                                (void)e;
                                 break;
                             }
                             case ASTEnumVariantData::TAG_Tuple: {
@@ -2545,8 +2497,6 @@ default:
 
         switch (dat.tag()) {
             case ASTItem::TAG_None: {
-                auto& e = dat.as_None();
-                (void)e;
                 // Skip: nothing
                 break;
             }
@@ -2619,14 +2569,10 @@ default:
                         MacroRef ref;
                     switch (m.tag()) {
                         case ResolveItemRefMacro::TAG_None: {
-                            auto& e = m.as_None();
-                            (void)e;
                             // Not found? Ignore.
                             break;
                         }
                         case ResolveItemRefMacro::TAG_InternalMacro: {
-                            auto& e = m.as_InternalMacro();
-                            (void)e;
                             // Ignore builtins, they're always available.
                             break;
                         }
@@ -2670,8 +2616,6 @@ default:
                 break;
             }
             case ASTItem::TAG_Module: {
-                auto& e = dat.as_Module();
-                (void)e;
                 throw "";
             }
             case ASTItem::TAG_Crate: {
@@ -2697,8 +2641,6 @@ default:
                 ExpandGenericParams(es, mod, e.params());
                 switch (e.data.tag()) {
                     case ASTStructData::TAG_Unit: {
-                        auto& sd = e.data.as_Unit();
-                        (void)sd;
                         break;
                     }
                     case ASTStructData::TAG_Struct: {
@@ -2757,8 +2699,6 @@ default:
                     });
                 switch (var.data.tag()) {
                     case ASTEnumVariantData::TAG_Unit: {
-                        auto& e = var.data.as_Unit();
-                        (void)e;
                         break;
                     }
                     case ASTEnumVariantData::TAG_Tuple: {
@@ -2860,8 +2800,6 @@ default:
 default:
                     BUG(Span(), "Unknown item type in trait block - " << ti.data.tagStr());
                     case ASTItem::TAG_None: {
-                        auto& e = ti.data.as_None();
-                        (void)e;
                         break;
                     }
                     case ASTItem::TAG_MacroInv: {

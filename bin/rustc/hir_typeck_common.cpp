@@ -101,23 +101,15 @@ struct TyVisitor {
             auto& tuMatch = (this->getTyData(ty));
             switch (tuMatch.tag()) {
                 case HIRTypeData::TAG_Infer: {
-                    auto& e = tuMatch.as_Infer();
-                    (void)e;
                     break;
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    auto& e = tuMatch.as_Diverge();
-                    (void)e;
                     break;
                 }
                 case HIRTypeData::TAG_Primitive: {
-                    auto& e = tuMatch.as_Primitive();
-                    (void)e;
                     break;
                 }
                 case HIRTypeData::TAG_Generic: {
-                    auto& e = tuMatch.as_Generic();
-                    (void)e;
                     break;
                 }
                 case HIRTypeData::TAG_Path: {
@@ -210,8 +202,6 @@ struct TyVisitor {
                     return visitType(e.rettype);
                 }
                 case HIRTypeData::TAG_NodeType: {
-                    auto& e = tuMatch.as_NodeType();
-                    (void)e;
                     // These just have a node pointer, no visiting
                     break;
                 }
@@ -331,23 +321,15 @@ namespace {
             if (!stop) {
                 switch (data.tag()) {
                     case HIRTypeData::TAG_Infer: {
-                        auto& e = data.as_Infer();
-                        (void)e;
                         break;
                     }
                     case HIRTypeData::TAG_Diverge: {
-                        auto& e = data.as_Diverge();
-                        (void)e;
                         break;
                     }
                     case HIRTypeData::TAG_Primitive: {
-                        auto& e = data.as_Primitive();
-                        (void)e;
                         break;
                     }
                     case HIRTypeData::TAG_Generic: {
-                        auto& e = data.as_Generic();
-                        (void)e;
                         break;
                     }
                     case HIRTypeData::TAG_Path: {
@@ -447,8 +429,6 @@ namespace {
                         break;
                     }
                     case HIRTypeData::TAG_NodeType: {
-                        auto& e = data.as_NodeType();
-                        (void)e;
                         break;
                     }
                 }
@@ -517,19 +497,13 @@ bool monomorphiseTypeNeeded(const HIRTypeData* tpl) {
 HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer /*=true*/) const {
     switch ((*tpl).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*tpl).as_Infer();
-            (void)e;
             ASSERT_BUG(sp, allowInfer, "Unexpected ivar seen - " << tpl);
             return tpl;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*tpl).as_Diverge();
-            (void)e;
             return tpl;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = (*tpl).as_Primitive();
-            (void)e;
             return tpl;
         }
         case HIRTypeData::TAG_Path: {
@@ -652,8 +626,6 @@ HIRTypeRef Monomorphiser::monomorphType(const Span& sp, const HIRTypeData* tpl, 
             return types.function(mv$(ft));
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = (*tpl).as_NodeType();
-            (void)e;
             return tpl;
         }
     }

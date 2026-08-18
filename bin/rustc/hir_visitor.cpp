@@ -48,8 +48,6 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
         auto& item = named.second->ent;
         switch (item.tag()) {
             case HIRTypeItem::TAG_Import: {
-                auto& e = item.as_Import();
-                (void)e;
                 break;
             }
             case HIRTypeItem::TAG_Module: {
@@ -71,8 +69,6 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
                 break;
             }
             case HIRTypeItem::TAG_ExternType: {
-                auto& e = item.as_ExternType();
-                (void)e;
                 TRACE_FUNCTION_F("extern type " << name);
                 break;
             }
@@ -107,8 +103,6 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
         auto& item = named.second->ent;
         switch (item.tag()) {
             case HIRValueItem::TAG_Import: {
-                auto& e = item.as_Import();
-                (void)e;
                 // SimplePath - no visitor
                 break;
             }
@@ -125,8 +119,6 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
                 break;
             }
             case HIRValueItem::TAG_StructConstant: {
-                auto& e = item.as_StructConstant();
-                (void)e;
                 // Just a path
                 break;
             }
@@ -137,8 +129,6 @@ void HIRVisitor::visitModule(HIRItemPath p, HIRModule& mod) {
                 break;
             }
             case HIRValueItem::TAG_StructConstructor: {
-                auto& e = item.as_StructConstructor();
-                (void)e;
                 // Just a path
                 break;
             }
@@ -331,8 +321,6 @@ void HIRVisitor::visitStruct(HIRItemPath p, HIRStruct& item) {
     this->visitParams(item.params);
     switch (item.data.tag()) {
         case HIRStructData::TAG_Unit: {
-            auto& e = item.data.as_Unit();
-            (void)e;
             break;
         }
         case HIRStructData::TAG_Tuple: {
@@ -494,18 +482,12 @@ void HIRVisitor::visitType(HIRTypeRef& ty) {
 void HIRVisitor::visitTypeData(HIRTypeData& data) {
     switch (data.tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = data.as_Infer();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = data.as_Diverge();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Primitive: {
-            auto& e = data.as_Primitive();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_Path: {
@@ -514,8 +496,6 @@ void HIRVisitor::visitTypeData(HIRTypeData& data) {
             break;
         }
         case HIRTypeData::TAG_Generic: {
-            auto& e = data.as_Generic();
-            (void)e;
             break;
         }
         case HIRTypeData::TAG_TraitObject: {
@@ -608,8 +588,6 @@ void HIRVisitor::visitTypeData(HIRTypeData& data) {
             break;
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = data.as_NodeType();
-            (void)e;
             break;
         }
     }
@@ -629,8 +607,6 @@ void HIRVisitor::visitConstgeneric(HIRConstGeneric& v) {
 void HIRVisitor::visitPattern(HIRPattern& pat) {
     switch (pat.data.tag()) {
         case HIRPatternData::TAG_Any: {
-            auto& e = pat.data.as_Any();
-            (void)e;
             break;
         }
         case HIRPatternData::TAG_Box: {
@@ -735,23 +711,15 @@ void HIRVisitor::visitPattern(HIRPattern& pat) {
 void HIRVisitor::visitPatternVal(HIRPattern::Value& val) {
     switch (val.tag()) {
         case HIRPattern::Value::TAG_Integer: {
-            auto& e = val.as_Integer();
-            (void)e;
             break;
         }
         case HIRPattern::Value::TAG_Float: {
-            auto& e = val.as_Float();
-            (void)e;
             break;
         }
         case HIRPattern::Value::TAG_String: {
-            auto& e = val.as_String();
-            (void)e;
             break;
         }
         case HIRPattern::Value::TAG_ByteString: {
-            auto& e = val.as_ByteString();
-            (void)e;
             break;
         }
         case HIRPattern::Value::TAG_Named: {

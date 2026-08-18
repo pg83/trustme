@@ -1007,15 +1007,11 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Function: {
-                    auto& te = (*ty).as_Function();
-                    (void)te;
                     emitTypeFn(ty);
                     of << "\n";
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
-                    auto& te = (*ty).as_NamedFunction();
-                    (void)te;
                     of << "typedef struct ";
                     emitCtype(ty);
                     of << " ";
@@ -1024,8 +1020,6 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Array: {
-                    auto& te = (*ty).as_Array();
-                    (void)te;
                     of << "typedef struct ";
                     emitCtype(ty);
                     of << " ";
@@ -1037,36 +1031,24 @@ default:
                     auto& te = (*ty).as_Path();
                     switch (te.binding.tag()) {
                         case HIRTypePathBinding::TAG_Unbound: {
-                            auto& tpb = te.binding.as_Unbound();
-                            (void)tpb;
                             throw "";
                         }
                         case HIRTypePathBinding::TAG_Opaque: {
-                            auto& tpb = te.binding.as_Opaque();
-                            (void)tpb;
                             throw "";
                         }
                         case HIRTypePathBinding::TAG_Struct: {
-                            auto& tpb = te.binding.as_Struct();
-                            (void)tpb;
                             of << "struct s_" << TransMangle(te.path) << ";\n";
                             break;
                         }
                         case HIRTypePathBinding::TAG_ExternType: {
-                            auto& tpb = te.binding.as_ExternType();
-                            (void)tpb;
                             of << "struct x_" << TransMangle(te.path) << ";\n";
                             break;
                         }
                         case HIRTypePathBinding::TAG_Union: {
-                            auto& tpb = te.binding.as_Union();
-                            (void)tpb;
                             of << "union u_" << TransMangle(te.path) << ";\n";
                             break;
                         }
                         case HIRTypePathBinding::TAG_Enum: {
-                            auto& tpb = te.binding.as_Enum();
-                            (void)tpb;
                             of << "struct e_" << TransMangle(te.path) << ";\n";
                             break;
                         }
@@ -1074,8 +1056,6 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    auto& te = (*ty).as_ErasedType();
-                    (void)te;
                     // TODO: Is this actually a bug?
                     return;
                 }
@@ -1309,15 +1289,11 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Function: {
-                    auto& te = (*ty).as_Function();
-                    (void)te;
                     emitTypeFn(ty);
                     of << " // " << ty << "\n";
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
-                    auto& te = (*ty).as_NamedFunction();
-                    (void)te;
                     of << "typedef struct ";
                     emitCtype(ty);
                     of << " {";
@@ -1366,8 +1342,6 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    auto& te = (*ty).as_ErasedType();
-                    (void)te;
                     // TODO: Is this actually a bug?
                     return;
                 }
@@ -2869,7 +2843,6 @@ default:
             switch (action.tag()) {
                 case MIRUnwindAction::TAG_Continue: {
                     auto& _ = action.as_Continue();
-                    (void)_;
                     emitOperation(indentLevel);
                     break;
                 }
@@ -2885,7 +2858,6 @@ default:
                 }
                 case MIRUnwindAction::TAG_Terminate: {
                     auto& _ = action.as_Terminate();
-                    (void)_;
                     of << indent << "try {\n";
                     emitOperation(indentLevel + 1);
                     of << indent << "} catch (...) { abort(); }\n";
@@ -2893,7 +2865,6 @@ default:
                 }
                 case MIRUnwindAction::TAG_Unreachable: {
                     auto& _ = action.as_Unreachable();
-                    (void)_;
                     of << indent << "try {\n";
                     emitOperation(indentLevel + 1);
                     of << indent << "} catch (...) { abort(); }\n";
@@ -2910,13 +2881,11 @@ default:
             switch (term.tag()) {
                 case MIRTerminator::TAG_Incomplete: {
                     auto& _ = term.as_Incomplete();
-                    (void)_;
                     of << indent << "abort();\n";
                     break;
                 }
                 case MIRTerminator::TAG_Return: {
                     auto& _ = term.as_Return();
-                    (void)_;
                     if (cleanup) {
                         of << indent << "abort();\n";
                     } else if (localMirRes.retType == crate.types.unit()) {
@@ -2928,7 +2897,6 @@ default:
                 }
                 case MIRTerminator::TAG_UnwindResume: {
                     auto& _ = term.as_UnwindResume();
-                    (void)_;
                     if (cleanup) {
                         of << indent << "return;\n";
                     } else {
@@ -2938,13 +2906,11 @@ default:
                 }
                 case MIRTerminator::TAG_UnwindTerminate: {
                     auto& _ = term.as_UnwindTerminate();
-                    (void)_;
                     of << indent << "abort();\n";
                     break;
                 }
                 case MIRTerminator::TAG_Unreachable: {
                     auto& _ = term.as_Unreachable();
-                    (void)_;
                     of << indent << "abort();\n";
                     break;
                 }
@@ -3013,7 +2979,6 @@ default:
                 }
             }
             of << indent << "// ^ " << term << "\n";
-            (void)blockIndex;
         }
 
         void emitCleanupRunner(MIRTypeResolve& localMirRes, const ::std::set<unsigned>& cleanupBlocks) {
@@ -3979,8 +3944,6 @@ default:
 
                         switch (repr->variants.tag()) {
                             case TypeReprVariantMode::TAG_None: {
-                                auto& re = repr->variants.as_None();
-                                (void)re;
                                 emitCompositeAssign(localMirRes, [&]() {
                                     emitLvalue(e.dst);
                                     of << ".DATA.var_0";
@@ -4536,8 +4499,6 @@ default:
                     break;
                 }
                 case TypeReprVariantMode::TAG_None: {
-                    auto& e = repr->variants.as_None();
-                    (void)e;
                     of << indent;
                     cb(0);
                     of << "\n";
@@ -4752,8 +4713,6 @@ default:
                             break;
                         }
                         case HIRPathData::TAG_UfcsUnknown: {
-                            auto& pe = e2.data.as_UfcsUnknown();
-                            (void)pe;
                             break;
                         }
                         case HIRPathData::TAG_UfcsInherent: {
@@ -4781,7 +4740,6 @@ default:
                             if (rvTpl->is_Diverge() || rvTpl == crate.types.unit()) {
                                 omitAssign |= true;
                             } else if (const auto* te = rvTpl->opt_Generic()) {
-                                (void)te;
                                 // TODO: Generic lookup
                             } else if (const auto* te = rvTpl->opt_Path()) {
                                 if (te->binding.is_Opaque()) {
@@ -5142,18 +5100,12 @@ default:
                         break;
                     }
                     case MIRAsmParam::TAG_Const: {
-                        auto& e = p.as_Const();
-                        (void)e;
                         return "const";
                     }
                     case MIRAsmParam::TAG_Sym: {
-                        auto& e = p.as_Sym();
-                        (void)e;
                         return "sym";
                     }
                     case MIRAsmParam::TAG_Label: {
-                        auto& e = p.as_Label();
-                        (void)e;
                         return "label";
                     }
                 }
@@ -5530,8 +5482,6 @@ default:
                             break;
                         }
                         case AsmRegisterSpec::TAG_Explicit: {
-                            auto& name = p.spec.as_Explicit();
-                            (void)name;
                             of << "r";
                             break;
                         }
@@ -5599,8 +5549,6 @@ default:
                                         break;
                                     }
                                     case AsmRegisterSpec::TAG_Explicit: {
-                                        auto& name = r.spec.as_Explicit();
-                                        (void)name;
                                         of << "r";
                                         break;
                                     }
@@ -5617,20 +5565,14 @@ default:
                             break;
                         }
                         case MIRAsmParam::TAG_Const: {
-                            auto& c = p.as_Const();
-                            (void)c;
                             MIR_TODO(localMirRes, "Asm2 GCC - Const");
                             break;
                         }
                         case MIRAsmParam::TAG_Sym: {
-                            auto& c = p.as_Sym();
-                            (void)c;
                             MIR_TODO(localMirRes, "Asm2 GCC - Sym");
                             break;
                         }
                         case MIRAsmParam::TAG_Label: {
-                            auto& c = p.as_Label();
-                            (void)c;
                             MIR_BUG(localMirRes, "Asm label listed as an input");
                             break;
                         }
@@ -6077,8 +6019,6 @@ default:
                             // A wrapper's own prefix is only part of the size:
                             // the tail may be another wrapper, whose prefix
                             // counts too.
-                            (void)alignNeeded;
-                            (void)itemAlign;
                             emitDstSize(ty, e.args.at(0));
                         } else {
                             emitParam(e.args.at(0));
@@ -6560,8 +6500,6 @@ default:
                     switch (repr->variants.tag()) {
                             break;
                             case TypeReprVariantMode::TAG_None: {
-                                auto& _e = repr->variants.as_None();
-                                (void)_e;
                                 of << "0";
                             }
                             break;
@@ -8457,48 +8395,30 @@ default:
             auto indent = RepeatLitStr{"\t", static_cast<int>(indentLevel)};
             switch ((*ty).tag()) {
                 case HIRTypeData::TAG_Diverge: {
-                    auto& te = (*ty).as_Diverge();
-                    (void)te;
                     break;
                 }
                 case HIRTypeData::TAG_Infer: {
-                    auto& te = (*ty).as_Infer();
-                    (void)te;
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    auto& te = (*ty).as_ErasedType();
-                    (void)te;
                     break;
                 }
                 case HIRTypeData::TAG_NodeType: {
-                    auto& te = (*ty).as_NodeType();
-                    (void)te;
                     break;
                 }
                 case HIRTypeData::TAG_Generic: {
-                    auto& te = (*ty).as_Generic();
-                    (void)te;
                     break;
                 }
                 case HIRTypeData::TAG_Primitive: {
-                    auto& te = (*ty).as_Primitive();
-                    (void)te;
                     break;
                 }
                 case HIRTypeData::TAG_Pointer: {
-                    auto& te = (*ty).as_Pointer();
-                    (void)te;
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
-                    auto& te = (*ty).as_NamedFunction();
-                    (void)te;
                     break;
                 }
                 case HIRTypeData::TAG_Function: {
-                    auto& te = (*ty).as_Function();
-                    (void)te;
                     break;
                 }
                 case HIRTypeData::TAG_Borrow: {
@@ -8510,8 +8430,6 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Path: {
-                    auto& te = (*ty).as_Path();
-                    (void)te;
                     // Call drop glue
                     // - TODO: If the destructor is known to do nothing, don't call it.
                     auto p = HIRPath(ty, "#drop_glue");
@@ -8581,8 +8499,6 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_TraitObject: {
-                    auto& te = (*ty).as_TraitObject();
-                    (void)te;
                     MIR_ASSERT(*mirRes, unsizedValid, "Dropping TraitObject without an owned pointer");
                     // Call destructor in vtable
                     of << indent << "((VTABLE_HDR*)";
@@ -8674,8 +8590,6 @@ default:
         void emitLvalue(const MIRLValue::CRef& val) {
             switch (val.tag()) {
                 case MIRLValue::RefCommon::TAG_Return: {
-                    decltype(val.as_Return()) _e = val.as_Return();
-                    (void)_e;
                     of << "rv";
                     break;
                 }
@@ -8745,8 +8659,6 @@ default:
                     break;
                 }
                 case MIRLValue::RefCommon::TAG_Deref: {
-                    decltype(val.as_Deref()) _e = val.as_Deref();
-                    (void)_e;
                     auto inner = val.innerRef();
                     HIRTypeRef tmp;
                     const auto& ty = mirRes->getLvalueType(tmp, val);
@@ -8994,20 +8906,14 @@ default:
                     break;
                 }
                 case MIRConstant::TAG_Const: {
-                    auto& c = ve.as_Const();
-                    (void)c;
                     MIR_BUG(*mirRes, "Unexpected Constant::Const - " << ve);
                     break;
                 }
                 case MIRConstant::TAG_Generic: {
-                    auto& c = ve.as_Generic();
-                    (void)c;
                     MIR_BUG(*mirRes, "Generic value present at codegen");
                     break;
                 }
                 case MIRConstant::TAG_Function: {
-                    auto& c = ve.as_Function();
-                    (void)c;
                     MIR_TODO(*mirRes, "Constant::Function");
                     break;
                 }
@@ -9120,14 +9026,10 @@ default:
 
             switch ((*ty).tag()) {
                 case HIRTypeData::TAG_Infer: {
-                    auto& te = (*ty).as_Infer();
-                    (void)te;
                     of << "@" << ty << "@" << inner;
                     break;
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    auto& te = (*ty).as_Diverge();
-                    (void)te;
                     of << "tBANG " << inner;
                     break;
                 }
@@ -9201,38 +9103,26 @@ default:
                     //}
                     switch (te.binding.tag()) {
                         case HIRTypePathBinding::TAG_Struct: {
-                            auto& tpb = te.binding.as_Struct();
-                            (void)tpb;
                             of << "struct s_" << TransMangle(te.path);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Union: {
-                            auto& tpb = te.binding.as_Union();
-                            (void)tpb;
                             of << "union u_" << TransMangle(te.path);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Enum: {
-                            auto& tpb = te.binding.as_Enum();
-                            (void)tpb;
                             of << "struct e_" << TransMangle(te.path);
                             break;
                         }
                         case HIRTypePathBinding::TAG_ExternType: {
-                            auto& tpb = te.binding.as_ExternType();
-                            (void)tpb;
                             of << "struct x_" << TransMangle(te.path);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Unbound: {
-                            auto& tpb = te.binding.as_Unbound();
-                            (void)tpb;
                             MIR_BUG(*mirRes, "Unbound type path in trans - " << ty);
                             break;
                         }
                         case HIRTypePathBinding::TAG_Opaque: {
-                            auto& tpb = te.binding.as_Opaque();
-                            (void)tpb;
                             MIR_BUG(*mirRes, "Opaque path in trans - " << ty);
                             break;
                         }
@@ -9241,32 +9131,22 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Generic: {
-                    auto& te = (*ty).as_Generic();
-                    (void)te;
                     MIR_BUG(*mirRes, "Generic in trans - " << ty);
                     break;
                 }
                 case HIRTypeData::TAG_TraitObject: {
-                    auto& te = (*ty).as_TraitObject();
-                    (void)te;
                     MIR_BUG(*mirRes, "Raw trait object - " << ty);
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    auto& te = (*ty).as_ErasedType();
-                    (void)te;
                     MIR_BUG(*mirRes, "ErasedType in trans - " << ty);
                     break;
                 }
                 case HIRTypeData::TAG_Array: {
-                    auto& te = (*ty).as_Array();
-                    (void)te;
                     of << "t_" << TransMangle(ty) << " " << inner;
                     break;
                 }
                 case HIRTypeData::TAG_Slice: {
-                    auto& te = (*ty).as_Slice();
-                    (void)te;
                     MIR_BUG(*mirRes, "Raw slice object - " << ty);
                     break;
                 }
@@ -9294,14 +9174,10 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
-                    auto& te = (*ty).as_NamedFunction();
-                    (void)te;
                     of << "t_" << TransMangle(ty) << " " << inner;
                     break;
                 }
                 case HIRTypeData::TAG_Function: {
-                    auto& te = (*ty).as_Function();
-                    (void)te;
                     of << "t_" << TransMangle(ty) << " " << inner;
                     break;
                 }
@@ -9330,8 +9206,6 @@ default:
                     MIR_BUG(*mirRes, "Unbound/opaque path in trans - " << ty);
                     throw "";
                         case HIRTypePathBinding::TAG_ExternType: {
-                            auto& tpb = tuMatch.as_ExternType();
-                            (void)tpb;
                             return ty;
                         }
                         case HIRTypePathBinding::TAG_Struct: {
@@ -9350,8 +9224,6 @@ default:
                                     };
                             switch (str.data.tag()) {
                                 case HIRStructData::TAG_Unit: {
-                                    auto& se = str.data.as_Unit();
-                                    (void)se;
                                     MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");
                                     break;
                                 }
@@ -9370,13 +9242,9 @@ default:
                             break;
                         }
                         case HIRTypePathBinding::TAG_Union: {
-                            auto& tpb = tuMatch.as_Union();
-                            (void)tpb;
                             return HIRTypeRef();
                         }
                         case HIRTypePathBinding::TAG_Enum: {
-                            auto& tpb = tuMatch.as_Enum();
-                            (void)tpb;
                             return HIRTypeRef();
                         }
                     }

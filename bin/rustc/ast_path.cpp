@@ -14,56 +14,38 @@
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingType& x) {
     switch (x.tag()) {
         case ASTPathBindingType::TAG_Unbound: {
-            auto& i = x.as_Unbound();
-            (void)i;
             os << "_";
             break;
         }
         case ASTPathBindingType::TAG_Crate: {
-            auto& i = x.as_Crate();
-            (void)i;
             os << "Crate";
             break;
         }
         case ASTPathBindingType::TAG_Primitive: {
-            auto& i = x.as_Primitive();
-            (void)i;
             os << "Primitive";
             break;
         }
         case ASTPathBindingType::TAG_Module: {
-            auto& i = x.as_Module();
-            (void)i;
             os << "Module";
             break;
         }
         case ASTPathBindingType::TAG_Trait: {
-            auto& i = x.as_Trait();
-            (void)i;
             os << "Trait";
             break;
         }
         case ASTPathBindingType::TAG_TraitAlias: {
-            auto& i = x.as_TraitAlias();
-            (void)i;
             os << "TraitAlias";
             break;
         }
         case ASTPathBindingType::TAG_Struct: {
-            auto& i = x.as_Struct();
-            (void)i;
             os << "Struct";
             break;
         }
         case ASTPathBindingType::TAG_Enum: {
-            auto& i = x.as_Enum();
-            (void)i;
             os << "Enum";
             break;
         }
         case ASTPathBindingType::TAG_Union: {
-            auto& i = x.as_Union();
-            (void)i;
             os << "Union";
             break;
         }
@@ -73,8 +55,6 @@
             break;
         }
         case ASTPathBindingType::TAG_TypeAlias: {
-            auto& i = x.as_TypeAlias();
-            (void)i;
             os << "TypeAlias";
             break;
         }
@@ -90,26 +70,18 @@
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingValue& x) {
     switch (x.tag()) {
         case ASTPathBindingValue::TAG_Unbound: {
-            auto& i = x.as_Unbound();
-            (void)i;
             os << "_";
             break;
         }
         case ASTPathBindingValue::TAG_Struct: {
-            auto& i = x.as_Struct();
-            (void)i;
             os << "Struct";
             break;
         }
         case ASTPathBindingValue::TAG_Static: {
-            auto& i = x.as_Static();
-            (void)i;
             os << "Static";
             break;
         }
         case ASTPathBindingValue::TAG_Function: {
-            auto& i = x.as_Function();
-            (void)i;
             os << "Function";
             break;
         }
@@ -135,8 +107,6 @@
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingMacro& x) {
     switch (x.tag()) {
         case ASTPathBindingMacro::TAG_Unbound: {
-            auto& i = x.as_Unbound();
-            (void)i;
             os << "_";
             break;
         }
@@ -156,8 +126,6 @@
             break;
         }
         case ASTPathBindingMacro::TAG_MacroRules: {
-            auto& i = x.as_MacroRules();
-            (void)i;
             os << "MacroRules(? ?)";
             break;
         }
@@ -257,10 +225,6 @@ Ordering ASTPathParamEnt::ord(const ASTPathParamEnt& x) const {
 
     switch ((*this).tag()) {
         case ASTPathParamEnt::TAG_Null: {
-            auto& v1 = (*this).as_Null();
-            (void)v1;
-            auto& v2 = x.as_Null();
-            (void)v2;
             return ::OrdEqual;
         }
         case ASTPathParamEnt::TAG_Lifetime: {
@@ -307,7 +271,6 @@ void ASTPathParamEnt::fmt(::std::ostream& os) const {
     switch ((*this).tag()) {
         case ASTPathParamEnt::TAG_Null: {
             auto& _ = (*this).as_Null();
-            (void)_;
             os << "/*removed*/";
             break;
         }
@@ -411,8 +374,6 @@ ASTPath::ASTPath(const ASTPath& x)
 {
     switch (x.cls.tag()) {
         case Class::TAG_Invalid: {
-            auto& ent = x.cls.as_Invalid();
-            (void)ent;
             cls = Class::make_Invalid({});
             break;
         }
@@ -496,10 +457,6 @@ Ordering ASTPath::ord(const ASTPath& x) const {
 
     switch (cls.tag()) {
         case ASTPath::Class::TAG_Invalid: {
-            auto& ent = cls.as_Invalid();
-            (void)ent;
-            auto& xEnt = x.cls.as_Invalid();
-            (void)xEnt;
             return OrdEqual;
         }
         case ASTPath::Class::TAG_Local: {
@@ -542,8 +499,6 @@ Ordering ASTPath::ord(const ASTPath& x) const {
 void ASTPath::printPretty(::std::ostream& os, bool isTypeContext, bool isDebug) const {
     switch (cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
-            auto& ent = cls.as_Invalid();
-            (void)ent;
             os << "/*inv*/";
             // NOTE: Don't print the binding for invalid paths
             return;
@@ -813,14 +768,10 @@ throw std::runtime_error("as_trivial on non-trivial path");
 size_t ASTPath::size() const {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
-            auto& ent = cls.as_Invalid();
-            (void)ent;
             assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");
             break;
         }
         case Class::TAG_Local: {
-            auto& ent = cls.as_Local();
-            (void)ent;
             return 1;
         }
         case Class::TAG_Relative: {
@@ -850,14 +801,10 @@ size_t ASTPath::size() const {
 ::std::vector<ASTPathNode>& ASTPath::nodes() {
     switch (cls.tag()) {
         case Class::TAG_Invalid: {
-            auto& ent = cls.as_Invalid();
-            (void)ent;
             assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");
             break;
         }
         case Class::TAG_Local: {
-            auto& ent = cls.as_Local();
-            (void)ent;
             assert(!cls.is_Local()); throw ::std::runtime_error("Path::nodes() on Local");
             break;
         }

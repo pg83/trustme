@@ -1027,8 +1027,6 @@ struct Deriver {
     void iterateStructFields(const ASTStruct& str, ::std::function<void(RcString)> cb) const {
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 break;
             }
             case ASTStructData::TAG_Struct: {
@@ -1079,8 +1077,6 @@ struct Deriver {
         ::std::vector<ASTType*> ret;
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 break;
             }
             case ASTStructData::TAG_Struct: {
@@ -1103,8 +1099,6 @@ struct Deriver {
         for (const auto& v : enm.variants()) {
             switch (v.data.tag()) {
                 case ASTEnumVariantData::TAG_Unit: {
-                    auto& e = v.data.as_Unit();
-                    (void)e;
                     break;
                 }
                 case ASTEnumVariantData::TAG_Tuple: {
@@ -1158,41 +1152,27 @@ default:
         // TODO: Locate type that is directly related to the type param.
         switch (ty->data.tag()) {
             case TypeData::TAG_None: {
-                auto& e = ty->data.as_None();
-                (void)e;
                 // Wat?
                 break;
             }
             case TypeData::TAG_Any: {
-                auto& e = ty->data.as_Any();
-                (void)e;
                 // Nope.
                 break;
             }
             case TypeData::TAG_Unit: {
-                auto& e = ty->data.as_Unit();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Bang: {
-                auto& e = ty->data.as_Bang();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Macro: {
-                auto& e = ty->data.as_Macro();
-                (void)e;
                 // not allowed
                 break;
             }
             case TypeData::TAG_Primitive: {
-                auto& e = ty->data.as_Primitive();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Function: {
-                auto& e = ty->data.as_Function();
-                (void)e;
                 // TODO? Well... function types don't tend to depend on the trait?
                 break;
             }
@@ -1224,8 +1204,6 @@ default:
                 break;
             }
             case TypeData::TAG_Generic: {
-                auto& e = ty->data.as_Generic();
-                (void)e;
                 // Although this is what we're looking for, it's already handled.
                 break;
             }
@@ -1233,14 +1211,10 @@ default:
                 auto& e = ty->data.as_Path();
                 switch (e->cls.tag()) {
                     case ASTPathClass::TAG_Invalid: {
-                        auto& pe = e->cls.as_Invalid();
-                        (void)pe;
                         // wut.
                         break;
                     }
                     case ASTPathClass::TAG_Local: {
-                        auto& pe = e->cls.as_Local();
-                        (void)pe;
                         break;
                     }
                     case ASTPathClass::TAG_Relative: {
@@ -1258,37 +1232,25 @@ default:
                         break;
                     }
                     case ASTPathClass::TAG_Self: {
-                        auto& pe = e->cls.as_Self();
-                        (void)pe;
                         break;
                     }
                     case ASTPathClass::TAG_Super: {
-                        auto& pe = e->cls.as_Super();
-                        (void)pe;
                         break;
                     }
                     case ASTPathClass::TAG_Absolute: {
-                        auto& pe = e->cls.as_Absolute();
-                        (void)pe;
                         break;
                     }
                     case ASTPathClass::TAG_UFCS: {
-                        auto& pe = e->cls.as_UFCS();
-                        (void)pe;
                         break;
                     }
                 }
                 break;
             }
             case TypeData::TAG_TraitObject: {
-                auto& e = ty->data.as_TraitObject();
-                (void)e;
                 // TODO: Should this be recursed?
                 break;
             }
             case TypeData::TAG_ErasedType: {
-                auto& e = ty->data.as_ErasedType();
-                (void)e;
                 // TODO: Should this be recursed?
                 break;
             }
@@ -1359,8 +1321,6 @@ public:
         }
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 node = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, name)));
                 break;
             }
@@ -1417,20 +1377,14 @@ public:
                 code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())));
                 switch (v.data.tag()) {
                     case ASTEnumVariantData::TAG_Unit: {
-                        auto& e = v.data.as_Unit();
-                        (void)e;
                         patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
                         break;
                     }
                     case ASTEnumVariantData::TAG_Tuple: {
-                        auto& e = v.data.as_Tuple();
-                        (void)e;
                         patA = ASTPattern(ASTPattern::TagNamedTuple(), sp, variantPath, ASTPattern::TuplePat{{}, true, {}});
                         break;
                     }
                     case ASTEnumVariantData::TAG_Struct: {
-                        auto& e = v.data.as_Struct();
-                        (void)e;
                         patA = ASTPattern(ASTPattern::TagStruct(), sp, variantPath, {}, false);
                         break;
                     }
@@ -1443,8 +1397,6 @@ public:
 
             switch (v.data.tag()) {
                 case ASTEnumVariantData::TAG_Unit: {
-                    auto& e = v.data.as_Unit();
-                    (void)e;
                     code = callPath(pathFormatter, "write_str", vec$(NEWNODE(NamedValue, ASTPath(rcstringF)), NEWNODE(String, v.name.c_str())));
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
                     break;
@@ -1535,8 +1487,6 @@ public:
 
             switch (v.data.tag()) {
                 case ASTEnumVariantData::TAG_Unit: {
-                    auto& e = v.data.as_Unit();
-                    (void)e;
                     code = this->equalValue(sp, opts.coreName);
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
                     patB = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
@@ -1733,8 +1683,6 @@ public:
 
             switch (v.data.tag()) {
                 case ASTEnumVariantData::TAG_Unit: {
-                    auto& e = v.data.as_Unit();
-                    (void)e;
                     code = NEWNODE(Block);
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(variantPath));
                     break;
@@ -1891,8 +1839,6 @@ public:
         ASTExprNodeP node;
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 node = NEWNODE(NamedValue, ASTPath(tyPath));
                 break;
             }
@@ -1933,8 +1879,6 @@ public:
 
             switch (v.data.tag()) {
                 case ASTEnumVariantData::TAG_Unit: {
-                    auto& e = v.data.as_Unit();
-                    (void)e;
                     code = NEWNODE(NamedValue, basePath + v.name);
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(basePath + v.name));
                     break;
@@ -2075,8 +2019,6 @@ public:
 
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 node = NEWNODE(NamedValue, ASTPath(tyPath));
                 break;
             }
@@ -2133,8 +2075,6 @@ public:
         ASTExprNodeP node;
         switch (defaultVar->data.tag()) {
             case ASTEnumVariantData::TAG_Unit: {
-                auto& e = defaultVar->data.as_Unit();
-                (void)e;
                 node = NEWNODE(NamedValue, std::move(varPath));
                 break;
             }
@@ -2223,8 +2163,6 @@ public:
 
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 break;
             }
             case ASTStructData::TAG_Struct: {
@@ -2297,8 +2235,6 @@ public:
             block->pushStmt(mv$(varIdxHash));
             switch (v.data.tag()) {
                 case ASTEnumVariantData::TAG_Unit: {
-                    auto& e = v.data.as_Unit();
-                    (void)e;
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(varPath));
                     break;
                 }
@@ -2404,8 +2340,6 @@ public:
         auto block = newBlock(sp);
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 break;
             }
             case ASTStructData::TAG_Struct: {
@@ -2432,8 +2366,6 @@ public:
         ASTExprNodeP    node;
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 node = getValOk(opts.coreName);
                 break;
             }
@@ -2466,8 +2398,6 @@ public:
 
             switch (v.data.tag()) {
                 case ASTEnumVariantData::TAG_Unit: {
-                    auto& e = v.data.as_Unit();
-                    (void)e;
                     code = NEWNODE(CallPath, this->getTraitPathEncoder() + "emit_enum_variant", vec$(sEnt->clone(), NEWNODE(String, v.name.c_str()), NEWNODE(Integer, U128(varIdx), CORETYPE_UINT), NEWNODE(Integer, U128(0), CORETYPE_UINT), this->encClosure(*type->pool, sp, this->getValOk(opts.coreName))));
                     patA = ASTPattern(ASTPattern::TagValue(), sp, ASTPattern::Value::make_Named(basePath + v.name));
                     break;
@@ -2595,8 +2525,6 @@ public:
         ASTExprNodeP nodeV;
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 break;
             }
             case ASTStructData::TAG_Struct: {
@@ -2628,8 +2556,6 @@ public:
         ASTExprNodeP    node;
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 node = this->getValOk(opts.coreName, NEWNODE(NamedValue, mv$(basePath)));
                 break;
             }
@@ -2667,8 +2593,6 @@ public:
 
             switch (v.data.tag()) {
                 case ASTEnumVariantData::TAG_Unit: {
-                    auto& e = v.data.as_Unit();
-                    (void)e;
                     code = NEWNODE(NamedValue, basePath + v.name);
                     break;
                 }
@@ -2897,13 +2821,9 @@ namespace {
         for (auto& param : params.entries) {
             switch (param.tag()) {
                 case ASTPathParamEnt::TAG_Null: {
-                    auto& e = param.as_Null();
-                    (void)e;
                     break;
                 }
                 case ASTPathParamEnt::TAG_Lifetime: {
-                    auto& e = param.as_Lifetime();
-                    (void)e;
                     break;
                 }
                 case ASTPathParamEnt::TAG_Type: {
@@ -2912,8 +2832,6 @@ namespace {
                     break;
                 }
                 case ASTPathParamEnt::TAG_Value: {
-                    auto& e = param.as_Value();
-                    (void)e;
                     break;
                 }
                 case ASTPathParamEnt::TAG_AssociatedTyEqual: {
@@ -2969,33 +2887,21 @@ namespace {
         bool changed = false;
         switch (type->data.tag()) {
             case TypeData::TAG_None: {
-                auto& e = type->data.as_None();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Any: {
-                auto& e = type->data.as_Any();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Bang: {
-                auto& e = type->data.as_Bang();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Unit: {
-                auto& e = type->data.as_Unit();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Macro: {
-                auto& e = type->data.as_Macro();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Primitive: {
-                auto& e = type->data.as_Primitive();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Function: {
@@ -3039,8 +2945,6 @@ namespace {
                 break;
             }
             case TypeData::TAG_Generic: {
-                auto& e = type->data.as_Generic();
-                (void)e;
                 break;
             }
             case TypeData::TAG_Path: {
@@ -3076,13 +2980,9 @@ namespace {
         bool changed = false;
         switch (bound.tag()) {
             case ASTGenericBound::TAG_None: {
-                auto& e = bound.as_None();
-                (void)e;
                 break;
             }
             case ASTGenericBound::TAG_Lifetime: {
-                auto& e = bound.as_Lifetime();
-                (void)e;
                 break;
             }
             case ASTGenericBound::TAG_TypeLifetime: {
@@ -3157,8 +3057,6 @@ namespace {
         bool hasField = false;
         switch (str.data.tag()) {
             case ASTStructData::TAG_Unit: {
-                auto& e = str.data.as_Unit();
-                (void)e;
                 break;
             }
             case ASTStructData::TAG_Struct: {
@@ -3269,8 +3167,6 @@ default:
 
             switch (mac.tag()) {
                 case MacroRef::TAG_None: {
-                    auto& e = mac.as_None();
-                    (void)e;
                     // Leave `mac_path` empty, triggering an error in caller
                     break;
                 }
@@ -3281,14 +3177,10 @@ default:
                     break;
                 }
                 case MacroRef::TAG_BuiltinProcMacro: {
-                    auto& procMac = mac.as_BuiltinProcMacro();
-                    (void)procMac;
                     TODO(sp, "Handle builtin proc macro");
                     break;
                 }
                 case MacroRef::TAG_MacroRules: {
-                    auto& mrPtr = mac.as_MacroRules();
-                    (void)mrPtr;
                     TODO(sp, "Custom derive using macro_rules?");
                     break;
                 }
@@ -3375,8 +3267,6 @@ public:
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
         switch (i.tag()) {
             case ASTItem::TAG_None: {
-                auto& e = i.as_None();
-                (void)e;
                 // Ignore, it's been deleted
                 break;
             }
@@ -3862,14 +3752,10 @@ default:
             TODO(sp, "Unknown item type " << i.tagStr() << " with #["<<attr<<"] attached at " << path);
             break;
             case ASTItem::TAG_None: {
-                auto& e = i.as_None();
-                (void)e;
                 // NOTE: Can happen when #[cfg] removed this
                 break;
             }
             case ASTItem::TAG_Impl: {
-                auto& e = i.as_Impl();
-                (void)e;
                 if (name == "i8") {
                 } else if (name == "u8") {
                 } else if (name == "i16") {
@@ -3926,38 +3812,26 @@ default:
                 break;
             }
             case ASTItem::TAG_Type: {
-                auto& e = i.as_Type();
-                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_TYPE_ALIAS, i);
                 break;
             }
             case ASTItem::TAG_Static: {
-                auto& e = i.as_Static();
-                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_STATIC, i);
                 break;
             }
             case ASTItem::TAG_Struct: {
-                auto& e = i.as_Struct();
-                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_STRUCT, i);
                 break;
             }
             case ASTItem::TAG_Enum: {
-                auto& e = i.as_Enum();
-                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_ENUM, i);
                 break;
             }
             case ASTItem::TAG_Union: {
-                auto& e = i.as_Union();
-                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_UNION, i);
                 break;
             }
             case ASTItem::TAG_Trait: {
-                auto& e = i.as_Trait();
-                (void)e;
                 handleLangItem(sp, crate, path, name, ITEM_TRAIT, i);
                 break;
             }

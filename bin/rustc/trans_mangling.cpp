@@ -236,8 +236,6 @@ public:
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
-                auto& e = p.data.as_UfcsUnknown();
-                (void)e;
                 BUG(Span(), "Non-encodable path " << p);
                 break;
             }
@@ -445,8 +443,6 @@ case HIRTypeData::TAG_Infer:
                 break;
             }
             case HIRTypeData::TAG_Diverge: {
-                auto& _e = (*ty).as_Diverge();
-                (void)_e;
                 os << 'C' << 'z';
                 break;
             }

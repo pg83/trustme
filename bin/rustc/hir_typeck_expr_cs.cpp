@@ -274,15 +274,11 @@ namespace {
 
             switch ((*tgtTy).tag()) {
                 case HIRTypeData::TAG_Infer: {
-                    auto& e = (*tgtTy).as_Infer();
-                    (void)e;
                     // Can't know anything
                     DEBUG("- Target type is still _");
                     break;
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    auto& e = (*tgtTy).as_Diverge();
-                    (void)e;
                     BUG(sp, "");
                     break;
                 }
@@ -306,33 +302,23 @@ namespace {
                     break;
                 }
                 case HIRTypeData::TAG_Path: {
-                    auto& e = (*tgtTy).as_Path();
-                    (void)e;
                     this->context.equateTypesCoerce(sp, tgtTy, node.value);
                     this->completed = true;
                     return;
                 }
                 case HIRTypeData::TAG_Generic: {
-                    auto& e = (*tgtTy).as_Generic();
-                    (void)e;
                     TODO(sp, "_Cast Generic");
                     break;
                 }
                 case HIRTypeData::TAG_TraitObject: {
-                    auto& e = (*tgtTy).as_TraitObject();
-                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
                     break;
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    auto& e = (*tgtTy).as_ErasedType();
-                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
                     break;
                 }
                 case HIRTypeData::TAG_Array: {
-                    auto& e = (*tgtTy).as_Array();
-                    (void)e;
                     // A cast is a coercion site.  In particular, its target
                     // supplies the otherwise unconstrained element type of
                     // an empty array literal and the element coercion for a
@@ -342,26 +328,18 @@ namespace {
                     return;
                 }
                 case HIRTypeData::TAG_Slice: {
-                    auto& e = (*tgtTy).as_Slice();
-                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
                     break;
                 }
                 case HIRTypeData::TAG_Pattern: {
-                    auto& e = (*tgtTy).as_Pattern();
-                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
                     break;
                 }
                 case HIRTypeData::TAG_Tuple: {
-                    auto& e = (*tgtTy).as_Tuple();
-                    (void)e;
                     bad_cast(sp, srcTy, tgtTy, "dst");
                     break;
                 }
                 case HIRTypeData::TAG_Borrow: {
-                    auto& e = (*tgtTy).as_Borrow();
-                    (void)e;
                     // An `as &[T]` cast is an unsizing operation on the
                     // already-typed source.  Do not let its destination pick
                     // the type of an otherwise pending source variable: that
@@ -589,14 +567,10 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_NamedFunction: {
-                    auto& e = (*tgtTy).as_NamedFunction();
-                    (void)e;
                     BUG(sp, "Attempting to cast to a named-function type - impossible");
                     break;
                 }
                 case HIRTypeData::TAG_NodeType: {
-                    auto& e = (*tgtTy).as_NodeType();
-                    (void)e;
                     BUG(sp, "Attempting to cast to a magic type type - impossible");
                     break;
                 }
@@ -749,8 +723,6 @@ default: {
                 }
                 break;
                 case HIRTypeData::TAG_Infer: {
-                    auto& e = (*ty).as_Infer();
-                    (void)e;
                     // Keep trying
                     this->context.possibleEquateTypeUnknown(node.span(), node.resType, Context::IvarUnknownType::From);
                     return;
@@ -1272,13 +1244,9 @@ default: {
                 // NOTE: Steals the params from the node
                 switch (node.methodPath.data.tag()) {
                     case HIRPath::Data::TAG_Generic: {
-                        auto& e = node.methodPath.data.as_Generic();
-                        (void)e;
                         break;
                     }
                     case HIRPath::Data::TAG_UfcsUnknown: {
-                        auto& e = node.methodPath.data.as_UfcsUnknown();
-                        (void)e;
                         break;
                     }
                     case HIRPath::Data::TAG_UfcsKnown: {
@@ -1298,13 +1266,9 @@ default: {
                     // Move the params back
                     switch (node.methodPath.data.tag()) {
                         case HIRPath::Data::TAG_Generic: {
-                            auto& e = node.methodPath.data.as_Generic();
-                            (void)e;
                             break;
                         }
                         case HIRPath::Data::TAG_UfcsUnknown: {
-                            auto& e = node.methodPath.data.as_UfcsUnknown();
-                            (void)e;
                             break;
                         }
                         case HIRPath::Data::TAG_UfcsKnown: {
@@ -1845,13 +1809,9 @@ default:
                 auto& tuMatch = ty->as_Path().binding;
                 switch (tuMatch.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
-                        auto& e = tuMatch.as_Unbound();
-                        (void)e;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
-                        auto& e = tuMatch.as_Opaque();
-                        (void)e;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Enum: {
@@ -1877,8 +1837,6 @@ default:
                         break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
-                        auto& e = tuMatch.as_ExternType();
-                        (void)e;
                         BUG(sp, "ExternType in StructLiteral");
                         break;
                     }
@@ -1939,23 +1897,15 @@ default:
                     break;
                 }
                 case HIRExprNodeLiteral::Data::TAG_Boolean: {
-                    auto& e = node.data.as_Boolean();
-                    (void)e;
                     break;
                 }
                 case HIRExprNodeLiteral::Data::TAG_ByteString: {
-                    auto& e = node.data.as_ByteString();
-                    (void)e;
                     break;
                 }
                 case HIRExprNodeLiteral::Data::TAG_CString: {
-                    auto& e = node.data.as_CString();
-                    (void)e;
                     break;
                 }
                 case HIRExprNodeLiteral::Data::TAG_String: {
-                    auto& e = node.data.as_String();
-                    (void)e;
                     break;
                 }
             }
@@ -2015,8 +1965,6 @@ default:
                     break;
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
-                    auto& pe = path.data.as_UfcsUnknown();
-                    (void)pe;
                     throw "";
                 }
             }
@@ -2040,8 +1988,6 @@ default:
                     break;
                 }
                 case HIRPath::Data::TAG_UfcsUnknown: {
-                    auto& pe = path.data.as_UfcsUnknown();
-                    (void)pe;
                     ERROR(sp, E0000, "UfcsUnknown " << path << " left in " << topType);
                     break;
                 }
@@ -2787,17 +2733,9 @@ void Context::equateTypesInner(const Span& sp, const HIRTypeData* li, const HIRT
             }
             switch ((*lT).tag()) {
                 case HIRTypeData::TAG_Infer: {
-                    auto& lE = (*lT).as_Infer();
-                    (void)lE;
-                    auto& rE = (*rT).as_Infer();
-                    (void)rE;
                     throw "";
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    auto& lE = (*lT).as_Diverge();
-                    (void)lE;
-                    auto& rE = (*rT).as_Diverge();
-                    (void)rE;
                     // ignore?
                     break;
                 }
@@ -3417,8 +3355,6 @@ namespace {
     void fixupPatternValuePaths(Context& context, const Span& sp, HIRPattern& pat) {
         switch (pat.data.tag()) {
             case HIRPatternData::TAG_Any: {
-                auto& e = pat.data.as_Any();
-                (void)e;
                 break;
             }
             case HIRPatternData::TAG_Box: {
@@ -3454,8 +3390,6 @@ namespace {
                 break;
             }
             case HIRPatternData::TAG_PathValue: {
-                auto& e = pat.data.as_PathValue();
-                (void)e;
                 break;
             }
             case HIRPatternData::TAG_PathTuple: {
@@ -3610,8 +3544,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         return context.crate.types.primitive(ve.type);
                     }
                     case HIRPatternValue::TAG_String: {
-                        auto& ve = pv.as_String();
-                        (void)ve;
                         return context.crate.types.borrow(HIRBorrowType::Shared, context.crate.types.primitive(HIRCoreType::Str));
                     }
                     case HIRPatternValue::TAG_ByteString: {
@@ -3651,8 +3583,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 // - Note, this is only if no derefs were applied
                 switch (pattern.data.tag()) {
                     case HIRPatternData::TAG_Any: {
-                        auto& pe = pattern.data.as_Any();
-                        (void)pe;
                         // No type information.
                         break;
                     }
@@ -3676,23 +3606,17 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                     }
                     case HIRPatternData::TAG_Box: {
-                        auto& pe = pattern.data.as_Box();
-                        (void)pe;
                         // TODO: Get type info (Box<_>) ?
                         // - Is this possible? Shouldn't a box pattern disable ergonomics?
                         break;
                     }
                     case HIRPatternData::TAG_Deref: {
-                        auto& pe = pattern.data.as_Deref();
-                        (void)pe;
                         // The inner pattern constrains `Deref::Target`, not the
                         // smart-pointer source itself.  It cannot be used as a
                         // fallback type for the outer scrutinee.
                         break;
                     }
                     case HIRPatternData::TAG_Ref: {
-                        auto& pe = pattern.data.as_Ref();
-                        (void)pe;
                         BUG(sp, "Match ergonomics - & pattern");
                         break;
                     }
@@ -3712,8 +3636,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                     }
                     case HIRPatternData::TAG_SplitTuple: {
-                        auto& pe = pattern.data.as_SplitTuple();
-                        (void)pe;
                         // Can't get type information, tuple size is unkown
                         break;
                     }
@@ -3725,8 +3647,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                     }
                     case HIRPatternData::TAG_SplitSlice: {
-                        auto& pe = pattern.data.as_SplitSlice();
-                        (void)pe;
                         // Can be either a [T] or [T; n]. Can't provide a hint
                         break;
                     }
@@ -3735,7 +3655,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         switch (e.binding.tag()) {
                             case HIRPatternPathBinding::TAG_Unbound: {
                                 auto& _ = e.binding.as_Unbound();
-                                (void)_;
                                 BUG(sp, "");
                                 break;
                             }
@@ -3771,7 +3690,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         switch (e.binding.tag()) {
                             case HIRPatternPathBinding::TAG_Unbound: {
                                 auto& _ = e.binding.as_Unbound();
-                                (void)_;
                                 BUG(sp, "");
                                 break;
                             }
@@ -3807,7 +3725,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         switch (e.binding.tag()) {
                             case HIRPatternPathBinding::TAG_Unbound: {
                                 auto& _ = e.binding.as_Unbound();
-                                (void)_;
                                 BUG(sp, "");
                                 break;
                             }
@@ -3866,18 +3783,12 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 }
                 switch (pattern.data.tag()) {
                     case HIRPatternData::TAG_Any: {
-                        auto& e = pattern.data.as_Any();
-                        (void)e;
                         return false;
                     }
                     case HIRPatternData::TAG_Value: {
-                        auto& e = pattern.data.as_Value();
-                        (void)e;
                         return false;
                     }
                     case HIRPatternData::TAG_Range: {
-                        auto& e = pattern.data.as_Range();
-                        (void)e;
                         return false;
                     }
                     case HIRPatternData::TAG_Box: {
@@ -3903,8 +3814,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                     }
                     case HIRPatternData::TAG_PathValue: {
-                        auto& e = pattern.data.as_PathValue();
-                        (void)e;
                         return false;
                     }
                     case HIRPatternData::TAG_PathTuple: {
@@ -3947,43 +3856,27 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 };
                 switch (pattern.data.tag()) {
                     case HIRPatternData::TAG_Any: {
-                        auto& e = pattern.data.as_Any();
-                        (void)e;
                         return true;
                     }
                     case HIRPatternData::TAG_Deref: {
-                        auto& e = pattern.data.as_Deref();
-                        (void)e;
                         return true;
                     }
                     case HIRPatternData::TAG_Box: {
-                        auto& e = pattern.data.as_Box();
-                        (void)e;
                         return type->is_Path();
                     }
                     case HIRPatternData::TAG_Ref: {
-                        auto& e = pattern.data.as_Ref();
-                        (void)e;
                         return type->is_Borrow();
                     }
                     case HIRPatternData::TAG_Tuple: {
-                        auto& e = pattern.data.as_Tuple();
-                        (void)e;
                         return type->is_Tuple();
                     }
                     case HIRPatternData::TAG_SplitTuple: {
-                        auto& e = pattern.data.as_SplitTuple();
-                        (void)e;
                         return type->is_Tuple();
                     }
                     case HIRPatternData::TAG_Slice: {
-                        auto& e = pattern.data.as_Slice();
-                        (void)e;
                         return type->is_Array() || type->is_Slice();
                     }
                     case HIRPatternData::TAG_SplitSlice: {
-                        auto& e = pattern.data.as_SplitSlice();
-                        (void)e;
                         return type->is_Array() || type->is_Slice();
                     }
                     case HIRPatternData::TAG_PathValue: {
@@ -3999,8 +3892,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         return matchesPath(e.path, e.binding);
                     }
                     case HIRPatternData::TAG_Range: {
-                        auto& e = pattern.data.as_Range();
-                        (void)e;
                         return type->is_Primitive();
                     }
                     case HIRPatternData::TAG_Value: {
@@ -4214,20 +4105,14 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 bool rv = false;
                 switch (pattern.data.tag()) {
                     case HIRPatternData::TAG_Ref: {
-                        auto& pe = pattern.data.as_Ref();
-                        (void)pe;
                         BUG(sp, "Match ergonomics - `&` pattern already handled");
                         break;
                     }
                     case HIRPatternData::TAG_Or: {
-                        auto& pe = pattern.data.as_Or();
-                        (void)pe;
                         BUG(sp, "Match ergonomics - `|` pattern already handled");
                         break;
                     }
                     case HIRPatternData::TAG_Any: {
-                        auto& pe = pattern.data.as_Any();
-                        (void)pe;
                         // no-op
                         rv = true;
                         break;
@@ -4257,8 +4142,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                     }
                     case HIRPatternData::TAG_Range: {
-                        auto& pe = pattern.data.as_Range();
-                        (void)pe;
                         // no-op?
                         rv = true;
                         break;
@@ -4410,8 +4293,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
                         switch (e.binding.tag()) {
                             case HIRPatternPathBinding::TAG_Unbound: {
-                                auto& be = e.binding.as_Unbound();
-                                (void)be;
                                 throw "";
                             }
                             case HIRPatternPathBinding::TAG_Struct: {
@@ -4421,8 +4302,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                                 break;
                             }
                             case HIRPatternPathBinding::TAG_Union: {
-                                auto& be = e.binding.as_Union();
-                                (void)be;
                                 BUG(sp, "PathValue used for union");
                                 break;
                             }
@@ -4514,18 +4393,12 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 }
                 switch (pat.data.tag()) {
                     case HIRPatternData::TAG_Any: {
-                        auto& e = pat.data.as_Any();
-                        (void)e;
                         break;
                     }
                     case HIRPatternData::TAG_Value: {
-                        auto& e = pat.data.as_Value();
-                        (void)e;
                         break;
                     }
                     case HIRPatternData::TAG_Range: {
-                        auto& e = pat.data.as_Range();
-                        (void)e;
                         break;
                     }
                     case HIRPatternData::TAG_Box: {
@@ -4581,8 +4454,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                     }
                     case HIRPatternData::TAG_PathValue: {
-                        auto& e = pat.data.as_PathValue();
-                        (void)e;
                         break;
                     }
                     case HIRPatternData::TAG_PathTuple: {
@@ -4621,18 +4492,12 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                 }
                 switch (pat.data.tag()) {
                     case HIRPatternData::TAG_Any: {
-                        auto& e = pat.data.as_Any();
-                        (void)e;
                         break;
                     }
                     case HIRPatternData::TAG_Value: {
-                        auto& e = pat.data.as_Value();
-                        (void)e;
                         break;
                     }
                     case HIRPatternData::TAG_Range: {
-                        auto& e = pat.data.as_Range();
-                        (void)e;
                         break;
                     }
                     case HIRPatternData::TAG_Box: {
@@ -4689,8 +4554,6 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                         break;
                     }
                     case HIRPatternData::TAG_PathValue: {
-                        auto& e = pat.data.as_PathValue();
-                        (void)e;
                         break;
                     }
                     case HIRPatternData::TAG_PathTuple: {
@@ -4765,14 +4628,10 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
                     break;
                 }
                 case HIRPattern::Value::TAG_String: {
-                    auto& v = val.as_String();
-                    (void)v;
                     context.equateTypes(sp, type, context.crate.types.borrow(HIRBorrowType::Shared, context.crate.types.primitive(HIRCoreType::Str)));
                     break;
                 }
                 case HIRPattern::Value::TAG_ByteString: {
-                    auto& v = val.as_ByteString();
-                    (void)v;
                     // NOTE: Matches both &[u8] and &[u8; N], so doesn't provide type information
                     // TODO: Check the type.
                     break;
@@ -4795,7 +4654,6 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
             switch (binding.tag()) {
                 case HIRPatternPathBinding::TAG_Unbound: {
                     auto& _ = binding.as_Unbound();
-                    (void)_;
                     BUG(sp, "");
                     break;
                 }
@@ -4827,8 +4685,6 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
 
     switch (pat.data.tag()) {
         case HIRPatternData::TAG_Any: {
-            auto& e = pat.data.as_Any();
-            (void)e;
             // Just leave it, the pattern says nothing
             break;
         }
@@ -5042,7 +4898,6 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Infer: {
-                    auto& te = (*ty).as_Infer();
                     auto inner = this->ivars.newIvarTr();
                     for (auto& sub : e.subPatterns) {
                         this->handlePatternDirectInner(sp, sub, inner);
@@ -5074,8 +4929,6 @@ default:
 default:
                         ERROR(sp, E0000, "Slice pattern on non-array/-slice - " << ty);
                         case HIRTypeData::TAG_Infer: {
-                            auto& te = (*ty).as_Infer();
-                            (void)te;
                             return false;
                         }
                         case HIRTypeData::TAG_Slice: {
@@ -5133,7 +4986,6 @@ default:
                     break;
                 }
                 case HIRTypeData::TAG_Infer: {
-                    auto& te = (*ty).as_Infer();
                     inner = this->ivars.newIvarTr();
                     HIRTypeRef varTy;
                     if (e.extraBind.isValid()) {
@@ -5172,8 +5024,6 @@ default:
 default:
                         ERROR(sp, E0000, "Slice pattern on non-array/-slice - " << ty);
                         case HIRTypeData::TAG_Infer: {
-                            auto& te = (*ty).as_Infer();
-                            (void)te;
                             return false;
                         }
                         case HIRTypeData::TAG_Slice: {
@@ -5221,18 +5071,14 @@ default:
             switch (e.binding.tag()) {
                 case HIRPatternPathBinding::TAG_Unbound: {
                     auto& _ = e.binding.as_Unbound();
-                    (void)_;
                     BUG(sp, "");
                     break;
                 }
                 case HIRPatternPathBinding::TAG_Struct: {
-                    auto& str = e.binding.as_Struct();
                     assert(str->data.is_Unit());
                     break;
                 }
                 case HIRPatternPathBinding::TAG_Union: {
-                    auto& unn = e.binding.as_Union();
-                    (void)unn;
                     BUG(sp, "PathValue used for union");
                     break;
                 }
@@ -5502,22 +5348,16 @@ void Context::requireSized(const Span& sp, const HIRTypeData* ty_) {
         const HIRGenericParams* paramsDef = nullptr;
         switch (e->binding.tag()) {
             case HIRTypePathBinding::TAG_Unbound: {
-                auto& pb = e->binding.as_Unbound();
-                (void)pb;
                 // TODO: Add a trait check rule
                 paramsDef = nullptr;
                 break;
             }
             case HIRTypePathBinding::TAG_Opaque: {
-                auto& pb = e->binding.as_Opaque();
-                (void)pb;
                 // Already checked by type_is_sized
                 paramsDef = nullptr;
                 break;
             }
             case HIRTypePathBinding::TAG_ExternType: {
-                auto& pb = e->binding.as_ExternType();
-                (void)pb;
                 static HIRGenericParams emptyParams; paramsDef = &emptyParams;
                 break;
             }
@@ -6207,18 +6047,10 @@ default:
                     if (se.binding.tag() == de.binding.tag()) {
                         switch (se.binding.tag()) {
                             case HIRTypePathBinding::TAG_Unbound: {
-                                auto& sbe = se.binding.as_Unbound();
-                                (void)sbe;
-                                auto& dbe = de.binding.as_Unbound();
-                                (void)dbe;
                                 // Don't care
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Opaque: {
-                                auto& sbe = se.binding.as_Opaque();
-                                (void)sbe;
-                                auto& dbe = de.binding.as_Opaque();
-                                (void)dbe;
                                 // Handled above in bounded
                                 break;
                             }
@@ -8537,17 +8369,14 @@ default:
                 }
                 case HIRTypeData::TAG_Borrow: {
                     auto& _ = (*r).as_Borrow();
-                    (void)_;
                     return OrdEqual;
                 }
                 case HIRTypeData::TAG_Infer: {
                     auto& _ = (*r).as_Infer();
-                    (void)_;
                     return OrdEqual;
                 }
                 case HIRTypeData::TAG_Pointer: {
                     auto& _ = (*r).as_Pointer();
-                    (void)_;
                     return OrdEqual;
                 }
             }
@@ -8589,8 +8418,6 @@ default:
                     return OrdEqual;
                     //TODO(sp, l << " with " << r << " - LHS is Path, RHS is " << r->tag_str());
                     case HIRTypeData::TAG_Slice: {
-                        auto& teR = (*r).as_Slice();
-                        (void)teR;
                         // Paths can deref to a slice (well, to any type) - so `slice < path` in restrictiveness
                         return OrdGreater;
                     }
@@ -8694,33 +8521,23 @@ default:
                     BUG(sp, "Unexpected type class " << l << " in get_ordering_ty (" << r << ")");
                     break;
                     case HIRTypeData::TAG_Generic: {
-                        auto& _te_l = (*l).as_Generic();
-                        (void)_te_l;
                         cmp = OrdEqual;
                         break;
                     }
                     case HIRTypeData::TAG_NamedFunction: {
-                        auto& teL = (*l).as_NamedFunction();
-                        (void)teL;
                         cmp = OrdEqual;
                         break;
                     }
                     case HIRTypeData::TAG_Path: {
-                        auto& teL = (*l).as_Path();
-                        (void)teL;
                         // TODO: Prevent this rule from applying?
                         return OrdEqual;
                     }
                     case HIRTypeData::TAG_NodeType: {
-                        auto& teL = (*l).as_NodeType();
-                        (void)teL;
                         // Does this need to care about the different types?
                         outUnordered = true;
                         return OrdEqual;
                     }
                     case HIRTypeData::TAG_ErasedType: {
-                        auto& teL = (*l).as_ErasedType();
-                        (void)teL;
                         // Two erased types say nothing about each other: neither
                         // is the more restrictive coercion target.
                         outUnordered = true;
@@ -9303,7 +9120,6 @@ default:
                 possibleTys.erase(newEnd, possibleTys.end());
             }
             DEBUG(nIvars << " ivars (" << nSrcIvars << " src, " << nDstIvars << " dst)");
-            (void)nIvars;
 
             // Distinct function items and closures have distinct source types,
             // but can share a function-pointer coercion target. Select that
@@ -9655,12 +9471,9 @@ default:
                 // TODO: Ivars have been removed, this sort of check should be moved elsewhere.
                 if (!removeOption && tyL->as_Infer().tyClass == HIRInferClass::Integer) {
                     if (const auto* te = (it->ty)->opt_Primitive()) {
-                        (void)te;
                     } else if (const auto* te = (it->ty)->opt_Path()) {
                         // If not Unbound, remove option
-                        (void)te;
                     } else if (const auto* te = (it->ty)->opt_Infer()) {
-                        (void)te;
                     } else {
                         removeOption = true;
                     }
@@ -10368,8 +10181,6 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                         break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
-                        auto& e = path.data.as_UfcsUnknown();
-                        (void)e;
                         BUG(sp, "Unresolved constant path " << path);
                         break;
                     }
@@ -10446,8 +10257,6 @@ default:
                         break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
-                        auto& _pe = node.path.data.as_UfcsUnknown();
-                        (void)_pe;
                         BUG(node.span(), "Unresolved call path " << node.path);
                         break;
                     }
@@ -10474,14 +10283,10 @@ default:
                 HIRPathParams* paramsPtr = nullptr;
                 switch (node.methodPath.data.tag()) {
                     case HIRPathData::TAG_Generic: {
-                        auto& _pe = node.methodPath.data.as_Generic();
-                        (void)_pe;
                         BUG(node.span(), "");
                         break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
-                        auto& _pe = node.methodPath.data.as_UfcsUnknown();
-                        (void)_pe;
                         BUG(node.span(), "");
                         break;
                     }
@@ -10833,15 +10638,11 @@ bool visitCallPopulateCache(Context& context, const Span& sp, HIRPath& path, HIR
                 break;
             }
             case HIRPathData::TAG_UfcsUnknown: {
-                auto& e = path.data.as_UfcsUnknown();
-                (void)e;
                 // TODO: Eventually, the HIR `Resolve UFCS` pass will be removed, leaving this code responsible for locating the item.
                 TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");
                 break;
             }
             case HIRPathData::TAG_UfcsInherent: {
-                auto& e = path.data.as_UfcsInherent();
-                (void)e;
                 // NOTE: This case is kinda long, so it's refactored out into a helper
                 if (!visitCallPopulateCacheUfcsInherent(context, sp, path, cache, fcnPtr)) {
                     return false;
@@ -11067,18 +10868,12 @@ public:
                                 break;
                             }
                             case HIRTypePathBinding::TAG_ExternType: {
-                                auto& pbe = te->binding.as_ExternType();
-                                (void)pbe;
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Opaque: {
-                                auto& pbe = te->binding.as_Opaque();
-                                (void)pbe;
                                 break;
                             }
                             case HIRTypePathBinding::TAG_Unbound: {
-                                auto& pbe = te->binding.as_Unbound();
-                                (void)pbe;
                                 break;
                             }
                         }
@@ -11335,8 +11130,6 @@ public:
                         break;
                     }
                     case HIRAsmParam::TAG_Sym: {
-                        auto& e = v.as_Sym();
-                        (void)e;
                         break;
                     }
                     case HIRAsmParam::TAG_Label: {
@@ -12024,8 +11817,6 @@ public:
                 break;
             }
             case HIRPath::Data::TAG_UfcsUnknown: {
-                auto& e = path.data.as_UfcsUnknown();
-                (void)e;
                 TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");
                 break;
             }
@@ -12082,13 +11873,9 @@ public:
                 auto& tuMatch = ty->as_Path().binding;
                 switch (tuMatch.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
-                        auto& e = tuMatch.as_Unbound();
-                        (void)e;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
-                        auto& e = tuMatch.as_Opaque();
-                        (void)e;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Enum: {
@@ -12114,14 +11901,10 @@ public:
                         break;
                     }
                     case HIRTypePathBinding::TAG_Union: {
-                        auto& e = tuMatch.as_Union();
-                        (void)e;
                         BUG(sp, "TupleVariant pointing to a union");
                         break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
-                        auto& e = tuMatch.as_ExternType();
-                        (void)e;
                         BUG(sp, "TupleVariant pointing to a extern type");
                         break;
                     }
@@ -12221,18 +12004,12 @@ public:
                 auto& tuMatch = ty->as_Path().binding;
                 switch (tuMatch.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
-                        auto& e = tuMatch.as_Unbound();
-                        (void)e;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
-                        auto& e = tuMatch.as_Opaque();
-                        (void)e;
                         break;
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
-                        auto& e = tuMatch.as_ExternType();
-                        (void)e;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Enum: {
@@ -12355,13 +12132,9 @@ public:
             auto& tuMatch = ty->as_Path().binding;
             switch (tuMatch.tag()) {
                 case HIRTypePathBinding::TAG_Unbound: {
-                    auto& e = tuMatch.as_Unbound();
-                    (void)e;
                     break;
                 }
                 case HIRTypePathBinding::TAG_Opaque: {
-                    auto& e = tuMatch.as_Opaque();
-                    (void)e;
                     break;
                 }
                 case HIRTypePathBinding::TAG_Enum: {
@@ -12370,13 +12143,9 @@ public:
                     break;
                 }
                 case HIRTypePathBinding::TAG_Union: {
-                    auto& e = tuMatch.as_Union();
-                    (void)e;
                     break;
                 }
                 case HIRTypePathBinding::TAG_ExternType: {
-                    auto& e = tuMatch.as_ExternType();
-                    (void)e;
                     break;
                 }
                 case HIRTypePathBinding::TAG_Struct: {
@@ -12580,7 +12349,6 @@ public:
             } else if (ty->is_Infer()) {
                 ::std::vector<HIRTypeRef> tupleTys;
                 for (const auto& val : node.vals) {
-                    (void)val;
                     tupleTys.push_back(this->context.ivars.newIvarTr());
                 }
                 this->context.equateTypes(node.span(), node.resType, this->context.crate.types.tuple(mv$(tupleTys)));
@@ -12686,8 +12454,6 @@ public:
                     break;
                 }
                 case HIRExprLiteral::TAG_String: {
-                    auto& e = node.data.as_String();
-                    (void)e;
                     // TODO: &'static
                     DEBUG("_Literal (&str)");
                     ty = this->context.crate.types.borrow(HIRBorrowType::Shared, this->context.crate.types.primitive(HIRCoreType::Str));
@@ -12701,8 +12467,6 @@ public:
                     break;
                 }
                 case HIRExprLiteral::TAG_CString: {
-                    auto& e = node.data.as_CString();
-                    (void)e;
                     DEBUG("_Literal (&CStr)");
                     auto p = context.crate.getLangItemPath(node.span(), "CStr");
                     ty = this->context.crate.types.path(p, &context.crate.getStructByPath(node.span(), p));
@@ -12785,8 +12549,6 @@ public:
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& e = node.path.data.as_UfcsUnknown();
-                    (void)e;
                     BUG(sp, "Encountered UfcsUnknown");
                     break;
                 }
@@ -13061,8 +12823,6 @@ private:
                 break;
             }
             case HIRPath::Data::TAG_UfcsUnknown: {
-                auto& e = path.data.as_UfcsUnknown();
-                (void)e;
                 TODO(sp, "Hit a UfcsUnknown (" << path << ") - Is this an error?");
                 break;
             }

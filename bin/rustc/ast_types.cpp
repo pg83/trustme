@@ -243,38 +243,18 @@ Ordering ASTType::ord(const ASTType& x) const {
 
     switch (data.tag()) {
         case TypeData::TAG_None: {
-            auto& ent = data.as_None();
-            (void)ent;
-            auto& xEnt = x.data.as_None();
-            (void)xEnt;
             return OrdEqual;
         }
         case TypeData::TAG_Macro: {
-            auto& ent = data.as_Macro();
-            (void)ent;
-            auto& xEnt = x.data.as_Macro();
-            (void)xEnt;
             throw CompileErrorBugCheck("ASTType*::ord - unexpanded macro");
         }
         case TypeData::TAG_Any: {
-            auto& ent = data.as_Any();
-            (void)ent;
-            auto& xEnt = x.data.as_Any();
-            (void)xEnt;
             return OrdEqual;
         }
         case TypeData::TAG_Unit: {
-            auto& ent = data.as_Unit();
-            (void)ent;
-            auto& xEnt = x.data.as_Unit();
-            (void)xEnt;
             return OrdEqual;
         }
         case TypeData::TAG_Bang: {
-            auto& ent = data.as_Bang();
-            (void)ent;
-            auto& xEnt = x.data.as_Bang();
-            (void)xEnt;
             return OrdEqual;
         }
         case TypeData::TAG_Primitive: {

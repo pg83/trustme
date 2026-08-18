@@ -939,25 +939,17 @@ namespace {
 
         switch ((*left).tag()) {
             case HIRTypeData::TAG_Generic: {
-                auto& le = (*left).as_Generic();
-                (void)le;
                 throw "";
             }
             case HIRTypeData::TAG_Infer: {
-                auto& le = (*left).as_Infer();
-                (void)le;
                 BUG(sp, "Hit infer");
                 break;
             }
             case HIRTypeData::TAG_Diverge: {
-                auto& le = (*left).as_Diverge();
-                (void)le;
                 BUG(sp, "Hit diverge");
                 break;
             }
             case HIRTypeData::TAG_NodeType: {
-                auto& le = (*left).as_NodeType();
-                (void)le;
                 BUG(sp, "Hit " << left);
                 break;
             }
@@ -986,24 +978,12 @@ namespace {
                         break;
                     }
                     case HIRPathData::TAG_UfcsUnknown: {
-                        auto& lpe = le.path.data.as_UfcsUnknown();
-                        (void)lpe;
-                        auto& rpe = right->as_Path().path.data.as_UfcsUnknown();
-                        (void)rpe;
                         break;
                     }
                     case HIRPathData::TAG_UfcsKnown: {
-                        auto& lpe = le.path.data.as_UfcsKnown();
-                        (void)lpe;
-                        auto& rpe = right->as_Path().path.data.as_UfcsKnown();
-                        (void)rpe;
                         break;
                     }
                     case HIRPathData::TAG_UfcsInherent: {
-                        auto& lpe = le.path.data.as_UfcsInherent();
-                        (void)lpe;
-                        auto& rpe = right->as_Path().path.data.as_UfcsInherent();
-                        (void)rpe;
                         break;
                     }
                 }
@@ -1031,20 +1011,14 @@ namespace {
                 return ::OrdEqual;
             }
             case HIRTypeData::TAG_ErasedType: {
-                auto& le = (*left).as_ErasedType();
-                (void)le;
                 TODO(sp, "ErasedType - " << left);
                 break;
             }
             case HIRTypeData::TAG_NamedFunction: {
-                auto& le = (*left).as_NamedFunction();
-                (void)le;
                 BUG(sp, "Hit function type");
                 break;
             }
             case HIRTypeData::TAG_Function: {
-                auto& le = (*left).as_Function();
-                (void)le;
                 if (/*const auto* re =*/right->opt_Function()) {
                     if (left == right) {
                         return ::OrdEqual;
@@ -1375,24 +1349,12 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                     break;
                 }
                 case HIRPathData::TAG_UfcsUnknown: {
-                    auto& ape = a.data.as_UfcsUnknown();
-                    (void)ape;
-                    auto& bpe = b.data.as_UfcsUnknown();
-                    (void)bpe;
                     break;
                 }
                 case HIRPathData::TAG_UfcsKnown: {
-                    auto& ape = a.data.as_UfcsKnown();
-                    (void)ape;
-                    auto& bpe = b.data.as_UfcsKnown();
-                    (void)bpe;
                     break;
                 }
                 case HIRPathData::TAG_UfcsInherent: {
-                    auto& ape = a.data.as_UfcsInherent();
-                    (void)ape;
-                    auto& bpe = b.data.as_UfcsInherent();
-                    (void)bpe;
                     break;
                 }
             }
@@ -1414,31 +1376,15 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
             }
             switch ((*a).tag()) {
                 case HIRTypeData::TAG_Generic: {
-                    auto& ae = (*a).as_Generic();
-                    (void)ae;
-                    auto& be = (*b).as_Generic();
-                    (void)be;
                     break;
                 }
                 case HIRTypeData::TAG_Infer: {
-                    auto& ae = (*a).as_Infer();
-                    (void)ae;
-                    auto& be = (*b).as_Infer();
-                    (void)be;
                     break;
                 }
                 case HIRTypeData::TAG_Diverge: {
-                    auto& ae = (*a).as_Diverge();
-                    (void)ae;
-                    auto& be = (*b).as_Diverge();
-                    (void)be;
                     break;
                 }
                 case HIRTypeData::TAG_NodeType: {
-                    auto& ae = (*a).as_NodeType();
-                    (void)ae;
-                    auto& be = (*b).as_NodeType();
-                    (void)be;
                     BUG(sp, "Hit node-magic type (closure/generator/async) - " << a << " " << b);
                     break;
                 }
@@ -1481,10 +1427,6 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                     return true;
                 }
                 case HIRTypeData::TAG_ErasedType: {
-                    auto& ae = (*a).as_ErasedType();
-                    (void)ae;
-                    auto& be = (*b).as_ErasedType();
-                    (void)be;
                     TODO(sp, "ErasedType - " << a);
                     break;
                 }
@@ -2093,8 +2035,6 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
     const HIRStruct* strP = nullptr;
     switch (binding.tag()) {
         case HIRPatternPathBinding::TAG_Unbound: {
-            auto& be = binding.as_Unbound();
-            (void)be;
             BUG(sp, "Unexpected unbound named pattern - " << path);
             break;
         }
@@ -2104,8 +2044,6 @@ const HIRStruct& patternGetStruct(const Span& sp, const HIRPath& path, const HIR
             break;
         }
         case HIRPatternPathBinding::TAG_Union: {
-            auto& be = binding.as_Union();
-            (void)be;
             BUG(sp, "Tuple pattern used on union " << path);
             break;
         }

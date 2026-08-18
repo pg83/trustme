@@ -331,8 +331,6 @@ ASTEnum ASTEnum::clone() const {
     for (const auto& var : variants_) {
         switch (var.data.tag()) {
             case ASTEnumVariantData::TAG_Unit: {
-                auto& e = var.data.as_Unit();
-                (void)e;
                 newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name));
                 break;
             }
@@ -357,8 +355,6 @@ ASTEnum ASTEnum::clone() const {
 ASTStruct ASTStruct::clone() const {
     switch (data.tag()) {
         case ASTStructData::TAG_Unit: {
-            auto& e = data.as_Unit();
-            (void)e;
             return ASTStruct(params_.clone());
         }
         case ASTStructData::TAG_Tuple: {
@@ -533,14 +529,10 @@ ASTItem ASTItem::clone() const {
             return ASTItem(e);
         }
         case ASTItem::TAG_MacroInv: {
-            auto& e = (*this).as_MacroInv();
-            (void)e;
             TODO(Span(), "Clone on Item::MacroInv");
             break;
         }
         case ASTItem::TAG_Macro: {
-            auto& e = (*this).as_Macro();
-            (void)e;
             TODO(Span(), "Clone on Item::Macro");
             break;
         }
@@ -549,8 +541,6 @@ ASTItem ASTItem::clone() const {
             return ASTItem(e.clone());
         }
         case ASTItem::TAG_ExternBlock: {
-            auto& e = (*this).as_ExternBlock();
-            (void)e;
             TODO(Span(), "Clone on Item::" << this->tagStr());
             break;
         }
@@ -559,20 +549,14 @@ ASTItem ASTItem::clone() const {
             return ASTItem(e.clone());
         }
         case ASTItem::TAG_Impl: {
-            auto& e = (*this).as_Impl();
-            (void)e;
             TODO(Span(), "Clone on Item::" << this->tagStr());
             break;
         }
         case ASTItem::TAG_NegImpl: {
-            auto& e = (*this).as_NegImpl();
-            (void)e;
             TODO(Span(), "Clone on Item::" << this->tagStr());
             break;
         }
         case ASTItem::TAG_Module: {
-            auto& e = (*this).as_Module();
-            (void)e;
             TODO(Span(), "Clone on Item::" << this->tagStr());
             break;
         }
@@ -647,8 +631,6 @@ ASTItem ASTItem::clone() const {
 std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
     switch (x.tag()) {
         case GenericParam::TAG_None: {
-            auto& e = x.as_None();
-            (void)e;
             os << "/*-*/";
             break;
         }
@@ -674,8 +656,6 @@ std::ostream& operator<<(std::ostream& os, const GenericParam& x) {
 ::std::ostream& operator<<(::std::ostream& os, const ASTGenericBound& x) {
     switch (x.tag()) {
         case ASTGenericBound::TAG_None: {
-            auto& ent = x.as_None();
-            (void)ent;
             os << "/*-*/";
             break;
         }
@@ -915,8 +895,6 @@ ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTT
     os << "EnumVariant(" << x.name;
     switch (x.data.tag()) {
         case ASTEnumVariantData::TAG_Unit: {
-            auto& e = x.data.as_Unit();
-            (void)e;
             break;
         }
         case ASTEnumVariantData::TAG_Tuple: {

@@ -3795,18 +3795,12 @@ ASTNamed<ASTItem> ParseTraitItem(TokenStream& lex) {
 default:
             TODO(lex.pointSpan(), "Interpolated item into trait: " << item.data.tagStr());
             case ASTItem::TAG_Function: {
-                auto& e = item.data.as_Function();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_Static: {
-                auto& e = item.data.as_Static();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_Type: {
-                auto& e = item.data.as_Type();
-                (void)e;
                 break;
             }
         }
@@ -3830,7 +3824,6 @@ default:
         GET_TOK(tok, lex);
     }
     // TODO: Mark specialisation
-    (void)isSpecialisable;
 
     std::string abi = ABI_RUST;
     ASTFunction::Flags fnFlags;

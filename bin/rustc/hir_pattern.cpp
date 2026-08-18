@@ -63,8 +63,6 @@
     }
         switch (x.data.tag()) {
             case HIRPatternData::TAG_Any: {
-                auto& e = x.data.as_Any();
-                (void)e;
                 os << "_";
                 break;
             }
@@ -212,8 +210,6 @@ namespace {
 
         switch (pattern.data.tag()) {
             case HIRPatternData::TAG_Any: {
-                auto& e = pattern.data.as_Any();
-                (void)e;
                 break;
             }
             case HIRPatternData::TAG_Box: {
@@ -242,8 +238,6 @@ namespace {
                 break;
             }
             case HIRPatternData::TAG_PathValue: {
-                auto& e = pattern.data.as_PathValue();
-                (void)e;
                 break;
             }
             case HIRPatternData::TAG_PathTuple: {
@@ -257,13 +251,9 @@ namespace {
                 break;
             }
             case HIRPatternData::TAG_Value: {
-                auto& e = pattern.data.as_Value();
-                (void)e;
                 break;
             }
             case HIRPatternData::TAG_Range: {
-                auto& e = pattern.data.as_Range();
-                (void)e;
                 break;
             }
             case HIRPatternData::TAG_Slice: {
@@ -290,8 +280,6 @@ namespace {
         visitImmediate = [&](const HIRPattern& current) {
             switch (current.data.tag()) {
                 case HIRPatternData::TAG_Any: {
-                    auto& e = current.data.as_Any();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_Box: {
@@ -320,8 +308,6 @@ namespace {
                     break;
                 }
                 case HIRPatternData::TAG_PathValue: {
-                    auto& e = current.data.as_PathValue();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_PathTuple: {
@@ -335,13 +321,9 @@ namespace {
                     break;
                 }
                 case HIRPatternData::TAG_Value: {
-                    auto& e = current.data.as_Value();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_Range: {
-                    auto& e = current.data.as_Range();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_Slice: {
@@ -355,7 +337,6 @@ namespace {
                     break;
                 }
                 case HIRPatternData::TAG_Or: {
-                    auto& e = current.data.as_Or();
                     assert(!e.empty()); deferredOrPatterns.push_back(&current);
                     break;
                 }
@@ -444,8 +425,6 @@ namespace {
     HIRPattern::Data clonePatternData(const HIRPattern::Data& data) {
     switch (data.tag()) {
         case HIRPatternData::TAG_Any: {
-            auto& e = data.as_Any();
-            (void)e;
             return HIRPattern::Data::make_Any({});
         }
         case HIRPatternData::TAG_Box: {

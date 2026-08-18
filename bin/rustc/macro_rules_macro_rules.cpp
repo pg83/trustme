@@ -407,8 +407,6 @@ default:
             }
             return curEnt;
             case SimplePatEnt::TAG_End: {
-                auto& _e = curEnt.as_End();
-                (void)_e;
                 BUG(Span(), "Unexpected End");
                 break;
             }
@@ -424,14 +422,10 @@ default:
                 break;
             }
             case SimplePatEnt::TAG_LoopNext: {
-                auto& _e = curEnt.as_LoopNext();
-                (void)_e;
                 loopIterations.back() += 1;
                 break;
             }
             case SimplePatEnt::TAG_LoopEnd: {
-                auto& _e = curEnt.as_LoopEnd();
-                (void)_e;
                 assert(!loopIterations.empty());
                 assert(!currentLoops.empty());
                 auto loopIndex = currentLoops.back();
@@ -2424,13 +2418,9 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
         DEBUG(*entPtr);
         switch ((*entPtr).tag()) {
             case MacroExpansionEnt::TAG_Token: {
-                auto& e = (*entPtr).as_Token();
-                (void)e;
                 break;
             }
             case MacroExpansionEnt::TAG_Loop: {
-                auto& e = (*entPtr).as_Loop();
-                (void)e;
                 break;
             }
             case MacroExpansionEnt::TAG_NamedValue: {
@@ -2454,8 +2444,6 @@ void MacroInvokeRulesCountSubstUses(ParameterMappings& boundTts, const ::std::ve
                 for (const auto& ccEnt : ccEnts) {
                 switch (ccEnt.tag()) {
                     case MacroExpansionConcatEnt::TAG_Ident: {
-                        auto& e = ccEnt.as_Ident();
-                        (void)e;
                         break;
                     }
                     case MacroExpansionConcatEnt::TAG_Named: {
@@ -2691,18 +2679,12 @@ const MacroExpansionEnt* MacroExpandState::nextEnt() {
             const auto& ent = ents[idx];
             switch (ent.tag()) {
                 case MacroExpansionEnt::TAG_Token: {
-                    auto& e = ent.as_Token();
-                    (void)e;
                     return &ent;
                 }
                 case MacroExpansionEnt::TAG_NamedValue: {
-                    auto& e = ent.as_NamedValue();
-                    (void)e;
                     return &ent;
                 }
                 case MacroExpansionEnt::TAG_Concat: {
-                    auto& e = ent.as_Concat();
-                    (void)e;
                     return &ent;
                 }
                 case MacroExpansionEnt::TAG_Loop: {
@@ -3084,8 +3066,6 @@ MacroRulesPtr::~MacroRulesPtr() {
 ::std::ostream& operator<<(::std::ostream& os, const SimplePatEnt& x) {
     switch (x.tag()) {
         case SimplePatEnt::TAG_End: {
-            auto& _e = x.as_End();
-            (void)_e;
             os << "End";
             break;
         }
@@ -3095,14 +3075,10 @@ MacroRulesPtr::~MacroRulesPtr() {
             break;
         }
         case SimplePatEnt::TAG_LoopNext: {
-            auto& _e = x.as_LoopNext();
-            (void)_e;
             os << "LoopNext";
             break;
         }
         case SimplePatEnt::TAG_LoopEnd: {
-            auto& _e = x.as_LoopEnd();
-            (void)_e;
             os << "LoopEnd";
             break;
         }
@@ -3161,8 +3137,6 @@ MacroRulesPtr::~MacroRulesPtr() {
             break;
         }
         case MacroExpansionEnt::TAG_Concat: {
-            auto& e = x.as_Concat();
-            (void)e;
             os << "${concat(...)}";
             break;
         }

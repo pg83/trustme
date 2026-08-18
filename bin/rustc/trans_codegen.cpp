@@ -39,18 +39,12 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
             if (const auto* te = ty.first->opt_Path()) {
                 switch (te->binding.tag()) {
                     case HIRTypePathBinding::TAG_Unbound: {
-                        auto& tpb = te->binding.as_Unbound();
-                        (void)tpb;
                         throw "";
                     }
                     case HIRTypePathBinding::TAG_Opaque: {
-                        auto& tpb = te->binding.as_Opaque();
-                        (void)tpb;
                         throw "";
                     }
                     case HIRTypePathBinding::TAG_ExternType: {
-                        auto& tpb = te->binding.as_ExternType();
-                        (void)tpb;
                         break;
                     }
                     case HIRTypePathBinding::TAG_Struct: {

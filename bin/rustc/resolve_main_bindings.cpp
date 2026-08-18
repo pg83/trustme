@@ -115,8 +115,6 @@ namespace {
                 for (const auto& e : params.params) {
                     switch (e.tag()) {
                         case GenericParam::TAG_None: {
-                            auto& param = e.as_None();
-                            (void)param;
                             break;
                         }
                         case GenericParam::TAG_Lifetime: {
@@ -210,8 +208,6 @@ namespace {
 
         void popSelf(ASTType* tr) {
             if (nameContext.back().is_ConcreteSelf()) {
-                auto& e = nameContext.back().as_ConcreteSelf();
-                (void)e;
                 nameContext.pop_back();
             }
             else {
@@ -537,14 +533,10 @@ namespace {
 default:
                                 TODO(sp, "Bind value '" << name << "' for module path " << mp << " : " << item->tagStr());
                                 case HIRValueItem::TAG_Function: {
-                                    auto& e = (*item).as_Function();
-                                    (void)e;
                                     bindings.value.set(itemPath, ASTPathBindingValue::make_Function({nullptr}));
                                     break;
                                 }
                                 case HIRValueItem::TAG_Static: {
-                                    auto& e = (*item).as_Static();
-                                    (void)e;
                                     bindings.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr}));
                                     break;
                                 }
@@ -581,32 +573,22 @@ default:
                                     break;
                                 }
                                 case HIRTypeItem::TAG_Trait: {
-                                    auto& e = (*item).as_Trait();
-                                    (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_Trait({nullptr}));
                                     break;
                                 }
                                 case HIRTypeItem::TAG_TypeAlias: {
-                                    auto& e = (*item).as_TypeAlias();
-                                    (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_TypeAlias({nullptr}));
                                     break;
                                 }
                                 case HIRTypeItem::TAG_Struct: {
-                                    auto& e = (*item).as_Struct();
-                                    (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_Struct({nullptr}));
                                     break;
                                 }
                                 case HIRTypeItem::TAG_Enum: {
-                                    auto& e = (*item).as_Enum();
-                                    (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_Enum({nullptr}));
                                     break;
                                 }
                                 case HIRTypeItem::TAG_Union: {
-                                    auto& e = (*item).as_Union();
-                                    (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_Union({nullptr}));
                                     break;
                                 }
@@ -803,13 +785,9 @@ default:
             for (auto it = nameContext.rbegin(); it != nameContext.rend(); ++it) {
                 switch ((*it).tag()) {
                     case Ent::TAG_Module: {
-                        auto& e = (*it).as_Module();
-                        (void)e;
                         break;
                     }
                     case Ent::TAG_ConcreteSelf: {
-                        auto& e = (*it).as_ConcreteSelf();
-                        (void)e;
                         break;
                     }
                     case Ent::TAG_VarBlock: {
@@ -827,8 +805,6 @@ default:
                         break;
                     }
                     case Ent::TAG_MacroDefinition: {
-                        auto& e = (*it).as_MacroDefinition();
-                        (void)e;
                         break;
                     }
                     case Ent::TAG_Generic: {
@@ -930,7 +906,6 @@ void ResolveAbsolutePathParams(/*const*/ Context& context, const Span& sp, ASTPa
         switch (ent.tag()) {
             case ASTPathParamEnt::TAG_Null: {
                 auto& _ = ent.as_Null();
-                (void)_;
                 break;
             }
             case ASTPathParamEnt::TAG_Lifetime: {
@@ -1051,8 +1026,6 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
                     }
                     switch (item.data.tag()) {
                         case ASTItem::TAG_Type: {
-                            auto& e = item.data.as_Type();
-                            (void)e;
                             // Resolve to asociated type
                             break;
                         }
@@ -1082,8 +1055,6 @@ default:
                         break;
                     }
                     case ASTItem::TAG_Static: {
-                        auto& e = item.data.as_Static();
-                        (void)e;
                         // Resolve to asociated static
                         break;
                     }
@@ -1217,15 +1188,11 @@ default:
             ASTPathBindingValue pbv;
             switch (it->second->ent.tag()) {
                 case HIRValueItem::TAG_Import: {
-                    auto& e = it->second->ent.as_Import();
-                    (void)e;
                     // Wait? is this even valid?
                     BUG(sp, "HIR Import item pointed to an import");
                     break;
                 }
                 case HIRValueItem::TAG_Constant: {
-                    auto& e = it->second->ent.as_Constant();
-                    (void)e;
                     pbv = ASTPathBindingValue::make_Static({nullptr, nullptr});
                     break;
                 }
@@ -1240,7 +1207,6 @@ default:
                     break;
                 }
                 case HIRValueItem::TAG_Function: {
-                    auto& e = it->second->ent.as_Function();
                     pbv = ASTPathBindingValue::make_Function({nullptr /*, &e*/});
                     break;
                 }
@@ -1259,8 +1225,6 @@ default:
             ASTPathBindingType pbt;
             switch (it->second->ent.tag()) {
                 case HIRTypeItem::TAG_Import: {
-                    auto& e = it->second->ent.as_Import();
-                    (void)e;
                     // Wait? is this even valid?
                     BUG(sp, "HIR Import item pointed to an import");
                     break;
@@ -1281,12 +1245,10 @@ default:
                     break;
                 }
                 case HIRTypeItem::TAG_TypeAlias: {
-                    auto& e = it->second->ent.as_TypeAlias();
                     pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
                     break;
                 }
                 case HIRTypeItem::TAG_ExternType: {
-                    auto& e = it->second->ent.as_ExternType();
                     pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
                     break;
                 }
@@ -1373,7 +1335,6 @@ default:
                     break;
                 }
                 case HIRTypeItem::TAG_TraitAlias: {
-                    auto& e = it->second->ent.as_TraitAlias();
                     //for(const auto& trait_path_hir : e.m_traits)
                     //{
                     //}
@@ -1391,7 +1352,6 @@ default:
                         pp = mv$(n.args());
                     } else {
                         for (const auto& typ : e.params.types) {
-                            (void)typ;
                             pp.entries.push_back(::mkType(context.typePool(), sp));
                         }
                     }
@@ -1516,12 +1476,10 @@ case HIRTypeItem::TAG_ExternType:
                             break;
                         }
                         case HIRTypeItem::TAG_ExternType: {
-                            auto& e = v->second->ent.as_ExternType();
                             pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
                             break;
                         }
                         case HIRTypeItem::TAG_TypeAlias: {
-                            auto& e = v->second->ent.as_TypeAlias();
                             pbt = ASTPathBindingType::make_TypeAlias({nullptr /*, &e*/});
                             break;
                         }
@@ -1568,8 +1526,6 @@ default:
                             return;
                         }
                         case HIRValueItem::TAG_Constant: {
-                            auto& e = v->second->ent.as_Constant();
-                            (void)e;
                             // Bind and update path
                             path.bindings.value.set(::std::move(ap), ASTPathBindingValue::make_Static({nullptr, nullptr}));
                             path = splitIntoCrate(sp, mv$(path), start, crate.name);
@@ -1592,7 +1548,6 @@ default:
                             return;
                         }
                         case HIRValueItem::TAG_Function: {
-                            auto& e = v->second->ent.as_Function();
                             pbv = ASTPathBindingValue::make_Function({nullptr /*, &e*/});
                             break;
                         }
@@ -1614,8 +1569,6 @@ default:
                             break;
                         }
                         case HIRValueItem::TAG_Constant: {
-                            auto& e = v->second->ent.as_Constant();
-                            (void)e;
                             // Bind
                             pbv = ASTPathBindingValue::make_Static({nullptr, nullptr});
                             break;
@@ -1690,8 +1643,6 @@ void ResolveAbsolutePathBindAbsolute(Context& context, const Span& sp, Context::
 default:
                 ERROR(sp, E0000, "Encountered non-namespace item '" << n.name() << "' ("<<nameRef.path<<") in path " << path);
                 case ASTPathBindingType::TAG_TypeAlias: {
-                    auto& e = nameRef.path.bindings.type.binding.as_TypeAlias();
-                    (void)e;
                     path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
@@ -1716,31 +1667,22 @@ default:
                             for (const auto& param : e.trait_->params().params) {
                             switch (param.tag()) {
                                 case GenericParam::TAG_None: {
-                                    auto& e = param.as_None();
-                                    (void)e;
                                     break;
                                 }
                                 case GenericParam::TAG_Lifetime: {
-                                    auto& e = param.as_Lifetime();
-                                    (void)e;
                                     break;
                                 }
                                 case GenericParam::TAG_Type: {
-                                    auto& typ = param.as_Type();
-                                    (void)typ;
                                     traitPath.nodes().back().args().entries.push_back(::mkType(context.typePool(), sp));
                                     break;
                                 }
                                 case GenericParam::TAG_Value: {
-                                    auto& val = param.as_Value();
-                                    (void)val;
                                     break;
                                 }
                             }
                             }
                         } else {
                             for (const auto& typ : e.hir->params.types) {
-                                (void)typ;
                                 traitPath.nodes().back().args().entries.push_back(::mkType(context.typePool(), sp));
                             }
                         }
@@ -1832,14 +1774,10 @@ default:
                     break;
                 }
                 case ASTPathBindingType::TAG_Struct: {
-                    auto& e = nameRef.path.bindings.type.binding.as_Struct();
-                    (void)e;
                     path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
                 case ASTPathBindingType::TAG_Union: {
-                    auto& e = nameRef.path.bindings.type.binding.as_Union();
-                    (void)e;
                     path = splitReplaceIntoUfcsPath(context.typePool(), sp, mv$(path), i, nameRef.path);
                     return ResolveAbsolutePathBindUFCS(context, sp, mode, path);
                 }
@@ -1888,8 +1826,6 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
 
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
-            auto& e = path.cls.as_Invalid();
-            (void)e;
             BUG(sp, "Attempted resolution of invalid path");
             break;
         }
@@ -2134,22 +2070,16 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
 default:
         BUG(sp, "Path wasn't absolutised correctly");
         case ASTPathClass::TAG_Local: {
-            auto& e = path.cls.as_Local();
-            (void)e;
             if (!path.bindings.hasBinding()) {
                 TODO(sp, "Bind unbound local path - " << path);
             }
             break;
         }
         case ASTPathClass::TAG_Absolute: {
-            auto& e = path.cls.as_Absolute();
-            (void)e;
             ResolveAbsolutePathBindAbsolute(context, sp, mode, path);
             break;
         }
         case ASTPathClass::TAG_UFCS: {
-            auto& e = path.cls.as_UFCS();
-            (void)e;
             ResolveAbsolutePathBindUFCS(context, sp, mode, path);
             break;
         }
@@ -2282,37 +2212,25 @@ void ResolveAbsoluteType(Context& context, ASTType*& type) {
 
     switch (type->data.tag()) {
         case TypeData::TAG_None: {
-            auto& e = type->data.as_None();
-            (void)e;
             // invalid type
             break;
         }
         case TypeData::TAG_Any: {
-            auto& e = type->data.as_Any();
-            (void)e;
             // _ type
             break;
         }
         case TypeData::TAG_Unit: {
-            auto& e = type->data.as_Unit();
-            (void)e;
             break;
         }
         case TypeData::TAG_Bang: {
-            auto& e = type->data.as_Bang();
-            (void)e;
             // ! type
             break;
         }
         case TypeData::TAG_Macro: {
-            auto& e = type->data.as_Macro();
-            (void)e;
             BUG(sp, "Resolve_Absolute_Type - Encountered an unexpanded macro in type - " << type);
             break;
         }
         case TypeData::TAG_Primitive: {
-            auto& e = type->data.as_Primitive();
-            (void)e;
             break;
         }
         case TypeData::TAG_Function: {
@@ -2646,12 +2564,9 @@ void ResolveAbsoluteGeneric(Context& context, ASTGenericParams& params) {
             switch (tuMatch.tag()) {
                 case GenericParam::TAG_None: {
                     auto& _ = tuMatch.as_None();
-                    (void)_;
                     break;
                 }
                 case GenericParam::TAG_Lifetime: {
-                    auto& param = tuMatch.as_Lifetime();
-                    (void)param;
                     break;
                 }
                 case GenericParam::TAG_Type: {
@@ -2671,8 +2586,6 @@ void ResolveAbsoluteGeneric(Context& context, ASTGenericParams& params) {
     for (auto& bound : params.bounds) {
         switch (bound.tag()) {
             case ASTGenericBound::TAG_None: {
-                auto& e = bound.as_None();
-                (void)e;
                 break;
             }
             case ASTGenericBound::TAG_Lifetime: {
@@ -2733,8 +2646,6 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
 
     switch (pat.data().tag()) {
         case ASTPatternData::TAG_Never: {
-            auto& e = pat.data().as_Never();
-            (void)e;
             // `!` names nothing and binds nothing.
             break;
         }
@@ -2756,14 +2667,10 @@ void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& p
             break;
         }
         case ASTPatternData::TAG_Macro: {
-            auto& e = pat.data().as_Macro();
-            (void)e;
             BUG(pat.span(), "Resolve_Absolute_Pattern - Encountered Macro - " << pat);
             break;
         }
         case ASTPatternData::TAG_Any: {
-            auto& e = pat.data().as_Any();
-            (void)e;
             // Ignore '_'
             break;
         }
@@ -2875,90 +2782,60 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTNamedList<ASTItem>& items
     for (auto& i : items) {
         switch (i.data.tag()) {
             case ASTItem::TAG_None: {
-                auto& e = i.data.as_None();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_MacroInv: {
-                auto& e = i.data.as_MacroInv();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_ExternBlock: {
-                auto& e = i.data.as_ExternBlock();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
                 break;
             }
             case ASTItem::TAG_Impl: {
-                auto& e = i.data.as_Impl();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
                 break;
             }
             case ASTItem::TAG_NegImpl: {
-                auto& e = i.data.as_NegImpl();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
                 break;
             }
             case ASTItem::TAG_GlobalAsm: {
-                auto& e = i.data.as_GlobalAsm();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
                 break;
             }
             case ASTItem::TAG_Macro: {
-                auto& e = i.data.as_Macro();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
                 break;
             }
             case ASTItem::TAG_Use: {
-                auto& e = i.data.as_Use();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - Use");
                 break;
             }
             case ASTItem::TAG_Module: {
-                auto& e = i.data.as_Module();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - Module");
                 break;
             }
             case ASTItem::TAG_Crate: {
-                auto& e = i.data.as_Crate();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - Crate");
                 break;
             }
             case ASTItem::TAG_Enum: {
-                auto& e = i.data.as_Enum();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - Enum");
                 break;
             }
             case ASTItem::TAG_Trait: {
-                auto& e = i.data.as_Trait();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
                 break;
             }
             case ASTItem::TAG_TraitAlias: {
-                auto& e = i.data.as_TraitAlias();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - " << i.data.tagStr());
                 break;
             }
             case ASTItem::TAG_Struct: {
-                auto& e = i.data.as_Struct();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - Struct");
                 break;
             }
             case ASTItem::TAG_Union: {
-                auto& e = i.data.as_Union();
-                (void)e;
                 BUG(i.span, "Resolve_Absolute_ImplItems - Union");
                 break;
             }
@@ -3100,90 +2977,60 @@ void ResolveAbsoluteImplItems(Context& itemContext, ASTImpl& impl) {
     for (auto& i : impl.items()) {
         switch ((*i.data).tag()) {
             case ASTItem::TAG_None: {
-                auto& e = (*i.data).as_None();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_MacroInv: {
-                auto& e = (*i.data).as_MacroInv();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_Impl: {
-                auto& e = (*i.data).as_Impl();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_NegImpl: {
-                auto& e = (*i.data).as_NegImpl();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_ExternBlock: {
-                auto& e = (*i.data).as_ExternBlock();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_GlobalAsm: {
-                auto& e = (*i.data).as_GlobalAsm();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_Macro: {
-                auto& e = (*i.data).as_Macro();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_Use: {
-                auto& e = (*i.data).as_Use();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_Module: {
-                auto& e = (*i.data).as_Module();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_Crate: {
-                auto& e = (*i.data).as_Crate();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_Enum: {
-                auto& e = (*i.data).as_Enum();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_Trait: {
-                auto& e = (*i.data).as_Trait();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_TraitAlias: {
-                auto& e = (*i.data).as_TraitAlias();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_Struct: {
-                auto& e = (*i.data).as_Struct();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
             case ASTItem::TAG_Union: {
-                auto& e = (*i.data).as_Union();
-                (void)e;
                 BUG(i.sp, "Resolve_Absolute_ImplItems - " << i.data->tagStr());
                 break;
             }
@@ -3248,13 +3095,9 @@ void ReplaceDelegatedSelf(ASTPathParams& params, const RcString& replacementName
     for (auto& param : params.entries) {
         switch (param.tag()) {
             case ASTPathParamEnt::TAG_Null: {
-                auto& e = param.as_Null();
-                (void)e;
                 break;
             }
             case ASTPathParamEnt::TAG_Lifetime: {
-                auto& e = param.as_Lifetime();
-                (void)e;
                 break;
             }
             case ASTPathParamEnt::TAG_Type: {
@@ -3263,8 +3106,6 @@ void ReplaceDelegatedSelf(ASTPathParams& params, const RcString& replacementName
                 break;
             }
             case ASTPathParamEnt::TAG_Value: {
-                auto& e = param.as_Value();
-                (void)e;
                 break;
             }
             case ASTPathParamEnt::TAG_AssociatedTyEqual: {
@@ -3302,33 +3143,21 @@ void ReplaceDelegatedSelf(ASTPath& path, const RcString& replacementName) {
 void ReplaceDelegatedSelf(ASTType*& type, const RcString& replacementName) {
     switch (type->data.tag()) {
         case TypeData::TAG_None: {
-            auto& e = type->data.as_None();
-            (void)e;
             break;
         }
         case TypeData::TAG_Any: {
-            auto& e = type->data.as_Any();
-            (void)e;
             break;
         }
         case TypeData::TAG_Bang: {
-            auto& e = type->data.as_Bang();
-            (void)e;
             break;
         }
         case TypeData::TAG_Unit: {
-            auto& e = type->data.as_Unit();
-            (void)e;
             break;
         }
         case TypeData::TAG_Macro: {
-            auto& e = type->data.as_Macro();
-            (void)e;
             break;
         }
         case TypeData::TAG_Primitive: {
-            auto& e = type->data.as_Primitive();
-            (void)e;
             break;
         }
         case TypeData::TAG_Function: {
@@ -3400,13 +3229,9 @@ void ReplaceDelegatedSelf(ASTFunction& function, const RcString& replacementName
     for (auto& param : function.params().params) {
         switch (param.tag()) {
             case GenericParam::TAG_None: {
-                auto& e = param.as_None();
-                (void)e;
                 break;
             }
             case GenericParam::TAG_Lifetime: {
-                auto& e = param.as_Lifetime();
-                (void)e;
                 break;
             }
             case GenericParam::TAG_Type: {
@@ -3424,13 +3249,9 @@ void ReplaceDelegatedSelf(ASTFunction& function, const RcString& replacementName
     for (auto& bound : function.params().bounds) {
         switch (bound.tag()) {
             case ASTGenericBound::TAG_None: {
-                auto& e = bound.as_None();
-                (void)e;
                 break;
             }
             case ASTGenericBound::TAG_Lifetime: {
-                auto& e = bound.as_Lifetime();
-                (void)e;
                 break;
             }
             case ASTGenericBound::TAG_TypeLifetime: {
@@ -3558,13 +3379,9 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
     auto& pool = context.typePool();
     switch ((*type).tag()) {
         case HIRTypeData::TAG_Infer: {
-            auto& e = (*type).as_Infer();
-            (void)e;
             return mkType(pool, span);
         }
         case HIRTypeData::TAG_Diverge: {
-            auto& e = (*type).as_Diverge();
-            (void)e;
             return mkType(pool, span, TypeData::make_Bang({}));
         }
         case HIRTypeData::TAG_Primitive: {
@@ -3592,14 +3409,10 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
             return mkType(pool, span, mv$(traits), {});
         }
         case HIRTypeData::TAG_ErasedType: {
-            auto& e = (*type).as_ErasedType();
-            (void)e;
             BUG(span, "Erased type in an external delegation signature");
             break;
         }
         case HIRTypeData::TAG_Array: {
-            auto& e = (*type).as_Array();
-            (void)e;
             BUG(span, "Array in an external delegation signature");
             break;
         }
@@ -3608,8 +3421,6 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
             return mkType(pool, ASTTypeTags::UnsizedArray(), span, HIRTypeToAST(context, span, e.inner));
         }
         case HIRTypeData::TAG_Pattern: {
-            auto& e = (*type).as_Pattern();
-            (void)e;
             BUG(span, "Pattern type in an external delegation signature");
             break;
         }
@@ -3628,8 +3439,6 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
             return mkType(pool, ASTTypeTags::Pointer(), span, e.type == HIRBorrowType::Unique, HIRTypeToAST(context, span, e.inner));
         }
         case HIRTypeData::TAG_NamedFunction: {
-            auto& e = (*type).as_NamedFunction();
-            (void)e;
             BUG(span, "Named function type in an external delegation signature");
             break;
         }
@@ -3640,8 +3449,6 @@ ASTType* HIRTypeToAST(Context& context, const Span& span, HIRTypeRef type) {
             return mkType(pool, ASTTypeTags::Function(), span, {}, e.isUnsafe, e.abi.c_str(), mv$(args), e.isVariadic, HIRTypeToAST(context, span, e.rettype));
         }
         case HIRTypeData::TAG_NodeType: {
-            auto& e = (*type).as_NodeType();
-            (void)e;
             BUG(span, "Node type in an external delegation signature");
             break;
         }
@@ -3768,8 +3575,6 @@ void ResolveAbsoluteFunction(
                 for (const auto& param : targetTrait->params().params) {
                     switch (param.tag()) {
                         case GenericParam::TAG_None: {
-                            auto& e = param.as_None();
-                            (void)e;
                             break;
                         }
                         case GenericParam::TAG_Lifetime: {
@@ -3901,8 +3706,6 @@ void ResolveAbsoluteStruct(Context& itemContext, ASTStruct& e) {
 
     switch (e.data.tag()) {
         case ASTStructData::TAG_Unit: {
-            auto& s = e.data.as_Unit();
-            (void)s;
             break;
         }
         case ASTStructData::TAG_Tuple: {
@@ -3964,8 +3767,6 @@ void ResolveAbsoluteEnum(Context& itemContext, ASTEnum& e) {
     for (auto& variant : e.variants()) {
         switch (variant.data.tag()) {
             case ASTEnumVariantData::TAG_Unit: {
-                auto& s = variant.data.as_Unit();
-                (void)s;
                 break;
             }
             case ASTEnumVariantData::TAG_Tuple: {
@@ -3999,23 +3800,15 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
     for (auto& i : mod.items) {
         switch (i->data.tag()) {
             case ASTItem::TAG_None: {
-                auto& e = i->data.as_None();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_MacroInv: {
-                auto& e = i->data.as_MacroInv();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_Use: {
-                auto& e = i->data.as_Use();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_Macro: {
-                auto& e = i->data.as_Macro();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_GlobalAsm: {
@@ -4042,8 +3835,6 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
                 for (auto& i2 : e.items()) {
                     switch (i2.data.tag()) {
                         case ASTItem::TAG_None: {
-                            auto& e2 = i2.data.as_None();
-                            (void)e2;
                             break;
                         }
                         case ASTItem::TAG_Function: {
@@ -4138,8 +3929,6 @@ void ResolveAbsoluteMod(Context itemContext, ASTModule& mod) {
                 break;
             }
             case ASTItem::TAG_Crate: {
-                auto& e = i->data.as_Crate();
-                (void)e;
                 // - Nothing
                 break;
             }
@@ -4344,44 +4133,28 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
 
         switch (i->data.tag()) {
             case ASTItem::TAG_None: {
-                auto& e = i->data.as_None();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_MacroInv: {
-                auto& e = i->data.as_MacroInv();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_ExternBlock: {
-                auto& e = i->data.as_ExternBlock();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_Impl: {
-                auto& e = i->data.as_Impl();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_NegImpl: {
-                auto& e = i->data.as_NegImpl();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_GlobalAsm: {
-                auto& e = i->data.as_GlobalAsm();
-                (void)e;
                 break;
             }
             case ASTItem::TAG_Macro: {
-                auto& e = i->data.as_Macro();
-                (void)e;
                 // Handled by `for(const auto& item : mod.macros())` below
                 break;
             }
             case ASTItem::TAG_Use: {
-                auto& e = i->data.as_Use();
-                (void)e;
                 // Skip for now
                 break;
             }
@@ -4485,74 +4258,50 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
                 // - Types
             switch (pb.type.binding.tag()) {
                 case ASTPathBindingType::TAG_Unbound: {
-                    auto& _e = pb.type.binding.as_Unbound();
-                    (void)_e;
                     DEBUG(iData.name << " - Not a type/module");
                     break;
                 }
                 case ASTPathBindingType::TAG_TypeParameter: {
-                    auto& e = pb.type.binding.as_TypeParameter();
-                    (void)e;
                     BUG(sp, "Import was bound to type parameter");
                     break;
                 }
                 case ASTPathBindingType::TAG_Primitive: {
-                    auto& e = pb.type.binding.as_Primitive();
-                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
                 case ASTPathBindingType::TAG_Crate: {
-                    auto& e = pb.type.binding.as_Crate();
-                    (void)e;
                     _add_item(sp, mod, IndexName::Namespace, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
                 case ASTPathBindingType::TAG_Module: {
-                    auto& e = pb.type.binding.as_Module();
-                    (void)e;
                     _add_item(sp, mod, IndexName::Namespace, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
                 case ASTPathBindingType::TAG_Enum: {
-                    auto& e = pb.type.binding.as_Enum();
-                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
                 case ASTPathBindingType::TAG_Union: {
-                    auto& e = pb.type.binding.as_Union();
-                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
                 case ASTPathBindingType::TAG_Trait: {
-                    auto& e = pb.type.binding.as_Trait();
-                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
                 case ASTPathBindingType::TAG_TraitAlias: {
-                    auto& e = pb.type.binding.as_TraitAlias();
-                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
                 case ASTPathBindingType::TAG_TypeAlias: {
-                    auto& e = pb.type.binding.as_TypeAlias();
-                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
                 case ASTPathBindingType::TAG_Struct: {
-                    auto& e = pb.type.binding.as_Struct();
-                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
                 case ASTPathBindingType::TAG_EnumVar: {
-                    auto& e = pb.type.binding.as_EnumVar();
-                    (void)e;
                     _add_item_type(sp, mod, iData.name, i.vis, pb.type, !allowCollide);
                     break;
                 }
@@ -4560,44 +4309,30 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
             // - Values
             switch (pb.value.binding.tag()) {
                 case ASTPathBindingValue::TAG_Unbound: {
-                    auto& _e = pb.value.binding.as_Unbound();
-                    (void)_e;
                     DEBUG(iData.name << " - Not a value");
                     break;
                 }
                 case ASTPathBindingValue::TAG_Variable: {
-                    auto& e = pb.value.binding.as_Variable();
-                    (void)e;
                     BUG(sp, "Import was bound to a variable");
                     break;
                 }
                 case ASTPathBindingValue::TAG_Generic: {
-                    auto& e = pb.value.binding.as_Generic();
-                    (void)e;
                     BUG(sp, "Import was bound to a generic value");
                     break;
                 }
                 case ASTPathBindingValue::TAG_Struct: {
-                    auto& e = pb.value.binding.as_Struct();
-                    (void)e;
                     _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
                     break;
                 }
                 case ASTPathBindingValue::TAG_EnumVar: {
-                    auto& e = pb.value.binding.as_EnumVar();
-                    (void)e;
                     _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
                     break;
                 }
                 case ASTPathBindingValue::TAG_Static: {
-                    auto& e = pb.value.binding.as_Static();
-                    (void)e;
                     _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
                     break;
                 }
                 case ASTPathBindingValue::TAG_Function: {
-                    auto& e = pb.value.binding.as_Function();
-                    (void)e;
                     _add_item_value(sp, mod, iData.name, i.vis, pb.value, !allowCollide);
                     break;
                 }
@@ -4605,32 +4340,22 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
             // - Macros
             switch (pb.macro.binding.tag()) {
                 case ASTPathBindingMacro::TAG_Unbound: {
-                    auto& _e = pb.macro.binding.as_Unbound();
-                    (void)_e;
                     DEBUG(iData.name << " - Not a macro");
                     break;
                 }
                 case ASTPathBindingMacro::TAG_MacroRules: {
-                    auto& e = pb.macro.binding.as_MacroRules();
-                    (void)e;
                     _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
                     break;
                 }
                 case ASTPathBindingMacro::TAG_ProcMacro: {
-                    auto& e = pb.macro.binding.as_ProcMacro();
-                    (void)e;
                     _add_item(sp, mod, IndexName::Macro, iData.name, i.vis, pb.macro, !allowCollide);
                     break;
                 }
                 case ASTPathBindingMacro::TAG_ProcMacroAttribute: {
-                    auto& e = pb.macro.binding.as_ProcMacroAttribute();
-                    (void)e;
                     TODO(sp, "ProcMacroAttribute import");
                     break;
                 }
                 case ASTPathBindingMacro::TAG_ProcMacroDerive: {
-                    auto& e = pb.macro.binding.as_ProcMacroDerive();
-                    (void)e;
                     TODO(sp, "ProcMacroDerive import");
                     break;
                 }
@@ -4740,20 +4465,14 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     break;
                 }
                 case HIRTypeItem::TAG_Enum: {
-                    auto& e = (*vep).as_Enum();
-                    (void)e;
                     pb.binding = ASTPathBindingType::make_Enum({nullptr});
                     break;
                 }
                 case HIRTypeItem::TAG_TypeAlias: {
-                    auto& e = (*vep).as_TypeAlias();
-                    (void)e;
                     pb.binding = ASTPathBindingType::make_TypeAlias({nullptr});
                     break;
                 }
                 case HIRTypeItem::TAG_ExternType: {
-                    auto& e = (*vep).as_ExternType();
-                    (void)e;
                     pb.binding = ASTPathBindingType::make_TypeAlias({nullptr});
                     break;
                 }
@@ -4797,19 +4516,13 @@ void ResolveIndexModuleWildcardGlobInHirMod(
             assert(vep);
             switch ((*vep).tag()) {
                 case HIRValueItem::TAG_Import: {
-                    auto& e = (*vep).as_Import();
-                    (void)e;
                     throw "";
                 }
                 case HIRValueItem::TAG_Constant: {
-                    auto& e = (*vep).as_Constant();
-                    (void)e;
                     pb.binding = ASTPathBindingValue::make_Static({nullptr});
                     break;
                 }
                 case HIRValueItem::TAG_Static: {
-                    auto& e = (*vep).as_Static();
-                    (void)e;
                     pb.binding = ASTPathBindingValue::make_Static({nullptr});
                     break;
                 }
@@ -4824,8 +4537,6 @@ void ResolveIndexModuleWildcardGlobInHirMod(
                     break;
                 }
                 case HIRValueItem::TAG_Function: {
-                    auto& e = (*vep).as_Function();
-                    (void)e;
                     pb.binding = ASTPathBindingValue::make_Function({nullptr});
                     break;
                 }
@@ -4848,7 +4559,6 @@ void ResolveIndexModuleWildcardGlobInHirMod(
             switch (e.ent.tag()) {
                 case HIRMacroItem::TAG_Import: {
                     auto& _ = e.ent.as_Import();
-                    (void)_;
                     pb.binding = ASTPathBindingMacro::make_MacroRules({nullptr, nullptr});
                     break;
                 }
@@ -5071,8 +4781,6 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
                 break;
             }
             case HIRTypeItem::TAG_Enum: {
-                auto& e = (*itemPtr).as_Enum();
-                (void)e;
                 if (i != info.nodes.size() - 2) { BUG(sp, "Path " << path << " pointed to non-module in component " << i); }
                 // Lazy, not checking
                 return;
@@ -5185,8 +4893,6 @@ default:
                     return false;
                 }
                 case ASTPathBindingType::TAG_Enum: {
-                    auto& e = ie.path.bindings.type.binding.as_Enum();
-                    (void)e;
                     // NOTE: Just assuming that if an Enum is hit, it's sane
                     return false;
                 }
@@ -5343,22 +5049,16 @@ void ResolveUse(const WireBoard& wb, ASTCrate& crate) {
 ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, const ASTCrate& crate, const ASTPath& basePath, ASTPath path) {
     switch (path.cls.tag()) {
         case ASTPathClass::TAG_Invalid: {
-            auto& e = path.cls.as_Invalid();
-            (void)e;
             // Should never happen
             BUG(span, "Invalid path class encountered");
             break;
         }
         case ASTPathClass::TAG_Local: {
-            auto& e = path.cls.as_Local();
-            (void)e;
             // Wait, how is this already known?
             BUG(span, "Local path class in use statement");
             break;
         }
         case ASTPathClass::TAG_UFCS: {
-            auto& e = path.cls.as_UFCS();
-            (void)e;
             // Wait, how is this already known?
             BUG(span, "UFCS path class in use statement");
             break;
@@ -5460,8 +5160,6 @@ ASTPath ResolveUseAbsolutisePath(const Span& span, const Settings& settings, con
             break;
         }
         case ASTPathClass::TAG_Self: {
-            auto& e = path.cls.as_Self();
-            (void)e;
             DEBUG("Self " << path);
             // `self::super::..` leaves the module the same way a leading `super`
             // does; only the spelling puts the `super` after the `self`.
@@ -5561,18 +5259,12 @@ void ResolveUseMod(const Settings& settings, const ASTCrate& crate, ASTModule& m
             if (useEnt.name == "") {
                 switch (useEnt.path.bindings.type.binding.tag()) {
                     case ASTPathBindingType::TAG_Enum: {
-                        auto& e = useEnt.path.bindings.type.binding.as_Enum();
-                        (void)e;
                         break;
                     }
                     case ASTPathBindingType::TAG_Crate: {
-                        auto& e = useEnt.path.bindings.type.binding.as_Crate();
-                        (void)e;
                         break;
                     }
                     case ASTPathBindingType::TAG_Module: {
-                        auto& e = useEnt.path.bindings.type.binding.as_Module();
-                        (void)e;
                         break;
                     }
                     default: {
@@ -5650,20 +5342,14 @@ default:
                 for (auto& ti : e.items()) {
                     switch (ti.data.tag()) {
                         case ASTItem::TAG_None: {
-                            auto& e = ti.data.as_None();
-                            (void)e;
                             // Deleted, ignore
                             break;
                         }
                         case ASTItem::TAG_MacroInv: {
-                            auto& e = ti.data.as_MacroInv();
-                            (void)e;
                             // TODO: Should this already be deleted?
                             break;
                         }
                         case ASTItem::TAG_Type: {
-                            auto& e = ti.data.as_Type();
-                            (void)e;
                             break;
                         }
                         case ASTItem::TAG_Function: {
@@ -5760,49 +5446,33 @@ ASTPath::Bindings ResolveUseGetBindingMod(
             DEBUG("Matching item: " << item.data.tagStr());
             switch (item.data.tag()) {
                 case ASTItem::TAG_None: {
-                    auto& _e = item.data.as_None();
-                    (void)_e;
                     // IMPOSSIBLE - Handled above
                     break;
                 }
                 case ASTItem::TAG_MacroInv: {
-                    auto& e = item.data.as_MacroInv();
-                    (void)e;
                     BUG(span, "Hit MacroInv in use resolution");
                     break;
                 }
                 case ASTItem::TAG_GlobalAsm: {
-                    auto& e = item.data.as_GlobalAsm();
-                    (void)e;
                     BUG(span, "Hit GlobalAsm in use resolution");
                     break;
                 }
                 case ASTItem::TAG_Macro: {
-                    auto& e = item.data.as_Macro();
-                    (void)e;
                     break;
                 }
                 case ASTItem::TAG_Use: {
-                    auto& e = item.data.as_Use();
-                    (void)e;
                     break; // Skip for now
                     break;
                 }
                 case ASTItem::TAG_Impl: {
-                    auto& e = item.data.as_Impl();
-                    (void)e;
                     BUG(span, "Hit Impl in use resolution");
                     break;
                 }
                 case ASTItem::TAG_NegImpl: {
-                    auto& e = item.data.as_NegImpl();
-                    (void)e;
                     BUG(span, "Hit NegImpl in use resolution");
                     break;
                 }
                 case ASTItem::TAG_ExternBlock: {
-                    auto& e = item.data.as_ExternBlock();
-                    (void)e;
                     BUG(span, "Hit Extern in use resolution");
                     break;
                 }
@@ -5914,8 +5584,6 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                     DEBUG("Macro Import - " << mac.path);
                     switch (mac.ref.tag()) {
                         case MacroRef::TAG_None: {
-                            auto& e = mac.ref.as_None();
-                            (void)e;
                             break;
                         }
                         case MacroRef::TAG_MacroRules: {
@@ -5924,13 +5592,9 @@ ASTPath::Bindings ResolveUseGetBindingMod(
                             break;
                         }
                         case MacroRef::TAG_BuiltinProcMacro: {
-                            auto& e = mac.ref.as_BuiltinProcMacro();
-                            (void)e;
                             break;
                         }
                         case MacroRef::TAG_ExternalProcMacro: {
-                            auto& e = mac.ref.as_ExternalProcMacro();
-                            (void)e;
                             break;
                         }
                     }
@@ -6316,14 +5980,10 @@ default:
                         break;
                     }
                     case HIRTypeItem::TAG_TypeAlias: {
-                        auto& e = (*itemPtr).as_TypeAlias();
-                        (void)e;
                         rv.type.set(ap, ASTPathBindingType::make_TypeAlias({nullptr}));
                         break;
                     }
                     case HIRTypeItem::TAG_ExternType: {
-                        auto& e = (*itemPtr).as_ExternType();
-                        (void)e;
                         rv.type.set(ap, ASTPathBindingType::make_TypeAlias({nullptr})); // Lazy.
                         break;
                     }
@@ -6391,14 +6051,10 @@ default:
                         break;
                     }
                     case HIRValueItem::TAG_Constant: {
-                        auto& e = (*itemPtr).as_Constant();
-                        (void)e;
                         rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr}));
                         break;
                     }
                     case HIRValueItem::TAG_Static: {
-                        auto& e = (*itemPtr).as_Static();
-                        (void)e;
                         rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr}));
                         break;
                     }
@@ -6415,8 +6071,6 @@ default:
                         break;
                     }
                     case HIRValueItem::TAG_Function: {
-                        auto& e = (*itemPtr).as_Function();
-                        (void)e;
                         rv.value.set(ap, ASTPathBindingValue::make_Function({nullptr}));
                         break;
                     }
@@ -6549,8 +6203,6 @@ ASTPath::Bindings ResolveUseGetBinding(
 default:
             ERROR(span, E0000, "Unexpected item type " << b.type.binding.tagStr() << " in import of " << path);
             case ASTPathBindingType::TAG_Unbound: {
-                auto& e = b.type.binding.as_Unbound();
-                (void)e;
                 // During speculative glob resolution a miss just skips the glob; the recursion
                 // guard can hide a module that a later direct resolution will find.
                 if (softFail) {
@@ -6587,8 +6239,6 @@ default:
                     }
                 switch (enum_.data.tag()) {
                     case HIREnumClass::TAG_Value: {
-                        auto& ve = enum_.data.as_Value();
-                        (void)ve;
                         isValue = true;
                         break;
                     }

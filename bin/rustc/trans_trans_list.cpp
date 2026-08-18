@@ -145,8 +145,6 @@ HIRPath TransParams::monomorph(const ::StaticTraitResolve& resolve, const HIRPat
             break;
         }
         case HIRPathData::TAG_UfcsUnknown: {
-            auto& e2 = rv.data.as_UfcsUnknown();
-            (void)e2;
             BUG(sp, "Encountered UfcsUnknown");
             break;
         }

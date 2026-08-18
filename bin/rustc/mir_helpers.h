@@ -444,8 +444,6 @@ default:
                     break;
                 }
                 case MIRStatement::TAG_SetDropFlag: {
-                    auto& e = stmt.as_SetDropFlag();
-                    (void)e;
                     break;
                 }
                 case MIRStatement::TAG_SaveDropFlag: {
@@ -459,8 +457,6 @@ default:
                     break;
                 }
                 case MIRStatement::TAG_ScopeEnd: {
-                    auto& e = stmt.as_ScopeEnd();
-                    (void)e;
                     break;
                 }
             }
@@ -475,28 +471,18 @@ default:
         bool rv = false;
             switch (term.tag()) {
                 case MIRTerminator::TAG_Incomplete: {
-                    auto& e = term.as_Incomplete();
-                    (void)e;
                     break;
                 }
                 case MIRTerminator::TAG_Return: {
-                    auto& e = term.as_Return();
-                    (void)e;
                     break;
                 }
                 case MIRTerminator::TAG_UnwindResume: {
-                    auto& e = term.as_UnwindResume();
-                    (void)e;
                     break;
                 }
                 case MIRTerminator::TAG_UnwindTerminate: {
-                    auto& e = term.as_UnwindTerminate();
-                    (void)e;
                     break;
                 }
                 case MIRTerminator::TAG_Unreachable: {
-                    auto& e = term.as_Unreachable();
-                    (void)e;
                     break;
                 }
                 case MIRTerminator::TAG_Goto: {

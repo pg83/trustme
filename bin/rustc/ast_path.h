@@ -285,8 +285,6 @@ public:
     bool isTrivial() const {
         switch (cls.tag()) {
             case Class::TAG_Local: {
-                auto& e = cls.as_Local();
-                (void)e;
                 return true;
             }
             case Class::TAG_Relative: {

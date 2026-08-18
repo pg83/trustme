@@ -66,8 +66,6 @@ const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValu
     const HIRTypeData* rv = nullptr;
     switch (val.root.tag()) {
         case MIRLValue::Storage::TAG_Return: {
-            decltype(val.root.as_Return()) e = val.root.as_Return();
-            (void)e;
             rv = monomorphedRettype ? monomorphedRettype : retType;
             break;
         }
@@ -134,8 +132,6 @@ default:
                         };
                         switch (str.data.tag()) {
                             case HIRStructData::TAG_Unit: {
-                                auto& se = str.data.as_Unit();
-                                (void)se;
                                 MIR_BUG(*this, "Field on unit-like struct - " << ty);
                                 break;
                             }
@@ -166,15 +162,11 @@ default:
             break;
         }
         case MIRLValue::Wrapper::TAG_Deref: {
-            decltype(w.as_Deref()) _e = w.as_Deref();
-            (void)_e;
             switch ((*ty).tag()) {
 default:
                 MIR_BUG(*this, "Deref on unexpected type - " << ty);
                 break;
                 case HIRTypeData::TAG_Path: {
-                    auto& te = (*ty).as_Path();
-                    (void)te;
                     if (const auto* innerPtr = this->isTypeOwnedBox(ty)) {
                         return innerPtr;
                     } else {
@@ -194,8 +186,6 @@ default:
             break;
         }
         case MIRLValue::Wrapper::TAG_Index: {
-            decltype(w.as_Index()) indexLocal = w.as_Index();
-            (void)indexLocal;
             switch ((*ty).tag()) {
 default:
                 MIR_BUG(*this, "Index on unexpected type - " << ty);
@@ -280,8 +270,6 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
             return crate.types.primitive(e.t);
         }
         case MIRConstant::TAG_Bool: {
-            auto& e = c.as_Bool();
-            (void)e;
             return crate.types.primitive(HIRCoreType::Bool);
         }
         case MIRConstant::TAG_Bytes: {
@@ -289,8 +277,6 @@ HIRTypeRef MIRTypeResolve::getConstType(const MIRConstant& c) const {
             return crate.types.borrow(HIRBorrowType::Shared, crate.types.array(crate.types.primitive(HIRCoreType::U8), e.size()));
         }
         case MIRConstant::TAG_StaticString: {
-            auto& e = c.as_StaticString();
-            (void)e;
             return crate.types.borrow(HIRBorrowType::Shared, crate.types.primitive(HIRCoreType::Str));
         }
         case MIRConstant::TAG_Encoded: {
@@ -328,8 +314,6 @@ default:
                 MIR_BUG(*this, "get_const_type - Function points to bad type: " << v.tagStr() << " - " << c);
                 break;
                 case TypeckValuePtr::TAG_NotFound: {
-                    auto& ve = v.as_NotFound();
-                    (void)ve;
                     MIR_BUG(*this, "get_const_type - ItemAddr points to unknown value - " << c);
                     break;
                 }
@@ -355,14 +339,10 @@ default:
                 auto v = resolve.getValue(this->sp, *e, p, /*signature_only=*/true);
             switch (v.tag()) {
                 case TypeckValuePtr::TAG_NotFound: {
-                    auto& ve = v.as_NotFound();
-                    (void)ve;
                     MIR_BUG(*this, "get_const_type - ItemAddr points to unknown value - " << c);
                     break;
                 }
                 case TypeckValuePtr::TAG_NotYetKnown: {
-                    auto& ve = v.as_NotYetKnown();
-                    (void)ve;
                     if (e->data.is_UfcsKnown()) {
                         const auto& pe = e->data.as_UfcsKnown();
                         if (pe.item == "vtable#" && pe.trait.path == HIRSimplePath()) {
@@ -407,8 +387,6 @@ default:
                     return rv;
                 }
                 case TypeckValuePtr::TAG_EnumValue: {
-                    auto& ve = v.as_EnumValue();
-                    (void)ve;
                     MIR_BUG(*this, "get_const_type - ItemAddr points to an enum value - " << c);
                     break;
                 }
@@ -419,8 +397,6 @@ default:
                     return rv;
                 }
                 case TypeckValuePtr::TAG_StructConstant: {
-                    auto& ve = v.as_StructConstant();
-                    (void)ve;
                     MIR_BUG(*this, c << " pointing to a struct constant");
                     break;
                 }
@@ -489,14 +465,11 @@ default:
                                 break;
                             }
                             case HIRStructData::TAG_Tuple: {
-                                auto& fields = str.data.as_Tuple();
-                                (void)fields;
                                 MIR_BUG(*this, "Named field on tuple struct: " << curTy << " ." << fieldName);
                                 break;
                             }
                             case HIRStructData::TAG_Unit: {
                                 auto& _ = str.data.as_Unit();
-                                (void)_;
                                 MIR_BUG(*this, "Empty struct: " << curTy << " ." << fieldName);
                                 break;
                             }
@@ -1091,13 +1064,9 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                         for (const auto& p : se.params) {
                         switch (p.tag()) {
                             case MIRAsmParam::TAG_Const: {
-                                auto& v = p.as_Const();
-                                (void)v;
                                 break;
                             }
                             case MIRAsmParam::TAG_Sym: {
-                                auto& v = p.as_Sym();
-                                (void)v;
                                 break;
                             }
                             case MIRAsmParam::TAG_Reg: {
@@ -1113,8 +1082,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                                 break;
                             }
                             case MIRAsmParam::TAG_Label: {
-                                auto& v = p.as_Label();
-                                (void)v;
                                 break;
                             }
                         }
@@ -1122,26 +1089,18 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                         break;
                     }
                     case MIRStatement::TAG_SetDropFlag: {
-                        auto& se = stmt.as_SetDropFlag();
-                        (void)se;
                         // Ignore
                         break;
                     }
                     case MIRStatement::TAG_SaveDropFlag: {
-                        auto& se = stmt.as_SaveDropFlag();
-                        (void)se;
                         // Ignore
                         break;
                     }
                     case MIRStatement::TAG_LoadDropFlag: {
-                        auto& se = stmt.as_LoadDropFlag();
-                        (void)se;
                         // Ignore
                         break;
                     }
                     case MIRStatement::TAG_ScopeEnd: {
-                        auto& se = stmt.as_ScopeEnd();
-                        (void)se;
                         // Ignore
                         break;
                     }
@@ -1165,37 +1124,27 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
             // Terminator
             switch (bb.terminator.tag()) {
                 case MIRTerminator::TAG_Incomplete: {
-                    auto& te = bb.terminator.as_Incomplete();
-                    (void)te;
                     // TODO: Isn't this a bug?
                     DEBUG(mirRes << "Incomplete");
                     state.finalise(stmtIdx);
                     break;
                 }
                 case MIRTerminator::TAG_Return: {
-                    auto& te = bb.terminator.as_Return();
-                    (void)te;
                     DEBUG(mirRes << "Return");
                     state.finalise(stmtIdx);
                     break;
                 }
                 case MIRTerminator::TAG_UnwindResume: {
-                    auto& te = bb.terminator.as_UnwindResume();
-                    (void)te;
                     DEBUG(mirRes << "UnwindResume");
                     state.finalise(stmtIdx);
                     break;
                 }
                 case MIRTerminator::TAG_UnwindTerminate: {
-                    auto& te = bb.terminator.as_UnwindTerminate();
-                    (void)te;
                     DEBUG(mirRes << "UnwindTerminate");
                     state.finalise(stmtIdx);
                     break;
                 }
                 case MIRTerminator::TAG_Unreachable: {
-                    auto& te = bb.terminator.as_Unreachable();
-                    (void)te;
                     DEBUG(mirRes << "Unreachable");
                     state.finalise(stmtIdx);
                     break;
@@ -1260,8 +1209,6 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                     break;
                 }
                 case MIRTerminator::TAG_TailCall: {
-                    auto& te = bb.terminator.as_TailCall();
-                    (void)te;
                     state.finalise(stmtIdx);
                     break;
                 }
@@ -1763,32 +1710,27 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         switch (fcn.blocks[bbIdx].terminator.tag()) {
             case MIRTerminator::TAG_Incomplete: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_Incomplete();
-                (void)e;
                 // Should be impossible here.
                 break;
             }
             case MIRTerminator::TAG_Return: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_Return();
-                (void)e;
                 // End all active lifetimes at their previous location.
                 applyState(valState);
                 break;
             }
             case MIRTerminator::TAG_UnwindResume: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_UnwindResume();
-                (void)e;
                 applyState(valState);
                 break;
             }
             case MIRTerminator::TAG_UnwindTerminate: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_UnwindTerminate();
-                (void)e;
                 applyState(valState);
                 break;
             }
             case MIRTerminator::TAG_Unreachable: {
                 auto& e = fcn.blocks[bbIdx].terminator.as_Unreachable();
-                (void)e;
                 applyState(valState);
                 break;
             }

@@ -57,8 +57,6 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
                     break;
                 }
                 case HIRTraitValueItem::TAG_Static: {
-                    auto& e = item.as_Static();
-                    (void)e;
                     itemGenerics = nullptr;
                     break;
                 }
@@ -79,8 +77,6 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
                     break;
                 }
                 case HIRValueItem::TAG_Static: {
-                    auto& e = item.as_Static();
-                    (void)e;
                     break;
                 }
                 case HIRValueItem::TAG_Function: {
@@ -89,20 +85,14 @@ void TypeckModuleState::prepareFromPath(const HIRItemPath& ip) {
                     break;
                 }
                 case HIRValueItem::TAG_StructConstant: {
-                    auto& _e = item.as_StructConstant();
-                    (void)_e;
                     BUG(sp, ip << " is StructConstant");
                     break;
                 }
                 case HIRValueItem::TAG_StructConstructor: {
-                    auto& _e = item.as_StructConstructor();
-                    (void)_e;
                     BUG(sp, ip << " is StructConstructor");
                     break;
                 }
                 case HIRValueItem::TAG_Import: {
-                    auto& _e = item.as_Import();
-                    (void)_e;
                     BUG(sp, ip << " is Import");
                     break;
                 }

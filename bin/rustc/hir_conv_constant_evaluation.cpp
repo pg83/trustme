@@ -1277,13 +1277,9 @@ namespace {
         auto v = resolve.getValue(sp, path, outMs, false, outImplParamsDef);
         switch (v.tag()) {
             case TypeckValuePtr::TAG_NotFound: {
-                auto& e = v.as_NotFound();
-                (void)e;
                 return EntPtr();
             }
             case TypeckValuePtr::TAG_NotYetKnown: {
-                auto& e = v.as_NotYetKnown();
-                (void)e;
                 throw Defer();
             }
             case TypeckValuePtr::TAG_Constant: {
@@ -1303,8 +1299,6 @@ namespace {
                 return EntPtr::Data_Enum{e.e, e.v};
             }
             case TypeckValuePtr::TAG_EnumValue: {
-                auto& e = v.as_EnumValue();
-                (void)e;
                 TODO(sp, "Handle EnumValue - " << path);
                 break;
             }
@@ -1313,8 +1307,6 @@ namespace {
                 return e.s;
             }
             case TypeckValuePtr::TAG_StructConstant: {
-                auto& e = v.as_StructConstant();
-                (void)e;
                 TODO(sp, "Handle StructConstant - " << path);
                 break;
             }
@@ -1531,8 +1523,6 @@ public:
         unsigned variant = 0;
                 switch (repr->variants.tag()) {
                     case TypeReprVariantMode::TAG_None: {
-                        auto& ve = repr->variants.as_None();
-                        (void)ve;
                         break;
                     }
                     case TypeReprVariantMode::TAG_Linear: {
@@ -1599,23 +1589,15 @@ public:
 
                 switch ((*ty).tag()) {
                     case HIRTypeData::TAG_Diverge: {
-                        auto& te = (*ty).as_Diverge();
-                        (void)te;
                         return false;
                     }
                     case HIRTypeData::TAG_Infer: {
-                        auto& te = (*ty).as_Infer();
-                        (void)te;
                         return true;
                     }
                     case HIRTypeData::TAG_ErasedType: {
-                        auto& te = (*ty).as_ErasedType();
-                        (void)te;
                         return true;
                     }
                     case HIRTypeData::TAG_NodeType: {
-                        auto& te = (*ty).as_NodeType();
-                        (void)te;
                         auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                         MIR_ASSERT(state, repr, "No representation for " << ty);
                         for (const auto& field : repr->fields) {
@@ -1627,13 +1609,9 @@ public:
                         return false;
                     }
                     case HIRTypeData::TAG_Generic: {
-                        auto& te = (*ty).as_Generic();
-                        (void)te;
                         return true;
                     }
                     case HIRTypeData::TAG_Primitive: {
-                        auto& te = (*ty).as_Primitive();
-                        (void)te;
                         return false;
                     }
                     case HIRTypeData::TAG_Pattern: {
@@ -1641,18 +1619,12 @@ public:
                         return valueNeedsNonConstDrop(te.inner, value);
                     }
                     case HIRTypeData::TAG_Pointer: {
-                        auto& te = (*ty).as_Pointer();
-                        (void)te;
                         return false;
                     }
                     case HIRTypeData::TAG_NamedFunction: {
-                        auto& te = (*ty).as_NamedFunction();
-                        (void)te;
                         return false;
                     }
                     case HIRTypeData::TAG_Function: {
-                        auto& te = (*ty).as_Function();
-                        (void)te;
                         return false;
                     }
                     case HIRTypeData::TAG_Borrow: {
@@ -1680,28 +1652,18 @@ public:
 
                                 switch (te.binding.tag()) {
                                     case HIRTypePathBinding::TAG_Unbound: {
-                                        auto& pbe = te.binding.as_Unbound();
-                                        (void)pbe;
                                         return true;
                                     }
                                     case HIRTypePathBinding::TAG_Opaque: {
-                                        auto& pbe = te.binding.as_Opaque();
-                                        (void)pbe;
                                         return true;
                                     }
                                     case HIRTypePathBinding::TAG_ExternType: {
-                                        auto& pbe = te.binding.as_ExternType();
-                                        (void)pbe;
                                         return false;
                                     }
                                     case HIRTypePathBinding::TAG_Union: {
-                                        auto& pbe = te.binding.as_Union();
-                                        (void)pbe;
                                         return false;
                                     }
                                     case HIRTypePathBinding::TAG_Struct: {
-                                        auto& pbe = te.binding.as_Struct();
-                                        (void)pbe;
                                         auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                                         MIR_ASSERT(state, repr, "No representation for struct " << ty);
                                         for (const auto& field : repr->fields) {
@@ -1746,18 +1708,12 @@ public:
                         return false;
                     }
                     case HIRTypeData::TAG_Slice: {
-                        auto& te = (*ty).as_Slice();
-                        (void)te;
                         return true;
                     }
                     case HIRTypeData::TAG_TraitObject: {
-                        auto& te = (*ty).as_TraitObject();
-                        (void)te;
                         return true;
                     }
                     case HIRTypeData::TAG_Tuple: {
-                        auto& te = (*ty).as_Tuple();
-                        (void)te;
                         auto* repr = TargetGetTypeRepr(state.sp, rootResolve, ty);
                         MIR_ASSERT(state, repr, "No representation for tuple " << ty);
                         for (const auto& field : repr->fields) {
@@ -1855,8 +1811,6 @@ public:
         MIREvalValueRef val;
             switch (lv.root.tag()) {
                 case MIRLValue::Storage::TAG_Return: {
-                    decltype(lv.root.as_Return()) e = lv.root.as_Return();
-                    (void)e;
                     typ = retType;
                     val = MIREvalValueRef(retval);
                     break;
@@ -1943,8 +1897,6 @@ public:
                         break;
                     }
                     case MIRLValue::Wrapper::TAG_Deref: {
-                        decltype(w.as_Deref()) e = w.as_Deref();
-                        (void)e;
                         if (const auto* te = typ->opt_Pointer()) {
                             typ = te->inner;
                         } else if (const auto* te = typ->opt_Borrow()) {
@@ -2181,8 +2133,6 @@ public:
                     break;
                 }
                 case MIRConstant::TAG_Function: {
-                    auto& e2 = c.as_Function();
-                    (void)e2;
                     break;
                 }
                 case MIRConstant::TAG_ItemAddr: {
@@ -2234,13 +2184,9 @@ public:
     const EncodedLiteral& getConst(const HIRConstGeneric& v, EncodedLiteral& tmp) const {
             switch (v.tag()) {
                 case HIRConstGeneric::TAG_Infer: {
-                    auto& ve = v.as_Infer();
-                    (void)ve;
                     throw Defer{};
                 }
                 case HIRConstGeneric::TAG_Generic: {
-                    auto& ve = v.as_Generic();
-                    (void)ve;
                     throw Defer{};
                 }
                 case HIRConstGeneric::TAG_Unevaluated: {
@@ -2281,8 +2227,6 @@ public:
                     return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readFloat(state, bits);
                 }
                 case MIRParam::TAG_Borrow: {
-                    auto& e = p.as_Borrow();
-                    (void)e;
                     MIR_BUG(state, "Expected a float, got a MIR::Param::Borrow");
                     break;
                 }
@@ -2313,8 +2257,6 @@ public:
                     return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readUint(state, bits);
                 }
                 case MIRParam::TAG_Borrow: {
-                    auto& e = p.as_Borrow();
-                    (void)e;
                     MIR_BUG(state, "Expected a float, got a MIR::Param::Borrow");
                     break;
                 }
@@ -2365,8 +2307,6 @@ public:
                     return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readUint(state, bits);
                 }
                 case MIRParam::TAG_Borrow: {
-                    auto& e = p.as_Borrow();
-                    (void)e;
                     MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
                     break;
                 }
@@ -2403,8 +2343,6 @@ public:
                     return const_cast<MIREvalCallStackEntry*>(this)->getLval(e).readSint(state, bits);
                 }
                 case MIRParam::TAG_Borrow: {
-                    auto& e = p.as_Borrow();
-                    (void)e;
                     MIR_BUG(state, "Expected an integer, got a MIR::Param::Borrow");
                     break;
                 }
@@ -3030,14 +2968,10 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
 
         switch (stmt.tag()) {
             case MIRStatement::TAG_Assign: {
-                auto& e = stmt.as_Assign();
-                (void)e;
                 // Fall through
                 break;
             }
             case MIRStatement::TAG_ScopeEnd: {
-                auto& se = stmt.as_ScopeEnd();
-                (void)se;
                 // Just ignore, it's a hint
                 return;
             }
@@ -3053,26 +2987,18 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                 return;
             }
             case MIRStatement::TAG_SaveDropFlag: {
-                auto& se = stmt.as_SaveDropFlag();
-                (void)se;
                 MIR_TODO(state, "Non-assign statement - " << stmt);
                 break;
             }
             case MIRStatement::TAG_LoadDropFlag: {
-                auto& se = stmt.as_LoadDropFlag();
-                (void)se;
                 MIR_TODO(state, "Non-assign statement - " << stmt);
                 break;
             }
             case MIRStatement::TAG_Asm: {
-                auto& se = stmt.as_Asm();
-                (void)se;
                 MIR_TODO(state, "Non-assign statement - " << stmt);
                 break;
             }
             case MIRStatement::TAG_Asm2: {
-                auto& se = stmt.as_Asm2();
-                (void)se;
                 MIR_TODO(state, "Non-assign statement - " << stmt);
                 break;
             }
@@ -3209,8 +3135,6 @@ break;
                         break;
                     }
                     case HIRTypeData::TAG_Function: {
-                        auto& de = (*castType).as_Function();
-                        (void)de;
                         if (const auto* e = srcTy->opt_NamedFunction()) {
                             dst.writePtr(state, EncodedLiteral::PTR_BASE, localState.getStaticrefMono(e->path));
                         } else {
@@ -3497,8 +3421,6 @@ default:
 
                 switch (enmRepr->variants.tag()) {
                     case TypeReprVariantMode::TAG_None: {
-                        auto& ve = enmRepr->variants.as_None();
-                        (void)ve;
                         break;
                     }
                     case TypeReprVariantMode::TAG_NonZero: {
@@ -3565,8 +3487,6 @@ default:
                 return e;
             }
             case MIRTerminator::TAG_Return: {
-                auto& e = terminator.as_Return();
-                (void)e;
                 return TERM_RET_RETURN;
             }
             case MIRTerminator::TAG_If: {
@@ -4082,8 +4002,6 @@ default:
                                 break;
                             }
                             case MIRParam::TAG_Borrow: {
-                                auto& e = fcnArg.as_Borrow();
-                                (void)e;
                                 MIR_BUG(state, "Invalid argument for function pointer to `const_eval_select`: " << fcnArg);
                                 break;
                             }
@@ -4325,8 +4243,6 @@ default:
 
                             switch (repr->variants.tag()) {
                                 case TypeReprVariantMode::TAG_None: {
-                                    auto& ve = repr->variants.as_None();
-                                    (void)ve;
                                     dst.writeUint(state, dst.getLen() * 8, U128(0));
                                     break;
                                 }
@@ -4386,7 +4302,6 @@ default:
                         // TODO: Other cases?
                     } else if (te->name == "assert_mem_uninitialized_valid") {
                         auto ty = localState.monomorphExpand(te->params.types.at(0));
-                        (void)ty;
                         // TODO: Detect types which reject the mitigated 0x01 fill.
                     } else if (te->name == "is_val_statically_known") {
                         dst.writeUint(state, 8, e.args.at(0).is_Constant() || e.args.at(0).is_Borrow());
@@ -4746,8 +4661,6 @@ default:
 default:
                 return;
                 case HIRTypePathBinding::TAG_Struct: {
-                    auto& pbe = te.binding.as_Struct();
-                    (void)pbe;
                     const auto* repr = TargetGetTypeRepr(state.sp, localState.rootResolve, ty);
                     MIR_ASSERT(state, repr, "No representation for struct " << ty);
                     for (size_t i = 0; i < repr->fields.size(); i++) {
@@ -5097,14 +5010,10 @@ namespace {
                         auto& vi = crate.getValitemByPath(sp, p.path);
                     switch (vi.tag()) {
                         case HIRValueItem::TAG_Import: {
-                            auto& e = vi.as_Import();
-                            (void)e;
                             BUG(sp, "Module Import");
                             break;
                         }
                         case HIRValueItem::TAG_Static: {
-                            auto& e = vi.as_Static();
-                            (void)e;
                             BUG(sp, "Getting params definition for Static - " << p);
                             break;
                         }
@@ -5132,26 +5041,18 @@ namespace {
                         auto& vi = crate.getTypeitemByPath(sp, p.path);
                     switch (vi.tag()) {
                         case HIRTypeItem::TAG_Import: {
-                            auto& e = vi.as_Import();
-                            (void)e;
                             BUG(sp, "Module Import");
                             break;
                         }
                         case HIRTypeItem::TAG_Module: {
-                            auto& e = vi.as_Module();
-                            (void)e;
                             BUG(sp, "mod - " << p);
                             break;
                         }
                         case HIRTypeItem::TAG_TypeAlias: {
-                            auto& e = vi.as_TypeAlias();
-                            (void)e;
                             BUG(sp, "type - " << p);
                             break;
                         }
                         case HIRTypeItem::TAG_TraitAlias: {
-                            auto& e = vi.as_TraitAlias();
-                            (void)e;
                             BUG(sp, "trait= - " << p);
                             break;
                         }
@@ -5172,8 +5073,6 @@ namespace {
                             return e.params;
                         }
                         case HIRTypeItem::TAG_ExternType: {
-                            auto& e = vi.as_ExternType();
-                            (void)e;
                             BUG(sp, "extern type - " << p);
                             break;
                         }
@@ -5199,14 +5098,10 @@ namespace {
                         auto vi = resolve.getValue(sp, p, unused, true);
                     switch (vi.tag()) {
                         case TypeckValuePtr::TAG_NotFound: {
-                            auto& e = vi.as_NotFound();
-                            (void)e;
                             BUG(sp, "NotFound");
                             break;
                         }
                         case TypeckValuePtr::TAG_NotYetKnown: {
-                            auto& e = vi.as_NotYetKnown();
-                            (void)e;
                             TODO(sp, "NotYetKnown");
                             break;
                         }
@@ -5223,26 +5118,18 @@ namespace {
                             return e->params;
                         }
                         case TypeckValuePtr::TAG_EnumConstructor: {
-                            auto& e = vi.as_EnumConstructor();
-                            (void)e;
                             TODO(sp, "Handle EnumConstructor - " << p);
                             break;
                         }
                         case TypeckValuePtr::TAG_EnumValue: {
-                            auto& e = vi.as_EnumValue();
-                            (void)e;
                             TODO(sp, "Handle EnumValue - " << p);
                             break;
                         }
                         case TypeckValuePtr::TAG_StructConstructor: {
-                            auto& e = vi.as_StructConstructor();
-                            (void)e;
                             TODO(sp, "Handle StructConstructor - " << p);
                             break;
                         }
                         case TypeckValuePtr::TAG_StructConstant: {
-                            auto& e = vi.as_StructConstant();
-                            (void)e;
                             TODO(sp, "Handle StructConstant - " << p);
                             break;
                         }
@@ -5324,12 +5211,10 @@ namespace {
                     switch (te->binding.tag()) {
                         case HIRTypePathBinding::TAG_Unbound: {
                             auto& _ = te->binding.as_Unbound();
-                            (void)_;
                             break;
                         }
                         case HIRTypePathBinding::TAG_Opaque: {
                             auto& _ = te->binding.as_Opaque();
-                            (void)_;
                             break;
                         }
                         case HIRTypePathBinding::TAG_Struct: {
@@ -5342,18 +5227,12 @@ namespace {
                             break;
                         }
                         case HIRTypePathBinding::TAG_Union: {
-                            auto& pbe = te->binding.as_Union();
-                            (void)pbe;
                             break;
                         }
                         case HIRTypePathBinding::TAG_Enum: {
-                            auto& pbe = te->binding.as_Enum();
-                            (void)pbe;
                             break;
                         }
                         case HIRTypePathBinding::TAG_ExternType: {
-                            auto& pbe = te->binding.as_ExternType();
-                            (void)pbe;
                             break;
                         }
                     }

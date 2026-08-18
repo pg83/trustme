@@ -203,8 +203,6 @@ Token::Token(const Token& t)
     assert(!t.data_.isDead());
     switch (t.data_.tag()) {
         case TokenData::TAG_None: {
-            auto& e = t.data_.as_None();
-            (void)e;
             break;
         }
         case TokenData::TAG_Ident: {
@@ -228,8 +226,6 @@ Token::Token(const Token& t)
             break;
         }
         case TokenData::TAG_Fragment: {
-            auto& e = t.data_.as_Fragment();
-            (void)e;
             BUG(Span(Span(), t.pos), "Attempted to copy a fragment - " << t);
             break;
         }
@@ -245,8 +241,6 @@ Token Token::clone() const {
     assert(!data_.isDead());
     switch (data_.tag()) {
         case Data::TAG_None: {
-            auto& e = data_.as_None();
-            (void)e;
             break;
         }
         case Data::TAG_Ident: {
@@ -878,10 +872,6 @@ bool Token::operator==(const Token& r) const {
     }
     switch (data_.tag()) {
         case Data::TAG_None: {
-            auto& e = data_.as_None();
-            (void)e;
-            auto& re = r.data_.as_None();
-            (void)re;
             return true;
         }
         case Data::TAG_Ident: {
@@ -905,10 +895,6 @@ bool Token::operator==(const Token& r) const {
             return e.datatype == re.datatype && e.floatval == re.floatval;
         }
         case Data::TAG_Fragment: {
-            auto& e = data_.as_Fragment();
-            (void)e;
-            auto& re = r.data_.as_Fragment();
-            (void)re;
             assert(!"Token equality on Fragment");
             break;
         }

@@ -165,7 +165,6 @@ void LintUnusedMustUse(const WireBoard& wb, HIRCrate& crate) {
     const auto level = LintUnusedMustUseLevel(*wb.settings);
     // A function may still raise the level for its own body, so the walk runs
     // even when the crate allows the lint.
-    (void)level;
     MustUseOuterVisitor visitor(wb, level);
     visitor.visitCrate(crate);
 }

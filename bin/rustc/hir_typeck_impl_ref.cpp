@@ -14,13 +14,9 @@ bool ImplRef::moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) con
                     break;
                 }
                 case Data::TAG_BoundedPtr: {
-                    auto& oe = other.data.as_BoundedPtr();
-                    (void)oe;
                     return false;
                 }
                 case Data::TAG_Bounded: {
-                    auto& oe = other.data.as_Bounded();
-                    (void)oe;
                     return false;
                 }
             }
@@ -105,13 +101,9 @@ bool ImplRef::typeIsSpecialisable(const char* name) const {
             return it->second.isSpecialisable;
         }
         case ImplRefData::TAG_BoundedPtr: {
-            auto& e = this->data.as_BoundedPtr();
-            (void)e;
             return false;
         }
         case ImplRefData::TAG_Bounded: {
-            auto& E = this->data.as_Bounded();
-            (void)E;
             return false;
         }
     }

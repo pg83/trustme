@@ -218,8 +218,6 @@ namespace {
                         break;
                     }
                     case HIRAsmParam::TAG_Sym: {
-                        auto& e = v.as_Sym();
-                        (void)e;
                         break;
                     }
                     case HIRAsmParam::TAG_Label: {
@@ -938,8 +936,6 @@ namespace {
             auto& ent = closureStack.back();
             switch (ent.tag()) {
                 case Scope::TAG_None: {
-                    auto& e = ent.as_None();
-                    (void)e;
                     throw "";
                 }
                 case Scope::TAG_Closure: {
@@ -964,18 +960,12 @@ namespace {
             // Recurse
             switch (pat.data.tag()) {
                 case HIRPatternData::TAG_Any: {
-                    auto& e = pat.data.as_Any();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_Value: {
-                    auto& e = pat.data.as_Value();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_Range: {
-                    auto& e = pat.data.as_Range();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_Box: {
@@ -1031,8 +1021,6 @@ namespace {
                     break;
                 }
                 case HIRPatternData::TAG_PathValue: {
-                    auto& e = pat.data.as_PathValue();
-                    (void)e;
                     break;
                 }
                 case HIRPatternData::TAG_PathTuple: {
@@ -1111,8 +1099,6 @@ namespace {
 
             switch (pat.data.tag()) {
                 case HIRPatternData::TAG_Any: {
-                    auto& pe = pat.data.as_Any();
-                    (void)pe;
                     return HIRValueUsage::Borrow;
                 }
                 case HIRPatternData::TAG_Box: {
@@ -1159,8 +1145,6 @@ namespace {
                     return rv;
                 }
                 case HIRPatternData::TAG_PathValue: {
-                    auto& pe = pat.data.as_PathValue();
-                    (void)pe;
                     return HIRValueUsage::Borrow;
                 }
                 case HIRPatternData::TAG_PathTuple: {
@@ -1217,13 +1201,9 @@ namespace {
                     return rv;
                 }
                 case HIRPatternData::TAG_Value: {
-                    auto& pe = pat.data.as_Value();
-                    (void)pe;
                     return HIRValueUsage::Borrow;
                 }
                 case HIRPatternData::TAG_Range: {
-                    auto& pe = pat.data.as_Range();
-                    (void)pe;
                     return HIRValueUsage::Borrow;
                 }
                 case HIRPatternData::TAG_Slice: {
@@ -1399,8 +1379,6 @@ namespace {
             auto& ent = closureStack.back();
             switch (ent.tag()) {
                 case Scope::TAG_None: {
-                    auto& e = ent.as_None();
-                    (void)e;
                     throw "";
                 }
                 case Scope::TAG_Closure: {
@@ -2324,8 +2302,6 @@ namespace {
                         return true;
                     }
                     case HIRGenericBound::TAG_TypeEquality: {
-                        auto& e = b.as_TypeEquality();
-                        (void)e;
                         TODO(sp, "");
                         break;
                     }
@@ -3976,7 +3952,6 @@ public:
                     vpp = &innerNode->value;
                 }
                 if (auto* innerNode = cast<HIRExprNodeDeref>(vpp->get())) {
-                    (void)innerNode;
                     allConstant_ = savedAllConstant;
                     isConstant = true;
                     return;
@@ -4784,7 +4759,6 @@ public:
             // If the inner value is already a static or it's a constant, then treat as a valid static
             auto& valuePtr = *valuePtrPtr;
             if (auto* innerNode = cast<HIRExprNodeDeref>(valuePtrPtr->get())) {
-                (void)innerNode;
                 BUG(node.span(), "Unexpected inner being deref?");
                 return;
             }
@@ -6317,16 +6291,12 @@ namespace {
                                 break;
                             }
                             case HIRTraitValueItem::TAG_Static: {
-                                auto& ve = vi.second.as_Static();
-                                (void)ve;
                                 if (vi.first != "vtable#") {
                                     TODO(Span(), "Associated static in vtable");
                                 }
                                 break;
                             }
                             case HIRTraitValueItem::TAG_Constant: {
-                                auto& ve = vi.second.as_Constant();
-                                (void)ve;
                                 //TODO(Span(), "Associated const in vtable");
                                 break;
                             }
