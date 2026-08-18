@@ -6,6 +6,9 @@
 #include <algorithm>
 #include <unordered_map>
 
+#include <std/str/hash.h>
+#include <std/rng/split_mix_64.h>
+
 HIRTraitPath::HIRTraitPath()
     : traitPtr(nullptr)
 {
@@ -127,25 +130,10 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 // never the component content — the combined 128 bits make a false match
 // impossible in practice.
 namespace {
-    // splitmix64 finaliser: a bijective avalanche mix.
-    uint64_t mix64(uint64_t x) {
-        x ^= x >> 30;
-        x *= 0xBF58476D1CE4E5B9;
-        x ^= x >> 27;
-        x *= 0x94D049BB133111EB;
-        x ^= x >> 31;
-        return x;
-    }
-
-    // FNV-1a; component keys must be content-based, not address-based, so
-    // that nothing about a path can depend on allocation order.
+    // Component keys must be content-based, not address-based, so that
+    // nothing about a path can depend on allocation order.
     uint64_t contentHash(const RcString& s) {
-        uint64_t h = 0xcbf29ce484222325;
-        for (char c : s) {
-            h ^= static_cast<unsigned char>(c);
-            h *= 0x100000001b3;
-        }
-        return h;
+        return stl::shash64(s.c_str(), s.size());
     }
 
     // The two Zobrist keys of a component at a position. Position goes
@@ -153,11 +141,11 @@ namespace {
     const uint64_t POS_STEP = 0x9E3779B97F4A7C15;
 
     uint64_t key1(uint64_t ch, size_t i) {
-        return mix64(ch + (i + 1) * POS_STEP);
+        return stl::splitMix64(ch + (i + 1) * POS_STEP);
     }
 
     uint64_t key2(uint64_t ch, size_t i) {
-        return mix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
+        return stl::splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
     }
 
     ::std::unordered_multimap<uint64_t, const HIRSimplePathData*>& pathTable() {
