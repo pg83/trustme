@@ -16,45 +16,14 @@
     return os;
 }
 
-ASTPathBindingType ASTPathBindingType::clone() const {
-    TU_MATCHA(
-        (*this),
-        (e),
-        (Unbound, return ASTPathBindingType::make_Unbound({});),
-        (Primitive, return e;),
-        (Module, return ASTPathBindingType::make_Module(e);),
-        (Crate, return ASTPathBindingType(e);),
-        (Trait, return ASTPathBindingType(e);),
-        (TraitAlias, return ASTPathBindingType(e);),
-        (Struct, return ASTPathBindingType(e);),
-        (Enum, return ASTPathBindingType(e);),
-        (Union, return ASTPathBindingType(e);),
-        (TypeAlias, return ASTPathBindingType::make_TypeAlias(e);),
-        (EnumVar, return ASTPathBindingType::make_EnumVar(e);),
-
-        (TypeParameter, return ASTPathBindingType::make_TypeParameter(e);)
-    )
-    throw "BUG: Fell off the end of PathBinding_Type::clone";
-}
-
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingValue& x) {
     TU_MATCHA((x), (i), (Unbound, os << "_";), (Struct, os << "Struct";), (Static, os << "Static";), (Function, os << "Function";), (EnumVar, os << "EnumVar(" << i.idx << ")";), (Generic, os << "Param(" << i.index << ")";), (Variable, os << "Var(" << i.slot << ")";))
     return os;
 }
 
-ASTPathBindingValue ASTPathBindingValue::clone() const {
-    TU_MATCHA((*this), (e), (Unbound, return ASTPathBindingValue::make_Unbound({});), (Struct, return ASTPathBindingValue(e);), (Static, return ASTPathBindingValue(e);), (Function, return ASTPathBindingValue(e);), (EnumVar, return ASTPathBindingValue::make_EnumVar(e);), (Generic, return ASTPathBindingValue::make_Generic(e);), (Variable, return ASTPathBindingValue::make_Variable(e);))
-    throw "BUG: Fell off the end of PathBinding_Value::clone";
-}
-
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingMacro& x) {
     TU_MATCHA((x), (i), (Unbound, os << "_";), (ProcMacroDerive, os << "ProcMacroDerive(? " << i.macName << ")";), (ProcMacroAttribute, os << "ProcMacroAttribute(? " << i.macName << ")";), (ProcMacro, os << "ProcMacro(? " << i.macName << ")";), (MacroRules, os << "MacroRules(? ?)";))
     return os;
-}
-
-ASTPathBindingMacro ASTPathBindingMacro::clone() const {
-    TU_MATCHA((*this), (e), (Unbound, return ASTPathBindingMacro::make_Unbound({});), (ProcMacroDerive, return ASTPathBindingMacro(e);), (ProcMacroAttribute, return ASTPathBindingMacro(e);), (ProcMacro, return ASTPathBindingMacro(e);), (MacroRules, return ASTPathBindingMacro(e);))
-    throw "BUG: Fell off the end of PathBinding_Macro::clone";
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathParams& x) {

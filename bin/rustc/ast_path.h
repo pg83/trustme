@@ -62,117 +62,13 @@ struct ASTAbsolutePath {
     bool isParentOf(const ASTAbsolutePath& other) const;
 };
 
-TAGGED_UNION_EX(
-    ASTPathBindingValue,
-    (),
-    Unbound,
-    ((Unbound, struct {}),
-     (Struct,
-      struct {
-          const ASTStruct* struct_;
-          const HIRStruct* hir;
-      }),
-     (Static,
-      struct {
-          const ASTStatic* static_;
-          const HIRStatic* hir; // if nullptr and static_ == nullptr, points to a `const`
-      }),
-     (Function, struct { const ASTFunction* func_; }),
-     (EnumVar,
-      struct {
-          const ASTEnum* enum_;
-          unsigned int idx;
-          const HIREnum* hir;
-      }),
-     (Generic, struct { unsigned int index; }),
-     (Variable, struct { unsigned int slot; })),
-    (),
-    (),
-    (public : ASTPathBindingValue clone() const;)
-);
-TAGGED_UNION_EX(
-    ASTPathBindingType,
-    (),
-    Unbound,
-    ((Unbound, struct {}),
-     (Primitive, eCoreType),
-     (Crate, struct { const ASTExternCrate* crate_; }),
-     (Module,
-      struct {
-          const ASTModule* module_;
-          struct Hir {
-              const ASTExternCrate* crate;
-              const HIRModule* mod;
-          } hir;
-      }),
-     (Struct,
-      struct {
-          const ASTStruct* struct_;
-          const HIRStruct* hir;
-      }),
-     (Enum,
-      struct {
-          const ASTEnum* enum_;
-          const HIREnum* hir;
-      }),
-     (Union,
-      struct {
-          const ASTUnion* union_;
-          const HIRUnion* hir;
-      }),
-     (Trait,
-      struct {
-          const ASTTrait* trait_;
-          const HIRTrait* hir;
-      }),
-     (TraitAlias,
-      struct {
-          const ASTTraitAlias* trait_;
-          const HIRTraitAlias* hir;
-      }),
+struct ASTPathBindingModuleHir {
+    const ASTExternCrate* crate;
+    const HIRModule* mod;
+};
 
-     (EnumVar,
-      struct {
-          const ASTEnum* enum_;
-          unsigned int idx;
-          const HIREnum* hir;
-      }),
-     (TypeAlias, struct { const ASTTypeAlias* alias_; }),
-
-     (TypeParameter, struct { unsigned int slot; })),
-    (),
-    (),
-    (public : ASTPathBindingType clone() const;)
-);
-TAGGED_UNION_EX(
-    ASTPathBindingMacro,
-    (),
-    Unbound,
-    ((Unbound, struct {}),
-     (ProcMacroDerive,
-      struct {
-          const ASTExternCrate* crate_;
-          RcString macName;
-      }),
-     (ProcMacroAttribute,
-      struct {
-          const ASTExternCrate* crate_;
-          RcString macName;
-      }),
-     (ProcMacro,
-      struct {
-          const ASTExternCrate* crate_;
-          RcString macName;
-      }),
-     (MacroRules,
-      struct {
-          const ASTExternCrate* crate_; // Can be NULL
-          const MacroRules* mac;
-      })),
-    (),
-    (),
-    (public : ASTPathBindingMacro clone() const;)
-);
+// Definitions generated from ast_path_binding.tu.
+#include "ast_path_binding_tu.h"
 
 extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingValue& x);
 extern ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingType& x);
@@ -472,4 +368,5 @@ public:
     //}
 };
 
-TAGGED_UNION_EX(ASTPathParamEnt, (), Null, ((Null, struct {}), (Lifetime, ASTLifetimeRef), (Type, ASTType*), (Value, ASTExprNodeP), (AssociatedTyEqual, ::std::pair<ASTPathNode, ASTType*>), (AssociatedTyBound, ::std::pair<ASTPathNode, std::vector<TypeTraitPath>>), (AssociatedValueEqual, ::std::pair<ASTPathNode, ASTExprNodeP>)), (), (), (public : ASTPathParamEnt clone() const; Ordering ord(const ASTPathParamEnt& x) const; void fmt(::std::ostream& os) const;));
+// Definitions generated from ast_path.tu.
+#include "ast_path_tu.h"
