@@ -24,26 +24,90 @@ namespace {
             case HIRVisitor::PathContext::VALUE: {
                 const auto& item = crate.getValitemByPath(sp, path);
 
-                TU_MATCH(
-                    HIRValueItem,
-                    (item),
-                    (e),
-                    (Import, BUG(sp, "Value path pointed to import - " << path << " = " << e.path);),
-                    (Function, return e.params;),
-                    (Constant, return e.params;),
-                    (Static,
-                     // TODO: Return an empty set?
-                     BUG(sp, "Attepted to get parameters for static " << path);),
-                    (StructConstructor, return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE);),
-                    (StructConstant, return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE);)
-                )
+                switch (item.tag()) {
+                    case HIRValueItem::TAG_Import: {
+                        auto& e = item.as_Import();
+                        BUG(sp, "Value path pointed to import - " << path << " = " << e.path);
+                        break;
+                    }
+                    case HIRValueItem::TAG_Function: {
+                        auto& e = item.as_Function();
+                        return e.params;
+                    }
+                    case HIRValueItem::TAG_Constant: {
+                        auto& e = item.as_Constant();
+                        return e.params;
+                    }
+                    case HIRValueItem::TAG_Static: {
+                        auto& e = item.as_Static();
+                        (void)e;
+                        // TODO: Return an empty set?
+                        BUG(sp, "Attepted to get parameters for static " << path);
+                        break;
+                    }
+                    case HIRValueItem::TAG_StructConstructor: {
+                        auto& e = item.as_StructConstructor();
+                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE);
+                    }
+                    case HIRValueItem::TAG_StructConstant: {
+                        auto& e = item.as_StructConstant();
+                        return getParamsForItem(sp, crate, e.ty, HIRVisitor::PathContext::TYPE);
+                    }
+                }
             } break;
             case HIRVisitor::PathContext::TRAIT:
                 // TODO: treat PathContext::TRAIT differently
             case HIRVisitor::PathContext::TYPE: {
                 const auto& item = crate.getTypeitemByPath(sp, path);
 
-                TU_MATCH(HIRTypeItem, (item), (e), (Import, BUG(sp, "Type path pointed to import - " << path);), (TypeAlias, BUG(sp, "Type path pointed to type alias - " << path);), (TraitAlias, BUG(sp, "Type path pointed to trait alias - " << path);), (ExternType, static HIRGenericParams emptyParams; return emptyParams;), (Module, BUG(sp, "Type path pointed to module - " << path);), (Struct, return e.params;), (Enum, return e.params;), (Union, return e.params;), (Trait, return e.params;))
+                switch (item.tag()) {
+                    case HIRTypeItem::TAG_Import: {
+                        auto& e = item.as_Import();
+                        (void)e;
+                        BUG(sp, "Type path pointed to import - " << path);
+                        break;
+                    }
+                    case HIRTypeItem::TAG_TypeAlias: {
+                        auto& e = item.as_TypeAlias();
+                        (void)e;
+                        BUG(sp, "Type path pointed to type alias - " << path);
+                        break;
+                    }
+                    case HIRTypeItem::TAG_TraitAlias: {
+                        auto& e = item.as_TraitAlias();
+                        (void)e;
+                        BUG(sp, "Type path pointed to trait alias - " << path);
+                        break;
+                    }
+                    case HIRTypeItem::TAG_ExternType: {
+                        auto& e = item.as_ExternType();
+                        (void)e;
+                        static HIRGenericParams emptyParams; return emptyParams;
+                        break;
+                    }
+                    case HIRTypeItem::TAG_Module: {
+                        auto& e = item.as_Module();
+                        (void)e;
+                        BUG(sp, "Type path pointed to module - " << path);
+                        break;
+                    }
+                    case HIRTypeItem::TAG_Struct: {
+                        auto& e = item.as_Struct();
+                        return e.params;
+                    }
+                    case HIRTypeItem::TAG_Enum: {
+                        auto& e = item.as_Enum();
+                        return e.params;
+                    }
+                    case HIRTypeItem::TAG_Union: {
+                        auto& e = item.as_Union();
+                        return e.params;
+                    }
+                    case HIRTypeItem::TAG_Trait: {
+                        auto& e = item.as_Trait();
+                        return e.params;
+                    }
+                }
             } break;
         }
         throw "";
@@ -128,17 +192,20 @@ namespace {
 
             // TODO: Check generic bounds
             for (const auto& bound : paramDef.bounds) {
-                TU_MATCH(
-                    HIRGenericBound,
-                    (bound),
-                    (e),
-                    (TraitBound,
-                     // TODO: Check for an implementation of this trait
-                     DEBUG("TODO: Check bound " << e.type << " : " << e.trait.path);),
-                    (TypeEquality,
-                     // TODO: Check that two types are equal in this case
-                     DEBUG("TODO: Check equality bound " << e.type << " == " << e.otherType);)
-                )
+                switch (bound.tag()) {
+                    case HIRGenericBound::TAG_TraitBound: {
+                        auto& e = bound.as_TraitBound();
+                        // TODO: Check for an implementation of this trait
+                        DEBUG("TODO: Check bound " << e.type << " : " << e.trait.path);
+                        break;
+                    }
+                    case HIRGenericBound::TAG_TypeEquality: {
+                        auto& e = bound.as_TypeEquality();
+                        // TODO: Check that two types are equal in this case
+                        DEBUG("TODO: Check equality bound " << e.type << " == " << e.otherType);
+                        break;
+                    }
+                }
             }
         }
 
@@ -222,7 +289,31 @@ namespace {
             ty = crate.types.intern(mv$(data));
 
             if (const auto* e = ty->opt_Path()) {
-                TU_MATCH(HIRPath::Data, (e->path.data), (pe), (Generic, ), (UfcsUnknown, TODO(sp, "Should UfcsKnown be encountered here?");), (UfcsInherent, TRACE_FUNCTION_FR("UfcsInherent - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);), (UfcsKnown, TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);))
+                switch (e->path.data.tag()) {
+                    case HIRPath::Data::TAG_Generic: {
+                        auto& pe = e->path.data.as_Generic();
+                        (void)pe;
+                        break;
+                    }
+                    case HIRPath::Data::TAG_UfcsUnknown: {
+                        auto& pe = e->path.data.as_UfcsUnknown();
+                        (void)pe;
+                        TODO(sp, "Should UfcsKnown be encountered here?");
+                        break;
+                    }
+                    case HIRPath::Data::TAG_UfcsInherent: {
+                        auto& pe = e->path.data.as_UfcsInherent();
+                        (void)pe;
+                        TRACE_FUNCTION_FR("UfcsInherent - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);
+                        break;
+                    }
+                    case HIRPath::Data::TAG_UfcsKnown: {
+                        auto& pe = e->path.data.as_UfcsKnown();
+                        (void)pe;
+                        TRACE_FUNCTION_FR("UfcsKnown - " << ty, ty); resolve_.expandAssociatedTypes(sp, ty);
+                        break;
+                    }
+                }
             }
         }
 
@@ -444,21 +535,31 @@ namespace {
         }
 
         void visitPath(HIRPath& p, HIRVisitor::PathContext pc) override {
-            TU_MATCH(
-                HIRPath::Data,
-                (p.data),
-                (e),
-                (Generic, this->visitGenericPath(e, pc);),
-                (
-                    UfcsKnown, this->visitType(e.type); selfTypes.push_back(e.type); this->visitGenericPath(e.trait, HIRVisitor::PathContext::TRAIT); selfTypes.pop_back();
+            switch (p.data.tag()) {
+                case HIRPath::Data::TAG_Generic: {
+                    auto& e = p.data.as_Generic();
+                    this->visitGenericPath(e, pc);
+                    break;
+                }
+                case HIRPath::Data::TAG_UfcsKnown: {
+                    auto& e = p.data.as_UfcsKnown();
+                    this->visitType(e.type); selfTypes.push_back(e.type); this->visitGenericPath(e.trait, HIRVisitor::PathContext::TRAIT); selfTypes.pop_back();
                     // TODO: Locate impl block and check parameters
-                ),
-                (
-                    UfcsInherent, this->visitType(e.type);
+                    break;
+                }
+                case HIRPath::Data::TAG_UfcsInherent: {
+                    auto& e = p.data.as_UfcsInherent();
+                    this->visitType(e.type);
                     // TODO: Locate impl block and check parameters
-                ),
-                (UfcsUnknown, BUG(Span(), "Encountered unknown-trait UFCS path during outer typeck - " << p);)
-            )
+                    break;
+                }
+                case HIRPath::Data::TAG_UfcsUnknown: {
+                    auto& e = p.data.as_UfcsUnknown();
+                    (void)e;
+                    BUG(Span(), "Encountered unknown-trait UFCS path during outer typeck - " << p);
+                    break;
+                }
+            }
         }
 
         void visitParams(HIRGenericParams& params) override {

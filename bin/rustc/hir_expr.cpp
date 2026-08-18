@@ -583,73 +583,110 @@ void HIRExprVisitorDef::visitPattern(const Span& sp, HIRPattern& pat) {
 
 void HIRExprVisitorDef::visitType(HIRTypeRef& ty) {
     auto data = ty->cloneData();
-    TU_MATCH(HIRTypeData, (data), (e),
-    (Infer,
-        ),
-    (Diverge,
-        ),
-    (Primitive,
-        ),
-    (Path,
-        this->visitPath(HIRVisitor::PathContext::TYPE, e.path);
-        ),
-    (Generic,
-        ),
-    (TraitObject,
-        this->visitTraitPath(e.trait);
-        for(auto& trait : e.markers) {
-        this->visitGenericPath(HIRVisitor::PathContext::TYPE, trait);
+    switch (data.tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = data.as_Infer();
+            (void)e;
+            break;
         }
-        ),
-    (ErasedType,
-        for(auto& trait : e.traits) {
-        this->visitTraitPath(trait);
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = data.as_Diverge();
+            (void)e;
+            break;
         }
-        TU_MATCH_HDRA( (e.inner), {)
-        TU_ARMA(Known, ee) {
-            this->visitType(ee);
-}
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = data.as_Primitive();
+            (void)e;
+            break;
+        }
+        case HIRTypeData::TAG_Path: {
+            auto& e = data.as_Path();
+            this->visitPath(HIRVisitor::PathContext::TYPE, e.path);
+            break;
+        }
+        case HIRTypeData::TAG_Generic: {
+            auto& e = data.as_Generic();
+            (void)e;
+            break;
+        }
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = data.as_TraitObject();
+            this->visitTraitPath(e.trait);
+            for(auto& trait : e.markers) {
+            this->visitGenericPath(HIRVisitor::PathContext::TYPE, trait);
+            }
+            break;
+        }
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = data.as_ErasedType();
+            for(auto& trait : e.traits) {
+                    this->visitTraitPath(trait);
+                    }
+                    TU_MATCH_HDRA( (e.inner), {)
+                    TU_ARMA(Known, ee) {
+                        this->visitType(ee);
+            }
 
-TU_ARMA(Fcn, ee) {
-    this->visitPath(HIRVisitor::PathContext::TYPE, ee.origin);
-}
+            TU_ARMA(Fcn, ee) {
+                this->visitPath(HIRVisitor::PathContext::TYPE, ee.origin);
+            }
 
-TU_ARMA(Alias, ee) {
-}
-}
-        ),
-    (Array,
-        this->visitType( e.inner );
-        ),
-    (Slice,
-        this->visitType( e.inner );
-        ),
-    (Pattern,
-        this->visitType(e.inner);
-        ),
-    (Tuple,
-        for(auto& t : e) {
-    this->visitType(t);
+            TU_ARMA(Alias, ee) {
+            }
+            }
+            break;
         }
-        ),
-    (Borrow,
-        this->visitType( e.inner );
-        ),
-    (Pointer,
-        this->visitType( e.inner );
-        ),
-    (NamedFunction,
-        this->visitPath(HIRVisitor::PathContext::VALUE, e.path);
-        ),
-    (Function,
-        for(auto& t : e.argTypes) {
-    this->visitType(t);
+        case HIRTypeData::TAG_Array: {
+            auto& e = data.as_Array();
+            this->visitType( e.inner );
+            break;
         }
-        this->visitType(e.rettype);
-        ),
-    (NodeType,
-        )
-    )
+        case HIRTypeData::TAG_Slice: {
+            auto& e = data.as_Slice();
+            this->visitType( e.inner );
+            break;
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = data.as_Pattern();
+            this->visitType(e.inner);
+            break;
+        }
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = data.as_Tuple();
+            for(auto& t : e) {
+            this->visitType(t);
+                }
+            break;
+        }
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = data.as_Borrow();
+            this->visitType( e.inner );
+            break;
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = data.as_Pointer();
+            this->visitType( e.inner );
+            break;
+        }
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = data.as_NamedFunction();
+            this->visitPath(HIRVisitor::PathContext::VALUE, e.path);
+            break;
+        }
+        case HIRTypeData::TAG_Function: {
+            auto& e = data.as_Function();
+            for(auto& t : e.argTypes) {
+            this->visitType(t);
+                }
+                this->visitType(e.rettype);
+            break;
+        }
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = data.as_NodeType();
+            (void)e;
+            break;
+        }
+    }
     ty = types.intern(std::move(data));
         }
 
@@ -672,7 +709,28 @@ TU_ARMA(Alias, ee) {
         }
 
         void HIRExprVisitorDef::visitPath(HIRVisitor::PathContext pc, HIRPath& path) {
-            TU_MATCHA((path.data), (e), (Generic, visitGenericPath(pc, e);), (UfcsKnown, visitType(e.type); visitGenericPath(pc, e.trait); visitPathParams(e.params);), (UfcsUnknown, visitType(e.type); visitPathParams(e.params);), (UfcsInherent, visitType(e.type); visitPathParams(e.params); visitPathParams(e.implParams);))
+            switch (path.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& e = path.data.as_Generic();
+                    visitGenericPath(pc, e);
+                    break;
+                }
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& e = path.data.as_UfcsKnown();
+                    visitType(e.type); visitGenericPath(pc, e.trait); visitPathParams(e.params);
+                    break;
+                }
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& e = path.data.as_UfcsUnknown();
+                    visitType(e.type); visitPathParams(e.params);
+                    break;
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& e = path.data.as_UfcsInherent();
+                    visitType(e.type); visitPathParams(e.params); visitPathParams(e.implParams);
+                    break;
+                }
+            }
         }
 
         void HIRExprVisitorDef::visitGenericPath(HIRVisitor::PathContext pc, HIRGenericPath& path) {

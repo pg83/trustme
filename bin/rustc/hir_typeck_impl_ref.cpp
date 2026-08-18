@@ -4,7 +4,39 @@
 #include "hir_typeck_static.h" // for monomorphise_type_with
 
 bool ImplRef::moreSpecificThan(HIRTypeInterner& types, const ImplRef& other) const {
-    TU_MATCH(Data, (this->data), (te), (TraitImpl, if (te.impl == nullptr) { return false; } TU_MATCH(Data, (other.data), (oe), (TraitImpl, if (oe.impl == nullptr) { return true; } return te.impl->moreSpecificThan(types, *oe.impl);), (BoundedPtr, return false;), (Bounded, return false;))), (BoundedPtr, if (!other.data.is_BoundedPtr()) return false; const auto& oe = other.data.as_BoundedPtr(); assert(te.type == oe.type); assert(*te.traitArgs == *oe.traitArgs); if (te.assoc->size() > oe.assoc->size()) return true; return false;), (Bounded, if (!other.data.is_Bounded()) return false; const auto& oe = other.data.as_Bounded(); assert(te.type == oe.type); assert(te.traitArgs == oe.traitArgs); if (te.assoc.size() > oe.assoc.size()) return true; return false;))
+    switch (this->data.tag()) {
+        case Data::TAG_TraitImpl: {
+            auto& te = this->data.as_TraitImpl();
+            if (te.impl == nullptr) { return false; } switch (other.data.tag()) {
+                case Data::TAG_TraitImpl: {
+                    auto& oe = other.data.as_TraitImpl();
+                    if (oe.impl == nullptr) { return true; } return te.impl->moreSpecificThan(types, *oe.impl);
+                    break;
+                }
+                case Data::TAG_BoundedPtr: {
+                    auto& oe = other.data.as_BoundedPtr();
+                    (void)oe;
+                    return false;
+                }
+                case Data::TAG_Bounded: {
+                    auto& oe = other.data.as_Bounded();
+                    (void)oe;
+                    return false;
+                }
+            }
+            break;
+        }
+        case Data::TAG_BoundedPtr: {
+            auto& te = this->data.as_BoundedPtr();
+            if (!other.data.is_BoundedPtr()) return false; const auto& oe = other.data.as_BoundedPtr(); assert(te.type == oe.type); assert(*te.traitArgs == *oe.traitArgs); if (te.assoc->size() > oe.assoc->size()) return true; return false;
+            break;
+        }
+        case Data::TAG_Bounded: {
+            auto& te = this->data.as_Bounded();
+            if (!other.data.is_Bounded()) return false; const auto& oe = other.data.as_Bounded(); assert(te.type == oe.type); assert(te.traitArgs == oe.traitArgs); if (te.assoc.size() > oe.assoc.size()) return true; return false;
+            break;
+        }
+    }
     throw "";
 }
 
@@ -12,21 +44,30 @@ bool ImplRef::overlapsWith(const HIRCrate& crate, const ImplRef& other) const {
     if (this->data.tag() != other.data.tag()) {
         return false;
     }
-    TU_MATCH(
-        Data,
-        (this->data, other.data),
-        (te, oe),
-        (TraitImpl, if (te.impl != nullptr && oe.impl != nullptr) return te.impl->overlapsWith(crate, *oe.impl);),
-        (BoundedPtr,
-         // TODO: Bounded and BoundedPtr are compatible
-         if (te.type != oe.type) return false;
-         if (*te.traitArgs != *oe.traitArgs) return false;
-         // Don't check associated types
-         return true;),
-        (Bounded, if (te.type != oe.type) return false; if (te.traitArgs != oe.traitArgs) return false;
-         // Don't check associated types
-         return true;)
-    )
+    switch (this->data.tag()) {
+        case Data::TAG_TraitImpl: {
+            auto& te = this->data.as_TraitImpl();
+            auto& oe = other.data.as_TraitImpl();
+            if (te.impl != nullptr && oe.impl != nullptr) return te.impl->overlapsWith(crate, *oe.impl);
+            break;
+        }
+        case Data::TAG_BoundedPtr: {
+            auto& te = this->data.as_BoundedPtr();
+            auto& oe = other.data.as_BoundedPtr();
+            // TODO: Bounded and BoundedPtr are compatible
+            if (te.type != oe.type) return false;
+            if (*te.traitArgs != *oe.traitArgs) return false;
+            // Don't check associated types
+            return true;
+        }
+        case Data::TAG_Bounded: {
+            auto& te = this->data.as_Bounded();
+            auto& oe = other.data.as_Bounded();
+            if (te.type != oe.type) return false; if (te.traitArgs != oe.traitArgs) return false;
+            // Don't check associated types
+            return true;
+        }
+    }
     return false;
 }
 

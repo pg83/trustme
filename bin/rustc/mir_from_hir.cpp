@@ -172,29 +172,37 @@ namespace {
                 if (generic && generic->path != builder.crate().getLangItemPathOpt("manually_drop")) {
                     auto monomorph = MonomorphStatePtr(builder.crate().types, ty, &generic->params, nullptr);
                     if (const auto* str = pathTy->binding.opt_Struct()) {
-                        TU_MATCHA(
-                            ((*str)->data),
-                            (fields),
-                            (Unit, ),
-                            (Tuple,
-                             for (const auto& field : fields) {
-                                 auto fieldTy = monomorph.monomorphType(sp, field.ent);
-                                 builder.resolve().expandAssociatedTypes(sp, fieldTy);
-                                 if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
-                                     rv = true;
-                                     break;
-                                 }
-                             }),
-                            (Named,
-                             for (const auto& field : fields) {
-                                 auto fieldTy = monomorph.monomorphType(sp, field.ty);
-                                 builder.resolve().expandAssociatedTypes(sp, fieldTy);
-                                 if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
-                                     rv = true;
-                                     break;
-                                 }
-                             })
-                        )
+                        switch (((*str)->data).tag()) {
+                            case HIRStructData::TAG_Unit: {
+                                auto& fields = ((*str)->data).as_Unit();
+                                (void)fields;
+                                break;
+                            }
+                            case HIRStructData::TAG_Tuple: {
+                                auto& fields = ((*str)->data).as_Tuple();
+                                for (const auto& field : fields) {
+                                    auto fieldTy = monomorph.monomorphType(sp, field.ent);
+                                    builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                                    if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
+                                        rv = true;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                            case HIRStructData::TAG_Named: {
+                                auto& fields = ((*str)->data).as_Named();
+                                for (const auto& field : fields) {
+                                    auto fieldTy = monomorph.monomorphType(sp, field.ty);
+                                    builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                                    if (typeNeedsAsyncDrop(sp, fieldTy, stack)) {
+                                        rv = true;
+                                        break;
+                                    }
+                                }
+                                break;
+                            }
+                        }
                     } else if (const auto* enm = pathTy->binding.opt_Enum()) {
                         if (const auto* variants = (*enm)->data.opt_Data()) {
                             for (const auto& variant : *variants) {
@@ -339,29 +347,37 @@ namespace {
             }
 
             auto monomorph = MonomorphStatePtr(builder.crate().types, ty, &generic.params, nullptr);
-            TU_MATCHA(
-                ((*str)->data),
-                (fields),
-                (Unit, ),
-                (Tuple,
-                 for (size_t i = 0; i < fields.size(); i++) {
-                     auto fieldTy = monomorph.monomorphType(sp, fields[i].ent);
-                     builder.resolve().expandAssociatedTypes(sp, fieldTy);
-                     auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
-                     if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, fieldTy)) {
-                         builder.pushStmtDropRaw(sp, std::move(field));
-                     }
-                 }),
-                (Named,
-                 for (size_t i = 0; i < fields.size(); i++) {
-                     auto fieldTy = monomorph.monomorphType(sp, fields[i].ty);
-                     builder.resolve().expandAssociatedTypes(sp, fieldTy);
-                     auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
-                     if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, fieldTy)) {
-                         builder.pushStmtDropRaw(sp, std::move(field));
-                     }
-                 })
-            )
+            switch (((*str)->data).tag()) {
+                case HIRStructData::TAG_Unit: {
+                    auto& fields = ((*str)->data).as_Unit();
+                    (void)fields;
+                    break;
+                }
+                case HIRStructData::TAG_Tuple: {
+                    auto& fields = ((*str)->data).as_Tuple();
+                    for (size_t i = 0; i < fields.size(); i++) {
+                        auto fieldTy = monomorph.monomorphType(sp, fields[i].ent);
+                        builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                        auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
+                        if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, fieldTy)) {
+                            builder.pushStmtDropRaw(sp, std::move(field));
+                        }
+                    }
+                    break;
+                }
+                case HIRStructData::TAG_Named: {
+                    auto& fields = ((*str)->data).as_Named();
+                    for (size_t i = 0; i < fields.size(); i++) {
+                        auto fieldTy = monomorph.monomorphType(sp, fields[i].ty);
+                        builder.resolve().expandAssociatedTypes(sp, fieldTy);
+                        auto field = MIRLValue::newField(value.clone(), static_cast<unsigned int>(i));
+                        if (!emitAsyncDrop(sp, field.clone(), ~0u) && builder.resolve().typeNeedsDropGlue(sp, fieldTy)) {
+                            builder.pushStmtDropRaw(sp, std::move(field));
+                        }
+                    }
+                    break;
+                }
+            }
         }
 
         bool emitAsyncDrop(const Span& sp, MIRLValue value, unsigned int flag) {
@@ -3163,7 +3179,26 @@ namespace {
                     const auto& tr = builder.crate().getTraitByPath(sp, pe.trait.path);
                     auto it = tr.values.find(pe.item);
                     ASSERT_BUG(sp, it != tr.values.end(), "Cannot find trait item for " << node.path);
-                    TU_MATCHA((it->second), (e), (Constant, builder.setResult(sp, MIRConstant::make_Const({box$(node.path.clone())}));), (Static, TODO(sp, "Associated statics (non-rustc) - " << node.path);), (Function, BUG(node.span(), "Should have produced a NamedFunction type and have been handled above");))
+                    switch (it->second.tag()) {
+                        case HIRTraitValueItem::TAG_Constant: {
+                            auto& e = it->second.as_Constant();
+                            (void)e;
+                            builder.setResult(sp, MIRConstant::make_Const({box$(node.path.clone())}));
+                            break;
+                        }
+                        case HIRTraitValueItem::TAG_Static: {
+                            auto& e = it->second.as_Static();
+                            (void)e;
+                            TODO(sp, "Associated statics (non-rustc) - " << node.path);
+                            break;
+                        }
+                        case HIRTraitValueItem::TAG_Function: {
+                            auto& e = it->second.as_Function();
+                            (void)e;
+                            BUG(node.span(), "Should have produced a NamedFunction type and have been handled above");
+                            break;
+                        }
+                    }
                 }
                 TU_ARMA(UfcsUnknown, pe) {
                     BUG(sp, "PathValue - Encountered UfcsUnknown - " << node.path);
@@ -5283,17 +5318,59 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
 
     struct H {
         static U128 getPatternValueInt(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
-            TU_MATCH_DEF(HIRPattern::Value, (val), (e), (BUG(sp, "Invalid Value type in " << pat);), (Integer, return e.value;), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readUint();))
+            switch (val.tag()) {
+                case HIRPattern::Value::TAG_Integer: {
+                    auto& e = val.as_Integer();
+                    return e.value;
+                }
+                case HIRPattern::Value::TAG_Named: {
+                    auto& e = val.as_Named();
+                    assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readUint();
+                    break;
+                }
+                default: {
+                    BUG(sp, "Invalid Value type in " << pat);
+                    break;
+                }
+            }
             throw "";
         }
 
         static S128 getPatternValueSigned(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
-            TU_MATCH_DEF(HIRPattern::Value, (val), (e), (BUG(sp, "Invalid signed Value type in " << pat);), (Integer, return S128(e.value);), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readSint();))
+            switch (val.tag()) {
+                case HIRPattern::Value::TAG_Integer: {
+                    auto& e = val.as_Integer();
+                    return S128(e.value);
+                }
+                case HIRPattern::Value::TAG_Named: {
+                    auto& e = val.as_Named();
+                    assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readSint();
+                    break;
+                }
+                default: {
+                    BUG(sp, "Invalid signed Value type in " << pat);
+                    break;
+                }
+            }
             throw "";
         }
 
         static FloatValue getPatternValueFloat(const Span& sp, const HIRPattern& pat, const HIRPattern::Value& val) {
-            TU_MATCH_DEF(HIRPattern::Value, (val), (e), (BUG(sp, "Invalid Value type in " << pat);), (Float, return e.value;), (Named, assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readFloat();))
+            switch (val.tag()) {
+                case HIRPattern::Value::TAG_Float: {
+                    auto& e = val.as_Float();
+                    return e.value;
+                }
+                case HIRPattern::Value::TAG_Named: {
+                    auto& e = val.as_Named();
+                    assert(e.binding); return EncodedLiteralSlice(e.binding->valueRes).readFloat();
+                    break;
+                }
+                default: {
+                    BUG(sp, "Invalid Value type in " << pat);
+                    break;
+                }
+            }
             throw "";
         }
 
@@ -5554,34 +5631,44 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         }
         TU_ARMA(Tuple, e) {
             fieldPath.push_back(0);
-            TU_MATCH_DEF(
-                HIRPattern::Data,
-                (pat.data),
-                (pe),
-                (BUG(sp, "Matching tuple with invalid pattern - " << pat);),
-                (Any,
-                 // TODO: Avoid storing the empty patterns, to save on space/cost
-                 for (const auto& sty : e) {
-                     this->appendFrom(sp, emptyPattern, sty);
-                     fieldPath.back()++;
-                 }),
-                (
-                    Tuple, assert(e.size() == pe.subPatterns.size()); for (unsigned int i = 0; i < e.size(); i++) {
+            switch (pat.data.tag()) {
+                case HIRPattern::Data::TAG_Any: {
+                    auto& pe = pat.data.as_Any();
+                    (void)pe;
+                    // TODO: Avoid storing the empty patterns, to save on space/cost
+                    for (const auto& sty : e) {
+                        this->appendFrom(sp, emptyPattern, sty);
+                        fieldPath.back()++;
+                    }
+                    break;
+                }
+                case HIRPattern::Data::TAG_Tuple: {
+                    auto& pe = pat.data.as_Tuple();
+                    assert(e.size() == pe.subPatterns.size()); for (unsigned int i = 0; i < e.size(); i++) {
                         this->appendFrom(sp, pe.subPatterns[i], e[i]);
                         fieldPath.back()++;
                     }
-                ),
-                (SplitTuple, assert(e.size() >= pe.leading.size() + pe.trailing.size()); unsigned trailingStart = e.size() - pe.trailing.size(); for (unsigned int i = 0; i < e.size(); i++) {
-                    if (i < pe.leading.size()) {
-                        this->appendFrom(sp, pe.leading[i], e[i]);
-                    } else if (i < trailingStart) {
-                        this->appendFrom(sp, emptyPattern, e[i]);
-                    } else {
-                        this->appendFrom(sp, pe.trailing[i - trailingStart], e[i]);
+                    break;
+                }
+                case HIRPattern::Data::TAG_SplitTuple: {
+                    auto& pe = pat.data.as_SplitTuple();
+                    assert(e.size() >= pe.leading.size() + pe.trailing.size()); unsigned trailingStart = e.size() - pe.trailing.size(); for (unsigned int i = 0; i < e.size(); i++) {
+                        if (i < pe.leading.size()) {
+                            this->appendFrom(sp, pe.leading[i], e[i]);
+                        } else if (i < trailingStart) {
+                            this->appendFrom(sp, emptyPattern, e[i]);
+                        } else {
+                            this->appendFrom(sp, pe.trailing[i - trailingStart], e[i]);
+                        }
+                        fieldPath.back()++;
                     }
-                    fieldPath.back()++;
-                })
-            )
+                    break;
+                }
+                default: {
+                    BUG(sp, "Matching tuple with invalid pattern - " << pat);
+                    break;
+                }
+            }
             fieldPath.pop_back();
         }
         TU_ARMA(Path, e) {
@@ -5637,25 +5724,44 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
                     BUG(sp, "Encounterd unbound path - " << e.path);
                 }
                 TU_ARMA(Opaque, be) {
-                    TU_MATCH_DEF(HIRPattern::Data, (pat.data), (pe), (BUG(sp, "Matching opaque type with invalid pattern - " << pat);), (Any, this->pushRule(PatternRule::make_Any({}));))
+                    switch (pat.data.tag()) {
+                        case HIRPattern::Data::TAG_Any: {
+                            auto& pe = pat.data.as_Any();
+                            (void)pe;
+                            this->pushRule(PatternRule::make_Any({}));
+                            break;
+                        }
+                        default: {
+                            BUG(sp, "Matching opaque type with invalid pattern - " << pat);
+                            break;
+                        }
+                    }
                 }
                 TU_ARMA(Struct, pbe) {
                     const auto& strData = pbe->data;
 
                     if (langBox && e.path.data.as_Generic().path == *langBox) {
                         const auto& innerTy = e.path.data.as_Generic().params.types.at(0);
-                        TU_MATCH_DEF(
-                            HIRPattern::Data,
-                            (pat.data),
-                            (pe),
-                            (BUG(sp, "Match not allowed, " << ty << " with " << pat);),
-                            (Any,
-                             // _ on a box, recurse into the box type.
-                             fieldPath.push_back(FIELD_DEREF);
-                             this->appendFrom(sp, emptyPattern, innerTy);
-                             fieldPath.pop_back();),
-                            (Box, fieldPath.push_back(FIELD_DEREF); this->appendFrom(sp, *pe.sub, innerTy); fieldPath.pop_back();)
-                        )
+                        switch (pat.data.tag()) {
+                            case HIRPattern::Data::TAG_Any: {
+                                auto& pe = pat.data.as_Any();
+                                (void)pe;
+                                // _ on a box, recurse into the box type.
+                                fieldPath.push_back(FIELD_DEREF);
+                                this->appendFrom(sp, emptyPattern, innerTy);
+                                fieldPath.pop_back();
+                                break;
+                            }
+                            case HIRPattern::Data::TAG_Box: {
+                                auto& pe = pat.data.as_Box();
+                                fieldPath.push_back(FIELD_DEREF); this->appendFrom(sp, *pe.sub, innerTy); fieldPath.pop_back();
+                                break;
+                            }
+                            default: {
+                                BUG(sp, "Match not allowed, " << ty << " with " << pat);
+                                break;
+                            }
+                        }
                         break;
                     }
             TU_MATCH_HDRA( (strData), {)
@@ -5851,7 +5957,18 @@ void PatternRulesetBuilder::appendFrom(const Span& sp, const HIRPattern& pat, co
         }
         TU_ARMA(Generic, e) {
             // Generics don't destructure, so the only valid pattern is `_`
-            TU_MATCH_DEF(HIRPattern::Data, (pat.data), (pe), (BUG(sp, "Match not allowed, " << ty << " with " << pat);), (Any, this->pushRule(PatternRule::make_Any({}));))
+            switch (pat.data.tag()) {
+                case HIRPattern::Data::TAG_Any: {
+                    auto& pe = pat.data.as_Any();
+                    (void)pe;
+                    this->pushRule(PatternRule::make_Any({}));
+                    break;
+                }
+                default: {
+                    BUG(sp, "Match not allowed, " << ty << " with " << pat);
+                    break;
+                }
+            }
         }
         TU_ARMA(TraitObject, e) {
             if (pat.data.is_Any()) {
@@ -6778,92 +6895,106 @@ int MIRLowerHIRMatchSimpleGeneratePattern(MirBuilder& builder, const Span& sp, c
                 }
                 break;
             case HIRCoreType::Char:
-                TU_MATCH_DEF( PatternRule, (rule), (re),
-                (
-                    BUG(sp, "PatternRule for char is not Value or ValueRange");
-                    ),
-                (Value,
-                    auto succBb = builder.newBbUnlinked();
+                switch (rule.tag()) {
+                    case PatternRule::TAG_Value: {
+                        auto& re = rule.as_Value();
+                        auto succBb = builder.newBbUnlinked();
 
-                    auto testVal = MIRParam(MIRConstant::make_Uint({ re.as_Uint().v, te }));
-                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({ MIRParam(val.clone()), MIRBinOp::EQ, mv$(testVal) }));
-                    builder.endBlock( MIRTerminator::make_If({ mv$(cmpLval), succBb, failBb }) );
-                    builder.setCurBlock(succBb);
-                    ),
-                (ValueRange,
-                    auto succBb = builder.newBbUnlinked();
-
-                    // IF `val` < `first` : fail_bb
-                    if( re.first.as_Uint().v != 0 ) {
-                            auto testBb2 = builder.newBbUnlinked();
-
-                            auto testLtVal = MIRParam(MIRConstant::make_Uint({re.first.as_Uint().v, te}));
-                            auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
-                            builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), failBb, testBb2}));
-
-                            builder.setCurBlock(testBb2);
+                        auto testVal = MIRParam(MIRConstant::make_Uint({ re.as_Uint().v, te }));
+                        auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({ MIRParam(val.clone()), MIRBinOp::EQ, mv$(testVal) }));
+                        builder.endBlock( MIRTerminator::make_If({ mv$(cmpLval), succBb, failBb }) );
+                        builder.setCurBlock(succBb);
+                        break;
                     }
+                    case PatternRule::TAG_ValueRange: {
+                        auto& re = rule.as_ValueRange();
+                        auto succBb = builder.newBbUnlinked();
 
-                    // IF `val` > `last` : fail_bb
-                    if(re.last.as_Uint().v >= 0x10FFFF ) {
-                            assert(re.isInclusive);
-                            builder.endBlock(MIRTerminator::make_Goto({succBb}));
-                    }
-                    else {
-                            auto testGtVal = MIRParam(MIRConstant::make_Uint({re.last.as_Uint().v, te}));
-                            auto op = re.isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
-                            auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
-                            builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), failBb, succBb}));
-                    }
+                        // IF `val` < `first` : fail_bb
+                        if( re.first.as_Uint().v != 0 ) {
+                                auto testBb2 = builder.newBbUnlinked();
 
-                    builder.setCurBlock(succBb);
-                    )
-                )
+                                auto testLtVal = MIRParam(MIRConstant::make_Uint({re.first.as_Uint().v, te}));
+                                auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
+                                builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), failBb, testBb2}));
+
+                                builder.setCurBlock(testBb2);
+                        }
+
+                        // IF `val` > `last` : fail_bb
+                        if(re.last.as_Uint().v >= 0x10FFFF ) {
+                                assert(re.isInclusive);
+                                builder.endBlock(MIRTerminator::make_Goto({succBb}));
+                        }
+                        else {
+                                auto testGtVal = MIRParam(MIRConstant::make_Uint({re.last.as_Uint().v, te}));
+                                auto op = re.isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
+                                auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
+                                builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), failBb, succBb}));
+                        }
+
+                        builder.setCurBlock(succBb);
+                        break;
+                    }
+                    default: {
+
+                        BUG(sp, "PatternRule for char is not Value or ValueRange");
+
+                        break;
+                    }
+                }
                 break;
             case HIRCoreType::F16:
             case HIRCoreType::F32:
             case HIRCoreType::F64:
             case HIRCoreType::F128:
-                TU_MATCH_DEF( PatternRule, (rule), (re),
-                (
-                    BUG(sp, "PatternRule for float is not Value or ValueRange");
-                    ),
-                (Value,
-                    auto succBb = builder.newBbUnlinked();
+                switch (rule.tag()) {
+                    case PatternRule::TAG_Value: {
+                        auto& re = rule.as_Value();
+                        auto succBb = builder.newBbUnlinked();
 
-                    auto testVal = MIRParam(MIRConstant::make_Float({ re.as_Float().v, te }));
-                    auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({ val.clone(), MIRBinOp::EQ, mv$(testVal) }));
-                    builder.endBlock( MIRTerminator::make_If({ mv$(cmpLval), succBb, failBb }) );
-                    builder.setCurBlock(succBb);
-                    ),
-                (ValueRange,
-                    auto succBb = builder.newBbUnlinked();
+                        auto testVal = MIRParam(MIRConstant::make_Float({ re.as_Float().v, te }));
+                        auto cmpLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({ val.clone(), MIRBinOp::EQ, mv$(testVal) }));
+                        builder.endBlock( MIRTerminator::make_If({ mv$(cmpLval), succBb, failBb }) );
+                        builder.setCurBlock(succBb);
+                        break;
+                    }
+                    case PatternRule::TAG_ValueRange: {
+                        auto& re = rule.as_ValueRange();
+                        auto succBb = builder.newBbUnlinked();
 
-                    // IF `val` < `first` : fail_bb
-                    if( re.first.as_Float().v == -std::numeric_limits<double>::infinity()) {
-                    }
-                    else {
-                            auto testBb2 = builder.newBbUnlinked();
-                            auto testLtVal = MIRParam(MIRConstant::make_Float({re.first.as_Float().v, te}));
-                            auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
-                            builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), failBb, testBb2}));
-                            builder.setCurBlock(testBb2);
-                    }
+                        // IF `val` < `first` : fail_bb
+                        if( re.first.as_Float().v == -std::numeric_limits<double>::infinity()) {
+                        }
+                        else {
+                                auto testBb2 = builder.newBbUnlinked();
+                                auto testLtVal = MIRParam(MIRConstant::make_Float({re.first.as_Float().v, te}));
+                                auto cmpLtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), MIRBinOp::LT, mv$(testLtVal)}));
+                                builder.endBlock(MIRTerminator::make_If({mv$(cmpLtLval), failBb, testBb2}));
+                                builder.setCurBlock(testBb2);
+                        }
 
-                    // IF `val` > `last` : fail_bb
-                    if( re.first.as_Float().v == std::numeric_limits<double>::infinity() && re.isInclusive ) {
-                            builder.endBlock(MIRTerminator::make_Goto({succBb}));
-                    }
-                    else {
-                            auto testGtVal = MIRParam(MIRConstant::make_Float({re.last.as_Float().v, te}));
-                            auto op = re.isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
-                            auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
-                            builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), failBb, succBb}));
-                    }
+                        // IF `val` > `last` : fail_bb
+                        if( re.first.as_Float().v == std::numeric_limits<double>::infinity() && re.isInclusive ) {
+                                builder.endBlock(MIRTerminator::make_Goto({succBb}));
+                        }
+                        else {
+                                auto testGtVal = MIRParam(MIRConstant::make_Float({re.last.as_Float().v, te}));
+                                auto op = re.isInclusive ? MIRBinOp::GT : MIRBinOp::GE;
+                                auto cmpGtLval = builder.lvalueOrTemp(sp, builder.resolve().crate.types.primitive(HIRCoreType::Bool), MIRRValue::make_BinOp({MIRParam(val.clone()), op, mv$(testGtVal)}));
+                                builder.endBlock(MIRTerminator::make_If({mv$(cmpGtLval), failBb, succBb}));
+                        }
 
-                    builder.setCurBlock(succBb);
-                    )
-                )
+                        builder.setCurBlock(succBb);
+                        break;
+                    }
+                    default: {
+
+                        BUG(sp, "PatternRule for float is not Value or ValueRange");
+
+                        break;
+                    }
+                }
                 break;
             case HIRCoreType::Str: {
                             ASSERT_BUG(sp, rule.is_Value() && rule.as_Value().is_StaticString(), "Unexpected use of non-value pattern on `str`");
@@ -8165,20 +8296,27 @@ void MirBuilder::registerVariableState(unsigned int idx) {
     DEBUG("REGISTER STATE (var) _" << idx << ": " << output.locals.at(idx));
     for (auto scopeIdx : ::reverse(scopeStack)) {
         auto& scopeDef = scopes.at(scopeIdx);
-        TU_MATCH_DEF(
-            ScopeType,
-            (scopeDef.data),
-            (e),
-            (),
-            (Owning,
-             if (!e.isTemporary) {
-                 auto it = ::std::find(e.slots.begin(), e.slots.end(), idx);
-                 assert(it == e.slots.end());
-                 e.slots.push_back(idx);
-                 return;
-             }),
-            (Split, BUG(Span(), "Variable " << idx << " introduced within a Split");)
-        )
+        switch (scopeDef.data.tag()) {
+            case ScopeType::TAG_Owning: {
+                auto& e = scopeDef.data.as_Owning();
+                if (!e.isTemporary) {
+                    auto it = ::std::find(e.slots.begin(), e.slots.end(), idx);
+                    assert(it == e.slots.end());
+                    e.slots.push_back(idx);
+                    return;
+                }
+                break;
+            }
+            case ScopeType::TAG_Split: {
+                auto& e = scopeDef.data.as_Split();
+                (void)e;
+                BUG(Span(), "Variable " << idx << " introduced within a Split");
+                break;
+            }
+            default: {
+                break;
+            }
+        }
     }
     BUG(Span(), "Variable " << idx << " introduced with no Variable scope");
 }
@@ -8187,24 +8325,31 @@ void MirBuilder::scheduleRegisteredVariableDrop(unsigned int idx) {
     DEBUG("SCHEDULE DROP (var) _" << idx << ": " << output.locals.at(idx));
     for (auto scopeIdx : ::reverse(scopeStack)) {
         auto& scopeDef = scopes.at(scopeIdx);
-        TU_MATCH_DEF(
-            ScopeType,
-            (scopeDef.data),
-            (e),
-            (),
-            (Owning,
-             if (!e.isTemporary) {
-                 auto stateIt = ::std::find(e.slots.begin(), e.slots.end(), idx);
-                 assert(stateIt != e.slots.end());
-                 auto dropIt = ::std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
-                     return !slot.isArgument && slot.index == idx;
-                 });
-                 assert(dropIt == e.dropSlots.end());
-                 e.dropSlots.push_back(ScopeDropSlot{false, idx});
-                 return;
-             }),
-            (Split, BUG(Span(), "Variable " << idx << " scheduled within a Split");)
-        )
+        switch (scopeDef.data.tag()) {
+            case ScopeType::TAG_Owning: {
+                auto& e = scopeDef.data.as_Owning();
+                if (!e.isTemporary) {
+                    auto stateIt = ::std::find(e.slots.begin(), e.slots.end(), idx);
+                    assert(stateIt != e.slots.end());
+                    auto dropIt = ::std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
+                        return !slot.isArgument && slot.index == idx;
+                    });
+                    assert(dropIt == e.dropSlots.end());
+                    e.dropSlots.push_back(ScopeDropSlot{false, idx});
+                    return;
+                }
+                break;
+            }
+            case ScopeType::TAG_Split: {
+                auto& e = scopeDef.data.as_Split();
+                (void)e;
+                BUG(Span(), "Variable " << idx << " scheduled within a Split");
+                break;
+            }
+            default: {
+                break;
+            }
+        }
     }
     BUG(Span(), "Variable " << idx << " scheduled with no Variable scope");
 }
@@ -8213,22 +8358,29 @@ void MirBuilder::scheduleArgumentDrop(unsigned int idx) {
     DEBUG("SCHEDULE DROP (arg) a" << idx << ": " << args_.at(idx).second);
     for (auto scopeIdx : ::reverse(scopeStack)) {
         auto& scopeDef = scopes.at(scopeIdx);
-        TU_MATCH_DEF(
-            ScopeType,
-            (scopeDef.data),
-            (e),
-            (),
-            (Owning,
-             if (!e.isTemporary) {
-                 auto it = ::std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
-                     return slot.isArgument && slot.index == idx;
-                 });
-                 assert(it == e.dropSlots.end());
-                 e.dropSlots.push_back(ScopeDropSlot{true, idx});
-                 return;
-             }),
-            (Split, BUG(Span(), "Argument " << idx << " introduced within a Split");)
-        )
+        switch (scopeDef.data.tag()) {
+            case ScopeType::TAG_Owning: {
+                auto& e = scopeDef.data.as_Owning();
+                if (!e.isTemporary) {
+                    auto it = ::std::find_if(e.dropSlots.begin(), e.dropSlots.end(), [&](const ScopeDropSlot& slot) {
+                        return slot.isArgument && slot.index == idx;
+                    });
+                    assert(it == e.dropSlots.end());
+                    e.dropSlots.push_back(ScopeDropSlot{true, idx});
+                    return;
+                }
+                break;
+            }
+            case ScopeType::TAG_Split: {
+                auto& e = scopeDef.data.as_Split();
+                (void)e;
+                BUG(Span(), "Argument " << idx << " introduced within a Split");
+                break;
+            }
+            default: {
+                break;
+            }
+        }
     }
     BUG(Span(), "Argument " << idx << " introduced with no Variable scope");
 }
@@ -8447,52 +8599,104 @@ void MirBuilder::pushStmtAssign(const Span& sp, MIRLValue dst, MIRRValue val, bo
             this->movedLvalue(sp, *e);
         }
     };
-    TU_MATCHA(
-        (val),
-        (e),
-        (Use, this->movedLvalue(sp, e);),
-        (Constant, ),
-        (SizedArray, movedParam(e.val);),
-        (Borrow,
-         if (e.type == HIRBorrowType::Owned) {
-             TODO(sp, "Move using &move");
-             // Likely would require a marker that ensures that the memory isn't reused.
-             this->movedLvalue(sp, e.val);
-         } else {
-             // Doesn't move
-         }),
-        (Cast, this->movedLvalue(sp, e.val);),
-        (BinOp,
-         switch (e.op) {
-             case MIRBinOp::EQ:
-             case MIRBinOp::NE:
-             case MIRBinOp::GT:
-             case MIRBinOp::GE:
-             case MIRBinOp::LT:
-             case MIRBinOp::LE:
-                 // Takes an implicit borrow... and only works on copy, so why is this block here?
-                 break;
-             default:
-                 movedParam(e.valL);
-                 movedParam(e.valR);
-                 break;
-         }),
-        (UniOp, this->movedLvalue(sp, e.val);),
-        (
-            DstMeta,
+    switch (val.tag()) {
+        case MIRRValue::TAG_Use: {
+            auto& e = val.as_Use();
+            this->movedLvalue(sp, e);
+            break;
+        }
+        case MIRRValue::TAG_Constant: {
+            auto& e = val.as_Constant();
+            (void)e;
+            break;
+        }
+        case MIRRValue::TAG_SizedArray: {
+            auto& e = val.as_SizedArray();
+            movedParam(e.val);
+            break;
+        }
+        case MIRRValue::TAG_Borrow: {
+            auto& e = val.as_Borrow();
+            if (e.type == HIRBorrowType::Owned) {
+                TODO(sp, "Move using &move");
+                // Likely would require a marker that ensures that the memory isn't reused.
+                this->movedLvalue(sp, e.val);
+            } else {
+                // Doesn't move
+            }
+            break;
+        }
+        case MIRRValue::TAG_Cast: {
+            auto& e = val.as_Cast();
+            this->movedLvalue(sp, e.val);
+            break;
+        }
+        case MIRRValue::TAG_BinOp: {
+            auto& e = val.as_BinOp();
+            switch (e.op) {
+                case MIRBinOp::EQ:
+                case MIRBinOp::NE:
+                case MIRBinOp::GT:
+                case MIRBinOp::GE:
+                case MIRBinOp::LT:
+                case MIRBinOp::LE:
+                    // Takes an implicit borrow... and only works on copy, so why is this block here?
+                    break;
+                default:
+                    movedParam(e.valL);
+                    movedParam(e.valR);
+                    break;
+            }
+            break;
+        }
+        case MIRRValue::TAG_UniOp: {
+            auto& e = val.as_UniOp();
+            this->movedLvalue(sp, e.val);
+            break;
+        }
+        case MIRRValue::TAG_DstMeta: {
+            auto& e = val.as_DstMeta();
+            (void)e;
             // Doesn't move
-        ),
-        (
-            DstPtr,
+            break;
+        }
+        case MIRRValue::TAG_DstPtr: {
+            auto& e = val.as_DstPtr();
+            (void)e;
             // Doesn't move
-        ),
-        (MakeDst, movedParam(e.ptrVal); movedParam(e.metaVal);),
-        (Tuple, for (const auto& val : e.vals) movedParam(val);),
-        (Array, for (const auto& val : e.vals) movedParam(val);),
-        (UnionVariant, movedParam(e.val);),
-        (EnumVariant, for (const auto& val : e.vals) movedParam(val);),
-        (Struct, for (const auto& val : e.vals) movedParam(val);)
-    )
+            break;
+        }
+        case MIRRValue::TAG_MakeDst: {
+            auto& e = val.as_MakeDst();
+            movedParam(e.ptrVal); movedParam(e.metaVal);
+            break;
+        }
+        case MIRRValue::TAG_Tuple: {
+            auto& e = val.as_Tuple();
+            for (const auto& val : e.vals) movedParam(val);
+            break;
+        }
+        case MIRRValue::TAG_Array: {
+            auto& e = val.as_Array();
+            for (const auto& val : e.vals) movedParam(val);
+            break;
+        }
+        case MIRRValue::TAG_UnionVariant: {
+            auto& e = val.as_UnionVariant();
+            movedParam(e.val);
+            break;
+        }
+        case MIRRValue::TAG_EnumVariant: {
+            auto& e = val.as_EnumVariant();
+            for (const auto& val : e.vals) movedParam(val);
+            break;
+        }
+        case MIRRValue::TAG_Struct: {
+            auto& e = val.as_Struct();
+            for (const auto& val : e.vals) movedParam(val);
+            break;
+        }
+    }
 
     // Drop target if populated
     if (updateDestState) {
@@ -8736,27 +8940,84 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRRValue& rval, const S
             this->raiseTemporaries(sp, *e, scope, toAbove);
         }
     };
-    TU_MATCHA(
-        (rval),
-        (e),
-        (Use, this->raiseTemporaries(sp, e, scope, toAbove);),
-        (Constant, ),
-        (SizedArray, raiseVars(e.val);),
-        (Borrow,
-         // TODO: Wait, is this valid?
-         this->raiseTemporaries(sp, e.val, scope, toAbove);),
-        (Cast, this->raiseTemporaries(sp, e.val, scope, toAbove);),
-        (BinOp, raiseVars(e.valL); raiseVars(e.valR);),
-        (UniOp, this->raiseTemporaries(sp, e.val, scope, toAbove);),
-        (DstMeta, this->raiseTemporaries(sp, e.val, scope, toAbove);),
-        (DstPtr, this->raiseTemporaries(sp, e.val, scope, toAbove);),
-        (MakeDst, raiseVars(e.ptrVal); raiseVars(e.metaVal);),
-        (Tuple, for (const auto& val : e.vals) raiseVars(val);),
-        (Array, for (const auto& val : e.vals) raiseVars(val);),
-        (UnionVariant, raiseVars(e.val);),
-        (EnumVariant, for (const auto& val : e.vals) raiseVars(val);),
-        (Struct, for (const auto& val : e.vals) raiseVars(val);)
-    )
+    switch (rval.tag()) {
+        case MIRRValue::TAG_Use: {
+            auto& e = rval.as_Use();
+            this->raiseTemporaries(sp, e, scope, toAbove);
+            break;
+        }
+        case MIRRValue::TAG_Constant: {
+            auto& e = rval.as_Constant();
+            (void)e;
+            break;
+        }
+        case MIRRValue::TAG_SizedArray: {
+            auto& e = rval.as_SizedArray();
+            raiseVars(e.val);
+            break;
+        }
+        case MIRRValue::TAG_Borrow: {
+            auto& e = rval.as_Borrow();
+            // TODO: Wait, is this valid?
+            this->raiseTemporaries(sp, e.val, scope, toAbove);
+            break;
+        }
+        case MIRRValue::TAG_Cast: {
+            auto& e = rval.as_Cast();
+            this->raiseTemporaries(sp, e.val, scope, toAbove);
+            break;
+        }
+        case MIRRValue::TAG_BinOp: {
+            auto& e = rval.as_BinOp();
+            raiseVars(e.valL); raiseVars(e.valR);
+            break;
+        }
+        case MIRRValue::TAG_UniOp: {
+            auto& e = rval.as_UniOp();
+            this->raiseTemporaries(sp, e.val, scope, toAbove);
+            break;
+        }
+        case MIRRValue::TAG_DstMeta: {
+            auto& e = rval.as_DstMeta();
+            this->raiseTemporaries(sp, e.val, scope, toAbove);
+            break;
+        }
+        case MIRRValue::TAG_DstPtr: {
+            auto& e = rval.as_DstPtr();
+            this->raiseTemporaries(sp, e.val, scope, toAbove);
+            break;
+        }
+        case MIRRValue::TAG_MakeDst: {
+            auto& e = rval.as_MakeDst();
+            raiseVars(e.ptrVal); raiseVars(e.metaVal);
+            break;
+        }
+        case MIRRValue::TAG_Tuple: {
+            auto& e = rval.as_Tuple();
+            for (const auto& val : e.vals) raiseVars(val);
+            break;
+        }
+        case MIRRValue::TAG_Array: {
+            auto& e = rval.as_Array();
+            for (const auto& val : e.vals) raiseVars(val);
+            break;
+        }
+        case MIRRValue::TAG_UnionVariant: {
+            auto& e = rval.as_UnionVariant();
+            raiseVars(e.val);
+            break;
+        }
+        case MIRRValue::TAG_EnumVariant: {
+            auto& e = rval.as_EnumVariant();
+            for (const auto& val : e.vals) raiseVars(val);
+            break;
+        }
+        case MIRRValue::TAG_Struct: {
+            auto& e = rval.as_Struct();
+            for (const auto& val : e.vals) raiseVars(val);
+            break;
+        }
+    }
 }
 
 MirBuilder::SaveCodeProto MirBuilder::codeSaveStart() {
@@ -9914,7 +10175,53 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
         resolve_.revealOpaqueTypes(sp, revealed);
         return revealed;
     };
-    TU_MATCHA((val.root), (e), (Return, ty = retTy;), (Argument, ty = args_.at(e).second;), (Local, ty = output.locals.at(e);), (Static, TU_MATCHA((e.data), (pe), (Generic, ASSERT_BUG(sp, pe.params.types.empty(), "Path params on static"); const auto& s = resolve_.hirCrate().getStaticByPath(sp, pe.path); ty = s.type;), (UfcsKnown, TODO(sp, "Static - UfcsKnown - " << e);), (UfcsUnknown, BUG(sp, "Encountered UfcsUnknown in Static - " << e);), (UfcsInherent, TODO(sp, "Static - UfcsInherent - " << e);))))
+    switch (val.root.tag()) {
+        case MIRLValue::Storage::TAG_Return: {
+            decltype(val.root.as_Return()) e = val.root.as_Return();
+            (void)e;
+            ty = retTy;
+            break;
+        }
+        case MIRLValue::Storage::TAG_Argument: {
+            decltype(val.root.as_Argument()) e = val.root.as_Argument();
+            ty = args_.at(e).second;
+            break;
+        }
+        case MIRLValue::Storage::TAG_Local: {
+            decltype(val.root.as_Local()) e = val.root.as_Local();
+            ty = output.locals.at(e);
+            break;
+        }
+        case MIRLValue::Storage::TAG_Static: {
+            decltype(val.root.as_Static()) e = val.root.as_Static();
+            switch (e.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& pe = e.data.as_Generic();
+                    ASSERT_BUG(sp, pe.params.types.empty(), "Path params on static"); const auto& s = resolve_.hirCrate().getStaticByPath(sp, pe.path); ty = s.type;
+                    break;
+                }
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& pe = e.data.as_UfcsKnown();
+                    (void)pe;
+                    TODO(sp, "Static - UfcsKnown - " << e);
+                    break;
+                }
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& pe = e.data.as_UfcsUnknown();
+                    (void)pe;
+                    BUG(sp, "Encountered UfcsUnknown in Static - " << e);
+                    break;
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& pe = e.data.as_UfcsInherent();
+                    (void)pe;
+                    TODO(sp, "Static - UfcsInherent - " << e);
+                    break;
+                }
+            }
+            break;
+        }
+    }
     assert(ty);
     for (const auto& w : val.wrappers) {
         if (&w == stopWrapper) {
@@ -9946,7 +10253,24 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
                     TU_ARMA(Path, te) {
                         if (const auto* tep = te.binding.opt_Struct()) {
                             const auto& str = **tep;
-                            TU_MATCHA((str.data), (se), (Unit, BUG(sp, "Field on unit-like struct - " << currentTy);), (Tuple, ASSERT_BUG(sp, fieldIndex < se.size(), "Field index out of range in tuple-struct " << currentTy << " - " << fieldIndex << " > " << se.size()); const auto& fld = se[fieldIndex]; ty = maybeMonomorph(str.params, te.path, fld.ent);), (Named, ASSERT_BUG(sp, fieldIndex < se.size(), "Field index out of range in struct " << currentTy << " - " << fieldIndex << " > " << se.size()); const auto& fld = se[fieldIndex]; ty = maybeMonomorph(str.params, te.path, fld.ty);))
+                            switch (str.data.tag()) {
+                                case HIRStructData::TAG_Unit: {
+                                    auto& se = str.data.as_Unit();
+                                    (void)se;
+                                    BUG(sp, "Field on unit-like struct - " << currentTy);
+                                    break;
+                                }
+                                case HIRStructData::TAG_Tuple: {
+                                    auto& se = str.data.as_Tuple();
+                                    ASSERT_BUG(sp, fieldIndex < se.size(), "Field index out of range in tuple-struct " << currentTy << " - " << fieldIndex << " > " << se.size()); const auto& fld = se[fieldIndex]; ty = maybeMonomorph(str.params, te.path, fld.ent);
+                                    break;
+                                }
+                                case HIRStructData::TAG_Named: {
+                                    auto& se = str.data.as_Named();
+                                    ASSERT_BUG(sp, fieldIndex < se.size(), "Field index out of range in struct " << currentTy << " - " << fieldIndex << " > " << se.size()); const auto& fld = se[fieldIndex]; ty = maybeMonomorph(str.params, te.path, fld.ty);
+                                    break;
+                                }
+                            }
                         } else if (/*const auto* tep =*/te.binding.opt_Union()) {
                             BUG(sp, "Field access on a union isn't valid, use Downcast instead - " << currentTy);
                         } else {
@@ -9979,7 +10303,22 @@ void MirBuilder::withValType(const Span& sp, const MIRLValue& val, ::std::functi
             }
             }
             TU_ARMA(Index, _index_val) {
-                TU_MATCH_DEF(HIRTypeData, (*currentTy), (te), (BUG(sp, "Index on unexpected type - " << currentTy);), (Slice, ty = te.inner;), (Array, ty = te.inner;))
+                switch ((*currentTy).tag()) {
+                    case HIRTypeData::TAG_Slice: {
+                        auto& te = (*currentTy).as_Slice();
+                        ty = te.inner;
+                        break;
+                    }
+                    case HIRTypeData::TAG_Array: {
+                        auto& te = (*currentTy).as_Array();
+                        ty = te.inner;
+                        break;
+                    }
+                    default: {
+                        BUG(sp, "Index on unexpected type - " << currentTy);
+                        break;
+                    }
+                }
             }
             TU_ARMA(Downcast, variantIndex) {
             TU_MATCH_HDRA( (*currentTy), { )
@@ -10167,7 +10506,29 @@ outOfLoop:
 VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool expectValid /*=false*/) {
     TRACE_FUNCTION_F(lv);
     VarState* vs = nullptr;
-    TU_MATCHA((lv.root), (e), (Return, BUG(sp, "Move of return value"); vs = &getSlotStateMut(sp, ~0u, SlotType::Local);), (Argument, vs = &getSlotStateMut(sp, e, SlotType::Argument);), (Local, vs = &getSlotStateMut(sp, e, SlotType::Local);), (Static, return nullptr;))
+    switch (lv.root.tag()) {
+        case MIRLValue::Storage::TAG_Return: {
+            decltype(lv.root.as_Return()) e = lv.root.as_Return();
+            (void)e;
+            BUG(sp, "Move of return value"); vs = &getSlotStateMut(sp, ~0u, SlotType::Local);
+            break;
+        }
+        case MIRLValue::Storage::TAG_Argument: {
+            decltype(lv.root.as_Argument()) e = lv.root.as_Argument();
+            vs = &getSlotStateMut(sp, e, SlotType::Argument);
+            break;
+        }
+        case MIRLValue::Storage::TAG_Local: {
+            decltype(lv.root.as_Local()) e = lv.root.as_Local();
+            vs = &getSlotStateMut(sp, e, SlotType::Local);
+            break;
+        }
+        case MIRLValue::Storage::TAG_Static: {
+            decltype(lv.root.as_Static()) e = lv.root.as_Static();
+            (void)e;
+            return nullptr;
+        }
+    }
     assert(vs);
 
     if (expectValid && vs->is_Valid()) {
@@ -10180,7 +10541,42 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
         TU_MATCH_HDRA( (w), { )
         TU_ARMA(Field, fieldIndex) {
                 VarState tpl;
-                TU_MATCHA((ivs), (ivse), (Invalid, tpl = VarState::make_Valid({});), (MovedOut, BUG(sp, "Field on value with MovedOut state - " << lv);), (Partial, ), (PartialArray, ), (Optional, tpl = ivs.clone();), (Valid, tpl = VarState::make_Valid({});))
+                switch (ivs.tag()) {
+                    case VarState::TAG_Invalid: {
+                        auto& ivse = ivs.as_Invalid();
+                        (void)ivse;
+                        tpl = VarState::make_Valid({});
+                        break;
+                    }
+                    case VarState::TAG_MovedOut: {
+                        auto& ivse = ivs.as_MovedOut();
+                        (void)ivse;
+                        BUG(sp, "Field on value with MovedOut state - " << lv);
+                        break;
+                    }
+                    case VarState::TAG_Partial: {
+                        auto& ivse = ivs.as_Partial();
+                        (void)ivse;
+                        break;
+                    }
+                    case VarState::TAG_PartialArray: {
+                        auto& ivse = ivs.as_PartialArray();
+                        (void)ivse;
+                        break;
+                    }
+                    case VarState::TAG_Optional: {
+                        auto& ivse = ivs.as_Optional();
+                        (void)ivse;
+                        tpl = ivs.clone();
+                        break;
+                    }
+                    case VarState::TAG_Valid: {
+                        auto& ivse = ivs.as_Valid();
+                        (void)ivse;
+                        tpl = VarState::make_Valid({});
+                        break;
+                    }
+                }
                 if (!ivs.is_Partial() && !ivs.is_PartialArray()) {
                     size_t nFlds = 0;
                     bool isArray = false;
@@ -10189,7 +10585,24 @@ VarState* MirBuilder::getValStateMutP(const Span& sp, const MIRLValue& lv, bool 
                         if (const auto* e = ty->opt_Path()) {
                             ASSERT_BUG(sp, e->binding.is_Struct(), "");
                             const auto& str = *e->binding.as_Struct();
-                            TU_MATCHA((str.data), (se), (Unit, BUG(sp, "Field access of unit-like struct");), (Tuple, nFlds = se.size();), (Named, nFlds = se.size();))
+                            switch (str.data.tag()) {
+                                case HIRStructData::TAG_Unit: {
+                                    auto& se = str.data.as_Unit();
+                                    (void)se;
+                                    BUG(sp, "Field access of unit-like struct");
+                                    break;
+                                }
+                                case HIRStructData::TAG_Tuple: {
+                                    auto& se = str.data.as_Tuple();
+                                    nFlds = se.size();
+                                    break;
+                                }
+                                case HIRStructData::TAG_Named: {
+                                    auto& se = str.data.as_Named();
+                                    nFlds = se.size();
+                                    break;
+                                }
+                            }
                         } else if (const auto* e = ty->opt_Tuple()) {
                             nFlds = e->size();
                         } else if (const auto* e = ty->opt_Array()) {
@@ -10323,145 +10736,171 @@ void MirBuilder::emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv
 
 void MirBuilder::dropValueFromState(const Span& sp, VarState& vs, MIRLValue lv) {
     TRACE_FUNCTION_F(lv << " " << vs);
-    TU_MATCHA(
-        (vs),
-        (vse),
-        (Invalid, ),
-        (Valid, vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv));),
-        (
-            MovedOut, auto movedState = vse.innerState->clone(); const auto outerFlag = vse.outerFlag; vs = VarState::make_Invalid(InvalidType::Moved); bool isBox = false; withValType(
-                sp,
-                lv,
-                [&](const auto& ty) {
-        isBox = this->isTypeOwnedBox(ty);
-    }
-            );
-            if (isBox) {
-        dropValueFromState(sp, movedState, MIRLValue::newDeref(lv.clone()));
-        pushStmtDropShallow(sp, mv$(lv), outerFlag);
-            } else {
-        TODO(sp, ""); }
-        ),
-        (
-            Partial, auto partialState = vs.clone(); vs = VarState::make_Invalid(InvalidType::Moved); auto& partial = partialState.as_Partial(); bool is_enum = false; bool isUnion = false; withValType(
-                sp,
-                lv,
-                [&](const auto& ty) {
-        is_enum = ty->is_Path() && ty->as_Path().binding.is_Enum();
-        isUnion = ty->is_Path() && ty->as_Path().binding.is_Union();
-    }
-            );
-            if (is_enum) {
-        bool hasValidVariant = false;
-        for (const auto& state : partial.innerStates) {
-            hasValidVariant |= !state.is_Invalid();
+    switch (vs.tag()) {
+        case VarState::TAG_Invalid: {
+            auto& vse = vs.as_Invalid();
+            (void)vse;
+            break;
         }
-        if (!hasValidVariant) {
-            return;
+        case VarState::TAG_Valid: {
+            auto& vse = vs.as_Valid();
+            (void)vse;
+            vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv));
+            break;
         }
+        case VarState::TAG_MovedOut: {
+            auto& vse = vs.as_MovedOut();
+            auto movedState = vse.innerState->clone(); const auto outerFlag = vse.outerFlag; vs = VarState::make_Invalid(InvalidType::Moved); bool isBox = false; withValType(
+                        sp,
+                        lv,
+                        [&](const auto& ty) {
+                isBox = this->isTypeOwnedBox(ty);
+            }
+                    );
+                    if (isBox) {
+                dropValueFromState(sp, movedState, MIRLValue::newDeref(lv.clone()));
+                pushStmtDropShallow(sp, mv$(lv), outerFlag);
+                    } else {
+                TODO(sp, ""); }
+            break;
+        }
+        case VarState::TAG_Partial: {
+            auto& vse = vs.as_Partial();
+            (void)vse;
+            auto partialState = vs.clone(); vs = VarState::make_Invalid(InvalidType::Moved); auto& partial = partialState.as_Partial(); bool is_enum = false; bool isUnion = false; withValType(
+                        sp,
+                        lv,
+                        [&](const auto& ty) {
+                is_enum = ty->is_Path() && ty->as_Path().binding.is_Enum();
+                isUnion = ty->is_Path() && ty->as_Path().binding.is_Union();
+            }
+                    );
+                    if (is_enum) {
+                bool hasValidVariant = false;
+                for (const auto& state : partial.innerStates) {
+                    hasValidVariant |= !state.is_Invalid();
+                }
+                if (!hasValidVariant) {
+                    return;
+                }
 
-        const auto outerFlag = partial.outerFlag;
-        const auto nextBb = newBbUnlinked();
-        ::std::vector<MIRBasicBlockId> arms;
-        ::std::vector<MIRBasicBlockId> cleanupBlocks;
-        arms.reserve(partial.innerStates.size());
-        cleanupBlocks.reserve(partial.innerStates.size());
-        for (const auto& state : partial.innerStates) {
-            const auto cleanupBb = state.is_Invalid() ? nextBb : newBbUnlinked();
-            arms.push_back(cleanupBb);
-            cleanupBlocks.push_back(cleanupBb);
-        }
-        endBlock(MIRTerminator::make_Switch({lv.clone(), mv$(arms), outerFlag, outerFlag == ~0u ? ~0u : nextBb}));
+                const auto outerFlag = partial.outerFlag;
+                const auto nextBb = newBbUnlinked();
+                ::std::vector<MIRBasicBlockId> arms;
+                ::std::vector<MIRBasicBlockId> cleanupBlocks;
+                arms.reserve(partial.innerStates.size());
+                cleanupBlocks.reserve(partial.innerStates.size());
+                for (const auto& state : partial.innerStates) {
+                    const auto cleanupBb = state.is_Invalid() ? nextBb : newBbUnlinked();
+                    arms.push_back(cleanupBb);
+                    cleanupBlocks.push_back(cleanupBb);
+                }
+                endBlock(MIRTerminator::make_Switch({lv.clone(), mv$(arms), outerFlag, outerFlag == ~0u ? ~0u : nextBb}));
 
-        const auto variantCount = partial.innerStates.size();
-        for (size_t i = 0; i < variantCount; i++) {
-            if (partial.innerStates[i].is_Invalid()) {
-                continue;
+                const auto variantCount = partial.innerStates.size();
+                for (size_t i = 0; i < variantCount; i++) {
+                    if (partial.innerStates[i].is_Invalid()) {
+                        continue;
+                    }
+                    setCurBlock(cleanupBlocks[i]);
+                    dropValueFromState(sp, partial.innerStates[i], MIRLValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)));
+                    endBlock(MIRTerminator::make_Goto(nextBb));
+                }
+                setCurBlock(nextBb);
+                    } else if (isUnion) {
+                // NOTE: Unions don't drop inner items.
+                    } else {
+                for (size_t i = 0; i < partial.innerStates.size(); i++) {
+                    dropValueFromState(sp, partial.innerStates[i], MIRLValue::newField(lv.clone(), static_cast<unsigned int>(i)));
+                }
+                    }
+            break;
+        }
+        case VarState::TAG_Optional: {
+            auto& vse = vs.as_Optional();
+            const auto flag = vse; vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv), flag);
+            break;
+        }
+        case VarState::TAG_PartialArray: {
+            auto& vse = vs.as_PartialArray();
+            (void)vse;
+            auto arrayState = vs.clone(); vs = VarState::make_Invalid(InvalidType::Moved); auto& array = arrayState.as_PartialArray();
+                unsigned int fillFlag = ~0u;
+                bool fillDrop = true;
+                TU_MATCH_HDRA((*array.fillState), {)
+                default:
+                    BUG(sp, "Composite fill state in PartialArray drop - " << *array.fillState);
+            TU_ARMA(Valid, fe) {
             }
-            setCurBlock(cleanupBlocks[i]);
-            dropValueFromState(sp, partial.innerStates[i], MIRLValue::newDowncast(lv.clone(), static_cast<unsigned int>(i)));
-            endBlock(MIRTerminator::make_Goto(nextBb));
-        }
-        setCurBlock(nextBb);
-            } else if (isUnion) {
-        // NOTE: Unions don't drop inner items.
-            } else {
-        for (size_t i = 0; i < partial.innerStates.size(); i++) {
-            dropValueFromState(sp, partial.innerStates[i], MIRLValue::newField(lv.clone(), static_cast<unsigned int>(i)));
-        }
+            TU_ARMA(Invalid, fe) {
+                fillDrop = false;
             }
-        ),
-        (Optional, const auto flag = vse; vs = VarState::make_Invalid(InvalidType::Moved); pushStmtDrop(sp, mv$(lv), flag);),
-        (
-            PartialArray, auto arrayState = vs.clone(); vs = VarState::make_Invalid(InvalidType::Moved); auto& array = arrayState.as_PartialArray();
-            unsigned int fillFlag = ~0u;
-            bool fillDrop = true;
-            TU_MATCH_HDRA((*array.fillState), {)
-            default:
-                BUG(sp, "Composite fill state in PartialArray drop - " << *array.fillState);
-        TU_ARMA(Valid, fe) {
-        }
-        TU_ARMA(Invalid, fe) {
-            fillDrop = false;
-        }
-        TU_ARMA(Optional, fe) {
-            fillFlag = fe;
-        }
+            TU_ARMA(Optional, fe) {
+                fillFlag = fe;
             }
-            size_t prev = 0;
-            for (auto& kv : array.otherStates) {
-        if (fillDrop) {
-            emitArrayElementDropLoop(sp, lv, prev, kv.first, fillFlag);
-        }
-        dropValueFromState(sp, kv.second, MIRLValue::newField(lv.clone(), kv.first));
-        prev = kv.first + 1;
-            }
+                }
+                size_t prev = 0;
+                for (auto& kv : array.otherStates) {
             if (fillDrop) {
-        emitArrayElementDropLoop(sp, lv, prev, array.count, fillFlag);
+                emitArrayElementDropLoop(sp, lv, prev, kv.first, fillFlag);
             }
-        )
-    )
+            dropValueFromState(sp, kv.second, MIRLValue::newField(lv.clone(), kv.first));
+            prev = kv.first + 1;
+                }
+                if (fillDrop) {
+            emitArrayElementDropLoop(sp, lv, prev, array.count, fillFlag);
+                }
+            break;
+        }
+    }
 }
 
 void MirBuilder::dropScopeValues(ScopeDef& sd, bool preserveStates /*=false*/) {
-    TU_MATCHA(
-        (sd.data),
-        (e),
-        (Owning,
-         const auto dropSlots = e.dropSlots;
-         for (const auto& slot : ::reverse(dropSlots)) {
-             const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
-             auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);
-             if (buildingCleanup) {
-                 if (unwindConsumedValue && lvalue == *unwindConsumedValue) {
-                     continue;
-                 }
-                 auto state = getSlotState(sd.span, slot.index, slotType).clone();
-                 DEBUG(lvalue << " - " << state);
-                 dropValueFromState(sd.span, state, mv$(lvalue));
-             } else if (preserveStates) {
-                 auto state = getSlotState(sd.span, slot.index, slotType).clone();
-                 DEBUG(lvalue << " - " << state << " (branch)");
-                 dropValueFromState(sd.span, state, mv$(lvalue));
-             } else {
-                 auto& state = getSlotStateMut(sd.span, slot.index, slotType);
-                 DEBUG(lvalue << " - " << state);
-                 dropValueFromState(sd.span, state, mv$(lvalue));
-             }
-         }),
-        (
-            Split,
+    switch (sd.data.tag()) {
+        case ScopeType::TAG_Owning: {
+            auto& e = sd.data.as_Owning();
+            const auto dropSlots = e.dropSlots;
+            for (const auto& slot : ::reverse(dropSlots)) {
+                const auto slotType = slot.isArgument ? SlotType::Argument : SlotType::Local;
+                auto lvalue = slot.isArgument ? MIRLValue::newArgument(slot.index) : MIRLValue::newLocal(slot.index);
+                if (buildingCleanup) {
+                    if (unwindConsumedValue && lvalue == *unwindConsumedValue) {
+                        continue;
+                    }
+                    auto state = getSlotState(sd.span, slot.index, slotType).clone();
+                    DEBUG(lvalue << " - " << state);
+                    dropValueFromState(sd.span, state, mv$(lvalue));
+                } else if (preserveStates) {
+                    auto state = getSlotState(sd.span, slot.index, slotType).clone();
+                    DEBUG(lvalue << " - " << state << " (branch)");
+                    dropValueFromState(sd.span, state, mv$(lvalue));
+                } else {
+                    auto& state = getSlotStateMut(sd.span, slot.index, slotType);
+                    DEBUG(lvalue << " - " << state);
+                    dropValueFromState(sd.span, state, mv$(lvalue));
+                }
+            }
+            break;
+        }
+        case ScopeType::TAG_Split: {
+            auto& e = sd.data.as_Split();
+            (void)e;
             // No values, controls parent
-        ),
-        (
-            Loop,
+            break;
+        }
+        case ScopeType::TAG_Loop: {
+            auto& e = sd.data.as_Loop();
+            (void)e;
             // No values
-        ),
-        (
-            Freeze,
+            break;
+        }
+        case ScopeType::TAG_Freeze: {
+            auto& e = sd.data.as_Freeze();
+            (void)e;
             // No values
-        )
-    )
+            break;
+        }
+    }
 }
 
 void MirBuilder::movedLvalue(const Span& sp, const MIRLValue& lv) {
@@ -10565,7 +11004,34 @@ ScopeHandle::~ScopeHandle() {
 }
 
 VarState VarState::clone() const {
-    TU_MATCHA((*this), (e), (Invalid, return VarState(e);), (Valid, return VarState(e);), (Optional, return VarState(e);), (MovedOut, return VarState::make_MovedOut({box$(e.innerState->clone()), e.outerFlag});), (Partial, ::std::vector<VarState> n; n.reserve(e.innerStates.size()); for (const auto& a : e.innerStates) n.push_back(a.clone()); return VarState::make_Partial({mv$(n), e.outerFlag});), (PartialArray, ::std::map<unsigned, VarState> n; for (const auto& kv : e.otherStates) n.insert(::std::make_pair(kv.first, kv.second.clone())); return VarState::make_PartialArray({box$(e.fillState->clone()), mv$(n), e.count});))
+    switch ((*this).tag()) {
+        case VarState::TAG_Invalid: {
+            auto& e = (*this).as_Invalid();
+            return VarState(e);
+        }
+        case VarState::TAG_Valid: {
+            auto& e = (*this).as_Valid();
+            return VarState(e);
+        }
+        case VarState::TAG_Optional: {
+            auto& e = (*this).as_Optional();
+            return VarState(e);
+        }
+        case VarState::TAG_MovedOut: {
+            auto& e = (*this).as_MovedOut();
+            return VarState::make_MovedOut({box$(e.innerState->clone()), e.outerFlag});
+        }
+        case VarState::TAG_Partial: {
+            auto& e = (*this).as_Partial();
+            ::std::vector<VarState> n; n.reserve(e.innerStates.size()); for (const auto& a : e.innerStates) n.push_back(a.clone()); return VarState::make_Partial({mv$(n), e.outerFlag});
+            break;
+        }
+        case VarState::TAG_PartialArray: {
+            auto& e = (*this).as_PartialArray();
+            ::std::map<unsigned, VarState> n; for (const auto& kv : e.otherStates) n.insert(::std::make_pair(kv.first, kv.second.clone())); return VarState::make_PartialArray({box$(e.fillState->clone()), mv$(n), e.count});
+            break;
+        }
+    }
     throw "";
 }
 
@@ -10573,51 +11039,98 @@ bool VarState::operator==(const VarState& x) const {
     if (this->tag() != x.tag()) {
         return false;
     }
-    TU_MATCHA(
-        (*this, x),
-        (te, xe),
-        (Invalid, return te == xe;),
-        (Valid, return true;),
-        (Optional, return te == xe;),
-        (MovedOut, if (te.outerFlag != xe.outerFlag) return false; return *te.innerState == *xe.innerState;),
-        (
-            Partial, if (te.outerFlag != xe.outerFlag || te.innerStates.size() != xe.innerStates.size()) return false; for (unsigned int i = 0; i < te.innerStates.size(); i++) {
+    switch ((*this).tag()) {
+        case VarState::TAG_Invalid: {
+            auto& te = (*this).as_Invalid();
+            auto& xe = x.as_Invalid();
+            return te == xe;
+        }
+        case VarState::TAG_Valid: {
+            auto& te = (*this).as_Valid();
+            (void)te;
+            auto& xe = x.as_Valid();
+            (void)xe;
+            return true;
+        }
+        case VarState::TAG_Optional: {
+            auto& te = (*this).as_Optional();
+            auto& xe = x.as_Optional();
+            return te == xe;
+        }
+        case VarState::TAG_MovedOut: {
+            auto& te = (*this).as_MovedOut();
+            auto& xe = x.as_MovedOut();
+            if (te.outerFlag != xe.outerFlag) return false; return *te.innerState == *xe.innerState;
+            break;
+        }
+        case VarState::TAG_Partial: {
+            auto& te = (*this).as_Partial();
+            auto& xe = x.as_Partial();
+            if (te.outerFlag != xe.outerFlag || te.innerStates.size() != xe.innerStates.size()) return false; for (unsigned int i = 0; i < te.innerStates.size(); i++) {
                 if (te.innerStates[i] != xe.innerStates[i]) {
                     return false;
                 }
             } return true;
-        ),
-        (PartialArray, if (te.count != xe.count || !(*te.fillState == *xe.fillState) || te.otherStates.size() != xe.otherStates.size()) return false; for (auto itT = te.otherStates.begin(), itX = xe.otherStates.begin(); itT != te.otherStates.end(); ++itT, ++itX) {
-            if (itT->first != itX->first || itT->second != itX->second) {
-                return false;
-            }
-        } return true;)
-    )
+            break;
+        }
+        case VarState::TAG_PartialArray: {
+            auto& te = (*this).as_PartialArray();
+            auto& xe = x.as_PartialArray();
+            if (te.count != xe.count || !(*te.fillState == *xe.fillState) || te.otherStates.size() != xe.otherStates.size()) return false; for (auto itT = te.otherStates.begin(), itX = xe.otherStates.begin(); itT != te.otherStates.end(); ++itT, ++itX) {
+                if (itT->first != itX->first || itT->second != itX->second) {
+                    return false;
+                }
+            } return true;
+            break;
+        }
+    }
     throw "";
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const VarState& x) {
-    TU_MATCHA(
-        (x),
-        (e),
-        (Invalid,
-         switch (e) {
-             case InvalidType::Uninit:
-                 os << "Uninit";
-                 break;
-             case InvalidType::Moved:
-                 os << "Moved";
-                 break;
-             case InvalidType::Descoped:
-                 os << "Descoped";
-                 break;
-         }),
-        (Valid, os << "Valid";),
-        (Optional, os << "Optional(df" << e << ")";),
-        (MovedOut, os << "MovedOut("; if (e.outerFlag == ~0u) os << "-"; else os << "df" << e.outerFlag; os << " " << *e.innerState << ")";),
-        (Partial, os << "Partial("; if (e.outerFlag == ~0u) os << "-"; else os << "df" << e.outerFlag; os << ", [" << e.innerStates << "])";),
-        (PartialArray, os << "PartialArray(" << e.count << ", fill=" << *e.fillState << ", {"; for (const auto& kv : e.otherStates) os << kv.first << ": " << kv.second << ","; os << "})";)
-    )
+    switch (x.tag()) {
+        case VarState::TAG_Invalid: {
+            auto& e = x.as_Invalid();
+            switch (e) {
+                case InvalidType::Uninit:
+                    os << "Uninit";
+                    break;
+                case InvalidType::Moved:
+                    os << "Moved";
+                    break;
+                case InvalidType::Descoped:
+                    os << "Descoped";
+                    break;
+            }
+            break;
+        }
+        case VarState::TAG_Valid: {
+            auto& e = x.as_Valid();
+            (void)e;
+            os << "Valid";
+            break;
+        }
+        case VarState::TAG_Optional: {
+            auto& e = x.as_Optional();
+            os << "Optional(df" << e << ")";
+            break;
+        }
+        case VarState::TAG_MovedOut: {
+            auto& e = x.as_MovedOut();
+            os << "MovedOut("; if (e.outerFlag == ~0u) os << "-"; else os << "df" << e.outerFlag; os << " " << *e.innerState << ")";
+            break;
+        }
+        case VarState::TAG_Partial: {
+            auto& e = x.as_Partial();
+            os << "Partial("; if (e.outerFlag == ~0u) os << "-"; else os << "df" << e.outerFlag; os << ", [" << e.innerStates << "])";
+            break;
+        }
+        case VarState::TAG_PartialArray: {
+            auto& e = x.as_PartialArray();
+            os << "PartialArray(" << e.count << ", fill=" << *e.fillState << ", {"; for (const auto& kv : e.otherStates) os << kv.first << ": " << kv.second << ","; os << "})";
+            break;
+        }
+    }
     return os;
 }
 

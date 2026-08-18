@@ -2306,7 +2306,23 @@ namespace {
                 DEBUG(x);
                 return resolve.monomorphExpandOpt(sp, tmp, x, ms);
             };
-            TU_MATCHA((item.data), (e), (Unit, ), (Tuple, for (const auto& fld : e) { visitType(monomorph(fld.ent)); }), (Named, for (const auto& fld : e) visitType(monomorph(fld.ty));))
+            switch (item.data.tag()) {
+                case HIRStructData::TAG_Unit: {
+                    auto& e = item.data.as_Unit();
+                    (void)e;
+                    break;
+                }
+                case HIRStructData::TAG_Tuple: {
+                    auto& e = item.data.as_Tuple();
+                    for (const auto& fld : e) { visitType(monomorph(fld.ent)); }
+                    break;
+                }
+                case HIRStructData::TAG_Named: {
+                    auto& e = item.data.as_Named();
+                    for (const auto& fld : e) visitType(monomorph(fld.ty));
+                    break;
+                }
+            }
         }
 
         void visitUnion(const HIRTypeData* selfType, const HIRGenericPath& path, const HIRUnion& item) {
@@ -2357,7 +2373,40 @@ namespace {
                         BUG(sp, "`_` type hit in enumeration");
                     }
                     TU_ARMA(Path, te) {
-                        TU_MATCHA((te.binding), (tpb), (Unbound, BUG(sp, "Unbound type hit in enumeration - " << ty);), (Opaque, BUG(sp, "Opaque type hit in enumeration - " << ty);), (ExternType, ), (Struct, ), (Union, ), (Enum, ))
+                        switch (te.binding.tag()) {
+                            case HIRTypePathBinding::TAG_Unbound: {
+                                auto& tpb = te.binding.as_Unbound();
+                                (void)tpb;
+                                BUG(sp, "Unbound type hit in enumeration - " << ty);
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Opaque: {
+                                auto& tpb = te.binding.as_Opaque();
+                                (void)tpb;
+                                BUG(sp, "Opaque type hit in enumeration - " << ty);
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_ExternType: {
+                                auto& tpb = te.binding.as_ExternType();
+                                (void)tpb;
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Struct: {
+                                auto& tpb = te.binding.as_Struct();
+                                (void)tpb;
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Union: {
+                                auto& tpb = te.binding.as_Union();
+                                (void)tpb;
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Enum: {
+                                auto& tpb = te.binding.as_Enum();
+                                (void)tpb;
+                                break;
+                            }
+                        }
                     }
                     TU_ARMA(Array, te) {
                         ASSERT_BUG(sp, te.size.is_Known(), "Encountered unknown array size - " << ty);
@@ -2405,22 +2454,43 @@ namespace {
                     }
                     // Recursion!
                     TU_ARMA(Path, te) {
-                        TU_MATCHA(
-                            (te.binding),
-                            (tpb),
-                            (Unbound, BUG(sp, "Unbound type hit in enumeration - " << ty);),
-                            (Opaque, BUG(sp, "Opaque type hit in enumeration - " << ty);),
-                            (
-                                ExternType,
+                        switch (te.binding.tag()) {
+                            case HIRTypePathBinding::TAG_Unbound: {
+                                auto& tpb = te.binding.as_Unbound();
+                                (void)tpb;
+                                BUG(sp, "Unbound type hit in enumeration - " << ty);
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Opaque: {
+                                auto& tpb = te.binding.as_Opaque();
+                                (void)tpb;
+                                BUG(sp, "Opaque type hit in enumeration - " << ty);
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_ExternType: {
+                                auto& tpb = te.binding.as_ExternType();
+                                (void)tpb;
                                 // No innards to visit
-                            ),
-                            (Struct, visitStruct(ty, te.path.data.as_Generic(), *tpb);),
-                            (Union, visitUnion(ty, te.path.data.as_Generic(), *tpb);),
-                            (Enum,
-                             // NOTE: Force repr generation before recursing into enums (allows layout optimisation to be calculated)
-                             TargetGetTypeRepr(sp, resolve, ty);
-                             visitEnum(ty, te.path.data.as_Generic(), *tpb);)
-                        )
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Struct: {
+                                auto& tpb = te.binding.as_Struct();
+                                visitStruct(ty, te.path.data.as_Generic(), *tpb);
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Union: {
+                                auto& tpb = te.binding.as_Union();
+                                visitUnion(ty, te.path.data.as_Generic(), *tpb);
+                                break;
+                            }
+                            case HIRTypePathBinding::TAG_Enum: {
+                                auto& tpb = te.binding.as_Enum();
+                                // NOTE: Force repr generation before recursing into enums (allows layout optimisation to be calculated)
+                                TargetGetTypeRepr(sp, resolve, ty);
+                                visitEnum(ty, te.path.data.as_Generic(), *tpb);
+                                break;
+                            }
+                        }
                     }
                     TU_ARMA(TraitObject, te) {
                         static Span sp;
@@ -2591,24 +2661,26 @@ namespace {
                         TU_ARMA(Static, e) {
                             // TODO: Monomorphise the path then hand to MIR::TypeResolve?
                             const auto& path = e;
-                                TU_MATCHA( (path.data), (pe),
-                                (Generic,
+                            switch (path.data.tag()) {
+                                case HIRPathData::TAG_Generic: {
+                                    auto& pe = path.data.as_Generic();
                                     MIR_ASSERT(localMirRes, pe.params.types.empty(), "Path params on static - " << path);
                                     const auto& s = tv.resolve.hirCrate().getStaticByPath(localMirRes.sp, pe.path);
                                     ty = s.type;
-                                    ),
-                                (UfcsKnown,
-                                    MIR_TODO(localMirRes, "LValue::Static - UfcsKnown - " << path);
-                                    ),
-                                (UfcsUnknown,
-                                    MIR_BUG(localMirRes, "Encountered UfcsUnknown in LValue::Static - " << path);
-                                    ),
-                                (UfcsInherent,
-                                    MIR_TODO(localMirRes, "LValue::Static - UfcsInherent - " << path);
-                                    )
-                        }
+                                    break;
                                 }
-                            )
+                                case HIRPathData::TAG_UfcsKnown: {
+                                    MIR_TODO(localMirRes, "LValue::Static - UfcsKnown - " << path);
+                                }
+                                case HIRPathData::TAG_UfcsUnknown: {
+                                    MIR_BUG(localMirRes, "Encountered UfcsUnknown in LValue::Static - " << path);
+                                }
+                                case HIRPathData::TAG_UfcsInherent: {
+                                    MIR_TODO(localMirRes, "LValue::Static - UfcsInherent - " << path);
+                                }
+                            }
+                        }
+                            }
                             assert(ty);
 
                                 for (const auto& w : lv.wrappers) {
@@ -3224,27 +3296,85 @@ void TransEnumerateFillFromMIRLValue(MIREnumCache& state, const MIRLValue& lv) {
 }
 
 void TransEnumerateFillFromMIRConstant(MIREnumCache& state, const MIRConstant& c) {
-    TU_MATCHA(
-        (c),
-        (ce),
-        (Int, ),
-        (Uint, ),
-        (Float, ),
-        (Bool, ),
-        (Bytes, ),
-        (StaticString, ), // String
-        (Encoded, for (const auto& reloc : ce.value.relocations) if (reloc.p) state.insertPath(*reloc.p);),
-        (Const,
-         // - Check if this constant has a value of Defer
-         state.insertPath(*ce.p);),
-        (Generic, ),
-        (Function, state.insertPath(*ce.p);),
-        (ItemAddr, if (ce) state.insertPath(*ce);)
-    )
+    switch (c.tag()) {
+        case MIRConstant::TAG_Int: {
+            auto& ce = c.as_Int();
+            (void)ce;
+            break;
+        }
+        case MIRConstant::TAG_Uint: {
+            auto& ce = c.as_Uint();
+            (void)ce;
+            break;
+        }
+        case MIRConstant::TAG_Float: {
+            auto& ce = c.as_Float();
+            (void)ce;
+            break;
+        }
+        case MIRConstant::TAG_Bool: {
+            auto& ce = c.as_Bool();
+            (void)ce;
+            break;
+        }
+        case MIRConstant::TAG_Bytes: {
+            auto& ce = c.as_Bytes();
+            (void)ce;
+            break;
+        }
+        case MIRConstant::TAG_StaticString: {
+            auto& ce = c.as_StaticString();
+            (void)ce;
+            break;
+        }
+        // String
+        case MIRConstant::TAG_Encoded: {
+            auto& ce = c.as_Encoded();
+            for (const auto& reloc : ce.value.relocations) if (reloc.p) state.insertPath(*reloc.p);
+            break;
+        }
+        case MIRConstant::TAG_Const: {
+            auto& ce = c.as_Const();
+            // - Check if this constant has a value of Defer
+            state.insertPath(*ce.p);
+            break;
+        }
+        case MIRConstant::TAG_Generic: {
+            auto& ce = c.as_Generic();
+            (void)ce;
+            break;
+        }
+        case MIRConstant::TAG_Function: {
+            auto& ce = c.as_Function();
+            state.insertPath(*ce.p);
+            break;
+        }
+        case MIRConstant::TAG_ItemAddr: {
+            auto& ce = c.as_ItemAddr();
+            if (ce) state.insertPath(*ce);
+            break;
+        }
+    }
 }
 
 void TransEnumerateFillFromMIRParam(MIREnumCache& state, const MIRParam& p) {
-    TU_MATCHA((p), (e), (LValue, TransEnumerateFillFromMIRLValue(state, e);), (Borrow, TransEnumerateFillFromMIRLValue(state, e.val);), (Constant, TransEnumerateFillFromMIRConstant(state, e);))
+    switch (p.tag()) {
+        case MIRParam::TAG_LValue: {
+            auto& e = p.as_LValue();
+            TransEnumerateFillFromMIRLValue(state, e);
+            break;
+        }
+        case MIRParam::TAG_Borrow: {
+            auto& e = p.as_Borrow();
+            TransEnumerateFillFromMIRLValue(state, e.val);
+            break;
+        }
+        case MIRParam::TAG_Constant: {
+            auto& e = p.as_Constant();
+            TransEnumerateFillFromMIRConstant(state, e);
+            break;
+        }
+    }
 }
 
 void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
@@ -3263,7 +3393,83 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
             TU_ARMA(Assign, se) {
                     DEBUG("- " << se.dst << " = " << se.src);
                     TransEnumerateFillFromMIRLValue(state, se.dst);
-                    TU_MATCHA((se.src), (e), (Use, TransEnumerateFillFromMIRLValue(state, e);), (Constant, TransEnumerateFillFromMIRConstant(state, e);), (SizedArray, TransEnumerateFillFromMIRParam(state, e.val);), (Borrow, TransEnumerateFillFromMIRLValue(state, e.val);), (Cast, TransEnumerateFillFromMIRLValue(state, e.val);), (BinOp, TransEnumerateFillFromMIRParam(state, e.valL); TransEnumerateFillFromMIRParam(state, e.valR);), (UniOp, TransEnumerateFillFromMIRLValue(state, e.val);), (DstMeta, TransEnumerateFillFromMIRLValue(state, e.val);), (DstPtr, TransEnumerateFillFromMIRLValue(state, e.val);), (MakeDst, TransEnumerateFillFromMIRParam(state, e.ptrVal); TransEnumerateFillFromMIRParam(state, e.metaVal);), (Tuple, for (const auto& val : e.vals) TransEnumerateFillFromMIRParam(state, val);), (Array, for (const auto& val : e.vals) TransEnumerateFillFromMIRParam(state, val);), (UnionVariant, TransEnumerateFillFromMIRParam(state, e.val);), (EnumVariant, for (const auto& val : e.vals) TransEnumerateFillFromMIRParam(state, val);), (Struct, for (const auto& val : e.vals) TransEnumerateFillFromMIRParam(state, val);))
+                    switch (se.src.tag()) {
+                        case MIRRValue::TAG_Use: {
+                            auto& e = se.src.as_Use();
+                            TransEnumerateFillFromMIRLValue(state, e);
+                            break;
+                        }
+                        case MIRRValue::TAG_Constant: {
+                            auto& e = se.src.as_Constant();
+                            TransEnumerateFillFromMIRConstant(state, e);
+                            break;
+                        }
+                        case MIRRValue::TAG_SizedArray: {
+                            auto& e = se.src.as_SizedArray();
+                            TransEnumerateFillFromMIRParam(state, e.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_Borrow: {
+                            auto& e = se.src.as_Borrow();
+                            TransEnumerateFillFromMIRLValue(state, e.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_Cast: {
+                            auto& e = se.src.as_Cast();
+                            TransEnumerateFillFromMIRLValue(state, e.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_BinOp: {
+                            auto& e = se.src.as_BinOp();
+                            TransEnumerateFillFromMIRParam(state, e.valL); TransEnumerateFillFromMIRParam(state, e.valR);
+                            break;
+                        }
+                        case MIRRValue::TAG_UniOp: {
+                            auto& e = se.src.as_UniOp();
+                            TransEnumerateFillFromMIRLValue(state, e.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_DstMeta: {
+                            auto& e = se.src.as_DstMeta();
+                            TransEnumerateFillFromMIRLValue(state, e.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_DstPtr: {
+                            auto& e = se.src.as_DstPtr();
+                            TransEnumerateFillFromMIRLValue(state, e.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_MakeDst: {
+                            auto& e = se.src.as_MakeDst();
+                            TransEnumerateFillFromMIRParam(state, e.ptrVal); TransEnumerateFillFromMIRParam(state, e.metaVal);
+                            break;
+                        }
+                        case MIRRValue::TAG_Tuple: {
+                            auto& e = se.src.as_Tuple();
+                            for (const auto& val : e.vals) TransEnumerateFillFromMIRParam(state, val);
+                            break;
+                        }
+                        case MIRRValue::TAG_Array: {
+                            auto& e = se.src.as_Array();
+                            for (const auto& val : e.vals) TransEnumerateFillFromMIRParam(state, val);
+                            break;
+                        }
+                        case MIRRValue::TAG_UnionVariant: {
+                            auto& e = se.src.as_UnionVariant();
+                            TransEnumerateFillFromMIRParam(state, e.val);
+                            break;
+                        }
+                        case MIRRValue::TAG_EnumVariant: {
+                            auto& e = se.src.as_EnumVariant();
+                            for (const auto& val : e.vals) TransEnumerateFillFromMIRParam(state, val);
+                            break;
+                        }
+                        case MIRRValue::TAG_Struct: {
+                            auto& e = se.src.as_Struct();
+                            for (const auto& val : e.vals) TransEnumerateFillFromMIRParam(state, val);
+                            break;
+                        }
+                    }
                 }
                 TU_ARMA(Asm2, e) {
                     for (auto& p : e.params) {
@@ -3305,10 +3511,108 @@ void TransEnumerateFillFromMIR(MIREnumCache& state, const MIRFunction& code) {
             }
         }
         DEBUG("> " << bb.terminator);
-        TU_MATCHA((bb.terminator), (e), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, ), (If, TransEnumerateFillFromMIRLValue(state, e.cond);), (Switch, TransEnumerateFillFromMIRLValue(state, e.val);), (SwitchValue, TransEnumerateFillFromMIRLValue(state, e.val);), (Drop, TransEnumerateFillFromMIRLValue(state, e.slot);), (Call, TransEnumerateFillFromMIRLValue(state, e.retVal); TU_MATCHA((e.fcn), (e2), (Value, TransEnumerateFillFromMIRLValue(state, e2);), (Path, state.insertPath(e2);), (Intrinsic, if (e2.name == "type_id") {
-                                                                                                                                                                                                                                                                                                                                                                                                                                                      // Add <T>::#type_id to the enumerate list
-                                                                                                                                                                                                                                                                                                                                                                                                                                                      state.insertTypeid(e2.params.types.at(0));
-                                                                                                                                                                                                                                                                                                                                                                                                                                                  })) for (const auto& arg : e.args) TransEnumerateFillFromMIRParam(state, arg);), (TailCall, TU_MATCHA((e.fcn), (e2), (Value, TransEnumerateFillFromMIRLValue(state, e2);), (Path, state.insertPath(e2);), (Intrinsic, if (e2.name == "type_id") state.insertTypeid(e2.params.types.at(0));)) for (const auto& arg : e.args) TransEnumerateFillFromMIRParam(state, arg);), (Asm2, for (const auto& p : e.params) { if (const auto* c = p.opt_Const()) TransEnumerateFillFromMIRConstant(state, *c); else if (const auto* s = p.opt_Sym()) state.insertPath(*s); else if (const auto* r = p.opt_Reg()) { if (r->input) TransEnumerateFillFromMIRParam(state, *r->input); if (r->output) TransEnumerateFillFromMIRLValue(state, *r->output); } }))
+        switch (bb.terminator.tag()) {
+            case MIRTerminator::TAG_Incomplete: {
+                auto& e = bb.terminator.as_Incomplete();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_Return: {
+                auto& e = bb.terminator.as_Return();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_UnwindResume: {
+                auto& e = bb.terminator.as_UnwindResume();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_UnwindTerminate: {
+                auto& e = bb.terminator.as_UnwindTerminate();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_Unreachable: {
+                auto& e = bb.terminator.as_Unreachable();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_Goto: {
+                auto& e = bb.terminator.as_Goto();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_If: {
+                auto& e = bb.terminator.as_If();
+                TransEnumerateFillFromMIRLValue(state, e.cond);
+                break;
+            }
+            case MIRTerminator::TAG_Switch: {
+                auto& e = bb.terminator.as_Switch();
+                TransEnumerateFillFromMIRLValue(state, e.val);
+                break;
+            }
+            case MIRTerminator::TAG_SwitchValue: {
+                auto& e = bb.terminator.as_SwitchValue();
+                TransEnumerateFillFromMIRLValue(state, e.val);
+                break;
+            }
+            case MIRTerminator::TAG_Drop: {
+                auto& e = bb.terminator.as_Drop();
+                TransEnumerateFillFromMIRLValue(state, e.slot);
+                break;
+            }
+            case MIRTerminator::TAG_Call: {
+                auto& e = bb.terminator.as_Call();
+                TransEnumerateFillFromMIRLValue(state, e.retVal); switch (e.fcn.tag()) {
+                    case MIRCallTarget::TAG_Value: {
+                        auto& e2 = e.fcn.as_Value();
+                        TransEnumerateFillFromMIRLValue(state, e2);
+                        break;
+                    }
+                    case MIRCallTarget::TAG_Path: {
+                        auto& e2 = e.fcn.as_Path();
+                        state.insertPath(e2);
+                        break;
+                    }
+                    case MIRCallTarget::TAG_Intrinsic: {
+                        auto& e2 = e.fcn.as_Intrinsic();
+                        if (e2.name == "type_id") {
+                            // Add <T>::#type_id to the enumerate list
+                            state.insertTypeid(e2.params.types.at(0));
+                        }
+                        break;
+                    }
+                } for (const auto& arg : e.args) TransEnumerateFillFromMIRParam(state, arg);
+                break;
+            }
+            case MIRTerminator::TAG_TailCall: {
+                auto& e = bb.terminator.as_TailCall();
+                switch (e.fcn.tag()) {
+                    case MIRCallTarget::TAG_Value: {
+                        auto& e2 = e.fcn.as_Value();
+                        TransEnumerateFillFromMIRLValue(state, e2);
+                        break;
+                    }
+                    case MIRCallTarget::TAG_Path: {
+                        auto& e2 = e.fcn.as_Path();
+                        state.insertPath(e2);
+                        break;
+                    }
+                    case MIRCallTarget::TAG_Intrinsic: {
+                        auto& e2 = e.fcn.as_Intrinsic();
+                        if (e2.name == "type_id") state.insertTypeid(e2.params.types.at(0));
+                        break;
+                    }
+                } for (const auto& arg : e.args) TransEnumerateFillFromMIRParam(state, arg);
+                break;
+            }
+            case MIRTerminator::TAG_Asm2: {
+                auto& e = bb.terminator.as_Asm2();
+                for (const auto& p : e.params) { if (const auto* c = p.opt_Const()) TransEnumerateFillFromMIRConstant(state, *c); else if (const auto* s = p.opt_Sym()) state.insertPath(*s); else if (const auto* r = p.opt_Reg()) { if (r->input) TransEnumerateFillFromMIRParam(state, *r->input); if (r->output) TransEnumerateFillFromMIRLValue(state, *r->output); } }
+                break;
+            }
+        }
     }
 }
 

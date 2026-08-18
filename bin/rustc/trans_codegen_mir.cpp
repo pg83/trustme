@@ -138,7 +138,29 @@ namespace {
                 os << "(*";
             }
         }
-        TU_MATCHA((x.e.root), (e), (Return, os << "RETURN";), (Local, os << "var" << e;), (Argument, os << "arg" << e;), (Static, os << fmt(e);))
+        switch (x.e.root.tag()) {
+            case MIRLValue::Storage::TAG_Return: {
+                decltype(x.e.root.as_Return()) e = x.e.root.as_Return();
+                (void)e;
+                os << "RETURN";
+                break;
+            }
+            case MIRLValue::Storage::TAG_Local: {
+                decltype(x.e.root.as_Local()) e = x.e.root.as_Local();
+                os << "var" << e;
+                break;
+            }
+            case MIRLValue::Storage::TAG_Argument: {
+                decltype(x.e.root.as_Argument()) e = x.e.root.as_Argument();
+                os << "arg" << e;
+                break;
+            }
+            case MIRLValue::Storage::TAG_Static: {
+                decltype(x.e.root.as_Static()) e = x.e.root.as_Static();
+                os << fmt(e);
+                break;
+            }
+        }
         bool wasNum = false;
         for (const auto& w : x.e.wrappers) {
             bool prevWasNum = wasNum;
@@ -382,7 +404,22 @@ namespace {
                                 auto monomorph = [&](const auto& tpl) {
                                     return resolve_.monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &path.params, nullptr));
                                 };
-                                TU_MATCHA((str.data), (se), (Unit, MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");), (Tuple, return metadataType(monomorph(se.back().ent));), (Named, return metadataType(monomorph(se.back().ty));))
+                                switch (str.data.tag()) {
+                                    case HIRStructData::TAG_Unit: {
+                                        auto& se = str.data.as_Unit();
+                                        (void)se;
+                                        MIR_BUG(*mirRes, "Unit-like struct with DstType::Possible");
+                                        break;
+                                    }
+                                    case HIRStructData::TAG_Tuple: {
+                                        auto& se = str.data.as_Tuple();
+                                        return metadataType(monomorph(se.back().ent));
+                                    }
+                                    case HIRStructData::TAG_Named: {
+                                        auto& se = str.data.as_Named();
+                                        return metadataType(monomorph(se.back().ty));
+                                    }
+                                }
                                 //MIR_TODO(*m_mir_res, "Determine DST type when ::Possible - " << ty);
                                 return MetadataType::None;
                             }
@@ -1170,11 +1207,23 @@ namespace {
                         break;
                         TU_ARM(term, TailCall, e) {
                             of << "TAILCALL ";
-                            TU_MATCHA((e.fcn), (f),
-                                (Intrinsic, of << "\"" << f.name << "\"";),
-                                (Value, of << "(" << fmt(f) << ")";),
-                                (Path, of << fmt(f);)
-                            )
+                            switch (e.fcn.tag()) {
+                                case MIRCallTarget::TAG_Intrinsic: {
+                                    auto& f = e.fcn.as_Intrinsic();
+                                    of << "\"" << f.name << "\"";
+                                    break;
+                                }
+                                case MIRCallTarget::TAG_Value: {
+                                    auto& f = e.fcn.as_Value();
+                                    of << "(" << fmt(f) << ")";
+                                    break;
+                                }
+                                case MIRCallTarget::TAG_Path: {
+                                    auto& f = e.fcn.as_Path();
+                                    of << fmt(f);
+                                    break;
+                                }
+                            }
                             of << "(";
                             for (const auto& arg : e.args) {
                                 of << fmt(arg) << ", ";

@@ -34,7 +34,18 @@ inline ::std::ostream& operator<<(::std::ostream& os, const CapturedVal& x) {
 }
 
 inline ::std::ostream& operator<<(::std::ostream& os, const CaptureLayer& x) {
-    TU_MATCH(CaptureLayer, (x), (e), (Vals, os << "[" << e << "]";), (Nested, os << "{" << e << "}";))
+    switch (x.tag()) {
+        case CaptureLayer::TAG_Vals: {
+            auto& e = x.as_Vals();
+            os << "[" << e << "]";
+            break;
+        }
+        case CaptureLayer::TAG_Nested: {
+            auto& e = x.as_Nested();
+            os << "{" << e << "}";
+            break;
+        }
+    }
     return os;
 }
 

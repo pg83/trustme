@@ -3,7 +3,18 @@
 #include "hir_type.h"
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRGenericBound& x) {
-    TU_MATCH(HIRGenericBound, (x), (e), (TraitBound, os << e.type << ": " << e.trait /*.m_path*/;), (TypeEquality, os << e.type << " = " << e.otherType;))
+    switch (x.tag()) {
+        case HIRGenericBound::TAG_TraitBound: {
+            auto& e = x.as_TraitBound();
+            os << e.type << ": " << e.trait /*.m_path*/;
+            break;
+        }
+        case HIRGenericBound::TAG_TypeEquality: {
+            auto& e = x.as_TypeEquality();
+            os << e.type << " = " << e.otherType;
+            break;
+        }
+    }
     return os;
 }
 
@@ -53,7 +64,20 @@ Ordering HIRGenericBound::ord(const HIRGenericBound& b) const {
     if (this->tag() != b.tag()) {
         return this->tag() < b.tag() ? OrdLess : OrdGreater;
     }
-    TU_MATCHA((*this, b), (ae, be), (TraitBound, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;), (TypeEquality, auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.otherType->ordIgnoringRegions(be.otherType); if (cmp != OrdEqual) return cmp;))
+    switch ((*this).tag()) {
+        case HIRGenericBound::TAG_TraitBound: {
+            auto& ae = (*this).as_TraitBound();
+            auto& be = b.as_TraitBound();
+            auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.trait.ord(be.trait); if (cmp != OrdEqual) return cmp;
+            break;
+        }
+        case HIRGenericBound::TAG_TypeEquality: {
+            auto& ae = (*this).as_TypeEquality();
+            auto& be = b.as_TypeEquality();
+            auto cmp = ae.type->ordIgnoringRegions(be.type); if (cmp != OrdEqual) return cmp; cmp = ae.otherType->ordIgnoringRegions(be.otherType); if (cmp != OrdEqual) return cmp;
+            break;
+        }
+    }
     return OrdEqual;
 }
 

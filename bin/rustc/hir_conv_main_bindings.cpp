@@ -360,23 +360,46 @@ namespace {
                             break;
                         }
                         const auto& item = *reinterpret_cast<const HIRTypeItem*>(getTypePointer(sp, crate, pe.path, Target::TypeItem));
-                        TU_MATCH_DEF(
-                            HIRTypeItem,
-                            (item),
-                            (e3),
-                            (ERROR(sp, E0000, "Unexpected item type returned for " << pe.path << " - " << item.tagStr());),
-                            (
-                                TypeAlias, BUG(sp, "TypeAlias encountered after `Resolve Type Aliases` - " << ty);
+                        switch (item.tag()) {
+                            case HIRTypeItem::TAG_TypeAlias: {
+                                auto& e3 = item.as_TypeAlias();
+                                (void)e3;
+                                BUG(sp, "TypeAlias encountered after `Resolve Type Aliases` - " << ty);
                                 // Assume it'll be filled out, with the correct binding
-                            ),
-                            (ExternType, e->binding = HIRTypePathBinding::make_ExternType(&e3); DEBUG("- " << ty);),
-                            (Struct, fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/inExpr != 0); e->binding = HIRTypePathBinding::make_Struct(&e3); DEBUG("- " << ty);),
-                            (Union, fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/inExpr != 0); e->binding = HIRTypePathBinding::make_Union(&e3); DEBUG("- " << ty);),
-                            (Enum, fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/inExpr != 0); e->binding = HIRTypePathBinding::make_Enum(&e3); DEBUG("- " << ty);),
-                            (Trait,
-                             // TODO: Should this reassign instead?
-                             data = HIRTypeData::make_TraitObject({HIRTraitPath{mv$(pe), {}, {}}, {}});)
-                        )
+                                break;
+                            }
+                            case HIRTypeItem::TAG_ExternType: {
+                                auto& e3 = item.as_ExternType();
+                                e->binding = HIRTypePathBinding::make_ExternType(&e3); DEBUG("- " << ty);
+                                break;
+                            }
+                            case HIRTypeItem::TAG_Struct: {
+                                auto& e3 = item.as_Struct();
+                                fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/inExpr != 0); e->binding = HIRTypePathBinding::make_Struct(&e3); DEBUG("- " << ty);
+                                break;
+                            }
+                            case HIRTypeItem::TAG_Union: {
+                                auto& e3 = item.as_Union();
+                                fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/inExpr != 0); e->binding = HIRTypePathBinding::make_Union(&e3); DEBUG("- " << ty);
+                                break;
+                            }
+                            case HIRTypeItem::TAG_Enum: {
+                                auto& e3 = item.as_Enum();
+                                fixParamCount(crate.types, sp, pe, e3.params, pe.params, /*fill_infer=*/inExpr != 0); e->binding = HIRTypePathBinding::make_Enum(&e3); DEBUG("- " << ty);
+                                break;
+                            }
+                            case HIRTypeItem::TAG_Trait: {
+                                auto& e3 = item.as_Trait();
+                                (void)e3;
+                                // TODO: Should this reassign instead?
+                                data = HIRTypeData::make_TraitObject({HIRTraitPath{mv$(pe), {}, {}}, {}});
+                                break;
+                            }
+                            default: {
+                                ERROR(sp, E0000, "Unexpected item type returned for " << pe.path << " - " << item.tagStr());
+                                break;
+                            }
+                        }
                     }
                     TU_ARMA(UfcsUnknown, pe) {
                         //TODO(sp, "Should UfcsKnown be encountered here?");
@@ -1402,7 +1425,30 @@ HIRTypeRef ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, cons
 
 HIRTypeRef ConvertHIRExpandAliasesGetExpansion(const HIRCrate& crate, const HIRPath& path, bool isExpr) {
     static Span sp;
-    TU_MATCH(HIRPath::Data, (path.data), (e), (Generic, return ConvertHIRExpandTypeAlias(sp, crate, e, isExpr);), (UfcsInherent, DEBUG("TODO: Locate impl blocks for types - path=" << path);), (UfcsKnown, DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);), (UfcsUnknown, DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);))
+    switch (path.data.tag()) {
+        case HIRPath::Data::TAG_Generic: {
+            auto& e = path.data.as_Generic();
+            return ConvertHIRExpandTypeAlias(sp, crate, e, isExpr);
+        }
+        case HIRPath::Data::TAG_UfcsInherent: {
+            auto& e = path.data.as_UfcsInherent();
+            (void)e;
+            DEBUG("TODO: Locate impl blocks for types - path=" << path);
+            break;
+        }
+        case HIRPath::Data::TAG_UfcsKnown: {
+            auto& e = path.data.as_UfcsKnown();
+            (void)e;
+            DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);
+            break;
+        }
+        case HIRPath::Data::TAG_UfcsUnknown: {
+            auto& e = path.data.as_UfcsUnknown();
+            (void)e;
+            DEBUG("TODO: Locate impl blocks for traits on types - path=" << path);
+            break;
+        }
+    }
     return crate.types.infer();
 }
 
@@ -2508,7 +2554,23 @@ namespace {
             }
 
             const HIRTypeData* fieldTy = nullptr;
-            TU_MATCHA((str.data), (se), (Unit, ), (Tuple, fieldTy = se.at(str.structMarkings.coerceUnsizedIndex).ent;), (Named, fieldTy = se.at(str.structMarkings.coerceUnsizedIndex).ty;))
+            switch (str.data.tag()) {
+                case HIRStructData::TAG_Unit: {
+                    auto& se = str.data.as_Unit();
+                    (void)se;
+                    break;
+                }
+                case HIRStructData::TAG_Tuple: {
+                    auto& se = str.data.as_Tuple();
+                    fieldTy = se.at(str.structMarkings.coerceUnsizedIndex).ent;
+                    break;
+                }
+                case HIRStructData::TAG_Named: {
+                    auto& se = str.data.as_Named();
+                    fieldTy = se.at(str.structMarkings.coerceUnsizedIndex).ty;
+                    break;
+                }
+            }
             assert(fieldTy);
         tryAgain:
             DEBUG("field_ty = " << fieldTy);

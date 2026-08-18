@@ -1009,34 +1009,92 @@ namespace {
 
         void visitType(::ASTType* ty) {
             // TODO: Correct handling of visit_type
-            TU_MATCHA(
-                (ty->data),
-                (te),
-                (None, BUG(sp, ty);),
-                (Any, pmi.sendRword("_");),
-                (Bang, pmi.sendSymbol("!");),
-                (Unit, pmi.sendSymbol("("); pmi.sendSymbol(")");),
-                (Macro, visitPath(te.inv->path()); pmi.sendSymbol("!"); pmi.sendSymbol("("); visitTokentree(te.inv->inputTt()); pmi.sendSymbol(")");),
-                (Primitive, TODO(sp, "proc_macro send primitive - " << ty);),
-                (Function, ::std::stringstream ss; ss << ty << " "; DEBUG("STRING: " << ss.str());
+            switch (ty->data.tag()) {
+                case TypeData::TAG_None: {
+                    auto& te = ty->data.as_None();
+                    (void)te;
+                    BUG(sp, ty);
+                    break;
+                }
+                case TypeData::TAG_Any: {
+                    auto& te = ty->data.as_Any();
+                    (void)te;
+                    pmi.sendRword("_");
+                    break;
+                }
+                case TypeData::TAG_Bang: {
+                    auto& te = ty->data.as_Bang();
+                    (void)te;
+                    pmi.sendSymbol("!");
+                    break;
+                }
+                case TypeData::TAG_Unit: {
+                    auto& te = ty->data.as_Unit();
+                    (void)te;
+                    pmi.sendSymbol("("); pmi.sendSymbol(")");
+                    break;
+                }
+                case TypeData::TAG_Macro: {
+                    auto& te = ty->data.as_Macro();
+                    visitPath(te.inv->path()); pmi.sendSymbol("!"); pmi.sendSymbol("("); visitTokentree(te.inv->inputTt()); pmi.sendSymbol(")");
+                    break;
+                }
+                case TypeData::TAG_Primitive: {
+                    auto& te = ty->data.as_Primitive();
+                    (void)te;
+                    TODO(sp, "proc_macro send primitive - " << ty);
+                    break;
+                }
+                case TypeData::TAG_Function: {
+                    auto& te = ty->data.as_Function();
+                    (void)te;
+                    ::std::stringstream ss; ss << ty << " "; DEBUG("STRING: " << ss.str());
 
-                 parseString(ss.str());),
-                (
-                    Tuple, pmi.sendSymbol("("); for (const auto& st : te.innerTypes) {
+                    parseString(ss.str());
+                    break;
+                }
+                case TypeData::TAG_Tuple: {
+                    auto& te = ty->data.as_Tuple();
+                    pmi.sendSymbol("("); for (const auto& st : te.innerTypes) {
                         this->visitType(st);
                         pmi.sendSymbol(",");
                     } pmi.sendSymbol(")");
-                ),
-                (Borrow, pmi.sendSymbol("&"); this->visitLifetime(te.lifetime); if (te.isMut) pmi.sendRword("mut"); pmi.sendSymbol("("); this->visitType(te.inner); pmi.sendSymbol(")");),
-                (Pointer, pmi.sendSymbol("*"); if (te.isMut) pmi.sendRword("mut"); else pmi.sendRword("const"); pmi.sendSymbol("("); this->visitType(te.inner); pmi.sendSymbol(")");),
-                (Array, pmi.sendSymbol("["); this->visitType(te.inner); pmi.sendSymbol(";"); if (te.size) { this->visitNode(*te.size); } else { pmi.sendRword("_"); } pmi.sendSymbol("]");),
-                (Slice, pmi.sendSymbol("["); this->visitType(te.inner); pmi.sendSymbol("]");),
-                (Generic,
-                 // TODO: This may already be resolved?... Wait, how?
-                 pmi.sendIdent(te.name.c_str());),
-                (Path, this->visitPath(*te);),
-                (
-                    TraitObject, pmi.sendSymbol("("); pmi.sendRword("dyn"); bool needsPlus = false; for (const auto& t : te.traits) {
+                    break;
+                }
+                case TypeData::TAG_Borrow: {
+                    auto& te = ty->data.as_Borrow();
+                    pmi.sendSymbol("&"); this->visitLifetime(te.lifetime); if (te.isMut) pmi.sendRword("mut"); pmi.sendSymbol("("); this->visitType(te.inner); pmi.sendSymbol(")");
+                    break;
+                }
+                case TypeData::TAG_Pointer: {
+                    auto& te = ty->data.as_Pointer();
+                    pmi.sendSymbol("*"); if (te.isMut) pmi.sendRword("mut"); else pmi.sendRword("const"); pmi.sendSymbol("("); this->visitType(te.inner); pmi.sendSymbol(")");
+                    break;
+                }
+                case TypeData::TAG_Array: {
+                    auto& te = ty->data.as_Array();
+                    pmi.sendSymbol("["); this->visitType(te.inner); pmi.sendSymbol(";"); if (te.size) { this->visitNode(*te.size); } else { pmi.sendRword("_"); } pmi.sendSymbol("]");
+                    break;
+                }
+                case TypeData::TAG_Slice: {
+                    auto& te = ty->data.as_Slice();
+                    pmi.sendSymbol("["); this->visitType(te.inner); pmi.sendSymbol("]");
+                    break;
+                }
+                case TypeData::TAG_Generic: {
+                    auto& te = ty->data.as_Generic();
+                    // TODO: This may already be resolved?... Wait, how?
+                    pmi.sendIdent(te.name.c_str());
+                    break;
+                }
+                case TypeData::TAG_Path: {
+                    auto& te = ty->data.as_Path();
+                    this->visitPath(*te);
+                    break;
+                }
+                case TypeData::TAG_TraitObject: {
+                    auto& te = ty->data.as_TraitObject();
+                    pmi.sendSymbol("("); pmi.sendRword("dyn"); bool needsPlus = false; for (const auto& t : te.traits) {
                         if (needsPlus) {
                             pmi.sendSymbol("+");
                         }
@@ -1053,32 +1111,37 @@ namespace {
                             this->visitLifetime(lft);
                         }
                     } pmi.sendSymbol(")");
-                ),
-                (ErasedType, pmi.sendRword("impl"); bool needsPlus = false; for (const auto& t : te->traits) {
-                    if (needsPlus) {
+                    break;
+                }
+                case TypeData::TAG_ErasedType: {
+                    auto& te = ty->data.as_ErasedType();
+                    pmi.sendRword("impl"); bool needsPlus = false; for (const auto& t : te->traits) {
+                        if (needsPlus) {
+                            pmi.sendSymbol("+");
+                        }
+                        needsPlus = true;
+                        this->visitHrbs(t.hrbs);
+                        this->visitBoundConstness(t.constness);
+                        this->visitPath(*t.path);
+                    } for (const auto& t : te->maybeTraits) {
+                        if (needsPlus) {
+                            pmi.sendSymbol("+");
+                        }
+                        needsPlus = true;
+                        pmi.sendSymbol("?");
+                        this->visitHrbs(t.hrbs);
+                        this->visitPath(*t.path);
+                    } for (const auto& lft : te->lifetimes) {
+                        if (needsPlus) {
+                            pmi.sendSymbol("+");
+                        }
+                        needsPlus = true;
                         pmi.sendSymbol("+");
-                    }
-                    needsPlus = true;
-                    this->visitHrbs(t.hrbs);
-                    this->visitBoundConstness(t.constness);
-                    this->visitPath(*t.path);
-                } for (const auto& t : te->maybeTraits) {
-                    if (needsPlus) {
-                        pmi.sendSymbol("+");
-                    }
-                    needsPlus = true;
-                    pmi.sendSymbol("?");
-                    this->visitHrbs(t.hrbs);
-                    this->visitPath(*t.path);
-                } for (const auto& lft : te->lifetimes) {
-                    if (needsPlus) {
-                        pmi.sendSymbol("+");
-                    }
-                    needsPlus = true;
-                    pmi.sendSymbol("+");
-                    this->visitLifetime(lft);
-                } if (te->use) { TODO(Span(), "`use`"); })
-            )
+                        this->visitLifetime(lft);
+                    } if (te->use) { TODO(Span(), "`use`"); }
+                    break;
+                }
+            }
         }
 
         void visitHrbs(const ASTHigherRankedBounds& hrbs) {

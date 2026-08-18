@@ -64,7 +64,29 @@ const HIRTypeData* MIRTypeResolve::getStaticType(HIRTypeRef& tmp, const HIRPath&
 
 const HIRTypeData* MIRTypeResolve::getLvalueType(HIRTypeRef& tmp, const MIRLValue& val, unsigned wrapperSkipCount /*=0*/) const {
     const HIRTypeData* rv = nullptr;
-    TU_MATCHA((val.root), (e), (Return, rv = monomorphedRettype ? monomorphedRettype : retType;), (Argument, MIR_ASSERT(*this, e < args.size(), "Argument " << val << " out of range (" << args.size() << ")"); rv = args.at(e).second;), (Local, MIR_ASSERT(*this, e < fcn.locals.size(), "Local " << val << " out of range (" << fcn.locals.size() << ")"); rv = monomorphedLocals ? monomorphedLocals->at(e) : fcn.locals.at(e);), (Static, rv = getStaticType(tmp, e);))
+    switch (val.root.tag()) {
+        case MIRLValue::Storage::TAG_Return: {
+            decltype(val.root.as_Return()) e = val.root.as_Return();
+            (void)e;
+            rv = monomorphedRettype ? monomorphedRettype : retType;
+            break;
+        }
+        case MIRLValue::Storage::TAG_Argument: {
+            decltype(val.root.as_Argument()) e = val.root.as_Argument();
+            MIR_ASSERT(*this, e < args.size(), "Argument " << val << " out of range (" << args.size() << ")"); rv = args.at(e).second;
+            break;
+        }
+        case MIRLValue::Storage::TAG_Local: {
+            decltype(val.root.as_Local()) e = val.root.as_Local();
+            MIR_ASSERT(*this, e < fcn.locals.size(), "Local " << val << " out of range (" << fcn.locals.size() << ")"); rv = monomorphedLocals ? monomorphedLocals->at(e) : fcn.locals.at(e);
+            break;
+        }
+        case MIRLValue::Storage::TAG_Static: {
+            decltype(val.root.as_Static()) e = val.root.as_Static();
+            rv = getStaticType(tmp, e);
+            break;
+        }
+    }
     if (val.wrappers.size() > 0) {
         assert(wrapperSkipCount <= val.wrappers.size());
         const auto* stopWrapper = val.wrappers.data() + (val.wrappers.size() - wrapperSkipCount);
@@ -104,7 +126,24 @@ const HIRTypeData* MIRTypeResolve::getUnwrappedType(HIRTypeRef& tmp, const MIRLV
                         auto maybeMonomorph = [&](const auto& fieldType) {
                             return resolve.monomorphExpandOpt(sp, tmp, fieldType, MonomorphStatePtr(crate.types, ty, &te.path.data.as_Generic().params, nullptr));
                         };
-                        TU_MATCHA((str.data), (se), (Unit, MIR_BUG(*this, "Field on unit-like struct - " << ty);), (Tuple, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in tuple-struct " << te.path); return maybeMonomorph(se[fieldIndex].ent);), (Named, MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in struct " << te.path); return maybeMonomorph(se[fieldIndex].ty);))
+                        switch (str.data.tag()) {
+                            case HIRStructData::TAG_Unit: {
+                                auto& se = str.data.as_Unit();
+                                (void)se;
+                                MIR_BUG(*this, "Field on unit-like struct - " << ty);
+                                break;
+                            }
+                            case HIRStructData::TAG_Tuple: {
+                                auto& se = str.data.as_Tuple();
+                                MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in tuple-struct " << te.path); return maybeMonomorph(se[fieldIndex].ent);
+                                break;
+                            }
+                            case HIRStructData::TAG_Named: {
+                                auto& se = str.data.as_Named();
+                                MIR_ASSERT(*this, fieldIndex < se.size(), "Field index out of range in struct " << te.path); return maybeMonomorph(se[fieldIndex].ty);
+                                break;
+                            }
+                        }
                     } else if (const auto* tep = te.binding.opt_Union()) {
                         const auto& unm = **tep;
                         auto maybeMonomorph = [&](const HIRTypeData* t) -> const HIRTypeData* {
@@ -1571,50 +1610,86 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
 
         state.setCurStmtTerm(bbIdx);
         DEBUG(state << "TERM " << fcn.blocks[bbIdx].terminator);
-        TU_MATCH(
-            MIRTerminator,
-            (fcn.blocks[bbIdx].terminator),
-            (e),
-            (
-                Incomplete,
+        switch (fcn.blocks[bbIdx].terminator.tag()) {
+            case MIRTerminator::TAG_Incomplete: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_Incomplete();
+                (void)e;
                 // Should be impossible here.
-            ),
-            (Return,
-             // End all active lifetimes at their previous location.
-             applyState(valState);),
-            (UnwindResume, applyState(valState);),
-            (UnwindTerminate, applyState(valState);),
-            (Unreachable, applyState(valState);),
-            (Goto, addToVisit(e, mv$(valState));),
-            (If, visitMirLvalue(e.cond, ValUsage::Read, visitLvalCb);
+                break;
+            }
+            case MIRTerminator::TAG_Return: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_Return();
+                (void)e;
+                // End all active lifetimes at their previous location.
+                applyState(valState);
+                break;
+            }
+            case MIRTerminator::TAG_UnwindResume: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_UnwindResume();
+                (void)e;
+                applyState(valState);
+                break;
+            }
+            case MIRTerminator::TAG_UnwindTerminate: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_UnwindTerminate();
+                (void)e;
+                applyState(valState);
+                break;
+            }
+            case MIRTerminator::TAG_Unreachable: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_Unreachable();
+                (void)e;
+                applyState(valState);
+                break;
+            }
+            case MIRTerminator::TAG_Goto: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_Goto();
+                addToVisit(e, mv$(valState));
+                break;
+            }
+            case MIRTerminator::TAG_If: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_If();
+                visitMirLvalue(e.cond, ValUsage::Read, visitLvalCb);
 
-             // Push blocks
-             addToVisit(e.bb0, valState.clone());
-             addToVisit(e.bb1, mv$(valState));),
-            (
-                Switch, visitMirLvalue(e.val, ValUsage::Read, visitLvalCb); ::std::set<unsigned int> tgts; for (const auto& tgt : e.targets) tgts.insert(tgt);
+                // Push blocks
+                addToVisit(e.bb0, valState.clone());
+                addToVisit(e.bb1, mv$(valState));
+                break;
+            }
+            case MIRTerminator::TAG_Switch: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_Switch();
+                visitMirLvalue(e.val, ValUsage::Read, visitLvalCb); ::std::set<unsigned int> tgts; for (const auto& tgt : e.targets) tgts.insert(tgt);
 
                 for (const auto& tgt : tgts) {
                     auto vs = (tgt == *tgts.rbegin() ? mv$(valState) : valState.clone());
                     addToVisit(tgt, mv$(vs));
                 }
-            ),
-            (Drop, visitMirLvalue(e.slot, ValUsage::Move, visitLvalCb); if (e.unwind.is_Cleanup()) {
-                auto& target = e.unwind.as_Cleanup();
-                addToVisit(target, valState.clone());
-            } addToVisit(e.target, mv$(valState));),
-            (Call, if (const auto* f = e.fcn.opt_Value()) visitMirLvalue(*f, ValUsage::Read, visitLvalCb); for (const auto& arg : e.args) if (const auto* e = arg.opt_LValue()) visitMirLvalue(*e, ValUsage::Read, visitLvalCb);
+                break;
+            }
+            case MIRTerminator::TAG_Drop: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_Drop();
+                visitMirLvalue(e.slot, ValUsage::Move, visitLvalCb); if (e.unwind.is_Cleanup()) {
+                    auto& target = e.unwind.as_Cleanup();
+                    addToVisit(target, valState.clone());
+                } addToVisit(e.target, mv$(valState));
+                break;
+            }
+            case MIRTerminator::TAG_Call: {
+                auto& e = fcn.blocks[bbIdx].terminator.as_Call();
+                if (const auto* f = e.fcn.opt_Value()) visitMirLvalue(*f, ValUsage::Read, visitLvalCb); for (const auto& arg : e.args) if (const auto* e = arg.opt_LValue()) visitMirLvalue(*e, ValUsage::Read, visitLvalCb);
 
-             // Push blocks (with return valid only in one)
-             if (e.unwind.is_Cleanup()) {
-                 auto& target = e.unwind.as_Cleanup();
-                 addToVisit(target, valState.clone());
-             }
+                // Push blocks (with return valid only in one)
+                if (e.unwind.is_Cleanup()) {
+                    auto& target = e.unwind.as_Cleanup();
+                    addToVisit(target, valState.clone());
+                }
 
-             // TODO: If the function returns !, don't follow the ret_block
-             lvalueSet(e.retVal);
-             addToVisit(e.retBlock, mv$(valState));)
-        )
+                // TODO: If the function returns !, don't follow the ret_block
+                lvalueSet(e.retVal);
+                addToVisit(e.retBlock, mv$(valState));
+                break;
+            }
+        }
     }
 
     // Dump out variable lifetimes.

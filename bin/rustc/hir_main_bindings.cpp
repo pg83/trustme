@@ -3413,26 +3413,74 @@ public:
             }
         };
         out.writeTag(static_cast<int>(term.tag()));
-        TU_MATCHA(
-            (term),
-            (e),
-            (
-                Incomplete,
+        switch (term.tag()) {
+            case MIRTerminator::TAG_Incomplete: {
+                auto& e = term.as_Incomplete();
+                (void)e;
                 // NOTE: loops that diverge (don't break) leave a dangling bb
-            ),
-            (Return, ),
-            (UnwindResume, ),
-            (UnwindTerminate, ),
-            (Unreachable, ),
-            (Goto, out.writeCount(e);),
-            (If, serialise(e.cond); out.writeCount(e.bbTrue); out.writeCount(e.bbFalse);),
-            (Switch, serialise(e.val); serialiseVec(e.targets); out.writeCount(e.validFlag); out.writeCount(e.invalidTarget);),
-            (SwitchValue, serialise(e.val); out.writeCount(e.defTarget); serialiseVec(e.targets); serialise(e.values);),
-            (Drop, out.writeTag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.writeCount(e.flagIdx); out.writeCount(e.target); serialiseUnwind(e.unwind);),
-            (Call, out.writeCount(e.retBlock); serialiseUnwind(e.unwind); serialise(e.retVal); serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);),
-            (TailCall, serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);)
-            ,(Asm2, serialise(e.options); serialiseVec(e.lines); serialiseVec(e.params); out.writeCount(e.retBlock);)
-        )
+                break;
+            }
+            case MIRTerminator::TAG_Return: {
+                auto& e = term.as_Return();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_UnwindResume: {
+                auto& e = term.as_UnwindResume();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_UnwindTerminate: {
+                auto& e = term.as_UnwindTerminate();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_Unreachable: {
+                auto& e = term.as_Unreachable();
+                (void)e;
+                break;
+            }
+            case MIRTerminator::TAG_Goto: {
+                auto& e = term.as_Goto();
+                out.writeCount(e);
+                break;
+            }
+            case MIRTerminator::TAG_If: {
+                auto& e = term.as_If();
+                serialise(e.cond); out.writeCount(e.bbTrue); out.writeCount(e.bbFalse);
+                break;
+            }
+            case MIRTerminator::TAG_Switch: {
+                auto& e = term.as_Switch();
+                serialise(e.val); serialiseVec(e.targets); out.writeCount(e.validFlag); out.writeCount(e.invalidTarget);
+                break;
+            }
+            case MIRTerminator::TAG_SwitchValue: {
+                auto& e = term.as_SwitchValue();
+                serialise(e.val); out.writeCount(e.defTarget); serialiseVec(e.targets); serialise(e.values);
+                break;
+            }
+            case MIRTerminator::TAG_Drop: {
+                auto& e = term.as_Drop();
+                out.writeTag(static_cast<unsigned>(e.kind)); serialise(e.slot); out.writeCount(e.flagIdx); out.writeCount(e.target); serialiseUnwind(e.unwind);
+                break;
+            }
+            case MIRTerminator::TAG_Call: {
+                auto& e = term.as_Call();
+                out.writeCount(e.retBlock); serialiseUnwind(e.unwind); serialise(e.retVal); serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);
+                break;
+            }
+            case MIRTerminator::TAG_TailCall: {
+                auto& e = term.as_TailCall();
+                serialise(e.fcn); serialiseVec(e.args); out.writeString(e.source.filename); out.writeCount(e.source.line); out.writeCount(e.source.column); out.writeBool(e.tracksCaller);
+                break;
+            }
+            case MIRTerminator::TAG_Asm2: {
+                auto& e = term.as_Asm2();
+                serialise(e.options); serialiseVec(e.lines); serialiseVec(e.params); out.writeCount(e.retBlock);
+                break;
+            }
+        }
     }
 
     void serialise(const MIRSwitchValues& sv) {
@@ -3455,13 +3503,45 @@ public:
 
     void serialise(const MIRCallTarget& ct) {
         out.writeTag(static_cast<int>(ct.tag()));
-        TU_MATCHA((ct), (e), (Value, serialise(e);), (Path, serialisePath(e);), (Intrinsic, out.writeString(e.name); serialisePathparams(e.params);))
+        switch (ct.tag()) {
+            case MIRCallTarget::TAG_Value: {
+                auto& e = ct.as_Value();
+                serialise(e);
+                break;
+            }
+            case MIRCallTarget::TAG_Path: {
+                auto& e = ct.as_Path();
+                serialisePath(e);
+                break;
+            }
+            case MIRCallTarget::TAG_Intrinsic: {
+                auto& e = ct.as_Intrinsic();
+                out.writeString(e.name); serialisePathparams(e.params);
+                break;
+            }
+        }
     }
 
     void serialise(const MIRParam& p) {
         TRACE_FUNCTION_F("Param = " << p);
         out.writeTag(static_cast<int>(p.tag()));
-        TU_MATCHA((p), (e), (LValue, serialise(e);), (Borrow, out.writeTag(static_cast<int>(e.type)); serialise(e.val);), (Constant, serialise(e);))
+        switch (p.tag()) {
+            case MIRParam::TAG_LValue: {
+                auto& e = p.as_LValue();
+                serialise(e);
+                break;
+            }
+            case MIRParam::TAG_Borrow: {
+                auto& e = p.as_Borrow();
+                out.writeTag(static_cast<int>(e.type)); serialise(e.val);
+                break;
+            }
+            case MIRParam::TAG_Constant: {
+                auto& e = p.as_Constant();
+                serialise(e);
+                break;
+            }
+        }
     }
 
     void serialise(const MIRLValue& lv) {
@@ -3482,16 +3562,194 @@ public:
     void serialise(const MIRRValue& val) {
         TRACE_FUNCTION_F("RValue = " << val);
         out.writeTag(val.tag());
-        TU_MATCHA((val), (e), (Use, serialise(e);), (Constant, serialise(e);), (SizedArray, serialise(e.val); serialiseArraysize(e.count);), (Borrow, out.writeTag(static_cast<int>(e.type)); out.writeBool(e.isRaw); serialise(e.val);), (Cast, serialise(e.val); serialise(e.type);), (BinOp, serialise(e.valL); out.writeTag(static_cast<int>(e.op)); serialise(e.valR);), (UniOp, serialise(e.val); out.writeTag(static_cast<int>(e.op));), (DstMeta, serialise(e.val);), (DstPtr, serialise(e.val);), (MakeDst, serialise(e.ptrVal); auto b = !(e.metaVal.is_Constant() && e.metaVal.as_Constant().is_ItemAddr() && e.metaVal.as_Constant().as_ItemAddr().get() == nullptr); out.writeBool(b); if (b) serialise(e.metaVal);), (Tuple, serialiseVec(e.vals);), (Array, serialiseVec(e.vals);), (UnionVariant, serialiseGenericpath(e.path); out.writeCount(e.index); serialise(e.val);), (EnumVariant, serialiseGenericpath(e.path); out.writeCount(e.index); serialiseVec(e.vals);), (Struct, serialiseGenericpath(e.path); serialiseVec(e.vals);))
+        switch (val.tag()) {
+            case MIRRValue::TAG_Use: {
+                auto& e = val.as_Use();
+                serialise(e);
+                break;
+            }
+            case MIRRValue::TAG_Constant: {
+                auto& e = val.as_Constant();
+                serialise(e);
+                break;
+            }
+            case MIRRValue::TAG_SizedArray: {
+                auto& e = val.as_SizedArray();
+                serialise(e.val); serialiseArraysize(e.count);
+                break;
+            }
+            case MIRRValue::TAG_Borrow: {
+                auto& e = val.as_Borrow();
+                out.writeTag(static_cast<int>(e.type)); out.writeBool(e.isRaw); serialise(e.val);
+                break;
+            }
+            case MIRRValue::TAG_Cast: {
+                auto& e = val.as_Cast();
+                serialise(e.val); serialise(e.type);
+                break;
+            }
+            case MIRRValue::TAG_BinOp: {
+                auto& e = val.as_BinOp();
+                serialise(e.valL); out.writeTag(static_cast<int>(e.op)); serialise(e.valR);
+                break;
+            }
+            case MIRRValue::TAG_UniOp: {
+                auto& e = val.as_UniOp();
+                serialise(e.val); out.writeTag(static_cast<int>(e.op));
+                break;
+            }
+            case MIRRValue::TAG_DstMeta: {
+                auto& e = val.as_DstMeta();
+                serialise(e.val);
+                break;
+            }
+            case MIRRValue::TAG_DstPtr: {
+                auto& e = val.as_DstPtr();
+                serialise(e.val);
+                break;
+            }
+            case MIRRValue::TAG_MakeDst: {
+                auto& e = val.as_MakeDst();
+                serialise(e.ptrVal); auto b = !(e.metaVal.is_Constant() && e.metaVal.as_Constant().is_ItemAddr() && e.metaVal.as_Constant().as_ItemAddr().get() == nullptr); out.writeBool(b); if (b) serialise(e.metaVal);
+                break;
+            }
+            case MIRRValue::TAG_Tuple: {
+                auto& e = val.as_Tuple();
+                serialiseVec(e.vals);
+                break;
+            }
+            case MIRRValue::TAG_Array: {
+                auto& e = val.as_Array();
+                serialiseVec(e.vals);
+                break;
+            }
+            case MIRRValue::TAG_UnionVariant: {
+                auto& e = val.as_UnionVariant();
+                serialiseGenericpath(e.path); out.writeCount(e.index); serialise(e.val);
+                break;
+            }
+            case MIRRValue::TAG_EnumVariant: {
+                auto& e = val.as_EnumVariant();
+                serialiseGenericpath(e.path); out.writeCount(e.index); serialiseVec(e.vals);
+                break;
+            }
+            case MIRRValue::TAG_Struct: {
+                auto& e = val.as_Struct();
+                serialiseGenericpath(e.path); serialiseVec(e.vals);
+                break;
+            }
+        }
     }
 
     void serialise(const MIRConstant& v) {
         out.writeTag(v.tag());
-        TU_MATCHA((v), (e), (Int, out.writeU128(e.v.getInner()); out.writeTag(static_cast<unsigned>(e.t));), (Uint, out.writeU128(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Float, out.writeFloatValue(e.v); out.writeTag(static_cast<unsigned>(e.t));), (Bool, out.writeBool(e.v);), (Bytes, out.writeCount(e.size()); out.write(e.data(), e.size());), (StaticString, out.writeString(e);), (Encoded, serialise(e.type); serialise(e.value);), (Const, ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), "Unexpected Constant: " << *e.p); serialisePath(*e.p);), (Generic, serialise(e);), (Function, serialisePath(*e.p);), (ItemAddr, serialisePath(*e); out.writeU128(e.offset);))
+        switch (v.tag()) {
+            case MIRConstant::TAG_Int: {
+                auto& e = v.as_Int();
+                out.writeU128(e.v.getInner()); out.writeTag(static_cast<unsigned>(e.t));
+                break;
+            }
+            case MIRConstant::TAG_Uint: {
+                auto& e = v.as_Uint();
+                out.writeU128(e.v); out.writeTag(static_cast<unsigned>(e.t));
+                break;
+            }
+            case MIRConstant::TAG_Float: {
+                auto& e = v.as_Float();
+                out.writeFloatValue(e.v); out.writeTag(static_cast<unsigned>(e.t));
+                break;
+            }
+            case MIRConstant::TAG_Bool: {
+                auto& e = v.as_Bool();
+                out.writeBool(e.v);
+                break;
+            }
+            case MIRConstant::TAG_Bytes: {
+                auto& e = v.as_Bytes();
+                out.writeCount(e.size()); out.write(e.data(), e.size());
+                break;
+            }
+            case MIRConstant::TAG_StaticString: {
+                auto& e = v.as_StaticString();
+                out.writeString(e);
+                break;
+            }
+            case MIRConstant::TAG_Encoded: {
+                auto& e = v.as_Encoded();
+                serialise(e.type); serialise(e.value);
+                break;
+            }
+            case MIRConstant::TAG_Const: {
+                auto& e = v.as_Const();
+                ASSERT_BUG(Span(), monomorphisePathNeeded(*e.p), "Unexpected Constant: " << *e.p); serialisePath(*e.p);
+                break;
+            }
+            case MIRConstant::TAG_Generic: {
+                auto& e = v.as_Generic();
+                serialise(e);
+                break;
+            }
+            case MIRConstant::TAG_Function: {
+                auto& e = v.as_Function();
+                serialisePath(*e.p);
+                break;
+            }
+            case MIRConstant::TAG_ItemAddr: {
+                auto& e = v.as_ItemAddr();
+                serialisePath(*e); out.writeU128(e.offset);
+                break;
+            }
+        }
     }
 
     void serialise(const HIRTypeItem& item) {
-        TU_MATCHA((item), (e), (Import, out.writeTag(0); serialiseSimplepath(e.path); out.writeBool(e.isVariant); out.writeCount(e.idx);), (Module, out.writeTag(1); serialiseModule(e);), (TypeAlias, out.writeTag(2); serialise(e);), (Enum, out.writeTag(3); serialise(e);), (Struct, out.writeTag(4); serialise(e);), (Trait, out.writeTag(5); serialise(e);), (Union, out.writeTag(6); serialise(e);), (ExternType, out.writeTag(7); serialise(e);), (TraitAlias, out.writeTag(8); serialise(e);))
+        switch (item.tag()) {
+            case HIRTypeItem::TAG_Import: {
+                auto& e = item.as_Import();
+                out.writeTag(0); serialiseSimplepath(e.path); out.writeBool(e.isVariant); out.writeCount(e.idx);
+                break;
+            }
+            case HIRTypeItem::TAG_Module: {
+                auto& e = item.as_Module();
+                out.writeTag(1); serialiseModule(e);
+                break;
+            }
+            case HIRTypeItem::TAG_TypeAlias: {
+                auto& e = item.as_TypeAlias();
+                out.writeTag(2); serialise(e);
+                break;
+            }
+            case HIRTypeItem::TAG_Enum: {
+                auto& e = item.as_Enum();
+                out.writeTag(3); serialise(e);
+                break;
+            }
+            case HIRTypeItem::TAG_Struct: {
+                auto& e = item.as_Struct();
+                out.writeTag(4); serialise(e);
+                break;
+            }
+            case HIRTypeItem::TAG_Trait: {
+                auto& e = item.as_Trait();
+                out.writeTag(5); serialise(e);
+                break;
+            }
+            case HIRTypeItem::TAG_Union: {
+                auto& e = item.as_Union();
+                out.writeTag(6); serialise(e);
+                break;
+            }
+            case HIRTypeItem::TAG_ExternType: {
+                auto& e = item.as_ExternType();
+                out.writeTag(7); serialise(e);
+                break;
+            }
+            case HIRTypeItem::TAG_TraitAlias: {
+                auto& e = item.as_TraitAlias();
+                out.writeTag(8); serialise(e);
+                break;
+            }
+        }
     }
 
     void serialise(const HIRMacroItem& item) {
@@ -3511,7 +3769,38 @@ public:
     }
 
     void serialise(const HIRValueItem& item) {
-        TU_MATCHA((item), (e), (Import, out.writeTag(0); serialiseSimplepath(e.path); out.writeBool(e.isVariant); out.writeCount(e.idx);), (Constant, out.writeTag(1); serialise(e);), (Static, out.writeTag(2); serialise(e);), (StructConstant, out.writeTag(3); serialiseSimplepath(e.ty);), (Function, out.writeTag(4); serialise(e);), (StructConstructor, out.writeTag(5); serialiseSimplepath(e.ty);))
+        switch (item.tag()) {
+            case HIRValueItem::TAG_Import: {
+                auto& e = item.as_Import();
+                out.writeTag(0); serialiseSimplepath(e.path); out.writeBool(e.isVariant); out.writeCount(e.idx);
+                break;
+            }
+            case HIRValueItem::TAG_Constant: {
+                auto& e = item.as_Constant();
+                out.writeTag(1); serialise(e);
+                break;
+            }
+            case HIRValueItem::TAG_Static: {
+                auto& e = item.as_Static();
+                out.writeTag(2); serialise(e);
+                break;
+            }
+            case HIRValueItem::TAG_StructConstant: {
+                auto& e = item.as_StructConstant();
+                out.writeTag(3); serialiseSimplepath(e.ty);
+                break;
+            }
+            case HIRValueItem::TAG_Function: {
+                auto& e = item.as_Function();
+                out.writeTag(4); serialise(e);
+                break;
+            }
+            case HIRValueItem::TAG_StructConstructor: {
+                auto& e = item.as_StructConstructor();
+                out.writeTag(5); serialiseSimplepath(e.ty);
+                break;
+            }
+        }
     }
 
     void serialise(const HIRLinkage& linkage) {
@@ -3627,7 +3916,18 @@ public:
 
     void serialise(const HIREnum::Class& v) {
         out.writeTag(v.tag());
-        TU_MATCHA((v), (e), (Value, serialiseVec(e.variants);), (Data, serialiseVec(e);))
+        switch (v.tag()) {
+            case HIREnumClass::TAG_Value: {
+                auto& e = v.as_Value();
+                serialiseVec(e.variants);
+                break;
+            }
+            case HIREnumClass::TAG_Data: {
+                auto& e = v.as_Data();
+                serialiseVec(e);
+                break;
+            }
+        }
     }
 
     void serialise(const HIREnum::ValueVariant& v) {
@@ -3691,7 +3991,23 @@ public:
         out.writeTag(static_cast<int>(item.repr));
 
         out.writeTag(item.data.tag());
-        TU_MATCHA((item.data), (e), (Unit, ), (Tuple, serialiseVec(e);), (Named, serialiseVec(e);))
+        switch (item.data.tag()) {
+            case HIRStructData::TAG_Unit: {
+                auto& e = item.data.as_Unit();
+                (void)e;
+                break;
+            }
+            case HIRStructData::TAG_Tuple: {
+                auto& e = item.data.as_Tuple();
+                serialiseVec(e);
+                break;
+            }
+            case HIRStructData::TAG_Named: {
+                auto& e = item.data.as_Named();
+                serialiseVec(e);
+                break;
+            }
+        }
 
         out.writeCount(item.forcedAlignment);
         out.writeCount(item.maxFieldAlignment);
@@ -3747,7 +4063,23 @@ public:
 
     void serialise(const HIRTraitValueItem& tvi) {
         out.writeTag(tvi.tag());
-        TU_MATCHA((tvi), (e), (Constant, DEBUG("Constant"); serialise(e);), (Static, DEBUG("Static"); serialise(e);), (Function, DEBUG("Function"); serialise(e);))
+        switch (tvi.tag()) {
+            case HIRTraitValueItem::TAG_Constant: {
+                auto& e = tvi.as_Constant();
+                DEBUG("Constant"); serialise(e);
+                break;
+            }
+            case HIRTraitValueItem::TAG_Static: {
+                auto& e = tvi.as_Static();
+                DEBUG("Static"); serialise(e);
+                break;
+            }
+            case HIRTraitValueItem::TAG_Function: {
+                auto& e = tvi.as_Function();
+                DEBUG("Function"); serialise(e);
+                break;
+            }
+        }
     }
 
     void serialise(const HIRAssociatedType& at) {

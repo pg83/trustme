@@ -229,39 +229,70 @@ Token Token::clone() const {
     rv.isDocComment_ = isDocComment_;
 
     assert(!data_.isDead());
-    TU_MATCH(Data, (data_), (e), (None, ), (Ident, rv.data_ = Data::make_Ident(e);), (String, rv.data_ = Data::make_String(e);), (Integer, rv.data_ = Data::make_Integer(e);), (Float, rv.data_ = Data::make_Float(e);), (Fragment, assert(e); switch (type_) {
-                 case TOK_INTERPOLATED_TYPE:
-                     rv.data_ = new ASTType*((*reinterpret_cast<ASTType**>(e))->clone());
-                     break;
-                 case TOK_INTERPOLATED_PATTERN:
-                     rv.data_ = new ASTPattern(reinterpret_cast<ASTPattern*>(e)->clone());
-                     break;
-                 case TOK_INTERPOLATED_PATH:
-                     rv.data_ = new ASTPath(*reinterpret_cast<ASTPath*>(e));
-                     break;
-                 case TOK_INTERPOLATED_EXPR:
-                     rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone().release();
-                     break;
-                 case TOK_INTERPOLATED_STMT:
-                     rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone().release();
-                     break;
-                 case TOK_INTERPOLATED_BLOCK:
-                     rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone().release();
-                     break;
-                 case TOK_INTERPOLATED_META:
-                     rv.data_ = new ASTAttribute(reinterpret_cast<ASTAttribute*>(e)->clone());
-                     break;
-                 case TOK_INTERPOLATED_STMT_ITEM:
-                 case TOK_INTERPOLATED_ITEM: {
-                     const auto& named = *reinterpret_cast<ASTNamed<ASTItem>*>(e);
-                     auto item = named.data.clone();
-                     rv.data_ = new ASTNamed<ASTItem>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
-                     break;
-                 }
-                 default:
-                     BUG(Span(Span(), pos), "Fragment with invalid token type (" << *this << ")");
-                     break;
-             } assert(rv.data_.is_Fragment());))
+    switch (data_.tag()) {
+        case Data::TAG_None: {
+            auto& e = data_.as_None();
+            (void)e;
+            break;
+        }
+        case Data::TAG_Ident: {
+            auto& e = data_.as_Ident();
+            rv.data_ = Data::make_Ident(e);
+            break;
+        }
+        case Data::TAG_String: {
+            auto& e = data_.as_String();
+            rv.data_ = Data::make_String(e);
+            break;
+        }
+        case Data::TAG_Integer: {
+            auto& e = data_.as_Integer();
+            rv.data_ = Data::make_Integer(e);
+            break;
+        }
+        case Data::TAG_Float: {
+            auto& e = data_.as_Float();
+            rv.data_ = Data::make_Float(e);
+            break;
+        }
+        case Data::TAG_Fragment: {
+            auto& e = data_.as_Fragment();
+            assert(e); switch (type_) {
+                case TOK_INTERPOLATED_TYPE:
+                    rv.data_ = new ASTType*((*reinterpret_cast<ASTType**>(e))->clone());
+                    break;
+                case TOK_INTERPOLATED_PATTERN:
+                    rv.data_ = new ASTPattern(reinterpret_cast<ASTPattern*>(e)->clone());
+                    break;
+                case TOK_INTERPOLATED_PATH:
+                    rv.data_ = new ASTPath(*reinterpret_cast<ASTPath*>(e));
+                    break;
+                case TOK_INTERPOLATED_EXPR:
+                    rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone().release();
+                    break;
+                case TOK_INTERPOLATED_STMT:
+                    rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone().release();
+                    break;
+                case TOK_INTERPOLATED_BLOCK:
+                    rv.data_ = reinterpret_cast<ASTExprNode*>(e)->clone().release();
+                    break;
+                case TOK_INTERPOLATED_META:
+                    rv.data_ = new ASTAttribute(reinterpret_cast<ASTAttribute*>(e)->clone());
+                    break;
+                case TOK_INTERPOLATED_STMT_ITEM:
+                case TOK_INTERPOLATED_ITEM: {
+                    const auto& named = *reinterpret_cast<ASTNamed<ASTItem>*>(e);
+                    auto item = named.data.clone();
+                    rv.data_ = new ASTNamed<ASTItem>(named.span, named.attrs.clone(), named.vis, named.name, mv$(item));
+                    break;
+                }
+                default:
+                    BUG(Span(Span(), pos), "Fragment with invalid token type (" << *this << ")");
+                    break;
+            } assert(rv.data_.is_Fragment());
+            break;
+        }
+    }
     return rv;
 }
 
@@ -831,6 +862,42 @@ bool Token::operator==(const Token& r) const {
     if (type() != r.type()) {
         return false;
     }
-    TU_MATCH(Data, (data_, r.data_), (e, re), (None, return true;), (Ident, return e.sameToken(re);), (String, return e == re;), (Integer, return e.datatype == re.datatype && e.intval == re.intval;), (Float, return e.datatype == re.datatype && e.floatval == re.floatval;), (Fragment, assert(!"Token equality on Fragment");))
+    switch (data_.tag()) {
+        case Data::TAG_None: {
+            auto& e = data_.as_None();
+            (void)e;
+            auto& re = r.data_.as_None();
+            (void)re;
+            return true;
+        }
+        case Data::TAG_Ident: {
+            auto& e = data_.as_Ident();
+            auto& re = r.data_.as_Ident();
+            return e.sameToken(re);
+        }
+        case Data::TAG_String: {
+            auto& e = data_.as_String();
+            auto& re = r.data_.as_String();
+            return e == re;
+        }
+        case Data::TAG_Integer: {
+            auto& e = data_.as_Integer();
+            auto& re = r.data_.as_Integer();
+            return e.datatype == re.datatype && e.intval == re.intval;
+        }
+        case Data::TAG_Float: {
+            auto& e = data_.as_Float();
+            auto& re = r.data_.as_Float();
+            return e.datatype == re.datatype && e.floatval == re.floatval;
+        }
+        case Data::TAG_Fragment: {
+            auto& e = data_.as_Fragment();
+            (void)e;
+            auto& re = r.data_.as_Fragment();
+            (void)re;
+            assert(!"Token equality on Fragment");
+            break;
+        }
+    }
     throw "";
 }

@@ -1111,25 +1111,38 @@ void RustPrinter::handleModule(const ASTModule& mod) {
         os << indent() << "{\n";
         incIndent();
         for (const auto& it : i.items()) {
-            TU_MATCH_DEF(
-                ASTItem,
-                (*it.data),
-                (e),
-                (throw ::std::runtime_error(FMT("Unexpected item type in impl block - " << it.data->tagStr()));),
-                (
-                    None,
+            switch ((*it.data).tag()) {
+                case ASTItem::TAG_None: {
+                    auto& e = (*it.data).as_None();
+                    (void)e;
                     // Ignore, it's been deleted by #[cfg]
-                ),
-                (
-                    MacroInv,
+                    break;
+                }
+                case ASTItem::TAG_MacroInv: {
+                    auto& e = (*it.data).as_MacroInv();
+                    (void)e;
                     // TODO: Dump macro invocations
-                ),
-                (
-                    Static, handleStatic(it.vis, it.name, e);
-                ),
-                (Type, os << indent() << "type " << it.name << " = " << e.type() << ";\n";),
-                (Function, handleFunction(it.vis, it.name, e);)
-            )
+                    break;
+                }
+                case ASTItem::TAG_Static: {
+                    auto& e = (*it.data).as_Static();
+                    handleStatic(it.vis, it.name, e);
+                    break;
+                }
+                case ASTItem::TAG_Type: {
+                    auto& e = (*it.data).as_Type();
+                    os << indent() << "type " << it.name << " = " << e.type() << ";\n";
+                    break;
+                }
+                case ASTItem::TAG_Function: {
+                    auto& e = (*it.data).as_Function();
+                    handleFunction(it.vis, it.name, e);
+                    break;
+                }
+                default: {
+                    throw ::std::runtime_error(FMT("Unexpected item type in impl block - " << it.data->tagStr()));
+                }
+            }
         }
         decIndent();
         os << indent() << "}\n";
@@ -1187,7 +1200,44 @@ void RustPrinter::printBounds(const ASTGenericParams& params) {
             isFirst = false;
 
             os << indent();
-            TU_MATCH(ASTGenericBound, (b), (ent), (None, os << "/*-*/";), (Lifetime, os << ent.test << ": " << ent.bound;), (TypeLifetime, os << ent.type << ": " << ent.bound;), (IsTrait, os << ent.outerHrbs << ent.type << ": "; if (ent.constness == ASTBoundConstness::Always) os << "const "; else if (ent.constness == ASTBoundConstness::Maybe) os << "[const] "; os << ent.innerHrbs << ent.trait;), (MaybeTrait, os << ent.type << ": ?" << ent.trait;), (NotTrait, os << ent.type << ": !" << ent.trait;), (Equality, os << ent.type << ": =" << ent.replacement;))
+            switch (b.tag()) {
+                case ASTGenericBound::TAG_None: {
+                    auto& ent = b.as_None();
+                    (void)ent;
+                    os << "/*-*/";
+                    break;
+                }
+                case ASTGenericBound::TAG_Lifetime: {
+                    auto& ent = b.as_Lifetime();
+                    os << ent.test << ": " << ent.bound;
+                    break;
+                }
+                case ASTGenericBound::TAG_TypeLifetime: {
+                    auto& ent = b.as_TypeLifetime();
+                    os << ent.type << ": " << ent.bound;
+                    break;
+                }
+                case ASTGenericBound::TAG_IsTrait: {
+                    auto& ent = b.as_IsTrait();
+                    os << ent.outerHrbs << ent.type << ": "; if (ent.constness == ASTBoundConstness::Always) os << "const "; else if (ent.constness == ASTBoundConstness::Maybe) os << "[const] "; os << ent.innerHrbs << ent.trait;
+                    break;
+                }
+                case ASTGenericBound::TAG_MaybeTrait: {
+                    auto& ent = b.as_MaybeTrait();
+                    os << ent.type << ": ?" << ent.trait;
+                    break;
+                }
+                case ASTGenericBound::TAG_NotTrait: {
+                    auto& ent = b.as_NotTrait();
+                    os << ent.type << ": !" << ent.trait;
+                    break;
+                }
+                case ASTGenericBound::TAG_Equality: {
+                    auto& ent = b.as_Equality();
+                    os << ent.type << ": =" << ent.replacement;
+                    break;
+                }
+            }
         }
         os << "\n";
 
@@ -1231,64 +1281,105 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
         }
         os << " @ ";
     }
-    TU_MATCH(
-        ASTPattern::Data,
-        (p.data()),
-        (v),
-        (Any, os << "_";),
-        (MaybeBind, os << v.name << " /*?*/";),
-        (Macro, os << *v.inv;),
-        (Box,
-         {
-             const auto& v = p.data().as_Box();
-             os << "box ";
-             printPattern(*v.sub, isRefutable);
-         }),
-        (Deref,
-         {
-             os << "deref!(";
-             printPattern(*v.sub, isRefutable);
-             os << ")";
-         }),
-        (Ref,
-         {
-             const auto& v = p.data().as_Ref();
-             if (v.mut) {
-                 os << "&mut ";
-             } else {
-                 os << "& ";
-             }
-             // Just in case the inner binds as mut
-             os << "(";
-             printPattern(*v.sub, isRefutable);
-             os << ")";
-         }),
-        (Value, os << v.start; if (!v.end.is_Invalid()) { os << " ..= " << v.end; }),
-        (ValueLeftInc, os << v.start << " .. " << v.end;),
-        (StructTuple, os << v.path << "("; this->printPatternTuple(v.tupPat, isRefutable); os << ")";),
-        (Struct,
-         {
-             const auto& v = p.data().as_Struct();
-             os << v.path << "{";
-             for (const auto& sp : v.subPatterns) {
-                 os << sp.name << ": ";
-                 printPattern(sp.pat, isRefutable);
-                 os << ",";
-             }
-             if (!v.isExhaustive) {
-                 os << "..";
-             }
-             os << "}";
-         }),
-        (Tuple, os << "("; this->printPatternTuple(v, isRefutable); os << ")";),
-        (
-            Slice, os << "["; for (const auto& sp : v.subPats) {
+    switch (p.data().tag()) {
+        case ASTPattern::Data::TAG_Any: {
+            auto& v = p.data().as_Any();
+            (void)v;
+            os << "_";
+            break;
+        }
+        case ASTPattern::Data::TAG_MaybeBind: {
+            auto& v = p.data().as_MaybeBind();
+            os << v.name << " /*?*/";
+            break;
+        }
+        case ASTPattern::Data::TAG_Macro: {
+            auto& v = p.data().as_Macro();
+            os << *v.inv;
+            break;
+        }
+        case ASTPattern::Data::TAG_Box: {
+            auto& v = p.data().as_Box();
+            {
+                const auto& v = p.data().as_Box();
+                os << "box ";
+                printPattern(*v.sub, isRefutable);
+            }
+            break;
+        }
+        case ASTPattern::Data::TAG_Deref: {
+            auto& v = p.data().as_Deref();
+            {
+                os << "deref!(";
+                printPattern(*v.sub, isRefutable);
+                os << ")";
+            }
+            break;
+        }
+        case ASTPattern::Data::TAG_Ref: {
+            auto& v = p.data().as_Ref();
+            {
+                const auto& v = p.data().as_Ref();
+                if (v.mut) {
+                    os << "&mut ";
+                } else {
+                    os << "& ";
+                }
+                // Just in case the inner binds as mut
+                os << "(";
+                printPattern(*v.sub, isRefutable);
+                os << ")";
+            }
+            break;
+        }
+        case ASTPattern::Data::TAG_Value: {
+            auto& v = p.data().as_Value();
+            os << v.start; if (!v.end.is_Invalid()) { os << " ..= " << v.end; }
+            break;
+        }
+        case ASTPattern::Data::TAG_ValueLeftInc: {
+            auto& v = p.data().as_ValueLeftInc();
+            os << v.start << " .. " << v.end;
+            break;
+        }
+        case ASTPattern::Data::TAG_StructTuple: {
+            auto& v = p.data().as_StructTuple();
+            os << v.path << "("; this->printPatternTuple(v.tupPat, isRefutable); os << ")";
+            break;
+        }
+        case ASTPattern::Data::TAG_Struct: {
+            auto& v = p.data().as_Struct();
+            {
+                const auto& v = p.data().as_Struct();
+                os << v.path << "{";
+                for (const auto& sp : v.subPatterns) {
+                    os << sp.name << ": ";
+                    printPattern(sp.pat, isRefutable);
+                    os << ",";
+                }
+                if (!v.isExhaustive) {
+                    os << "..";
+                }
+                os << "}";
+            }
+            break;
+        }
+        case ASTPattern::Data::TAG_Tuple: {
+            auto& v = p.data().as_Tuple();
+            os << "("; this->printPatternTuple(v, isRefutable); os << ")";
+            break;
+        }
+        case ASTPattern::Data::TAG_Slice: {
+            auto& v = p.data().as_Slice();
+            os << "["; for (const auto& sp : v.subPats) {
                 printPattern(sp, isRefutable);
                 os << ", ";
             } os << "]";
-        ),
-        (
-            SplitSlice, os << "["; bool needsComma = false; for (const auto& sp : v.leading) {
+            break;
+        }
+        case ASTPattern::Data::TAG_SplitSlice: {
+            auto& v = p.data().as_SplitSlice();
+            os << "["; bool needsComma = false; for (const auto& sp : v.leading) {
                 printPattern(sp, isRefutable);
                 os << ", ";
             }
@@ -1323,12 +1414,17 @@ void RustPrinter::printPattern(const ASTPattern& p, bool isRefutable) {
                 }
             } os
             << "]";
-        ),
-        (Or, os << "("; for (const auto& e : v) {
-            os << (&e == &v.front() ? "" : " | ");
-            printPattern(e, isRefutable);
-        } os << ")";)
-    )
+            break;
+        }
+        case ASTPattern::Data::TAG_Or: {
+            auto& v = p.data().as_Or();
+            os << "("; for (const auto& e : v) {
+                os << (&e == &v.front() ? "" : " | ");
+                printPattern(e, isRefutable);
+            } os << ")";
+            break;
+        }
+    }
 }
 
 void RustPrinter::printType(ASTType* t) {
@@ -1338,19 +1434,29 @@ void RustPrinter::printType(ASTType* t) {
 void RustPrinter::handleStruct(const ASTStruct& s) {
     printParams(s.params());
 
-    TU_MATCH(
-        ASTStructData,
-        (s.data),
-        (e),
-        (Unit, os << " /* unit-like */\n"; printBounds(s.params()); os << indent() << ";\n";),
-        (Tuple, os << "("; for (const auto& i : e.ents) { os << i.vis << i.type << ", "; } os << ")\n"; printBounds(s.params()); os << indent() << ";\n";),
-        (Struct, os << "\n"; printBounds(s.params());
+    switch (s.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            auto& e = s.data.as_Unit();
+            (void)e;
+            os << " /* unit-like */\n"; printBounds(s.params()); os << indent() << ";\n";
+            break;
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = s.data.as_Tuple();
+            os << "("; for (const auto& i : e.ents) { os << i.vis << i.type << ", "; } os << ")\n"; printBounds(s.params()); os << indent() << ";\n";
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = s.data.as_Struct();
+            os << "\n"; printBounds(s.params());
 
-         os << indent() << "{\n";
-         incIndent();
-         for (const auto& i : e.ents) { os << indent() << i.vis << i.name << ": " << i.type->printPretty() << ",\n"; } decIndent();
-         os << indent() << "}\n";)
-    )
+            os << indent() << "{\n";
+            incIndent();
+            for (const auto& i : e.ents) { os << indent() << i.vis << i.name << ": " << i.type->printPretty() << ",\n"; } decIndent();
+            os << indent() << "}\n";
+            break;
+        }
+    }
     os << "\n";
 }
 
@@ -1364,7 +1470,23 @@ void RustPrinter::handleEnum(const ASTEnum& s) {
     unsigned int idx = 0;
     for (const auto& i : s.variants()) {
         os << indent() << "/*" << idx << "*/" << i.name;
-        TU_MATCH(ASTEnumVariantData, (i.data), (e), (Unit, ), (Tuple, os << "("; for (const auto& t : e.items) os << t.type->printPretty() << ", "; os << ")";), (Struct, os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.name << ": " << i.type->printPretty() << ",\n"; } decIndent(); os << indent() << "}";))
+        switch (i.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                auto& e = i.data.as_Unit();
+                (void)e;
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = i.data.as_Tuple();
+                os << "("; for (const auto& t : e.items) os << t.type->printPretty() << ", "; os << ")";
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = i.data.as_Struct();
+                os << "{\n"; incIndent(); for (const auto& i : e.fields) { os << indent() << i.name << ": " << i.type->printPretty() << ",\n"; } decIndent(); os << indent() << "}";
+                break;
+            }
+        }
         if (i.discriminantValue) {
             os << " = " << i.discriminantValue;
         }
@@ -1396,7 +1518,27 @@ void RustPrinter::handleTrait(const ASTTrait& s) {
     incIndent();
 
     for (const auto& i : s.items()) {
-        TU_MATCH_DEF(ASTItem, (i.data), (e), (), (Type, os << indent() << "type " << i.name << ";\n";), (Static, handleStatic(ASTVisibility::makeBarePrivate(), i.name, e);), (Function, handleFunction(ASTVisibility::makeBarePrivate(), i.name, e);))
+        switch (i.data.tag()) {
+            case ASTItem::TAG_Type: {
+                auto& e = i.data.as_Type();
+                (void)e;
+                os << indent() << "type " << i.name << ";\n";
+                break;
+            }
+            case ASTItem::TAG_Static: {
+                auto& e = i.data.as_Static();
+                handleStatic(ASTVisibility::makeBarePrivate(), i.name, e);
+                break;
+            }
+            case ASTItem::TAG_Function: {
+                auto& e = i.data.as_Function();
+                handleFunction(ASTVisibility::makeBarePrivate(), i.name, e);
+                break;
+            }
+            default: {
+                break;
+            }
+        }
     }
 
     decIndent();

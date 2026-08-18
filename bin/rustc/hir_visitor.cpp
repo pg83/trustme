@@ -261,15 +261,24 @@ void HIRVisitor::visitTrait(HIRItemPath p, HIRTrait& item) {
     }
     for (auto& i : item.values) {
         auto itemPath = HIRItemPath(traitIp, i.first.c_str());
-        TU_MATCH(
-            HIRTraitValueItem,
-            (i.second),
-            (e),
+        switch (i.second.tag()) {
             //(None, ),
-            (Constant, DEBUG("constant " << i.first); this->visitConstant(itemPath, e);),
-            (Static, DEBUG("static " << i.first); this->visitStatic(itemPath, e);),
-            (Function, DEBUG("method " << i.first); this->visitFunction(itemPath, e);)
-        )
+            case HIRTraitValueItem::TAG_Constant: {
+                auto& e = i.second.as_Constant();
+                DEBUG("constant " << i.first); this->visitConstant(itemPath, e);
+                break;
+            }
+            case HIRTraitValueItem::TAG_Static: {
+                auto& e = i.second.as_Static();
+                DEBUG("static " << i.first); this->visitStatic(itemPath, e);
+                break;
+            }
+            case HIRTraitValueItem::TAG_Function: {
+                auto& e = i.second.as_Function();
+                DEBUG("method " << i.first); this->visitFunction(itemPath, e);
+                break;
+            }
+        }
     }
     if (resolve_) {
         resolve_->clearImplGenerics();
@@ -599,7 +608,33 @@ void HIRVisitor::visitPattern(HIRPattern& pat) {
 }
 
 void HIRVisitor::visitPatternVal(HIRPattern::Value& val) {
-    TU_MATCH(HIRPattern::Value, (val), (e), (Integer, ), (Float, ), (String, ), (ByteString, ), (Named, this->visitPath(e.path, HIRVisitor::PathContext::VALUE);))
+    switch (val.tag()) {
+        case HIRPattern::Value::TAG_Integer: {
+            auto& e = val.as_Integer();
+            (void)e;
+            break;
+        }
+        case HIRPattern::Value::TAG_Float: {
+            auto& e = val.as_Float();
+            (void)e;
+            break;
+        }
+        case HIRPattern::Value::TAG_String: {
+            auto& e = val.as_String();
+            (void)e;
+            break;
+        }
+        case HIRPattern::Value::TAG_ByteString: {
+            auto& e = val.as_ByteString();
+            (void)e;
+            break;
+        }
+        case HIRPattern::Value::TAG_Named: {
+            auto& e = val.as_Named();
+            this->visitPath(e.path, HIRVisitor::PathContext::VALUE);
+            break;
+        }
+    }
 }
 
 void HIRVisitor::visitTraitPath(HIRTraitPath& p) {

@@ -5,42 +5,62 @@
 #include "ast_expr.h" // A guard pattern holds an expression
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTPattern::Value& val) {
-    TU_MATCH(
-        ASTPattern::Value,
-        (val),
-        (e),
-        (Invalid, os << "/*BAD PAT VAL*/";),
-        (Integer,
-         switch (e.type) {
-             case CORETYPE_BOOL:
-                 os << (e.value != U128(0) ? "true" : "false");
-                 break;
-             case CORETYPE_F32:
-             case CORETYPE_F64:
-                 BUG(Span(), "Hit F32/f64 in printing pattern literal");
-                 break;
-             default:
-                 os << e.value;
-                 break;
-         }),
-        (Float,
-         switch (e.type) {
-             case CORETYPE_BOOL:
-                 os << (e.value != FloatValue() ? "true" : "false");
-                 break;
-             case CORETYPE_ANY:
-             case CORETYPE_F32:
-             case CORETYPE_F64:
-                 os << e.value;
-                 break;
-             default:
-                 BUG(Span(), "Hit integer in printing pattern literal");
-                 break;
-         }),
-        (String, os << "\"" << e << "\"";),
-        (ByteString, os << "b\"" << e.v << "\"";),
-        (Named, os << e;)
-    )
+    switch (val.tag()) {
+        case ASTPattern::Value::TAG_Invalid: {
+            auto& e = val.as_Invalid();
+            (void)e;
+            os << "/*BAD PAT VAL*/";
+            break;
+        }
+        case ASTPattern::Value::TAG_Integer: {
+            auto& e = val.as_Integer();
+            switch (e.type) {
+                case CORETYPE_BOOL:
+                    os << (e.value != U128(0) ? "true" : "false");
+                    break;
+                case CORETYPE_F32:
+                case CORETYPE_F64:
+                    BUG(Span(), "Hit F32/f64 in printing pattern literal");
+                    break;
+                default:
+                    os << e.value;
+                    break;
+            }
+            break;
+        }
+        case ASTPattern::Value::TAG_Float: {
+            auto& e = val.as_Float();
+            switch (e.type) {
+                case CORETYPE_BOOL:
+                    os << (e.value != FloatValue() ? "true" : "false");
+                    break;
+                case CORETYPE_ANY:
+                case CORETYPE_F32:
+                case CORETYPE_F64:
+                    os << e.value;
+                    break;
+                default:
+                    BUG(Span(), "Hit integer in printing pattern literal");
+                    break;
+            }
+            break;
+        }
+        case ASTPattern::Value::TAG_String: {
+            auto& e = val.as_String();
+            os << "\"" << e << "\"";
+            break;
+        }
+        case ASTPattern::Value::TAG_ByteString: {
+            auto& e = val.as_ByteString();
+            os << "b\"" << e.v << "\"";
+            break;
+        }
+        case ASTPattern::Value::TAG_Named: {
+            auto& e = val.as_Named();
+            os << e;
+            break;
+        }
+    }
     return os;
 }
 
@@ -275,7 +295,32 @@ ASTPattern ASTPattern::clone() const {
         }
 
         static ASTPattern::Value cloneVal(const ASTPattern::Value& v) {
-            TU_MATCH(ASTPattern::Value, (v), (e), (Invalid, return Value(e);), (Integer, return Value(e);), (Float, return Value(e);), (String, return Value(e);), (ByteString, return Value(e);), (Named, return Value::make_Named(ASTPath(e));))
+            switch (v.tag()) {
+                case ASTPattern::Value::TAG_Invalid: {
+                    auto& e = v.as_Invalid();
+                    return Value(e);
+                }
+                case ASTPattern::Value::TAG_Integer: {
+                    auto& e = v.as_Integer();
+                    return Value(e);
+                }
+                case ASTPattern::Value::TAG_Float: {
+                    auto& e = v.as_Float();
+                    return Value(e);
+                }
+                case ASTPattern::Value::TAG_String: {
+                    auto& e = v.as_String();
+                    return Value(e);
+                }
+                case ASTPattern::Value::TAG_ByteString: {
+                    auto& e = v.as_ByteString();
+                    return Value(e);
+                }
+                case ASTPattern::Value::TAG_Named: {
+                    auto& e = v.as_Named();
+                    return Value::make_Named(ASTPath(e));
+                }
+            }
             throw "";
         }
     };
@@ -432,14 +477,42 @@ namespace {
     Ordering ordPatternValue(const ASTPattern::Value& a, const ASTPattern::Value& b) {
         auto rv = ::ord(static_cast<unsigned>(a.tag()), static_cast<unsigned>(b.tag()));
         if (rv != OrdEqual) return rv;
-        TU_MATCH(ASTPattern::Value, (a, b), (ae, be),
-            (Invalid, return OrdEqual;),
-            (Integer, rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; return ::ord(ae.value, be.value);),
-            (Float, rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; rv = ::ord(ae.value.bitsHi(), be.value.bitsHi()); if (rv != OrdEqual) return rv; return ::ord(ae.value.bitsLo(), be.value.bitsLo());),
-            (String, return ::ord(ae, be);),
-            (ByteString, return ::ord(ae.v, be.v);),
-            (Named, return ae.ord(be);)
-        )
+        switch (a.tag()) {
+            case ASTPattern::Value::TAG_Invalid: {
+                auto& ae = a.as_Invalid();
+                (void)ae;
+                auto& be = b.as_Invalid();
+                (void)be;
+                return OrdEqual;
+            }
+            case ASTPattern::Value::TAG_Integer: {
+                auto& ae = a.as_Integer();
+                auto& be = b.as_Integer();
+                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; return ::ord(ae.value, be.value);
+                break;
+            }
+            case ASTPattern::Value::TAG_Float: {
+                auto& ae = a.as_Float();
+                auto& be = b.as_Float();
+                rv = ::ord(static_cast<unsigned>(ae.type), static_cast<unsigned>(be.type)); if (rv != OrdEqual) return rv; rv = ::ord(ae.value.bitsHi(), be.value.bitsHi()); if (rv != OrdEqual) return rv; return ::ord(ae.value.bitsLo(), be.value.bitsLo());
+                break;
+            }
+            case ASTPattern::Value::TAG_String: {
+                auto& ae = a.as_String();
+                auto& be = b.as_String();
+                return ::ord(ae, be);
+            }
+            case ASTPattern::Value::TAG_ByteString: {
+                auto& ae = a.as_ByteString();
+                auto& be = b.as_ByteString();
+                return ::ord(ae.v, be.v);
+            }
+            case ASTPattern::Value::TAG_Named: {
+                auto& ae = a.as_Named();
+                auto& be = b.as_Named();
+                return ae.ord(be);
+            }
+        }
         throw "";
     }
 }
@@ -447,23 +520,109 @@ namespace {
 Ordering ord(const ASTPattern& a, const ASTPattern& b) {
     auto rv = ::ord(static_cast<unsigned>(a.data().tag()), static_cast<unsigned>(b.data().tag()));
     if (rv != OrdEqual) return rv;
-    TU_MATCH(ASTPattern::Data, (a.data(), b.data()), (ae, be),
-        (Value, rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);),
-        (ValueLeftInc, rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);),
-        (Or, rv = ::ord(ae.size(), be.size()); if (rv != OrdEqual) return rv; for (size_t i = 0; i < ae.size(); i++) { rv = ::ord(ae[i], be[i]); if (rv != OrdEqual) return rv; } return OrdEqual;),
-        (MaybeBind, return ::ord(ae.name.name, be.name.name);),
-        (Macro, throw CompileErrorBugCheck("ord on unexpanded pattern macro");),
-        (Any, return OrdEqual;),
-        (Never, return OrdEqual;),
-        (Box, return ::ord(*ae.sub, *be.sub);),
-        (Guard, throw CompileErrorBugCheck("ord on a guard pattern");),
-        (Deref, return ::ord(*ae.sub, *be.sub);),
-        (Ref, rv = ::ord(ae.mut, be.mut); if (rv != OrdEqual) return rv; return ::ord(*ae.sub, *be.sub);),
-        (Tuple, throw CompileErrorBugCheck("ord on unsupported tuple pattern type");),
-        (StructTuple, throw CompileErrorBugCheck("ord on unsupported tuple-struct pattern type");),
-        (Struct, throw CompileErrorBugCheck("ord on unsupported struct pattern type");),
-        (Slice, throw CompileErrorBugCheck("ord on unsupported slice pattern type");),
-        (SplitSlice, throw CompileErrorBugCheck("ord on unsupported split-slice pattern type");)
-    )
+    switch (a.data().tag()) {
+        case ASTPattern::Data::TAG_Value: {
+            auto& ae = a.data().as_Value();
+            auto& be = b.data().as_Value();
+            rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);
+            break;
+        }
+        case ASTPattern::Data::TAG_ValueLeftInc: {
+            auto& ae = a.data().as_ValueLeftInc();
+            auto& be = b.data().as_ValueLeftInc();
+            rv = ordPatternValue(ae.start, be.start); if (rv != OrdEqual) return rv; return ordPatternValue(ae.end, be.end);
+            break;
+        }
+        case ASTPattern::Data::TAG_Or: {
+            auto& ae = a.data().as_Or();
+            auto& be = b.data().as_Or();
+            rv = ::ord(ae.size(), be.size()); if (rv != OrdEqual) return rv; for (size_t i = 0; i < ae.size(); i++) { rv = ::ord(ae[i], be[i]); if (rv != OrdEqual) return rv; } return OrdEqual;
+            break;
+        }
+        case ASTPattern::Data::TAG_MaybeBind: {
+            auto& ae = a.data().as_MaybeBind();
+            auto& be = b.data().as_MaybeBind();
+            return ::ord(ae.name.name, be.name.name);
+        }
+        case ASTPattern::Data::TAG_Macro: {
+            auto& ae = a.data().as_Macro();
+            (void)ae;
+            auto& be = b.data().as_Macro();
+            (void)be;
+            throw CompileErrorBugCheck("ord on unexpanded pattern macro");
+        }
+        case ASTPattern::Data::TAG_Any: {
+            auto& ae = a.data().as_Any();
+            (void)ae;
+            auto& be = b.data().as_Any();
+            (void)be;
+            return OrdEqual;
+        }
+        case ASTPattern::Data::TAG_Never: {
+            auto& ae = a.data().as_Never();
+            (void)ae;
+            auto& be = b.data().as_Never();
+            (void)be;
+            return OrdEqual;
+        }
+        case ASTPattern::Data::TAG_Box: {
+            auto& ae = a.data().as_Box();
+            auto& be = b.data().as_Box();
+            return ::ord(*ae.sub, *be.sub);
+        }
+        case ASTPattern::Data::TAG_Guard: {
+            auto& ae = a.data().as_Guard();
+            (void)ae;
+            auto& be = b.data().as_Guard();
+            (void)be;
+            throw CompileErrorBugCheck("ord on a guard pattern");
+        }
+        case ASTPattern::Data::TAG_Deref: {
+            auto& ae = a.data().as_Deref();
+            auto& be = b.data().as_Deref();
+            return ::ord(*ae.sub, *be.sub);
+        }
+        case ASTPattern::Data::TAG_Ref: {
+            auto& ae = a.data().as_Ref();
+            auto& be = b.data().as_Ref();
+            rv = ::ord(ae.mut, be.mut); if (rv != OrdEqual) return rv; return ::ord(*ae.sub, *be.sub);
+            break;
+        }
+        case ASTPattern::Data::TAG_Tuple: {
+            auto& ae = a.data().as_Tuple();
+            (void)ae;
+            auto& be = b.data().as_Tuple();
+            (void)be;
+            throw CompileErrorBugCheck("ord on unsupported tuple pattern type");
+        }
+        case ASTPattern::Data::TAG_StructTuple: {
+            auto& ae = a.data().as_StructTuple();
+            (void)ae;
+            auto& be = b.data().as_StructTuple();
+            (void)be;
+            throw CompileErrorBugCheck("ord on unsupported tuple-struct pattern type");
+        }
+        case ASTPattern::Data::TAG_Struct: {
+            auto& ae = a.data().as_Struct();
+            (void)ae;
+            auto& be = b.data().as_Struct();
+            (void)be;
+            throw CompileErrorBugCheck("ord on unsupported struct pattern type");
+        }
+        case ASTPattern::Data::TAG_Slice: {
+            auto& ae = a.data().as_Slice();
+            (void)ae;
+            auto& be = b.data().as_Slice();
+            (void)be;
+            throw CompileErrorBugCheck("ord on unsupported slice pattern type");
+        }
+        case ASTPattern::Data::TAG_SplitSlice: {
+            auto& ae = a.data().as_SplitSlice();
+            (void)ae;
+            auto& be = b.data().as_SplitSlice();
+            (void)be;
+            throw CompileErrorBugCheck("ord on unsupported split-slice pattern type");
+        }
+    }
     throw "";
 }

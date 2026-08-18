@@ -1070,7 +1070,23 @@ struct Deriver {
 
     ::std::vector<ASTType*> getFieldBounds(const ASTStruct& str) const {
         ::std::vector<ASTType*> ret;
-        TU_MATCH(ASTStructData, (str.data), (e), (Unit, ), (Struct, for (const auto& fld : e.ents) { addFieldBoundFromTy(str.params(), ret, fld.type); }), (Tuple, for (const auto& ent : e.ents) { addFieldBoundFromTy(str.params(), ret, ent.type); }))
+        switch (str.data.tag()) {
+            case ASTStructData::TAG_Unit: {
+                auto& e = str.data.as_Unit();
+                (void)e;
+                break;
+            }
+            case ASTStructData::TAG_Struct: {
+                auto& e = str.data.as_Struct();
+                for (const auto& fld : e.ents) { addFieldBoundFromTy(str.params(), ret, fld.type); }
+                break;
+            }
+            case ASTStructData::TAG_Tuple: {
+                auto& e = str.data.as_Tuple();
+                for (const auto& ent : e.ents) { addFieldBoundFromTy(str.params(), ret, ent.type); }
+                break;
+            }
+        }
         return ret;
     }
 
@@ -1078,7 +1094,23 @@ struct Deriver {
         ::std::vector<ASTType*> ret;
 
         for (const auto& v : enm.variants()) {
-            TU_MATCH(ASTEnumVariantData, (v.data), (e), (Unit, ), (Tuple, for (const auto& ent : e.items) { addFieldBoundFromTy(enm.params(), ret, ent.type); }), (Struct, for (const auto& fld : e.fields) { addFieldBoundFromTy(enm.params(), ret, fld.type); }))
+            switch (v.data.tag()) {
+                case ASTEnumVariantData::TAG_Unit: {
+                    auto& e = v.data.as_Unit();
+                    (void)e;
+                    break;
+                }
+                case ASTEnumVariantData::TAG_Tuple: {
+                    auto& e = v.data.as_Tuple();
+                    for (const auto& ent : e.items) { addFieldBoundFromTy(enm.params(), ret, ent.type); }
+                    break;
+                }
+                case ASTEnumVariantData::TAG_Struct: {
+                    auto& e = v.data.as_Struct();
+                    for (const auto& fld : e.fields) { addFieldBoundFromTy(enm.params(), ret, fld.type); }
+                    break;
+                }
+            }
         }
 
         return ret;
@@ -3022,19 +3054,33 @@ public:
     }
 
     void handle(const Span& sp, const ASTAttribute& attr, const WireBoard& wb, ASTCrate& crate, const ASTAbsolutePath& path, ASTModule& mod, size_t modIdx, slice<const ASTAttribute> attrs, const ASTVisibility& vis, ASTItem& i) const override {
-        TU_MATCH_DEF(
-            ASTItem,
-            (i),
-            (e),
-            (TODO(sp, "Handle #[derive] for other item types - " << i.tagStr());),
-            (
-                None,
+        switch (i.tag()) {
+            case ASTItem::TAG_None: {
+                auto& e = i.as_None();
+                (void)e;
                 // Ignore, it's been deleted
-            ),
-            (Union, deriveItem(sp, wb, crate, mod, attr, path, attrs, vis, e);),
-            (Enum, deriveItem(sp, wb, crate, mod, attr, path, attrs, vis, e);),
-            (Struct, deriveItem(sp, wb, crate, mod, attr, path, attrs, vis, e);)
-        )
+                break;
+            }
+            case ASTItem::TAG_Union: {
+                auto& e = i.as_Union();
+                deriveItem(sp, wb, crate, mod, attr, path, attrs, vis, e);
+                break;
+            }
+            case ASTItem::TAG_Enum: {
+                auto& e = i.as_Enum();
+                deriveItem(sp, wb, crate, mod, attr, path, attrs, vis, e);
+                break;
+            }
+            case ASTItem::TAG_Struct: {
+                auto& e = i.as_Struct();
+                deriveItem(sp, wb, crate, mod, attr, path, attrs, vis, e);
+                break;
+            }
+            default: {
+                TODO(sp, "Handle #[derive] for other item types - " << i.tagStr());
+                break;
+            }
+        }
     }
 };
 

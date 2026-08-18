@@ -51,7 +51,22 @@ namespace {
                             state.resolve.expandAssociatedTypes(sp, rv);
                             return rv;
                         };
-                        TU_MATCHA((str.data), (se), (Unit, MIR_BUG(state, "Unit-like struct with DstType::Possible - " << unsizedTy);), (Tuple, return getMetadataType(state, monomorph(se.back().ent));), (Named, return getMetadataType(state, monomorph(se.back().ty));))
+                        switch (str.data.tag()) {
+                            case HIRStructData::TAG_Unit: {
+                                auto& se = str.data.as_Unit();
+                                (void)se;
+                                MIR_BUG(state, "Unit-like struct with DstType::Possible - " << unsizedTy);
+                                break;
+                            }
+                            case HIRStructData::TAG_Tuple: {
+                                auto& se = str.data.as_Tuple();
+                                return getMetadataType(state, monomorph(se.back().ent));
+                            }
+                            case HIRStructData::TAG_Named: {
+                                auto& se = str.data.as_Named();
+                                return getMetadataType(state, monomorph(se.back().ty));
+                            }
+                        }
                         throw "";
                     }
                     case HIRStructMarkings::DstType::Slice:
@@ -2799,7 +2814,27 @@ bool MIROptimiseInlining(MIRTypeResolve& state, MIRFunction& fcn, bool minimal, 
             if (src.is_Return()) {
                 return MIRTerminator::make_Goto(this->te.retBlock);
             } else if (src.is_UnwindResume()) {
-                TU_MATCHA((this->te.unwind), (ue), (Continue, return MIRTerminator::make_UnwindResume({});), (Cleanup, return MIRTerminator::make_Goto(ue);), (Terminate, return MIRTerminator::make_UnwindTerminate({});), (Unreachable, return MIRTerminator::make_Unreachable({});))
+                switch (this->te.unwind.tag()) {
+                    case MIRUnwindAction::TAG_Continue: {
+                        auto& ue = this->te.unwind.as_Continue();
+                        (void)ue;
+                        return MIRTerminator::make_UnwindResume({});
+                    }
+                    case MIRUnwindAction::TAG_Cleanup: {
+                        auto& ue = this->te.unwind.as_Cleanup();
+                        return MIRTerminator::make_Goto(ue);
+                    }
+                    case MIRUnwindAction::TAG_Terminate: {
+                        auto& ue = this->te.unwind.as_Terminate();
+                        (void)ue;
+                        return MIRTerminator::make_UnwindTerminate({});
+                    }
+                    case MIRUnwindAction::TAG_Unreachable: {
+                        auto& ue = this->te.unwind.as_Unreachable();
+                        (void)ue;
+                        return MIRTerminator::make_Unreachable({});
+                    }
+                }
                 throw "";
             } else {
                 return MIRCloner::cloneTerm(src);
@@ -5433,33 +5468,70 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                             }
                             break;
                         case MIRUniOp::NEG:
-                            TU_MATCHA( (val), (ve),
-                            (Uint,
-                                // Not valid?
-                                ),
-                            (Int,
-                                newValue = MIRConstant::make_Int({ H::truncateS(ve.t, -ve.v), ve.t });
-                                replace = true;
-                                ),
-                            (Float,
-                                if (!floatValueIsNan(ve.v)) {
-                                        newValue = MIRConstant::make_Float({-ve.v, ve.t});
-                                        replace = true;
+                            switch (val.tag()) {
+                                case MIRConstant::TAG_Uint: {
+                                    auto& ve = val.as_Uint();
+                                    (void)ve;
+                                    // Not valid?
+                                    break;
                                 }
-                                ),
-                            (Bool,
-                                // Not valid?
-                                ),
-                            (Bytes, ),
-                            (StaticString, ),
-                            (Encoded, ),
-                            (Const,
-                                // TODO:
-                                ),
-                            (Generic,  ),
-                            (Function, ),
-                            (ItemAddr, )
-                            )
+                                case MIRConstant::TAG_Int: {
+                                    auto& ve = val.as_Int();
+                                    newValue = MIRConstant::make_Int({ H::truncateS(ve.t, -ve.v), ve.t });
+                                    replace = true;
+                                    break;
+                                }
+                                case MIRConstant::TAG_Float: {
+                                    auto& ve = val.as_Float();
+                                    if (!floatValueIsNan(ve.v)) {
+                                            newValue = MIRConstant::make_Float({-ve.v, ve.t});
+                                            replace = true;
+                                    }
+                                    break;
+                                }
+                                case MIRConstant::TAG_Bool: {
+                                    auto& ve = val.as_Bool();
+                                    (void)ve;
+                                    // Not valid?
+                                    break;
+                                }
+                                case MIRConstant::TAG_Bytes: {
+                                    auto& ve = val.as_Bytes();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_StaticString: {
+                                    auto& ve = val.as_StaticString();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_Encoded: {
+                                    auto& ve = val.as_Encoded();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_Const: {
+                                    auto& ve = val.as_Const();
+                                    (void)ve;
+                                    // TODO:
+                                    break;
+                                }
+                                case MIRConstant::TAG_Generic: {
+                                    auto& ve = val.as_Generic();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_Function: {
+                                    auto& ve = val.as_Function();
+                                    (void)ve;
+                                    break;
+                                }
+                                case MIRConstant::TAG_ItemAddr: {
+                                    auto& ve = val.as_ItemAddr();
+                                    (void)ve;
+                                    break;
+                                }
+                            }
                             break;
                             }
                             if (replace) {
@@ -6087,7 +6159,81 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                             return found;
                         });
                     }
-                    TU_MATCHA((block.terminator), (e), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, DEBUG("TODO: Chain");), (If, stop = true;), (Switch, stop = true;), (SwitchValue, stop = true;), (Drop, stop = true;), (Call, stop = true;), (TailCall, stop = true;), (Asm2, stop = true;))
+                    switch (block.terminator.tag()) {
+                        case MIRTerminator::TAG_Incomplete: {
+                            auto& e = block.terminator.as_Incomplete();
+                            (void)e;
+                            break;
+                        }
+                        case MIRTerminator::TAG_Return: {
+                            auto& e = block.terminator.as_Return();
+                            (void)e;
+                            break;
+                        }
+                        case MIRTerminator::TAG_UnwindResume: {
+                            auto& e = block.terminator.as_UnwindResume();
+                            (void)e;
+                            break;
+                        }
+                        case MIRTerminator::TAG_UnwindTerminate: {
+                            auto& e = block.terminator.as_UnwindTerminate();
+                            (void)e;
+                            break;
+                        }
+                        case MIRTerminator::TAG_Unreachable: {
+                            auto& e = block.terminator.as_Unreachable();
+                            (void)e;
+                            break;
+                        }
+                        case MIRTerminator::TAG_Goto: {
+                            auto& e = block.terminator.as_Goto();
+                            (void)e;
+                            DEBUG("TODO: Chain");
+                            break;
+                        }
+                        case MIRTerminator::TAG_If: {
+                            auto& e = block.terminator.as_If();
+                            (void)e;
+                            stop = true;
+                            break;
+                        }
+                        case MIRTerminator::TAG_Switch: {
+                            auto& e = block.terminator.as_Switch();
+                            (void)e;
+                            stop = true;
+                            break;
+                        }
+                        case MIRTerminator::TAG_SwitchValue: {
+                            auto& e = block.terminator.as_SwitchValue();
+                            (void)e;
+                            stop = true;
+                            break;
+                        }
+                        case MIRTerminator::TAG_Drop: {
+                            auto& e = block.terminator.as_Drop();
+                            (void)e;
+                            stop = true;
+                            break;
+                        }
+                        case MIRTerminator::TAG_Call: {
+                            auto& e = block.terminator.as_Call();
+                            (void)e;
+                            stop = true;
+                            break;
+                        }
+                        case MIRTerminator::TAG_TailCall: {
+                            auto& e = block.terminator.as_TailCall();
+                            (void)e;
+                            stop = true;
+                            break;
+                        }
+                        case MIRTerminator::TAG_Asm2: {
+                            auto& e = block.terminator.as_Asm2();
+                            (void)e;
+                            stop = true;
+                            break;
+                        }
+                    }
                 }
                 // Schedule a replacement in a future pass
                 if (found) {
@@ -7164,13 +7310,79 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
         depths[info.bbIdx] = ::std::make_pair(info.branchCount, info.level);
         const auto& bb = fcn.blocks[info.bbIdx];
 
-        TU_MATCHA((bb.terminator), (te), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});), (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});), (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});), (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});), (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); if (te.unwind.is_Cleanup()) {
-            auto& target = te.unwind.as_Cleanup();
-            todo.push_back(Todo{target, ++branches, info.level + 1});
-        }), (Call, todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); if (te.unwind.is_Cleanup()) {
-            auto& target = te.unwind.as_Cleanup();
-            todo.push_back(Todo{target, ++branches, info.level + 1});
-        }), (TailCall, ), (Asm2, if (te.retBlock != ~0u) todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); for (const auto& p : te.params) if (const auto* dst = p.opt_Label()) todo.push_back(Todo{*dst, ++branches, info.level + 1});))
+        switch (bb.terminator.tag()) {
+            case MIRTerminator::TAG_Incomplete: {
+                auto& te = bb.terminator.as_Incomplete();
+                (void)te;
+                break;
+            }
+            case MIRTerminator::TAG_Return: {
+                auto& te = bb.terminator.as_Return();
+                (void)te;
+                break;
+            }
+            case MIRTerminator::TAG_UnwindResume: {
+                auto& te = bb.terminator.as_UnwindResume();
+                (void)te;
+                break;
+            }
+            case MIRTerminator::TAG_UnwindTerminate: {
+                auto& te = bb.terminator.as_UnwindTerminate();
+                (void)te;
+                break;
+            }
+            case MIRTerminator::TAG_Unreachable: {
+                auto& te = bb.terminator.as_Unreachable();
+                (void)te;
+                break;
+            }
+            case MIRTerminator::TAG_Goto: {
+                auto& te = bb.terminator.as_Goto();
+                todo.push_back(Todo{te, info.branchCount, info.level + 1});
+                break;
+            }
+            case MIRTerminator::TAG_If: {
+                auto& te = bb.terminator.as_If();
+                todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});
+                break;
+            }
+            case MIRTerminator::TAG_Switch: {
+                auto& te = bb.terminator.as_Switch();
+                for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});
+                break;
+            }
+            case MIRTerminator::TAG_SwitchValue: {
+                auto& te = bb.terminator.as_SwitchValue();
+                for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});
+                break;
+            }
+            case MIRTerminator::TAG_Drop: {
+                auto& te = bb.terminator.as_Drop();
+                todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); if (te.unwind.is_Cleanup()) {
+                    auto& target = te.unwind.as_Cleanup();
+                    todo.push_back(Todo{target, ++branches, info.level + 1});
+                }
+                break;
+            }
+            case MIRTerminator::TAG_Call: {
+                auto& te = bb.terminator.as_Call();
+                todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); if (te.unwind.is_Cleanup()) {
+                    auto& target = te.unwind.as_Cleanup();
+                    todo.push_back(Todo{target, ++branches, info.level + 1});
+                }
+                break;
+            }
+            case MIRTerminator::TAG_TailCall: {
+                auto& te = bb.terminator.as_TailCall();
+                (void)te;
+                break;
+            }
+            case MIRTerminator::TAG_Asm2: {
+                auto& te = bb.terminator.as_Asm2();
+                if (te.retBlock != ~0u) todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); for (const auto& p : te.params) if (const auto* dst = p.opt_Label()) todo.push_back(Todo{*dst, ++branches, info.level + 1});
+                break;
+            }
+        }
     }
 
     // Sort a list of block indexes by `depths`

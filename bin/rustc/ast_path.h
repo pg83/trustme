@@ -284,7 +284,20 @@ public:
     void append(ASTPathNode node);
 
     bool isTrivial() const {
-        TU_MATCH_DEF(Class, (cls), (e), (return false;), (Local, return true;), (Relative, return e.nodes.size() == 1 && e.nodes[0].args().isEmpty();))
+        switch (cls.tag()) {
+            case Class::TAG_Local: {
+                auto& e = cls.as_Local();
+                (void)e;
+                return true;
+            }
+            case Class::TAG_Relative: {
+                auto& e = cls.as_Relative();
+                return e.nodes.size() == 1 && e.nodes[0].args().isEmpty();
+            }
+            default: {
+                return false;
+            }
+        }
     }
 
     const RcString& asTrivial() const;

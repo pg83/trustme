@@ -329,7 +329,24 @@ ASTTrait ASTTrait::clone() const {
 ASTEnum ASTEnum::clone() const {
     decltype(variants_) newVariants;
     for (const auto& var : variants_) {
-        TU_MATCHA((var.data), (e), (Unit, newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name));), (Tuple, decltype(e.items) newSt; for (const auto& f : e.items) newSt.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newSt)));), (Struct, decltype(e.fields) newFields; for (const auto& f : e.fields) newFields.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newFields)));))
+        switch (var.data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                auto& e = var.data.as_Unit();
+                (void)e;
+                newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = var.data.as_Tuple();
+                decltype(e.items) newSt; for (const auto& f : e.items) newSt.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newSt)));
+                break;
+            }
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = var.data.as_Struct();
+                decltype(e.fields) newFields; for (const auto& f : e.fields) newFields.push_back(f.clone()); newVariants.push_back(ASTEnumVariant(var.attrs.clone(), var.name, mv$(newFields)));
+                break;
+            }
+        }
         newVariants.back().discriminantValue = var.discriminantValue.clone();
     }
     auto rv = ASTEnum(params_.clone(), mv$(newVariants));
@@ -338,7 +355,23 @@ ASTEnum ASTEnum::clone() const {
 }
 
 ASTStruct ASTStruct::clone() const {
-    TU_MATCHA((data), (e), (Unit, return ASTStruct(params_.clone());), (Tuple, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));), (Struct, decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));))
+    switch (data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            auto& e = data.as_Unit();
+            (void)e;
+            return ASTStruct(params_.clone());
+        }
+        case ASTStructData::TAG_Tuple: {
+            auto& e = data.as_Tuple();
+            decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));
+            break;
+        }
+        case ASTStructData::TAG_Struct: {
+            auto& e = data.as_Struct();
+            decltype(e.ents) newFields; for (const auto& f : e.ents) newFields.push_back(f.clone()); return ASTStruct(params_.clone(), mv$(newFields));
+            break;
+        }
+    }
     throw "";
 }
 
@@ -490,29 +523,92 @@ void ASTModule::addMacro(bool isExported, RcString name, MacroRulesPtr macro) {
 }
 
 ASTItem ASTItem::clone() const {
-    TU_MATCHA(
-        (*this),
-        (e),
-        (None, return ASTItem(e);),
-        (MacroInv, TODO(Span(), "Clone on Item::MacroInv");),
-        (Macro, TODO(Span(), "Clone on Item::Macro");),
-        (Use, return ASTItem(e.clone());),
-        (ExternBlock, TODO(Span(), "Clone on Item::" << this->tagStr());),
-        (GlobalAsm, return ASTItem(e.clone());),
-        (Impl, TODO(Span(), "Clone on Item::" << this->tagStr());),
-        (NegImpl, TODO(Span(), "Clone on Item::" << this->tagStr());),
-        (Module, TODO(Span(), "Clone on Item::" << this->tagStr());),
-        (Crate, return ASTItem(e);),
-        (Type, return ASTItem(e.clone());),
-        (Struct, return ASTItem(e.clone());),
-        (Enum, return ASTItem(e.clone());),
-        (Union, return ASTItem(e.clone());),
-        (Trait, return ASTItem(e.clone());),
-        (TraitAlias, return ASTItem(e.clone());),
-
-        (Function, return ASTItem(e.clone());),
-        (Static, return ASTItem(e.clone());)
-    )
+    switch ((*this).tag()) {
+        case ASTItem::TAG_None: {
+            auto& e = (*this).as_None();
+            return ASTItem(e);
+        }
+        case ASTItem::TAG_MacroInv: {
+            auto& e = (*this).as_MacroInv();
+            (void)e;
+            TODO(Span(), "Clone on Item::MacroInv");
+            break;
+        }
+        case ASTItem::TAG_Macro: {
+            auto& e = (*this).as_Macro();
+            (void)e;
+            TODO(Span(), "Clone on Item::Macro");
+            break;
+        }
+        case ASTItem::TAG_Use: {
+            auto& e = (*this).as_Use();
+            return ASTItem(e.clone());
+        }
+        case ASTItem::TAG_ExternBlock: {
+            auto& e = (*this).as_ExternBlock();
+            (void)e;
+            TODO(Span(), "Clone on Item::" << this->tagStr());
+            break;
+        }
+        case ASTItem::TAG_GlobalAsm: {
+            auto& e = (*this).as_GlobalAsm();
+            return ASTItem(e.clone());
+        }
+        case ASTItem::TAG_Impl: {
+            auto& e = (*this).as_Impl();
+            (void)e;
+            TODO(Span(), "Clone on Item::" << this->tagStr());
+            break;
+        }
+        case ASTItem::TAG_NegImpl: {
+            auto& e = (*this).as_NegImpl();
+            (void)e;
+            TODO(Span(), "Clone on Item::" << this->tagStr());
+            break;
+        }
+        case ASTItem::TAG_Module: {
+            auto& e = (*this).as_Module();
+            (void)e;
+            TODO(Span(), "Clone on Item::" << this->tagStr());
+            break;
+        }
+        case ASTItem::TAG_Crate: {
+            auto& e = (*this).as_Crate();
+            return ASTItem(e);
+        }
+        case ASTItem::TAG_Type: {
+            auto& e = (*this).as_Type();
+            return ASTItem(e.clone());
+        }
+        case ASTItem::TAG_Struct: {
+            auto& e = (*this).as_Struct();
+            return ASTItem(e.clone());
+        }
+        case ASTItem::TAG_Enum: {
+            auto& e = (*this).as_Enum();
+            return ASTItem(e.clone());
+        }
+        case ASTItem::TAG_Union: {
+            auto& e = (*this).as_Union();
+            return ASTItem(e.clone());
+        }
+        case ASTItem::TAG_Trait: {
+            auto& e = (*this).as_Trait();
+            return ASTItem(e.clone());
+        }
+        case ASTItem::TAG_TraitAlias: {
+            auto& e = (*this).as_TraitAlias();
+            return ASTItem(e.clone());
+        }
+        case ASTItem::TAG_Function: {
+            auto& e = (*this).as_Function();
+            return ASTItem(e.clone());
+        }
+        case ASTItem::TAG_Static: {
+            auto& e = (*this).as_Static();
+            return ASTItem(e.clone());
+        }
+    }
     throw "";
 }
 
@@ -785,7 +881,23 @@ ASTImplDef::ASTImplDef(ASTGenericParams params, Spanned<ASTPath> traitType, ASTT
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTEnumVariant& x) {
     os << "EnumVariant(" << x.name;
-    TU_MATCH(ASTEnumVariantData, (x.data), (e), (Unit, ), (Tuple, os << "(" << e.items << ")";), (Struct, os << " { " << e.fields << " }";))
+    switch (x.data.tag()) {
+        case ASTEnumVariantData::TAG_Unit: {
+            auto& e = x.data.as_Unit();
+            (void)e;
+            break;
+        }
+        case ASTEnumVariantData::TAG_Tuple: {
+            auto& e = x.data.as_Tuple();
+            os << "(" << e.items << ")";
+            break;
+        }
+        case ASTEnumVariantData::TAG_Struct: {
+            auto& e = x.data.as_Struct();
+            os << " { " << e.fields << " }";
+            break;
+        }
+    }
     if (x.discriminantValue) {
         os << " = " << x.discriminantValue;
     }

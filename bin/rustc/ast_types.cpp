@@ -241,7 +241,108 @@ Ordering ASTType::ord(const ASTType& x) const {
         return rv;
     }
 
-    TU_MATCH(TypeData, (data, x.data), (ent, xEnt), (None, return OrdEqual;), (Macro, throw CompileErrorBugCheck("ASTType*::ord - unexpanded macro");), (Any, return OrdEqual;), (Unit, return OrdEqual;), (Bang, return OrdEqual;), (Primitive, return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);), (Function, return ent.info.ord(xEnt.info);), (Tuple, return ::ord(ent.innerTypes, xEnt.innerTypes);), (Borrow, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Pointer, rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);), (Array, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;), (Slice, return ent.inner->ord(*xEnt.inner);), (Pattern, rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; return ::ord(*ent.pattern, *xEnt.pattern);), (Generic, return ::ord(ent.name, xEnt.name);), (Path, return ent->ord(*xEnt);), (TraitObject, return ::ord(ent.traits, xEnt.traits);), (ErasedType, ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;))
+    switch (data.tag()) {
+        case TypeData::TAG_None: {
+            auto& ent = data.as_None();
+            (void)ent;
+            auto& xEnt = x.data.as_None();
+            (void)xEnt;
+            return OrdEqual;
+        }
+        case TypeData::TAG_Macro: {
+            auto& ent = data.as_Macro();
+            (void)ent;
+            auto& xEnt = x.data.as_Macro();
+            (void)xEnt;
+            throw CompileErrorBugCheck("ASTType*::ord - unexpanded macro");
+        }
+        case TypeData::TAG_Any: {
+            auto& ent = data.as_Any();
+            (void)ent;
+            auto& xEnt = x.data.as_Any();
+            (void)xEnt;
+            return OrdEqual;
+        }
+        case TypeData::TAG_Unit: {
+            auto& ent = data.as_Unit();
+            (void)ent;
+            auto& xEnt = x.data.as_Unit();
+            (void)xEnt;
+            return OrdEqual;
+        }
+        case TypeData::TAG_Bang: {
+            auto& ent = data.as_Bang();
+            (void)ent;
+            auto& xEnt = x.data.as_Bang();
+            (void)xEnt;
+            return OrdEqual;
+        }
+        case TypeData::TAG_Primitive: {
+            auto& ent = data.as_Primitive();
+            auto& xEnt = x.data.as_Primitive();
+            return ::ord((unsigned)ent.coreType, (unsigned)xEnt.coreType);
+        }
+        case TypeData::TAG_Function: {
+            auto& ent = data.as_Function();
+            auto& xEnt = x.data.as_Function();
+            return ent.info.ord(xEnt.info);
+        }
+        case TypeData::TAG_Tuple: {
+            auto& ent = data.as_Tuple();
+            auto& xEnt = x.data.as_Tuple();
+            return ::ord(ent.innerTypes, xEnt.innerTypes);
+        }
+        case TypeData::TAG_Borrow: {
+            auto& ent = data.as_Borrow();
+            auto& xEnt = x.data.as_Borrow();
+            rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);
+            break;
+        }
+        case TypeData::TAG_Pointer: {
+            auto& ent = data.as_Pointer();
+            auto& xEnt = x.data.as_Pointer();
+            rv = ::ord(ent.isMut, xEnt.isMut); if (rv != OrdEqual) return rv; return ent.inner->ord(*xEnt.inner);
+            break;
+        }
+        case TypeData::TAG_Array: {
+            auto& ent = data.as_Array();
+            auto& xEnt = x.data.as_Array();
+            rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; if (ent.size.get()) { throw ::std::runtime_error("TODO: Sized array comparisons"); } return OrdEqual;
+            break;
+        }
+        case TypeData::TAG_Slice: {
+            auto& ent = data.as_Slice();
+            auto& xEnt = x.data.as_Slice();
+            return ent.inner->ord(*xEnt.inner);
+        }
+        case TypeData::TAG_Pattern: {
+            auto& ent = data.as_Pattern();
+            auto& xEnt = x.data.as_Pattern();
+            rv = ent.inner->ord(*xEnt.inner); if (rv != OrdEqual) return rv; return ::ord(*ent.pattern, *xEnt.pattern);
+            break;
+        }
+        case TypeData::TAG_Generic: {
+            auto& ent = data.as_Generic();
+            auto& xEnt = x.data.as_Generic();
+            return ::ord(ent.name, xEnt.name);
+        }
+        case TypeData::TAG_Path: {
+            auto& ent = data.as_Path();
+            auto& xEnt = x.data.as_Path();
+            return ent->ord(*xEnt);
+        }
+        case TypeData::TAG_TraitObject: {
+            auto& ent = data.as_TraitObject();
+            auto& xEnt = x.data.as_TraitObject();
+            return ::ord(ent.traits, xEnt.traits);
+        }
+        case TypeData::TAG_ErasedType: {
+            auto& ent = data.as_ErasedType();
+            auto& xEnt = x.data.as_ErasedType();
+            ORD(ent->traits, xEnt->traits); ORD(ent->maybeTraits, xEnt->maybeTraits); ORD(ent->lifetimes, xEnt->lifetimes); ORD(ent->use != 0, xEnt->use != 0); if (ent->use) { ORD(*ent->use, *xEnt->use); } ORD(ent->isEdition2024OrLater, xEnt->isEdition2024OrLater); return OrdEqual;
+            break;
+        }
+    }
     throw ::std::runtime_error(FMT("BUGCHECK - Unhandled ASTType* class '" << data.tag() << "'"));
 }
 

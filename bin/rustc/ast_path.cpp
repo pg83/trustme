@@ -12,17 +12,156 @@
 
 // --- AST::PathBinding
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingType& x) {
-    TU_MATCHA((x), (i), (Unbound, os << "_";), (Crate, os << "Crate";), (Primitive, os << "Primitive";), (Module, os << "Module";), (Trait, os << "Trait";), (TraitAlias, os << "TraitAlias";), (Struct, os << "Struct";), (Enum, os << "Enum";), (Union, os << "Union";), (EnumVar, os << "EnumVar(" << i.idx << ")";), (TypeAlias, os << "TypeAlias";), (TypeParameter, os << "TyParam(" << i.slot << ")";))
+    switch (x.tag()) {
+        case ASTPathBindingType::TAG_Unbound: {
+            auto& i = x.as_Unbound();
+            (void)i;
+            os << "_";
+            break;
+        }
+        case ASTPathBindingType::TAG_Crate: {
+            auto& i = x.as_Crate();
+            (void)i;
+            os << "Crate";
+            break;
+        }
+        case ASTPathBindingType::TAG_Primitive: {
+            auto& i = x.as_Primitive();
+            (void)i;
+            os << "Primitive";
+            break;
+        }
+        case ASTPathBindingType::TAG_Module: {
+            auto& i = x.as_Module();
+            (void)i;
+            os << "Module";
+            break;
+        }
+        case ASTPathBindingType::TAG_Trait: {
+            auto& i = x.as_Trait();
+            (void)i;
+            os << "Trait";
+            break;
+        }
+        case ASTPathBindingType::TAG_TraitAlias: {
+            auto& i = x.as_TraitAlias();
+            (void)i;
+            os << "TraitAlias";
+            break;
+        }
+        case ASTPathBindingType::TAG_Struct: {
+            auto& i = x.as_Struct();
+            (void)i;
+            os << "Struct";
+            break;
+        }
+        case ASTPathBindingType::TAG_Enum: {
+            auto& i = x.as_Enum();
+            (void)i;
+            os << "Enum";
+            break;
+        }
+        case ASTPathBindingType::TAG_Union: {
+            auto& i = x.as_Union();
+            (void)i;
+            os << "Union";
+            break;
+        }
+        case ASTPathBindingType::TAG_EnumVar: {
+            auto& i = x.as_EnumVar();
+            os << "EnumVar(" << i.idx << ")";
+            break;
+        }
+        case ASTPathBindingType::TAG_TypeAlias: {
+            auto& i = x.as_TypeAlias();
+            (void)i;
+            os << "TypeAlias";
+            break;
+        }
+        case ASTPathBindingType::TAG_TypeParameter: {
+            auto& i = x.as_TypeParameter();
+            os << "TyParam(" << i.slot << ")";
+            break;
+        }
+    }
     return os;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingValue& x) {
-    TU_MATCHA((x), (i), (Unbound, os << "_";), (Struct, os << "Struct";), (Static, os << "Static";), (Function, os << "Function";), (EnumVar, os << "EnumVar(" << i.idx << ")";), (Generic, os << "Param(" << i.index << ")";), (Variable, os << "Var(" << i.slot << ")";))
+    switch (x.tag()) {
+        case ASTPathBindingValue::TAG_Unbound: {
+            auto& i = x.as_Unbound();
+            (void)i;
+            os << "_";
+            break;
+        }
+        case ASTPathBindingValue::TAG_Struct: {
+            auto& i = x.as_Struct();
+            (void)i;
+            os << "Struct";
+            break;
+        }
+        case ASTPathBindingValue::TAG_Static: {
+            auto& i = x.as_Static();
+            (void)i;
+            os << "Static";
+            break;
+        }
+        case ASTPathBindingValue::TAG_Function: {
+            auto& i = x.as_Function();
+            (void)i;
+            os << "Function";
+            break;
+        }
+        case ASTPathBindingValue::TAG_EnumVar: {
+            auto& i = x.as_EnumVar();
+            os << "EnumVar(" << i.idx << ")";
+            break;
+        }
+        case ASTPathBindingValue::TAG_Generic: {
+            auto& i = x.as_Generic();
+            os << "Param(" << i.index << ")";
+            break;
+        }
+        case ASTPathBindingValue::TAG_Variable: {
+            auto& i = x.as_Variable();
+            os << "Var(" << i.slot << ")";
+            break;
+        }
+    }
     return os;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const ASTPathBindingMacro& x) {
-    TU_MATCHA((x), (i), (Unbound, os << "_";), (ProcMacroDerive, os << "ProcMacroDerive(? " << i.macName << ")";), (ProcMacroAttribute, os << "ProcMacroAttribute(? " << i.macName << ")";), (ProcMacro, os << "ProcMacro(? " << i.macName << ")";), (MacroRules, os << "MacroRules(? ?)";))
+    switch (x.tag()) {
+        case ASTPathBindingMacro::TAG_Unbound: {
+            auto& i = x.as_Unbound();
+            (void)i;
+            os << "_";
+            break;
+        }
+        case ASTPathBindingMacro::TAG_ProcMacroDerive: {
+            auto& i = x.as_ProcMacroDerive();
+            os << "ProcMacroDerive(? " << i.macName << ")";
+            break;
+        }
+        case ASTPathBindingMacro::TAG_ProcMacroAttribute: {
+            auto& i = x.as_ProcMacroAttribute();
+            os << "ProcMacroAttribute(? " << i.macName << ")";
+            break;
+        }
+        case ASTPathBindingMacro::TAG_ProcMacro: {
+            auto& i = x.as_ProcMacro();
+            os << "ProcMacro(? " << i.macName << ")";
+            break;
+        }
+        case ASTPathBindingMacro::TAG_MacroRules: {
+            auto& i = x.as_MacroRules();
+            (void)i;
+            os << "MacroRules(? ?)";
+            break;
+        }
+    }
     return os;
 }
 
@@ -232,7 +371,44 @@ ASTPath::ASTPath(const ASTPath& x)
     : cls()
     , bindings(x.bindings.clone())
 {
-    TU_MATCH(Class, (x.cls), (ent), (Invalid, cls = Class::make_Invalid({});), (Local, cls = Class::make_Local({ent.name});), (Relative, cls = Class::make_Relative({ent.hygiene, ent.nodes});), (Self, cls = Class::make_Self({ent.nodes});), (Super, cls = Class::make_Super({ent.count, ent.nodes});), (Absolute, cls = Class::make_Absolute({ent.crate, ent.nodes});), (UFCS, if (ent.trait) cls = Class::make_UFCS({ent.type->clone(), ::std::unique_ptr<ASTPath>(new ASTPath(*ent.trait)), ent.nodes}); else cls = Class::make_UFCS({ent.type->clone(), nullptr, ent.nodes});))
+    switch (x.cls.tag()) {
+        case Class::TAG_Invalid: {
+            auto& ent = x.cls.as_Invalid();
+            (void)ent;
+            cls = Class::make_Invalid({});
+            break;
+        }
+        case Class::TAG_Local: {
+            auto& ent = x.cls.as_Local();
+            cls = Class::make_Local({ent.name});
+            break;
+        }
+        case Class::TAG_Relative: {
+            auto& ent = x.cls.as_Relative();
+            cls = Class::make_Relative({ent.hygiene, ent.nodes});
+            break;
+        }
+        case Class::TAG_Self: {
+            auto& ent = x.cls.as_Self();
+            cls = Class::make_Self({ent.nodes});
+            break;
+        }
+        case Class::TAG_Super: {
+            auto& ent = x.cls.as_Super();
+            cls = Class::make_Super({ent.count, ent.nodes});
+            break;
+        }
+        case Class::TAG_Absolute: {
+            auto& ent = x.cls.as_Absolute();
+            cls = Class::make_Absolute({ent.crate, ent.nodes});
+            break;
+        }
+        case Class::TAG_UFCS: {
+            auto& ent = x.cls.as_UFCS();
+            if (ent.trait) cls = Class::make_UFCS({ent.type->clone(), ::std::unique_ptr<ASTPath>(new ASTPath(*ent.trait)), ent.nodes}); else cls = Class::make_UFCS({ent.type->clone(), nullptr, ent.nodes});
+            break;
+        }
+    }
 }
 
 bool ASTPath::isParentOf(const ASTPath& x) const {
@@ -280,7 +456,47 @@ Ordering ASTPath::ord(const ASTPath& x) const {
         return rv;
     }
 
-    TU_MATCH(ASTPath::Class, (cls, x.cls), (ent, xEnt), (Invalid, return OrdEqual;), (Local, return ::ord(ent.name, xEnt.name);), (Relative, return ::ord(ent.nodes, xEnt.nodes);), (Self, return ::ord(ent.nodes, xEnt.nodes);), (Super, return ::ord(ent.nodes, xEnt.nodes);), (Absolute, rv = ::ord(ent.crate, xEnt.crate); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, xEnt.nodes);), (UFCS, rv = ent.type->ord(*xEnt.type); if (rv != OrdEqual) return rv; rv = ent.trait->ord(*xEnt.trait); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, xEnt.nodes);))
+    switch (cls.tag()) {
+        case ASTPath::Class::TAG_Invalid: {
+            auto& ent = cls.as_Invalid();
+            (void)ent;
+            auto& xEnt = x.cls.as_Invalid();
+            (void)xEnt;
+            return OrdEqual;
+        }
+        case ASTPath::Class::TAG_Local: {
+            auto& ent = cls.as_Local();
+            auto& xEnt = x.cls.as_Local();
+            return ::ord(ent.name, xEnt.name);
+        }
+        case ASTPath::Class::TAG_Relative: {
+            auto& ent = cls.as_Relative();
+            auto& xEnt = x.cls.as_Relative();
+            return ::ord(ent.nodes, xEnt.nodes);
+        }
+        case ASTPath::Class::TAG_Self: {
+            auto& ent = cls.as_Self();
+            auto& xEnt = x.cls.as_Self();
+            return ::ord(ent.nodes, xEnt.nodes);
+        }
+        case ASTPath::Class::TAG_Super: {
+            auto& ent = cls.as_Super();
+            auto& xEnt = x.cls.as_Super();
+            return ::ord(ent.nodes, xEnt.nodes);
+        }
+        case ASTPath::Class::TAG_Absolute: {
+            auto& ent = cls.as_Absolute();
+            auto& xEnt = x.cls.as_Absolute();
+            rv = ::ord(ent.crate, xEnt.crate); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, xEnt.nodes);
+            break;
+        }
+        case ASTPath::Class::TAG_UFCS: {
+            auto& ent = cls.as_UFCS();
+            auto& xEnt = x.cls.as_UFCS();
+            rv = ent.type->ord(*xEnt.type); if (rv != OrdEqual) return rv; rv = ent.trait->ord(*xEnt.trait); if (rv != OrdEqual) return rv; return ::ord(ent.nodes, xEnt.nodes);
+            break;
+        }
+    }
 
     return OrdEqual;
 }
@@ -541,12 +757,77 @@ throw std::runtime_error("as_trivial on non-trivial path");
 }
 
 size_t ASTPath::size() const {
-    TU_MATCH(Class, (cls), (ent), (Invalid, assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, return 1;), (Relative, return ent.nodes.size();), (Self, return ent.nodes.size();), (Super, return ent.nodes.size();), (Absolute, return ent.nodes.size();), (UFCS, return ent.nodes.size();))
+    switch (cls.tag()) {
+        case Class::TAG_Invalid: {
+            auto& ent = cls.as_Invalid();
+            (void)ent;
+            assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");
+            break;
+        }
+        case Class::TAG_Local: {
+            auto& ent = cls.as_Local();
+            (void)ent;
+            return 1;
+        }
+        case Class::TAG_Relative: {
+            auto& ent = cls.as_Relative();
+            return ent.nodes.size();
+        }
+        case Class::TAG_Self: {
+            auto& ent = cls.as_Self();
+            return ent.nodes.size();
+        }
+        case Class::TAG_Super: {
+            auto& ent = cls.as_Super();
+            return ent.nodes.size();
+        }
+        case Class::TAG_Absolute: {
+            auto& ent = cls.as_Absolute();
+            return ent.nodes.size();
+        }
+        case Class::TAG_UFCS: {
+            auto& ent = cls.as_UFCS();
+            return ent.nodes.size();
+        }
+    }
     throw ::std::runtime_error("Path::nodes() fell off");
 }
 
 ::std::vector<ASTPathNode>& ASTPath::nodes() {
-    TU_MATCH(Class, (cls), (ent), (Invalid, assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");), (Local, assert(!cls.is_Local()); throw ::std::runtime_error("Path::nodes() on Local");), (Relative, return ent.nodes;), (Self, return ent.nodes;), (Super, return ent.nodes;), (Absolute, return ent.nodes;), (UFCS, return ent.nodes;))
+    switch (cls.tag()) {
+        case Class::TAG_Invalid: {
+            auto& ent = cls.as_Invalid();
+            (void)ent;
+            assert(!cls.is_Invalid()); throw ::std::runtime_error("Path::nodes() on Invalid");
+            break;
+        }
+        case Class::TAG_Local: {
+            auto& ent = cls.as_Local();
+            (void)ent;
+            assert(!cls.is_Local()); throw ::std::runtime_error("Path::nodes() on Local");
+            break;
+        }
+        case Class::TAG_Relative: {
+            auto& ent = cls.as_Relative();
+            return ent.nodes;
+        }
+        case Class::TAG_Self: {
+            auto& ent = cls.as_Self();
+            return ent.nodes;
+        }
+        case Class::TAG_Super: {
+            auto& ent = cls.as_Super();
+            return ent.nodes;
+        }
+        case Class::TAG_Absolute: {
+            auto& ent = cls.as_Absolute();
+            return ent.nodes;
+        }
+        case Class::TAG_UFCS: {
+            auto& ent = cls.as_UFCS();
+            return ent.nodes;
+        }
+    }
     throw ::std::runtime_error("Path::nodes() fell off");
 }
 

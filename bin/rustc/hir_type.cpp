@@ -315,7 +315,44 @@ void HIRTypeData::fmt(::std::ostream& os) const {
         }
         TU_ARMA(Path, e) {
             os << e.path;
-            TU_MATCH(HIRTypePathBinding, (e.binding), (be), (Unbound, os << "/*?*/";), (Opaque, os << "/*O*/";), (ExternType, os << "/*X*/";), (Struct, os << "/*S*/";), (Union, os << "/*U*/";), (Enum, os << "/*E*/";))
+            switch (e.binding.tag()) {
+                case HIRTypePathBinding::TAG_Unbound: {
+                    auto& be = e.binding.as_Unbound();
+                    (void)be;
+                    os << "/*?*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Opaque: {
+                    auto& be = e.binding.as_Opaque();
+                    (void)be;
+                    os << "/*O*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_ExternType: {
+                    auto& be = e.binding.as_ExternType();
+                    (void)be;
+                    os << "/*X*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& be = e.binding.as_Struct();
+                    (void)be;
+                    os << "/*S*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Union: {
+                    auto& be = e.binding.as_Union();
+                    (void)be;
+                    os << "/*U*/";
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Enum: {
+                    auto& be = e.binding.as_Enum();
+                    (void)be;
+                    os << "/*E*/";
+                    break;
+                }
+            }
         }
         TU_ARMA(Generic, e) {
             os << e;
@@ -1294,29 +1331,99 @@ Ordering HIRTypeData::ordIgnoringRegions(HIRTypeRef x) const {
     }
     ORD(static_cast<unsigned int>(tag()), static_cast<unsigned int>(x->tag()));
 
-    TU_MATCH(
-        HIRTypeData,
-        (*this, *x),
-        (te, xe),
-        (Infer,
-         // TODO: Should comparing inferrence vars be an error?
-         return ::ord(te.index, xe.index);),
-        (Diverge, return OrdEqual;),
-        (Primitive, return ::ord(static_cast<unsigned>(te), static_cast<unsigned>(xe));),
-        (Path, return ::ord(te.path, xe.path);),
-        (Generic, if ((rv = ::ord(te.binding, xe.binding)) != OrdEqual) return rv; return OrdEqual;),
-        (TraitObject, ORD(te.trait, xe.trait); ORD(te.markers, xe.markers); return OrdEqual;),
-        (ErasedType, ORD(te.inner, xe.inner); return OrdEqual;),
-        (Array, ORD(te.inner, xe.inner); ORD(te.size, xe.size); return OrdEqual;),
-        (Slice, return ::ord(te.inner, xe.inner);),
-        (Pattern, ORD(te.inner, xe.inner); return te.pattern.ord(xe.pattern);),
-        (Tuple, return ::ord(te, xe);),
-        (Borrow, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
-        (Pointer, ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);),
-        (NamedFunction, return ::ord(te.path, xe.path);),
-        (Function, ORD(te.isUnsafe, xe.isUnsafe); ORD(te.isVariadic, xe.isVariadic); ORD(te.trackCaller, xe.trackCaller); ORD(te.abi, xe.abi); ORD(te.argTypes, xe.argTypes); return ::ord(te.rettype, xe.rettype);),
-        (NodeType, return te.ord(xe);)
-    )
+    switch ((*this).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& te = (*this).as_Infer();
+            auto& xe = (*x).as_Infer();
+            // TODO: Should comparing inferrence vars be an error?
+            return ::ord(te.index, xe.index);
+        }
+        case HIRTypeData::TAG_Diverge: {
+            auto& te = (*this).as_Diverge();
+            (void)te;
+            auto& xe = (*x).as_Diverge();
+            (void)xe;
+            return OrdEqual;
+        }
+        case HIRTypeData::TAG_Primitive: {
+            auto& te = (*this).as_Primitive();
+            auto& xe = (*x).as_Primitive();
+            return ::ord(static_cast<unsigned>(te), static_cast<unsigned>(xe));
+        }
+        case HIRTypeData::TAG_Path: {
+            auto& te = (*this).as_Path();
+            auto& xe = (*x).as_Path();
+            return ::ord(te.path, xe.path);
+        }
+        case HIRTypeData::TAG_Generic: {
+            auto& te = (*this).as_Generic();
+            auto& xe = (*x).as_Generic();
+            if ((rv = ::ord(te.binding, xe.binding)) != OrdEqual) return rv; return OrdEqual;
+            break;
+        }
+        case HIRTypeData::TAG_TraitObject: {
+            auto& te = (*this).as_TraitObject();
+            auto& xe = (*x).as_TraitObject();
+            ORD(te.trait, xe.trait); ORD(te.markers, xe.markers); return OrdEqual;
+            break;
+        }
+        case HIRTypeData::TAG_ErasedType: {
+            auto& te = (*this).as_ErasedType();
+            auto& xe = (*x).as_ErasedType();
+            ORD(te.inner, xe.inner); return OrdEqual;
+            break;
+        }
+        case HIRTypeData::TAG_Array: {
+            auto& te = (*this).as_Array();
+            auto& xe = (*x).as_Array();
+            ORD(te.inner, xe.inner); ORD(te.size, xe.size); return OrdEqual;
+            break;
+        }
+        case HIRTypeData::TAG_Slice: {
+            auto& te = (*this).as_Slice();
+            auto& xe = (*x).as_Slice();
+            return ::ord(te.inner, xe.inner);
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto& te = (*this).as_Pattern();
+            auto& xe = (*x).as_Pattern();
+            ORD(te.inner, xe.inner); return te.pattern.ord(xe.pattern);
+            break;
+        }
+        case HIRTypeData::TAG_Tuple: {
+            auto& te = (*this).as_Tuple();
+            auto& xe = (*x).as_Tuple();
+            return ::ord(te, xe);
+        }
+        case HIRTypeData::TAG_Borrow: {
+            auto& te = (*this).as_Borrow();
+            auto& xe = (*x).as_Borrow();
+            ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);
+            break;
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto& te = (*this).as_Pointer();
+            auto& xe = (*x).as_Pointer();
+            ORD(static_cast<unsigned>(te.type), static_cast<unsigned>(xe.type)); return ::ord(te.inner, xe.inner);
+            break;
+        }
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& te = (*this).as_NamedFunction();
+            auto& xe = (*x).as_NamedFunction();
+            return ::ord(te.path, xe.path);
+        }
+        case HIRTypeData::TAG_Function: {
+            auto& te = (*this).as_Function();
+            auto& xe = (*x).as_Function();
+            ORD(te.isUnsafe, xe.isUnsafe); ORD(te.isVariadic, xe.isVariadic); ORD(te.trackCaller, xe.trackCaller); ORD(te.abi, xe.abi); ORD(te.argTypes, xe.argTypes); return ::ord(te.rettype, xe.rettype);
+            break;
+        }
+        case HIRTypeData::TAG_NodeType: {
+            auto& te = (*this).as_NodeType();
+            auto& xe = (*x).as_NodeType();
+            return te.ord(xe);
+        }
+    }
     throw "";
 }
 
@@ -1742,7 +1849,34 @@ HIRCompare HIRMatchGenerics::cmpType(const Span& sp, const HIRTypeData* tyL, con
 }
 
 HIRTypePathBinding HIRTypePathBinding::clone() const {
-    TU_MATCH(HIRTypePathBinding, (*this), (e), (Unbound, return HIRTypePathBinding::make_Unbound({});), (Opaque, return HIRTypePathBinding::make_Opaque({});), (ExternType, return HIRTypePathBinding(e);), (Struct, return HIRTypePathBinding(e);), (Union, return HIRTypePathBinding(e);), (Enum, return HIRTypePathBinding(e);))
+    switch ((*this).tag()) {
+        case HIRTypePathBinding::TAG_Unbound: {
+            auto& e = (*this).as_Unbound();
+            (void)e;
+            return HIRTypePathBinding::make_Unbound({});
+        }
+        case HIRTypePathBinding::TAG_Opaque: {
+            auto& e = (*this).as_Opaque();
+            (void)e;
+            return HIRTypePathBinding::make_Opaque({});
+        }
+        case HIRTypePathBinding::TAG_ExternType: {
+            auto& e = (*this).as_ExternType();
+            return HIRTypePathBinding(e);
+        }
+        case HIRTypePathBinding::TAG_Struct: {
+            auto& e = (*this).as_Struct();
+            return HIRTypePathBinding(e);
+        }
+        case HIRTypePathBinding::TAG_Union: {
+            auto& e = (*this).as_Union();
+            return HIRTypePathBinding(e);
+        }
+        case HIRTypePathBinding::TAG_Enum: {
+            auto& e = (*this).as_Enum();
+            return HIRTypePathBinding(e);
+        }
+    }
     assert(!"Fell off end of clone_binding");
     throw "";
 }
@@ -1751,7 +1885,42 @@ bool HIRTypePathBinding::operator==(const HIRTypePathBinding& x) const {
     if (this->tag() != x.tag()) {
         return false;
     }
-    TU_MATCH(HIRTypePathBinding, (*this, x), (te, xe), (Unbound, return true;), (Opaque, return true;), (ExternType, return te == xe;), (Struct, return te == xe;), (Union, return te == xe;), (Enum, return te == xe;))
+    switch ((*this).tag()) {
+        case HIRTypePathBinding::TAG_Unbound: {
+            auto& te = (*this).as_Unbound();
+            (void)te;
+            auto& xe = x.as_Unbound();
+            (void)xe;
+            return true;
+        }
+        case HIRTypePathBinding::TAG_Opaque: {
+            auto& te = (*this).as_Opaque();
+            (void)te;
+            auto& xe = x.as_Opaque();
+            (void)xe;
+            return true;
+        }
+        case HIRTypePathBinding::TAG_ExternType: {
+            auto& te = (*this).as_ExternType();
+            auto& xe = x.as_ExternType();
+            return te == xe;
+        }
+        case HIRTypePathBinding::TAG_Struct: {
+            auto& te = (*this).as_Struct();
+            auto& xe = x.as_Struct();
+            return te == xe;
+        }
+        case HIRTypePathBinding::TAG_Union: {
+            auto& te = (*this).as_Union();
+            auto& xe = x.as_Union();
+            return te == xe;
+        }
+        case HIRTypePathBinding::TAG_Enum: {
+            auto& te = (*this).as_Enum();
+            auto& xe = x.as_Enum();
+            return te == xe;
+        }
+    }
     throw "";
 }
 
@@ -1759,7 +1928,38 @@ const HIRTraitMarkings* HIRTypePathBinding::getTraitMarkings() const {
     // A binding that names an item can still be waiting for it: until then
     // there are no markings to read, the same as for one that names none.
     const HIRTraitMarkings* markingsPtr = nullptr;
-    TU_MATCHA((*this), (tpb), (Unbound, ), (Opaque, ), (ExternType, if (tpb) markingsPtr = &tpb->markings;), (Struct, if (tpb) markingsPtr = &tpb->markings;), (Union, if (tpb) markingsPtr = &tpb->markings;), (Enum, if (tpb) markingsPtr = &tpb->markings;))
+    switch ((*this).tag()) {
+        case HIRTypePathBinding::TAG_Unbound: {
+            auto& tpb = (*this).as_Unbound();
+            (void)tpb;
+            break;
+        }
+        case HIRTypePathBinding::TAG_Opaque: {
+            auto& tpb = (*this).as_Opaque();
+            (void)tpb;
+            break;
+        }
+        case HIRTypePathBinding::TAG_ExternType: {
+            auto& tpb = (*this).as_ExternType();
+            if (tpb) markingsPtr = &tpb->markings;
+            break;
+        }
+        case HIRTypePathBinding::TAG_Struct: {
+            auto& tpb = (*this).as_Struct();
+            if (tpb) markingsPtr = &tpb->markings;
+            break;
+        }
+        case HIRTypePathBinding::TAG_Union: {
+            auto& tpb = (*this).as_Union();
+            if (tpb) markingsPtr = &tpb->markings;
+            break;
+        }
+        case HIRTypePathBinding::TAG_Enum: {
+            auto& tpb = (*this).as_Enum();
+            if (tpb) markingsPtr = &tpb->markings;
+            break;
+        }
+    }
     return markingsPtr;
 }
 

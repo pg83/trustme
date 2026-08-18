@@ -509,7 +509,28 @@ void HMTypeInferrence::expandIvars(HIRTypeRef& type) {
 
     struct H {
         static void expandIvarsPath(/*const*/ HMTypeInferrence& self, HIRPath& path) {
-            TU_MATCH(HIRPath::Data, (path.data), (e2), (Generic, self.expandIvarsParams(e2.params);), (UfcsKnown, self.expandIvars(e2.type); self.expandIvarsParams(e2.trait.params); self.expandIvarsParams(e2.params);), (UfcsUnknown, self.expandIvars(e2.type); self.expandIvarsParams(e2.params);), (UfcsInherent, self.expandIvars(e2.type); self.expandIvarsParams(e2.params);))
+            switch (path.data.tag()) {
+                case HIRPath::Data::TAG_Generic: {
+                    auto& e2 = path.data.as_Generic();
+                    self.expandIvarsParams(e2.params);
+                    break;
+                }
+                case HIRPath::Data::TAG_UfcsKnown: {
+                    auto& e2 = path.data.as_UfcsKnown();
+                    self.expandIvars(e2.type); self.expandIvarsParams(e2.trait.params); self.expandIvarsParams(e2.params);
+                    break;
+                }
+                case HIRPath::Data::TAG_UfcsUnknown: {
+                    auto& e2 = path.data.as_UfcsUnknown();
+                    self.expandIvars(e2.type); self.expandIvarsParams(e2.params);
+                    break;
+                }
+                case HIRPath::Data::TAG_UfcsInherent: {
+                    auto& e2 = path.data.as_UfcsInherent();
+                    self.expandIvars(e2.type); self.expandIvarsParams(e2.params);
+                    break;
+                }
+            }
         }
     };
 
@@ -655,7 +676,28 @@ void HMTypeInferrence::addIvars(HIRTypeRef& type) {
         }
         TU_ARMA(Path, e) {
             // Iterate all arguments
-            TU_MATCH(HIRPath::Data, (e.path.data), (e2), (Generic, this->addIvarsParams(e2.params);), (UfcsKnown, this->addIvars(e2.type); this->addIvarsParams(e2.trait.params); this->addIvarsParams(e2.params);), (UfcsUnknown, this->addIvars(e2.type); this->addIvarsParams(e2.params);), (UfcsInherent, this->addIvars(e2.type); this->addIvarsParams(e2.params);))
+            switch (e.path.data.tag()) {
+                case HIRPath::Data::TAG_Generic: {
+                    auto& e2 = e.path.data.as_Generic();
+                    this->addIvarsParams(e2.params);
+                    break;
+                }
+                case HIRPath::Data::TAG_UfcsKnown: {
+                    auto& e2 = e.path.data.as_UfcsKnown();
+                    this->addIvars(e2.type); this->addIvarsParams(e2.trait.params); this->addIvarsParams(e2.params);
+                    break;
+                }
+                case HIRPath::Data::TAG_UfcsUnknown: {
+                    auto& e2 = e.path.data.as_UfcsUnknown();
+                    this->addIvars(e2.type); this->addIvarsParams(e2.params);
+                    break;
+                }
+                case HIRPath::Data::TAG_UfcsInherent: {
+                    auto& e2 = e.path.data.as_UfcsInherent();
+                    this->addIvars(e2.type); this->addIvarsParams(e2.params);
+                    break;
+                }
+            }
         }
         TU_ARMA(Generic, e) {
         }
@@ -888,17 +930,28 @@ void HMTypeInferrence::setIvarTo(unsigned int slot, HIRTypeRef type) {
     if (const auto* lE = type->opt_Infer()) {
         assert(lE->index != slot);
         if (lE->tyClass != HIRInferClass::None) {
-            TU_MATCH_DEF(
-                HIRTypeData,
-                ((*rootIvar.type)),
-                (e),
-                (ERROR(sp, E0000, "Type unificiation of literal with invalid type - " << rootIvar.type);),
-                (Primitive, checkTypeClassPrimitive(sp, type, lE->tyClass, e);),
-                (Pattern, const auto* primitive = e.inner->opt_Primitive(); if (!primitive) { ERROR(sp, E0000, "Type unificiation of literal with invalid pattern type - " << rootIvar.type); } checkTypeClassPrimitive(sp, type, lE->tyClass, *primitive);),
-                (Infer,
-                 // Check for right having a ty_class
-                 if (e.tyClass != HIRInferClass::None && e.tyClass != lE->tyClass) { ERROR(sp, E0000, "Unifying types with mismatching literal classes - " << type << " := " << rootIvar.type); })
-            )
+            switch ((*rootIvar.type).tag()) {
+                case HIRTypeData::TAG_Primitive: {
+                    auto& e = (*rootIvar.type).as_Primitive();
+                    checkTypeClassPrimitive(sp, type, lE->tyClass, e);
+                    break;
+                }
+                case HIRTypeData::TAG_Pattern: {
+                    auto& e = (*rootIvar.type).as_Pattern();
+                    const auto* primitive = e.inner->opt_Primitive(); if (!primitive) { ERROR(sp, E0000, "Type unificiation of literal with invalid pattern type - " << rootIvar.type); } checkTypeClassPrimitive(sp, type, lE->tyClass, *primitive);
+                    break;
+                }
+                case HIRTypeData::TAG_Infer: {
+                    auto& e = (*rootIvar.type).as_Infer();
+                    // Check for right having a ty_class
+                    if (e.tyClass != HIRInferClass::None && e.tyClass != lE->tyClass) { ERROR(sp, E0000, "Unifying types with mismatching literal classes - " << type << " := " << rootIvar.type); }
+                    break;
+                }
+                default: {
+                    ERROR(sp, E0000, "Type unificiation of literal with invalid type - " << rootIvar.type);
+                    break;
+                }
+            }
         }
 
         // Alias `l_e.index` to this slot
@@ -1061,78 +1114,126 @@ bool HMTypeInferrence::typeContainsIvars(const HIRTypeData* ty, bool onlyUnbound
     }
     TRACE_FUNCTION_F("ty = " << ty);
     auto pathContainsIvars = [this](const HIRPath& path, bool onlyUnbound) {
-        TU_MATCH(HIRPath::Data, (path.data), (pe), (Generic, return this->pathparamsContainIvars(pe.params, onlyUnbound);), (UfcsKnown, if (this->typeContainsIvars(pe.type, onlyUnbound)) return true; if (this->pathparamsContainIvars(pe.trait.params, onlyUnbound)) return true; return this->pathparamsContainIvars(pe.params, onlyUnbound);), (UfcsInherent, if (this->typeContainsIvars(pe.type, onlyUnbound)) return true; return this->pathparamsContainIvars(pe.params, onlyUnbound);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
+        switch (path.data.tag()) {
+            case HIRPath::Data::TAG_Generic: {
+                auto& pe = path.data.as_Generic();
+                return this->pathparamsContainIvars(pe.params, onlyUnbound);
+            }
+            case HIRPath::Data::TAG_UfcsKnown: {
+                auto& pe = path.data.as_UfcsKnown();
+                if (this->typeContainsIvars(pe.type, onlyUnbound)) return true; if (this->pathparamsContainIvars(pe.trait.params, onlyUnbound)) return true; return this->pathparamsContainIvars(pe.params, onlyUnbound);
+                break;
+            }
+            case HIRPath::Data::TAG_UfcsInherent: {
+                auto& pe = path.data.as_UfcsInherent();
+                if (this->typeContainsIvars(pe.type, onlyUnbound)) return true; return this->pathparamsContainIvars(pe.params, onlyUnbound);
+                break;
+            }
+            case HIRPath::Data::TAG_UfcsUnknown: {
+                auto& pe = path.data.as_UfcsUnknown();
+                (void)pe;
+                BUG(Span(), "UfcsUnknown");
+                break;
+            }
+        }
         throw "";
     };
     //TU_MATCH(::HIR::TypeData, (this->get_type(ty).m_data), (e),
-    TU_MATCH(HIRTypeData, (*ty), (e),
-    (Infer,
-        if( onlyUnbound ) {
-        return e.index == ~0u;
+    switch ((*ty).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& e = (*ty).as_Infer();
+            if( onlyUnbound ) {
+            return e.index == ~0u;
+            }
+            return true;
         }
-        return true;
-        ),
-    (Primitive, return false; ),
-    (Diverge, return false; ),
-    (Generic, return false; ),
-    (Path,
-        return pathContainsIvars(e.path, onlyUnbound);
-        ),
-    (Borrow,
-        return typeContainsIvars(e.inner, onlyUnbound);
-        ),
-    (Pointer,
-        return typeContainsIvars(e.inner, onlyUnbound);
-        ),
-    (Slice,
-        return typeContainsIvars(e.inner, onlyUnbound);
-        ),
-    (Pattern,
-        return typeContainsIvars(e.inner, onlyUnbound);
-        ),
-    (Array,
-        return typeContainsIvars(e.inner, onlyUnbound);
-        ),
-    (NodeType,
-        return false;
-        ),
-    (NamedFunction,
-        return pathContainsIvars(e.path, onlyUnbound);
-        ),
-    (Function,
-        for(const auto& arg : e.argTypes)
-            if( typeContainsIvars(arg, onlyUnbound) )
-                return true;
-        return typeContainsIvars(e.rettype, onlyUnbound);
-        ),
-    (TraitObject,
-        for(const auto& marker : e.markers)
-            if( pathparamsContainIvars(marker.params, onlyUnbound) )
-                return true;
-        return pathparamsContainIvars(e.trait.path.params, onlyUnbound);
-        ),
-    (ErasedType,
-        TU_MATCH_HDRA( (e.inner), {)
-        TU_ARMA(Fcn, ee) {
-            return pathContainsIvars(ee.origin, onlyUnbound);
-}
+        case HIRTypeData::TAG_Primitive: {
+            auto& e = (*ty).as_Primitive();
+            (void)e;
+            return false;
+        }
+        case HIRTypeData::TAG_Diverge: {
+            auto& e = (*ty).as_Diverge();
+            (void)e;
+            return false;
+        }
+        case HIRTypeData::TAG_Generic: {
+            auto& e = (*ty).as_Generic();
+            (void)e;
+            return false;
+        }
+        case HIRTypeData::TAG_Path: {
+            auto& e = (*ty).as_Path();
+            return pathContainsIvars(e.path, onlyUnbound);
+        }
+        case HIRTypeData::TAG_Borrow: {
+            auto& e = (*ty).as_Borrow();
+            return typeContainsIvars(e.inner, onlyUnbound);
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto& e = (*ty).as_Pointer();
+            return typeContainsIvars(e.inner, onlyUnbound);
+        }
+        case HIRTypeData::TAG_Slice: {
+            auto& e = (*ty).as_Slice();
+            return typeContainsIvars(e.inner, onlyUnbound);
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto& e = (*ty).as_Pattern();
+            return typeContainsIvars(e.inner, onlyUnbound);
+        }
+        case HIRTypeData::TAG_Array: {
+            auto& e = (*ty).as_Array();
+            return typeContainsIvars(e.inner, onlyUnbound);
+        }
+        case HIRTypeData::TAG_NodeType: {
+            auto& e = (*ty).as_NodeType();
+            (void)e;
+            return false;
+        }
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& e = (*ty).as_NamedFunction();
+            return pathContainsIvars(e.path, onlyUnbound);
+        }
+        case HIRTypeData::TAG_Function: {
+            auto& e = (*ty).as_Function();
+            for(const auto& arg : e.argTypes)
+                if( typeContainsIvars(arg, onlyUnbound) )
+                    return true;
+            return typeContainsIvars(e.rettype, onlyUnbound);
+        }
+        case HIRTypeData::TAG_TraitObject: {
+            auto& e = (*ty).as_TraitObject();
+            for(const auto& marker : e.markers)
+                if( pathparamsContainIvars(marker.params, onlyUnbound) )
+                    return true;
+            return pathparamsContainIvars(e.trait.path.params, onlyUnbound);
+        }
+        case HIRTypeData::TAG_ErasedType: {
+            auto& e = (*ty).as_ErasedType();
+            TU_MATCH_HDRA( (e.inner), {)
+                    TU_ARMA(Fcn, ee) {
+                        return pathContainsIvars(ee.origin, onlyUnbound);
+            }
 
-TU_ARMA(Known, ee) {
-    return typeContainsIvars(ee, onlyUnbound);
-}
+            TU_ARMA(Known, ee) {
+                return typeContainsIvars(ee, onlyUnbound);
+            }
 
-TU_ARMA(Alias, ee) {
-    return false;
-}
-}
-        ),
-    (Tuple,
-        for(const auto& st : e)
-            if( typeContainsIvars(st, onlyUnbound) )
-                return true;
-        return false;
-        )
-    )
+            TU_ARMA(Alias, ee) {
+                return false;
+            }
+            }
+            break;
+        }
+        case HIRTypeData::TAG_Tuple: {
+            auto& e = (*ty).as_Tuple();
+            for(const auto& st : e)
+                if( typeContainsIvars(st, onlyUnbound) )
+                    return true;
+            return false;
+        }
+    }
     throw "";
         }
 
@@ -1180,96 +1281,166 @@ TU_ARMA(Alias, ee) {
                     if (l.data.tag() != r.data.tag()) {
                         return false;
                     }
-                    TU_MATCH(HIRPath::Data, (l.data, r.data), (lpe, rpe), (Generic, if (lpe.path != rpe.path) return false; return self.pathparamsEqual(lpe.params, rpe.params);), (UfcsKnown, if (lpe.item != rpe.item) return false; if (!self.typesEqual(lpe.type, rpe.type)) return false; if (!self.pathparamsEqual(lpe.trait.params, rpe.trait.params)) return false; return self.pathparamsEqual(lpe.params, rpe.params);), (UfcsInherent, if (lpe.item != rpe.item) return false; if (!self.typesEqual(lpe.type, rpe.type)) return false; return self.pathparamsEqual(lpe.params, rpe.params);), (UfcsUnknown, BUG(Span(), "UfcsUnknown");))
+                    switch (l.data.tag()) {
+                        case HIRPath::Data::TAG_Generic: {
+                            auto& lpe = l.data.as_Generic();
+                            auto& rpe = r.data.as_Generic();
+                            if (lpe.path != rpe.path) return false; return self.pathparamsEqual(lpe.params, rpe.params);
+                            break;
+                        }
+                        case HIRPath::Data::TAG_UfcsKnown: {
+                            auto& lpe = l.data.as_UfcsKnown();
+                            auto& rpe = r.data.as_UfcsKnown();
+                            if (lpe.item != rpe.item) return false; if (!self.typesEqual(lpe.type, rpe.type)) return false; if (!self.pathparamsEqual(lpe.trait.params, rpe.trait.params)) return false; return self.pathparamsEqual(lpe.params, rpe.params);
+                            break;
+                        }
+                        case HIRPath::Data::TAG_UfcsInherent: {
+                            auto& lpe = l.data.as_UfcsInherent();
+                            auto& rpe = r.data.as_UfcsInherent();
+                            if (lpe.item != rpe.item) return false; if (!self.typesEqual(lpe.type, rpe.type)) return false; return self.pathparamsEqual(lpe.params, rpe.params);
+                            break;
+                        }
+                        case HIRPath::Data::TAG_UfcsUnknown: {
+                            auto& lpe = l.data.as_UfcsUnknown();
+                            (void)lpe;
+                            auto& rpe = r.data.as_UfcsUnknown();
+                            (void)rpe;
+                            BUG(Span(), "UfcsUnknown");
+                            break;
+                        }
+                    }
                     throw "";
                 }
             };
 
-    TU_MATCH(HIRTypeData, (*l, *r), (le, re),
-    (Infer, return le.index == re.index; ),
-    (Primitive, return le == re; ),
-    (Diverge, return true; ),
-    (Generic, return le.binding == re.binding; ),
-    (Path,
-        return H::comparePath(*this, le.path, re.path);
-        ),
-    (Borrow,
-        if( le.type != re.type )
-            return false;
-        return typesEqual(le.inner, re.inner);
-        ),
-    (Pointer,
-        if( le.type != re.type )
-            return false;
-        return typesEqual(le.inner, re.inner);
-        ),
-    (Slice,
-        return typesEqual(le.inner, re.inner);
-        ),
-    (Pattern,
-        return le.pattern.ord(re.pattern) == OrdEqual && typesEqual(le.inner, re.inner);
-        ),
-    (Array,
-        if( le.size != re.size )
-            return false;
-        return typesEqual(le.inner, re.inner);
-        ),
-    (NodeType,
-        return le == re;
-        ),
-    (NamedFunction,
-        return H::comparePath(*this, le.path, re.path);
-        ),
-    (Function,
-        if( le.isUnsafe != re.isUnsafe || le.abi != re.abi || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller )
-            return false;
-        if( !typeListEqual(*this, le.argTypes, re.argTypes) )
-            return false;
-        return typesEqual(le.rettype, re.rettype);
-        ),
-    (TraitObject,
-        if( le.markers.size() != re.markers.size() )
-            return false;
-        for(unsigned int i = 0; i < le.markers.size(); i ++) {
-        const auto& lm = le.markers[i];
-        const auto& rm = re.markers[i];
-        if (lm.path != rm.path) {
-            return false;
+    switch ((*l).tag()) {
+        case HIRTypeData::TAG_Infer: {
+            auto& le = (*l).as_Infer();
+            auto& re = (*r).as_Infer();
+            return le.index == re.index;
         }
-        if (!pathparamsEqual(lm.params, rm.params)) {
-            return false;
+        case HIRTypeData::TAG_Primitive: {
+            auto& le = (*l).as_Primitive();
+            auto& re = (*r).as_Primitive();
+            return le == re;
         }
+        case HIRTypeData::TAG_Diverge: {
+            auto& le = (*l).as_Diverge();
+            (void)le;
+            auto& re = (*r).as_Diverge();
+            (void)re;
+            return true;
         }
-        if( le.trait.path.path != re.trait.path.path )
-            return false;
-        return pathparamsEqual(le.trait.path.params, re.trait.path.params);
-        ),
-    (ErasedType,
-        if( le.inner.tag() != re.inner.tag() )
-            return false;
-        TU_MATCH_HDRA( (le.inner, re.inner), {)
-        TU_ARMA(Fcn, l,r) {
-            ASSERT_BUG(Span(), l.origin != HIRSimplePath(), "Erased type with unset origin");
-            ASSERT_BUG(Span(), r.origin != HIRSimplePath(), "Erased type with unset origin");
-            return H::comparePath(*this, l.origin, r.origin);
+        case HIRTypeData::TAG_Generic: {
+            auto& le = (*l).as_Generic();
+            auto& re = (*r).as_Generic();
+            return le.binding == re.binding;
         }
-
-        TU_ARMA(Known, l, r) {
-            return typesEqual(l, r);
+        case HIRTypeData::TAG_Path: {
+            auto& le = (*l).as_Path();
+            auto& re = (*r).as_Path();
+            return H::comparePath(*this, le.path, re.path);
         }
-
-        TU_ARMA(Alias, l, r) {
-            if (l.inner->path != r.inner->path) {
+        case HIRTypeData::TAG_Borrow: {
+            auto& le = (*l).as_Borrow();
+            auto& re = (*r).as_Borrow();
+            if( le.type != re.type )
+                return false;
+            return typesEqual(le.inner, re.inner);
+        }
+        case HIRTypeData::TAG_Pointer: {
+            auto& le = (*l).as_Pointer();
+            auto& re = (*r).as_Pointer();
+            if( le.type != re.type )
+                return false;
+            return typesEqual(le.inner, re.inner);
+        }
+        case HIRTypeData::TAG_Slice: {
+            auto& le = (*l).as_Slice();
+            auto& re = (*r).as_Slice();
+            return typesEqual(le.inner, re.inner);
+        }
+        case HIRTypeData::TAG_Pattern: {
+            auto& le = (*l).as_Pattern();
+            auto& re = (*r).as_Pattern();
+            return le.pattern.ord(re.pattern) == OrdEqual && typesEqual(le.inner, re.inner);
+        }
+        case HIRTypeData::TAG_Array: {
+            auto& le = (*l).as_Array();
+            auto& re = (*r).as_Array();
+            if( le.size != re.size )
+                return false;
+            return typesEqual(le.inner, re.inner);
+        }
+        case HIRTypeData::TAG_NodeType: {
+            auto& le = (*l).as_NodeType();
+            auto& re = (*r).as_NodeType();
+            return le == re;
+        }
+        case HIRTypeData::TAG_NamedFunction: {
+            auto& le = (*l).as_NamedFunction();
+            auto& re = (*r).as_NamedFunction();
+            return H::comparePath(*this, le.path, re.path);
+        }
+        case HIRTypeData::TAG_Function: {
+            auto& le = (*l).as_Function();
+            auto& re = (*r).as_Function();
+            if( le.isUnsafe != re.isUnsafe || le.abi != re.abi || le.isVariadic != re.isVariadic || le.trackCaller != re.trackCaller )
+                return false;
+            if( !typeListEqual(*this, le.argTypes, re.argTypes) )
+                return false;
+            return typesEqual(le.rettype, re.rettype);
+        }
+        case HIRTypeData::TAG_TraitObject: {
+            auto& le = (*l).as_TraitObject();
+            auto& re = (*r).as_TraitObject();
+            if( le.markers.size() != re.markers.size() )
+                return false;
+            for(unsigned int i = 0; i < le.markers.size(); i ++) {
+            const auto& lm = le.markers[i];
+            const auto& rm = re.markers[i];
+            if (lm.path != rm.path) {
                 return false;
             }
-            return pathparamsEqual(l.params, r.params);
+            if (!pathparamsEqual(lm.params, rm.params)) {
+                return false;
+            }
+            }
+            if( le.trait.path.path != re.trait.path.path )
+                return false;
+            return pathparamsEqual(le.trait.path.params, re.trait.path.params);
         }
+        case HIRTypeData::TAG_ErasedType: {
+            auto& le = (*l).as_ErasedType();
+            auto& re = (*r).as_ErasedType();
+            if( le.inner.tag() != re.inner.tag() )
+                return false;
+            TU_MATCH_HDRA( (le.inner, re.inner), {)
+            TU_ARMA(Fcn, l,r) {
+                ASSERT_BUG(Span(), l.origin != HIRSimplePath(), "Erased type with unset origin");
+                ASSERT_BUG(Span(), r.origin != HIRSimplePath(), "Erased type with unset origin");
+                return H::comparePath(*this, l.origin, r.origin);
+            }
+
+            TU_ARMA(Known, l, r) {
+                return typesEqual(l, r);
+            }
+
+            TU_ARMA(Alias, l, r) {
+                if (l.inner->path != r.inner->path) {
+                    return false;
+                }
+                return pathparamsEqual(l.params, r.params);
+            }
+            }
+            break;
         }
-        ),
-    (Tuple,
-        return typeListEqual(*this, le, re);
-        )
-    )
+        case HIRTypeData::TAG_Tuple: {
+            auto& le = (*l).as_Tuple();
+            auto& re = (*r).as_Tuple();
+            return typeListEqual(*this, le, re);
+        }
+    }
     throw "";
         }
 
@@ -1543,7 +1714,24 @@ TU_ARMA(Alias, ee) {
                         case HIRStructMarkings::DstType::Possible:
                         case HIRStructMarkings::DstType::TraitObject: {
                             const HIRTypeData* tailTpl = nullptr;
-                            TU_MATCHA((str.data), (se), (Unit, BUG(sp, "Unsized unit struct in Pointee lookup - " << type);), (Tuple, ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;), (Named, ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tailTpl = se.back().ty;))
+                            switch (str.data.tag()) {
+                                case HIRStructData::TAG_Unit: {
+                                    auto& se = str.data.as_Unit();
+                                    (void)se;
+                                    BUG(sp, "Unsized unit struct in Pointee lookup - " << type);
+                                    break;
+                                }
+                                case HIRStructData::TAG_Tuple: {
+                                    auto& se = str.data.as_Tuple();
+                                    ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;
+                                    break;
+                                }
+                                case HIRStructData::TAG_Named: {
+                                    auto& se = str.data.as_Named();
+                                    ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tailTpl = se.back().ty;
+                                    break;
+                                }
+                            }
                             ASSERT_BUG(sp, tailTpl, "Missing unsized tail field for " << type);
 
                             const auto& path = type->as_Path().path.data.as_Generic();
@@ -3472,25 +3660,33 @@ TU_ARMA(Alias, ee) {
                     Certainty result = Certainty::Proven;
                     if (const auto* strPtr = e.binding.opt_Struct()) {
                         const auto& str = **strPtr;
-                        TU_MATCH(
-                            HIRStruct::Data,
-                            (str.data),
-                            (se),
-                            (Unit, ),
-                            (Tuple,
-                             for (const auto& field : se) {
-                                 combine(result, evaluateField(field.ent));
-                                 if (result == Certainty::NoSolution) {
-                                     return result;
-                                 }
-                             }),
-                            (Named, for (const auto& field : se) {
-                                combine(result, evaluateField(field.ty));
-                                if (result == Certainty::NoSolution) {
-                                    return result;
+                        switch (str.data.tag()) {
+                            case HIRStruct::Data::TAG_Unit: {
+                                auto& se = str.data.as_Unit();
+                                (void)se;
+                                break;
+                            }
+                            case HIRStruct::Data::TAG_Tuple: {
+                                auto& se = str.data.as_Tuple();
+                                for (const auto& field : se) {
+                                    combine(result, evaluateField(field.ent));
+                                    if (result == Certainty::NoSolution) {
+                                        return result;
+                                    }
                                 }
-                            })
-                        )
+                                break;
+                            }
+                            case HIRStruct::Data::TAG_Named: {
+                                auto& se = str.data.as_Named();
+                                for (const auto& field : se) {
+                                    combine(result, evaluateField(field.ty));
+                                    if (result == Certainty::NoSolution) {
+                                        return result;
+                                    }
+                                }
+                                break;
+                            }
+                        }
                     } else if (const auto* enmPtr = e.binding.opt_Enum()) {
                         const auto& enm = **enmPtr;
                         if (const auto* variants = enm.data.opt_Data()) {
@@ -4600,7 +4796,28 @@ TU_ARMA(Alias, ee) {
                 }
 
                 static bool checkPath(const TraitResolution& r, const HIRPath& p) {
-                    TU_MATCH(HIRPath::Data, (p.data), (e2), (Generic, return H::checkPathparams(r, e2.params);), (UfcsInherent, if (r.hasAssociatedType(e2.type)) return true; if (H::checkPathparams(r, e2.params)) return true; return false;), (UfcsKnown, if (r.hasAssociatedType(e2.type)) return true; if (H::checkPathparams(r, e2.trait.params)) return true; if (H::checkPathparams(r, e2.params)) return true; return false;), (UfcsUnknown, BUG(Span(), "Encountered UfcsUnknown - " << p);))
+                    switch (p.data.tag()) {
+                        case HIRPath::Data::TAG_Generic: {
+                            auto& e2 = p.data.as_Generic();
+                            return H::checkPathparams(r, e2.params);
+                        }
+                        case HIRPath::Data::TAG_UfcsInherent: {
+                            auto& e2 = p.data.as_UfcsInherent();
+                            if (r.hasAssociatedType(e2.type)) return true; if (H::checkPathparams(r, e2.params)) return true; return false;
+                            break;
+                        }
+                        case HIRPath::Data::TAG_UfcsKnown: {
+                            auto& e2 = p.data.as_UfcsKnown();
+                            if (r.hasAssociatedType(e2.type)) return true; if (H::checkPathparams(r, e2.trait.params)) return true; if (H::checkPathparams(r, e2.params)) return true; return false;
+                            break;
+                        }
+                        case HIRPath::Data::TAG_UfcsUnknown: {
+                            auto& e2 = p.data.as_UfcsUnknown();
+                            (void)e2;
+                            BUG(Span(), "Encountered UfcsUnknown - " << p);
+                            break;
+                        }
+                    }
                     throw "";
                 }
             };
@@ -5959,31 +6176,39 @@ TU_ARMA(Alias, ee) {
                             // TODO: Somehow store a ruleset for auto traits on the type
                             // - Map of trait->does_impl for local fields?
                             // - Problems occur with type parameters
-                            TU_MATCH(
-                                HIRStruct::Data,
-                                (str.data),
-                                (se),
-                                (Unit, ),
-                                (Tuple,
-                                 for (const auto& fld : se) {
-                                     const auto& fldTyMono = monomorphGet(fld.ent);
-                                     DEBUG("Struct::Tuple " << fldTyMono);
-                                     res &= typeImplsTrait(fldTyMono);
-                                     if (res == HIRCompare::Unequal) {
-                                         return HIRCompare::Unequal;
-                                     }
-                                 }),
-                                (Named, for (const auto& fld : se) {
-                                    DEBUG(type << " FIELD '" << fld.name << "' " << fld.ty);
-                                    const auto& fldTyMono = monomorphGet(fld.ty);
-                                    DEBUG("Struct::Named '" << fld.name << "' " << fldTyMono);
-
-                                    res &= typeImplsTrait(fldTyMono);
-                                    if (res == HIRCompare::Unequal) {
-                                        return HIRCompare::Unequal;
+                            switch (str.data.tag()) {
+                                case HIRStruct::Data::TAG_Unit: {
+                                    auto& se = str.data.as_Unit();
+                                    (void)se;
+                                    break;
+                                }
+                                case HIRStruct::Data::TAG_Tuple: {
+                                    auto& se = str.data.as_Tuple();
+                                    for (const auto& fld : se) {
+                                        const auto& fldTyMono = monomorphGet(fld.ent);
+                                        DEBUG("Struct::Tuple " << fldTyMono);
+                                        res &= typeImplsTrait(fldTyMono);
+                                        if (res == HIRCompare::Unequal) {
+                                            return HIRCompare::Unequal;
+                                        }
                                     }
-                                })
-                            )
+                                    break;
+                                }
+                                case HIRStruct::Data::TAG_Named: {
+                                    auto& se = str.data.as_Named();
+                                    for (const auto& fld : se) {
+                                        DEBUG(type << " FIELD '" << fld.name << "' " << fld.ty);
+                                        const auto& fldTyMono = monomorphGet(fld.ty);
+                                        DEBUG("Struct::Named '" << fld.name << "' " << fldTyMono);
+
+                                        res &= typeImplsTrait(fldTyMono);
+                                        if (res == HIRCompare::Unequal) {
+                                            return HIRCompare::Unequal;
+                                        }
+                                    }
+                                    break;
+                                }
+                            }
                         }
                         TU_ARMA(Enum, tpb) {
                             if (const auto* e = tpb->data.opt_Data()) {
@@ -6663,38 +6888,52 @@ TU_ARMA(Alias, ee) {
         }
         TU_ARMA(Path, e) {
             // TODO: Check that only ?Sized parameters are !Sized
-            TU_MATCHA(
-                (e.binding),
-                (pb),
-                (Unbound, ),
-                (
-                    Opaque,
+            switch (e.binding.tag()) {
+                case HIRTypePathBinding::TAG_Unbound: {
+                    auto& pb = e.binding.as_Unbound();
+                    (void)pb;
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Opaque: {
+                    auto& pb = e.binding.as_Opaque();
+                    (void)pb;
                     // TODO: Check bounds
-                ),
-                (ExternType,
-                 // Is it sized? No.
-                 return HIRCompare::Unequal;),
-                (
-                    Enum,
+                    break;
+                }
+                case HIRTypePathBinding::TAG_ExternType: {
+                    auto& pb = e.binding.as_ExternType();
+                    (void)pb;
+                    // Is it sized? No.
+                    return HIRCompare::Unequal;
+                }
+                case HIRTypePathBinding::TAG_Enum: {
+                    auto& pb = e.binding.as_Enum();
+                    (void)pb;
                     // HAS to be Sized
-                ),
-                (
-                    Union,
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Union: {
+                    auto& pb = e.binding.as_Union();
+                    (void)pb;
                     // Pretty sure unions are Sized
-                ),
-                (Struct,
-                 // Possibly not sized
-                 switch (pb->structMarkings.dstType) {
-                     case HIRStructMarkings::DstType::None:
-                         break;
-                     case HIRStructMarkings::DstType::Possible:
-                         // Check sized-ness of the unsized param
-                         return typeIsSized(sp, e.path.data.as_Generic().params.types.at(pb->structMarkings.unsizedParam));
-                     case HIRStructMarkings::DstType::Slice:
-                     case HIRStructMarkings::DstType::TraitObject:
-                         return HIRCompare::Unequal;
-                 })
-            )
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& pb = e.binding.as_Struct();
+                    // Possibly not sized
+                    switch (pb->structMarkings.dstType) {
+                        case HIRStructMarkings::DstType::None:
+                            break;
+                        case HIRStructMarkings::DstType::Possible:
+                            // Check sized-ness of the unsized param
+                            return typeIsSized(sp, e.path.data.as_Generic().params.types.at(pb->structMarkings.unsizedParam));
+                        case HIRStructMarkings::DstType::Slice:
+                        case HIRStructMarkings::DstType::TraitObject:
+                            return HIRCompare::Unequal;
+                    }
+                    break;
+                }
+            }
         }
         TU_ARMA(Generic, e) {
             switch (e.group()) {

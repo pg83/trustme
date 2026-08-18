@@ -98,7 +98,25 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const HIRPath& x) {
-    TU_MATCH(HIRPath::Data, (x.data), (e), (Generic, return os << e;), (UfcsInherent, return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;), (UfcsKnown, os << "<" << e.type << " as "; os << e.trait << ">::" << e.item << e.params; return os;), (UfcsUnknown, return os << "<" << e.type << " as _>::" << e.item << e.params;))
+    switch (x.data.tag()) {
+        case HIRPath::Data::TAG_Generic: {
+            auto& e = x.data.as_Generic();
+            return os << e;
+        }
+        case HIRPath::Data::TAG_UfcsInherent: {
+            auto& e = x.data.as_UfcsInherent();
+            return os << "<" << e.type << " /*- " << e.implParams << "*/>::" << e.item << e.params;
+        }
+        case HIRPath::Data::TAG_UfcsKnown: {
+            auto& e = x.data.as_UfcsKnown();
+            os << "<" << e.type << " as "; os << e.trait << ">::" << e.item << e.params; return os;
+            break;
+        }
+        case HIRPath::Data::TAG_UfcsUnknown: {
+            auto& e = x.data.as_UfcsUnknown();
+            return os << "<" << e.type << " as _>::" << e.item << e.params;
+        }
+    }
     return os;
 }
 
@@ -561,7 +579,31 @@ HIRCompare HIRPath::compareWithPlaceholders(const Span& sp, const HIRPath& x, tC
 
 Ordering HIRPath::ord(const HIRPath& x) const {
     ORD((unsigned)data.tag(), (unsigned)x.data.tag());
-    TU_MATCH(HIRPath::Data, (this->data, x.data), (tpe, xpe), (Generic, return ::ord(tpe, xpe);), (UfcsInherent, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsKnown, ORD(tpe.type, xpe.type); ORD(tpe.trait, xpe.trait); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);), (UfcsUnknown, ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);))
+    switch (this->data.tag()) {
+        case HIRPath::Data::TAG_Generic: {
+            auto& tpe = this->data.as_Generic();
+            auto& xpe = x.data.as_Generic();
+            return ::ord(tpe, xpe);
+        }
+        case HIRPath::Data::TAG_UfcsInherent: {
+            auto& tpe = this->data.as_UfcsInherent();
+            auto& xpe = x.data.as_UfcsInherent();
+            ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);
+            break;
+        }
+        case HIRPath::Data::TAG_UfcsKnown: {
+            auto& tpe = this->data.as_UfcsKnown();
+            auto& xpe = x.data.as_UfcsKnown();
+            ORD(tpe.type, xpe.type); ORD(tpe.trait, xpe.trait); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);
+            break;
+        }
+        case HIRPath::Data::TAG_UfcsUnknown: {
+            auto& tpe = this->data.as_UfcsUnknown();
+            auto& xpe = x.data.as_UfcsUnknown();
+            ORD(tpe.type, xpe.type); ORD(tpe.item, xpe.item); return ::ord(tpe.params, xpe.params);
+            break;
+        }
+    }
     throw "";
 }
 

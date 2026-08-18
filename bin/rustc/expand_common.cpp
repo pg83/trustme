@@ -1958,7 +1958,43 @@ void ExpandGenericParams(const ExpandState& es, ASTModule& mod, ASTGenericParams
         }
     }
     for (auto& bound : params.bounds) {
-        TU_MATCHA((bound), (be), (None, ), (Lifetime, ), (TypeLifetime, ExpandType(es, mod, be.type);), (IsTrait, ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);), (MaybeTrait, ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);), (NotTrait, ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);), (Equality, ExpandType(es, mod, be.type); ExpandType(es, mod, be.replacement);))
+        switch (bound.tag()) {
+            case ASTGenericBound::TAG_None: {
+                auto& be = bound.as_None();
+                (void)be;
+                break;
+            }
+            case ASTGenericBound::TAG_Lifetime: {
+                auto& be = bound.as_Lifetime();
+                (void)be;
+                break;
+            }
+            case ASTGenericBound::TAG_TypeLifetime: {
+                auto& be = bound.as_TypeLifetime();
+                ExpandType(es, mod, be.type);
+                break;
+            }
+            case ASTGenericBound::TAG_IsTrait: {
+                auto& be = bound.as_IsTrait();
+                ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);
+                break;
+            }
+            case ASTGenericBound::TAG_MaybeTrait: {
+                auto& be = bound.as_MaybeTrait();
+                ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);
+                break;
+            }
+            case ASTGenericBound::TAG_NotTrait: {
+                auto& be = bound.as_NotTrait();
+                ExpandType(es, mod, be.type); ExpandPath(es, mod, be.trait);
+                break;
+            }
+            case ASTGenericBound::TAG_Equality: {
+                auto& be = bound.as_Equality();
+                ExpandType(es, mod, be.type); ExpandType(es, mod, be.replacement);
+                break;
+            }
+        }
     }
     for (auto& t : params.bareBoundTypes) {
         ExpandType(es, mod, t);

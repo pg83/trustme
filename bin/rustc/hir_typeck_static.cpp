@@ -172,7 +172,24 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                     case HIRStructMarkings::DstType::Possible:
                     case HIRStructMarkings::DstType::TraitObject: {
                         const HIRTypeData* tailTpl = nullptr;
-                        TU_MATCHA((str.data), (se), (Unit, BUG(sp, "Unsized unit struct in Pointee lookup - " << type);), (Tuple, ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;), (Named, ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tailTpl = se.back().ty;))
+                        switch (str.data.tag()) {
+                            case HIRStructData::TAG_Unit: {
+                                auto& se = str.data.as_Unit();
+                                (void)se;
+                                BUG(sp, "Unsized unit struct in Pointee lookup - " << type);
+                                break;
+                            }
+                            case HIRStructData::TAG_Tuple: {
+                                auto& se = str.data.as_Tuple();
+                                ASSERT_BUG(sp, !se.empty(), "Unsized tuple struct without fields - " << type); tailTpl = se.back().ent;
+                                break;
+                            }
+                            case HIRStructData::TAG_Named: {
+                                auto& se = str.data.as_Named();
+                                ASSERT_BUG(sp, !se.empty(), "Unsized struct without fields - " << type); tailTpl = se.back().ty;
+                                break;
+                            }
+                        }
                         ASSERT_BUG(sp, tailTpl, "Missing unsized tail field for " << type);
 
                         const auto& path = type->as_Path().path.data.as_Generic();
@@ -1357,30 +1374,38 @@ HIRCompare StaticTraitResolve::checkAutoTraitImplDestructure(const Span& sp, con
                         // TODO: Somehow store a ruleset for auto traits on the type
                         // - Map of trait->does_impl for local fields?
                         // - Problems occur with type parameters
-                        TU_MATCH(
-                            HIRStruct::Data,
-                            (str.data),
-                            (se),
-                            (Unit, ),
-                            (Tuple,
-                             for (const auto& fld : se) {
-                                 const auto& fldTyMono = monomorphGet(fld.ent);
-                                 DEBUG("Struct::Tuple " << fldTyMono);
-                                 res &= typeImplsTrait(fldTyMono);
-                                 if (res == HIRCompare::Unequal) {
-                                     return HIRCompare::Unequal;
-                                 }
-                             }),
-                            (Named, for (const auto& fld : se) {
-                                const auto& fldTyMono = monomorphGet(fld.ty);
-                                DEBUG("Struct::Named '" << fld.name << "' " << fldTyMono);
-
-                                res &= typeImplsTrait(fldTyMono);
-                                if (res == HIRCompare::Unequal) {
-                                    return HIRCompare::Unequal;
+                        switch (str.data.tag()) {
+                            case HIRStruct::Data::TAG_Unit: {
+                                auto& se = str.data.as_Unit();
+                                (void)se;
+                                break;
+                            }
+                            case HIRStruct::Data::TAG_Tuple: {
+                                auto& se = str.data.as_Tuple();
+                                for (const auto& fld : se) {
+                                    const auto& fldTyMono = monomorphGet(fld.ent);
+                                    DEBUG("Struct::Tuple " << fldTyMono);
+                                    res &= typeImplsTrait(fldTyMono);
+                                    if (res == HIRCompare::Unequal) {
+                                        return HIRCompare::Unequal;
+                                    }
                                 }
-                            })
-                        )
+                                break;
+                            }
+                            case HIRStruct::Data::TAG_Named: {
+                                auto& se = str.data.as_Named();
+                                for (const auto& fld : se) {
+                                    const auto& fldTyMono = monomorphGet(fld.ty);
+                                    DEBUG("Struct::Named '" << fld.name << "' " << fldTyMono);
+
+                                    res &= typeImplsTrait(fldTyMono);
+                                    if (res == HIRCompare::Unequal) {
+                                        return HIRCompare::Unequal;
+                                    }
+                                }
+                                break;
+                            }
+                        }
                     }
                     TU_ARMA(Enum, tpb) {
                         if (const auto* e = tpb->data.opt_Data()) {
@@ -3180,7 +3205,21 @@ MetadataType StaticTraitResolve::metadataType(const Span& sp, const HIRTypeData*
                             auto monomorph = [&](const auto& tpl) {
                                 return this->monomorphExpand(sp, tpl, MonomorphStatePtr(crate.types, ty, &params, nullptr));
                             };
-                            TU_MATCHA((pbe->data), (se), (Unit, return MetadataType::None;), (Tuple, return se.empty() ? MetadataType::None : this->metadataType(sp, monomorph(se.back().ent));), (Named, return se.empty() ? MetadataType::None : this->metadataType(sp, monomorph(se.back().ty));))
+                            switch (pbe->data.tag()) {
+                                case HIRStructData::TAG_Unit: {
+                                    auto& se = pbe->data.as_Unit();
+                                    (void)se;
+                                    return MetadataType::None;
+                                }
+                                case HIRStructData::TAG_Tuple: {
+                                    auto& se = pbe->data.as_Tuple();
+                                    return se.empty() ? MetadataType::None : this->metadataType(sp, monomorph(se.back().ent));
+                                }
+                                case HIRStructData::TAG_Named: {
+                                    auto& se = pbe->data.as_Named();
+                                    return se.empty() ? MetadataType::None : this->metadataType(sp, monomorph(se.back().ty));
+                                }
+                            }
                             throw "";
                         }
                     }
@@ -3277,49 +3316,77 @@ bool StaticTraitResolve::typeNeedsDropGlue(const Span& sp, const HIRTypeData* ty
                 return this->monomorphExpandOpt(sp, tmpTy, tpl, monomorphCb);
             };
             bool needsDropGlue = false;
-            TU_MATCHA(
-                (e.binding),
-                (pbe),
-                (Unbound, BUG(sp, "Unbound path");),
-                (Opaque,
-                 // Technically a bug, checked above
-                 return true;),
-                (Struct,
-                 TU_MATCHA(
-                     (pbe->data),
-                     (se),
-                     (Unit, ),
-                     (Tuple,
-                      for (const auto& e : se) {
-                          if (typeNeedsDropGlue(sp, monomorph(e.ent))) {
-                              needsDropGlue = true;
-                              break;
-                          }
-                      }),
-                     (Named,
-                      for (const auto& e : se) {
-                          if (typeNeedsDropGlue(sp, monomorph(e.ty))) {
-                              needsDropGlue = true;
-                              break;
-                          }
-                      })
-                 )),
-                (Enum,
-                 if (const auto* e = pbe->data.opt_Data()) {
-                     for (const auto& var : *e) {
-                         if (typeNeedsDropGlue(sp, monomorph(var.type))) {
-                             needsDropGlue = true;
-                             break;
-                         }
-                     }
-                 }),
-                (Union,
-                 // Unions don't have drop glue unless they impl Drop
-                 needsDropGlue = false;),
-                (ExternType,
-                 // Extern types don't have drop glue
-                 needsDropGlue = false;)
-            )
+            switch (e.binding.tag()) {
+                case HIRTypePathBinding::TAG_Unbound: {
+                    auto& pbe = e.binding.as_Unbound();
+                    (void)pbe;
+                    BUG(sp, "Unbound path");
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Opaque: {
+                    auto& pbe = e.binding.as_Opaque();
+                    (void)pbe;
+                    // Technically a bug, checked above
+                    return true;
+                }
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& pbe = e.binding.as_Struct();
+                    switch (pbe->data.tag()) {
+                        case HIRStructData::TAG_Unit: {
+                            auto& se = pbe->data.as_Unit();
+                            (void)se;
+                            break;
+                        }
+                        case HIRStructData::TAG_Tuple: {
+                            auto& se = pbe->data.as_Tuple();
+                            for (const auto& e : se) {
+                                if (typeNeedsDropGlue(sp, monomorph(e.ent))) {
+                                    needsDropGlue = true;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                        case HIRStructData::TAG_Named: {
+                            auto& se = pbe->data.as_Named();
+                            for (const auto& e : se) {
+                                if (typeNeedsDropGlue(sp, monomorph(e.ty))) {
+                                    needsDropGlue = true;
+                                    break;
+                                }
+                            }
+                            break;
+                        }
+                    }
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Enum: {
+                    auto& pbe = e.binding.as_Enum();
+                    if (const auto* e = pbe->data.opt_Data()) {
+                        for (const auto& var : *e) {
+                            if (typeNeedsDropGlue(sp, monomorph(var.type))) {
+                                needsDropGlue = true;
+                                break;
+                            }
+                        }
+                    }
+                    break;
+                }
+                case HIRTypePathBinding::TAG_Union: {
+                    auto& pbe = e.binding.as_Union();
+                    (void)pbe;
+                    // Unions don't have drop glue unless they impl Drop
+                    needsDropGlue = false;
+                    break;
+                }
+                case HIRTypePathBinding::TAG_ExternType: {
+                    auto& pbe = e.binding.as_ExternType();
+                    (void)pbe;
+                    // Extern types don't have drop glue
+                    needsDropGlue = false;
+                    break;
+                }
+            }
             dropCache.insert(::std::make_pair(ty, needsDropGlue));
             return needsDropGlue;
         }
@@ -3496,7 +3563,40 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
                 }
             }
             const auto& v = crate.getValitemByPath(sp, pe.path);
-            TU_MATCHA((v), (ve), (Import, BUG(sp, "Module Import");), (Constant, outParams.ppMethod = &pe.params; return &ve;), (Static, outParams.ppMethod = &pe.params; return &ve;), (Function, outParams.ppMethod = &pe.params; return &ve;), (StructConstant, outParams.ppImpl = &pe.params; TODO(sp, "StructConstant - " << p);), (StructConstructor, outParams.ppImpl = &pe.params; const auto& str = crate.getStructByPath(sp, ve.ty); if (outImplParamsDef) { *outImplParamsDef = &str.params; } return ValuePtr::Data_StructConstructor{&ve.ty, &str};))
+            switch (v.tag()) {
+                case HIRValueItem::TAG_Import: {
+                    auto& ve = v.as_Import();
+                    (void)ve;
+                    BUG(sp, "Module Import");
+                    break;
+                }
+                case HIRValueItem::TAG_Constant: {
+                    auto& ve = v.as_Constant();
+                    outParams.ppMethod = &pe.params; return &ve;
+                    break;
+                }
+                case HIRValueItem::TAG_Static: {
+                    auto& ve = v.as_Static();
+                    outParams.ppMethod = &pe.params; return &ve;
+                    break;
+                }
+                case HIRValueItem::TAG_Function: {
+                    auto& ve = v.as_Function();
+                    outParams.ppMethod = &pe.params; return &ve;
+                    break;
+                }
+                case HIRValueItem::TAG_StructConstant: {
+                    auto& ve = v.as_StructConstant();
+                    (void)ve;
+                    outParams.ppImpl = &pe.params; TODO(sp, "StructConstant - " << p);
+                    break;
+                }
+                case HIRValueItem::TAG_StructConstructor: {
+                    auto& ve = v.as_StructConstructor();
+                    outParams.ppImpl = &pe.params; const auto& str = crate.getStructByPath(sp, ve.ty); if (outImplParamsDef) { *outImplParamsDef = &str.params; } return ValuePtr::Data_StructConstructor{&ve.ty, &str};
+                    break;
+                }
+            }
             throw "";
         }
         TU_ARM(p.data, UfcsKnown, pe) {
@@ -3520,7 +3620,20 @@ StaticTraitResolve::ValuePtr StaticTraitResolve::getValue(const Span& sp, const 
 
             const HIRTraitValueItem& v = tr.values.at(pe.item);
             if (signatureOnly) {
-                TU_MATCHA((v), (ve), (Constant, return &ve;), (Static, return &ve;), (Function, return &ve;))
+                switch (v.tag()) {
+                    case HIRTraitValueItem::TAG_Constant: {
+                        auto& ve = v.as_Constant();
+                        return &ve;
+                    }
+                    case HIRTraitValueItem::TAG_Static: {
+                        auto& ve = v.as_Static();
+                        return &ve;
+                    }
+                    case HIRTraitValueItem::TAG_Function: {
+                        auto& ve = v.as_Function();
+                        return &ve;
+                    }
+                }
             } else {
                 bool bestIsSpec = false;
                 bool hasBoundedImpl = false;

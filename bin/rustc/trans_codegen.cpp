@@ -37,7 +37,38 @@ void TransCodegen(const WireBoard& wb, const ::std::string& outfile, CodegenOutp
             codegen->emitTypeProto(ty.first);
         } else {
             if (const auto* te = ty.first->opt_Path()) {
-                TU_MATCHA((te->binding), (tpb), (Unbound, throw "";), (Opaque, throw "";), (ExternType, ), (Struct, codegen->emitStruct(sp, te->path.data.as_Generic(), *tpb);), (Union, codegen->emitUnion(sp, te->path.data.as_Generic(), *tpb);), (Enum, codegen->emitEnum(sp, te->path.data.as_Generic(), *tpb);))
+                switch (te->binding.tag()) {
+                    case HIRTypePathBinding::TAG_Unbound: {
+                        auto& tpb = te->binding.as_Unbound();
+                        (void)tpb;
+                        throw "";
+                    }
+                    case HIRTypePathBinding::TAG_Opaque: {
+                        auto& tpb = te->binding.as_Opaque();
+                        (void)tpb;
+                        throw "";
+                    }
+                    case HIRTypePathBinding::TAG_ExternType: {
+                        auto& tpb = te->binding.as_ExternType();
+                        (void)tpb;
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Struct: {
+                        auto& tpb = te->binding.as_Struct();
+                        codegen->emitStruct(sp, te->path.data.as_Generic(), *tpb);
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Union: {
+                        auto& tpb = te->binding.as_Union();
+                        codegen->emitUnion(sp, te->path.data.as_Generic(), *tpb);
+                        break;
+                    }
+                    case HIRTypePathBinding::TAG_Enum: {
+                        auto& tpb = te->binding.as_Enum();
+                        codegen->emitEnum(sp, te->path.data.as_Generic(), *tpb);
+                        break;
+                    }
+                }
             }
             codegen->emitType(ty.first);
         }

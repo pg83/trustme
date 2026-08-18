@@ -888,7 +888,35 @@ namespace {
                 if (!right->is_Path() || le.path.data.tag() != right->as_Path().path.data.tag()) {
                     BUG(sp, "Mismatched types - " << left << " and " << right);
                 }
-                TU_MATCHA((le.path.data, right->as_Path().path.data), (lpe, rpe), (Generic, if (lpe.path != rpe.path) BUG(sp, "Mismatched types - " << left << " and " << right); return typelistOrdSpecific(sp, lpe.params.types, rpe.params.types);), (UfcsUnknown, ), (UfcsKnown, ), (UfcsInherent, ))
+                switch (le.path.data.tag()) {
+                    case HIRPathData::TAG_Generic: {
+                        auto& lpe = le.path.data.as_Generic();
+                        auto& rpe = right->as_Path().path.data.as_Generic();
+                        if (lpe.path != rpe.path) BUG(sp, "Mismatched types - " << left << " and " << right); return typelistOrdSpecific(sp, lpe.params.types, rpe.params.types);
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsUnknown: {
+                        auto& lpe = le.path.data.as_UfcsUnknown();
+                        (void)lpe;
+                        auto& rpe = right->as_Path().path.data.as_UfcsUnknown();
+                        (void)rpe;
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsKnown: {
+                        auto& lpe = le.path.data.as_UfcsKnown();
+                        (void)lpe;
+                        auto& rpe = right->as_Path().path.data.as_UfcsKnown();
+                        (void)rpe;
+                        break;
+                    }
+                    case HIRPathData::TAG_UfcsInherent: {
+                        auto& lpe = le.path.data.as_UfcsInherent();
+                        (void)lpe;
+                        auto& rpe = right->as_Path().path.data.as_UfcsInherent();
+                        (void)rpe;
+                        break;
+                    }
+                }
                 TODO(sp, "Path - " << le.path << " and " << right);
             }
             TU_ARMA(TraitObject, le) {
@@ -1228,7 +1256,35 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
             if (a.data.tag() != b.data.tag()) {
                 return false;
             }
-            TU_MATCHA((a.data, b.data), (ape, bpe), (Generic, if (ape.path != bpe.path) return false; return H::typesOverlap(ape.params, bpe.params);), (UfcsUnknown, ), (UfcsKnown, ), (UfcsInherent, ))
+            switch (a.data.tag()) {
+                case HIRPathData::TAG_Generic: {
+                    auto& ape = a.data.as_Generic();
+                    auto& bpe = b.data.as_Generic();
+                    if (ape.path != bpe.path) return false; return H::typesOverlap(ape.params, bpe.params);
+                    break;
+                }
+                case HIRPathData::TAG_UfcsUnknown: {
+                    auto& ape = a.data.as_UfcsUnknown();
+                    (void)ape;
+                    auto& bpe = b.data.as_UfcsUnknown();
+                    (void)bpe;
+                    break;
+                }
+                case HIRPathData::TAG_UfcsKnown: {
+                    auto& ape = a.data.as_UfcsKnown();
+                    (void)ape;
+                    auto& bpe = b.data.as_UfcsKnown();
+                    (void)bpe;
+                    break;
+                }
+                case HIRPathData::TAG_UfcsInherent: {
+                    auto& ape = a.data.as_UfcsInherent();
+                    (void)ape;
+                    auto& bpe = b.data.as_UfcsInherent();
+                    (void)bpe;
+                    break;
+                }
+            }
             DEBUG("TODO: Path - " << a << " and " << b);
             return false;
         }

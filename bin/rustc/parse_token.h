@@ -113,7 +113,20 @@ public:
     }
 
     enum eCoreType datatype() const {
-        TU_MATCH_DEF(Data, (data_), (e), (assert(!"Getting datatype of invalid token type");), (Integer, return e.datatype;), (Float, return e.datatype;)) throw "";
+        switch (data_.tag()) {
+            case Data::TAG_Integer: {
+                auto& e = data_.as_Integer();
+                return e.datatype;
+            }
+            case Data::TAG_Float: {
+                auto& e = data_.as_Float();
+                return e.datatype;
+            }
+            default: {
+                assert(!"Getting datatype of invalid token type");
+                break;
+            }
+        } throw "";
     }
 
     U128 intval() const {

@@ -5,6 +5,11 @@ Applied in phases; each invocation rewrites one macro family in place:
 
     dev/tu_match_rewrite.py iflet FILE...   # TU_IFLET
     dev/tu_match_rewrite.py test FILE...    # TU_TEST1 / TU_TEST2 / TU_OPT1
+    dev/tu_match_rewrite.py match FILE...   # TU_MATCH / TU_MATCHA / TU_MATCH_DEF
+
+For TU_MATCHA the union type behind the case labels is inferred from the
+.tu descriptions: the set of arm tags is matched against every union's
+variant set, and the rewrite fails loudly when that is ambiguous.
 
 The scanner understands string/char literals, comments and nested
 parentheses, so macro arguments (including whole statements in TU_IFLET
@@ -46,9 +51,9 @@ def scan_args(text, open_paren):
             i = text.index("\n", i)
         elif text.startswith("/*", i):
             i = text.index("*/", i) + 1
-        elif c in "([{":
+        elif c == "(":
             depth += 1
-        elif c in ")]}":
+        elif c == ")":
             depth -= 1
             if depth == 0:
                 args.append(text[start:i])
@@ -78,6 +83,43 @@ def subject(expr):
     return f"({expr})"
 
 
+def code_mask(text):
+    """Spans of comments and string/char literals, to skip macro hits there."""
+    spans = []
+    i = 0
+    n = len(text)
+    while i < n:
+        c = text[i]
+        if c in "\"'":
+            start = i
+            quote = c
+            i += 1
+            while i < n:
+                if text[i] == "\\":
+                    i += 2
+                    continue
+                if text[i] == quote:
+                    break
+                i += 1
+            spans.append((start, i + 1))
+        elif text.startswith("//", i):
+            start = i
+            i = text.find("\n", i)
+            if i < 0:
+                i = n
+            spans.append((start, i))
+        elif text.startswith("/*", i):
+            start = i
+            i = text.find("*/", i) + 2
+            spans.append((start, i))
+        i += 1
+    return spans
+
+
+def in_mask(spans, pos):
+    return any(a <= pos < b for a, b in spans)
+
+
 def line_indent(text, pos):
     bol = text.rfind("\n", 0, pos) + 1
     indent = ""
@@ -95,7 +137,7 @@ def rewrite_tests(text):
         changed = False
         for name in ("TU_TEST1", "TU_TEST2", "TU_OPT1"):
             m = re.search(r"\b%s\(" % name, text)
-            if not m:
+            if not m or in_mask(code_mask(text), m.start()):
                 continue
             args, end = scan_args(text, m.end() - 1)
             def glue(fragment):
@@ -128,10 +170,14 @@ def rewrite_tests(text):
 
 
 def rewrite_iflet(text):
+    offset = 0
     while True:
-        m = re.search(r"\bTU_IFLET\(", text)
+        m = re.compile(r"\bTU_IFLET\(").search(text, offset)
         if not m:
             return text
+        if in_mask(code_mask(text), m.start()):
+            offset = m.end()
+            continue
         args, end = scan_args(text, m.end() - 1)
         _cls, var, tag, name = (a.strip() for a in args[:4])
         body = ",".join(args[4:]).strip()
@@ -161,6 +207,165 @@ def rewrite_iflet(text):
         text = text[:m.start()] + "\n".join(lines) + text[tail:]
 
 
+def load_union_specs():
+    """name -> frozenset(tags) for every union described in bin/rustc/*.tu."""
+    specs = {}
+
+    class StubVariant:
+        def __init__(self, tag, *args, **kwargs):
+            self.tag = tag
+
+    specs["MIRLValue::Storage"] = frozenset(
+        {"Argument", "Local", "Static", "Return"})
+    specs["MIRLValue::Wrapper"] = frozenset(
+        {"Deref", "Field", "Downcast", "Index"})
+    specs["MIRLValue::RefCommon"] = frozenset(
+        {"Argument", "Local", "Static", "Return",
+         "Deref", "Field", "Downcast", "Index"})
+    for path in pathlib.Path("bin/rustc").glob("*.tu"):
+        def generate(**kwargs):
+            specs[kwargs["name"]] = frozenset(v.tag for v in kwargs["variants"])
+
+        exec(compile(path.read_text(), str(path), "exec"),
+             {"generate": generate, "v": StubVariant,
+              "context": lambda *_: None, "local": lambda: None})
+    return specs
+
+
+def infer_class(specs, tags, where):
+    exact = [name for name, variants in specs.items() if variants == tags]
+    if len(exact) == 1:
+        return exact[0]
+    superset = [name for name, variants in specs.items() if tags <= variants]
+    if len(superset) == 1:
+        return superset[0]
+    print(f"{where}: cannot infer union for tags {sorted(tags)}:"
+          f" candidates {exact or superset} - left for hand conversion")
+    return None
+
+
+NO_BREAK = re.compile(r"(?:^|\n)\s*(?:return\b[^;]*|throw\b[^;]*|break|continue)\s*;\s*\Z")
+
+
+# The pointer-tagged MIRLValue classes return their payloads by value, so
+# their bindings copy via decltype (as the macros did) instead of auto&.
+BY_VALUE_CLASSES = {"MIRLValue::Storage", "MIRLValue::Wrapper",
+                    "MIRLValue::RefCommon"}
+
+
+def emit_arm(lines, indent, label, subjects, names, code, used_break=True):
+    lines.append(f"{indent}    case {label}: {{")
+    cls = label.rsplit("::TAG_", 1)[0]
+    tag = label.rsplit("TAG_", 1)[1]
+    binder = ("decltype({subj}.as_{tag}())"
+              if cls in BY_VALUE_CLASSES else "auto&")
+    for subj, name in zip(subjects, names):
+        bind = binder.format(subj=subj, tag=tag)
+        lines.append(f"{indent}        {bind} {name} = {subj}.as_{tag}();")
+        if not re.search(r"\b%s\b" % re.escape(name), code):
+            lines.append(f"{indent}        (void){name};")
+    emit_code(lines, indent + "        ", code)
+    if used_break and not NO_BREAK.search(code):
+        lines.append(f"{indent}        break;")
+    lines.append(f"{indent}    }}")
+
+
+def emit_code(lines, indent, code):
+    code_lines = code.splitlines()
+    rest = [cl for cl in code_lines[1:] if cl.strip()]
+    common = min((len(cl) - len(cl.lstrip()) for cl in rest), default=0)
+    for pos, cl in enumerate(code_lines):
+        if not cl.strip():
+            lines.append("")
+        elif pos == 0:
+            lines.append(f"{indent}{cl.strip()}")
+        else:
+            lines.append(f"{indent}{cl[common:].rstrip()}")
+
+
+def rewrite_match(text, specs, where):
+    offset = 0
+    while True:
+        m = re.compile(r"\bTU_MATCH(A|_DEF)?\(").search(text, offset)
+        if not m:
+            return text
+        if in_mask(code_mask(text), m.start()):
+            offset = m.end()
+            continue
+        kind = m.group(1) or ""
+        args, end = scan_args(text, m.end() - 1)
+        pos = 0
+        if kind != "A":
+            cls = args[pos].strip()
+            pos += 1
+        subjects_raw = args[pos].strip()
+        names_raw = args[pos + 1].strip()
+        pos += 2
+        default_code = None
+        if kind == "_DEF":
+            default_code = args[pos].strip()
+            if default_code.startswith("(") and default_code.endswith(")"):
+                default_code = default_code[1:-1]
+            pos += 1
+        arms = []
+        for arm in args[pos:]:
+            arm = arm.strip()
+            comments = []
+            while arm.startswith("//") or arm.startswith("/*"):
+                if arm.startswith("//"):
+                    comment, _, arm = arm.partition("\n")
+                else:
+                    comment, _, arm = arm.partition("*/")
+                    comment += "*/"
+                comments.append(comment.strip())
+                arm = arm.strip()
+            if not (arm.startswith("(") and arm.endswith(")")):
+                arms.append(None)
+                continue
+            parts, _ = scan_args(arm, 0)
+            arms.append((parts[0].strip(), ",".join(parts[1:]).strip(), comments))
+
+        def split_list(raw):
+            if raw.startswith("(") and raw.endswith(")"):
+                parts, endp = scan_args(raw, 0)
+                if endp == len(raw):
+                    return [p.strip() for p in parts]
+            return [raw]
+
+        subjects = [subject(sub) for sub in split_list(subjects_raw)]
+        names = split_list(names_raw)
+
+        if any(bad is None for bad in arms):
+            print(f"{where}: malformed arm list at offset {m.start()} -"
+                  " left for hand conversion")
+            offset = m.end()
+            continue
+        if kind == "A":
+            tags = frozenset(tag for tag, _, _ in arms)
+            cls = infer_class(specs, tags, where)
+            if cls is None:
+                offset = m.end()
+                continue
+
+        indent = line_indent(text, m.start())
+        lines = [f"switch ({subjects[0]}.tag()) {{"]
+        for tag, code, comments in arms:
+            for comment in comments:
+                lines.append(f"{indent}    {comment}")
+            emit_arm(lines, indent, f"{cls}::TAG_{tag}", subjects, names, code)
+        if default_code is not None:
+            lines.append(f"{indent}    default: {{")
+            emit_code(lines, indent + "        ", default_code)
+            if not NO_BREAK.search(default_code):
+                lines.append(f"{indent}        break;")
+            lines.append(f"{indent}    }}")
+        lines.append(f"{indent}}}")
+        tail = end
+        if tail < len(text) and text[tail] == ";":
+            tail += 1
+        text = text[:m.start()] + "\n".join(lines) + text[tail:]
+
+
 def main():
     if len(sys.argv) < 3:
         raise SystemExit(__doc__)
@@ -172,6 +377,8 @@ def main():
             text = rewrite_tests(text)
         elif mode == "iflet":
             text = rewrite_iflet(text)
+        elif mode == "match":
+            text = rewrite_match(text, load_union_specs(), path)
         else:
             raise SystemExit(f"unknown mode {mode}")
         p.write_text(text, encoding="utf-8")
