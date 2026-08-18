@@ -1,6 +1,5 @@
 #pragma once
 
-#include "tagged_union.h"
 
 #include <iosfwd>
 #include <stdexcept>

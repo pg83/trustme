@@ -2,7 +2,6 @@
 
 /*
  */
-#include "tagged_union.h"
 #include <climits>
 #include <ostream>
 #include <string>

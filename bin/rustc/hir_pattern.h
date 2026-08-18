@@ -4,7 +4,6 @@
 #include "int128.h"
 #include "hir_path.h"
 #include "hir_type.h"
-#include "tagged_union.h"
 
 #include <memory>
 #include <vector>

@@ -4,7 +4,6 @@
 #include "floats.h"
 #include "ast_path.h"
 #include "ast_macro.h"
-#include "tagged_union.h"
 
 #include <memory>
 #include <string>

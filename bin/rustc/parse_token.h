@@ -6,7 +6,6 @@
 #include "int128.h"
 #include "coretypes.h"
 #include "rc_string.h"
-#include "tagged_union.h"
 
 #include <memory>
 

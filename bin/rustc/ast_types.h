@@ -10,7 +10,6 @@
 //#include "ast/macro.h"
 #include "ast_lifetime_ref.h"
 //#include "ast/path.h"
-#include "tagged_union.h"
 
 namespace stl {
     class ObjPool;

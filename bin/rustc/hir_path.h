@@ -5,7 +5,6 @@
 #include "thin_vector.h"
 #include "hir_expr_ptr.h"
 #include "hir_type_ref.h"
-#include "tagged_union.h"
 #include "hir_generic_ref.h"
 
 #include <span>

@@ -7,7 +7,6 @@
 #include "ast_edition.h"
 #include "hir_pattern.h"
 #include "hir_expr_ptr.h"
-#include "tagged_union.h"
 #include "settings.h"
 #include "target_version.h"
 #include "hir_generic_params.h"

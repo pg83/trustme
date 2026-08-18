@@ -4,7 +4,6 @@
 #include "hir_path.h"
 #include "hir_expr_ptr.h"
 #include "hir_type_ref.h"
-#include "tagged_union.h"
 #include "hir_generic_ref.h"
 #include "hir_generic_params.h"
 

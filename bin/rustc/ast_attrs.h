@@ -1,7 +1,6 @@
 #pragma once
 
 #include "ast_expr_ptr.h"
-#include "tagged_union.h"
 #include "parse_tokentree.h"
 
 class ASTCrate;

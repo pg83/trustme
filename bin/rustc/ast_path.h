@@ -5,7 +5,6 @@
 #include "common.h"
 #include "ast_types.h"
 #include "ast_expr_ptr.h"
-#include "tagged_union.h"
 #include "ast_lifetime_ref.h"
 
 #include <string>

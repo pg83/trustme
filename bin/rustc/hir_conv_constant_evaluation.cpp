@@ -5526,20 +5526,24 @@ namespace {
                     expr.state->stage = HIRExprState::Stage::Expand;
                 }
             };
-            TU_MATCH_HDRA((item.data), {)
-            TU_ARMA(Value, e) {
+            switch (item.data.tag()) {
+                case HIREnumClass::TAG_Value: {
+                    auto& e = item.data.as_Value();
                     for (size_t i = 0; i < e.variants.size() && i < lastChanged; i++) {
                         if (namesAVariant(crate, e.variants[i].expr)) {
                             drop(e.variants[i].expr);
                         }
                     }
+                    break;
                 }
-                TU_ARMA(Data, e) {
+                case HIREnumClass::TAG_Data: {
+                    auto& e = item.data.as_Data();
                     for (size_t i = 0; i < e.size() && i < lastChanged; i++) {
                         if (namesAVariant(crate, e[i].discriminantExpr)) {
                             drop(e[i].discriminantExpr);
                         }
                     }
+                    break;
                 }
             }
         }

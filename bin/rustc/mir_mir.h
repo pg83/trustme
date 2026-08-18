@@ -5,7 +5,6 @@
 #include "hir_asm.h"
 #include "hir_encoded_literal.h"
 #include "hir_type.h"
-#include "tagged_union.h"
 
 #include <memory> // std::unique_ptr
 #include <string>
