@@ -34,6 +34,7 @@
 #include <std/mem/obj_pool.h>
 
 #include <climits>
+#include <fstream>
 #include <cstdlib>
 #include <cstring>
 #include <iomanip>
@@ -170,6 +171,9 @@ struct ProgramParams {
         STAGE_MIR,
         STAGE_ALL,
     } lastStage = STAGE_ALL;
+
+    /// `--emit=metadata`: analyse the crate, but do not codegen or link it.
+    bool emitMetadataOnly = false;
 
     ::std::string infile;
     ::std::string outfile;
@@ -882,6 +886,16 @@ static int compile(int argc, char* argv[]) {
                 crateForSer.exportedMacroNames = hirCrate->exportedMacroNames;
                 HIRSerialise(params.outfile + ".hir", crateForSer);
             });
+        }
+
+        // `--emit=metadata` stops here: the crate has been analysed, and what
+        // is left only builds it.
+        if (params.emitMetadataOnly) {
+            CompilePhaseV("HIR Serialise", [&]() {
+                HIRSerialise(params.outfile + ".hir", *hirCrate);
+            });
+            { ::std::ofstream marker(params.outfile); }
+            return 0;
         }
 
         // Enumerate items to be passed to codegen
@@ -1603,7 +1617,14 @@ ProgramParams::ProgramParams(Settings& settings, int argc, char* argv[]) {
                 }
                 CfgSetLintCap(settings, level);
             } else if (const char* emit = checkWithArg("emit")) {
-                ::std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
+                // `--emit=metadata` asks for the crate to be analysed but not
+                // built: nothing is codegenned and nothing is linked, so a
+                // crate that only declares an external symbol is still valid.
+                if (::std::strcmp(emit, "metadata") == 0) {
+                    this->emitMetadataOnly = true;
+                } else {
+                    ::std::cerr << "Ignoring `--emit " << emit << "` for compatability with rustc" << std::endl;
+                }
             }
             // `--target <triple>`  - Override the default compiler target
             else if (const char* targetName = checkWithArg("target")) {
