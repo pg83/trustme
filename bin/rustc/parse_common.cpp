@@ -1266,6 +1266,10 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                     case TOK_RWORD_USE:
                         val = NEWNODE(ASTExprNodeUniOp, ASTExprNodeUniOp::USE, ::std::move(val));
                         break;
+                    // Postfix yield: `value.yield` is `yield value`.
+                    case TOK_RWORD_YIELD:
+                        val = NEWNODE(ASTExprNodeFlow, ASTExprNodeFlow::YIELD, Ident(""), ::std::move(val));
+                        break;
                     default:
                         throw ParseErrorUnexpected(lex, mv$(tok));
                 }
@@ -1475,6 +1479,17 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
         GET_TOK(tok, lex);
         if (tok.fragPath().isTrivial() && tok.fragPath().asTrivial() == "gen") {
             // Generators!
+            bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
+            return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), isMove, false);
+        }
+        PUTBACK(tok, lex);
+    }
+    // `gen { .. }` written out. `gen` is a keyword from Rust 2024, so before
+    // that edition the same tokens are a struct literal and stay one.
+    if (lex.editionAfter(ASTEdition::Rust2021) && lex.lookahead(0) == TOK_IDENT
+        && ((lex.lookahead(1) == TOK_RWORD_MOVE && lex.lookahead(2) == TOK_BRACE_OPEN) || lex.lookahead(1) == TOK_BRACE_OPEN)) {
+        GET_TOK(tok, lex);
+        if (tok.ident().name == "gen") {
             bool isMove = lex.getTokenIf(TOK_RWORD_MOVE);
             return NEWNODE(ASTExprNodeGeneratorBlock, ParseExprBlockNode(lex, ASTExprNodeBlock::Type::Bare), mkType(lex.typePool(), lex.pointSpan()), isMove, false);
         }

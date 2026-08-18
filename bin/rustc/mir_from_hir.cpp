@@ -1197,7 +1197,10 @@ namespace {
                 generatorState.states.push_back(builder.newBbUnlinked());
                 builder.setCurBlock(generatorState.states.back().entrypoint);
 
-                builder.setResult(node.span(), MIRRValue::make_Tuple({}));
+                // `yield` evaluates to the argument the coroutine was resumed
+                // with, which the body takes after the self pointer. A `gen`
+                // block resumes with `()`, and gets it.
+                builder.setResult(node.span(), MIRRValue::make_Use(MIRLValue::newArgument(1)));
             } else {
                 BUG(node.span(), "Unexpected ExprNode_Yield (should have been re-written)");
             }
