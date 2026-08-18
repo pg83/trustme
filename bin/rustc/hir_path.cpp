@@ -4,6 +4,7 @@
 #include "hir_type.h"
 
 #include <algorithm>
+#include <unordered_map>
 
 HIRTraitPath::HIRTraitPath()
     : traitPtr(nullptr)
@@ -120,78 +121,201 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
     return os;
 }
 
-HIRSimplePath HIRSimplePath::clone() const {
-    return HIRSimplePath(members);
+// The simple-path interner. A process-wide table (like the RcString intern
+// table: path constructors have no access to the wiring board) maps the
+// first Zobrist hash to entries; a lookup compares the second hash only,
+// never the component content — the combined 128 bits make a false match
+// impossible in practice.
+namespace {
+    // splitmix64 finaliser: a bijective avalanche mix.
+    uint64_t mix64(uint64_t x) {
+        x ^= x >> 30;
+        x *= 0xBF58476D1CE4E5B9;
+        x ^= x >> 27;
+        x *= 0x94D049BB133111EB;
+        x ^= x >> 31;
+        return x;
+    }
+
+    // FNV-1a; component keys must be content-based, not address-based, so
+    // that nothing about a path can depend on allocation order.
+    uint64_t contentHash(const RcString& s) {
+        uint64_t h = 0xcbf29ce484222325;
+        for (char c : s) {
+            h ^= static_cast<unsigned char>(c);
+            h *= 0x100000001b3;
+        }
+        return h;
+    }
+
+    // The two Zobrist keys of a component at a position. Position goes
+    // through the mixer (a plain XOR fold would make the hash symmetric).
+    const uint64_t POS_STEP = 0x9E3779B97F4A7C15;
+
+    uint64_t key1(uint64_t ch, size_t i) {
+        return mix64(ch + (i + 1) * POS_STEP);
+    }
+
+    uint64_t key2(uint64_t ch, size_t i) {
+        return mix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
+    }
+
+    ::std::unordered_multimap<uint64_t, const HIRSimplePathData*>& pathTable() {
+        static ::std::unordered_multimap<uint64_t, const HIRSimplePathData*> table;
+        return table;
+    }
+
+    const HIRSimplePathData* emptyPathData() {
+        static const HIRSimplePathData empty{0, 0, ThinVector<RcString>()};
+        return &empty;
+    }
+
+    const HIRSimplePathData* findPath(uint64_t h1, uint64_t h2) {
+        auto rng = pathTable().equal_range(h1);
+        for (auto it = rng.first; it != rng.second; ++it) {
+            if (it->second->hash2 == h2) {
+                return it->second;
+            }
+        }
+        return nullptr;
+    }
+
+    // Entries live until process exit, so member references stay valid.
+    const HIRSimplePathData* addPath(uint64_t h1, uint64_t h2, ThinVector<RcString> members) {
+        auto* d = new HIRSimplePathData{h1, h2, std::move(members)};
+        pathTable().emplace(h1, d);
+        return d;
+    }
+
+    const HIRSimplePathData* internMembers(ThinVector<RcString> members) {
+        if (members.empty()) {
+            return emptyPathData();
+        }
+        uint64_t h1 = 0, h2 = 0;
+        for (size_t i = 0; i < members.size(); i++) {
+            auto ch = contentHash(members[i]);
+            h1 ^= key1(ch, i);
+            h2 ^= key2(ch, i);
+        }
+        if (const auto* d = findPath(h1, h2)) {
+            return d;
+        }
+        return addPath(h1, h2, std::move(members));
+    }
 }
 
 HIRSimplePath HIRSimplePath::parent() const {
-    if (members.size() > 1) {
-        return HIRSimplePath(ThinVector<RcString>(members.begin(), members.end() - 1));
+    const auto& m = p->members;
+    if (m.size() > 1) {
+        auto ch = contentHash(m.back());
+        auto i = m.size() - 1;
+        auto h1 = p->hash1 ^ key1(ch, i);
+        auto h2 = p->hash2 ^ key2(ch, i);
+        if (const auto* d = findPath(h1, h2)) {
+            return HIRSimplePath(d);
+        }
+        return HIRSimplePath(addPath(h1, h2, ThinVector<RcString>(m.begin(), m.end() - 1)));
     } else {
-        return this->clone();
+        return *this;
     }
 }
 
 HIRSimplePath HIRSimplePath::operator+(const RcString& s) const {
-    if (members.empty()) {
-        return ThinVector<RcString>({RcString(), s});
-    } else {
-        HIRSimplePath rv;
-        rv.members.reserve(members.size());
-        for (const auto& v : members) {
-            rv.members.push_back(v);
-        }
-        rv.members.push_back(s);
-        return rv;
+    const auto& m = p->members;
+    if (m.empty()) {
+        return HIRSimplePath(internMembers(ThinVector<RcString>({RcString(), s})));
     }
+    auto ch = contentHash(s);
+    auto h1 = p->hash1 ^ key1(ch, m.size());
+    auto h2 = p->hash2 ^ key2(ch, m.size());
+    if (const auto* d = findPath(h1, h2)) {
+        return HIRSimplePath(d);
+    }
+    ThinVector<RcString> members;
+    members.reserve(m.size() + 1);
+    for (const auto& v : m) {
+        members.push_back(v);
+    }
+    members.push_back(s);
+    return HIRSimplePath(addPath(h1, h2, std::move(members)));
 }
 
 void HIRSimplePath::operator+=(const RcString& s) {
-    if (members.empty()) {
-        members = ThinVector<RcString>({RcString(), s});
-    } else {
-        members.push_back(s);
-    }
+    *this = *this + s;
 }
 
 RcString HIRSimplePath::popComponent() {
-    if (members.size() <= 1) {
+    const auto& m = p->members;
+    if (m.size() <= 1) {
         return RcString();
-    } else {
-        auto rv = members.back();
-        members.pop_back();
-        if (members.size() == 1 && members[0] == RcString()) {
-            members = ThinVector<RcString>();
-        }
+    }
+    auto rv = m.back();
+    if (m.size() == 2 && m[0] == RcString()) {
+        p = emptyPathData();
         return rv;
     }
+    auto ch = contentHash(rv);
+    auto i = m.size() - 1;
+    auto h1 = p->hash1 ^ key1(ch, i);
+    auto h2 = p->hash2 ^ key2(ch, i);
+    if (const auto* d = findPath(h1, h2)) {
+        p = d;
+    } else {
+        p = addPath(h1, h2, ThinVector<RcString>(m.begin(), m.end() - 1));
+    }
+    return rv;
 }
 
 void HIRSimplePath::updateCrateName(RcString v) {
-    if (members.empty()) {
-        members.push_back(v);
-    } else if (v.c_str()[0] == '\0' && members.size() == 1) {
-        members = ThinVector<RcString>();
+    const auto& m = p->members;
+    if (m.empty()) {
+        p = internMembers(ThinVector<RcString>({std::move(v)}));
+    } else if (v.c_str()[0] == '\0' && m.size() == 1) {
+        p = emptyPathData();
     } else {
+        auto chOld = contentHash(m[0]);
+        auto chNew = contentHash(v);
+        auto h1 = p->hash1 ^ key1(chOld, 0) ^ key1(chNew, 0);
+        auto h2 = p->hash2 ^ key2(chOld, 0) ^ key2(chNew, 0);
+        if (const auto* d = findPath(h1, h2)) {
+            p = d;
+            return;
+        }
+        ThinVector<RcString> members(m.begin(), m.end());
         members[0] = std::move(v);
+        p = addPath(h1, h2, std::move(members));
     }
 }
 
 void HIRSimplePath::updateLastComponent(RcString v) {
-    assert(members.size() >= 2);
+    const auto& m = p->members;
+    assert(m.size() >= 2);
+    auto i = m.size() - 1;
+    auto chOld = contentHash(m.back());
+    auto chNew = contentHash(v);
+    auto h1 = p->hash1 ^ key1(chOld, i) ^ key1(chNew, i);
+    auto h2 = p->hash2 ^ key2(chOld, i) ^ key2(chNew, i);
+    if (const auto* d = findPath(h1, h2)) {
+        p = d;
+        return;
+    }
+    ThinVector<RcString> members(m.begin(), m.end());
     members.back() = std::move(v);
+    p = addPath(h1, h2, std::move(members));
 }
 
-bool HIRSimplePath::startsWith(const HIRSimplePath& p, bool skipLast /*=false*/) const {
-    if (p.members.empty()) {
+bool HIRSimplePath::startsWith(const HIRSimplePath& x, bool skipLast /*=false*/) const {
+    const auto& m = p->members;
+    const auto& xm = x.p->members;
+    if (xm.empty()) {
         return crateName() == RcString();
     }
-    // This path can't start with `p` if it's shorter than `p`
-    if (members.size() < p.members.size() - (skipLast ? 1 : 0)) {
+    // This path can't start with `x` if it's shorter than `x`
+    if (m.size() < xm.size() - (skipLast ? 1 : 0)) {
         return false;
     }
-    for (size_t i = 0; i < p.members.size() - (skipLast ? 1 : 0); i++) {
-        if (p.members[i] != this->members[i]) {
+    for (size_t i = 0; i < xm.size() - (skipLast ? 1 : 0); i++) {
+        if (xm[i] != m[i]) {
             return false;
         }
     }
@@ -692,42 +816,55 @@ const EncodedLiteral* HIREncodedLiteralPtr::operator->() const {
 }
 
 HIRSimplePath::HIRSimplePath(ThinVector<RcString> members)
-    : members(std::move(members))
+    : p(internMembers(std::move(members)))
 {
 }
 
-HIRSimplePath::HIRSimplePath() {
+HIRSimplePath::HIRSimplePath()
+    : p(emptyPathData())
+{
 }
 
 HIRSimplePath::HIRSimplePath(RcString crate)
-    : HIRSimplePath(crate, ::std::span<RcString>())
+    : HIRSimplePath(crate, ::std::span<const RcString>())
 {
 }
 
 HIRSimplePath::HIRSimplePath(RcString crate, ::std::vector<RcString> components)
-    : HIRSimplePath(crate, ::std::span<RcString>(components))
+    : HIRSimplePath(crate, ::std::span<const RcString>(components))
 {
 }
 
-HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<RcString> components) {
-    // NOTE: Ensure that it's impossible for the crate name to be empty with only one value in `m_members`, simplifies comparison logic
-    if (crate.c_str()[0] != '\0' || !components.empty()) {
-        members.reserve(1 + components.size());
-        members.push_back(std::move(crate));
-        for (auto& n : components) {
-            members.push_back(std::move(n));
-        }
-    }
+HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<RcString> components)
+    : HIRSimplePath(crate, ::std::span<const RcString>(components.begin(), components.end()))
+{
 }
 
 HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<const RcString> components) {
-    if (crate.c_str()[0] != '\0' || !components.empty()) {
-        members.reserve(1 + components.size());
-        members.push_back(std::move(crate));
-        for (const auto& n : components) {
-            members.push_back(n);
-        }
+    // NOTE: Ensure that it's impossible for the crate name to be empty with only one value in `members`, simplifies comparison logic
+    if (crate.c_str()[0] == '\0' && components.empty()) {
+        p = emptyPathData();
+        return;
     }
+    auto ch = contentHash(crate);
+    uint64_t h1 = key1(ch, 0);
+    uint64_t h2 = key2(ch, 0);
+    for (size_t i = 0; i < components.size(); i++) {
+        ch = contentHash(components[i]);
+        h1 ^= key1(ch, i + 1);
+        h2 ^= key2(ch, i + 1);
+    }
+    if (const auto* d = findPath(h1, h2)) {
+        p = d;
+        return;
+    }
+    ThinVector<RcString> members;
+    members.reserve(1 + components.size());
+    members.push_back(std::move(crate));
+    for (const auto& n : components) {
+        members.push_back(n);
+    }
+    p = addPath(h1, h2, std::move(members));
 }
 
 HIRSimplePath::HIRSimplePath(RcString crate, ::std::initializer_list<RcString> components)
@@ -737,7 +874,7 @@ HIRSimplePath::HIRSimplePath(RcString crate, ::std::initializer_list<RcString> c
 
 const RcString& HIRSimplePath::crateName() const {
     static RcString empty;
-    return members.empty() ? empty : members.front();
+    return p->members.empty() ? empty : p->members.front();
 }
 
 ::std::vector<RcString> HIRSimplePath::componentsVec() const {

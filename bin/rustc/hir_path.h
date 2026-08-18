@@ -68,14 +68,34 @@ class HIRGenericParams;
 
 HIRCompare& operator&=(HIRCompare& x, const HIRCompare& y);
 
-/// Simple path - Absolute with no generic parameters
-// TODO: Maybe make this de-duplicated? Not sure about the overheads involved vs the gain - some paths are very common, others are only used once
+/// Interned storage for HIRSimplePath. Never constructed directly: entries
+/// live forever in the process-wide interner in hir_path.cpp.
+struct HIRSimplePathData {
+    // Two independent Zobrist hashes over (component, position). hash1 keys
+    // the interner table; hash2 is what lookups compare instead of the
+    // component content. Both support O(1) incremental update on
+    // append/pop/replace, which is what makes path mutation cheap.
+    uint64_t hash1;
+    uint64_t hash2;
+    ThinVector<RcString> members; // [0] = crate name; empty vector = empty path
+};
+
+/// Simple path - Absolute with no generic parameters.
+/// De-duplicated: the object is a single pointer into the interner, so copies
+/// are trivial and equality is pointer identity. ord() stays lexicographic
+/// over the components: HIRSimplePath keys many std::map's whose iteration
+/// order leaks into the output, so it must not depend on interning order.
 struct HIRSimplePath {
     friend HirSerialiser;
     friend HirDeserialiser;
 
 private:
-    ThinVector<RcString> members;
+    const HIRSimplePathData* p;
+
+    HIRSimplePath(const HIRSimplePathData* p)
+        : p(p)
+    {
+    }
 
     HIRSimplePath(ThinVector<RcString> members);
 
@@ -92,13 +112,17 @@ public:
 
     HIRSimplePath(RcString crate, ::std::initializer_list<RcString> components);
 
-    HIRSimplePath clone() const;
+    HIRSimplePath clone() const {
+        return *this;
+    }
+
     HIRSimplePath parent() const;
 
     const RcString& crateName() const;
 
     ::std::span<const RcString> components() const {
-        return members.empty() ? std::span<const RcString>() : std::span<const RcString>(members.begin() + 1, members.end());
+        const auto& m = p->members;
+        return m.empty() ? std::span<const RcString>() : std::span<const RcString>(m.begin() + 1, m.end());
     }
 
     ::std::vector<RcString> componentsVec() const;
@@ -112,11 +136,11 @@ public:
     void updateLastComponent(RcString v);
 
     bool operator==(const HIRSimplePath& x) const {
-        return ord(x) == OrdEqual;
+        return p == x.p;
     }
 
     bool operator!=(const HIRSimplePath& x) const {
-        return !(*this == x);
+        return p != x.p;
     }
 
     bool operator<(const HIRSimplePath& x) const {
@@ -124,7 +148,10 @@ public:
     }
 
     Ordering ord(const HIRSimplePath& x) const {
-        return ::ord(members, x.members);
+        if (p == x.p) {
+            return OrdEqual;
+        }
+        return ::ord(p->members, x.p->members);
     }
 
     bool startsWith(const HIRSimplePath& x, bool skipLast = false) const;

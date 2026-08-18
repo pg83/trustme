@@ -2845,7 +2845,7 @@ break;
 
     void serialiseSimplepath(const HIRSimplePath& path) {
         TRACE_FUNCTION_F(path);
-        serialiseVec(path.members);
+        serialiseVec(path.p->members);
     }
 
     void serialisePathparams(const HIRPathParams& pp) {
