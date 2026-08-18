@@ -5474,6 +5474,21 @@ ASTNamed<ASTItem> ParseModItemS(TokenStream& lex, const ASTModule::FileInfo& mod
 
             switch (GET_TOK(tok, lex)) {
                 case TOK_BRACE_OPEN:
+                    // An inner `#![path]` names the directory this module's
+                    // children are found in. An outer `#[path]` on the module
+                    // already named one, and wins.
+                    ParseParentAttrs(lex, metaItems);
+                    if (pathAttr.empty()) {
+                        ::std::string innerPath;
+                        for (const auto& a : metaItems.items) {
+                            if (a.name() == "path") {
+                                innerPath = a.parseEqualsString(*lex.parseState().wb, *lex.parseState().crate, *lex.parseState().module);
+                            }
+                        }
+                        if (!innerPath.empty()) {
+                            subPath = dirname(lex.pointSpan().getTopFileSpan().filename.c_str()) / innerPath.c_str();
+                        }
+                    }
                     submod.fileInfo.path = subPath.str() + "/";
                     submod.fileInfo.inModBlock = true;
                     submod.fileInfo.isDisabled = !H::checkItemCfg(*lex.parseState().wb->settings, metaItems);

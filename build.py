@@ -856,12 +856,16 @@ unit_tests.append(command(
     color="green",
 ))
 rust_unit_tests = []
+# Files a unit test pulls in with `#[path]`, which are inputs of every unit
+# node because the node cannot tell which test names them.
+unit_aux = build.glob("$(S)/tst/unit/aux/**/*.rs")
+
 for _src in build.glob("$(S)/tst/unit/test_*.rs"):
     _stem = _src.rsplit("/", 1)[1][len("test_"):-len(".rs")]
     _uses_rust_lib_dependencies = _stem == "rust_lib_dev_dependencies"
     _target = command(
         name="unit_" + _stem,
-        inputs=[_src, "$(S)/tst/unit/run_one.py"] + TESTS_LIB,
+        inputs=[_src, "$(S)/tst/unit/run_one.py"] + unit_aux + TESTS_LIB,
         outputs=["$(B)/tst/unit/" + _stem + ".stamp"],
         cmd=[
             *TEST_TIMEOUT,
