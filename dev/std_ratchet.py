@@ -12,6 +12,10 @@ baseline in place, so improvements lock in immediately.
 
 The build node passes the same glob it declares as inputs; the script
 never walks the tree itself.
+
+Escape hatch, for dire necessity only: a `// escape: <reason>` comment on
+the same line or an adjacent line exempts that line's hits from the
+count. The reason is mandatory.
 """
 
 import os
@@ -76,6 +80,18 @@ def strip_code(text):
     return "".join(out)
 
 
+ESCAPE = re.compile(r"//\s*escape:\s*\S")
+
+
+def escaped_lines(text):
+    """Line indices exempted by `// escape: why` markers (marker line +-1)."""
+    out = set()
+    for i, line in enumerate(text.splitlines()):
+        if ESCAPE.search(line):
+            out.update((i - 1, i, i + 1))
+    return out
+
+
 def baseline_key(path):
     """Stable key independent of where the build ran from."""
     norm = path.replace(os.sep, "/")
@@ -85,14 +101,23 @@ def baseline_key(path):
 
 def scan(files):
     counts = {}
+    escaped = 0
     for path in files:
         with open(path, errors="replace") as fh:
-            code = strip_code(fh.read())
+            raw = fh.read()
+        lines = strip_code(raw).splitlines()
+        exempt = escaped_lines(raw)
         for label, rx in PATTERNS:
-            hits = len(rx.findall(code))
+            hits = 0
+            for i, line in enumerate(lines):
+                n = len(rx.findall(line))
+                if i in exempt:
+                    escaped += n
+                else:
+                    hits += n
             if hits:
                 counts[(baseline_key(path), label)] = hits
-    return counts
+    return counts, escaped
 
 
 def load_baseline(path):
@@ -134,20 +159,22 @@ def main():
     if baseline_path is None or not args:
         raise SystemExit(__doc__)
 
-    current = scan(sorted(args))
+    current, escaped = scan(sorted(args))
+    suffix = f", {escaped} escaped" if escaped else ""
     baseline = load_baseline(baseline_path)
 
     if baseline is None:
         save_baseline(baseline_path, current)
         print(f"std_ratchet: baseline created with {sum(current.values())}"
-              f" hits in {len(current)} entries")
+              f" hits in {len(current)} entries{suffix}")
     else:
         worse = [(k, baseline.get(k, 0), v) for k, v in sorted(current.items())
                  if v > baseline.get(k, 0)]
         if worse:
             print("std_ratchet: banned std:: constructs increased —"
                   " use the libstd idiom (ObjPool ownership, interning;"
-                  " see CLAUDE.md):", file=sys.stderr)
+                  " see CLAUDE.md); if truly unavoidable, annotate with"
+                  " `// escape: <why>`:", file=sys.stderr)
             for (rel, label), base, cur in worse:
                 print(f"  {rel}: {label} {base} -> {cur}", file=sys.stderr)
             return 1
@@ -155,10 +182,10 @@ def main():
             save_baseline(baseline_path, current)
             print(f"std_ratchet: tightened"
                   f" {sum(baseline.values())} -> {sum(current.values())} hits,"
-                  f" {len(baseline)} -> {len(current)} entries")
+                  f" {len(baseline)} -> {len(current)} entries{suffix}")
         else:
             print(f"std_ratchet: OK ({sum(current.values())} hits in"
-                  f" {len(current)} entries)")
+                  f" {len(current)} entries{suffix})")
 
     if stamp:
         with open(stamp, "w"):

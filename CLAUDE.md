@@ -57,3 +57,12 @@ constructs per file against `dev/std_ratchet.baseline`. Counts may only
 go down: any increase fails the gate; any decrease rewrites the baseline
 automatically, locking the improvement in. Never edit the baseline
 upward by hand.
+
+Escape hatch — for dire necessity only. The rules are not absolute:
+when a banned construct is truly unavoidable (FFI shape, a std::
+interface you do not control, a measured perf exception), annotate it
+with a `// escape: <why>` comment on the same line or an adjacent line
+and the ratchet skips that line, so the counter grows only where the
+necessity is written down. The reason is mandatory; an escape without a
+real justification is a review reject. Reach for the pool/interning
+idiom first — an escape is the last resort, not an alternative.
