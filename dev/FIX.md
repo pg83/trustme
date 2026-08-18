@@ -41,13 +41,13 @@ read as a qualified path), which a rerun of the failing set could not have.
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 221 |
-| fixed, or no longer reproducing, since the gate | 410 |
+| still failing on the current tree | 211 |
+| fixed, or no longer reproducing, since the gate | 420 |
 
 The 221 is measured, not decremented by hand: the eight corpus groups that hold
 the failures (`rust_ui_compile rust_1_90 rust_reference rust_by_example gccrs
 gccrs_compile miri rust_lib`) are rerun whole, which is also the only regression
-check there is between full gates. That run last stood at 196; the remaining 25
+check there is between full gates. That run last stood at 186; the remaining 25
 are in groups outside it and come from the last full sweep.
 
 | priority class | tests |
@@ -58,6 +58,14 @@ are in groups outside it and come from the last full sweep.
 | missing rejection or diagnostic | 53 |
 | generated C++ or link failure | 10 |
 | stable timeout | 8 |
+
+A single-variant enum is not zero-sized yet (`glossary__L232`, `size_of::<enum
+E { V }>()`). Dropping the tag field from the layout is a two-line change and
+makes that test pass, but eight sites across const evaluation and both codegen
+backends read the discriminant out of a tag field and assert on the variant mode
+that goes with it, so three tests that cast such an enum to an integer break.
+The tag-free read has to come first: for one variant the discriminant is a
+constant, with nothing to load.
 
 ## P0: accepted Rust rejected by the front end
 
