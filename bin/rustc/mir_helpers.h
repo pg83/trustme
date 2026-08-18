@@ -311,7 +311,7 @@ public:
             }
             TU_ARMA(MakeDst, se) {
                 rv |= visitParam(se.ptrVal, MIRValUsage::Move);
-                if (TU_TEST2(se.metaVal, Constant, , ItemAddr, .get() == nullptr)) {
+                if ((se.metaVal.is_Constant() && se.metaVal.as_Constant().is_ItemAddr() && se.metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                 } else {
                     rv |= visitParam(se.metaVal, MIRValUsage::Move);
                 }
@@ -440,7 +440,10 @@ public:
             TU_ARMA(Drop, e) {
                 rv |= visitLvalue(e.slot, MIRValUsage::Move);
                 rv |= visitBlockId(e.target);
-                TU_IFLET(MIRUnwindAction, e.unwind, Cleanup, target, rv |= visitBlockId(target);)
+                if (e.unwind.is_Cleanup()) {
+                    auto& target = e.unwind.as_Cleanup();
+                    rv |= visitBlockId(target);
+                }
             }
             TU_ARMA(Call, e) {
                 TU_MATCH_HDRA( (e.fcn), {)
@@ -458,7 +461,10 @@ public:
                     rv |= visitParam(v, MIRValUsage::Read);
                 rv |= visitLvalue(e.retVal, MIRValUsage::Write);
                 rv |= visitBlockId(e.retBlock);
-                TU_IFLET(MIRUnwindAction, e.unwind, Cleanup, target, rv |= visitBlockId(target);)
+                if (e.unwind.is_Cleanup()) {
+                    auto& target = e.unwind.as_Cleanup();
+                    rv |= visitBlockId(target);
+                }
             }
             TU_ARMA(TailCall, e) {
                 TU_MATCH_HDRA((e.fcn), {)

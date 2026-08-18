@@ -200,7 +200,11 @@ namespace {
         }
 
         void popSelf(ASTType* tr) {
-            TU_IFLET(Ent, nameContext.back(), ConcreteSelf, e, nameContext.pop_back();)
+            if (nameContext.back().is_ConcreteSelf()) {
+                auto& e = nameContext.back().as_ConcreteSelf();
+                (void)e;
+                nameContext.pop_back();
+            }
             else {
                 BUG(Span(), "resolve/absolute.cpp - Context::pop(ASTType*) - Mismatched pop");
             }
@@ -2413,7 +2417,10 @@ void ResolveAbsoluteGeneric(Context& context, ASTGenericParams& params) {
 
 // Locals shouldn't be possible, as they'd end up as MaybeBind. Will assert the path class.
 void ResolveAbsolutePatternValue(/*const*/ Context& context, const Span& sp, ASTPattern::Value& val) {
-    TU_IFLET(ASTPattern::Value, val, Named, e, ResolveAbsolutePath(context, sp, Context::LookupMode::Constant, e);)
+    if (val.is_Named()) {
+        auto& e = val.as_Named();
+        ResolveAbsolutePath(context, sp, Context::LookupMode::Constant, e);
+    }
 }
 
 void ResolveAbsolutePattern(Context& context, bool allowRefutable, ASTPattern& pat) {
@@ -4121,32 +4128,26 @@ void ResolveIndexModuleNormalisePathExt(const ASTCrate& crate, const Span& sp, A
         case IndexName::Namespace: {
             auto itM = hmod->modItems.find(lastnode.name());
             if (itM != hmod->modItems.end()) {
-                TU_IFLET(
-                    HIRTypeItem,
-                    itM->second->ent,
-                    Import,
-                    e,
+                if (itM->second->ent.is_Import()) {
+                    auto& e = itM->second->ent.as_Import();
                     // Replace the path with this path (maintaining binding)
                     auto bindings = path.bindings.clone();
                     path = hirToAst(e.path);
                     path.bindings = mv$(bindings);
-                )
+                }
                 return;
             }
         } break;
         case IndexName::Value: {
             auto itV = hmod->valueItems.find(lastnode.name());
             if (itV != hmod->valueItems.end()) {
-                TU_IFLET(
-                    HIRValueItem,
-                    itV->second->ent,
-                    Import,
-                    e,
+                if (itV->second->ent.is_Import()) {
+                    auto& e = itV->second->ent.as_Import();
                     // Replace the path with this path (maintaining binding)
                     auto bindings = path.bindings.clone();
                     path = hirToAst(e.path);
                     path.bindings = mv$(bindings);
-                )
+                }
                 return;
             }
         } break;
@@ -5035,11 +5036,20 @@ namespace {
             if (it == hmod->modItems.end()) {
                 BUG(sp, "");
             }
-            TU_IFLET(HIRTypeItem, (it->second->ent), Module, mod, hmod = &mod;)
-            else TU_IFLET(HIRTypeItem, (it->second->ent), Import, import, hmod = getHirModByPath(sp, crate, import.path); if (!hmod) BUG(sp, "Import in module position didn't resolve as a module - " << import.path);) else TU_IFLET(HIRTypeItem, (it->second->ent), Enum, enm, if (&node == &path.components().back()) {
-                is_enum = true;
-                return &enm;
-            } BUG(sp, "");) else {
+            if (it->second->ent.is_Module()) {
+                auto& mod = it->second->ent.as_Module();
+                hmod = &mod;
+            }
+            else if (it->second->ent.is_Import()) {
+                auto& import = it->second->ent.as_Import();
+                hmod = getHirModByPath(sp, crate, import.path); if (!hmod) BUG(sp, "Import in module position didn't resolve as a module - " << import.path);
+            } else if (it->second->ent.is_Enum()) {
+                auto& enm = it->second->ent.as_Enum();
+                if (&node == &path.components().back()) {
+                    is_enum = true;
+                    return &enm;
+                } BUG(sp, "");
+            } else {
                 if (&node == &path.components().back()) {
                     return nullptr;
                 }

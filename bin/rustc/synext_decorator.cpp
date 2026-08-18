@@ -1163,7 +1163,7 @@ struct Deriver {
                         if (pe.nodes.size() > 1) {
                             // Check if the first node of a relative is a generic param.
                             for (const auto& param : params.params) {
-                                if (TU_TEST1(param, Type, .name() == pe.nodes.front().name())) {
+                                if ((param.is_Type() && (param.as_Type().name() == pe.nodes.front().name()))) {
                                     addFieldBound(outList, ty);
                                     break;
                                 }

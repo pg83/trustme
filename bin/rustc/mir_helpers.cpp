@@ -689,7 +689,10 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
         state.setCurStmtTerm(bbIdx);
 
         // Only Call can assign a value
-        TU_IFLET(MIRTerminator, bb.terminator, Call, te, assignedLvalue(te.retBlock, 0, te.retVal);)
+        if (bb.terminator.is_Call()) {
+            auto& te = bb.terminator.as_Call();
+            assignedLvalue(te.retBlock, 0, te.retVal);
+        }
     }
 
     // Dump out variable lifetimes.
@@ -1053,7 +1056,10 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                         state.finalise(stmtIdx);
                         return;
                     }
-                    TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, statesToDo.push_back(::std::make_pair(target, state.clone()));)
+                    if (te.unwind.is_Cleanup()) {
+                        auto& target = te.unwind.as_Cleanup();
+                        statesToDo.push_back(::std::make_pair(target, state.clone()));
+                    }
                     statesToDo.push_back(::std::make_pair(te.target, mv$(state)));
                 }
                 TU_ARMA(Call, te) {
@@ -1063,7 +1069,10 @@ void MIRHelperGetLifetimesDetermineValueLifetime(
                         state.finalise(stmtIdx);
                         return;
                     }
-                    TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, statesToDo.push_back(::std::make_pair(target, state.clone()));)
+                    if (te.unwind.is_Cleanup()) {
+                        auto& target = te.unwind.as_Cleanup();
+                        statesToDo.push_back(::std::make_pair(target, state.clone()));
+                    }
                     statesToDo.push_back(::std::make_pair(te.retBlock, mv$(state)));
                 }
                 TU_ARMA(TailCall, te) {
@@ -1590,11 +1599,17 @@ MIRValueLifetimes MIRHelperGetLifetimes(MIRTypeResolve& state, const MIRFunction
                     addToVisit(tgt, mv$(vs));
                 }
             ),
-            (Drop, visitMirLvalue(e.slot, ValUsage::Move, visitLvalCb); TU_IFLET(MIRUnwindAction, e.unwind, Cleanup, target, addToVisit(target, valState.clone());) addToVisit(e.target, mv$(valState));),
+            (Drop, visitMirLvalue(e.slot, ValUsage::Move, visitLvalCb); if (e.unwind.is_Cleanup()) {
+                auto& target = e.unwind.as_Cleanup();
+                addToVisit(target, valState.clone());
+            } addToVisit(e.target, mv$(valState));),
             (Call, if (const auto* f = e.fcn.opt_Value()) visitMirLvalue(*f, ValUsage::Read, visitLvalCb); for (const auto& arg : e.args) if (const auto* e = arg.opt_LValue()) visitMirLvalue(*e, ValUsage::Read, visitLvalCb);
 
              // Push blocks (with return valid only in one)
-             TU_IFLET(MIRUnwindAction, e.unwind, Cleanup, target, addToVisit(target, valState.clone());)
+             if (e.unwind.is_Cleanup()) {
+                 auto& target = e.unwind.as_Cleanup();
+                 addToVisit(target, valState.clone());
+             }
 
              // TODO: If the function returns !, don't follow the ret_block
              lvalueSet(e.retVal);

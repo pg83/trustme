@@ -1556,7 +1556,10 @@ namespace {
             default:
                 break;
                 TU_ARMA(Value, e) {
-                    TU_IFLET(HIRPattern::Value, (e.val), Named, ve, this->checkTypeResolvedPath(sp, ve.path);)
+                    if (e.val.is_Named()) {
+                        auto& ve = e.val.as_Named();
+                        this->checkTypeResolvedPath(sp, ve.path);
+                    }
                 }
                 TU_ARMA(Range, e) {
                     if (e.start && e.start->is_Named()) {
@@ -3581,7 +3584,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     nDeref++;
                 }
                 DEBUG("- " << nDeref << " derefs of class " << bt << " to get " << ty);
-                if (ty->is_Infer() || TU_TEST1(*ty, Path, .binding.is_Unbound())) {
+                if (ty->is_Infer() || ((*ty).is_Path() && ((*ty).as_Path().binding.is_Unbound()))) {
                     // Still pure infer, can't do anything
                     // - What if it's a literal?
 
@@ -3732,7 +3735,7 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
                     }
                     TU_ARM(pattern.data, Box, pe) {
                         // Box<T>
-                        if (TU_TEST2(*ty, Path, .path.data, Generic, .path == context.langBox)) {
+                        if (((*ty).is_Path() && (*ty).as_Path().path.data.is_Generic() && (*ty).as_Path().path.data.as_Generic().path == context.langBox)) {
                             const auto& path = ty->as_Path().path.data.as_Generic();
                             const auto& inner = path.params.types.at(0);
                             rv = this->revisitInner(context, *pe.sub, inner, bindingMode);
@@ -4209,7 +4212,7 @@ void Context::handlePatternDirectInner(const Span& sp, HIRPattern& pat, const HI
 
             // Taking option 1 for now
             if (const auto* te = ty->opt_Path()) {
-                if (TU_TEST1(te->path.data, Generic, .path == langBox)) {
+                if ((te->path.data.is_Generic() && (te->path.data.as_Generic().path == langBox))) {
                     // Box<T>
                     const auto& inner = te->path.data.as_Generic().params.types.at(0);
                     this->handlePatternDirectInner(sp, *e.sub, inner);
@@ -4838,7 +4841,7 @@ std::ostream& operator<<(std::ostream& os, const Context::PossibleTypeSource& x)
 Context::IVarPossible* Context::getIvarPossibilities(const Span& sp, unsigned int ivarIndex) {
     {
         const auto& realTy = ivars.getType(ivarIndex);
-        if (!TU_TEST1(*realTy, Infer, .index == ivarIndex)) {
+        if (!((*realTy).is_Infer() && ((*realTy).as_Infer().index == ivarIndex))) {
             DEBUG("IVar " << ivarIndex << " is actually " << realTy);
             return nullptr;
         }
@@ -4917,7 +4920,7 @@ void Context::possibleEquateIvarBounds(const Span& sp, unsigned int ivarIndex, s
         auto& e = *it;
         ASSERT_BUG(sp, !typeContainsImplPlaceholder(crate.types, e), "Type contained an impl placeholder parameter - " << e);
         e = ivars.getType(e);
-        if (TU_TEST1(*e, Infer, .index == ivarIndex)) {
+        if (((*e).is_Infer() && ((*e).as_Infer().index == ivarIndex))) {
             hasSelf = true;
             it = types.erase(it);
         } else {
@@ -5185,11 +5188,11 @@ namespace {
         }
 
         // If either side is an unbound path, then return Unknown
-        if (TU_TEST1(*src, Path, .binding.is_Unbound())) {
+        if (((*src).is_Path() && ((*src).as_Path().binding.is_Unbound()))) {
             DEBUG("Source unbound path");
             return CoerceResult::Unknown;
         }
-        if (TU_TEST1(*dst, Path, .binding.is_Unbound())) {
+        if (((*dst).is_Path() && ((*dst).as_Path().binding.is_Unbound()))) {
             DEBUG("Destination unbound path");
             return CoerceResult::Unknown;
         }
@@ -5261,12 +5264,12 @@ namespace {
                     }
                 }
 
-                if (TU_TEST1(*outTy, Generic, .isPlaceholder())) {
+                if (((*outTy).is_Generic() && ((*outTy).as_Generic().isPlaceholder()))) {
                     DEBUG("Src derefed to a placeholder generic type (" << outTy << "), return Unknown");
                     return CoerceResult::Unknown;
                 }
 
-                if (TU_TEST1(*outTy, Path, .binding.is_Unbound())) {
+                if (((*outTy).is_Path() && ((*outTy).as_Path().binding.is_Unbound()))) {
                     DEBUG("Src derefed to unbound type (" << outTy << "), return Unknown");
                     return CoerceResult::Unknown;
                 }
@@ -5405,7 +5408,7 @@ namespace {
             static bool typeIsBounded(const HIRTypeData* ty) {
                 if (ty->is_Generic()) {
                     return true;
-                } else if (TU_TEST1(*ty, Path, .binding.is_Opaque())) {
+                } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_Opaque()))) {
                     return true;
                 } else {
                     return false;
@@ -5521,7 +5524,7 @@ namespace {
         }
 
         // If the destination is an Unbound path, return Unknown
-        if (TU_TEST1(*dst, Path, .binding.is_Unbound())) {
+        if (((*dst).is_Path() && ((*dst).as_Path().binding.is_Unbound()))) {
             DEBUG("Unbound destination");
             return CoerceResult::Unknown;
         }
@@ -5546,7 +5549,7 @@ namespace {
             return CoerceResult::Equality;
         }
         // If either side is a literal, then can't Coerce
-        if (TU_TEST1(*dst, Infer, .isLit())) {
+        if (((*dst).is_Infer() && ((*dst).as_Infer().isLit()))) {
             if (!src->is_Diverge()) {
                 return CoerceResult::Equality;
             }
@@ -5555,7 +5558,7 @@ namespace {
         if (dst->is_Diverge()) {
             return CoerceResult::Equality;
         }
-        if (TU_TEST1(*src, Infer, .isLit())) {
+        if (((*src).is_Infer() && ((*src).as_Infer().isLit()))) {
             return CoerceResult::Equality;
         }
 
@@ -5574,7 +5577,7 @@ namespace {
             static bool typeIsBounded(const HIRTypeData* ty) {
                 if (ty->is_Generic()) {
                     return true;
-                } else if (TU_TEST1(*ty, Path, .binding.is_Opaque())) {
+                } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_Opaque()))) {
                     return true;
                 } else {
                     return false;
@@ -5636,21 +5639,21 @@ namespace {
         // CoerceUnsized struct paths
         // - If one side is an ivar, create a type-pruned version of the other
         // - Recurse/unsize inner value
-        if (src->is_Infer() && TU_TEST2(*dst, Path, .binding, Struct, ->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None)) {
+        if (src->is_Infer() && ((*dst).is_Path() && (*dst).as_Path().binding.is_Struct() && (*dst).as_Path().binding.as_Struct()->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None)) {
             if (contextMut) {
                 contextMut->possibleEquateIvar(sp, src->as_Infer().index, dst, Context::PossibleTypeSource::CoerceTo);
             }
             // TODO: Avoid needless loop return
             return CoerceResult::Unknown;
         }
-        if (dst->is_Infer() && TU_TEST2(*src, Path, .binding, Struct, ->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None)) {
+        if (dst->is_Infer() && ((*src).is_Path() && (*src).as_Path().binding.is_Struct() && (*src).as_Path().binding.as_Struct()->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None)) {
             if (contextMut) {
                 contextMut->possibleEquateIvar(sp, dst->as_Infer().index, src, Context::PossibleTypeSource::CoerceFrom);
             }
             // TODO: Avoid needless loop return
             return CoerceResult::Unknown;
         }
-        if (TU_TEST1(*dst, Path, .binding.is_Struct()) && TU_TEST1(*src, Path, .binding.is_Struct())) {
+        if (((*dst).is_Path() && ((*dst).as_Path().binding.is_Struct())) && ((*src).is_Path() && ((*src).as_Path().binding.is_Struct()))) {
             const auto& spbe = src->as_Path().binding.as_Struct();
             const auto& dpbe = dst->as_Path().binding.as_Struct();
             if (spbe != dpbe) {
@@ -5699,8 +5702,8 @@ namespace {
         // An unresolved projection is still a coercion source/destination.
         // Keep that dependency in the possibility set instead of leaving only
         // a `!` arm visible and prematurely selecting the bottom type.
-        const bool dstIsUnboundPath = TU_TEST1(*dst, Path, .binding.is_Unbound());
-        const bool srcIsUnboundPath = TU_TEST1(*src, Path, .binding.is_Unbound());
+        const bool dstIsUnboundPath = ((*dst).is_Path() && ((*dst).as_Path().binding.is_Unbound()));
+        const bool srcIsUnboundPath = ((*src).is_Path() && ((*src).as_Path().binding.is_Unbound()));
         if (dstIsUnboundPath || srcIsUnboundPath) {
             if (contextMut) {
                 if (const auto* dep = dst->opt_Infer(); dep && srcIsUnboundPath) {
@@ -6941,11 +6944,11 @@ namespace {
                     return AssociatedCheckResult::Retry;
                 }
                 const auto& implTy = context.ivars.getType(v.implTy);
-                if (TU_TEST1(*implTy, Path, .binding.is_Unbound())) {
+                if (((*implTy).is_Path() && ((*implTy).as_Path().binding.is_Unbound()))) {
                     DEBUG("Unbound UfcsKnown, waiting");
                     return AssociatedCheckResult::Stalled;
                 }
-                if (TU_TEST1(*implTy, Infer, .isLit() == false)) {
+                if (((*implTy).is_Infer() && ((*implTy).as_Infer().isLit() == false))) {
                     DEBUG("Unbounded ivar, waiting - TODO: Add possibility " << implTy << " == " << possibleImplTy);
                     return AssociatedCheckResult::Ambiguous;
                 }
@@ -6963,11 +6966,11 @@ namespace {
                     outputType = context.resolve.expandAssociatedTypes(sp, mv$(*outputType));
 
                     // If the output type is just < v.impl_ty as v.trait >::v.name, return false
-                    if (TU_TEST1(**outputType, Path, .path.data.is_UfcsKnown())) {
+                    if (((**outputType).is_Path() && ((**outputType).as_Path().path.data.is_UfcsKnown()))) {
                         auto& pe = (*outputType)->as_Path().path.data.as_UfcsKnown();
 
                         if (pe.type == v.implTy && pe.trait.path == v.trait && pe.trait.params == v.params && pe.item == v.name) {
-                            if (TU_TEST1(*v.leftTy, Path, .path.data.is_UfcsKnown())) {
+                            if (((*v.leftTy).is_Path() && ((*v.leftTy).as_Path().path.data.is_UfcsKnown()))) {
                                 auto data = (*outputType)->cloneData();
                                 data.as_Path().binding = HIRTypePathBinding::make_Opaque({});
                                 outputType = context.crate.types.intern(std::move(data));
@@ -7533,7 +7536,7 @@ namespace {
             unsigned int derefCount = context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, t, node.method, possibleMethods);
             DEBUG("> deref_count = " << derefCount << ", possible_methods={" << possibleMethods << "}");
             // TODO: Detect the above hitting an ivar, and use that instead of this hacky check of if it's `_` or `&_`
-            if (!(t->is_Infer() || TU_TEST1(*t, Borrow, .inner->is_Infer())) && possibleMethods.empty()) {
+            if (!(t->is_Infer() || ((*t).is_Borrow() && ((*t).as_Borrow().inner->is_Infer()))) && possibleMethods.empty()) {
                 // No method found, which would be an error
                 DEBUG("Remove possibility " << newTy << " because it didn't have a method");
                 return true;
@@ -7812,7 +7815,7 @@ namespace {
                             return OrdGreater;
                         } else if (teR.binding.is_Opaque()) {
                             TODO(sp, l << " with " << r << " - LHS is Path, RHS is opaque type");
-                        } else if (TU_TEST1(teR.binding, Struct, ->structMarkings.canUnsize)) {
+                        } else if ((teR.binding.is_Struct() && (teR.binding.as_Struct()->structMarkings.canUnsize))) {
                             TODO(sp, l << " with " << r << " - LHS is Path, RHS is unsize-capable struct");
                         } else {
                             return OrdEqual;
@@ -7953,7 +7956,7 @@ namespace {
             if (ty->is_Infer()) {
                 return true;
             }
-            if (TU_TEST1(*ty, Path, .binding.is_Unbound())) {
+            if (((*ty).is_Path() && ((*ty).as_Path().binding.is_Unbound()))) {
                 return true;
             }
             return false;
@@ -8041,7 +8044,7 @@ namespace {
                         return Incompatible;
                     }
                     return compareTop(context, context.ivars.getType(le->inner), context.ivars.getType(re.inner), false);
-                } else if (TU_TEST2(*tyL, Path, .binding, Struct, ->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None)) {
+                } else if (((*tyL).is_Path() && (*tyL).as_Path().binding.is_Struct() && (*tyL).as_Path().binding.as_Struct()->structMarkings.coerceUnsized != HIRStructMarkings::Coerce::None)) {
                     const auto& le = tyL->as_Path();
                     const auto& re = tyR->as_Path();
                     if (le.binding != re.binding) {
@@ -8087,7 +8090,7 @@ namespace {
         const auto& tyL = context.ivars.getType(i);
         const auto& boundRefs = boundIndex[i];
 
-        if (!TU_TEST1(*tyL, Infer, .index == i)) {
+        if (!((*tyL).is_Infer() && ((*tyL).as_Infer().index == i))) {
             if (ivarEnt.hasRules()) {
                 DEBUG("- IVar " << i << " had possibilities, but was known to be " << tyL);
                 // Completely clear by reinitialising
@@ -8495,14 +8498,14 @@ namespace {
             if (possibleTys.size() >= 2
                 && (fallbackTy == IvarPossFallbackType::FinalOption || nSrcIvars == 0)
                 && std::all_of(possibleTys.begin(), possibleTys.end(), [](const auto& e) {
-                return e.hasType() && (TU_TEST1(*e.ty, NodeType, .is_Closure()) || (e.ty)->is_NamedFunction());
+                return e.hasType() && (((*e.ty).is_NodeType() && ((*e.ty).as_NodeType().is_Closure())) || (e.ty)->is_NamedFunction());
             })) {
                 ::std::optional<HIRTypeDataFunctionPointer> target;
                 for (const auto& possible : possibleTys) {
                     HIRTypeDataFunctionPointer candidate;
                     if (const auto* function = possible.ty->opt_NamedFunction()) {
                         candidate = function->decay(context.crate.types, sp);
-                    } else if (const auto* closure = TU_OPT1(*possible.ty, NodeType, .opt_Closure())) {
+                    } else if (const auto* closure = ((*possible.ty).is_NodeType() ? ((*possible.ty).as_NodeType().opt_Closure()) : nullptr)) {
                         candidate = HIRTypeDataFunctionPointer{false, false, RcString::newInterned(ABI_RUST), (*closure)->returnType, {}};
                         for (const auto& argument : (*closure)->args) {
                             candidate.argTypes.push_back(argument.second);
@@ -8572,7 +8575,7 @@ namespace {
                     bool isMaxAccepting = false;
                     if ((innerTy)->is_Slice()) {
                         isMaxAccepting = true;
-                    } else if (TU_TEST1(*innerTy, Primitive, == HIRCoreType::Str)) {
+                    } else if (((*innerTy).is_Primitive() && ((*innerTy).as_Primitive() == HIRCoreType::Str))) {
                         isMaxAccepting = true;
                     } else {
                     }
@@ -8596,7 +8599,7 @@ namespace {
                         continue;
                     }
                     // Ignore infer borrows
-                    if (TU_TEST1(*ent.ty, Borrow, .inner->is_Infer())) {
+                    if (((*ent.ty).is_Borrow() && ((*ent.ty).as_Borrow().inner->is_Infer()))) {
                         continue;
                     }
                     bool isDuplicate = false;
@@ -8673,7 +8676,7 @@ namespace {
                         continue;
                     }
                     // Ignore infer borrows
-                    if (TU_TEST1(*ent.ty, Borrow, .inner->is_Infer())) {
+                    if (((*ent.ty).is_Borrow() && ((*ent.ty).as_Borrow().inner->is_Infer()))) {
                         continue;
                     }
                     bool isDuplicate = false;
@@ -8814,7 +8817,7 @@ namespace {
                         }
                     }
 
-                    if (destType && nIvars == 0 && anyIvarPresent == false && !TU_TEST1(*destType, NodeType, .is_Closure()) && !isUnordered) {
+                    if (destType && nIvars == 0 && anyIvarPresent == false && !((*destType).is_NodeType() && ((*destType).as_NodeType().is_Closure())) && !isUnordered) {
                         DEBUG("Suitable option " << destType << " from " << possibleTys);
                         context.equateTypes(sp, tyL, destType);
                         return true;
@@ -9417,7 +9420,7 @@ void TypecheckCodeCS(const TypeckModuleState& ms, tArgs& args, const HIRTypeData
                 if (!ent.typesDefault.empty()) {
                     const auto& tyL = context.ivars.getType(i);
 
-                    if (TU_TEST1(*tyL, Infer, .index == i)) {
+                    if (((*tyL).is_Infer() && ((*tyL).as_Infer().index == i))) {
                         if (ent.typesDefault.size() != 1) {
                             // TODO: Error?
                         } else {
@@ -11223,13 +11226,13 @@ public:
             auto t = this->context.resolve.expandAssociatedTypes(sp, mv$(node.type));
             node.type = HIRTypeRef();
             if (node.isStruct) {
-                ASSERT_BUG(sp, TU_TEST1((*t), Path, .path.data.is_Generic()), "Struct literal with non-Generic path - " << t);
+                ASSERT_BUG(sp, ((*t).is_Path() && ((*t).as_Path().path.data.is_Generic())), "Struct literal with non-Generic path - " << t);
                 node.realPath = t->as_Path().path.data.as_Generic().clone();
             } else {
-                ASSERT_BUG(sp, TU_TEST1((*t), Path, .path.data.is_UfcsInherent()), "Enum struct literal with non-UfcsInherent path - " << t);
+                ASSERT_BUG(sp, ((*t).is_Path() && ((*t).as_Path().path.data.is_UfcsInherent())), "Enum struct literal with non-UfcsInherent path - " << t);
                 auto& it = t->as_Path().path.data.as_UfcsInherent().type;
                 auto& name = t->as_Path().path.data.as_UfcsInherent().item;
-                ASSERT_BUG(sp, TU_TEST1((*it), Path, .path.data.is_Generic()), "Struct literal with non-Generic path - " << t);
+                ASSERT_BUG(sp, ((*it).is_Path() && ((*it).as_Path().path.data.is_Generic())), "Struct literal with non-Generic path - " << t);
                 node.realPath = it->as_Path().path.data.as_Generic().clone();
                 node.realPath.path += name;
             }

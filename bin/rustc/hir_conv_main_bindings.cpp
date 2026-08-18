@@ -40,13 +40,19 @@ namespace {
                     throw "";
 
                 case Target::Struct:
-                    TU_IFLET(HIRTypeItem, ti, Struct, e2, return &e2;)
+                    if (ti.is_Struct()) {
+                        auto& e2 = ti.as_Struct();
+                        return &e2;
+                    }
                     else {
                         ERROR(sp, E0000, "Expected a struct at " << path << ", got a " << ti.tagStr());
                     }
                     break;
                 case Target::Enum:
-                    TU_IFLET(HIRTypeItem, ti, Enum, e2, return &e2;)
+                    if (ti.is_Enum()) {
+                        auto& e2 = ti.as_Enum();
+                        return &e2;
+                    }
                     else {
                         ERROR(sp, E0000, "Expected a enum at " << path << ", got a " << ti.tagStr());
                     }
@@ -1639,7 +1645,7 @@ public:
                 if (!implType) {
                     ERROR(sp, E0000, "Use of `Self` pattern outside of an impl block");
                 }
-                if (!TU_TEST1((*implType), Path, .path.data.is_Generic())) {
+                if (!((*implType).is_Path() && ((*implType).as_Path().path.data.is_Generic()))) {
                     ERROR(sp, E0000, "Use of `Self` pattern in non-struct impl block - " << implType);
                 }
                 gpP = &implType->as_Path().path.data.as_Generic();
@@ -1683,7 +1689,7 @@ public:
             if (!implType) {
                 ERROR(sp, E0000, "Use of `Self` pattern outside of an impl block");
             }
-            if (!TU_TEST1((*implType), Path, .path.data.is_Generic())) {
+            if (!((*implType).is_Path() && ((*implType).as_Path().path.data.is_Generic()))) {
                 ERROR(sp, E0000, "Use of `Self` pattern in non-struct impl block - " << implType);
             }
             path = implType->as_Path().path.data.as_Generic().clone();
@@ -2307,7 +2313,7 @@ namespace {
                 } else {
                     return HIRStructMarkings::DstType::Possible;
                 }
-            } else if (ty->is_Slice() || TU_TEST1((*ty), Primitive, == HIRCoreType::Str)) {
+            } else if (ty->is_Slice() || ((*ty).is_Primitive() && ((*ty).as_Primitive() == HIRCoreType::Str))) {
                 return HIRStructMarkings::DstType::Slice;
             } else if (ty->is_TraitObject()) {
                 return HIRStructMarkings::DstType::TraitObject;
@@ -2419,7 +2425,7 @@ namespace {
                             TU_ARMA(Tuple, se) {
                                 for (unsigned int i = 0; i < se.size(); i++) {
                                     // If the data is PhantomData, ignore it.
-                                    if (TU_TEST2((*se[i].ent), Path, .path.data, Generic, .path == langPhantomData_)) {
+                                    if (((*se[i].ent).is_Path() && (*se[i].ent).as_Path().path.data.is_Generic() && (*se[i].ent).as_Path().path.data.as_Generic().path == langPhantomData_)) {
                                         continue;
                                     }
                                     if (monomorphiseTypeNeeded(se[i].ent)) {
@@ -2437,7 +2443,7 @@ namespace {
                             TU_ARMA(Named, se) {
                                 for (unsigned int i = 0; i < se.size(); i++) {
                                     // If the data is PhantomData, ignore it.
-                                    if (TU_TEST2((*se[i].ty), Path, .path.data, Generic, .path == langPhantomData_)) {
+                                    if (((*se[i].ty).is_Path() && (*se[i].ty).as_Path().path.data.is_Generic() && (*se[i].ty).as_Path().path.data.as_Generic().path == langPhantomData_)) {
                                         continue;
                                     }
                                     if (monomorphiseTypeNeeded(se[i].ty)) {
@@ -3294,7 +3300,7 @@ public:
                 }
                 DEBUG("counter = " << stack.size());
                 rewriteTyWith(crate.types, ty, [&](HIRTypeRef& rewritten, HIRTypeData& data) -> bool {
-                    if (TU_TEST1(data, Generic, .isPlaceholder())) {
+                    if ((data.is_Generic() && (data.as_Generic().isPlaceholder()))) {
                         rewritten = crate.types.infer();
                     }
                     return false;

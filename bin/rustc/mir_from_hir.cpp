@@ -8362,7 +8362,10 @@ MIRLValue MirBuilder::newTemporary(const HIRTypeData* ty) {
 }
 
 MIRLValue MirBuilder::lvalueOrTemp(const Span& sp, const HIRTypeData* ty, MIRRValue val) {
-    TU_IFLET(MIRRValue, val, Use, e, return mv$(e);)
+    if (val.is_Use()) {
+        auto& e = val.as_Use();
+        return mv$(e);
+    }
     else {
         auto temp = newTemporary(ty);
         pushStmtAssign(sp, temp.clone(), mv$(val));
@@ -8382,7 +8385,10 @@ MIRRValue MirBuilder::getResult(const Span& sp) {
 
 MIRLValue MirBuilder::getResultUnwrapLvalue(const Span& sp) {
     auto rv = getResult(sp);
-    TU_IFLET(MIRRValue, rv, Use, e, return mv$(e);)
+    if (rv.is_Use()) {
+        auto& e = rv.as_Use();
+        return mv$(e);
+    }
     else {
         BUG(sp, "LValue expected, got RValue");
     }
@@ -8393,7 +8399,10 @@ MIRLValue MirBuilder::getResultInLvalue(const Span& sp, const HIRTypeData* ty, b
         return newTemporary(ty);
     }
     auto rv = getResult(sp);
-    TU_IFLET(MIRRValue, rv, Use, e, return mv$(e);)
+    if (rv.is_Use()) {
+        auto& e = rv.as_Use();
+        return mv$(e);
+    }
     else {
         auto temp = newTemporary(ty);
         pushStmtAssign(sp, MIRLValue(temp.clone()), mv$(rv));
@@ -8572,7 +8581,10 @@ void MirBuilder::markValueAssigned(const Span& sp, const MIRLValue& dst) {
     VarState* stateP = getValStateMutP(sp, dst, /*expect_valid=*/true);
 
     if (stateP) {
-        TU_IFLET(VarState, (*stateP), Invalid, se, ASSERT_BUG(sp, se != InvalidType::Descoped, "Assining of descoped variable - " << dst);)
+        if ((*stateP).is_Invalid()) {
+            auto& se = (*stateP).as_Invalid();
+            ASSERT_BUG(sp, se != InvalidType::Descoped, "Assining of descoped variable - " << dst);
+        }
         dropValueFromState(sp, *stateP, dst.clone());
         auto newState = VarState::make_Valid({});
         DEBUG("State " << dst << " " << *stateP << " => " << newState);
@@ -8608,11 +8620,8 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
             DEBUG(val << " defined in or above target (scope " << scope << ")");
         }
 
-        TU_IFLET(
-            ScopeType,
-            scopeDef.data,
-            Owning,
-            e,
+        if (scopeDef.data.is_Owning()) {
+            auto& e = scopeDef.data.as_Owning();
             if (e.isTemporary == isTemp) {
                 auto tmpIt = ::std::find(e.slots.begin(), e.slots.end(), idx);
                 if (tmpIt != e.slots.end()) {
@@ -8628,7 +8637,7 @@ void MirBuilder::raiseTemporaries(const Span& sp, const MIRLValue& val, const Sc
             } else {
                 // TODO: Should this care about variables?
             }
-        )
+        }
         else {
             // TODO: Does this need to handle this value being set in the
             // split scopes?
@@ -9125,7 +9134,10 @@ void MirBuilder::terminateScopeEarly(const Span& sp, const ScopeHandle& scope, b
             // Emit drops for dropped values within this scope
             dropScopeValues(scopeDef);
             // Inform the scope that it's been early-exited
-            TU_IFLET(ScopeType, scopeDef.data, Split, e, e.arms.back().hasEarlyTerminated = true;)
+            if (scopeDef.data.is_Split()) {
+                auto& e = scopeDef.data.as_Split();
+                e.arms.back().hasEarlyTerminated = true;
+            }
         }
     }
 

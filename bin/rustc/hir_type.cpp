@@ -1149,7 +1149,7 @@ HIRTypeRef HIRTypeInterner::asyncBlock(HIRExprNodeAsyncBlock* node) {
 }
 
 const HIRSimplePath* HIRTypeData::getSortPath() const {
-    if (TU_TEST1(*this, Path, .path.data.is_Generic())) {
+    if (((*this).is_Path() && ((*this).as_Path().path.data.is_Generic()))) {
         return &as_Path().path.data.as_Generic().path;
     }
     if (is_TraitObject()) {

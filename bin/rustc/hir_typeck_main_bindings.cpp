@@ -241,12 +241,15 @@ namespace {
     private:
         bool locateTraitItemInBounds(const Span& sp, HIRVisitor::PathContext pc, const HIRTypeData* tr, const HIRGenericParams& params, HIRPath::Data& pd) {
             for (const auto& b : params.bounds) {
-                TU_IFLET(HIRGenericBound, b, TraitBound, e, DEBUG("- " << e.type << " : " << e.trait.path); if (e.type == tr) {
-                    DEBUG(" - Match");
-                    if (locateInTraitAndSet(sp, pc, e.trait.path, this->crate.getTraitByPath(sp, e.trait.path.path), pd)) {
-                        return true;
+                if (b.is_TraitBound()) {
+                    auto& e = b.as_TraitBound();
+                    DEBUG("- " << e.type << " : " << e.trait.path); if (e.type == tr) {
+                        DEBUG(" - Match");
+                        if (locateInTraitAndSet(sp, pc, e.trait.path, this->crate.getTraitByPath(sp, e.trait.path.path), pd)) {
+                            return true;
+                        }
                     }
-                });
+                }
                 // -
             }
             return false;

@@ -1196,7 +1196,7 @@ namespace {
                 } else if (ty == HIRCoreType::Str) {
                     of << "uint8_t _" << fld << "[0]";
                     hasUnsized = true;
-                } else if (TU_TEST1(*ty, Path, .binding.is_ExternType())) {
+                } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_ExternType()))) {
                     of << "// External";
                     hasUnsized = true;
                 } else {
@@ -1419,7 +1419,7 @@ namespace {
                     }
                     of << ".TAG";
                     assert(&fld == &path.subFields.back());
-                } else if (/*!repr->variants.is_None() ||*/ TU_TEST1(**ty, Path, .binding.is_Enum())) {
+                } else if (/*!repr->variants.is_None() ||*/ ((**ty).is_Path() && ((**ty).as_Path().binding.is_Enum()))) {
                     of << ".DATA.var_" << fld;
                 } else {
                     of << "._" << fld;
@@ -4530,7 +4530,7 @@ namespace {
             for (unsigned int j = 0; j < e.args.size(); j++) {
                 HIRTypeRef tmp;
                 const auto& ty = mirRes->getParamType(tmp, e.args[j]);
-                if (options.disallowEmptyStructs /*&& TU_TEST1(e.args[j], LValue, .is_Field())*/) {
+                if (options.disallowEmptyStructs /*&& (e.args[j].is_LValue() && (e.args[j].as_LValue().is_Field()))*/) {
                     if (this->typeIsBadZst(ty)) {
                         if (!hasZst) {
                             of << "{\n";

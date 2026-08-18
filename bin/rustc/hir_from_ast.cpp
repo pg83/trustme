@@ -4092,7 +4092,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         }
         auto ty = ctx.LowerHIRType(::mkType(*ctx.crate->pool, v.span(), v.path));
         if (v.path.bindings.type.binding.is_EnumVar()) {
-            ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.data.is_Generic()), "Enum variant path not GenericPath: " << ty);
+            ASSERT_BUG(v.span(), ((*ty).is_Path() && ((*ty).as_Path().path.data.is_Generic())), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();
             auto& gp = data.as_Path().path.data.as_Generic();
             auto varName = gp.path.popComponent();
@@ -4115,7 +4115,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         }
         auto ty = ctx.LowerHIRType(::mkType(*ctx.crate->pool, v.span(), v.path));
         if (v.path.bindings.type.binding.is_EnumVar()) {
-            ASSERT_BUG(v.span(), TU_TEST1(*ty, Path, .path.data.is_Generic()), "Enum variant path not GenericPath: " << ty);
+            ASSERT_BUG(v.span(), ((*ty).is_Path() && ((*ty).as_Path().path.data.is_Generic())), "Enum variant path not GenericPath: " << ty);
             auto data = ty->cloneData();
             auto& gp = data.as_Path().path.data.as_Generic();
             auto varName = gp.path.popComponent();

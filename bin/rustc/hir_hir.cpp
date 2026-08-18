@@ -581,7 +581,10 @@ const HIRModule& HIRCrate::getModByPath(const Span& sp, const HIRSimplePath& pat
 
 const HIRTrait& HIRCrate::getTraitByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getTypeitemByPath(sp, path);
-    TU_IFLET(HIRTypeItem, ti, Trait, e, return e;)
+    if (ti.is_Trait()) {
+        auto& e = ti.as_Trait();
+        return e;
+    }
     else {
         BUG(sp, "Trait path " << path << " didn't point to a trait (" << ti.tagStr() << ")");
     }
@@ -622,7 +625,10 @@ const HIRTrait& HIRCrate::getTraitByPath(const Span& sp, const HIRSimplePath& pa
 
 const HIRStruct& HIRCrate::getStructByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getTypeitemByPath(sp, path);
-    TU_IFLET(HIRTypeItem, ti, Struct, e, return e;)
+    if (ti.is_Struct()) {
+        auto& e = ti.as_Struct();
+        return e;
+    }
     else {
         BUG(sp, "Struct path " << path << " didn't point to a struct (" << ti.tagStr() << ")");
     }
@@ -630,7 +636,10 @@ const HIRStruct& HIRCrate::getStructByPath(const Span& sp, const HIRSimplePath& 
 
 const HIRUnion& HIRCrate::getUnionByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getTypeitemByPath(sp, path);
-    TU_IFLET(HIRTypeItem, ti, Union, e, return e;)
+    if (ti.is_Union()) {
+        auto& e = ti.as_Union();
+        return e;
+    }
     else {
         BUG(sp, "Path " << path << " didn't point to a union (" << ti.tagStr() << ")");
     }
@@ -638,7 +647,10 @@ const HIRUnion& HIRCrate::getUnionByPath(const Span& sp, const HIRSimplePath& pa
 
 const HIREnum& HIRCrate::getEnumByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName, bool ignoreLastNode) const {
     const auto& ti = this->getTypeitemByPath(sp, path, ignoreCrateName, ignoreLastNode);
-    TU_IFLET(HIRTypeItem, ti, Enum, e, return e;)
+    if (ti.is_Enum()) {
+        auto& e = ti.as_Enum();
+        return e;
+    }
     else {
         BUG(sp, "Enum path " << path << " didn't point to an enum (" << ti.tagStr() << ")");
     }
@@ -677,7 +689,10 @@ const HIRValueItem& HIRCrate::getValitemByPath(const Span& sp, const HIRSimplePa
 
 const HIRFunction& HIRCrate::getFunctionByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getValitemByPath(sp, path);
-    TU_IFLET(HIRValueItem, ti, Function, e, return e;)
+    if (ti.is_Function()) {
+        auto& e = ti.as_Function();
+        return e;
+    }
     else {
         BUG(sp, "Function path " << path << " didn't point to an function (" << ti.tagStr() << ")");
     }
@@ -1443,7 +1458,7 @@ bool HIRTraitImpl::overlapsWith(const HIRCrate& crate, const HIRTraitImpl& other
                             DEBUG("No matching bound for " << ty << " : " << trait << " in source bounds - " << gSrc.params.fmtBounds());
                             return false;
                         }
-                    } else if (TU_TEST1((*ty), Path, .binding.is_Opaque())) {
+                    } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_Opaque()))) {
                         TODO(sp, "Check bound " << ty << " : " << trait << " in source bounds or trait bounds");
                     } else {
                         // Search the crate for an impl
@@ -2237,7 +2252,10 @@ HIRCrate::HIRCrate(stl::ObjPool* pool, HIRTypeInterner& types)
 
 const HIRConstant& HIRCrate::getConstantByPath(const Span& sp, const HIRSimplePath& path) const {
     const auto& ti = this->getValitemByPath(sp, path);
-    TU_IFLET(HIRValueItem, ti, Constant, e, return e;)
+    if (ti.is_Constant()) {
+        auto& e = ti.as_Constant();
+        return e;
+    }
     else {
         BUG(sp, "`const` path " << path << " didn't point to an enum");
     }

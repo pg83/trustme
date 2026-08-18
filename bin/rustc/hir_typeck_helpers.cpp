@@ -1469,7 +1469,7 @@ TU_ARMA(Alias, ee) {
                 }
             }
 
-            if (trait == langClone() && (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || TU_TEST1(*type, Path, .isClosure()))) {
+            if (trait == langClone() && (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || ((*type).is_Path() && ((*type).as_Path().isClosure())))) {
                 auto cmp = this->typeIsClone(sp, type);
                 if (cmp != HIRCompare::Unequal) {
                     return callback(ImplRef(type, &nullParams, &nullAssoc), cmp);
@@ -1528,7 +1528,7 @@ TU_ARMA(Alias, ee) {
                     hasMetaTy = true;
                 }
                 // Slice and str
-                else if (type->is_Slice() || TU_TEST1(*type, Primitive, == HIRCoreType::Str)) {
+                else if (type->is_Slice() || ((*type).is_Primitive() && ((*type).as_Primitive() == HIRCoreType::Str))) {
                     metaTy = crate.types.primitive(HIRCoreType::Usize);
                     hasMetaTy = true;
                 }
@@ -5796,7 +5796,7 @@ TU_ARMA(Alias, ee) {
 
                 const HIRTraitMarkings* markings = nullptr;
                 if (const auto* e = type->opt_Path()) {
-                    if (TU_TEST1(e->path.data, Generic, .params.types.size() == 0)) {
+                    if ((e->path.data.is_Generic() && (e->path.data.as_Generic().params.types.size() == 0))) {
                         markings = e->binding.getTraitMarkings();
                     }
                 }
@@ -6023,7 +6023,7 @@ TU_ARMA(Alias, ee) {
                         return HIRCompare::Fuzzy;
                     }
                     // Otherwise, it's opaque. Check the bounds on the trait.
-                    if (TU_TEST1(*pe.type, Generic, .binding >> 8 == 2)) {
+                    if (((*pe.type).is_Generic() && ((*pe.type).as_Generic().binding >> 8 == 2))) {
                         DEBUG("- UfcsKnown of placeholder, returning Fuzzy");
                         return HIRCompare::Fuzzy;
                     }
@@ -6398,12 +6398,12 @@ TU_ARMA(Alias, ee) {
                     DEBUG("- bound mono " << realType << " : " << realTrait);
                     bool foundFuzzyMatch = false;
                     // If the type is an unbound UFCS path, assume fuzzy
-                    if (TU_TEST1(*realType, Path, .binding.is_Unbound())) {
+                    if (((*realType).is_Path() && ((*realType).as_Path().binding.is_Unbound()))) {
                         DEBUG("- Bounded type is unbound UFCS, assuming fuzzy match");
                         foundFuzzyMatch = true;
                     }
                     // If the type is an ivar, but not a literal, assume fuzzy
-                    if (TU_TEST1(*realType, Infer, .isLit() == false)) {
+                    if (((*realType).is_Infer() && ((*realType).as_Infer().isLit() == false))) {
                         DEBUG("- Bounded type is an ivar, assuming fuzzy match");
                         foundFuzzyMatch = true;
                     }
@@ -6509,10 +6509,10 @@ TU_ARMA(Alias, ee) {
                             DEBUG("TODO: Multiple fuzzy matches (" << numFuzzy << "), which placeholder set to use?");
                         }
                         match = HIRCompare::Fuzzy;
-                    } else if (TU_TEST1(*realType, Infer, .tyClass == HIRInferClass::None)) {
+                    } else if (((*realType).is_Infer() && ((*realType).as_Infer().tyClass == HIRInferClass::None))) {
                         DEBUG("- Bound " << realType << " : " << realTraitPath << " full infer type - make result fuzzy");
                         match = HIRCompare::Fuzzy;
-                    } else if (TU_TEST1(*realType, Generic, .isPlaceholder())) {
+                    } else if (((*realType).is_Generic() && ((*realType).as_Generic().isPlaceholder()))) {
                         DEBUG("- Bound " << realType << " : " << realTraitPath << " placeholder - make result fuzzy");
                         match = HIRCompare::Fuzzy;
                     } else {
@@ -7713,7 +7713,7 @@ TU_ARMA(Alias, ee) {
                     finalTraitPath = MonomorphEraseHrls(crate.types).monomorphGenericpath(sp, finalTraitPath, true);
 
                     // If the type is an unbounded ivar, don't check.
-                    if (TU_TEST1(**selfTy, Infer, .isLit() == false)) {
+                    if (((**selfTy).is_Infer() && ((**selfTy).as_Infer().isLit() == false))) {
                         return false;
                     }
                     // TODO: Do a fuzzy match here?
@@ -7754,7 +7754,7 @@ TU_ARMA(Alias, ee) {
                     DEBUG("- Found trait " << finalTraitPath << " (current)");
                     if (auto selfTy = checkMethodReceiver(sp, *fcnPtr, ty, access)) {
                         // If the type is an unbounded ivar, don't check.
-                        if (TU_TEST1(**selfTy, Infer, .isLit() == false)) {
+                        if (((**selfTy).is_Infer() && ((**selfTy).as_Infer().isLit() == false))) {
                             return false;
                         }
 

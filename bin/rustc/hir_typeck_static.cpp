@@ -95,7 +95,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
             }
         } else if (traitPath == langClone()) {
             // NOTE: Duplicated check for enumerate
-            if (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || TU_TEST1(*type, Path, .isClosure())) {
+            if (type->is_Tuple() || type->is_Array() || type->is_Function() || type->is_NodeType() || type->is_NamedFunction() || ((*type).is_Path() && ((*type).as_Path().isClosure()))) {
                 if (this->typeIsClone(sp, type)) {
                     return foundCb(ImplRef(type, &nullParams, &nullAssoc), false);
                 }
@@ -160,7 +160,7 @@ bool StaticTraitResolve::findImpl(const Span& sp, const HIRSimplePath& traitPath
                 return foundCb(ImplRef(type, {}, std::move(assocList)), false);
             }
             // Slice and str
-            else if (type->is_Slice() || TU_TEST1(*type, Primitive, == HIRCoreType::Str)) {
+            else if (type->is_Slice() || ((*type).is_Primitive() && ((*type).as_Primitive() == HIRCoreType::Str))) {
                 return foundCb(ImplRef(type, traitParams, &assocSlice), false);
             }
             // Structs: Can delegate their metadata
@@ -2475,7 +2475,7 @@ bool StaticTraitResolve::typeIsCopy(const Span& sp, const HIRTypeData* ty) const
         }
         TU_ARMA(Array, e) {
             // TODO: Why is `[T; 0]` treated as `Copy`?
-            if (TU_TEST1(e.size, Known, == 0)) {
+            if ((e.size.is_Known() && (e.size.as_Known() == 0))) {
                 return true;
             }
             return typeIsCopy(sp, e.inner);

@@ -3153,7 +3153,7 @@ void TransEnumerateFillFromPathMono(EnumState& state, HIRPath pathMono) {
                         }
                     } else if (const auto* te = innerTy->opt_Array()) {
                         enumImpl(te->inner);
-                    } else if (TU_TEST1(*innerTy, Path, .isClosure())) {
+                    } else if (((*innerTy).is_Path() && ((*innerTy).as_Path().isClosure()))) {
                         const auto& gp = innerTy->as_Path().path.data.as_Generic();
                         const auto& str = state.crate.getStructByPath(sp, gp.path);
                         auto p = TransParams::newImpl(state.crate.types, sp, {}, gp.params.clone());

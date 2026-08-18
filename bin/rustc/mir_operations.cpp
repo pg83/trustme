@@ -1120,7 +1120,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
 
             // >> Detect use of `!` as a value
             HIRTypeRef tmp;
-            if (TU_TEST1(stmt, Assign, .src.is_Borrow()) && state.getLvalueType(tmp, stmt.as_Assign().src.as_Borrow().val)->is_Diverge()) {
+            if ((stmt.is_Assign() && (stmt.as_Assign().src.is_Borrow())) && state.getLvalueType(tmp, stmt.as_Assign().src.as_Borrow().val)->is_Diverge()) {
                 DEBUG(state << "Not killing block due to use of `!`, it's being borrowed");
             } else {
                 if (visitMirLvalues(stmt, [&](const auto& lv, auto /*vu*/) {
@@ -1340,7 +1340,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
 
                 // Fix up coercions
                 if (auto* e = se.src.opt_MakeDst()) {
-                    if (TU_TEST2(e->metaVal, Constant, , ItemAddr, .get() == nullptr)) {
+                    if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                         HIRTypeRef tmp, tmp2;
                         const auto& srcTy = state.getParamType(tmp, e->ptrVal);
                         const auto& dstTy = state.getLvalueType(tmp2, se.dst);
@@ -1350,7 +1350,7 @@ void MIRCleanup(const StaticTraitResolve& resolve, const HIRItemPath& path, MIRF
                 }
 
                 if (auto* e = se.src.opt_MakeDst()) {
-                    if (TU_TEST2(e->metaVal, Constant, , ItemAddr, .get() == nullptr)) {
+                    if ((e->metaVal.is_Constant() && e->metaVal.as_Constant().is_ItemAddr() && e->metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                         // TODO: Check the validity?
                         // - Ensure that something is generic in either the destination or source
                         HIRTypeRef tmp;
@@ -3186,7 +3186,7 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
 
             // If usage is direct assignment of the original value.
             // - In this case, we can move the usage upwards
-            if (slot.useLoc.stmtIdx < useBb.statements.size() && TU_TEST2(useBb.statements[slot.useLoc.stmtIdx], Assign, .src, Use, == thisVar)) {
+            if (slot.useLoc.stmtIdx < useBb.statements.size() && (useBb.statements[slot.useLoc.stmtIdx].is_Assign() && useBb.statements[slot.useLoc.stmtIdx].as_Assign().src.is_Use() && useBb.statements[slot.useLoc.stmtIdx].as_Assign().src.as_Use() == thisVar)) {
                 // Move the usage up to original assignment (if destination isn't invalidated)
                 const auto& dst = useBb.statements[slot.useLoc.stmtIdx].as_Assign().dst;
 
@@ -3264,7 +3264,7 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
 
             // Can't move up, can we move down?
             // - If the source is an Assign(Use) then we can move down
-            if (slot.setLoc.stmtIdx < setBb.statements.size() && TU_TEST1(setBb.statements[slot.setLoc.stmtIdx], Assign, .src.is_Use())) {
+            if (slot.setLoc.stmtIdx < setBb.statements.size() && (setBb.statements[slot.setLoc.stmtIdx].is_Assign() && (setBb.statements[slot.setLoc.stmtIdx].as_Assign().src.is_Use()))) {
                 auto& setStmt = setBb.statements[slot.setLoc.stmtIdx];
                 const auto& src = setStmt.as_Assign().src.as_Use();
                 bool srcCopy = src.wrappers.empty() && state.lvalueIsCopy(src);
@@ -3278,7 +3278,7 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
                                                                 useLocInc,
                                                                 // NOTE: If a mutable borrow happens, assume it invalidates the source
                                                                 [&](auto loc, const auto& stmt) -> bool {
-                    return checkInvalidatesLvalue(stmt, src, srcCopy) || TU_TEST2(stmt, Assign, .src, Borrow, .type != HIRBorrowType::Shared);
+                    return checkInvalidatesLvalue(stmt, src, srcCopy) || (stmt.is_Assign() && stmt.as_Assign().src.is_Borrow() && stmt.as_Assign().src.as_Borrow().type != HIRBorrowType::Shared);
                 },
                                                                 [&](auto loc, const auto& term) -> bool {
                     return checkInvalidatesLvalue(term, src, srcCopy);
@@ -3456,7 +3456,7 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
 
         // Check that the source was a borrow statement
         auto& srcBb = fcn.blocks[slot.setLoc.bbIdx];
-        if (!(slot.setLoc.stmtIdx < srcBb.statements.size() && TU_TEST1(srcBb.statements[slot.setLoc.stmtIdx], Assign, .src.is_Borrow()))) {
+        if (!(slot.setLoc.stmtIdx < srcBb.statements.size() && (srcBb.statements[slot.setLoc.stmtIdx].is_Assign() && (srcBb.statements[slot.setLoc.stmtIdx].as_Assign().src.is_Borrow())))) {
             DEBUG(thisVar << " - Source is not a borrow op");
             continue;
         }
@@ -4622,7 +4622,7 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
             const auto& ty = tef.params.types.at(0);
             // - Only expand at this stage if there's no generics, and no unbound paths
             if (!visitTyWith(ty, [](const HIRTypeData* ty) -> bool {
-                return ty->is_Generic() || TU_TEST1(*ty, Path, .binding.is_Unbound());
+                return ty->is_Generic() || ((*ty).is_Path() && ((*ty).as_Path().binding.is_Unbound()));
             })) {
                 bool needsDrop = state.resolve.typeNeedsDropGlue(state.sp, ty);
                 bb.statements.push_back(MIRStatement::make_Assign({mv$(te.retVal), MIRRValue::make_Constant(MIRConstant::make_Bool({needsDrop}))}));
@@ -5476,7 +5476,7 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                     TU_ARMA(MakeDst, se) {
                         // NOTE: This disables any checks if the metadata isn't populated.
                         // This avoids issues with cleanup when optimise is run first
-                        if (TU_TEST2(se.metaVal, Constant, , ItemAddr, .get() == nullptr)) {
+                        if ((se.metaVal.is_Constant() && se.metaVal.as_Constant().is_ItemAddr() && se.metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                         } else {
                             checkParam(se.ptrVal);
                             checkParam(se.metaVal);
@@ -6786,7 +6786,7 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
                 TU_ARMA(Goto, e) {
                         if (srcBb.statements.empty()) {
                             DEBUG(state << "BB" << bbIdx << " empty");
-                        } else if (TU_TEST1(srcBb.statements.back(), Assign, .dst == src)) {
+                        } else if ((srcBb.statements.back().is_Assign() && (srcBb.statements.back().as_Assign().dst == src))) {
                             DEBUG("BB" << bbIdx << "/" << srcBb.statements.size() << " " << srcBb.statements.back());
                             numUsed += 1;
                         } else {
@@ -6824,10 +6824,10 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
         for (auto bbIdx : sources) {
             auto& srcBb = fcn.blocks[bbIdx];
 
-            if (TU_TEST1(srcBb.terminator, Call, .retVal == src)) {
+            if ((srcBb.terminator.is_Call() && (srcBb.terminator.as_Call().retVal == src))) {
                 DEBUG("- Source block: BB" << bbIdx << " - term " << srcBb.terminator);
                 srcBb.terminator.as_Call().retVal = dst.clone();
-            } else if (!srcBb.statements.empty() && TU_TEST1(srcBb.statements.back(), Assign, .dst == src)) {
+            } else if (!srcBb.statements.empty() && (srcBb.statements.back().is_Assign() && (srcBb.statements.back().as_Assign().dst == src))) {
                 DEBUG("- Source block: BB" << bbIdx << " - tail " << srcBb.statements.back());
                 srcBb.statements.back().as_Assign().dst = dst.clone();
             } else {
@@ -6921,7 +6921,10 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
         };
 
         for (const auto& stmt : block.statements) {
-            TU_IFLET(MIRStatement, stmt, Assign, e, assignedLval(e.dst);)
+            if (stmt.is_Assign()) {
+                auto& e = stmt.as_Assign();
+                assignedLval(e.dst);
+            }
             //else if( const auto* e = stmt.opt_Drop() )
             //{
             //    //if( e->flag_idx != ~0u )
@@ -7161,7 +7164,13 @@ void MIRSortBlocks(const StaticTraitResolve& resolve, const HIRItemPath& path, M
         depths[info.bbIdx] = ::std::make_pair(info.branchCount, info.level);
         const auto& bb = fcn.blocks[info.bbIdx];
 
-        TU_MATCHA((bb.terminator), (te), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});), (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});), (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});), (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});), (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (Call, todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); TU_IFLET(MIRUnwindAction, te.unwind, Cleanup, target, todo.push_back(Todo{target, ++branches, info.level + 1});)), (TailCall, ), (Asm2, if (te.retBlock != ~0u) todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); for (const auto& p : te.params) if (const auto* dst = p.opt_Label()) todo.push_back(Todo{*dst, ++branches, info.level + 1});))
+        TU_MATCHA((bb.terminator), (te), (Incomplete, ), (Return, ), (UnwindResume, ), (UnwindTerminate, ), (Unreachable, ), (Goto, todo.push_back(Todo{te, info.branchCount, info.level + 1});), (If, todo.push_back(Todo{te.bbTrue, ++branches, info.level + 1}); todo.push_back(Todo{te.bbFalse, ++branches, info.level + 1});), (Switch, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); if (te.validFlag != ~0u) todo.push_back(Todo{te.invalidTarget, ++branches, info.level + 1});), (SwitchValue, for (auto dst : te.targets) todo.push_back(Todo{dst, ++branches, info.level + 1}); todo.push_back(Todo{te.defTarget, info.branchCount, info.level + 1});), (Drop, todo.push_back(Todo{te.target, info.branchCount, info.level + 1}); if (te.unwind.is_Cleanup()) {
+            auto& target = te.unwind.as_Cleanup();
+            todo.push_back(Todo{target, ++branches, info.level + 1});
+        }), (Call, todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); if (te.unwind.is_Cleanup()) {
+            auto& target = te.unwind.as_Cleanup();
+            todo.push_back(Todo{target, ++branches, info.level + 1});
+        }), (TailCall, ), (Asm2, if (te.retBlock != ~0u) todo.push_back(Todo{te.retBlock, info.branchCount, info.level + 1}); for (const auto& p : te.params) if (const auto* dst = p.opt_Label()) todo.push_back(Todo{*dst, ++branches, info.level + 1});))
     }
 
     // Sort a list of block indexes by `depths`

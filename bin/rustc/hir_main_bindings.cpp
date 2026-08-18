@@ -3407,7 +3407,10 @@ public:
     void serialise(const MIRTerminator& term) {
         auto serialiseUnwind = [this](const MIRUnwindAction& action) {
             out.writeTag(static_cast<int>(action.tag()));
-            TU_IFLET(MIRUnwindAction, action, Cleanup, target, out.writeCount(target);)
+            if (action.is_Cleanup()) {
+                auto& target = action.as_Cleanup();
+                out.writeCount(target);
+            }
         };
         out.writeTag(static_cast<int>(term.tag()));
         TU_MATCHA(
@@ -3479,7 +3482,7 @@ public:
     void serialise(const MIRRValue& val) {
         TRACE_FUNCTION_F("RValue = " << val);
         out.writeTag(val.tag());
-        TU_MATCHA((val), (e), (Use, serialise(e);), (Constant, serialise(e);), (SizedArray, serialise(e.val); serialiseArraysize(e.count);), (Borrow, out.writeTag(static_cast<int>(e.type)); out.writeBool(e.isRaw); serialise(e.val);), (Cast, serialise(e.val); serialise(e.type);), (BinOp, serialise(e.valL); out.writeTag(static_cast<int>(e.op)); serialise(e.valR);), (UniOp, serialise(e.val); out.writeTag(static_cast<int>(e.op));), (DstMeta, serialise(e.val);), (DstPtr, serialise(e.val);), (MakeDst, serialise(e.ptrVal); auto b = !TU_TEST2(e.metaVal, Constant, , ItemAddr, .get() == nullptr); out.writeBool(b); if (b) serialise(e.metaVal);), (Tuple, serialiseVec(e.vals);), (Array, serialiseVec(e.vals);), (UnionVariant, serialiseGenericpath(e.path); out.writeCount(e.index); serialise(e.val);), (EnumVariant, serialiseGenericpath(e.path); out.writeCount(e.index); serialiseVec(e.vals);), (Struct, serialiseGenericpath(e.path); serialiseVec(e.vals);))
+        TU_MATCHA((val), (e), (Use, serialise(e);), (Constant, serialise(e);), (SizedArray, serialise(e.val); serialiseArraysize(e.count);), (Borrow, out.writeTag(static_cast<int>(e.type)); out.writeBool(e.isRaw); serialise(e.val);), (Cast, serialise(e.val); serialise(e.type);), (BinOp, serialise(e.valL); out.writeTag(static_cast<int>(e.op)); serialise(e.valR);), (UniOp, serialise(e.val); out.writeTag(static_cast<int>(e.op));), (DstMeta, serialise(e.val);), (DstPtr, serialise(e.val);), (MakeDst, serialise(e.ptrVal); auto b = !(e.metaVal.is_Constant() && e.metaVal.as_Constant().is_ItemAddr() && e.metaVal.as_Constant().as_ItemAddr().get() == nullptr); out.writeBool(b); if (b) serialise(e.metaVal);), (Tuple, serialiseVec(e.vals);), (Array, serialiseVec(e.vals);), (UnionVariant, serialiseGenericpath(e.path); out.writeCount(e.index); serialise(e.val);), (EnumVariant, serialiseGenericpath(e.path); out.writeCount(e.index); serialiseVec(e.vals);), (Struct, serialiseGenericpath(e.path); serialiseVec(e.vals);))
     }
 
     void serialise(const MIRConstant& v) {

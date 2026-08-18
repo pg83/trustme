@@ -579,7 +579,7 @@ namespace {
             // TODO: Different usage based on trait.
             HIRValueUsage vu = HIRValueUsage::Borrow;
 
-            if (const auto* nodePp = TU_OPT1(*node.value->resType, NodeType, .opt_Closure())) {
+            if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
                 assert(*nodePp);
                 if ((*nodePp)->cls == HIRExprNodeClosure::Class::Unknown) {
                     auto _ = pushUsage(HIRValueUsage::Move);
@@ -1864,7 +1864,7 @@ namespace {
         void visit(HIRExprNodeCast& node) override {
             const Span& sp = node.span();
             // Handle casts from closures to function pointers
-            if (TU_TEST1((*node.value->resType), NodeType, .is_Closure())) {
+            if (((*node.value->resType).is_NodeType() && ((*node.value->resType).as_NodeType().is_Closure()))) {
                 TRACE_FUNCTION_FR("_Cast: " << &node << " " << node.value->resType, node.value->resType);
 
                 const auto* srcNodep = node.value->resType->as_NodeType().as_Closure();
@@ -1908,7 +1908,7 @@ namespace {
         }
 
         void visit(HIRExprNodeCallValue& node) override {
-            if (const auto* nodePp = TU_OPT1((*node.value->resType), NodeType, .opt_Closure())) {
+            if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
                 switch ((*nodePp)->cls) {
                     case HIRExprNodeClosure::Class::Unknown:
                         BUG(node.span(), "References an ::Unknown closure");
@@ -5276,7 +5276,7 @@ namespace {
 
             // - If the called value is a local closure, figure out how it's being used.
             // TODO: You can call via &-ptrs, but that currently isn't handled in typeck
-            if (const auto* nodePp = TU_OPT1((*node.value->resType), NodeType, .opt_Closure())) {
+            if (const auto* nodePp = ((*node.value->resType).is_NodeType() ? ((*node.value->resType).as_NodeType().opt_Closure()) : nullptr)) {
                 if (node.traitUsed == HIRExprNodeCallValue::TraitUsed::Unknown) {
                     // NOTE: Closure node still exists, and will do until MIR construction deletes the HIR
                     switch ((*nodePp)->cls) {

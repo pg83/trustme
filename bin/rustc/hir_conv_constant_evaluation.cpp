@@ -2954,7 +2954,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
                                     }
                                 } break;
                                 case TypeInfo::Other: {
-                                    MIR_ASSERT(state, TU_TEST1(*srcTy, Path, .binding.is_Enum()), "Constant cast Variant to integer with invalid type - " << srcTy);
+                                    MIR_ASSERT(state, ((*srcTy).is_Path() && ((*srcTy).as_Path().binding.is_Enum())), "Constant cast Variant to integer with invalid type - " << srcTy);
                                     MIR_ASSERT(state, srcTy->as_Path().binding.as_Enum(), "Enum binding pointer not set! - " << srcTy);
                                     const HIREnum& enm = *srcTy->as_Path().binding.as_Enum();
                                     MIR_ASSERT(state, enm.isValue(), "Constant cast Variant to integer with non-value enum - " << srcTy);
@@ -3101,7 +3101,7 @@ void HIREvaluator::runStatement(MIREvalCallStackEntry& localState, const MIRStat
             dst.copyFrom(state, v.slice(0, ptrSize));
         }
         TU_ARMA(MakeDst, e) {
-            if (TU_TEST2(e.metaVal, Constant, , ItemAddr, .get() == nullptr)) {
+            if ((e.metaVal.is_Constant() && e.metaVal.as_Constant().is_ItemAddr() && e.metaVal.as_Constant().as_ItemAddr().get() == nullptr)) {
                 HIRTypeRef tmp;
                 const auto& srcTy = state.getParamType(tmp, e.ptrVal);
                 HIRTypeRef tmp2;
