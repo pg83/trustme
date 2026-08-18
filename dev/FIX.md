@@ -4,7 +4,7 @@ This file contains unfinished work only. Priorities are ordered by the number
 of independently reproduced failures that a shared fix can plausibly remove.
 Source locations are routing signatures, not proof of a shared root cause.
 
-Snapshot: 2026-08-18, commit `6d9c1d640`. The numbers below come from rerunning
+Snapshot: 2026-08-18, commit `1b17e3320`. The numbers below come from rerunning
 the nodes that failed the last full gate, not from a fresh gate. The gate
 itself ran at commit `79582dd3f` in the clang Nix environment on all 78
 available cores:
@@ -27,8 +27,8 @@ nix --extra-experimental-features 'nix-command flakes' develop .#clang -c \
 
 All 631 failed nodes were rerun independently inside the same clang Nix
 environment, most recently at the commit above. The authoritative rerun data is
-in `/tmp/trustme-reclass-20260818a`; classified records are in
-`/tmp/trustme-classification-20260818a`. Every count below is measured from
+in `/tmp/trustme-reclass-20260818b`; classified records are in
+`/tmp/trustme-classification-20260818b`. Every count below is measured from
 that rerun, not decremented by hand.
 
 Reruns and the two whole-group sweeps (`rust_ui_compile`, `rust_1_90`) are the
@@ -40,13 +40,13 @@ sweeps found two regressions from this session's own work (a rejected
 |---|---:|
 | total active fast-gate nodes | 14,113 |
 | failed in the full gate | 631 |
-| still failing on the current tree | 298 |
-| fixed, or no longer reproducing, since the gate | 333 |
+| still failing on the current tree | 277 |
+| fixed, or no longer reproducing, since the gate | 354 |
 
 | priority class | tests |
 |---|---:|
-| accepted Rust rejected by the compiler or driver | 106 |
-| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 78 |
+| accepted Rust rejected by the compiler or driver | 97 |
+| compiler BUG, MIR TODO/ERROR, assertion, exception, or signal | 66 |
 | wrong runtime behaviour, panic, abort, or output | 38 |
 | missing rejection or diagnostic | 53 |
 | generated C++ or link failure | 15 |
@@ -54,18 +54,18 @@ sweeps found two regressions from this session's own work (a rejected
 
 ## P0: accepted Rust rejected by the front end
 
-All 106 tests are positive programs accepted by Rust 1.90. A normal trustme
+All 97 tests are positive programs accepted by Rust 1.90. A normal trustme
 error is a compiler deficiency, not an expected corpus result.
 
 | shared area | tests | largest routes |
 |---|---:|---|
-| type checking, HIR lowering, and resolution | 78 | trait/impl selection 30 (`hir_typeck_expr_cs.cpp:6822`, `:6824`); type mismatch 16 (`hir_typeck_expr_cs.cpp:2547`, `:2558`, `:2563`); unresolved type/value names 6 (`resolve_main_bindings.cpp:395`, `:403`) |
-| parser | 22 | 21 unexpected-token failures through the three `parse_parseerror.cpp` routes; 1 `parse_common.cpp` failure |
-| macro and attribute expansion | 2 | |
+| type checking, HIR lowering, and resolution | 74 | trait/impl selection 30; type mismatch 16; unresolved type/value names 5 |
+| parser | 19 | unexpected-token failures through the three `parse_parseerror.cpp` routes |
+| macro and attribute expansion | 1 | |
 | CTFE and MIR lowering | 2 | |
-| crate/driver handling | 2 | missing external crate path 1; enum repr 1 |
+| crate/driver handling | 1 | |
 
-The 21 parser failures must be regrouped by syntax family before changing the
+The 19 parser failures must be regrouped by syntax family before changing the
 parser; the common `parse_parseerror.cpp` line is only the reporting site. By
 unexpected token the largest families are never patterns (3) and a long tail of
 one- and two-test spellings. Grouping by test directory finds them faster than
@@ -115,7 +115,10 @@ candidate is accepted before changing the gate again.
 A `for<T>` binder is only dropped where it quantifies a where predicate. In a
 supertrait list (`trait Foo: for<T> Bar<T>`) or a return type
 (`impl for<T> Trait<T>`) the bound is the item's whole meaning, so
-`non_lifetime_binders/method-probe.rs` and `on-rpit.rs` still fail.
+`non_lifetime_binders/method-probe.rs` and `on-rpit.rs` still fail. Replacing
+the binder's argument with a wildcard was tried and reverted: it makes both
+tests reach typeck and then abort on an inference variable that a bound may
+not hold (`hir_typeck_common.cpp`, `allowInfer`).
 
 `trait S = ?Sized;` is supported: the relaxed bound adds nothing to the alias,
 so expanding the alias shortens the list it was in, and a trait object whose
@@ -125,9 +128,10 @@ relax"), so the reference compiler cannot confirm the 1.90 behaviour these tests
 want -- the unit test covers the expansion with a lifetime-only alias instead.
 
 What is left of the unresolved-name group splits by rule: two
-`non_lifetime_binders` (the `for<T>` trap above) and four one-offs
-(`UnitLike` in an enum body, `T` in a const trait bound, `Self` as a
-constructor, a type alias used as a value).
+`non_lifetime_binders` (the `for<T>` trap above), `T` in a const trait bound
+under `-Zunpretty=hir` (which runs the passes that build the HIR, so it cannot
+stop before resolution), `Self` as a constructor from an item nested inside the
+impl, and a `use` of an item declared in the same block.
 
 The two `issue-65041-empty-vis-matcher` tests are a trap: accepting a
 visibility on an *enum variant* lets them parse further and then crash inside
@@ -137,26 +141,25 @@ item is not affected -- it takes a `$vis` fragment now.
 
 ## P1: internal compiler failures
 
-There are 78 compiler-internal failures in 65 stable signatures.
+There are 66 compiler-internal failures in 54 stable signatures.
 
 | compiler area | tests |
 |---|---:|
-| type checker | 16 |
-| MIR lowering, CTFE MIR, and optimisation | 15 |
-| HIR lowering and conversion | 14 |
-| parser and macro expansion | 12 |
+| type checking, HIR lowering, and name resolution | 30 |
+| MIR lowering, CTFE MIR, and optimisation | 16 |
 | translation and code generation | 10 |
-| name resolution | 4 |
-| routed by a bare `ASSERT`/signal line with no file attribution | 7 |
+| macro expansion | 5 |
+| routed by a bare `ASSERT`/signal line with no file attribution | 4 |
+| parser | 1 |
 
 The multi-test signatures are:
 
 | signature | tests |
 |---|---:|
-| `ASSERT` with no backtrace | 5 |
+| `ASSERT` with no backtrace | 2 |
 | `SIGSEGV` with no backtrace | 2 |
-| eight other two-test signatures | 16 |
-| fifty-five one-test signatures | 55 |
+| eight two-test signatures | 16 |
+| forty-six one-test signatures | 46 |
 
 The line numbers in a signature move with every commit that touches the file:
 the ones here are read from the classification named above, and are worth
