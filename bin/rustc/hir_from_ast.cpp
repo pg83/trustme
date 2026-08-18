@@ -3776,14 +3776,23 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         return rv;
     }
 
+    /// A node built by a desugaring rather than lowered from one in the source
+    /// still needs a result type for type checking to fill in.
+    template <typename T, typename... Args>
+    HIRExprNodeP mkNode(Args&&... args) {
+        auto* node = ctx.crate->pool->make<T>(::std::forward<Args>(args)...);
+        node->resType = ctx.crate->types.infer();
+        return HIRExprNodeP(node);
+    }
+
     virtual void visit(ASTExprNodeWhile& v) override {
         // Desugar to `loop { match () { _ if ... => { body }, _ => break, } }`
         auto label = enterLoopLabel(v.label);
         ::std::vector<HIRExprNodeMatch::Arm> arms;
         arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), ifletToGuards(v.conditions), lower(v.code)});
-        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), {}, HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeLoopControl>(v.span(), "", false, nullptr))});
+        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), {}, mkNode<HIRExprNodeLoopControl>(v.span(), "", false, nullptr)});
         leaveLoopLabel(label);
-        rv.reset(ctx.crate->pool->make<HIRExprNodeLoop>(v.span(), mv$(label), HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeMatch>(v.span(), HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>())), std::move(arms)))));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeLoop>(v.span(), mv$(label), mkNode<HIRExprNodeMatch>(v.span(), mkNode<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>()), std::move(arms))));
     }
 
     virtual void visit(ASTExprNodeMatch& v) override {
@@ -3808,9 +3817,9 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         for (auto& arm : v.arms) {
             arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), ifletToGuards(arm.conditions), lower(arm.body)});
         }
-        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), {}, v.elseNode ? lower(v.elseNode) : HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>()))});
+        arms.push_back(HIRExprNodeMatch::Arm{makeVec1(HIRPattern()), {}, v.elseNode ? lower(v.elseNode) : mkNode<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>())});
 
-        rv.reset(ctx.crate->pool->make<HIRExprNodeMatch>(v.span(), HIRExprNodeP(ctx.crate->pool->make<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>())), std::move(arms)));
+        rv.reset(ctx.crate->pool->make<HIRExprNodeMatch>(v.span(), mkNode<HIRExprNodeTuple>(v.span(), ::std::vector<HIRExprNodeP>()), std::move(arms)));
     }
 
     virtual void visit(ASTExprNodeWildcardPattern& v) override {

@@ -671,7 +671,11 @@ namespace {
                 }
 
                 void visitNodePtr(HIRExprNodeP& nodePtr) override {
-                    upperVisitor.visitType(nodePtr->resType);
+                    // A node a desugaring built has no result type until type
+                    // checking gives it one.
+                    if (nodePtr->resType != HIRTypeRef()) {
+                        upperVisitor.visitType(nodePtr->resType);
+                    }
                     HIRExprVisitorDef::visitNodePtr(nodePtr);
                 }
 
@@ -1203,7 +1207,11 @@ namespace {
                 }
 
                 void visitNodePtr(HIRExprNodeP& nodePtr) override {
-                    upperVisitor.visitType(nodePtr->resType);
+                    // A node a desugaring built has no result type until type
+                    // checking gives it one.
+                    if (nodePtr->resType != HIRTypeRef()) {
+                        upperVisitor.visitType(nodePtr->resType);
+                    }
                     HIRExprVisitorDef::visitNodePtr(nodePtr);
                 }
 

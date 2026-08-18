@@ -190,7 +190,11 @@ void HIRExprVisitorDef::visitNodePtr(HIRExprNodeP& nodePtr) {
     assert(nodePtr);
     TRACE_FUNCTION_F(&*nodePtr << " " << nodePtr->typeName());
     nodePtr->visit(*this);
-    visitType(nodePtr->resType);
+    // A node a desugaring built has no result type until type checking gives
+    // it one, and a pass that runs before then has nothing to visit.
+    if (nodePtr->resType != HIRTypeRef()) {
+        visitType(nodePtr->resType);
+    }
 }
 
 DEF_VISIT_H(HIRExprNodeBlock, node) {
