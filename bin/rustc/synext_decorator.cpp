@@ -533,7 +533,15 @@ class CHandlerLinkage: public ExpandDecorator {
             linkage = ASTLinkage::ExternWeak;
         } else if (linkageStr == "weak") {
             linkage = ASTLinkage::Weak;
+        } else if (linkageStr == "linkonce" || linkageStr == "linkonce_odr" || linkageStr == "weak_odr") {
+            // One definition is kept and the rest discarded, which is what a
+            // weak definition already does here.
+            linkage = ASTLinkage::Weak;
         } else if (linkageStr == "external") {
+        } else if (linkageStr == "internal" || linkageStr == "private") {
+            // The symbol is local to the object it is emitted in. Nothing here
+            // exports a definition that was not asked for, so an ordinary
+            // definition is what this means.
         } else {
             TODO(sp, "#[linkage=\"" << linkageStr << "\"]");
         }

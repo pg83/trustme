@@ -1494,10 +1494,14 @@ uint32_t Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             if (!ch.isxdigit()) {
                 throw CompileErrorGeneric(*this, FMT("Found invalid character '\\x" << ::std::hex << ch.v << "' in \\u sequence"));
             }
-            while (ch.isxdigit()) {
-                char tmp[2] = {static_cast<char>(ch.v), 0};
-                val *= 16;
-                val += ::std::strtol(tmp, NULL, 16);
+            // `\u{10__FFFF}` -- an underscore may separate the digits, as it
+            // may in any other numeric literal.
+            while (ch.isxdigit() || ch == '_') {
+                if (ch != '_') {
+                    char tmp[2] = {static_cast<char>(ch.v), 0};
+                    val *= 16;
+                    val += ::std::strtol(tmp, NULL, 16);
+                }
                 ch = this->getc();
             }
             if (!reqCloseBrace) {
@@ -1669,6 +1673,7 @@ bool Codepoint::isspace() const {
         case '\r':
         case '\n':
         case ' ':
+        case 0xB: // vertical tab
         case 0xC: // ^L
         case 0x85:
         case 0x200E:
