@@ -321,18 +321,33 @@ public:
     HIRTraitMarkings markings;
 };
 
+struct HIREnumDataVariant {
+    RcString name;
+    bool isStruct; // Indicates that the variant does not show up in the value namespace
+    HIRTypeRef type;
+
+    /// Optional explicit descriminant value, only valid when repr isn't Repr::Auto
+    HIRExprPtr discriminantExpr;
+    // Constant-evaluated descriminant value
+    U128 discriminantValue = U128(0);
+};
+
+struct HIREnumValueVariant {
+    RcString name;
+    HIRExprPtr expr;
+    // TODO: Signed.
+    U128 val = U128(0);
+};
+
+// Definitions generated from hir_hir_enum.tu.
+#include "hir_hir_enum_tu.h"
+
 class HIREnum {
 public:
-    struct DataVariant {
-        RcString name;
-        bool isStruct; // Indicates that the variant does not show up in the value namespace
-        HIRTypeRef type;
+    using DataVariant = HIREnumDataVariant;
+    using ValueVariant = HIREnumValueVariant;
+    using Class = HIREnumClass;
 
-        /// Optional explicit descriminant value, only valid when repr isn't Repr::Auto
-        HIRExprPtr discriminantExpr;
-        // Constant-evaluated descriminant value
-        U128 discriminantValue = U128(0);
-    };
     enum class Repr {
         Auto,
         Usize,
@@ -349,14 +364,7 @@ public:
         I128,
     };
 
-    struct ValueVariant {
-        RcString name;
-        HIRExprPtr expr;
-        // TODO: Signed.
-        U128 val = U128(0);
-    };
 
-    TAGGED_UNION(Class, Data, (Data, ::std::vector<DataVariant>), (Value, struct { ::std::vector<ValueVariant> variants; }));
 
     HIRGenericParams params;
     bool isCRepr;
@@ -398,6 +406,9 @@ public:
     bool mustUse = false;
 };
 
+// Definitions generated from hir_hir_struct.tu.
+#include "hir_hir_struct_tu.h"
+
 class HIRStruct {
 public:
     enum class Repr {
@@ -406,7 +417,7 @@ public:
         Simd,
         Transparent,
     };
-    TAGGED_UNION(Data, Unit, (Unit, struct {}), (Tuple, tTupleFields), (Named, tStructFields));
+    using Data = HIRStructData;
 
     struct FieldDefault {
         size_t index;
@@ -471,7 +482,8 @@ struct HIRAssociatedType {
     HIRAssociatedType(HIRGenericParams generics, bool isSized, ::std::vector<HIRTraitPath> traitBounds, HIRTypeRef defaultType);
 };
 
-TAGGED_UNION(HIRTraitValueItem, Constant, (Constant, HIRConstant), (Static, HIRStatic), (Function, HIRFunction));
+// Definitions generated from hir_hir_trait_value.tu.
+#include "hir_hir_trait_value_tu.h"
 
 class HIRTrait {
 public:
@@ -535,16 +547,8 @@ public:
     ::std::vector<::std::string> attributes;
 };
 
-TAGGED_UNION(
-    HIRGlobalAsmOperand,
-    Const,
-    (Const,
-     struct {
-         HIRConstGeneric value;
-         HIRTypeRef type;
-     }),
-    (Sym, HIRPath)
-);
+// Definitions generated from hir_hir_asm.tu.
+#include "hir_hir_asm_tu.h"
 
 class HIRGlobalAssembly {
 public:
@@ -587,40 +591,8 @@ public:
 
 // --------------------------------------------------------------------
 
-TAGGED_UNION(
-    HIRTypeItem,
-    Import,
-    (Import,
-     struct {
-         HIRSimplePath path;
-         bool isVariant;
-         unsigned int idx;
-     }),
-    (Module, HIRModule),
-    (TypeAlias, HIRTypeAlias), // NOTE: These don't introduce new values
-    (TraitAlias, HIRTraitAlias),
-    (ExternType, HIRExternType),
-    (Enum, HIREnum),
-    (Struct, HIRStruct),
-    (Union, HIRUnion),
-    (Trait, HIRTrait)
-);
-TAGGED_UNION(
-    HIRValueItem,
-    Import,
-    (Import,
-     struct {
-         HIRSimplePath path;
-         bool isVariant;
-         unsigned int idx;
-     }),
-    (Constant, HIRConstant),
-    (Static, HIRStatic),
-    (StructConstant, struct { HIRSimplePath ty; }),
-    (Function, HIRFunction),
-    (StructConstructor, struct { HIRSimplePath ty; })
-);
-TAGGED_UNION(HIRMacroItem, Import, (Import, struct { HIRSimplePath path; }), (MacroRules, MacroRulesPtr), (ProcMacro, HIRProcMacro));
+// Definitions generated from hir_hir_items.tu.
+#include "hir_hir_items_tu.h"
 
 // --------------------------------------------------------------------
 
