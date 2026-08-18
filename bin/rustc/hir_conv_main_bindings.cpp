@@ -3707,11 +3707,12 @@ void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate) {
         pushIndexImpls(crate, *ec.second.data);
     }
 
-    {
-        const auto& langBox = crate.getLangItemPathOpt("owned_box");
-        pushIndexInherentMethods(*wb.inherentMethods, langBox, crate);
-        for (const auto& ec : crate.extCrates) {
-            pushIndexInherentMethods(*wb.inherentMethods, langBox, *ec.second.data);
-        }
+}
+
+void ConvertHIRIndexInherentMethods(const WireBoard& wb, const HIRCrate& crate) {
+    const auto& langBox = crate.getLangItemPathOpt("owned_box");
+    pushIndexInherentMethods(*wb.inherentMethods, langBox, crate);
+    for (const auto& ec : crate.extCrates) {
+        pushIndexInherentMethods(*wb.inherentMethods, langBox, *ec.second.data);
     }
 }

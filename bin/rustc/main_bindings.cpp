@@ -297,6 +297,7 @@ void initDebugList() {
 
          "Resolve Type Aliases",
          "Resolve Bind",
+         "Index Inherent Methods",
          "Resolve UFCS Outer",
          "Resolve UFCS paths",
          "Resolve HIR Self Type",
@@ -705,6 +706,11 @@ static int compile(int argc, char* argv[]) {
             ConvertHIRBind(wb, *hirCrate);
         });
 
+        // A method call resolved in an outer scope still has to find an
+        // inherent method, so the index of them comes first.
+        CompilePhaseV("Index Inherent Methods", [&]() {
+            ConvertHIRIndexInherentMethods(wb, *hirCrate);
+        });
         // Determine what trait to use for <T>::Foo in outer scope
         // - Also inserts defaults in trait impls
         CompilePhaseV("Resolve UFCS Outer", [&]() {

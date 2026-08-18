@@ -30,6 +30,9 @@ extern void ConvertHIRExpandAliasesSelfExpr(const HIRCrate& crate, const HIRType
 extern HIRTypeRef ConvertHIRExpandTypeAlias(const Span& sp, const HIRCrate& crate, const HIRGenericPath& path, bool isExpr);
 extern void ConvertHIRBind(const WireBoard& wb, HIRCrate& crate);
 extern void ConvertHIRResolveUFCSSortImpls(WireBoard& wb, HIRCrate& crate);
+/// Index the inherent methods of every type, so that a method call can find
+/// one before the passes that resolve a UFCS path run.
+extern void ConvertHIRIndexInherentMethods(const WireBoard& wb, const HIRCrate& crate);
 extern void ConvertHIRResolveUFCSOuter(const WireBoard& wb, HIRCrate& crate);
 extern void ConvertHIRResolveUFCS(const WireBoard& wb, HIRCrate& crate);
 extern void ConvertHIRMarkings(HIRCrate& crate);
