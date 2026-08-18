@@ -4739,6 +4739,24 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
     return os;
 }
 
+namespace {
+    // Two rules for the same variant do not have to carry the same number of
+    // sub-rules: a deref pattern matches against a root of its own, so
+    // `Some("42")` (against `Option<String>`) has one sub-rule where `Some(_)`
+    // has one per field of the string. Order on what the two share, then on
+    // how much there is.
+    ::Ordering ordSubRules(const ::std::vector<PatternRule>& a, const ::std::vector<PatternRule>& b) {
+        const size_t n = ::std::min(a.size(), b.size());
+        for (size_t i = 0; i < n; i++) {
+            auto cmp = a[i].ord(b[i]);
+            if (cmp != ::OrdEqual) {
+                return cmp;
+            }
+        }
+        return ::ord(static_cast<unsigned>(a.size()), static_cast<unsigned>(b.size()));
+    }
+}  // namespace
+
 ::Ordering PatternRule::ord(const PatternRule& x) const {
     ORD(static_cast<int>(tag()), static_cast<int>(x.tag()));
     ORD(this->rootIndex, x.rootIndex);
@@ -4752,28 +4770,13 @@ void MIRLowerHIRMatch(MirBuilder& builder, MirConverter& conv, HIRExprNodeMatch&
             if (te.idx != xe.idx) {
                 return ::ord(te.idx, xe.idx);
             }
-            assert(te.subRules.size() == xe.subRules.size());
-            for (unsigned int i = 0; i < te.subRules.size(); i++) {
-                auto cmp = te.subRules[i].ord(xe.subRules[i]);
-                if (cmp != ::OrdEqual) {
-                    return cmp;
-                }
-            }
-            return ::OrdEqual;
+            return ordSubRules(te.subRules, xe.subRules);
         }
         TU_ARMA(Slice, te, xe) {
             if (te.len != xe.len) {
                 return ::ord(te.len, xe.len);
             }
-            // Wait? Why would the rule count be the same?
-            assert(te.subRules.size() == xe.subRules.size());
-            for (unsigned int i = 0; i < te.subRules.size(); i++) {
-                auto cmp = te.subRules[i].ord(xe.subRules[i]);
-                if (cmp != ::OrdEqual) {
-                    return cmp;
-                }
-            }
-            return ::OrdEqual;
+            return ordSubRules(te.subRules, xe.subRules);
         }
         TU_ARMA(SplitSlice, te, xe) {
             ORD(te.leading, xe.leading);

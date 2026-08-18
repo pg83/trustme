@@ -1143,7 +1143,13 @@ struct CExpandExpr: public ASTNodeVisitor {
             auto pathOpsYeet = getPath(coreCrate, "ops", "Yeet");
             auto pathFromResidualFromResidual = getPath(coreCrate, "ops", "FromResidual", "from_residual");
 
-            auto v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathOpsYeet), ::makeVec1(std::move(node.value))));
+            // `do yeet` with no value yeets a unit, the same as `do yeet ()`.
+            auto yeeted = std::move(node.value);
+            if (!yeeted) {
+                yeeted = ASTExprNodeP(new ASTExprNodeTuple(::std::vector<ASTExprNodeP>()));
+                yeeted->setSpan(node.span());
+            }
+            auto v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathOpsYeet), ::makeVec1(std::move(yeeted))));
             v->setSpan(node.span());
             v = ASTExprNodeP(new ASTExprNodeCallPath(ASTPath(pathFromResidualFromResidual), ::makeVec1(std::move(v))));
             v->setSpan(node.span());
