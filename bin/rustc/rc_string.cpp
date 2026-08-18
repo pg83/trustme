@@ -1,35 +1,131 @@
 #include "rc_string.h"
+
 #include <cstring>
 #include <string>
-#include <iostream>
-#include <algorithm> // std::max
+#include <algorithm> // std::min
 
-RcString::RcString(const char* s, size_t len)
-    : ptr(nullptr)
-{
-    if (len > 0) {
-        size_t nwords = (len + 1 + sizeof(unsigned int) - 1) / sizeof(unsigned int);
-        ptr = reinterpret_cast<Inner*>(malloc(sizeof(Inner) + (nwords - 1) * sizeof(unsigned int)));
-        ptr->refcount = 1;
-        ptr->size = static_cast<unsigned>(len);
-        ptr->ordering = 0;
-        char* dataMut = reinterpret_cast<char*>(ptr->data);
-        for (unsigned int j = 0; j < len; j++) {
-            dataMut[j] = s[j];
+#define XXH_INLINE_ALL
+#include <xxhash.h>
+
+#include <std/lib/vector.h>
+#include <std/mem/obj_pool.h>
+
+// The string interner. Every constructed string lives here forever:
+// zero-terminated bytes in the interner's ObjPool, one InternedString
+// entry per unique content, and an open-addressing slot table keyed by
+// the first xxh128 half with the second half as the whole equality check
+// (a full 128-bit collision is the accepted, negligible failure mode).
+namespace {
+    struct InternedString {
+        const char* begin;
+        const char* end;
+        uint64_t hash1;
+        uint64_t hash2;
+    };
+
+    struct StrInterner {
+        stl::ObjPool::Ref poolRef = stl::ObjPool::fromMemory();
+        stl::ObjPool* pool = poolRef.mutPtr();
+        stl::Vector<InternedString> strs;
+        stl::Vector<uint32_t> slots; // values are ids; 0 = empty slot
+        size_t mask;
+        size_t used = 0;
+
+        StrInterner() {
+            auto* empty = static_cast<char*>(pool->allocate(1));
+            empty[0] = '\0';
+            strs.pushBack(InternedString{empty, empty, 0, 0});
+
+            const size_t initial = 1 << 19; // libcargo peaks at ~129k uniques
+            slots.zero(initial);
+            mask = initial - 1;
         }
-        dataMut[len] = '\0';
+
+        void grow() {
+            stl::Vector<uint32_t> next;
+            next.zero((mask + 1) * 2);
+            const size_t nextMask = (mask + 1) * 2 - 1;
+            for (uint32_t id = 1; id < strs.length(); id++) {
+                size_t i = strs[id].hash1 & nextMask;
+                while (next[i]) {
+                    i = (i + 1) & nextMask;
+                }
+                next.mut(i) = id;
+            }
+            slots.xchg(next);
+            mask = nextMask;
+        }
+
+        uint32_t intern(const char* s, size_t len) {
+            if (len == 0) {
+                return 0;
+            }
+            const auto h = XXH3_128bits(s, len);
+            size_t i = h.high64 & mask;
+            while (uint32_t id = slots[i]) {
+                const auto& e = strs[id];
+                if (e.hash1 == h.high64 && e.hash2 == h.low64) {
+                    return id;
+                }
+                i = (i + 1) & mask;
+            }
+
+            auto* data = static_cast<char*>(pool->allocate(len + 1));
+            ::std::memcpy(data, s, len);
+            data[len] = '\0';
+
+            const auto id = static_cast<uint32_t>(strs.length());
+            strs.pushBack(InternedString{data, data + len, h.high64, h.low64});
+            slots.mut(i) = id;
+            used += 1;
+            if (used * 10 > (mask + 1) * 7) {
+                grow();
+            }
+            return id;
+        }
+    };
+
+    StrInterner& interner() {
+        static StrInterner in;
+        return in;
+    }
+
+    const InternedString& ent(uint32_t id) {
+        return interner().strs[id];
     }
 }
 
-RcString::~RcString() {
-    if (ptr) {
-        ptr->refcount -= 1;
-        //::std::cout << "RcString(" << m_ptr << " \"" << *this << "\") - " << *m_ptr << " refs left (drop)" << ::std::endl;
-        if (ptr->refcount == 0) {
-            free(ptr);
-        }
-        ptr = nullptr;
-    }
+RcString::RcString(const char* s, size_t len)
+    : id(interner().intern(s, len))
+{
+}
+
+RcString::RcString(const char* s)
+    : RcString(s, ::std::strlen(s))
+{
+}
+
+RcString::RcString(const ::std::string& s)
+    : RcString(s.data(), s.size())
+{
+}
+
+size_t RcString::size() const {
+    const auto& e = ent(id);
+    return e.end - e.begin;
+}
+
+const char* RcString::c_str() const {
+    return ent(id).begin;
+}
+
+char RcString::back() const {
+    assert(size() > 0);
+    return *(ent(id).end - 1);
+}
+
+uint64_t RcString::contentHash() const {
+    return ent(id).hash1;
 }
 
 Ordering RcString::ord(const char* s, size_t len) const {
@@ -44,8 +140,16 @@ Ordering RcString::ord(const char* s, size_t len) const {
     return ::ord(this->size(), len);
 }
 
+Ordering RcString::ord(const RcString& s) const {
+    if (id == s.id) {
+        return OrdEqual;
+    }
+    const auto& b = ent(s.id);
+    return ord(b.begin, b.end - b.begin);
+}
+
 Ordering RcString::ord(const char* s) const {
-    if (ptr == nullptr) {
+    if (id == 0) {
         return (*s == '\0' ? OrdEqual : OrdLess);
     }
 
@@ -61,298 +165,10 @@ Ordering RcString::ord(const char* s) const {
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const RcString& x) {
-    for (size_t i = 0; i < x.size(); i++) {
-        os << x.c_str()[i];
-    }
+    os.write(x.c_str(), x.size());
     return os;
 }
 
-// Replace the use of `std::set` with a collection of sorted buffers
-// Limit each entry to ~1024 items, and split in half when full.
-// - This limits the cost of insertion to just needing to move a maximum of 1024 items plus the ~170 items in the outer list (assuming an average of 75% usage)
-// - Numbers: libcargo 1.74 has 128,900 interned strings (of which 115,984 are in use at Trans), hence the above estimate of 170 blocks of 1024
-namespace {
-    struct StringView {
-        const char* p;
-        size_t l;
-
-        operator RcString() const {
-            return RcString(p, l);
-        }
-    };
-
-    struct CmpRcStringRaw {
-        bool operator()(const RcString& a, const RcString& b) const {
-            return a.ord(b.c_str(), b.size()) == OrdLess;
-        }
-
-        bool operator()(const RcString& a, StringView& b) const {
-            return a.ord(b.p, b.l) == OrdLess;
-        }
-    };
-
-    // This is faster than std::set, as it doesn't have to allocate `RcString` instances, and it has lower memory overhead
-    const size_t BLOCK_SIZE = 1024;
-
-    class TieredSet {
-        struct Block {
-            std::vector<RcString> ents;
-
-            Block() {
-                ents.reserve(BLOCK_SIZE);
-            }
-        };
-
-        std::vector<Block> blocks;
-
-    public:
-        TieredSet() {
-            blocks.reserve(150'000 * 3 / BLOCK_SIZE / 2);
-        }
-
-        std::pair<const RcString*, bool> lookupOrAdd(const StringView& sv) {
-            // Special case: empty collection
-            if (blocks.empty()) {
-                blocks.push_back(Block());
-                blocks.front().ents.push_back(RcString(sv));
-                return ::std::make_pair(&blocks.front().ents.front(), true);
-            }
-
-            // Find the block that starts with an element after this string
-            auto maybeAfter = ::std::lower_bound(blocks.begin(), blocks.end(), sv, [](const Block& b, const StringView& sv) {
-                return b.ents.front().ord(sv.p, sv.l) == OrdLess;
-            });
-
-            if (maybeAfter != blocks.end() && maybeAfter->ents.front().ord(sv.p, sv.l) == OrdEqual) {
-                return std::make_pair(&maybeAfter->ents.front(), false);
-            }
-            // Special case: The first block sorts after this string, so we need to add the new string to the start of it (or to a new block before)
-            else if (maybeAfter == blocks.begin()) {
-                return insertIntoBlock(maybeAfter, maybeAfter->ents.begin(), RcString(sv));
-            }
-            // Since the string sorts before the beginning of `maybe_after`, it should be in (or be added to) the previous block
-            else {
-                auto maybeBlock = maybeAfter - 1;
-                auto& ents = maybeBlock->ents;
-                auto maybePos = std::lower_bound(ents.begin(), ents.end(), sv, [](const RcString& s, const StringView& sv) {
-                    return s.ord(sv.p, sv.l) == OrdLess;
-                });
-                if (maybePos != ents.end() && maybePos->ord(sv.p, sv.l) == OrdEqual) {
-                    return std::make_pair(&*maybePos, false);
-                } else {
-                    // Not equal, so it has to be above - so insert
-                    return insertIntoBlock(maybeBlock, maybePos, RcString(sv));
-                }
-            }
-        }
-
-        struct It {
-            std::vector<Block>::iterator block, blockE;
-            std::vector<RcString>::iterator slot;
-
-            RcString& operator*() {
-                assert(block != blockE);
-                assert(slot != block->ents.end());
-                return *slot;
-            }
-
-            It& operator++() {
-                assert(block != blockE);
-                assert(slot != block->ents.end());
-                ++slot;
-                if (slot == block->ents.end()) {
-                    ++block;
-                    if (block != blockE) {
-                        slot = block->ents.begin();
-                    }
-                }
-                return *this;
-            }
-
-            bool operator!=(const It& x) const {
-                return block != x.block || slot != x.slot;
-            }
-        };
-
-        It begin() {
-            return It{blocks.begin(), blocks.end(), blocks.front().ents.begin()};
-        }
-
-        It end() {
-            return It{blocks.end(), blocks.end(), blocks.back().ents.end()};
-        }
-
-    private:
-        std::pair<const RcString*, bool> insertIntoBlock(std::vector<Block>::iterator block, std::vector<RcString>::iterator slot, RcString rv) {
-#define VALIDATE 0
-#if VALIDATE
-            size_t startLen = 0;
-            for (const auto& v : *this) {
-                startLen += 1;
-            }
-#endif
-            if (block->ents.size() == block->ents.capacity()) {
-                // Block is full, so create a new block and split the contents between the two
-                // - The new block should go after the current one, and get half of its contents
-                auto newBlock = blocks.insert(block + 1, Block());
-                block = newBlock - 1;
-                const auto splitPoint = block->ents.size() / 2;
-                if (static_cast<size_t>(slot - block->ents.begin()) >= splitPoint) {
-                    // The target location is in the second half of the range, so we're inserting into the new block
-                    newBlock->ents.insert(newBlock->ents.end(), block->ents.begin() + splitPoint, slot);
-                    newBlock->ents.push_back(rv);
-                    slot = newBlock->ents.insert(newBlock->ents.end(), slot, block->ents.end()) - 1;
-                    block->ents.resize(splitPoint);
-                } else {
-                    // Target is in the lower half, so copy the entities and then insert
-                    newBlock->ents.insert(newBlock->ents.end(), block->ents.begin() + splitPoint, block->ents.end());
-                    block->ents.resize(splitPoint);
-                    slot = block->ents.insert(slot, rv);
-                }
-            } else {
-                slot = block->ents.insert(slot, rv);
-            }
-
-#if VALIDATE
-            StringView prev{nullptr, 0};
-            size_t endLen = 0;
-            for (auto& v : *this) {
-                if (prev.p) {
-                    if (v.ord(prev.p, prev.l) > 0) {
-                    } else {
-                        std::cerr << "BUG: Ordering lost after adding `" << rv << "` - '" << prev.p << "' and '" << v << "'\n";
-                        abort();
-                    }
-                }
-                prev.p = v.c_str();
-                prev.l = v.size();
-                endLen += 1;
-            }
-            if (startLen + 1 != endLen) {
-                std::cerr << "BUG: Counts failed after addition of `" << rv << " (was " << startLen << ", now " << endLen << ")`\n";
-                abort();
-            }
-            ::std::cerr << "ADDED #" << endLen << ": `" << rv << "`\n";
-#endif
-
-            return std::make_pair(&*slot, true);
-        }
-    };
-}
-
-TieredSet* RcStringInternedStrings;
-bool RcStringInternedOrderingValid;
-
-RcString RcString::newInterned(const char* s, size_t len) {
-    if (len == 0) {
-        return RcString();
-    }
-    if (!RcStringInternedStrings) {
-        RcStringInternedStrings = new TieredSet;
-    }
-    auto ret = RcStringInternedStrings->lookupOrAdd(StringView{s, len});
-    // Set interned and invalidate the cache if an insert happened
-    if (ret.second) {
-        ret.first->ptr->ordering = 1;
-        RcStringInternedOrderingValid = false;
-    }
-    return *ret.first;
-}
-
-Ordering RcString::ordInterned(const RcString& s) const {
-    assert(s.isInterned() && this->isInterned());
-    if (!RcStringInternedOrderingValid) {
-        // Populate cache
-        unsigned i = 1;
-        assert(RcStringInternedStrings);
-        for (auto& e : *RcStringInternedStrings) {
-            e.ptr->ordering = i++;
-        }
-        RcStringInternedOrderingValid = true;
-    }
-    return ::ord(this->ptr->ordering, s.ptr->ordering);
-}
-
-size_t std::hash<RcString>::operator()(const RcString& s) const noexcept {
-    // http://www.cse.yorku.ca/~oz/hash.html "djb2"
-    size_t h = 5381;
-    for (auto c : s) {
-        h = h * 33 + (unsigned)c;
-    }
-    return h;
-}
-
-RcString::RcString()
-    : ptr(nullptr) {
-}
-RcString::RcString(const char* s)
-    : RcString(s, ::std::strlen(s)) {
-}
-RcString::RcString(const ::std::string& s)
-    : RcString(s.data(), s.size()) {
-}
-RcString::RcString(const RcString& x)
-    : ptr(x.ptr) {
-    if (ptr) {
-        ptr->refcount += 1;
-    }
-}
-RcString::RcString(RcString&& x)
-    : ptr(x.ptr) {
-    x.ptr = nullptr;
-}
-RcString& RcString::operator=(const RcString& x) {
-    if (&x != this) {
-        this->~RcString();
-        ptr = x.ptr;
-        if (ptr) {
-            ptr->refcount += 1;
-        }
-    }
-    return *this;
-}
-RcString& RcString::operator=(RcString&& x) {
-    if (&x != this) {
-        this->~RcString();
-        ptr = x.ptr;
-        x.ptr = nullptr;
-    }
-    return *this;
-}
-const char* RcString::c_str() const {
-    if (ptr) {
-        return reinterpret_cast<const char*>(ptr->data);
-    } else {
-        return "";
-    }
-}
-char RcString::back() const {
-    assert(size() > 0);
-    return *(c_str() + size() - 1);
-}
-Ordering RcString::ord(const RcString& s) const {
-    if (ptr == s.ptr) {
-        return OrdEqual;
-    }
-    if (!ptr || !s.ptr) {
-        return ptr ? OrdGreater : OrdLess;
-    }
-    // If both are interned, then use stored sorting
-    if (isInterned() && s.isInterned()) {
-        return ordInterned(s);
-    }
-    return ord(s.c_str(), s.size());
-}
-bool RcString::operator==(const RcString& s) const {
-    if (s.size() != this->size()) {
-        return false;
-    }
-    // If both are interned, then just compare pointers
-    if (isInterned() && s.isInterned()) {
-        return ptr == s.ptr;
-    }
-    return this->ord(s) == OrdEqual;
-}
 int RcString::compare(size_t o, size_t l, const char* s) const {
     assert(o <= this->size());
     if (l <= this->size() - o) {

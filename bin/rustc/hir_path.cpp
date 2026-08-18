@@ -5,7 +5,6 @@
 
 #include <algorithm>
 
-#include <std/str/hash.h>
 #include <std/sym/i_map.h>
 #include <std/mem/obj_pool.h>
 #include <std/rng/split_mix_64.h>
@@ -131,10 +130,10 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 // never the component content — the combined 128 bits make a false match
 // impossible in practice.
 namespace {
-    // Component keys must be content-based, not address-based, so that
-    // nothing about a path can depend on allocation order.
+    // Component keys must be content-based, not allocation-order-based;
+    // the string interner's stored xxh128 half is exactly that, for free.
     uint64_t contentHash(const RcString& s) {
-        return stl::shash64(s.c_str(), s.size());
+        return s.contentHash();
     }
 
     // The two Zobrist keys of a component at a position. Position goes

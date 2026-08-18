@@ -4,16 +4,20 @@
 #include <ostream>
 #include "common.h"
 
+/// An interned string: a u32 id into the process-wide intern table.
+/// Construction interns (xxh128-keyed open-addressing table, data
+/// zero-terminated in the interner's ObjPool), so copies are trivial,
+/// equality is an id compare and c_str() is a pointer load. ord() reads
+/// the table and stays lexicographic: RcString keys ordered maps whose
+/// iteration order leaks into the output.
 class RcString {
-    struct Inner {
-        unsigned int refcount;
-        unsigned int size;
-        unsigned int ordering; // Populated only for interned strings, 0 otherwise
-        unsigned int data[1];  // Actually arbitary
-    }* ptr;
+    uint32_t id;
 
 public:
-    RcString();
+    RcString()
+        : id(0)
+    {
+    }
 
     RcString(const char* s, size_t len);
 
@@ -21,25 +25,17 @@ public:
 
     explicit RcString(const ::std::string& s);
 
-    static RcString newInterned(const char* s, size_t len);
+    static RcString newInterned(const char* s, size_t len) {
+        return RcString(s, len);
+    }
 
     static RcString newInterned(const ::std::string& s) {
-        return newInterned(s.data(), s.size());
+        return RcString(s);
     }
 
     static RcString newInterned(const char* s) {
-        return newInterned(s, ::std::strlen(s));
+        return RcString(s);
     }
-
-    RcString(const RcString& x);
-
-    RcString(RcString&& x);
-
-    ~RcString();
-
-    RcString& operator=(const RcString& x);
-
-    RcString& operator=(RcString&& x);
 
     const char* begin() const {
         return c_str();
@@ -49,27 +45,29 @@ public:
         return c_str() + size();
     }
 
-    bool isInterned() const {
-        return ptr && ptr->ordering != 0;
-    }
-
-    size_t size() const {
-        return ptr ? ptr->size : 0;
-    }
+    size_t size() const;
 
     const char* c_str() const;
 
     char back() const;
 
+    /// The first xxh128 half from the intern table; free to read, content-based.
+    uint64_t contentHash() const;
+
+    uint32_t rawId() const {
+        return id;
+    }
+
     Ordering ord(const char* s, size_t l) const;
-    Ordering ordInterned(const RcString& s) const;
 
     Ordering ord(const RcString& s) const;
 
-    bool operator==(const RcString& s) const;
+    bool operator==(const RcString& s) const {
+        return id == s.id;
+    }
 
     bool operator!=(const RcString& s) const {
-        return !(*this == s);
+        return id != s.id;
     }
 
     bool operator<(const RcString& s) const {
@@ -123,6 +121,8 @@ public:
     int compare(size_t o, size_t l, const char* s) const;
 };
 
+static_assert(sizeof(RcString) == sizeof(uint32_t));
+
 namespace std {
     static inline bool operator==(const string& a, const ::RcString& b) {
         return b == a;
@@ -134,6 +134,8 @@ namespace std {
 
     template <>
     struct hash<RcString> {
-        size_t operator()(const RcString& s) const noexcept;
+        size_t operator()(const RcString& s) const noexcept {
+            return s.rawId() * 0x9E3779B97F4A7C15ull;
+        }
     };
 }
