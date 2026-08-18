@@ -2879,7 +2879,18 @@ HIRCrate* AST2HIR::lowerCrate(const WireBoard& wb, stl::ObjPool* pool, ASTCrate&
         // Use a non-empty crate name that won't conflict with any libraries
         rv.crateName = "bin#";
     }
-    rv.crateNameDisplay = RcString::newInterned(crate.crateNameSet);
+    {
+        // The test harness names the crate `X$test` so that its symbols do not
+        // collide with the crate it is built from; the type name is the name
+        // the crate was written under.
+        ::std::string display(crate.crateNameSet);
+        static const ::std::string testSuffix = "$test";
+        if (display.size() > testSuffix.size()
+            && display.compare(display.size() - testSuffix.size(), testSuffix.size(), testSuffix) == 0) {
+            display.resize(display.size() - testSuffix.size());
+        }
+        rv.crateNameDisplay = RcString::newInterned(display);
+    }
     rv.edition = crate.edition;
     rv.isNoCore = crate.loadStd == ASTCrate::LOAD_NONE;
     rv.noMain = crate.noMain;
