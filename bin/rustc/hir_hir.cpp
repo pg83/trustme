@@ -525,6 +525,34 @@ const HIRTypeItem& HIRCrate::getTypeitemByPath(const Span& sp, const HIRSimplePa
     return it->second->ent;
 }
 
+const HIRTypeItem* HIRCrate::getTypeitemByPathOpt(const HIRSimplePath& path) const {
+    if (path.components().empty()) {
+        return nullptr;
+    }
+    const HIRModule* mod;
+    if (path.crateName() == this->crateName) {
+        mod = &this->rootModule;
+    } else {
+        auto crateIt = this->extCrates.find(path.crateName());
+        if (crateIt == this->extCrates.end()) {
+            return nullptr;
+        }
+        mod = &crateIt->second.data->rootModule;
+    }
+    for (size_t i = 0; i + 1 < path.components().size(); i++) {
+        auto it = mod->modItems.find(path.components()[i]);
+        if (it == mod->modItems.end()) {
+            return nullptr;
+        }
+        mod = it->second->ent.opt_Module();
+        if (!mod) {
+            return nullptr;
+        }
+    }
+    auto it = mod->modItems.find(path.components().back());
+    return it == mod->modItems.end() ? nullptr : &it->second->ent;
+}
+
 const HIRModule& HIRCrate::getModByPath(const Span& sp, const HIRSimplePath& path, bool ignoreLastNode /*=false*/, bool ignoreCrateName /*=false*/) const {
     if (ignoreLastNode) {
         ASSERT_BUG(sp, path.components().size() > 0, "get_mod_by_path received invalid path with ignore_last_node=true - " << path);

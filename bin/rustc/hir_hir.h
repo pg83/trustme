@@ -821,6 +821,8 @@ public:
     const HIRMacroItem& getMacroitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false) const;
 
     const HIRTypeItem& getTypeitemByPath(const Span& sp, const HIRSimplePath& path, bool ignoreCrateName = false, bool ignoreLastNode = false) const;
+    /// The type item a path names, or `nullptr` if the path names nothing.
+    const HIRTypeItem* getTypeitemByPathOpt(const HIRSimplePath& path) const;
     const HIRTrait& getTraitByPath(const Span& sp, const HIRSimplePath& path) const;
     ::std::optional<size_t> findMostSpecificTrait(const Span& sp, const ::std::vector<HIRSimplePath>& candidates) const;
     const HIRStruct& getStructByPath(const Span& sp, const HIRSimplePath& path) const;

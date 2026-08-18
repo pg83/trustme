@@ -4424,6 +4424,33 @@ TU_ARMA(Alias, ee) {
             if (::std::find(definingOpaqueAliases.begin(), definingOpaqueAliases.end(), alias.path) != definingOpaqueAliases.end()) {
                 return true;
             }
+            // `#[define_opaque(X)]` may name a plain alias of the opaque one.
+            // The two are the same type, but only the opaque one is the path an
+            // erased type records.
+            if (this->wb.crate) {
+                for (const auto& named : definingOpaqueAliases) {
+                    const HIRSimplePath* path = &named;
+                    for (unsigned int depth = 0; depth < 8; depth++) {
+                        const auto* item = this->wb.crate->getTypeitemByPathOpt(*path);
+                        if (!item) {
+                            break;
+                        }
+                        const auto* ta = item->opt_TypeAlias();
+                        if (!ta || ta->type == HIRTypeRef()) {
+                            break;
+                        }
+                        const auto* erased = ta->type->opt_ErasedType();
+                        if (!erased || !erased->inner.is_Alias()) {
+                            break;
+                        }
+                        const auto& inner = erased->inner.as_Alias();
+                        if (inner.inner->path == alias.path) {
+                            return true;
+                        }
+                        path = &inner.inner->path;
+                    }
+                }
+            }
             for (const auto& path : opaqueAliasScopes) {
                 if (alias.isLocalTo(path)) {
                     return true;
