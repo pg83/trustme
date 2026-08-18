@@ -1690,6 +1690,24 @@ public:
             // Fall through for the resizing below
         }
 
+        // `<Foo as A>::Assoc { .. }` matches the struct the associated type
+        // resolves to, so the projection is replaced by that type.
+        if (const auto* ufcs = path.data.opt_UfcsKnown()) {
+            const HIRTypeData* revealed = nullptr;
+            crate.findTraitImpls(ufcs->trait.path, ufcs->type, HIRResolvePlaceholdersNop(), [&](const HIRTraitImpl& impl) {
+                auto it = impl.types.find(ufcs->item);
+                if (it == impl.types.end()) {
+                    return false;
+                }
+                revealed = it->second.data;
+                return true;
+            });
+            if (!revealed || !revealed->is_Path() || !revealed->as_Path().path.data.is_Generic()) {
+                ERROR(sp, E0000, "Expected a struct behind the associated type in a pattern, got " << path);
+            }
+            path = revealed->as_Path().path.data.as_Generic().clone();
+        }
+
         ASSERT_BUG(sp, path.data.is_Generic(), path);
         auto& gp = path.data.as_Generic();
 

@@ -982,10 +982,11 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
         const auto& tr = *pb.as_Trait().trait_;
 
         switch (mode) {
+            // A qualified path names a type in a pattern the same way it does
+            // anywhere else: `let <Foo as A>::Assoc { .. } = ..` matches the
+            // struct the associated type resolves to.
             case Context::LookupMode::PatternValue:
             case Context::LookupMode::PatternType:
-                ERROR(sp, E0000, "Invalid use of UFCS in pattern");
-                break;
             case Context::LookupMode::Namespace:
             case Context::LookupMode::Type:
                 for (const auto& item : tr.items()) {
