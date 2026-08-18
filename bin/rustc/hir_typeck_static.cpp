@@ -1033,25 +1033,20 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
 
     // Cache the result of this function
     // 100% required for 1.90's librustc_session - "Trans Monomorph" took 20mins without that
-    std::string cacheKey;
+    // The key is structural: the impl side by definition addresses, the
+    // destination side by interned pointers; the variable desTraitParams
+    // content is matched inside the (typically tiny) bucket.
+    auto& cacheBucket = cachedImplChecks[ImplCheckKey{&implParamsDef, &implTraitParams, implType, desTraitPath.rawData(), desType}];
     {
-        ::std::stringstream ss;
-        ss << "impl" << implParamsDef.fmtArgs() << " " << desTraitPath << implTraitParams << " for " << implType << implParamsDef.fmtBounds();
-        ss << " vs ";
-        if (desTraitParams) {
-            ss << *desTraitParams;
-        } else {
-            ss << "<?>";
-        }
-        ss << " for " << desType;
-        cacheKey = ss.str();
-    }
-    {
-        auto it = cachedImplChecks.find(cacheKey);
-        if (it != cachedImplChecks.end()) {
-            const auto& r = it->second;
-            DEBUG("CACHED: " << r.second << " impl_params=" << r.first);
-            return foundCb(r.first.clone(), r.second);
+        for (const auto& ent : cacheBucket) {
+            if (ent.hasDesParams != (desTraitParams != nullptr)) {
+                continue;
+            }
+            if (desTraitParams && ent.desParams != *desTraitParams) {
+                continue;
+            }
+            DEBUG("CACHED: " << ent.result << " impl_params=" << ent.implParams);
+            return foundCb(ent.implParams.clone(), ent.result);
         }
     }
     // TODO: What if `des_trait_params` already has impl placeholders?
@@ -1342,7 +1337,7 @@ bool StaticTraitResolve::findImplCheckCrateRaw(const Span& sp, const HIRSimplePa
     // TODO: Can this be cached?
     // - Needs to cache the result
     {
-        cachedImplChecks.insert(::std::make_pair(cacheKey, std::make_pair(implParams.clone(), match)));
+        cacheBucket.push_back(ImplCheckEntry{desTraitParams != nullptr, desTraitParams ? desTraitParams->clone() : HIRPathParams(), implParams.clone(), match});
     }
     return foundCb(mv$(implParams), match);
 }

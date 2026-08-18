@@ -235,11 +235,10 @@
 2	std::function	bin/rustc/hir_typeck_resolve_common.h
 1	std::map	bin/rustc/hir_typeck_resolve_common.h
 3	std::function	bin/rustc/hir_typeck_static.cpp
-1	std::string	bin/rustc/hir_typeck_static.cpp
 9	std::vector	bin/rustc/hir_typeck_static.cpp
 4	std::function	bin/rustc/hir_typeck_static.h
 5	std::map	bin/rustc/hir_typeck_static.h
-2	std::string	bin/rustc/hir_typeck_static.h
+1	std::string	bin/rustc/hir_typeck_static.h
 1	std::vector	bin/rustc/hir_typeck_static.h
 1	std::function	bin/rustc/hir_visitor.cpp
 1	unique_ptr	bin/rustc/hir_visitor.cpp
@@ -293,7 +292,7 @@
 2	std::string	bin/rustc/mir_mir.h
 17	std::vector	bin/rustc/mir_mir.h
 3	unique_ptr	bin/rustc/mir_mir.h
-17	std::function	bin/rustc/mir_operations.cpp
+4	std::function	bin/rustc/mir_operations.cpp
 7	std::map	bin/rustc/mir_operations.cpp
 1	std::set	bin/rustc/mir_operations.cpp
 2	std::string	bin/rustc/mir_operations.cpp

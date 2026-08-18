@@ -2011,29 +2011,58 @@ void MIROptimise(const StaticTraitResolve& resolve, const HIRItemPath& path, MIR
 }
 
 namespace {
-    bool optVisitMirLvaluesInner(const MIRLValue& lv, MIRValUsage u, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
+    // Callback interfaces for the lvalue-visit family: plain virtual structs
+    // (the std::function versions allocated per visited statement).
+    struct LvalueVisitor {
+        virtual bool visitLvalue(const MIRLValue& lv, MIRValUsage u) = 0;
+    };
+
+    struct LvalueVisitorMut {
+        virtual bool visitLvalue(MIRLValue& lv, MIRValUsage u) = 0;
+    };
+
+    struct LvalueRefVisitorMut {
+        virtual bool visitLvalue(MIRLValue::MRef& lv, MIRValUsage u) = 0;
+    };
+
+    // Adapts a const visitor to the mutable walkers (the walkers themselves
+    // never mutate through the reference).
+    struct LvalueConstAdapter final: public LvalueVisitorMut {
+        LvalueVisitor& inner;
+
+        explicit LvalueConstAdapter(LvalueVisitor& inner)
+            : inner(inner)
+        {
+        }
+
+        bool visitLvalue(MIRLValue& lv, MIRValUsage u) override {
+            return inner.visitLvalue(lv, u);
+        }
+    };
+
+    bool optVisitMirLvaluesInner(const MIRLValue& lv, MIRValUsage u, LvalueVisitor& cb) {
         for (const auto& w : lv.wrappers) {
             if (w.is_Index()) {
-                if (cb(MIRLValue::newLocal(w.as_Index()), MIRValUsage::Read)) {
+                if (cb.visitLvalue(MIRLValue::newLocal(w.as_Index()), MIRValUsage::Read)) {
                     return true;
                 }
             } else if (w.is_Deref()) {
             }
         }
-        return cb(lv, u);
+        return cb.visitLvalue(lv, u);
     }
 
-    bool visitMirLvalueMut(MIRLValue& lv, MIRValUsage u, ::std::function<bool(MIRLValue::MRef&, MIRValUsage)> cb) {
+    bool visitMirLvalueMut(MIRLValue& lv, MIRValUsage u, LvalueRefVisitorMut& cb) {
         auto lvr = MIRLValue::MRef(lv);
         do {
-            if (cb(lvr, u)) {
+            if (cb.visitLvalue(lvr, u)) {
                 return true;
             }
             // TODO: Use a TU_MATCH?
             if (lvr.is_Index()) {
                 auto ilv = MIRLValue::newLocal(lvr.as_Index());
                 auto ilvR = MIRLValue::MRef(ilv);
-                bool rv = cb(ilvR, MIRValUsage::Read);
+                bool rv = cb.visitLvalue(ilvR, MIRValUsage::Read);
                 assert(ilv.is_Local() && ilv.as_Local() == lvr.as_Index());
                 if (rv) {
                     return true;
@@ -2055,11 +2084,11 @@ namespace {
         return false;
     }
 
-    bool visitMirLvalueRawMut(MIRLValue& lv, MIRValUsage u, ::std::function<bool(MIRLValue&, MIRValUsage)> cb) {
-        return cb(lv, u);
+    bool visitMirLvalueRawMut(MIRLValue& lv, MIRValUsage u, LvalueVisitorMut& cb) {
+        return cb.visitLvalue(lv, u);
     }
 
-    bool visitMirLvalueMut(MIRParam& p, MIRValUsage u, ::std::function<bool(MIRLValue&, MIRValUsage)> cb) {
+    bool visitMirLvalueMut(MIRParam& p, MIRValUsage u, LvalueVisitorMut& cb) {
         if (auto* e = p.opt_LValue()) {
             return visitMirLvalueRawMut(*e, u, cb);
         } else {
@@ -2067,7 +2096,7 @@ namespace {
         }
     }
 
-    bool optVisitMirLvaluesMut(MIRRValue& rval, ::std::function<bool(MIRLValue&, MIRValUsage)> cb) {
+    bool optVisitMirLvaluesMut(MIRRValue& rval, LvalueVisitorMut& cb) {
         bool rv = false;
         switch (rval.tag()) {
             case MIRRValue::TAG_Use: {
@@ -2157,13 +2186,12 @@ namespace {
         return rv;
     }
 
-    bool optVisitMirLvalues(const MIRRValue& rval, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-        return optVisitMirLvaluesMut(const_cast<MIRRValue&>(rval), [&](auto& lv, auto u) {
-            return cb(lv, u);
-        });
+    bool optVisitMirLvalues(const MIRRValue& rval, LvalueVisitor& cb) {
+        LvalueConstAdapter adapter{cb};
+        return optVisitMirLvaluesMut(const_cast<MIRRValue&>(rval), adapter);
     }
 
-    bool optVisitMirLvaluesMut(MIRStatement& stmt, ::std::function<bool(MIRLValue&, MIRValUsage)> cb) {
+    bool optVisitMirLvaluesMut(MIRStatement& stmt, LvalueVisitorMut& cb) {
         bool rv = false;
         switch (stmt.tag()) {
             case MIRStatement::TAG_Assign: {
@@ -2229,13 +2257,12 @@ namespace {
         return rv;
     }
 
-    bool optVisitMirLvalues(const MIRStatement& stmt, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-        return optVisitMirLvaluesMut(const_cast<MIRStatement&>(stmt), [&](auto& lv, auto im) {
-            return cb(lv, im);
-        });
+    bool optVisitMirLvalues(const MIRStatement& stmt, LvalueVisitor& cb) {
+        LvalueConstAdapter adapter{cb};
+        return optVisitMirLvaluesMut(const_cast<MIRStatement&>(stmt), adapter);
     }
 
-    bool optVisitMirLvaluesMut(MIRTerminator& term, ::std::function<bool(MIRLValue&, MIRValUsage)> cb) {
+    bool optVisitMirLvaluesMut(MIRTerminator& term, LvalueVisitorMut& cb) {
         bool rv = false;
         switch (term.tag()) {
             case MIRTerminator::TAG_Incomplete: {
@@ -2315,13 +2342,12 @@ namespace {
         return rv;
     }
 
-    bool optVisitMirLvalues(const MIRTerminator& term, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-        return optVisitMirLvaluesMut(const_cast<MIRTerminator&>(term), [&](auto& lv, auto im) {
-            return cb(lv, im);
-        });
+    bool optVisitMirLvalues(const MIRTerminator& term, LvalueVisitor& cb) {
+        LvalueConstAdapter adapter{cb};
+        return optVisitMirLvaluesMut(const_cast<MIRTerminator&>(term), adapter);
     }
 
-    void optVisitMirLvaluesMut(MIRTypeResolve& state, MIRFunction& fcn, ::std::function<bool(MIRLValue&, MIRValUsage)> cb) {
+    void optVisitMirLvaluesMut(MIRTypeResolve& state, MIRFunction& fcn, LvalueVisitorMut& cb) {
         for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
             auto& block = fcn.blocks[blockIdx];
             for (auto& stmt : block.statements) {
@@ -2336,10 +2362,9 @@ namespace {
         }
     }
 
-    void optVisitMirLvalues(MIRTypeResolve& state, const MIRFunction& fcn, ::std::function<bool(const MIRLValue&, MIRValUsage)> cb) {
-        optVisitMirLvaluesMut(state, const_cast<MIRFunction&>(fcn), [&](auto& lv, auto im) {
-            return cb(lv, im);
-        });
+    void optVisitMirLvalues(MIRTypeResolve& state, const MIRFunction& fcn, LvalueVisitor& cb) {
+        LvalueConstAdapter adapter{cb};
+        optVisitMirLvaluesMut(state, const_cast<MIRFunction&>(fcn), adapter);
     }
 
     struct ParamsSet: public MonomorphiserPP {
@@ -3302,13 +3327,25 @@ namespace {
         return IterPathRes::Complete;
     }
 
-    ::std::function<bool(const MIRLValue&, MIRValUsage)> checkInvalidatesLvalueCb(const MIRLValue& val, bool isCopy, bool alsoRead = false) {
-        bool hasIndex = ::std::any_of(val.wrappers.begin(), val.wrappers.end(), [](const auto& w) {
-            return w.is_Index();
-        });
-        // Value is invalidated if it's used with MIRValUsage::Write or MIRValUsage::Borrow
-        // - Same applies to any component of the lvalue
-        return [&val, hasIndex, isCopy, alsoRead](const MIRLValue& lv, MIRValUsage vu) {
+    // Value is invalidated if it's used with MIRValUsage::Write or MIRValUsage::Borrow
+    // - Same applies to any component of the lvalue
+    struct CheckInvalidatesLvalue final: public LvalueVisitor {
+        const MIRLValue& val;
+        bool hasIndex;
+        bool isCopy;
+        bool alsoRead;
+
+        CheckInvalidatesLvalue(const MIRLValue& val, bool isCopy, bool alsoRead = false)
+            : val(val)
+            , hasIndex(::std::any_of(val.wrappers.begin(), val.wrappers.end(), [](const auto& w) {
+                return w.is_Index();
+            }))
+            , isCopy(isCopy)
+            , alsoRead(alsoRead)
+        {
+        }
+
+        bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
             switch (vu) {
                     // - Ideally this would check if it DOES invalidate
                 case MIRValUsage::Write:
@@ -3352,15 +3389,17 @@ namespace {
                     break;
             }
             return false;
-        };
-    }
+        }
+    };
 
     bool checkInvalidatesLvalue(const MIRStatement& stmt, const MIRLValue& val, bool isCopy, bool alsoRead = false) {
-        return optVisitMirLvalues(stmt, checkInvalidatesLvalueCb(val, isCopy, alsoRead));
+        CheckInvalidatesLvalue cb{val, isCopy, alsoRead};
+        return optVisitMirLvalues(stmt, cb);
     }
 
     bool checkInvalidatesLvalue(const MIRTerminator& term, const MIRLValue& val, bool isCopy, bool alsoRead = false) {
-        return optVisitMirLvalues(term, checkInvalidatesLvalueCb(val, isCopy, alsoRead));
+        CheckInvalidatesLvalue cb{val, isCopy, alsoRead};
+        return optVisitMirLvalues(term, cb);
     }
 }
 
@@ -3396,39 +3435,51 @@ bool MIROptimiseDeTemporarySingleSetAndUse(MIRTypeResolve& state, MIRFunction& f
 
     // 1. Enumrate usage
     {
-        auto getCurLoc = [&state]() {
-            return OptimiseStmtRef(state.getCurBlock(), state.getCurStmtOfs());
-        };
-        auto visitCb = [&](const MIRLValue& lv, auto vu) {
-            if (!lv.wrappers.empty()) {
-                vu = MIRValUsage::Read;
+        struct CountUsage final: public LvalueVisitor {
+            MIRTypeResolve& state;
+            decltype(usageInfo)& usageInfo;
+
+            CountUsage(MIRTypeResolve& state, decltype(usageInfo)& usageInfo)
+                : state(state)
+                , usageInfo(usageInfo)
+            {
             }
-            for (const auto& w : lv.wrappers) {
-                if (w.is_Index()) {
-                    auto& slot = usageInfo[w.as_Index()];
-                    slot.nRead += 1;
-                    slot.useLoc = getCurLoc();
+
+            OptimiseStmtRef getCurLoc() const {
+                return OptimiseStmtRef(state.getCurBlock(), state.getCurStmtOfs());
+            }
+
+            bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
+                if (!lv.wrappers.empty()) {
+                    vu = MIRValUsage::Read;
                 }
-            }
-            if (lv.root.is_Local()) {
-                auto& slot = usageInfo[lv.root.as_Local()];
-                switch (vu) {
-                    case MIRValUsage::Write:
-                        slot.nWrite += 1;
-                        slot.setLoc = getCurLoc();
-                        break;
-                    case MIRValUsage::Move:
+                for (const auto& w : lv.wrappers) {
+                    if (w.is_Index()) {
+                        auto& slot = usageInfo[w.as_Index()];
                         slot.nRead += 1;
                         slot.useLoc = getCurLoc();
-                        break;
-                    case MIRValUsage::Read:
-                    case MIRValUsage::Borrow:
-                        slot.nBorrow += 1;
-                        break;
+                    }
                 }
+                if (lv.root.is_Local()) {
+                    auto& slot = usageInfo[lv.root.as_Local()];
+                    switch (vu) {
+                        case MIRValUsage::Write:
+                            slot.nWrite += 1;
+                            slot.setLoc = getCurLoc();
+                            break;
+                        case MIRValUsage::Move:
+                            slot.nRead += 1;
+                            slot.useLoc = getCurLoc();
+                            break;
+                        case MIRValUsage::Read:
+                        case MIRValUsage::Borrow:
+                            slot.nBorrow += 1;
+                            break;
+                    }
+                }
+                return false;
             }
-            return false;
-        };
+        } visitCb{state, usageInfo};
         optVisitMirLvalues(state, fcn, visitCb);
     }
 
@@ -3563,46 +3614,80 @@ break;
                     return w.is_Deref();
                 })) {
                     // If there are any move ops between the set and the usage, invalidate
-                    bool stop = false;
-                    auto checkCb = [&](const MIRLValue& lv, MIRValUsage vu) {
-                        if (lv == thisVar) {
-                            stop = true;
+                    struct CheckMoves final: public LvalueVisitor {
+                        MIRTypeResolve& state;
+                        const MIRLValue& thisVar;
+                        bool stop = false;
+
+                        CheckMoves(MIRTypeResolve& state, const MIRLValue& thisVar)
+                            : state(state)
+                            , thisVar(thisVar)
+                        {
+                        }
+
+                        bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
+                            if (lv == thisVar) {
+                                stop = true;
+                                return false;
+                            }
+                            if (stop) {
+                                // Once the value is seen, ignore anything else
+                                return false;
+                            }
+                            // If a move is seen, check if it's a move (and not a copy)
+                            if (vu == MIRValUsage::Move) {
+                                return !state.lvalueIsCopy(lv);
+                            }
                             return false;
                         }
-                        if (stop) {
-                            // Once the value is seen, ignore anything else
-                            return false;
+                    } checkCb{state, thisVar};
+                    struct FindThisVar final: public LvalueVisitor {
+                        const MIRLValue& thisVar;
+
+                        explicit FindThisVar(const MIRLValue& thisVar)
+                            : thisVar(thisVar)
+                        {
                         }
-                        // If a move is seen, check if it's a move (and not a copy)
-                        if (vu == MIRValUsage::Move) {
-                            return !state.lvalueIsCopy(lv);
+
+                        bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
+                            return lv == thisVar;
                         }
-                        return false;
-                    };
+                    } findThisVar{thisVar};
                     invalidated = IterPathRes::Complete != iterPath(fcn, setLocNext, useLocInc, [&](auto loc, const auto& stmt) -> bool {
                         return optVisitMirLvalues(stmt, checkCb);
                     }, [&](auto loc, const auto& term) -> bool {
-                        return (term.is_Call() && !optVisitMirLvalues(term, [&](const MIRLValue& lv, MIRValUsage vu) {
-                            return lv == thisVar;
-                        })) || optVisitMirLvalues(term, checkCb);
+                        return (term.is_Call() && !optVisitMirLvalues(term, findThisVar)) || optVisitMirLvalues(term, checkCb);
                     });
                     DEBUG("invalidated = " << invalidated);
                 }
                 if (!invalidated) {
                     // Update the usage site and replace.
-                    auto replaceCb = [&](MIRLValue& slot, MIRValUsage vu) -> bool {
-                        if (slot.root == thisVar.root) {
-                            if (src.wrappers.empty()) {
-                                slot.root = src.root.clone();
-                            } else if (slot.wrappers.empty()) {
-                                slot = src.clone();
-                            } else {
-                                MIR_TODO(state, "Replace inner of " << slot << " with " << src);
-                            }
-                            return true;
+                    struct ReplaceVar final: public LvalueVisitorMut {
+                        MIRTypeResolve& state;
+                        const MIRLValue& thisVar;
+                        const MIRLValue& src;
+
+                        ReplaceVar(MIRTypeResolve& state, const MIRLValue& thisVar, const MIRLValue& src)
+                            : state(state)
+                            , thisVar(thisVar)
+                            , src(src)
+                        {
                         }
-                        return false;
-                    };
+
+                        bool visitLvalue(MIRLValue& slot, MIRValUsage /*vu*/) override {
+                            if (slot.root == thisVar.root) {
+                                if (src.wrappers.empty()) {
+                                    slot.root = src.root.clone();
+                                } else if (slot.wrappers.empty()) {
+                                    slot = src.clone();
+                                } else {
+                                    MIR_TODO(state, "Replace inner of " << slot << " with " << src);
+                                }
+                                return true;
+                            }
+                            return false;
+                        }
+                    } replaceCb{state, thisVar, src};
                     if (slot.useLoc.stmtIdx < useBb.statements.size()) {
                         auto& useStmt = useBb.statements[slot.useLoc.stmtIdx];
                         DEBUG("Replace " << thisVar << " with " << src << " in BB" << slot.useLoc.bbIdx << "/" << slot.useLoc.stmtIdx << " " << useStmt);
@@ -3676,9 +3761,18 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
     };
 
     auto usageInfo = ::std::vector<LocalUsage>(fcn.locals.size());
-    for (const auto& bb : fcn.blocks) {
+    struct CountBorrowUsage final: public LvalueVisitor {
+        const MIRFunction& fcn;
+        decltype(usageInfo)& usageInfo;
         OptimiseStmtRef curLoc;
-        auto visitCb = [&](const MIRLValue& lv, auto vu) {
+
+        CountBorrowUsage(const MIRFunction& fcn, decltype(usageInfo)& usageInfo)
+            : fcn(fcn)
+            , usageInfo(usageInfo)
+        {
+        }
+
+        bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
             if (lv.root.is_Local()) {
                 auto& slot = usageInfo[lv.root.as_Local()];
                 // NOTE: This pass doesn't care about indexing, as we're looking for values that are borrows (which aren't valid indexes)
@@ -3700,13 +3794,16 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
             }
             return false;
-        };
+        }
+    } visitCb{fcn, usageInfo};
+    for (const auto& bb : fcn.blocks) {
         for (const auto& stmt : bb.statements) {
-            curLoc = OptimiseStmtRef(&bb - &fcn.blocks.front(), &stmt - &bb.statements.front());
+            visitCb.curLoc = OptimiseStmtRef(&bb - &fcn.blocks.front(), &stmt - &bb.statements.front());
 
             optVisitMirLvalues(stmt, visitCb);
         }
-        curLoc = OptimiseStmtRef(&bb - &fcn.blocks.front(), bb.statements.size());
+        auto curLoc = OptimiseStmtRef(&bb - &fcn.blocks.front(), bb.statements.size());
+        visitCb.curLoc = curLoc;
         if (const auto* drop = bb.terminator.opt_Drop(); drop && drop->slot.root.is_Local() && drop->slot.wrappers.empty()) {
             usageInfo[drop->slot.root.as_Local()].dropLocs.push_back(curLoc);
         } else {
@@ -3758,27 +3855,44 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
         // Locate usage sites (by walking forwards) and check for invalidation
         auto curLoc = slot.setLoc;
         curLoc.stmtIdx++;
-        unsigned numReplaced = 0;
-        auto replaceCb = [&](MIRLValue& lv, auto _vu) {
-            if (lv.root == thisVar.root && !lv.wrappers.empty()) {
-                ASSERT_BUG(Span(), !lv.wrappers.empty(), curLoc << " " << lv);
-                MIR_ASSERT(state, lv.wrappers.front().is_Deref(), "Use of a replacable value that isn't via a deref - " << lv);
-                // Make a LValue reference, then overwrite it
-                {
-                    auto lvr = MIRLValue::MRef(lv);
-                    while (lvr.wrapperCount() > 1) {
-                        lvr.tryUnwrap();
-                    }
-                    DEBUG(thisVar << " " << curLoc << " - Replace " << lvr << " with " << srcLv << " in " << lv);
-                    lvr.replace(srcLv.clone());
-                }
-                DEBUG("= " << lv);
-                assert(lv.root != thisVar.root);
-                assert(numReplaced < slot.nDerefRead);
-                numReplaced += 1;
+        struct ReplaceDerefs final: public LvalueVisitorMut {
+            MIRTypeResolve& state;
+            const MIRLValue& thisVar;
+            const MIRLValue& srcLv;
+            const OptimiseStmtRef& curLoc;
+            const LocalUsage& slot;
+            unsigned numReplaced = 0;
+
+            ReplaceDerefs(MIRTypeResolve& state, const MIRLValue& thisVar, const MIRLValue& srcLv, const OptimiseStmtRef& curLoc, const LocalUsage& slot)
+                : state(state)
+                , thisVar(thisVar)
+                , srcLv(srcLv)
+                , curLoc(curLoc)
+                , slot(slot)
+            {
             }
-            return false;
-        };
+
+            bool visitLvalue(MIRLValue& lv, MIRValUsage /*vu*/) override {
+                if (lv.root == thisVar.root && !lv.wrappers.empty()) {
+                    ASSERT_BUG(Span(), !lv.wrappers.empty(), curLoc << " " << lv);
+                    MIR_ASSERT(state, lv.wrappers.front().is_Deref(), "Use of a replacable value that isn't via a deref - " << lv);
+                    // Make a LValue reference, then overwrite it
+                    {
+                        auto lvr = MIRLValue::MRef(lv);
+                        while (lvr.wrapperCount() > 1) {
+                            lvr.tryUnwrap();
+                        }
+                        DEBUG(thisVar << " " << curLoc << " - Replace " << lvr << " with " << srcLv << " in " << lv);
+                        lvr.replace(srcLv.clone());
+                    }
+                    DEBUG("= " << lv);
+                    assert(lv.root != thisVar.root);
+                    assert(numReplaced < slot.nDerefRead);
+                    numReplaced += 1;
+                }
+                return false;
+            }
+        } replaceCb{state, thisVar, srcLv, curLoc, slot};
         for (bool stop = false; !stop;) {
             auto& curBb = fcn.blocks[curLoc.bbIdx];
             for (; curLoc.stmtIdx < curBb.statements.size(); curLoc.stmtIdx++) {
@@ -3794,7 +3908,7 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
                 // Replace usage
                 optVisitMirLvaluesMut(stmt, replaceCb);
-                if (numReplaced == slot.nDerefRead) {
+                if (replaceCb.numReplaced == slot.nDerefRead) {
                     stop = true;
                     break;
                 }
@@ -3804,7 +3918,7 @@ bool MIROptimiseDeTemporaryBorrows(MIRTypeResolve& state, MIRFunction& fcn) {
             }
             // Replace usage
             optVisitMirLvaluesMut(curBb.terminator, replaceCb);
-            if (numReplaced == slot.nDerefRead) {
+            if (replaceCb.numReplaced == slot.nDerefRead) {
                 stop = true;
                 break;
             }
@@ -3829,15 +3943,15 @@ default:
 
         // If the source was an inner deref, update its counts
         if (srcLv.root.is_Local() && !srcLv.wrappers.empty() && srcLv.wrappers.front().is_Deref()) {
-            usageInfo[srcLv.root.as_Local()].nDerefRead += numReplaced;
-            if (numReplaced == slot.nDerefRead) {
+            usageInfo[srcLv.root.as_Local()].nDerefRead += replaceCb.numReplaced;
+            if (replaceCb.numReplaced == slot.nDerefRead) {
                 usageInfo[srcLv.root.as_Local()].nDerefRead -= 1;
             }
         }
 
         // If all usage sites were updated, then remove the original assignment
         // - Since this code works with `&mut`, can't just leave the assignment for DCE when mut
-        if (numReplaced == slot.nDerefRead + slot.nOtherRead) {
+        if (replaceCb.numReplaced == slot.nDerefRead + slot.nOtherRead) {
             DEBUG(thisVar << " - Erase " << slot.setLoc << " as it is no longer used (" << srcBb.statements[slot.setLoc.stmtIdx] << ")");
             srcBb.statements[slot.setLoc.stmtIdx] = MIRStatement();
             for (const auto& dropLoc : slot.dropLocs) {
@@ -3853,7 +3967,7 @@ default:
         }
 
         // Any replacements? Then there was an actionable change
-        if (numReplaced > 0) {
+        if (replaceCb.numReplaced > 0) {
             changed = true;
             // Return as soon as a variable has been changed, as this can invalidate the slot information
             return changed;
@@ -4086,46 +4200,54 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
     for (size_t i = 0; i < possible.size(); i++) {
         possibleBySource[possible[i].slot.getInner()].push_back(i);
     }
-    for (const auto& blk : fcn.blocks) {
-        for (const auto& stmt : blk.statements) {
-            state.setCurStmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
-            auto pos = OptimiseStmtRef(state.getCurBlock(), state.getCurStmtOfs());
-            optVisitMirLvalues(stmt, [&](const MIRLValue& lv, MIRValUsage /*vu*/) {
-                if (!(lv.root.is_Local() || lv.root.is_Argument())) {
-                    return false;
-                }
-                auto it = possibleBySource.find(lv.root.getInner());
-                if (it == possibleBySource.end()) {
-                    return false;
-                }
-                for (auto possibleIdx : it->second) {
-                    auto& p = possible[possibleIdx];
-                    if (!(pos == p.pos)) {
-                        DEBUG(state << p.slot << " Used - " << stmt);
-                        p.used = true;
-                    }
-                }
-                return false;
-            });
+    struct MarkUsed final: public LvalueVisitor {
+        MIRTypeResolve& state;
+        decltype(possible)& possible;
+        const decltype(possibleBySource)& possibleBySource;
+        // Statement scan: skip the possibility at this position. Terminator
+        // scan: skip when the terminator is a plain drop of the slot itself.
+        const OptimiseStmtRef* pos = nullptr;
+        const MIRTerminator::Data_Drop* dropped = nullptr;
+
+        MarkUsed(MIRTypeResolve& state, decltype(possible)& possible, const decltype(possibleBySource)& possibleBySource)
+            : state(state)
+            , possible(possible)
+            , possibleBySource(possibleBySource)
+        {
         }
-        const auto* dropped = blk.terminator.opt_Drop();
-        optVisitMirLvalues(blk.terminator, [&](const MIRLValue& lv, MIRValUsage /*vu*/) {
+
+        bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
             if (!(lv.root.is_Local() || lv.root.is_Argument())) {
                 return false;
             }
             auto it = possibleBySource.find(lv.root.getInner());
-            if (it != possibleBySource.end()) {
-                if (dropped && dropped->slot.wrappers.empty() && dropped->slot.root.getInner() == lv.root.getInner()) {
-                    return false;
-                }
-                for (auto possibleIdx : it->second) {
-                    auto& p = possible[possibleIdx];
-                    DEBUG(state << p.slot << " Used - " << blk.terminator);
+            if (it == possibleBySource.end()) {
+                return false;
+            }
+            if (dropped && dropped->slot.wrappers.empty() && dropped->slot.root.getInner() == lv.root.getInner()) {
+                return false;
+            }
+            for (auto possibleIdx : it->second) {
+                auto& p = possible[possibleIdx];
+                if (!(pos && *pos == p.pos)) {
+                    DEBUG(state << p.slot << " Used");
                     p.used = true;
                 }
             }
             return false;
-        });
+        }
+    } markUsed{state, possible, possibleBySource};
+    for (const auto& blk : fcn.blocks) {
+        for (const auto& stmt : blk.statements) {
+            state.setCurStmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
+            auto pos = OptimiseStmtRef(state.getCurBlock(), state.getCurStmtOfs());
+            markUsed.pos = &pos;
+            markUsed.dropped = nullptr;
+            optVisitMirLvalues(stmt, markUsed);
+        }
+        markUsed.pos = nullptr;
+        markUsed.dropped = blk.terminator.opt_Drop();
+        optVisitMirLvalues(blk.terminator, markUsed);
     }
 
     // Remove any marked with `used=true` from the list
@@ -4149,27 +4271,17 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
         replacements[destination] = next == replacements.end() ? source : next->second;
         fcn.blocks[it->pos.bbIdx].statements[it->pos.stmtIdx] = MIRStatement();
     }
-    for (auto& blk : fcn.blocks) {
-        for (auto& stmt : blk.statements) {
-            state.setCurStmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
-            optVisitMirLvaluesMut(stmt, [&](MIRLValue& lv, MIRValUsage /*vu*/) {
-                if (lv.root.is_Local()) {
-                    auto it = replacements.find(lv.root.getInner());
-                    if (it != replacements.end()) {
-                        DEBUG(state << lv.root << " Replace");
-                        lv.root = MIRLValue::Storage::fromInner(it->second);
-                    }
-                }
-                return false;
-            });
+    struct ReplaceRoots final: public LvalueVisitorMut {
+        MIRTypeResolve& state;
+        const decltype(replacements)& replacements;
+
+        ReplaceRoots(MIRTypeResolve& state, const decltype(replacements)& replacements)
+            : state(state)
+            , replacements(replacements)
+        {
         }
 
-        if (auto* drop = blk.terminator.opt_Drop(); drop && drop->slot.wrappers.empty() && (drop->slot.root.is_Local() || drop->slot.root.is_Argument()) && sourceSlots.count(drop->slot.root.getInner()) != 0) {
-            DEBUG(state << drop->slot.root << " Erase drop");
-            auto target = drop->target;
-            blk.terminator = MIRTerminator::make_Goto(target);
-        }
-        optVisitMirLvaluesMut(blk.terminator, [&](MIRLValue& lv, MIRValUsage /*vu*/) {
+        bool visitLvalue(MIRLValue& lv, MIRValUsage /*vu*/) override {
             if (lv.root.is_Local()) {
                 auto it = replacements.find(lv.root.getInner());
                 if (it != replacements.end()) {
@@ -4178,7 +4290,20 @@ bool MIROptimiseDeTemporaryReborrowOfUnused(MIRTypeResolve& state, MIRFunction& 
                 }
             }
             return false;
-        });
+        }
+    } replaceRoots{state, replacements};
+    for (auto& blk : fcn.blocks) {
+        for (auto& stmt : blk.statements) {
+            state.setCurStmt(&blk - fcn.blocks.data(), &stmt - blk.statements.data());
+            optVisitMirLvaluesMut(stmt, replaceRoots);
+        }
+
+        if (auto* drop = blk.terminator.opt_Drop(); drop && drop->slot.wrappers.empty() && (drop->slot.root.is_Local() || drop->slot.root.is_Argument()) && sourceSlots.count(drop->slot.root.getInner()) != 0) {
+            DEBUG(state << drop->slot.root << " Erase drop");
+            auto target = drop->target;
+            blk.terminator = MIRTerminator::make_Goto(target);
+        }
+        optVisitMirLvaluesMut(blk.terminator, replaceRoots);
     }
     changed = true;
     return changed;
@@ -4209,93 +4334,141 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
         // TODO: Keep track of what variables would invalidate a local (and compound on assignment)
         ::std::vector<unsigned> statementsToRemove; // List of statements that have to be removed
 
-        // ----- Helper closures -----
+        // ----- Helper visitors -----
         // > Check if a recorded assignment is no longer valid.
-        auto cbCheckInvalidate = [&](const MIRLValue& lv, MIRValUsage vu) {
-            for (auto it = localAssignments.begin(); it != localAssignments.end();) {
-                bool invalidated = false;
-                const auto& srcRvalue = bb.statements[it->second].as_Assign().src;
+        struct CheckInvalidate final: public LvalueVisitor {
+            MIRTypeResolve& state;
+            const MIRBasicBlock& bb;
+            decltype(localAssignments)& localAssignments;
 
-                // Destination invalidated?
-                if (lv.root.is_Local() && it->first == lv.root.as_Local()) {
-                    switch (vu) {
-                        case MIRValUsage::Borrow:
-                        case MIRValUsage::Write:
-                            DEBUG(state << "> Mutate/Borrowed " << lv);
-                            invalidated = true;
-                            break;
-                        default:
-                            break;
-                    }
+            CheckInvalidate(MIRTypeResolve& state, const MIRBasicBlock& bb, decltype(localAssignments)& localAssignments)
+                : state(state)
+                , bb(bb)
+                , localAssignments(localAssignments)
+            {
+            }
+
+            // Does the source rvalue mention the same root as `lv`?
+            struct SourceMentions final: public LvalueVisitor {
+                const MIRLValue& lv;
+                bool hit = false;
+
+                explicit SourceMentions(const MIRLValue& lv)
+                    : lv(lv)
+                {
                 }
-                // Source invalidated?
-                else {
-                    switch (vu) {
-                        case MIRValUsage::Borrow: // Borrows are annoying, assume they invalidate anything used
-                        case MIRValUsage::Write:  // Mutated? It's invalidated
-                        case MIRValUsage::Move:   // Moved? Now invalid
-                            optVisitMirLvalues(srcRvalue, [&](const MIRLValue& sLv, auto sVu) {
-                                if (sLv.root == lv.root) {
+
+                bool visitLvalue(const MIRLValue& sLv, MIRValUsage /*vu*/) override {
+                    if (sLv.root == lv.root) {
+                        hit = true;
+                        return true;
+                    }
+                    return false;
+                }
+            };
+
+            bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
+                for (auto it = localAssignments.begin(); it != localAssignments.end();) {
+                    bool invalidated = false;
+                    const auto& srcRvalue = bb.statements[it->second].as_Assign().src;
+
+                    // Destination invalidated?
+                    if (lv.root.is_Local() && it->first == lv.root.as_Local()) {
+                        switch (vu) {
+                            case MIRValUsage::Borrow:
+                            case MIRValUsage::Write:
+                                DEBUG(state << "> Mutate/Borrowed " << lv);
+                                invalidated = true;
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                    // Source invalidated?
+                    else {
+                        switch (vu) {
+                            case MIRValUsage::Borrow: // Borrows are annoying, assume they invalidate anything used
+                            case MIRValUsage::Write:  // Mutated? It's invalidated
+                            case MIRValUsage::Move: { // Moved? Now invalid
+                                SourceMentions mentions{lv};
+                                optVisitMirLvalues(srcRvalue, mentions);
+                                if (mentions.hit) {
                                     DEBUG(state << "> Invalidates source of Local(" << it->first << ") - " << srcRvalue);
                                     invalidated = true;
-                                    return true;
                                 }
-                                return false;
-                            });
-                            break;
-                        case MIRValUsage::Read: // Read is Ok
-                            break;
+                                break;
+                            }
+                            case MIRValUsage::Read: // Read is Ok
+                                break;
+                        }
+                    }
+
+                    if (invalidated) {
+                        it = localAssignments.erase(it);
+                    } else {
+                        ++it;
                     }
                 }
-
-                if (invalidated) {
-                    it = localAssignments.erase(it);
-                } else {
-                    ++it;
-                }
+                return false;
             }
-            return false;
-        };
+        } cbCheckInvalidate{state, bb, localAssignments};
         // ^^^ Check for invalidations
-        auto cbApplyReplacements = [&](auto& topLv, auto topUsage) {
-            // NOTE: Visits only the top-level LValues
-            // - The inner `visit_mir_lvalue_mut` handles sub-values
+        struct ApplyReplacements final: public LvalueVisitorMut {
+            MIRTypeResolve& state;
+            const MIRBasicBlock& bb;
+            decltype(localAssignments)& localAssignments;
+            decltype(statementsToRemove)& statementsToRemove;
+            bool& changed;
 
-            // TODO: Handle partial moves (only delete assignment if the value is fully used)
-            // > For now, don't do the replacement if it would delete the assignment UNLESS it's directly being used)
+            ApplyReplacements(MIRTypeResolve& state, const MIRBasicBlock& bb, decltype(localAssignments)& localAssignments, decltype(statementsToRemove)& statementsToRemove, bool& changed)
+                : state(state)
+                , bb(bb)
+                , localAssignments(localAssignments)
+                , statementsToRemove(statementsToRemove)
+                , changed(changed)
+            {
+            }
 
-            // 2. Search for replacements
-            if (topLv.root.is_Local()) {
-                bool topLevel = topLv.wrappers.empty();
-                auto ilv = MIRLValue::newLocal(topLv.root.as_Local());
-                auto it = localAssignments.find(topLv.root.as_Local());
-                if (it != localAssignments.end()) {
-                    const auto& newVal = bb.statements[it->second].as_Assign().src.as_Use();
-                    // - Copy? All is good.
-                    if (state.lvalueIsCopy(ilv)) {
-                        topLv = newVal.cloneWrapped(topLv.wrappers.begin(), topLv.wrappers.end());
-                        DEBUG(state << "> Replace (and keep) Local(" << it->first << ") with " << newVal);
-                        changed = true;
-                    }
-                    // - Top-level (directly used) also good.
-                    else if (topLevel && topUsage == MIRValUsage::Move) {
-                        // TODO: DstMeta/DstPtr _doesn't_ move, so shouldn't trigger this.
-                        topLv = newVal.clone();
-                        DEBUG(state << "> Replace (and remove) Local(" << it->first << ") with " << newVal);
-                        statementsToRemove.push_back(it->second);
-                        localAssignments.erase(it);
-                        changed = true;
-                    }
-                    // - Otherwise, remove the record.
-                    else {
-                        DEBUG(state << "> Non-copy value used within a LValue, remove record of Local(" << it->first << ")");
-                        localAssignments.erase(it);
+            bool visitLvalue(MIRLValue& topLv, MIRValUsage topUsage) override {
+                // NOTE: Visits only the top-level LValues
+                // - The inner `visit_mir_lvalue_mut` handles sub-values
+
+                // TODO: Handle partial moves (only delete assignment if the value is fully used)
+                // > For now, don't do the replacement if it would delete the assignment UNLESS it's directly being used)
+
+                // 2. Search for replacements
+                if (topLv.root.is_Local()) {
+                    bool topLevel = topLv.wrappers.empty();
+                    auto ilv = MIRLValue::newLocal(topLv.root.as_Local());
+                    auto it = localAssignments.find(topLv.root.as_Local());
+                    if (it != localAssignments.end()) {
+                        const auto& newVal = bb.statements[it->second].as_Assign().src.as_Use();
+                        // - Copy? All is good.
+                        if (state.lvalueIsCopy(ilv)) {
+                            topLv = newVal.cloneWrapped(topLv.wrappers.begin(), topLv.wrappers.end());
+                            DEBUG(state << "> Replace (and keep) Local(" << it->first << ") with " << newVal);
+                            changed = true;
+                        }
+                        // - Top-level (directly used) also good.
+                        else if (topLevel && topUsage == MIRValUsage::Move) {
+                            // TODO: DstMeta/DstPtr _doesn't_ move, so shouldn't trigger this.
+                            topLv = newVal.clone();
+                            DEBUG(state << "> Replace (and remove) Local(" << it->first << ") with " << newVal);
+                            statementsToRemove.push_back(it->second);
+                            localAssignments.erase(it);
+                            changed = true;
+                        }
+                        // - Otherwise, remove the record.
+                        else {
+                            DEBUG(state << "> Non-copy value used within a LValue, remove record of Local(" << it->first << ")");
+                            localAssignments.erase(it);
+                        }
                     }
                 }
+                // Return true to prevent recursion
+                return true;
             }
-            // Return true to prevent recursion
-            return true;
-        };
+        } cbApplyReplacements{state, bb, localAssignments, statementsToRemove, changed};
 
         // ----- Top-level algorithm ------
         // - Find expressions matching the pattern `Local(N) = Use(...)`
@@ -4319,9 +4492,19 @@ bool MIROptimiseDeTemporary(MIRTypeResolve& state, MIRFunction& fcn) {
             if (stmt.is_Assign() && stmt.as_Assign().dst.is_Local() && stmt.as_Assign().src.is_Use()) {
                 const auto& dstLv = stmt.as_Assign().dst;
                 const auto& srcLv = stmt.as_Assign().src.as_Use();
-                if (optVisitMirLvaluesInner(srcLv, MIRValUsage::Read, [&](const auto& lv, auto) {
-                    return lv.root == dstLv.root;
-                })) {
+                struct SameRoot final: public LvalueVisitor {
+                    const MIRLValue& dstLv;
+
+                    explicit SameRoot(const MIRLValue& dstLv)
+                        : dstLv(dstLv)
+                    {
+                    }
+
+                    bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
+                        return lv.root == dstLv.root;
+                    }
+                } sameRoot{dstLv};
+                if (optVisitMirLvaluesInner(srcLv, MIRValUsage::Read, sameRoot)) {
                     DEBUG(state << "> Don't record, self-referrential");
                 } else if (::std::any_of(srcLv.wrappers.begin(), srcLv.wrappers.end(), [](const auto& w) {
                     return w.is_Deref();
@@ -4507,17 +4690,29 @@ bool MIROptimiseUnifyTemporaries(MIRTypeResolve& state, MIRFunction& fcn) {
 
     if (replacementNeeded) {
         DEBUG("Replacing temporaries using {" << replacements << "}");
-        optVisitMirLvaluesMut(state, fcn, [&](auto& lv, auto) {
-            if (lv.root.is_Local()) {
-                auto it = replacements.find(lv.root.as_Local());
-                if (it != replacements.end()) {
-                    MIR_DEBUG(state, lv << " => Local(" << it->second << ")");
-                    lv.root = MIRLValue::Storage::newLocal(it->second);
-                    return true;
-                }
+        struct ReplaceLocals final: public LvalueVisitorMut {
+            MIRTypeResolve& state;
+            const decltype(replacements)& replacements;
+
+            ReplaceLocals(MIRTypeResolve& state, const decltype(replacements)& replacements)
+                : state(state)
+                , replacements(replacements)
+            {
             }
-            return false;
-        });
+
+            bool visitLvalue(MIRLValue& lv, MIRValUsage /*vu*/) override {
+                if (lv.root.is_Local()) {
+                    auto it = replacements.find(lv.root.as_Local());
+                    if (it != replacements.end()) {
+                        MIR_DEBUG(state, lv << " => Local(" << it->second << ")");
+                        lv.root = MIRLValue::Storage::newLocal(it->second);
+                        return true;
+                    }
+                }
+                return false;
+            }
+        } replaceLocals{state, replacements};
+        optVisitMirLvaluesMut(state, fcn, replaceLocals);
 
         // TODO: Replace in ScopeEnd too?
     }
@@ -4876,8 +5071,24 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
         for (size_t i = 0; i < block.statements.size(); i++) {
             state.setCurStmt(bbIdx, i);
             DEBUG(state << block.statements[i]);
-            optVisitMirLvaluesMut(block.statements[i], [&](MIRLValue& lv, auto vu) {
-                if (vu == MIRValUsage::Read && lv.wrappers.size() > 1 && lv.wrappers.front().is_Field() && lv.root.is_Local()) {
+            struct FieldOriginRewrite final: public LvalueVisitorMut {
+                MIRTypeResolve& state;
+                decltype(getField)& getField;
+                size_t bbIdx;
+                size_t i;
+                bool& changeHappend;
+
+                FieldOriginRewrite(MIRTypeResolve& state, decltype(getField)& getField, size_t bbIdx, size_t i, bool& changeHappend)
+                    : state(state)
+                    , getField(getField)
+                    , bbIdx(bbIdx)
+                    , i(i)
+                    , changeHappend(changeHappend)
+                {
+                }
+
+                bool visitLvalue(MIRLValue& lv, MIRValUsage vu) override {
+                    if (vu == MIRValUsage::Read && lv.wrappers.size() > 1 && lv.wrappers.front().is_Field() && lv.root.is_Local()) {
                     auto fieldIndex = lv.wrappers.front().as_Field();
                     auto innerLv = MIRLValue::newLocal(lv.root.as_Local());
                     auto outerLv = MIRLValue::newField(innerLv.clone(), fieldIndex);
@@ -4898,11 +5109,13 @@ bool MIROptimisePropagateKnownValues(MIRTypeResolve& state, MIRFunction& fcn) {
                         } else {
                             DEBUG(state << "No change");
                         }
-                        return false;
+                            return false;
+                        }
                     }
+                    return false;
                 }
-                return false;
-            });
+            } fieldOriginRewrite{state, getField, bbIdx, i, changeHappend};
+            optVisitMirLvaluesMut(block.statements[i], fieldOriginRewrite);
         }
     }
     return changeHappend;
@@ -5130,7 +5343,19 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
         };
 
         // Convert known indexes into field acceses
-        auto editLval = [&](MIRLValue& lv, MIRValUsage _vu) -> bool {
+        struct EditLval final: public LvalueVisitorMut {
+            MIRTypeResolve& state;
+            decltype(knownValues)& knownValues;
+            bool& changed;
+
+            EditLval(MIRTypeResolve& state, decltype(knownValues)& knownValues, bool& changed)
+                : state(state)
+                , knownValues(knownValues)
+                , changed(changed)
+            {
+            }
+
+            bool visitLvalue(MIRLValue& lv, MIRValUsage /*vu*/) override {
             for (auto& w : lv.wrappers) {
                 if (w.is_Index()) {
                     auto it = knownValues.find(MIRLValue::newLocal(w.as_Index()));
@@ -5159,7 +5384,8 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
             }
             return true;
-        };
+            }
+        } editLval{state, knownValues, changed};
 
         for (auto& stmt : bb.statements) {
             auto stmtidx = &stmt - &bb.statements.front();
@@ -6065,13 +6291,25 @@ default:
                 }
             }
             // - If a known temporary is borrowed mutably or mutated somehow, clear its knowledge
-            optVisitMirLvalues(stmt, [&knownValues, &knownValuesVar](const MIRLValue& lv, MIRValUsage vu) -> bool {
-                if (vu == MIRValUsage::Write) {
-                    knownValues.erase(lv);
-                    knownValuesVar.erase(lv);
+            struct ForgetWritten final: public LvalueVisitor {
+                decltype(knownValues)& knownValues;
+                decltype(knownValuesVar)& knownValuesVar;
+
+                ForgetWritten(decltype(knownValues)& knownValues, decltype(knownValuesVar)& knownValuesVar)
+                    : knownValues(knownValues)
+                    , knownValuesVar(knownValuesVar)
+                {
                 }
-                return false;
-            });
+
+                bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
+                    if (vu == MIRValUsage::Write) {
+                        knownValues.erase(lv);
+                        knownValuesVar.erase(lv);
+                    }
+                    return false;
+                }
+            } forgetWritten{knownValues, knownValuesVar};
+            optVisitMirLvalues(stmt, forgetWritten);
             // - Locate `temp = SOME_CONST` and record value
             if (const auto* e = stmt.opt_Assign()) {
                 if (e->dst.is_Local()) {
@@ -6189,9 +6427,18 @@ default:
             continue;
         }
 
-        auto hasCond = [&](const auto& lv, auto ut) -> bool {
-            return lv == te.cond;
-        };
+        struct HasCond final: public LvalueVisitor {
+            const MIRLValue& cond;
+
+            explicit HasCond(const MIRLValue& cond)
+                : cond(cond)
+            {
+            }
+
+            bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
+                return lv == cond;
+            }
+        } hasCond{te.cond};
         bool valKnown = false;
         bool knownVal;
         for (unsigned int i = bb.statements.size(); i--;) {
@@ -6318,7 +6565,20 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
 
     // 2. Check how the variables are used (allow one write, and no other direct usage)
     // - Removes any potentials that are invalidated.
-    optVisitMirLvalues(state, fcn, [&](const MIRLValue& lv, MIRValUsage vu) -> bool {
+    struct CheckPotentials final: public LvalueVisitor {
+        MIRTypeResolve& state;
+        const MIRFunction& fcn;
+        decltype(potentials)& potentials;
+
+        CheckPotentials(MIRTypeResolve& state, const MIRFunction& fcn, decltype(potentials)& potentials)
+            : state(state)
+            , fcn(fcn)
+            , potentials(potentials)
+        {
+        }
+
+        bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
+
         if (lv.root.is_Local()) {
             // Is this one of the potentials?
             auto it = potentials.find(lv.root.as_Local());
@@ -6359,7 +6619,9 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
             }
         }
         return true;
-    });
+    }
+    } checkPotentials{state, fcn, potentials};
+    optVisitMirLvalues(state, fcn, checkPotentials);
     // - All potentials removed? Return early
     if (potentials.empty()) {
         return false;
@@ -6433,7 +6695,18 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
     }
 
     // 4. Replace all usages
-    optVisitMirLvaluesMut(state, fcn, [&](MIRLValue& lv, MIRValUsage vu) -> bool {
+    struct ReplaceAggregateUses final: public LvalueVisitorMut {
+        MIRTypeResolve& state;
+        decltype(potentials)& potentials;
+
+        ReplaceAggregateUses(MIRTypeResolve& state, decltype(potentials)& potentials)
+            : state(state)
+            , potentials(potentials)
+        {
+        }
+
+        bool visitLvalue(MIRLValue& lv, MIRValUsage /*vu*/) override {
+
         if (lv.root.is_Local()) {
             // Is this one of the potentials?
             auto it = potentials.find(lv.root.as_Local());
@@ -6457,7 +6730,9 @@ bool MIROptimiseSplitAggregates(MIRTypeResolve& state, MIRFunction& fcn) {
             }
         }
         return true;
-    });
+    }
+    } replaceAggregateUses{state, potentials};
+    optVisitMirLvaluesMut(state, fcn, replaceAggregateUses);
 
     // If we reach this point, a replacement was done.
     changed = true;
@@ -6508,10 +6783,20 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
         }
     } valUses = {::std::vector<ValUse>(fcn.locals.size())};
 
-    optVisitMirLvalues(state, fcn, [&](const auto& lv, auto ut) {
-        valUses.useLvalue(lv, ut);
-        return false;
-    });
+    struct CollectValUses final: public LvalueVisitor {
+        decltype(valUses)& valUses;
+
+        explicit CollectValUses(decltype(valUses)& valUses)
+            : valUses(valUses)
+        {
+        }
+
+        bool visitLvalue(const MIRLValue& lv, MIRValUsage ut) override {
+            valUses.useLvalue(lv, ut);
+            return false;
+        }
+    } collectValUses{valUses};
+    optVisitMirLvalues(state, fcn, collectValUses);
 
     // --- Eliminate `tmp = Use(...)` (moves lvalues downwards)
     // > Find an assignment `tmp = Use(...)` where the temporary is only written and read once
@@ -6586,9 +6871,23 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                 bool srcIsLvalue = e.src.is_Use();
                 DEBUG("- Locate usage");
 
-                auto isLvalueUsage = [&](const auto& lv, auto) {
-                    return lv.root == e.dst.root;
-                };
+                struct IsLvalueUsage final: public LvalueVisitor {
+                    const MIRLValue& dst;
+                    bool found = false;
+
+                    explicit IsLvalueUsage(const MIRLValue& dst)
+                        : dst(dst)
+                    {
+                    }
+
+                    bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
+                        if (lv.root == dst.root) {
+                            found = true;
+                            return true;
+                        }
+                        return false;
+                    }
+                } isLvalueUsage{e.dst};
 
                 // Eligable for replacement
                 // Find where this value is used
@@ -6639,10 +6938,9 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     state.setCurStmtTerm(&block - &fcn.blocks.front());
                     DEBUG(state << "[find usage] " << block.terminator);
                     if (srcIsLvalue) {
-                        optVisitMirLvalues(block.terminator, [&](const auto& lv, auto vu) {
-                            found |= isLvalueUsage(lv, vu);
-                            return found;
-                        });
+                        isLvalueUsage.found = false;
+                        optVisitMirLvalues(block.terminator, isLvalueUsage);
+                        found |= isLvalueUsage.found;
                     }
                     switch (block.terminator.tag()) {
                         case MIRTerminator::TAG_Incomplete: {
@@ -6709,20 +7007,44 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
         // Apply replacements within replacements
         for (;;) {
             unsigned int innerReplacedCount = 0;
-            for (auto& r : replacements) {
-                optVisitMirLvaluesMut(r.second, [&](MIRLValue& lv, auto vu) {
-                    if (vu == MIRValUsage::Read || vu == MIRValUsage::Move) {
-                        visitMirLvalueMut(lv, vu, [&](MIRLValue::MRef& lvr, auto vu) {
-                            auto it = replacementsFind(lvr);
-                            if (it != replacements.end() && it->second.is_Use()) {
-                                lvr.replace(it->second.as_Use().clone());
-                                innerReplacedCount++;
-                            }
-                            return false;
-                        });
+            struct InnerReplace final: public LvalueRefVisitorMut {
+                decltype(replacements)& replacements;
+                decltype(replacementsFind)& replacementsFind;
+                unsigned int& innerReplacedCount;
+
+                InnerReplace(decltype(replacements)& replacements, decltype(replacementsFind)& replacementsFind, unsigned int& innerReplacedCount)
+                    : replacements(replacements)
+                    , replacementsFind(replacementsFind)
+                    , innerReplacedCount(innerReplacedCount)
+                {
+                }
+
+                bool visitLvalue(MIRLValue::MRef& lvr, MIRValUsage /*vu*/) override {
+                    auto it = replacementsFind(lvr);
+                    if (it != replacements.end() && it->second.is_Use()) {
+                        lvr.replace(it->second.as_Use().clone());
+                        innerReplacedCount++;
                     }
                     return false;
-                });
+                }
+            } innerReplace{replacements, replacementsFind, innerReplacedCount};
+            struct InnerReplaceTop final: public LvalueVisitorMut {
+                InnerReplace& inner;
+
+                explicit InnerReplaceTop(InnerReplace& inner)
+                    : inner(inner)
+                {
+                }
+
+                bool visitLvalue(MIRLValue& lv, MIRValUsage vu) override {
+                    if (vu == MIRValUsage::Read || vu == MIRValUsage::Move) {
+                        visitMirLvalueMut(lv, vu, inner);
+                    }
+                    return false;
+                }
+            } innerReplaceTop{innerReplace};
+            for (auto& r : replacements) {
+                optVisitMirLvaluesMut(r.second, innerReplaceTop);
             }
             if (innerReplacedCount == 0) {
                 break;
@@ -6734,8 +7056,21 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
         unsigned int replaced = 0;
         while (replaced < replacements.size()) {
             auto oldReplaced = replaced;
-            auto cb = [&](MIRLValue& lv, auto vu) {
-                return visitMirLvalueMut(lv, vu, [&](MIRLValue::MRef& lv, auto vu) {
+            struct ReplaceReads final: public LvalueRefVisitorMut {
+                MIRTypeResolve& state;
+                decltype(replacements)& replacements;
+                decltype(replacementsFind)& replacementsFind;
+                unsigned int& replaced;
+
+                ReplaceReads(MIRTypeResolve& state, decltype(replacements)& replacements, decltype(replacementsFind)& replacementsFind, unsigned int& replaced)
+                    : state(state)
+                    , replacements(replacements)
+                    , replacementsFind(replacementsFind)
+                    , replaced(replaced)
+                {
+                }
+
+                bool visitLvalue(MIRLValue::MRef& lv, MIRValUsage vu) override {
                     if (vu == MIRValUsage::Read || vu == MIRValUsage::Move) {
                         auto it = replacementsFind(lv);
                         if (it != replacements.end()) {
@@ -6748,8 +7083,20 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                         }
                     }
                     return false;
-                });
-            };
+                }
+            } replaceReads{state, replacements, replacementsFind, replaced};
+            struct ReplaceReadsTop final: public LvalueVisitorMut {
+                ReplaceReads& inner;
+
+                explicit ReplaceReadsTop(ReplaceReads& inner)
+                    : inner(inner)
+                {
+                }
+
+                bool visitLvalue(MIRLValue& lv, MIRValUsage vu) override {
+                    return visitMirLvalueMut(lv, vu, inner);
+                }
+            } cb{replaceReads};
             for (unsigned int blockIdx = 0; blockIdx < fcn.blocks.size(); blockIdx++) {
                 auto& block = fcn.blocks[blockIdx];
                 if (block.terminator.isDead()) {
@@ -6839,14 +7186,21 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                     // Ensure that the target doesn't change in the intervening time.
                     bool wasInvalidated = false;
                     for (auto it3 = it + 1; it3 != it2; it3++) {
-                        // Closure returns `true` if the passed lvalue is a component of `new_dst_lval`
-                        auto isLvalueInVal = [&](const auto& lv) {
-                            // Don't care about indexing?
-                            return lv.root == newDstLval.root;
-                        };
-                        if (optVisitMirLvalues(*it3, [&](const auto& lv, auto) {
-                            return isLvalueInVal(lv);
-                        })) {
+                        // `true` when the visited lvalue is a component of `newDstLval`
+                        struct IsLvalueInVal final: public LvalueVisitor {
+                            const MIRLValue& newDstLval;
+
+                            explicit IsLvalueInVal(const MIRLValue& newDstLval)
+                                : newDstLval(newDstLval)
+                            {
+                            }
+
+                            bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
+                                // Don't care about indexing?
+                                return lv.root == newDstLval.root;
+                            }
+                        } isLvalueInVal{newDstLval};
+                        if (optVisitMirLvalues(*it3, isLvalueInVal)) {
                             wasInvalidated = true;
                             break;
                         }
@@ -6926,9 +7280,21 @@ bool MIROptimisePropagateSingleAssignments(MIRTypeResolve& state, MIRFunction& f
                             replacementHappend = true;
                             break;
                         }
-                        if (optVisitMirLvalues(stmt, [&](const MIRLValue& lv, MIRValUsage vu) {
-                            return lv == *newDst || (vu == MIRValUsage::Write && lvalueImpactsDst(lv));
-                        })) {
+                        struct DstTouched final: public LvalueVisitor {
+                            const MIRLValue& newDst;
+                            decltype(lvalueImpactsDst)& lvalueImpactsDst;
+
+                            DstTouched(const MIRLValue& newDst, decltype(lvalueImpactsDst)& lvalueImpactsDst)
+                                : newDst(newDst)
+                                , lvalueImpactsDst(lvalueImpactsDst)
+                            {
+                            }
+
+                            bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
+                                return lv == newDst || (vu == MIRValUsage::Write && lvalueImpactsDst(lv));
+                            }
+                        } dstTouched{*newDst, lvalueImpactsDst};
+                        if (optVisitMirLvalues(stmt, dstTouched)) {
                             break;
                         }
                     }
@@ -7079,8 +7445,15 @@ bool MIROptimiseDeadAssignments(MIRTypeResolve& state, MIRFunction& fcn) {
     // Per-local flag indicating that the particular local is read.
     ::std::vector<bool> readLocals(fcn.locals.size());
     ::std::vector<bool> droppedLocals(fcn.locals.size());
-    for (const auto& bb : fcn.blocks) {
-        auto cb = [&](const MIRLValue& lv, MIRValUsage vu) {
+    struct RecordReads final: public LvalueVisitor {
+        decltype(readLocals)& readLocals;
+
+        explicit RecordReads(decltype(readLocals)& readLocals)
+            : readLocals(readLocals)
+        {
+        }
+
+        bool visitLvalue(const MIRLValue& lv, MIRValUsage /*vu*/) override {
             if (lv.root.is_Local()) {
                 readLocals[lv.root.as_Local()] = true;
             }
@@ -7090,7 +7463,9 @@ bool MIROptimiseDeadAssignments(MIRTypeResolve& state, MIRFunction& fcn) {
                 }
             }
             return false;
-        };
+        }
+    } cb{readLocals};
+    for (const auto& bb : fcn.blocks) {
         for (const auto& stmt : bb.statements) {
             // If the assignment is to a local, then just consider the source (the target is writing to a local)
             if (stmt.is_Assign() && stmt.as_Assign().dst.is_Local()) {
@@ -7331,27 +7706,39 @@ bool MIROptimiseGotoAssign(MIRTypeResolve& state, MIRFunction& fcn) {
 
     ::std::vector<unsigned> localReads(fcn.locals.size(), 0);
     ::std::vector<unsigned> localBorrows(fcn.locals.size(), 0);
-    optVisitMirLvalues(state, fcn, [&](const auto& lv, auto vu) {
-        if (lv.root.is_Local()) {
-            switch (vu) {
-                case MIRValUsage::Read:
-                case MIRValUsage::Move:
-                    localReads[lv.root.as_Local()]++;
-                    break;
-                case MIRValUsage::Borrow:
-                    localBorrows[lv.root.as_Local()]++;
-                    break;
-                case MIRValUsage::Write:
-                    break;
-            }
+    struct CountLocalUses final: public LvalueVisitor {
+        decltype(localReads)& localReads;
+        decltype(localBorrows)& localBorrows;
+
+        CountLocalUses(decltype(localReads)& localReads, decltype(localBorrows)& localBorrows)
+            : localReads(localReads)
+            , localBorrows(localBorrows)
+        {
         }
-        for (const auto& w : lv.wrappers) {
-            if (w.is_Index()) {
-                localReads[w.as_Index()]++;
+
+        bool visitLvalue(const MIRLValue& lv, MIRValUsage vu) override {
+            if (lv.root.is_Local()) {
+                switch (vu) {
+                    case MIRValUsage::Read:
+                    case MIRValUsage::Move:
+                        localReads[lv.root.as_Local()]++;
+                        break;
+                    case MIRValUsage::Borrow:
+                        localBorrows[lv.root.as_Local()]++;
+                        break;
+                    case MIRValUsage::Write:
+                        break;
+                }
             }
+            for (const auto& w : lv.wrappers) {
+                if (w.is_Index()) {
+                    localReads[w.as_Index()]++;
+                }
+            }
+            return true;
         }
-        return true;
-    });
+    } countLocalUses{localReads, localBorrows};
+    optVisitMirLvalues(state, fcn, countLocalUses);
 
     for (auto& dstBb : fcn.blocks) {
         if (dstBb.statements.empty()) {
@@ -7615,21 +8002,32 @@ bool MIROptimiseGarbageCollect(MIRTypeResolve& state, MIRFunction& fcn) {
     auto it = fcn.blocks.begin();
     for (unsigned int i = 0; i < visited.size(); i++) {
         if (visited[i]) {
-            auto lvalueCb = [&](MIRLValue& lv, auto) {
-                if (lv.root.is_Local()) {
-                    auto e = lv.root.as_Local();
-                    MIR_ASSERT(state, e < localRewriteTable.size(), "Variable out of range - " << lv);
-                    // If the table entry for this variable is !0, it wasn't marked as used
-                    MIR_ASSERT(state, localRewriteTable.at(e) != ~0u, "LValue " << lv << " incorrectly marked as unused");
-                    lv.root = MIRLValue::Storage::newLocal(localRewriteTable.at(e));
+            struct RewriteLocals final: public LvalueVisitorMut {
+                MIRTypeResolve& state;
+                const decltype(localRewriteTable)& localRewriteTable;
+
+                RewriteLocals(MIRTypeResolve& state, const decltype(localRewriteTable)& localRewriteTable)
+                    : state(state)
+                    , localRewriteTable(localRewriteTable)
+                {
                 }
-                for (auto& w : lv.wrappers) {
-                    if (w.is_Index()) {
-                        w = MIRLValue::Wrapper::newIndex(localRewriteTable.at(w.as_Index()));
+
+                bool visitLvalue(MIRLValue& lv, MIRValUsage /*vu*/) override {
+                    if (lv.root.is_Local()) {
+                        auto e = lv.root.as_Local();
+                        MIR_ASSERT(state, e < localRewriteTable.size(), "Variable out of range - " << lv);
+                        // If the table entry for this variable is !0, it wasn't marked as used
+                        MIR_ASSERT(state, localRewriteTable.at(e) != ~0u, "LValue " << lv << " incorrectly marked as unused");
+                        lv.root = MIRLValue::Storage::newLocal(localRewriteTable.at(e));
                     }
+                    for (auto& w : lv.wrappers) {
+                        if (w.is_Index()) {
+                            w = MIRLValue::Wrapper::newIndex(localRewriteTable.at(w.as_Index()));
+                        }
+                    }
+                    return false;
                 }
-                return false;
-            };
+            } lvalueCb{state, localRewriteTable};
             ::std::vector<bool> toRemoveStatements(it->statements.size());
             for (auto& stmt : it->statements) {
                 auto stmtIdx = &stmt - &it->statements.front();

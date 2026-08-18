@@ -116,6 +116,12 @@ public:
         return *this;
     }
 
+    /// The interned identity: stable for the process lifetime, equal iff the
+    /// paths are equal. For pointer-keyed caches.
+    const HIRSimplePathData* rawData() const {
+        return p;
+    }
+
     HIRSimplePath parent() const;
 
     const RcString& crateName() const;

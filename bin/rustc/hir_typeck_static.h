@@ -28,8 +28,43 @@ class StaticTraitResolve: public TraitResolveCommon {
     mutable ::std::map<HIRTypeRef, bool> dropCache;
     mutable ::std::map<std::string, HIRTypeRef> atyCache;
 
+    /// Cache key for findImplCheckCrateRaw: the impl side is identified by
+    /// the addresses of its (immutable, pool-owned) definition parts, the
+    /// destination side by interned pointers. The variable-content part
+    /// (destination trait params) lives in the bucket entries.
+    struct ImplCheckKey {
+        const void* implParamsDef;
+        const void* implTraitParams;
+        const HIRTypeData* implType;
+        const void* desTraitPath;
+        const HIRTypeData* desType;
+
+        bool operator<(const ImplCheckKey& x) const {
+            if (implParamsDef != x.implParamsDef) {
+                return implParamsDef < x.implParamsDef;
+            }
+            if (implTraitParams != x.implTraitParams) {
+                return implTraitParams < x.implTraitParams;
+            }
+            if (implType != x.implType) {
+                return implType < x.implType;
+            }
+            if (desTraitPath != x.desTraitPath) {
+                return desTraitPath < x.desTraitPath;
+            }
+            return desType < x.desType;
+        }
+    };
+
+    struct ImplCheckEntry {
+        bool hasDesParams;
+        HIRPathParams desParams;
+        HIRPathParams implParams;
+        HIRCompare result;
+    };
+
     /// Cache of the result of find_impl__check_crate_raw
-    mutable ::std::map<std::string, std::pair<HIRPathParams, HIRCompare>> cachedImplChecks;
+    mutable ::std::map<ImplCheckKey, ThinVector<ImplCheckEntry>> cachedImplChecks;
     mutable ::std::vector<::std::tuple<const HIRSimplePath*, const HIRPathParams*, const HIRTypeData*>> findImplStack;
     // Owned by the crate ObjPool and reused across all fully-static goals.
     mutable NextSolverBridge* nextSolver = nullptr;
