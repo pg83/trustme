@@ -3538,6 +3538,21 @@ ASTFunction ParseFunctionDef(TokenStream& lex, Span definitionSpan, bool allowSe
     // Return type
     ASTType* retType = lex.getTokenIf(TOK_THINARROW) ? ParseType(lex) : mkType(lex.typePool(), ASTTypeTags::Unit(), lex.pointSpan());
 
+    // `contract_requires(|| ..)` and `contract_ensures(|ret| ..)` state a
+    // condition the caller and the function each have to hold to. Nothing here
+    // checks them, and a condition that holds changes no result, so they are
+    // parsed and dropped.
+    while (lex.lookahead(0) == TOK_IDENT && lex.lookahead(1) == TOK_PAREN_OPEN) {
+        auto name = lex.getToken();
+        if (name.ident().name != "contract_requires" && name.ident().name != "contract_ensures") {
+            PUTBACK(name, lex);
+            break;
+        }
+        lex.getTokenCheck(TOK_PAREN_OPEN);
+        (void)ParseExpr0(lex);
+        lex.getTokenCheck(TOK_PAREN_CLOSE);
+    }
+
     // Bounds
     if (lex.getTokenIf(TOK_RWORD_WHERE)) {
         ParseWhereClause(lex, params);
