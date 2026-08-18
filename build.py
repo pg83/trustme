@@ -148,6 +148,13 @@ for tu_src in sorted(build.glob("$(S)/bin/rustc/*.tu")):
         {"src": tu_gen_cpp, "inputs": [f"$(S)/bin/rustc/{tu_stem}.h"]}
     )
 
+# Real compiler unions link into the compiler (and, via SRC, into rustc_ut);
+# the tagged_union_sample fixture stays out of the compiler binary.
+tu_compiler_srcs = [
+    entry for entry in tu_generated_srcs
+    if not entry["src"].endswith("/tagged_union_sample_tu.cpp")
+]
+
 
 def compiler_source(source, *generated_inputs):
     inputs = list(generated_inputs)
@@ -172,7 +179,7 @@ if system_rustc_mode:
     )
 else:
     rustc = program(
-        srcs=[compiler_source(source) for source in SRC],
+        srcs=[*[compiler_source(source) for source in SRC], *tu_compiler_srcs],
         name="rustc",
         output="$(B)/bin/rustc",
         deps=[platform_libstd, codegen_c_prelude, unicode_nfc_tables],

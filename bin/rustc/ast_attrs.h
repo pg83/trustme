@@ -130,4 +130,5 @@ public:
     friend ::std::ostream& operator<<(::std::ostream& os, const ASTAttribute& x);
 };
 
-TAGGED_UNION(ASTAttributeData, None, (None, struct {}), (ValueUnexpanded, ASTExprNodeP), (String, struct { ::std::string val; }), (List, struct { ::std::vector<ASTAttribute> subItems; }));
+// Definitions generated from ast_attrs.tu.
+#include "ast_attrs_tu.h"

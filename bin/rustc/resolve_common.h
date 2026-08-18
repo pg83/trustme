@@ -22,13 +22,8 @@ class HIRProcMacro;
 class HIRTypeItem;
 class HIRValueItem;
 
-TAGGED_UNION(ResolveModuleRef, None, (None, struct {}), (ImplicitPrelude, struct {}), (Ast, const ASTModule*), (Hir, const HIRModule*));
-
-TAGGED_UNION(ResolveItemRefMacro, None, (None, struct {}), (InternalMacro, ExpandProcMacro*), (ProcMacro, const HIRProcMacro*), (MacroRules, const MacroRules*));
-TAGGED_UNION(ResolveItemRefType, None, (None, struct {}), (Ast, const ASTItem*), (Hir, const HIRTypeItem*), (HirRoot, const HIRCrate*), (AstRoot, const ASTModule*));
-TAGGED_UNION(ResolveItemRefValue, None, (None, struct {}), (Ast, const ASTItem*), (Hir, const HIRValueItem*));
-
-TAGGED_UNION(ResolveItemRef, None, (None, struct {}), (Namespace, ResolveItemRefType), (Value, ResolveItemRefValue), (Macro, ResolveItemRefMacro));
+// Definitions generated from resolve_common.tu.
+#include "resolve_common_tu.h"
 
 enum class ResolveNamespace {
     Namespace,
