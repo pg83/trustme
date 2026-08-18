@@ -2460,51 +2460,63 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
             };
 
             DEBUG(i.data.tagStr() << " " << mod.path() << "::" << i.name);
-            TU_MATCH_HDRA( (i.data), { )
-            // Expand cfg within types, so derive macros don't need to care
-            TU_ARMA(Struct, str) {
-                switch (str.data.tag()) {
-                    case ASTStructData::TAG_Unit: {
-                        auto& e = str.data.as_Unit();
-                        (void)e;
-                        break;
+            switch (i.data.tag()) {
+                case ASTItem::TAG_Struct: {
+                    auto& str = i.data.as_Struct();
+                    switch (str.data.tag()) {
+                        case ASTStructData::TAG_Unit: {
+                            auto& e = str.data.as_Unit();
+                            (void)e;
+                            break;
+                        }
+                        case ASTStructData::TAG_Struct: {
+                            auto& e = str.data.as_Struct();
+                            H::filterCfg(*es.wb.settings, e.ents);
+                            break;
+                        }
+                        case ASTStructData::TAG_Tuple: {
+                            auto& e = str.data.as_Tuple();
+                            H::filterCfg(*es.wb.settings, e.ents);
+                            break;
+                        }
                     }
-                    case ASTStructData::TAG_Struct: {
-                        auto& e = str.data.as_Struct();
-                        H::filterCfg(*es.wb.settings, e.ents);
-                        break;
-                    }
-                    case ASTStructData::TAG_Tuple: {
-                        auto& e = str.data.as_Tuple();
-                        H::filterCfg(*es.wb.settings, e.ents);
-                        break;
-                    }
+                    break;
                 }
-                }
-                TU_ARMA(Union, unm) {
+                case ASTItem::TAG_Union: {
+                    auto& unm = i.data.as_Union();
                     H::filterCfg(*es.wb.settings, unm.variants);
+                    break;
                 }
-                TU_ARMA(Enum, enm) {
+                case ASTItem::TAG_Enum: {
+                    auto& enm = i.data.as_Enum();
                     for (auto it = enm.variants().begin(); it != enm.variants().end();) {
                         if (!checkCfgAttrs(*es.wb.settings, it->attrs)) {
                             it = enm.variants().erase(it);
                         } else {
-                        TU_MATCH_HDRA( (it->data), { )
-                        TU_ARMA(Unit, e) {
-                                }
-                                TU_ARMA(Tuple, e) {
-                                    H::filterCfg(*es.wb.settings, e.items);
-                                }
-                                TU_ARMA(Struct, e) {
-                                    H::filterCfg(*es.wb.settings, e.fields);
-                                }
+                        switch (it->data.tag()) {
+                            case ASTEnumVariantData::TAG_Unit: {
+                                auto& e = it->data.as_Unit();
+                                (void)e;
+                                break;
+                            }
+                            case ASTEnumVariantData::TAG_Tuple: {
+                                auto& e = it->data.as_Tuple();
+                                H::filterCfg(*es.wb.settings, e.items);
+                                break;
+                            }
+                            case ASTEnumVariantData::TAG_Struct: {
+                                auto& e = it->data.as_Struct();
+                                H::filterCfg(*es.wb.settings, e.fields);
+                                break;
+                            }
                         }
 
                         ++ it;
                         }
                     }
+                    break;
                 }
-                default:
+default:
                     break;
             }
         }
@@ -2683,48 +2695,55 @@ void ExpandMod(const ExpandState& es, ASTAbsolutePath modpath, ASTModule& mod, u
             case ASTItem::TAG_Struct: {
                 auto& e = dat.as_Struct();
                 ExpandGenericParams(es, mod, e.params());
-                TU_MATCH_HDRA( (e.data), {)
-                TU_ARMA(Unit, sd) {
-                        }
-                        TU_ARMA(Struct, sd) {
-                            for (auto it = sd.ents.begin(); it != sd.ents.end();) {
-                                auto& si = *it;
-                                ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                                ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
-                                    d.handle(sp, a, es.wb, es.crate, si);
-                                });
-                                ExpandType(es, mod, si.type);
-                                ExpandExpr(es, si.defaultValue);
-                                ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
-                                    d.handle(sp, a, es.wb, es.crate, si);
-                                });
+                switch (e.data.tag()) {
+                    case ASTStructData::TAG_Unit: {
+                        auto& sd = e.data.as_Unit();
+                        (void)sd;
+                        break;
+                    }
+                    case ASTStructData::TAG_Struct: {
+                        auto& sd = e.data.as_Struct();
+                        for (auto it = sd.ents.begin(); it != sd.ents.end();) {
+                            auto& si = *it;
+                            ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                                d.handle(sp, a, es.wb, es.crate, si);
+                            });
+                            ExpandType(es, mod, si.type);
+                            ExpandExpr(es, si.defaultValue);
+                            ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+                                d.handle(sp, a, es.wb, es.crate, si);
+                            });
 
-                                if (si.name == "") {
-                                    it = sd.ents.erase(it);
-                                } else {
-                                    ++it;
-                                }
+                            if (si.name == "") {
+                                it = sd.ents.erase(it);
+                            } else {
+                                ++it;
                             }
                         }
-                        TU_ARMA(Tuple, sd) {
-                            for (auto it = sd.ents.begin(); it != sd.ents.end();) {
-                                auto& si = *it;
-                                ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
-                                ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
-                                    d.handle(sp, a, es.wb, es.crate, si);
-                                });
-                                ExpandType(es, mod, si.type);
-                                ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
-                                    d.handle(sp, a, es.wb, es.crate, si);
-                                });
+                        break;
+                    }
+                    case ASTStructData::TAG_Tuple: {
+                        auto& sd = e.data.as_Tuple();
+                        for (auto it = sd.ents.begin(); it != sd.ents.end();) {
+                            auto& si = *it;
+                            ExpandAttrsCfgAttr(*es.wb.settings, si.attrs);
+                            ExpandAttrs(es, si.attrs, AttrStage::Pre, [&](const Span& sp, const auto& d, const auto& a) {
+                                d.handle(sp, a, es.wb, es.crate, si);
+                            });
+                            ExpandType(es, mod, si.type);
+                            ExpandAttrs(es, si.attrs, AttrStage::Post, [&](const Span& sp, const auto& d, const auto& a) {
+                                d.handle(sp, a, es.wb, es.crate, si);
+                            });
 
-                                if (!si.type->isValid()) {
-                                    it = sd.ents.erase(it);
-                                } else {
-                                    ++it;
-                                }
+                            if (!si.type->isValid()) {
+                                it = sd.ents.erase(it);
+                            } else {
+                                ++it;
                             }
                         }
+                        break;
+                    }
                 }
                 break;
             }

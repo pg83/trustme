@@ -3335,7 +3335,9 @@ default:
                     of << ";\n";
                     break;
                 }
-                    TU_ARM(stmt, SaveDropFlag, e) {
+                    break;
+                    case MIRStatement::TAG_SaveDropFlag: {
+                        auto& e = stmt.as_SaveDropFlag();
                         of << indent << "if(df" << e.idx << ") { ";
                         emitLvalue(e.slot);
                         of << ".DATA[" << (e.bitIndex / 8) << "] |= (1 << " << (e.bitIndex % 8) << ");";
@@ -3343,13 +3345,17 @@ default:
                         emitLvalue(e.slot);
                         of << ".DATA[" << (e.bitIndex / 8) << "] &= ~(1 << " << (e.bitIndex % 8) << ");";
                         of << " }\n";
+
                     }
                     break;
-                    TU_ARM(stmt, LoadDropFlag, e) {
+                    break;
+                    case MIRStatement::TAG_LoadDropFlag: {
+                        auto& e = stmt.as_LoadDropFlag();
                         of << indent << "df" << e.idx << " = ((";
                         emitLvalue(e.slot);
                         of << ".DATA[" << (e.bitIndex / 8) << "] & (1 << " << (e.bitIndex % 8) << ")) != 0)";
                         of << ";\n";
+
                     }
                     break;
                 case MIRStatement::TAG_Asm:
@@ -5485,53 +5491,56 @@ default:
                                 MIR_BUG(localMirRes, "Input-only asm parameter listed as an output");
                         }
                     }
-                    TU_MATCH_HDRA((p.spec), {)
-                    TU_ARMA(Class, c)
-                        // https://gcc.gnu.org/onlinedocs/gcc/Machine-Constraints.html
-                        switch(c)
-                        {
-                            // x86
-                            case AsmRegisterClass::x86Reg:
-                                of << "r";
-                                break;
-                            case AsmRegisterClass::x86RegAbcd:
-                                of << "Q";
-                                break;
-                            case AsmRegisterClass::x86RegByte:
-                                of << "q";
-                                break;
-                            case AsmRegisterClass::x86Xmm:
-                                of << "x";
-                                break;
-                            case AsmRegisterClass::x86Ymm:
-                                of << "x";
-                                break;
-                            case AsmRegisterClass::x86Zmm:
-                                of << "v";
-                                break;
-                            case AsmRegisterClass::x86Kreg:
-                                of << "Yk";
-                                break;
-                            // riscv
-                            case AsmRegisterClass::riscvReg:
-                                of << "r";
-                                break;
-                            case AsmRegisterClass::riscvFreg:
-                                of << "f";
-                                break;
+                    switch (p.spec.tag()) {
+                        case AsmRegisterSpec::TAG_Class: {
+                            auto& c = p.spec.as_Class();
+                            // https://gcc.gnu.org/onlinedocs/gcc/Machine-Constraints.html
+                            switch (c) {
+                                // x86
+                                case AsmRegisterClass::x86Reg:
+                                    of << "r";
+                                    break;
+                                case AsmRegisterClass::x86RegAbcd:
+                                    of << "Q";
+                                    break;
+                                case AsmRegisterClass::x86RegByte:
+                                    of << "q";
+                                    break;
+                                case AsmRegisterClass::x86Xmm:
+                                    of << "x";
+                                    break;
+                                case AsmRegisterClass::x86Ymm:
+                                    of << "x";
+                                    break;
+                                case AsmRegisterClass::x86Zmm:
+                                    of << "v";
+                                    break;
+                                case AsmRegisterClass::x86Kreg:
+                                    of << "Yk";
+                                    break;
+                                // riscv
+                                case AsmRegisterClass::riscvReg:
+                                    of << "r";
+                                    break;
+                                case AsmRegisterClass::riscvFreg:
+                                    of << "f";
+                                    break;
+                            }
+                            break;
                         }
-                        TU_ARMA(Explicit, name) {
+                        case AsmRegisterSpec::TAG_Explicit: {
+                            auto& name = p.spec.as_Explicit();
+                            (void)name;
                             of << "r";
+                            break;
                         }
                     }
                     of << "\" (";
-                    if( !p.output ) {
+                    if (!p.output) {
                         of << "asm_anon_" << i;
-                    }
-                    else if( const auto* regnameP = p.spec.opt_Explicit() ) {
+                    } else if (const auto* regnameP = p.spec.opt_Explicit()) {
                         of << "asm_" << *regnameP;
-                    }
-                    else {
+                    } else {
                         emitLvalue(*p.output);
                     }
                     of << ")";
@@ -5552,51 +5561,55 @@ default:
                                 MIR_ASSERT(localMirRes, it != outputs.end(), "Missing asm output");
                                 of << (it - outputs.begin());
                             } else {
-                                TU_MATCH_HDRA((r.spec), {)
-                                TU_ARMA(Class, c)
-                                    switch(c)
-                                    {
-                                        // x86
-                                        case AsmRegisterClass::x86Reg:
-                                            of << "r";
-                                            break;
-                                        case AsmRegisterClass::x86RegAbcd:
-                                            of << "Q";
-                                            break;
-                                        case AsmRegisterClass::x86RegByte:
-                                            of << "q";
-                                            break;
-                                        case AsmRegisterClass::x86Xmm:
-                                            of << "x";
-                                            break;
-                                        case AsmRegisterClass::x86Ymm:
-                                            of << "x";
-                                            break;
-                                        case AsmRegisterClass::x86Zmm:
-                                            of << "v";
-                                            break;
-                                        case AsmRegisterClass::x86Kreg:
-                                            of << "Yk";
-                                            break;
-                                        // riscv
-                                        case AsmRegisterClass::riscvReg:
-                                            of << "r";
-                                            break;
-                                        case AsmRegisterClass::riscvFreg:
-                                            of << "f";
-                                            break;
+                                switch (r.spec.tag()) {
+                                    case AsmRegisterSpec::TAG_Class: {
+                                        auto& c = r.spec.as_Class();
+                                        switch (c) {
+                                            // x86
+                                            case AsmRegisterClass::x86Reg:
+                                                of << "r";
+                                                break;
+                                            case AsmRegisterClass::x86RegAbcd:
+                                                of << "Q";
+                                                break;
+                                            case AsmRegisterClass::x86RegByte:
+                                                of << "q";
+                                                break;
+                                            case AsmRegisterClass::x86Xmm:
+                                                of << "x";
+                                                break;
+                                            case AsmRegisterClass::x86Ymm:
+                                                of << "x";
+                                                break;
+                                            case AsmRegisterClass::x86Zmm:
+                                                of << "v";
+                                                break;
+                                            case AsmRegisterClass::x86Kreg:
+                                                of << "Yk";
+                                                break;
+                                            // riscv
+                                            case AsmRegisterClass::riscvReg:
+                                                of << "r";
+                                                break;
+                                            case AsmRegisterClass::riscvFreg:
+                                                of << "f";
+                                                break;
+                                        }
+                                        break;
                                     }
-                                TU_ARMA(Explicit, name) {
+                                    case AsmRegisterSpec::TAG_Explicit: {
+                                        auto& name = r.spec.as_Explicit();
+                                        (void)name;
                                         of << "r";
+                                        break;
                                     }
                                 }
                             }
                             assert(r.input);
                             of << "\" (";
-                            if( const auto* regnameP = p.as_Reg().spec.opt_Explicit() ) {
+                            if (const auto* regnameP = p.as_Reg().spec.opt_Explicit()) {
                                 of << "asm_" << *regnameP;
-                            }
-                            else {
+                            } else {
                                 emitParam(*r.input);
                             }
                             of << ")";
@@ -6544,17 +6557,26 @@ default:
                     const auto* repr = TargetGetTypeRepr(sp, resolve_, ty);
                     MIR_ASSERT(localMirRes, repr, "No repr for enum " << ty);
                     switch (repr->variants.tag()) {
-                            TU_ARM(repr->variants, None, _e)
-                            of << "0";
                             break;
-                            TU_ARM(repr->variants, Values, ve) {
+                            case TypeReprVariantMode::TAG_None: {
+                                auto& _e = repr->variants.as_None();
+                                (void)_e;
+                                of << "0";
+                            }
+                            break;
+                            break;
+                            case TypeReprVariantMode::TAG_Values: {
+                                auto& ve = repr->variants.as_Values();
                                 of << "(*";
                                 emitParam(e.args.at(0));
                                 of << ")";
                                 emitEnumPath(repr, ve.field);
+
                             }
                             break;
-                            TU_ARM(repr->variants, Linear, ve) {
+                            break;
+                            case TypeReprVariantMode::TAG_Linear: {
+                                auto& ve = repr->variants.as_Linear();
                                 const auto& tagTy = TargetGetInnerType(sp, resolve_, *repr, ve.field.index, ve.field.subFields);
                                 const bool pointerTag = tagTy->is_Pointer() || tagTy->is_Borrow() || tagTy->is_Function();
                                 auto emitTag = [&]() {
@@ -6581,9 +6603,12 @@ default:
                                 } else {
                                     emitTag();
                                 }
+
                             }
                             break;
-                            TU_ARM(repr->variants, NonZero, ve) {
+                            break;
+                            case TypeReprVariantMode::TAG_NonZero: {
+                                auto& ve = repr->variants.as_NonZero();
                                 of << "(*";
                                 emitParam(e.args.at(0));
                                 of << ")";
@@ -6591,6 +6616,7 @@ default:
                                 of << " ";
                                 of << (ve.zeroVariant ? "==" : "!=");
                                 of << " 0";
+
                             }
                             break;
                     }

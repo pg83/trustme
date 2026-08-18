@@ -1071,16 +1071,21 @@ void ResolveAbsolutePathBindUFCS(Context& context, const Span& sp, Context::Look
                     if (item.name != node.name()) {
                         continue;
                     }
-                TU_MATCH_HDRA( (item.data), {)
-                default:
+                switch (item.data.tag()) {
+default:
                     // TODO: Error
-                TU_ARMA(Function, e) {
-                            // Bind as trait method
-                            path.bindings.value.set(ufcs.trait->bindings.type.path + item.name, ASTPathBindingValue::make_Function({&e}));
-                        }
-                        TU_ARMA(Static, e) {
-                            // Resolve to asociated static
-                        }
+                    case ASTItem::TAG_Function: {
+                        auto& e = item.data.as_Function();
+                        // Bind as trait method
+                        path.bindings.value.set(ufcs.trait->bindings.type.path + item.name, ASTPathBindingValue::make_Function({&e}));
+                        break;
+                    }
+                    case ASTItem::TAG_Static: {
+                        auto& e = item.data.as_Static();
+                        (void)e;
+                        // Resolve to asociated static
+                        break;
+                    }
                 }
                 }
                 break;
@@ -1162,10 +1167,11 @@ namespace {
                 ERROR(sp, E0000, "Couldn't find path component '" << name << "' of " << p);
             }
 
-            TU_MATCH_HDRA( (it->second->ent), {)
-            default:
+            switch (it->second->ent.tag()) {
+default:
                 TODO(sp, "Unknown item type in path - " << i << " " << p << " - " << it->second->ent.tagStr());
-                TU_ARMA(Enum, e) {
+                case HIRTypeItem::TAG_Enum: {
+                    auto& e = it->second->ent.as_Enum();
                     if (i != p.components().size() - 2) {
                         ERROR(sp, E0000, "Enum as path component in unexpected location - " << p);
                     }
@@ -1190,8 +1196,10 @@ namespace {
 
                     return;
                 }
-                TU_ARMA(Module, e) {
+                case HIRTypeItem::TAG_Module: {
+                    auto& e = it->second->ent.as_Module();
                     hmod = &e;
+                    break;
                 }
             }
         }

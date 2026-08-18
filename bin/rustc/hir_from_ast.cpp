@@ -380,27 +380,43 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
         }
     };
 
-    TU_MATCH_HDRA( (pat.data()), {)
-    TU_ARMA(MaybeBind, e) {
+    switch (pat.data().tag()) {
+        case ASTPatternData::TAG_MaybeBind: {
+            auto& e = pat.data().as_MaybeBind();
+            (void)e;
             BUG(pat.span(), "Encountered MaybeBind pattern");
+            break;
         }
-        TU_ARMA(Macro, e) {
+        case ASTPatternData::TAG_Macro: {
+            auto& e = pat.data().as_Macro();
+            (void)e;
             BUG(pat.span(), "Encountered Macro pattern");
+            break;
         }
-        TU_ARMA(Any, e)
-        return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
-        // `!` matches a value of a type that has none. Every use of it is
-        // either dropped as an unreachable alternative or made to diverge, so
-        // what is left to lower only has to read the place it names.
-        TU_ARMA(Never, e)
-        return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
-        TU_ARMA(Box, e)
-        return HIRPattern{mv$(bindings), HIRPattern::Data::make_Box({box$(LowerHIRPattern(*e.sub))})};
-        TU_ARMA(Deref, e)
-        return HIRPattern{mv$(bindings), HIRPattern::Data::make_Deref({HIRPattern::DerefKind::Unknown, nullptr, box$(LowerHIRPattern(*e.sub))})};
-        TU_ARMA(Ref, e)
-        return HIRPattern{mv$(bindings), HIRPattern::Data::make_Ref({(e.mut ? HIRBorrowType::Unique : HIRBorrowType::Shared), box$(LowerHIRPattern(*e.sub))})};
-        TU_ARMA(Tuple, e) {
+        case ASTPatternData::TAG_Any: {
+            auto& e = pat.data().as_Any();
+            (void)e;
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
+        }
+        case ASTPatternData::TAG_Never: {
+            auto& e = pat.data().as_Never();
+            (void)e;
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Any({})};
+        }
+        case ASTPatternData::TAG_Box: {
+            auto& e = pat.data().as_Box();
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Box({box$(LowerHIRPattern(*e.sub))})};
+        }
+        case ASTPatternData::TAG_Deref: {
+            auto& e = pat.data().as_Deref();
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Deref({HIRPattern::DerefKind::Unknown, nullptr, box$(LowerHIRPattern(*e.sub))})};
+        }
+        case ASTPatternData::TAG_Ref: {
+            auto& e = pat.data().as_Ref();
+            return HIRPattern{mv$(bindings), HIRPattern::Data::make_Ref({(e.mut ? HIRBorrowType::Unique : HIRBorrowType::Shared), box$(LowerHIRPattern(*e.sub))})};
+        }
+        case ASTPatternData::TAG_Tuple: {
+            auto& e = pat.data().as_Tuple();
             auto leading = H(*this).lowerhirPatternvec(e.start);
             auto trailing = H(*this).lowerhirPatternvec(e.end);
 
@@ -410,11 +426,10 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
                 assert(trailing.size() == 0);
                 return HIRPattern(mv$(bindings), HIRPattern::Data::make_Tuple({mv$(leading)}));
             }
+            break;
         }
-        ///
-        /// Named tuple pattern
-        ///
-        TU_ARMA(StructTuple, e) {
+        case ASTPatternData::TAG_StructTuple: {
+            auto& e = pat.data().as_StructTuple();
             auto leading = H(*this).lowerhirPatternvec(e.tupPat.start);
             auto trailing = H(*this).lowerhirPatternvec(e.tupPat.end);
 
@@ -434,10 +449,8 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
                 })
             );
         }
-        ///
-        /// Struct pattern
-        ///
-        TU_ARMA(Struct, e) {
+        case ASTPatternData::TAG_Struct: {
+            auto& e = pat.data().as_Struct();
             ::std::vector<::std::pair<RcString, HIRPattern>> subPatterns;
             for (const auto& sp : e.subPatterns) {
                 subPatterns.push_back(::std::make_pair(sp.name, LowerHIRPattern(sp.pat)));
@@ -461,8 +474,8 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
 
             return HIRPattern(mv$(bindings), HIRPattern::Data::make_PathNamed({LowerHIRPatternPath(pat.span(), e.path, FromASTPathClass::Type), HIRPattern::PathBinding(), mv$(subPatterns), e.isExhaustive}));
         }
-
-        TU_ARMA(Value, e) {
+        case ASTPatternData::TAG_Value: {
+            auto& e = pat.data().as_Value();
             if (e.end.is_Invalid()) {
                 return HIRPattern{mv$(bindings), HIRPattern::Data::make_Value({H(*this).lowerhirPatternValue(pat.span(), e.start)})};
             } else if (e.start.is_Invalid()) {
@@ -470,8 +483,10 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
             } else {
                 return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), true})};
             }
+            break;
         }
-        TU_ARMA(ValueLeftInc, e) {
+        case ASTPatternData::TAG_ValueLeftInc: {
+            auto& e = pat.data().as_ValueLeftInc();
             if (e.end.is_Invalid()) {
                 return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), {}, false})};
             }
@@ -480,14 +495,16 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
             }
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_Range({box$(H(*this).lowerhirPatternValue(pat.span(), e.start)), box$(H(*this).lowerhirPatternValue(pat.span(), e.end)), false})};
         }
-        TU_ARMA(Slice, e) {
+        case ASTPatternData::TAG_Slice: {
+            auto& e = pat.data().as_Slice();
             ::std::vector<HIRPattern> leading;
             for (const auto& sp : e.subPats) {
                 leading.push_back(LowerHIRPattern(sp));
             }
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_Slice({mv$(leading)})};
         }
-        TU_ARMA(SplitSlice, e) {
+        case ASTPatternData::TAG_SplitSlice: {
+            auto& e = pat.data().as_SplitSlice();
             ::std::vector<HIRPattern> leading;
             for (const auto& sp : e.leading) {
                 leading.push_back(LowerHIRPattern(sp));
@@ -506,7 +523,8 @@ HIRPattern AST2HIR::LowerHIRPattern(const ASTPattern& pat) {
 
             return HIRPattern{mv$(bindings), HIRPattern::Data::make_SplitSlice({mv$(leading), mv$(extraBind), mv$(trailing)})};
         }
-        TU_ARMA(Or, e) {
+        case ASTPatternData::TAG_Or: {
+            auto& e = pat.data().as_Or();
             ::std::vector<HIRPattern> subpats;
             for (const auto& sp : e) {
                 subpats.push_back(LowerHIRPattern(sp));
@@ -1516,11 +1534,15 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
 
     auto rv = HIRStruct{LowerHIRGenericParams(ent.params(), nullptr), HIRStruct::Repr::Rust, {}};
 
-    TU_MATCH_HDRA( (ent.data), {)
-    TU_ARMA(Unit, e) {
+    switch (ent.data.tag()) {
+        case ASTStructData::TAG_Unit: {
+            auto& e = ent.data.as_Unit();
+            (void)e;
             rv.data = HIRStruct::Data::make_Unit({});
+            break;
         }
-        TU_ARMA(Tuple, e) {
+        case ASTStructData::TAG_Tuple: {
+            auto& e = ent.data.as_Tuple();
             HIRStruct::Data::Data_Tuple fields;
 
             for (const auto& field : e.ents) {
@@ -1528,10 +1550,13 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
             }
 
             rv.data = HIRStruct::Data::make_Tuple(mv$(fields));
+            break;
         }
-        TU_ARMA(Struct, e) {
+        case ASTStructData::TAG_Struct: {
+            auto& e = ent.data.as_Struct();
             auto fields = LowerHIRStructFields(path, rv.params, e.ents, outMod);
             rv.data = HIRStruct::Data::make_Named(mv$(fields));
+            break;
         }
     }
 
@@ -2855,13 +2880,15 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
             assert(hirPath.components().back() != "");
             HIRValueItem vi;
 
-            TU_MATCH_HDRA( (ie.second.path.bindings.value.binding), {)
-            default:
+            switch (ie.second.path.bindings.value.binding.tag()) {
+default:
                 DEBUG("Import VAL " << ie.first << " = " << hirPath);
                 vi = HIRValueItem::make_Import({mv$(hirPath), false, 0});
-                TU_ARMA(EnumVar, pb) {
+                case ASTPathBindingValue::TAG_EnumVar: {
+                    auto& pb = ie.second.path.bindings.value.binding.as_EnumVar();
                     DEBUG("Import VAL " << ie.first << " = " << hirPath << " (Enum Variant)");
                     vi = HIRValueItem::make_Import({mv$(hirPath), true, pb.idx});
+                    break;
                 }
             }
             _add_mod_val_item(*crate->pool, mod, ie.first, getVis(ie.second.vis), mv$(vi));

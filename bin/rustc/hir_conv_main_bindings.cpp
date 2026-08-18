@@ -243,14 +243,18 @@ namespace {
                             BUG(sp, "Couldn't find final component of " << path);
                         }
                         // Unit-like struct match or a constant
-                        TU_MATCH_HDRA( (it->second->ent), { )
-                        default:
+                        switch (it->second->ent.tag()) {
+default:
                             ERROR(sp, E0000, "Value pattern " << pat << " pointing to unexpected item type - " << it->second->ent.tagStr());
-                            TU_ARMA(Constant, e2) {
+                            case HIRValueItem::TAG_Constant: {
+                                auto& e2 = it->second->ent.as_Constant();
                                 // Store reference to this item for later use
                                 ve->binding = &e2;
+                                break;
                             }
-                            TU_ARMA(StructConstant, e2) {
+                            case HIRValueItem::TAG_StructConstant: {
+                                auto& e2 = it->second->ent.as_StructConstant();
+                                (void)e2;
                                 const auto& str = mod->modItems.find(pc)->second->ent.as_Struct();
                                 // Convert into a dedicated pattern type
                                 if (!isSingleValue) {
@@ -259,6 +263,7 @@ namespace {
                                 auto path = mv$(*pe);
                                 fixTypeParams(crate.types, sp, str.params, path.params);
                                 pat.data = HIRPattern::Data::make_PathValue({mv$(path), &str});
+                                break;
                             }
                         }
                     }

@@ -25,16 +25,19 @@ namespace {
     /// `#[must_use]` on the type of the discarded value.
     bool typeIsMustUse(const HIRTypeData* ty) {
         if (const auto* pe = ty->opt_Path()) {
-            TU_MATCH_HDRA( (pe->binding), {)
-            default:
+            switch (pe->binding.tag()) {
+default:
                 return false;
-                TU_ARMA(Struct, be) {
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& be = pe->binding.as_Struct();
                     return be->mustUse;
                 }
-                TU_ARMA(Enum, be) {
+                case HIRTypePathBinding::TAG_Enum: {
+                    auto& be = pe->binding.as_Enum();
                     return be->mustUse;
                 }
-                TU_ARMA(Union, be) {
+                case HIRTypePathBinding::TAG_Union: {
+                    auto& be = pe->binding.as_Union();
                     return be->mustUse;
                 }
             }

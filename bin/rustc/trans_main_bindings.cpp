@@ -1697,7 +1697,9 @@ namespace {
         TRACE_FUNCTION_F(getPath() << " : " << vi.tagStr() << " is_visible=" << isVisible);
         const Span sp;
         switch (vi.tag()) {
-                TU_ARM(vi, Import, e) {
+                break;
+                case HIRValueItem::TAG_Import: {
+                    auto& e = vi.as_Import();
                     // TODO: If visible, ensure that target is visited.
                     if (isVisible) {
                         if (!e.isVariant && e.path.crateName() == state.crate.crateName) {
@@ -1707,15 +1709,26 @@ namespace {
                             });
                         }
                     }
+
                 }
                 break;
-                TU_ARM(vi, StructConstant, e) {
+                break;
+                case HIRValueItem::TAG_StructConstant: {
+                    auto& e = vi.as_StructConstant();
+                    (void)e;
+
                 }
                 break;
-                TU_ARM(vi, StructConstructor, e) {
+                break;
+                case HIRValueItem::TAG_StructConstructor: {
+                    auto& e = vi.as_StructConstructor();
+                    (void)e;
+
                 }
                 break;
-                TU_ARM(vi, Constant, e) {
+                break;
+                case HIRValueItem::TAG_Constant: {
+                    auto& e = vi.as_Constant();
                     if (isVisible) {
                         // Visible constants need their relocations added as roots
                         // - Can't add this logic to `Trans_Enumerate_FillFrom_Literal` as it's used by non-public enumeration
@@ -1726,9 +1739,12 @@ namespace {
                         }
                         TransEnumerateFillFromLiteral(state, e.valueRes, TransParams(state.crate.types));
                     }
+
                 }
                 break;
-                TU_ARM(vi, Static, e) {
+                break;
+                case HIRValueItem::TAG_Static: {
+                    auto& e = vi.as_Static();
                     if (e.linkage.name != "" || e.linkage.section != "") {
                         // If a link name is set, force emit
                         isVisible = true;
@@ -1747,9 +1763,12 @@ namespace {
 
                         state.rv.roots.push_back(getPath());
                     }
+
                 }
                 break;
-                TU_ARM(vi, Function, e) {
+                break;
+                case HIRValueItem::TAG_Function: {
+                    auto& e = vi.as_Function();
                     bool isInline = false;
                     if (isVisible) {
                         switch (e.markings.inlineType) {
@@ -1786,6 +1805,7 @@ namespace {
                     if (e.saveCode) {
                         TransEnumerateGenericFunctionItems(state, sp, e, MonomorphStatePtr(state.crate.types), !e.params.bounds.empty());
                     }
+
                 }
                 break;
         }

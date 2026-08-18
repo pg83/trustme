@@ -2334,12 +2334,15 @@ namespace {
             }
 
             HIRGenericBound monomorphBound(const Span& sp, const HIRGenericBound& b) const {
-                TU_MATCH_HDRA( (b), {)
-                TU_ARMA(TraitBound, e) {
+                switch (b.tag()) {
+                    case HIRGenericBound::TAG_TraitBound: {
+                        auto& e = b.as_TraitBound();
                         return HIRGenericBound::make_TraitBound({this->monomorphType(sp, e.type), this->monomorphTraitpath(sp, e.trait, false), e.constness});
                     }
-                    TU_ARMA(TypeEquality, e)
-                    return HIRGenericBound::make_TypeEquality({this->monomorphType(sp, e.type), this->monomorphType(sp, e.otherType)});
+                    case HIRGenericBound::TAG_TypeEquality: {
+                        auto& e = b.as_TypeEquality();
+                        return HIRGenericBound::make_TypeEquality({this->monomorphType(sp, e.type), this->monomorphType(sp, e.otherType)});
+                    }
                 }
                 throw "";
             }
@@ -4608,11 +4611,15 @@ public:
 
         // - Clone the bounds (from both levels)
         auto monomorphBound = [&](const HIRGenericBound& b) -> HIRGenericBound {
-                TU_MATCH_HDRA( (b), {)
-                TU_ARMA(TraitBound, e)
-                return HIRGenericBound::make_TraitBound({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphTraitpath(sp, e.trait, false), e.constness});
-                TU_ARMA(TypeEquality, e)
-                return HIRGenericBound::make_TypeEquality({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphType(sp, e.otherType)});
+                switch (b.tag()) {
+                    case HIRGenericBound::TAG_TraitBound: {
+                        auto& e = b.as_TraitBound();
+                        return HIRGenericBound::make_TraitBound({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphTraitpath(sp, e.trait, false), e.constness});
+                    }
+                    case HIRGenericBound::TAG_TypeEquality: {
+                        auto& e = b.as_TypeEquality();
+                        return HIRGenericBound::make_TypeEquality({monomorphCb.monomorphType(sp, e.type), monomorphCb.monomorphType(sp, e.otherType)});
+                    }
                 }
                 throw "";
         };

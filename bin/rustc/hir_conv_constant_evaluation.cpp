@@ -4738,17 +4738,21 @@ default:
                 }
                 this->callConstDestructor(localState, ty, slot);
             }
-            TU_MATCH_HDRA( (te.binding), {)
-            default:
+            switch (te.binding.tag()) {
+default:
                 return;
-            TU_ARMA(Struct, pbe) {
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& pbe = te.binding.as_Struct();
+                    (void)pbe;
                     const auto* repr = TargetGetTypeRepr(state.sp, localState.rootResolve, ty);
                     MIR_ASSERT(state, repr, "No representation for struct " << ty);
                     for (size_t i = 0; i < repr->fields.size(); i++) {
                         this->runConstDrop(localState, repr->fields[i].ty, MIRLValue::newField(slot.clone(), static_cast<unsigned>(i)));
                     }
+                    break;
                 }
-                TU_ARMA(Enum, pbe) {
+                case HIRTypePathBinding::TAG_Enum: {
+                    auto& pbe = te.binding.as_Enum();
                     if (!pbe->data.is_Data()) {
                         return;
                     }
@@ -4757,6 +4761,7 @@ default:
                     MIR_ASSERT(state, repr, "No representation for enum " << ty);
                     MIR_ASSERT(state, variant < repr->fields.size(), "Enum representation has no variant " << variant << " for " << ty);
                     this->runConstDrop(localState, repr->fields[variant].ty, MIRLValue::newDowncast(slot.clone(), variant));
+                    break;
                 }
             }
             break;

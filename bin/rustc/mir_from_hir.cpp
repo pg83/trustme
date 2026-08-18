@@ -2409,16 +2409,19 @@ default: {
                         switch (inArray.size.tag()) {
                             case HIRArraySize::TAG_Unevaluated: {
                                 auto& se = inArray.size.as_Unevaluated();
-                                TU_MATCH_HDRA( (se), {)
-                                default:
+                                switch (se.tag()) {
+default:
                                     // Preserve array-to-slice unsizing until the const
                                     // expression is evaluated during monomorphisation.
                                     // MIR cleanup recognises an empty ItemAddr as the
                                     // unsize pseudo-op and supplies the concrete length.
                                     sizeVal = MIRConstant::make_ItemAddr({});
                                     break;
-                                            TU_ARMA(Generic, cge)
-                                            sizeVal = cge;
+                                    case HIRConstGeneric::TAG_Generic: {
+                                        auto& cge = se.as_Generic();
+                                        sizeVal = cge;
+                                        break;
+                                    }
                                 }
                                 break;
                             }
@@ -4970,23 +4973,35 @@ PatternRule PatternRule::clone() const {
         }
 
         static PatternRule cloneInner(const PatternRule& t) {
-            TU_MATCH_HDRA( (t), {)
-            TU_ARMA(Any, te)
-                return te;
-
-                TU_ARMA(Variant, te)
-                return PatternRule::make_Variant({te.idx, H::cloneList(te.subRules)});
-                TU_ARMA(Slice, te)
-                return PatternRule::make_Slice({te.len, H::cloneList(te.subRules)});
-                TU_ARMA(SplitSlice, te)
-                return PatternRule::make_SplitSlice({te.minLen, te.trailingLen, H::cloneList(te.leading), H::cloneList(te.trailing)});
-
-                TU_ARMA(Bool, te)
-                return te;
-                TU_ARMA(Value, te)
-                return te.clone();
-                TU_ARMA(ValueRange, te)
-                return PatternRule::make_ValueRange({te.first.clone(), te.last.clone(), te.isInclusive});
+            switch (t.tag()) {
+                case PatternRule::TAG_Any: {
+                    auto& te = t.as_Any();
+                    return te;
+                }
+                case PatternRule::TAG_Variant: {
+                    auto& te = t.as_Variant();
+                    return PatternRule::make_Variant({te.idx, H::cloneList(te.subRules)});
+                }
+                case PatternRule::TAG_Slice: {
+                    auto& te = t.as_Slice();
+                    return PatternRule::make_Slice({te.len, H::cloneList(te.subRules)});
+                }
+                case PatternRule::TAG_SplitSlice: {
+                    auto& te = t.as_SplitSlice();
+                    return PatternRule::make_SplitSlice({te.minLen, te.trailingLen, H::cloneList(te.leading), H::cloneList(te.trailing)});
+                }
+                case PatternRule::TAG_Bool: {
+                    auto& te = t.as_Bool();
+                    return te;
+                }
+                case PatternRule::TAG_Value: {
+                    auto& te = t.as_Value();
+                    return te.clone();
+                }
+                case PatternRule::TAG_ValueRange: {
+                    auto& te = t.as_ValueRange();
+                    return PatternRule::make_ValueRange({te.first.clone(), te.last.clone(), te.isInclusive});
+                }
             }
             throw "";
         }
@@ -11004,28 +11019,30 @@ default:
             }
             case MIRLValue::Wrapper::TAG_Downcast: {
                 decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
-                TU_MATCH_HDRA( (*currentTy), { )
-                default:
+                switch ((*currentTy).tag()) {
+default:
                     BUG(sp, "Downcast on unexpected type - " << currentTy);
-                        TU_ARMA(Path, te) {
-                            if (const auto* pbe = te.binding.opt_Enum()) {
-                                const auto& enm = **pbe;
-                                ASSERT_BUG(sp, enm.data.is_Data(), "Downcast on non-data enum");
-                                const auto& variants = enm.data.as_Data();
-                                ASSERT_BUG(sp, variantIndex < variants.size(), "Variant index out of range");
-                                const auto& variant = variants[variantIndex];
+                    case HIRTypeData::TAG_Path: {
+                        auto& te = (*currentTy).as_Path();
+                        if (const auto* pbe = te.binding.opt_Enum()) {
+                            const auto& enm = **pbe;
+                            ASSERT_BUG(sp, enm.data.is_Data(), "Downcast on non-data enum");
+                            const auto& variants = enm.data.as_Data();
+                            ASSERT_BUG(sp, variantIndex < variants.size(), "Variant index out of range");
+                            const auto& variant = variants[variantIndex];
 
-                                ty = maybeMonomorph(enm.params, te.path, variant.type);
-                            } else if (const auto* pbe = te.binding.opt_Union()) {
-                                const auto& unm = **pbe;
-                                ASSERT_BUG(sp, variantIndex < unm.variants.size(), "Variant index out of range");
-                                const auto& variant = unm.variants.at(variantIndex);
+                            ty = maybeMonomorph(enm.params, te.path, variant.type);
+                        } else if (const auto* pbe = te.binding.opt_Union()) {
+                            const auto& unm = **pbe;
+                            ASSERT_BUG(sp, variantIndex < unm.variants.size(), "Variant index out of range");
+                            const auto& variant = unm.variants.at(variantIndex);
 
-                                ty = maybeMonomorph(unm.params, te.path, variant.ty);
-                            } else {
-                                BUG(sp, "Downcast on non-Enum/Union - " << currentTy << " for " << val);
-                            }
+                            ty = maybeMonomorph(unm.params, te.path, variant.ty);
+                        } else {
+                            BUG(sp, "Downcast on non-Enum/Union - " << currentTy << " for " << val);
                         }
+                        break;
+                    }
                 }
                 break;
             }

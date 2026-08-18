@@ -372,7 +372,9 @@ void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
             _(Macro, os << *ent.inv;)
             _(Unit, os << "()";)
             _(Primitive, os << ent.coreType;)
-            TU_ARM(data, Function, ent) {
+            break;
+            case TypeData::TAG_Function: {
+                auto& ent = data.as_Function();
                 os << ent.info.hrbs;
                 if (ent.info.abi != "") {
                     os << "extern \"" << ent.info.abi << "\" ";
@@ -389,19 +391,23 @@ void ASTType::print(::std::ostream& os, bool isDebug /*=false*/) const {
                 if (!ent.info.rettype->isUnit()) {
                     os << " -> " << *ent.info.rettype;
                 }
+
             }
             break;
             _(Tuple, os << "( "; for (const auto& it : ent.innerTypes) {
                 it->print(os, isDebug);
                 os << ", ";
             } os << ")";)
-            TU_ARM(data, Borrow, ent) {
+            break;
+            case TypeData::TAG_Borrow: {
+                auto& ent = data.as_Borrow();
                 os << "&";
                 if (ent.lifetime != ASTLifetimeRef()) {
                     os << ent.lifetime << " ";
                 }
                 os << (ent.isMut ? "mut " : "");
                 ent.inner->print(os, isDebug);
+
             }
             break;
             _(Pointer, os << "*" << (ent.isMut ? "mut " : "const "); ent.inner->print(os, isDebug);)

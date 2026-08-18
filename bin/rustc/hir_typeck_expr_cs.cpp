@@ -6194,10 +6194,12 @@ namespace {
 
         // Path types
         if (src->tag() == dst->tag()) {
-            TU_MATCH_HDRA( (*src, *dst), {)
-            default:
+            switch ((*src).tag()) {
+default:
                 return CoerceResult::Equality;
-                TU_ARMA(Path, se, de) {
+                case HIRTypeData::TAG_Path: {
+                    auto& se = (*src).as_Path();
+                    auto& de = (*dst).as_Path();
                     if (se.binding.tag() == de.binding.tag()) {
                         switch (se.binding.tag()) {
                             case HIRTypePathBinding::TAG_Unbound: {
@@ -6280,6 +6282,7 @@ namespace {
                             }
                         }
                     }
+                    break;
                 }
             }
         }

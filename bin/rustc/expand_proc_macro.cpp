@@ -1356,14 +1356,22 @@ default:
                                         pmi.sendSymbol("+");
                                     }
                                 }
-                            TU_MATCH_HDRA((params.bounds[i]), {)
-                            default:
+                            {
+                                auto& tuMatch = params.bounds[i];
+                                switch (tuMatch.tag()) {
+default:
                                 BUG(sp, "");
-                                    TU_ARMA(None, be) {
+                                    case ASTGenericBound::TAG_None: {
+                                        auto& be = tuMatch.as_None();
+                                        (void)be;
+                                        break;
                                     }
-                                    TU_ARMA(Lifetime, be) {
+                                    case ASTGenericBound::TAG_Lifetime: {
+                                        auto& be = tuMatch.as_Lifetime();
                                         pmi.sendLifetime(be.test.name().name.c_str());
+                                        break;
                                     }
+                                }
                             }
                             }
                             break;

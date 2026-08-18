@@ -203,25 +203,38 @@ break;
             bool prevWasNum = wasNum;
             wasNum = false;
             switch (w.tag()) {
-                    TU_ARM(w, Deref, e)
-                    os << ")";
                     break;
-                    TU_ARM(w, Field, fieldIndex) {
+                    case MIRLValue::Wrapper::TAG_Deref: {
+                        decltype(w.as_Deref()) e = w.as_Deref();
+                        (void)e;
+                        os << ")";
+                    }
+                    break;
+                    break;
+                    case MIRLValue::Wrapper::TAG_Field: {
+                        decltype(w.as_Field()) fieldIndex = w.as_Field();
                         // Add a space to prevent accidental float literals
                         if (prevWasNum) {
                             os << " ";
                         }
                         os << "." << fieldIndex;
                         wasNum = true;
+
                     }
                     break;
-                    TU_ARM(w, Index, e) {
+                    break;
+                    case MIRLValue::Wrapper::TAG_Index: {
+                        decltype(w.as_Index()) e = w.as_Index();
                         os << "[" << fmt(MIRLValue::newLocal(e)) << "]";
+
                     }
                     break;
-                    TU_ARM(w, Downcast, variantIndex) {
+                    break;
+                    case MIRLValue::Wrapper::TAG_Downcast: {
+                        decltype(w.as_Downcast()) variantIndex = w.as_Downcast();
                         os << "@" << variantIndex;
                         wasNum = true;
+
                     }
                     break;
             }
@@ -240,14 +253,22 @@ break;
 
         const auto& e = x.e;
         switch (e.tag()) {
-                TU_ARM(e, Int, v) {
+                break;
+                case MIRConstant::TAG_Int: {
+                    auto& v = e.as_Int();
                     os << (v.v < 0 ? "" : "+") << v.v << " " << v.t;
+
                 }
                 break;
-                TU_ARM(e, Uint, v)
-                os << v.v << " " << v.t;
                 break;
-                TU_ARM(e, Float, v) {
+                case MIRConstant::TAG_Uint: {
+                    auto& v = e.as_Uint();
+                    os << v.v << " " << v.t;
+                }
+                break;
+                break;
+                case MIRConstant::TAG_Float: {
+                    auto& v = e.as_Float();
                     // TODO: Infinity/nan/...
                     auto vi = H::doubleToU64(static_cast<double>(v.v));
                     bool sign = (vi & (1ull << 63)) != 0;
@@ -255,17 +276,25 @@ break;
                     uint64_t frac = vi & ((1ull << 52) - 1);
                     os << (sign ? "-" : "+") << "0x1." << ::std::setw(52 / 4) << ::std::setfill('0') << ::std::hex << frac << ::std::dec << "p" << (exp - 1023);
                     os << " " << v.t;
+
                 }
                 break;
-                TU_ARM(e, ItemAddr, v) {
+                break;
+                case MIRConstant::TAG_ItemAddr: {
+                    auto& v = e.as_ItemAddr();
                     os << "ADDROF " << fmt(*v);
                     if (v.offset != U128(0)) {
                         os << " + " << v.offset;
                     }
+
                 }
                 break;
-                TU_ARM(e, Const, v) {
+                break;
+                case MIRConstant::TAG_Const: {
+                    auto& v = e.as_Const();
+                    (void)v;
                     BUG(Span(), "Stray named constant in MIR after cleanup - " << e);
+
                 }
                 break;
             default:
@@ -277,10 +306,15 @@ break;
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<MIRParam>& x) {
         switch (x.e.tag()) {
-                TU_ARM(x.e, LValue, e)
-                os << fmt(e);
                 break;
-                TU_ARM(x.e, Borrow, e) {
+                case MIRParam::TAG_LValue: {
+                    auto& e = x.e.as_LValue();
+                    os << fmt(e);
+                }
+                break;
+                break;
+                case MIRParam::TAG_Borrow: {
+                    auto& e = x.e.as_Borrow();
                     os << "&";
                     switch (e.type) {
                         case HIRBorrowType::Shared:
@@ -293,10 +327,14 @@ break;
                             break;
                     }
                     os << fmt(e.val);
+
                 }
                 break;
-                TU_ARM(x.e, Constant, e)
-                os << fmt(e);
+                break;
+                case MIRParam::TAG_Constant: {
+                    auto& e = x.e.as_Constant();
+                    os << fmt(e);
+                }
                 break;
         }
         return os;
@@ -430,7 +468,10 @@ break;
             } else if (ty->is_Path()) {
                 const auto& te = ty->as_Path();
                 switch (te.binding.tag()) {
-                    TU_ARM(te.binding, Struct, tpb) {
+                    break;
+                    case HIRTypePathBinding::TAG_Struct: {
+                        auto& tpb = te.binding.as_Struct();
+                        {
                         switch (tpb->structMarkings.dstType) {
                             case HIRStructMarkings::DstType::None:
                                 return MetadataType::None;
@@ -466,12 +507,19 @@ break;
                                 return MetadataType::TraitObject;
                         }
                         throw "";
+                        }
                     }
                     break;
-                    TU_ARM(te.binding, Union, tpb)
-                    return MetadataType::None;
-                    TU_ARM(te.binding, Enum, tpb)
-                    return MetadataType::None;
+                    case HIRTypePathBinding::TAG_Union: {
+                        auto& tpb = te.binding.as_Union();
+                        (void)tpb;
+                        return MetadataType::None;
+                    }
+                    case HIRTypePathBinding::TAG_Enum: {
+                        auto& tpb = te.binding.as_Enum();
+                        (void)tpb;
+                        return MetadataType::None;
+                    }
                     default:
                         MIR_BUG(*mirRes, "Unbound/opaque path in trans - " << ty);
                 }
@@ -675,9 +723,15 @@ break;
             };
 
             switch (repr->variants.tag()) {
-                    TU_ARM(repr->variants, None, _e) {
+                    break;
+                    case TypeReprVariantMode::TAG_None: {
+                        auto& _e = repr->variants.as_None();
+                        (void)_e;
+
                     }
-                    TU_ARM(repr->variants, Linear, e) {
+                    break;
+                    case TypeReprVariantMode::TAG_Linear: {
+                        auto& e = repr->variants.as_Linear();
                         of << "\t@[" << e.field.index << ", " << e.field.subFields << "] = {\n";
                         for (size_t i = 0; i < e.numVariants; i++) {
                             of << "\t\t";
@@ -694,8 +748,11 @@ break;
                             of << ",\n";
                         }
                         of << "\t\t}\n";
+
                     }
-                    TU_ARM(repr->variants, Values, e) {
+                    break;
+                    case TypeReprVariantMode::TAG_Values: {
+                        auto& e = repr->variants.as_Values();
                         of << "\t@[" << e.field.index << ", " << e.field.subFields << "] = {\n";
                         for (size_t idx = 0; idx < e.values.size(); idx++) {
                             of << "\t\t";
@@ -708,8 +765,11 @@ break;
                             of << ",\n";
                         }
                         of << "\t}\n";
+
                     }
-                    TU_ARM(repr->variants, NonZero, e) {
+                    break;
+                    case TypeReprVariantMode::TAG_NonZero: {
+                        auto& e = repr->variants.as_NonZero();
                         of << "\t@[" << e.field.index << ", " << e.field.subFields << "] = { ";
                         for (size_t i = 0; i < 2; i++) {
                             if (i == 1) {
@@ -727,6 +787,7 @@ break;
                             }
                         }
                         of << " }\n";
+
                     }
             }
             of << "}\n";
@@ -858,19 +919,32 @@ break;
                     localMirRes.setCurStmt(i, (&stmt - &code->blocks[i].statements.front()));
                     DEBUG(stmt);
                     switch (stmt.tag()) {
-                            TU_ARM(stmt, Assign, se) {
+                            break;
+                            case MIRStatement::TAG_Assign: {
+                                auto& se = stmt.as_Assign();
                                 of << "ASSIGN " << fmt(se.dst) << " = ";
                                 switch (se.src.tag()) {
-                                        TU_ARM(se.src, Use, e)
-                                        of << "=" << fmt(e);
                                         break;
-                                        TU_ARM(se.src, Constant, e)
-                                        of << fmt(e);
+                                        case MIRRValue::TAG_Use: {
+                                            auto& e = se.src.as_Use();
+                                            of << "=" << fmt(e);
+                                        }
                                         break;
-                                        TU_ARM(se.src, SizedArray, e)
-                                        of << "[" << fmt(e.val) << "; " << e.count << "]";
                                         break;
-                                        TU_ARM(se.src, Borrow, e) {
+                                        case MIRRValue::TAG_Constant: {
+                                            auto& e = se.src.as_Constant();
+                                            of << fmt(e);
+                                        }
+                                        break;
+                                        break;
+                                        case MIRRValue::TAG_SizedArray: {
+                                            auto& e = se.src.as_SizedArray();
+                                            of << "[" << fmt(e.val) << "; " << e.count << "]";
+                                        }
+                                        break;
+                                        break;
+                                        case MIRRValue::TAG_Borrow: {
+                                            auto& e = se.src.as_Borrow();
                                             of << "&";
                                             switch (e.type) {
                                                 case HIRBorrowType::Shared:
@@ -883,12 +957,18 @@ break;
                                                     break;
                                             }
                                             of << fmt(e.val);
+
                                         }
                                         break;
-                                        TU_ARM(se.src, Cast, e)
-                                        of << "CAST " << fmt(e.val) << " as " << fmt(e.type);
                                         break;
-                                        TU_ARM(se.src, BinOp, e) {
+                                        case MIRRValue::TAG_Cast: {
+                                            auto& e = se.src.as_Cast();
+                                            of << "CAST " << fmt(e.val) << " as " << fmt(e.type);
+                                        }
+                                        break;
+                                        break;
+                                        case MIRRValue::TAG_BinOp: {
+                                            auto& e = se.src.as_BinOp();
                                             of << "BINOP " << fmt(e.valL) << " ";
                                             switch (e.op) {
                                                 case MIRBinOp::ADD:
@@ -953,9 +1033,12 @@ break;
                                                     break;
                                             }
                                             of << " " << fmt(e.valR);
+
                                         }
                                         break;
-                                        TU_ARM(se.src, UniOp, e) {
+                                        break;
+                                        case MIRRValue::TAG_UniOp: {
+                                            auto& e = se.src.as_UniOp();
                                             of << "UNIOP ";
                                             switch (e.op) {
                                                 case MIRUniOp::INV:
@@ -966,73 +1049,110 @@ break;
                                                     break;
                                             }
                                             of << " " << fmt(e.val);
+
                                         }
                                         break;
-                                        TU_ARM(se.src, DstMeta, e)
-                                        of << "DSTMETA " << fmt(e.val);
                                         break;
-                                        TU_ARM(se.src, DstPtr, e)
-                                        of << "DSTPTR " << fmt(e.val);
+                                        case MIRRValue::TAG_DstMeta: {
+                                            auto& e = se.src.as_DstMeta();
+                                            of << "DSTMETA " << fmt(e.val);
+                                        }
                                         break;
-                                        TU_ARM(se.src, MakeDst, e)
-                                        of << "MAKEDST " << fmt(e.ptrVal) << ", " << fmt(e.metaVal);
                                         break;
-                                        TU_ARM(se.src, UnionVariant, e)
-                                        of << "UNION " << fmt(e.path) << " " << e.index << " " << fmt(e.val);
+                                        case MIRRValue::TAG_DstPtr: {
+                                            auto& e = se.src.as_DstPtr();
+                                            of << "DSTPTR " << fmt(e.val);
+                                        }
                                         break;
-                                        TU_ARM(se.src, EnumVariant, e) {
+                                        break;
+                                        case MIRRValue::TAG_MakeDst: {
+                                            auto& e = se.src.as_MakeDst();
+                                            of << "MAKEDST " << fmt(e.ptrVal) << ", " << fmt(e.metaVal);
+                                        }
+                                        break;
+                                        break;
+                                        case MIRRValue::TAG_UnionVariant: {
+                                            auto& e = se.src.as_UnionVariant();
+                                            of << "UNION " << fmt(e.path) << " " << e.index << " " << fmt(e.val);
+                                        }
+                                        break;
+                                        break;
+                                        case MIRRValue::TAG_EnumVariant: {
+                                            auto& e = se.src.as_EnumVariant();
                                             of << "ENUM " << fmt(e.path) << " " << e.index << " { ";
                                             for (const auto& v : e.vals) {
                                                 of << fmt(v) << ", ";
                                             }
                                             of << "}";
+
                                         }
                                         break;
-                                        TU_ARM(se.src, Array, e) {
+                                        break;
+                                        case MIRRValue::TAG_Array: {
+                                            auto& e = se.src.as_Array();
                                             of << "[ ";
                                             for (const auto& v : e.vals) {
                                                 of << fmt(v) << ", ";
                                             }
                                             of << "]";
+
                                         }
                                         break;
-                                        TU_ARM(se.src, Tuple, e) {
+                                        break;
+                                        case MIRRValue::TAG_Tuple: {
+                                            auto& e = se.src.as_Tuple();
                                             of << "( ";
                                             for (const auto& v : e.vals) {
                                                 of << fmt(v) << ", ";
                                             }
                                             of << ")";
+
                                         }
                                         break;
-                                        TU_ARM(se.src, Struct, e) {
+                                        break;
+                                        case MIRRValue::TAG_Struct: {
+                                            auto& e = se.src.as_Struct();
                                             of << "{ ";
                                             for (const auto& v : e.vals) {
                                                 of << fmt(v) << ", ";
                                             }
                                             of << "}: " << fmt(e.path);
+
                                         }
                                         break;
                                 }
+
                             }
                             break;
-                            TU_ARM(stmt, SetDropFlag, se) {
+                            break;
+                            case MIRStatement::TAG_SetDropFlag: {
+                                auto& se = stmt.as_SetDropFlag();
                                 of << "SETFLAG df" << se.idx << " = ";
                                 if (se.other == ~0u) {
                                     of << se.newVal;
                                 } else {
                                     of << (se.newVal ? "" : "!") << "df" << se.other;
                                 }
+
                             }
                             break;
-                            TU_ARM(stmt, LoadDropFlag, se) {
+                            break;
+                            case MIRStatement::TAG_LoadDropFlag: {
+                                auto& se = stmt.as_LoadDropFlag();
                                 of << "LOADFLAG df" << se.idx << " = " << fmt(se.slot) << " BIT " << se.bitIndex;
+
                             }
                             break;
-                            TU_ARM(stmt, SaveDropFlag, se) {
+                            break;
+                            case MIRStatement::TAG_SaveDropFlag: {
+                                auto& se = stmt.as_SaveDropFlag();
                                 of << "SAVEFLAG " << fmt(se.slot) << " BIT " << se.bitIndex << " = df" << se.idx;
+
                             }
                             break;
-                            TU_ARM(stmt, Asm, se) {
+                            break;
+                            case MIRStatement::TAG_Asm: {
+                                auto& se = stmt.as_Asm();
                                 of << "ASM (";
                                 for (const auto& v : se.outputs) {
                                     of << "\"" << v.first << "\" : " << fmt(v.second) << ", ";
@@ -1047,57 +1167,64 @@ break;
                                     of << "\"" << v << "\", ";
                                 }
                                 of << ":" << se.flags << "]";
+
                             }
                             break;
-                            TU_ARM(stmt, Asm2, se) {
+                            break;
+                            case MIRStatement::TAG_Asm2: {
+                                auto& se = stmt.as_Asm2();
                                 of << "ASM2 (";
-                                for (const auto& l : se.lines) {
-                                    of << l;
+                                    for (const auto& l : se.lines) {
+                                        of << l;
+                                    }
+                                    for (const auto& p : se.params) {
+                                        of << ", ";
+                                switch (p.tag()) {
+                                    case MIRAsmParam::TAG_Const: {
+                                        auto& v = p.as_Const();
+                                        of << "const " << fmt(v);
+                                        break;
+                                    }
+                                    case MIRAsmParam::TAG_Sym: {
+                                        auto& v = p.as_Sym();
+                                        of << "sym " << fmt(v);
+                                        break;
+                                    }
+                                    case MIRAsmParam::TAG_Reg: {
+                                        auto& v = p.as_Reg();
+                                        of << "reg(" << v.dir << " " << v.spec << ") ";
+                                        if (v.input) {
+                                            of << fmt(*v.input);
+                                        } else {
+                                            of << "_";
+                                        }
+                                        of << " => ";
+                                        if (v.output) {
+                                            of << fmt(*v.output);
+                                        } else {
+                                            of << "_";
+                                        }
+                                        break;
+                                    }
+                                    case MIRAsmParam::TAG_Label: {
+                                        auto& v = p.as_Label();
+                                        of << "label " << v;
+                                        break;
+                                    }
                                 }
-                                for (const auto& p : se.params) {
+                                    }
                                     of << ", ";
-                            switch (p.tag()) {
-                                case MIRAsmParam::TAG_Const: {
-                                    auto& v = p.as_Const();
-                                    of << "const " << fmt(v);
-                                    break;
-                                }
-                                case MIRAsmParam::TAG_Sym: {
-                                    auto& v = p.as_Sym();
-                                    of << "sym " << fmt(v);
-                                    break;
-                                }
-                                case MIRAsmParam::TAG_Reg: {
-                                    auto& v = p.as_Reg();
-                                    of << "reg(" << v.dir << " " << v.spec << ") ";
-                                    if (v.input) {
-                                        of << fmt(*v.input);
-                                    } else {
-                                        of << "_";
-                                    }
-                                    of << " => ";
-                                    if (v.output) {
-                                        of << fmt(*v.output);
-                                    } else {
-                                        of << "_";
-                                    }
-                                    break;
-                                }
-                                case MIRAsmParam::TAG_Label: {
-                                    auto& v = p.as_Label();
-                                    of << "label " << v;
-                                    break;
-                                }
-                            }
-                                }
-                                of << ", ";
-                                se.options.fmt(of);
-                                of << ")";
+                                    se.options.fmt(of);
+                                    of << ")";
+
                             }
                             break;
-                            TU_ARM(stmt, ScopeEnd, se) {
+                            break;
+                            case MIRStatement::TAG_ScopeEnd: {
+                                auto& se = stmt.as_ScopeEnd();
                                 (void)se;
                                 break;
+
                             }
                             break;
                     }
@@ -1109,22 +1236,44 @@ break;
                 DEBUG("- " << term);
                 of << "\t\t";
                 switch (term.tag()) {
-                        TU_ARM(term, Incomplete, _e)(void) _e;
+                        break;
+                        case MIRTerminator::TAG_Incomplete: {
+                            auto& _e = term.as_Incomplete();
+                            (void) _e;
+                        }
                         of << "INCOMPLETE\n";
                         break;
-                        TU_ARM(term, Return, _e)(void) _e;
+                        break;
+                        case MIRTerminator::TAG_Return: {
+                            auto& _e = term.as_Return();
+                            (void) _e;
+                        }
                         of << "RETURN\n";
                         break;
-                        TU_ARM(term, UnwindResume, _e)(void) _e;
+                        break;
+                        case MIRTerminator::TAG_UnwindResume: {
+                            auto& _e = term.as_UnwindResume();
+                            (void) _e;
+                        }
                         of << "UNWIND RESUME\n";
                         break;
-                        TU_ARM(term, UnwindTerminate, _e)(void) _e;
+                        break;
+                        case MIRTerminator::TAG_UnwindTerminate: {
+                            auto& _e = term.as_UnwindTerminate();
+                            (void) _e;
+                        }
                         of << "UNWIND TERMINATE\n";
                         break;
-                        TU_ARM(term, Unreachable, _e)(void) _e;
+                        break;
+                        case MIRTerminator::TAG_Unreachable: {
+                            auto& _e = term.as_Unreachable();
+                            (void) _e;
+                        }
                         of << "UNREACHABLE\n";
                         break;
-                        TU_ARM(term, Asm2, e) {
+                        break;
+                        case MIRTerminator::TAG_Asm2: {
+                            auto& e = term.as_Asm2();
                             of << "ASM2_GOTO (";
                             for (const auto& line : e.lines) {
                                 of << line;
@@ -1139,29 +1288,46 @@ break;
                                 }
                             }
                             of << "\n";
+
                         }
                         break;
-                        TU_ARM(term, Goto, e)
-                        of << "GOTO " << e << "\n";
                         break;
-                        TU_ARM(term, If, e)
-                        of << "IF " << fmt(e.cond) << " goto " << e.bbTrue << " else " << e.bbFalse << "\n";
+                        case MIRTerminator::TAG_Goto: {
+                            auto& e = term.as_Goto();
+                            of << "GOTO " << e << "\n";
+                        }
                         break;
-                        TU_ARM(term, Switch, e) {
+                        break;
+                        case MIRTerminator::TAG_If: {
+                            auto& e = term.as_If();
+                            of << "IF " << fmt(e.cond) << " goto " << e.bbTrue << " else " << e.bbFalse << "\n";
+                        }
+                        break;
+                        break;
+                        case MIRTerminator::TAG_Switch: {
+                            auto& e = term.as_Switch();
                             of << "SWITCH " << fmt(e.val) << " { ";
                             of << e.targets;
                             of << " }\n";
+
                         }
                         break;
-                        TU_ARM(term, SwitchValue, e) {
+                        break;
+                        case MIRTerminator::TAG_SwitchValue: {
+                            auto& e = term.as_SwitchValue();
                             of << "SWITCHVALUE " << fmt(e.val) << " { ";
                             switch (e.values.tag()) {
-                                    TU_ARM(e.values, String, ve)
-                                    for (size_t i = 0; i < ve.size(); i++) {
-                                        of << "\"" << FmtEscaped(ve[i]) << "\" = " << e.targets[i] << ",";
+                                    break;
+                                    case MIRSwitchValues::TAG_String: {
+                                        auto& ve = e.values.as_String();
+                                        for (size_t i = 0; i < ve.size(); i++) {
+                                            of << "\"" << FmtEscaped(ve[i]) << "\" = " << e.targets[i] << ",";
+                                        }
+                                        break;
                                     }
                                     break;
-                                    TU_ARM(e.values, ByteString, ve) {
+                                    case MIRSwitchValues::TAG_ByteString: {
+                                        auto& ve = e.values.as_ByteString();
                                         for (size_t j = 0; j < ve.size(); j++) {
                                             of << "b\"";
                                             for (size_t i = 0; i < ve[j].size(); i++) {
@@ -1186,18 +1352,25 @@ break;
                                             }
                                             of << "\" = " << e.targets[i] << ",";
                                         }
+
                                     }
                                     break;
-                                    TU_ARM(e.values, Unsigned, ve)
-                                    for (size_t i = 0; i < ve.size(); i++) {
-                                        of << ve[i] << " = " << e.targets[i] << ",";
+                                    break;
+                                    case MIRSwitchValues::TAG_Unsigned: {
+                                        auto& ve = e.values.as_Unsigned();
+                                        for (size_t i = 0; i < ve.size(); i++) {
+                                            of << ve[i] << " = " << e.targets[i] << ",";
+                                        }
+                                        break;
                                     }
                                     break;
-                                    TU_ARM(e.values, Signed, ve)
-                                    for (size_t i = 0; i < ve.size(); i++) {
-                                        of << (ve[i] < 0 ? "" : "+") << ve[i] << " = " << e.targets[i] << ",";
+                                    case MIRSwitchValues::TAG_Signed: {
+                                        auto& ve = e.values.as_Signed();
+                                        for (size_t i = 0; i < ve.size(); i++) {
+                                            of << (ve[i] < 0 ? "" : "+") << ve[i] << " = " << e.targets[i] << ",";
+                                        }
+                                        break;
                                     }
-                                    break;
                             }
                             // TODO: Values.
                             //if( e.values.size() > 0 )
@@ -1205,9 +1378,12 @@ break;
                             //}
                             of << "_ = " << e.defTarget;
                             of << " }\n";
+
                         }
                         break;
-                        TU_ARM(term, Drop, e) {
+                        break;
+                        case MIRTerminator::TAG_Drop: {
+                            auto& e = term.as_Drop();
                             of << "DROP " << fmt(e.slot);
                             if (e.kind == MIRDropKind::SHALLOW) {
                                 of << " SHALLOW";
@@ -1216,9 +1392,12 @@ break;
                                 of << " IF df" << e.flagIdx;
                             }
                             of << " goto " << e.target << " unwind " << e.unwind.tagStr() << "\n";
+
                         }
                         break;
-                        TU_ARM(term, Call, e) {
+                        break;
+                        case MIRTerminator::TAG_Call: {
+                            auto& e = term.as_Call();
                             if (const auto* fP = e.fcn.opt_Intrinsic()) {
                                 if (fP->name == "offset_of") {
                                     size_t val = localMirRes.intrinsicOffsetOf(fP->params.types.at(0), e.args);
@@ -1229,7 +1408,9 @@ break;
                             }
                             of << "CALL " << fmt(e.retVal) << " = ";
                             switch (e.fcn.tag()) {
-                                    TU_ARM(e.fcn, Intrinsic, f) {
+                                    break;
+                                    case MIRCallTarget::TAG_Intrinsic: {
+                                        auto& f = e.fcn.as_Intrinsic();
                                         of << "\"" << f.name << "\"";
                                         if (f.params.types.size() > 0) {
                                             of << "<";
@@ -1238,11 +1419,20 @@ break;
                                             }
                                             of << ">";
                                         }
+
                                     }
                                     break;
-                                    TU_ARM(e.fcn, Value, f) of << "(" << fmt(f) << ")";
                                     break;
-                                    TU_ARM(e.fcn, Path, f) of << fmt(f);
+                                    case MIRCallTarget::TAG_Value: {
+                                        auto& f = e.fcn.as_Value();
+                                        of << "(" << fmt(f) << ")";
+                                    }
+                                    break;
+                                    break;
+                                    case MIRCallTarget::TAG_Path: {
+                                        auto& f = e.fcn.as_Path();
+                                        of << fmt(f);
+                                    }
                                     break;
                             }
                             of << "(";
@@ -1250,9 +1440,12 @@ break;
                                 of << fmt(a) << ", ";
                             }
                             of << ") goto " << e.retBlock << " unwind " << e.unwind.tagStr() << "\n";
+
                         }
                         break;
-                        TU_ARM(term, TailCall, e) {
+                        break;
+                        case MIRTerminator::TAG_TailCall: {
+                            auto& e = term.as_TailCall();
                             of << "TAILCALL ";
                             switch (e.fcn.tag()) {
                                 case MIRCallTarget::TAG_Intrinsic: {
@@ -1276,6 +1469,7 @@ break;
                                 of << fmt(arg) << ", ";
                             }
                             of << ")\n";
+
                         }
                         break;
                 }

@@ -3856,45 +3856,49 @@ default:
         }
         case HIRTypeData::TAG_Path: {
             auto& te = (*ty).as_Path();
-            TU_MATCH_HDRA( (te.binding), {)
-            default:
+            switch (te.binding.tag()) {
+default:
                 BUG(sp, "Getting field on invalid type - " << ty);
-                    TU_ARMA(Struct, pbe) {
-                        MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
-                switch (pbe->data.tag()) {
-                    case HIRStructData::TAG_Named: {
-                        auto& se = pbe->data.as_Named();
-                        for (const auto& f : se) {
-                            if (f.name == name) {
-                                return ms.monomorphType(sp, f.ty);
+                case HIRTypePathBinding::TAG_Struct: {
+                    auto& pbe = te.binding.as_Struct();
+                    MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
+                    switch (pbe->data.tag()) {
+                        case HIRStructData::TAG_Named: {
+                            auto& se = pbe->data.as_Named();
+                            for (const auto& f : se) {
+                                if (f.name == name) {
+                                    return ms.monomorphType(sp, f.ty);
+                                }
                             }
+                            BUG(sp, "Unknown field `" << name << "` on " << ty);
+                            break;
                         }
-                        BUG(sp, "Unknown field `" << name << "` on " << ty);
-                        break;
+                        case HIRStructData::TAG_Tuple: {
+                            auto& se = pbe->data.as_Tuple();
+                            unsigned index = std::strtol(name.c_str(), nullptr, 10);
+                            ASSERT_BUG(sp, index < se.size(), "" << ty << " " << name);
+                            return ms.monomorphType(sp, se.at(index).ent);
+                        }
+                        case HIRStructData::TAG_Unit: {
+                            auto& se = pbe->data.as_Unit();
+                            (void)se;
+                            BUG(sp, "Getting field from unit-like struct - " << ty);
+                            break;
+                        }
                     }
-                    case HIRStructData::TAG_Tuple: {
-                        auto& se = pbe->data.as_Tuple();
-                        unsigned index = std::strtol(name.c_str(), nullptr, 10);
-                        ASSERT_BUG(sp, index < se.size(), "" << ty << " " << name);
-                        return ms.monomorphType(sp, se.at(index).ent);
-                    }
-                    case HIRStructData::TAG_Unit: {
-                        auto& se = pbe->data.as_Unit();
-                        (void)se;
-                        BUG(sp, "Getting field from unit-like struct - " << ty);
-                        break;
-                    }
+                    break;
                 }
-                    }
-                    TU_ARMA(Union, pbe) {
-                        MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
-                        for (const auto& f : pbe->variants) {
-                            if (f.name == name) {
-                                return ms.monomorphType(sp, f.ty);
-                            }
+                case HIRTypePathBinding::TAG_Union: {
+                    auto& pbe = te.binding.as_Union();
+                    MonomorphStatePtr ms{crate.types, nullptr, &te.path.data.as_Generic().params, nullptr};
+                    for (const auto& f : pbe->variants) {
+                        if (f.name == name) {
+                            return ms.monomorphType(sp, f.ty);
                         }
-                        BUG(sp, "Unknown field `" << name << "` on " << ty);
                     }
+                    BUG(sp, "Unknown field `" << name << "` on " << ty);
+                    break;
+                }
             }
             break;
         }

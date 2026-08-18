@@ -2131,19 +2131,25 @@ public:
 
         ::std::vector<ASTType*> boundTys;
         ASTExprNodeP node;
-        TU_MATCH_HDRA( (defaultVar->data), { )
-        TU_ARMA(Unit, e) {
+        switch (defaultVar->data.tag()) {
+            case ASTEnumVariantData::TAG_Unit: {
+                auto& e = defaultVar->data.as_Unit();
+                (void)e;
                 node = NEWNODE(NamedValue, std::move(varPath));
+                break;
             }
-            TU_ARMA(Tuple, e) {
+            case ASTEnumVariantData::TAG_Tuple: {
+                auto& e = defaultVar->data.as_Tuple();
                 ::std::vector<ASTExprNodeP> vals;
                 for (const auto& fld : e.items) {
                     addFieldBoundFromTy(enm.params(), boundTys, fld.type);
                     vals.push_back(this->defaultCall(*type->pool, opts.coreName));
                 }
                 node = NEWNODE(CallPath, std::move(varPath), mv$(vals));
+                break;
             }
-            TU_ARMA(Struct, e) {
+            case ASTEnumVariantData::TAG_Struct: {
+                auto& e = defaultVar->data.as_Struct();
                 ASTExprNodeStructLiteral::tValues vals;
                 for (const auto& fld : e.fields) {
                     if (fld.defaultValue) {
@@ -2153,6 +2159,7 @@ public:
                     }
                 }
                 node = NEWNODE(StructLiteralPattern, std::move(varPath), mv$(vals));
+                break;
             }
         }
         // Only the `#[default]` variant is constructed, so the other variants'

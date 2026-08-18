@@ -6121,7 +6121,9 @@ default:
         }
         optVisitMirLvaluesMut(bb.terminator, editLval);
         switch (bb.terminator.tag()) {
-                TU_ARM(bb.terminator, Switch, te) {
+                break;
+                case MIRTerminator::TAG_Switch: {
+                    auto& te = bb.terminator.as_Switch();
                     auto it = knownValuesVar.find(te.val);
                     if (it != knownValuesVar.end()) {
                         MIR_ASSERT(state, it->second < te.targets.size(), "Terminator::Switch with known variant index out of bounds" << " (#" << it->second << " with " << bb.terminator << ")");
@@ -6131,9 +6133,12 @@ default:
 
                         changed = true;
                     }
+
                 }
                 break;
-                TU_ARM(bb.terminator, If, te) {
+                break;
+                case MIRTerminator::TAG_If: {
+                    auto& te = bb.terminator.as_If();
                     auto it = knownValues.find(te.cond);
                     if (it != knownValues.end()) {
                         if (it->second.is_Const() || it->second.is_Generic()) {
@@ -6146,12 +6151,16 @@ default:
                             changed = true;
                         }
                     }
+
                 }
                 break;
-                TU_ARM(bb.terminator, Call, te) {
+                break;
+                case MIRTerminator::TAG_Call: {
+                    auto& te = bb.terminator.as_Call();
                     for (auto& a : te.args) {
                         checkParam(a);
                     }
+
                 }
                 break;
             default:

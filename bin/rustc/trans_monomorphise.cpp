@@ -71,12 +71,18 @@ MIRFunctionPointer TransMonomorphise(const ::StaticTraitResolve& resolve, const 
         for (const auto& stmt : block.statements) {
             switch (stmt.tag()) {
                 // LAZY: These _should_ be in `clone_stmt`, but they're not needed in optimising and MIR cloning
-                TU_ARM(stmt, SaveDropFlag, e) {
+                break;
+                case MIRStatement::TAG_SaveDropFlag: {
+                    auto& e = stmt.as_SaveDropFlag();
                     statements.push_back(MIRStatement::make_SaveDropFlag({e.slot.clone(), e.bitIndex, e.idx}));
+
                 }
                 break;
-                TU_ARM(stmt, LoadDropFlag, e) {
+                break;
+                case MIRStatement::TAG_LoadDropFlag: {
+                    auto& e = stmt.as_LoadDropFlag();
                     statements.push_back(MIRStatement::make_LoadDropFlag({e.idx, e.slot.clone(), e.bitIndex}));
+
                 }
                 break;
                 default:

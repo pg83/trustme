@@ -1360,15 +1360,27 @@ HIRPathParams MIRCloner::monomorph(const HIRPathParams& ty) const {
 ::std::vector<MIRAsmParam> MIRCloner::cloneAsmParams(const ::std::vector<MIRAsmParam>& params) const {
     ::std::vector<MIRAsmParam> rv;
     for (const auto& p : params) {
-        TU_MATCH_HDRA((p), {)
-        TU_ARMA(Const, v)
-            rv.push_back( this->cloneConstant(v) );
-            TU_ARMA(Sym, v)
-            rv.push_back(this->monomorph(v));
-            TU_ARMA(Reg, v)
-            rv.push_back(MIRAsmParam::make_Reg({v.dir, v.spec.clone(), v.input ? box$(this->cloneParam(*v.input)) : std::unique_ptr<MIRParam>(), v.output ? box$(this->cloneLval(*v.output)) : std::unique_ptr<MIRLValue>()}));
-            TU_ARMA(Label, v)
-            rv.push_back(MIRAsmParam::make_Label(mapBbIdx(v)));
+        switch (p.tag()) {
+            case MIRAsmParam::TAG_Const: {
+                auto& v = p.as_Const();
+                rv.push_back( this->cloneConstant(v) );
+                break;
+            }
+            case MIRAsmParam::TAG_Sym: {
+                auto& v = p.as_Sym();
+                rv.push_back(this->monomorph(v));
+                break;
+            }
+            case MIRAsmParam::TAG_Reg: {
+                auto& v = p.as_Reg();
+                rv.push_back(MIRAsmParam::make_Reg({v.dir, v.spec.clone(), v.input ? box$(this->cloneParam(*v.input)) : std::unique_ptr<MIRParam>(), v.output ? box$(this->cloneLval(*v.output)) : std::unique_ptr<MIRLValue>()}));
+                break;
+            }
+            case MIRAsmParam::TAG_Label: {
+                auto& v = p.as_Label();
+                rv.push_back(MIRAsmParam::make_Label(mapBbIdx(v)));
+                break;
+            }
         }
     }
     return rv;
@@ -1635,76 +1647,102 @@ MIRLValue MIRCloner::cloneLval(const MIRLValue& src) const {
 }
 
 MIRConstant MIRCloner::cloneConstant(const MIRConstant& src) const {
-    TU_MATCH_HDRA( (src), {)
-    TU_ARMA(Int  , ce) return MIRConstant(ce);
-        TU_ARMA(Uint, ce) return MIRConstant(ce);
-        TU_ARMA(Float, ce) return MIRConstant(ce);
-        TU_ARMA(Bool, ce) return MIRConstant(ce);
-        TU_ARMA(Bytes, ce) return MIRConstant(ce);
-        TU_ARMA(StaticString, ce) return MIRConstant(ce);
-        TU_ARMA(Encoded, ce) return MIRConstant::make_Encoded({this->monomorph(ce.type), ce.value.clone()});
-        TU_ARMA(Const, ce) {
+    switch (src.tag()) {
+        case MIRConstant::TAG_Int: {
+            auto& ce = src.as_Int();
+            return MIRConstant(ce);
+        }
+        case MIRConstant::TAG_Uint: {
+            auto& ce = src.as_Uint();
+            return MIRConstant(ce);
+        }
+        case MIRConstant::TAG_Float: {
+            auto& ce = src.as_Float();
+            return MIRConstant(ce);
+        }
+        case MIRConstant::TAG_Bool: {
+            auto& ce = src.as_Bool();
+            return MIRConstant(ce);
+        }
+        case MIRConstant::TAG_Bytes: {
+            auto& ce = src.as_Bytes();
+            return MIRConstant(ce);
+        }
+        case MIRConstant::TAG_StaticString: {
+            auto& ce = src.as_StaticString();
+            return MIRConstant(ce);
+        }
+        case MIRConstant::TAG_Encoded: {
+            auto& ce = src.as_Encoded();
+            return MIRConstant::make_Encoded({this->monomorph(ce.type), ce.value.clone()});
+        }
+        case MIRConstant::TAG_Const: {
+            auto& ce = src.as_Const();
             return MIRConstant::make_Const({box$(this->monomorph(*ce.p))});
         }
-        TU_ARMA(Generic, ce) {
+        case MIRConstant::TAG_Generic: {
+            auto& ce = src.as_Generic();
             auto val = monomorphiser().getValue(sp, ce);
-            if (const auto* r = resolve()) {
-                r->evaluateConstGeneric(sp, val);
-            }
-        switch (val.tag()) {
-default:
-            TODO(sp, "Monomorphise MIR generic constant " << ce << " = " << val);
-            case HIRConstGeneric::TAG_Generic: {
-                auto& ve = val.as_Generic();
-                return ve;
-            }
-            case HIRConstGeneric::TAG_Evaluated: {
-                auto& ve = val.as_Evaluated();
-                // The parameter's declared type can name other generics
-                // (`const M: [T; N]`), so it needs monomorphising too.
-                const auto ty = this->monomorph(this->valueGenericType(ce));
-                auto v = EncodedLiteralSlice(*ve);
-                if (!ty->is_Primitive()) {
-                    return MIRConstant::make_Encoded({ty, ve->clone()});
-                }
-                // TODO: This is duplicated in `mir/from_hir_match.cpp` - De-duplicate?
-                switch (ty->as_Primitive()) {
-                    case HIRCoreType::Bool:
-                        return MIRConstant::make_Bool({v.readUint(1) != 0});
-                    case HIRCoreType::U8:
-                    case HIRCoreType::U16:
-                    case HIRCoreType::U32:
-                    case HIRCoreType::U64:
-                    case HIRCoreType::U128:
-                        return MIRConstant::make_Uint({v.readUint(ve->bytes.size()), ty->as_Primitive()});
-                    case HIRCoreType::Usize:
-                        return MIRConstant::make_Uint({v.readUint(TargetGetPointerBits() / 8), ty->as_Primitive()});
-                    case HIRCoreType::I8:
-                    case HIRCoreType::I16:
-                    case HIRCoreType::I32:
-                    case HIRCoreType::I64:
-                    case HIRCoreType::I128:
-                        return MIRConstant::make_Int({v.readSint(ve->bytes.size()), ty->as_Primitive()});
-                    case HIRCoreType::Isize:
-                        return MIRConstant::make_Int({v.readSint(TargetGetPointerBits() / 8), ty->as_Primitive()});
-                    case HIRCoreType::F16:
-                    case HIRCoreType::F32:
-                    case HIRCoreType::F64:
-                    case HIRCoreType::F128:
-                        return MIRConstant::make_Float({v.readFloat(ve->bytes.size()), ty->as_Primitive()});
-                    case HIRCoreType::Char:
-                        return MIRConstant::make_Uint({v.readUint(4), ty->as_Primitive()});
-                    case HIRCoreType::Str:
-                        BUG(sp, "`str` const generic");
-                }
-                break;
-            }
+                        if (const auto* r = resolve()) {
+                            r->evaluateConstGeneric(sp, val);
+                        }
+                    switch (val.tag()) {
+            default:
+                        TODO(sp, "Monomorphise MIR generic constant " << ce << " = " << val);
+                        case HIRConstGeneric::TAG_Generic: {
+                            auto& ve = val.as_Generic();
+                            return ve;
+                        }
+                        case HIRConstGeneric::TAG_Evaluated: {
+                            auto& ve = val.as_Evaluated();
+                            // The parameter's declared type can name other generics
+                            // (`const M: [T; N]`), so it needs monomorphising too.
+                            const auto ty = this->monomorph(this->valueGenericType(ce));
+                            auto v = EncodedLiteralSlice(*ve);
+                            if (!ty->is_Primitive()) {
+                                return MIRConstant::make_Encoded({ty, ve->clone()});
+                            }
+                            // TODO: This is duplicated in `mir/from_hir_match.cpp` - De-duplicate?
+                            switch (ty->as_Primitive()) {
+                                case HIRCoreType::Bool:
+                                    return MIRConstant::make_Bool({v.readUint(1) != 0});
+                                case HIRCoreType::U8:
+                                case HIRCoreType::U16:
+                                case HIRCoreType::U32:
+                                case HIRCoreType::U64:
+                                case HIRCoreType::U128:
+                                    return MIRConstant::make_Uint({v.readUint(ve->bytes.size()), ty->as_Primitive()});
+                                case HIRCoreType::Usize:
+                                    return MIRConstant::make_Uint({v.readUint(TargetGetPointerBits() / 8), ty->as_Primitive()});
+                                case HIRCoreType::I8:
+                                case HIRCoreType::I16:
+                                case HIRCoreType::I32:
+                                case HIRCoreType::I64:
+                                case HIRCoreType::I128:
+                                    return MIRConstant::make_Int({v.readSint(ve->bytes.size()), ty->as_Primitive()});
+                                case HIRCoreType::Isize:
+                                    return MIRConstant::make_Int({v.readSint(TargetGetPointerBits() / 8), ty->as_Primitive()});
+                                case HIRCoreType::F16:
+                                case HIRCoreType::F32:
+                                case HIRCoreType::F64:
+                                case HIRCoreType::F128:
+                                    return MIRConstant::make_Float({v.readFloat(ve->bytes.size()), ty->as_Primitive()});
+                                case HIRCoreType::Char:
+                                    return MIRConstant::make_Uint({v.readUint(4), ty->as_Primitive()});
+                                case HIRCoreType::Str:
+                                    BUG(sp, "`str` const generic");
+                            }
+                            break;
+                        }
+                    }
+            break;
         }
-        }
-        TU_ARMA(Function, ce) {
+        case MIRConstant::TAG_Function: {
+            auto& ce = src.as_Function();
             return MIRConstant::make_Function({box$(this->monomorph(*ce.p))});
         }
-        TU_ARMA(ItemAddr, ce) {
+        case MIRConstant::TAG_ItemAddr: {
+            auto& ce = src.as_ItemAddr();
             if (!ce) {
                 return MIRConstant::make_ItemAddr({});
             }

@@ -1166,7 +1166,10 @@ namespace {
 
     bool getNonzeroPath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, TypeRepr::FieldPath& outPath) {
         switch (ty->tag()) {
-            TU_ARM(*ty, Tuple, te) {
+            break;
+            case HIRTypeData::TAG_Tuple: {
+                auto& te = (*ty).as_Tuple();
+                (void)te;
                 const TypeRepr* repr = TargetGetTypeRepr(sp, resolve, ty);
                 if (!repr) {
                     return false;
@@ -1177,16 +1180,22 @@ namespace {
                         return true;
                     }
                 }
+
             }
             break;
-            TU_ARM(*ty, Array, te) {
+            break;
+            case HIRTypeData::TAG_Array: {
+                auto& te = (*ty).as_Array();
                 if (te.size.is_Known() && te.size.as_Known() > 0 && getNonzeroPath(sp, resolve, te.inner, outPath)) {
                     outPath.subFields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
+
             }
             break;
-            TU_ARM(*ty, Path, te) {
+            break;
+            case HIRTypeData::TAG_Path: {
+                auto& te = (*ty).as_Path();
                 if (te.binding.is_Struct()) {
                     const auto* str = te.binding.as_Struct();
                     const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
@@ -1234,23 +1243,34 @@ namespace {
                         }
                     }
                 }
+
             }
             break;
-            TU_ARM(*ty, Borrow, _te) {
+            break;
+            case HIRTypeData::TAG_Borrow: {
+                auto& _te = (*ty).as_Borrow();
                 (void)_te;
                 // TODO: Only return a single-pointer size
                 outPath.size = TargetGetPointerBits() / 8;
                 return true;
+
             }
             break;
-            TU_ARM(*ty, Function, _te)(void) _te;
+            break;
+            case HIRTypeData::TAG_Function: {
+                auto& _te = (*ty).as_Function();
+                (void) _te;
+            }
             TargetGetSizeOf(sp, resolve, ty, outPath.size);
             return true;
-            TU_ARM(*ty, Pattern, te) {
+            break;
+            case HIRTypeData::TAG_Pattern: {
+                auto& te = (*ty).as_Pattern();
                 ::std::vector<::std::pair<size_t, size_t>> ranges;
                 if (getPatternValidRanges(te, outPath.size, ranges) && ranges.front().first != 0) {
                     return true;
                 }
+
             }
             break;
             default:
@@ -1298,7 +1318,10 @@ namespace {
     bool getVariantNichePath(const Span& sp, const StaticTraitResolve& resolve, const HIRTypeData* ty, size_t minOffset, size_t maxOffset, size_t requiredCount, TypeRepr::FieldPath& outPath, size_t& nicheStart) {
         TRACE_FUNCTION_F(ty << " min_offset=" << minOffset << " max_offset=" << maxOffset << " required_count=" << requiredCount);
         switch (ty->tag()) {
-            TU_ARM(*ty, Tuple, te) {
+            break;
+            case HIRTypeData::TAG_Tuple: {
+                auto& te = (*ty).as_Tuple();
+                (void)te;
                 const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
                 if (!r) {
                     return false;
@@ -1317,14 +1340,20 @@ namespace {
                         }
                     }
                 }
+
             }
-            TU_ARM(*ty, Array, te) {
+            break;
+            case HIRTypeData::TAG_Array: {
+                auto& te = (*ty).as_Array();
                 if (te.size.is_Known() && te.size.as_Known() > 0 && getVariantNichePath(sp, resolve, te.inner, minOffset, maxOffset, requiredCount, outPath, nicheStart)) {
                     outPath.subFields.push_back(TypeRepr::FieldPath::ARRAY_ELEMENT);
                     return true;
                 }
+
             }
-            TU_ARM(*ty, Path, te) {
+            break;
+            case HIRTypeData::TAG_Path: {
+                auto& te = (*ty).as_Path();
                 if (te.binding.is_Struct()) {
                     const auto* str = te.binding.as_Struct();
                     const TypeRepr* r = TargetGetTypeRepr(sp, resolve, ty);
@@ -1524,9 +1553,12 @@ namespace {
                     }
                 }
                 }
+
             }
             break;
-            TU_ARM(*ty, Primitive, te) {
+            break;
+            case HIRTypeData::TAG_Primitive: {
+                auto& te = (*ty).as_Primitive();
                 switch (te) {
                     case HIRCoreType::Char:
                         // Only valid if the min offset is zero
@@ -1546,8 +1578,11 @@ namespace {
                     default:
                         break;
                 }
+
             }
-            TU_ARM(*ty, Pattern, te) {
+            break;
+            case HIRTypeData::TAG_Pattern: {
+                auto& te = (*ty).as_Pattern();
                 size_t scalarSize;
                 ::std::vector<::std::pair<size_t, size_t>> ranges;
                 if (minOffset != 0 || !getPatternValidRanges(te, scalarSize, ranges) || scalarSize > maxOffset) {
@@ -1575,22 +1610,29 @@ namespace {
                     return true;
                 }
                 return false;
+
             }
-            TU_ARM(*ty, Borrow, te) {
+            break;
+            case HIRTypeData::TAG_Borrow: {
+                auto& te = (*ty).as_Borrow();
                 (void)te;
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
                     nicheStart = 0;
                     return true;
                 }
+
             }
-            TU_ARM(*ty, Function, te) {
+            break;
+            case HIRTypeData::TAG_Function: {
+                auto& te = (*ty).as_Function();
                 (void)te;
                 if (minOffset == 0 && maxOffset >= TargetGetPointerBits() / 8 && requiredCount == 1) {
                     outPath.size = TargetGetPointerBits() / 8;
                     nicheStart = 0;
                     return true;
                 }
+
             }
             default:
                 break;
@@ -1615,7 +1657,9 @@ namespace {
 
         TypeRepr rv;
         switch (enm.data.tag()) {
-                TU_ARM(enm.data, Data, e) {
+                break;
+                case HIREnumClass::TAG_Data: {
+                    auto& e = enm.data.as_Data();
                     // repr(C) enums - they have different rules
                     // - A data enum with `repr(C)` puts the tag before the data
                     if (enm.isCRepr) {
@@ -2062,9 +2106,12 @@ namespace {
                             }
                         }
                     }
+
                 }
                 break;
-                TU_ARM(enm.data, Value, e) {
+                break;
+                case HIREnumClass::TAG_Value: {
+                    auto& e = enm.data.as_Value();
                     // TODO: If the values aren't yet populated, force const evaluation
                     switch (enm.tagRepr) {
                         case HIREnum::Repr::Auto:
@@ -2119,6 +2166,7 @@ namespace {
                         DEBUG("vals = " << vals);
                         rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<uint8_t>(rv.size), {}}, ::std::move(vals)});
                     }
+
                 }
                 break;
         }

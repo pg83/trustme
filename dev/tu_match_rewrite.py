@@ -449,8 +449,10 @@ def skip_blank(text, i, mask):
     return i
 
 
-def rewrite_hdr(text, specs, where):
+def rewrite_hdr(text, specs, where, force_class=None, start_line=None):
     offset = 0
+    if start_line is not None:
+        offset = sum(len(l) + 1 for l in text.splitlines()[:start_line - 1])
     while True:
         m = re.compile(r"\bTU_MATCH_HDRA?\(").search(text, offset)
         if not m:
@@ -529,9 +531,9 @@ def rewrite_hdr(text, specs, where):
                     break
                 k += 1
             stmt = text[j:k + 1]
-            if "{" in stmt:
-                print(f"{where}: braceless arm with a block at offset {j}"
-                      " - left for hand conversion")
+            if re.match(r"(?:if|for|while|switch|do)\b", stmt.lstrip()):
+                print(f"{where}: braceless arm with a control statement at"
+                      f" offset {j} - left for hand conversion")
                 ok = False
                 break
             arms.append((tag, names, stmt))
@@ -540,12 +542,15 @@ def rewrite_hdr(text, specs, where):
             offset = m.end()
             continue
 
-        cls = infer_class(specs,
-                          frozenset(tag for tag, _, _ in arms
-                                    if tag is not None), where, subjects)
-        if cls is None:
-            offset = m.end()
-            continue
+        if force_class is not None:
+            cls = force_class
+        else:
+            cls = infer_class(specs,
+                              frozenset(tag for tag, _, _ in arms
+                                        if tag is not None), where, subjects)
+            if cls is None:
+                offset = m.end()
+                continue
 
         indent = line_indent(text, m.start())
         lines = []
@@ -586,12 +591,101 @@ def rewrite_hdr(text, specs, where):
         if scoped:
             lines.append(f"{indent}}}")
         text = text[:m.start()] + "\n".join(lines) + text[i:]
+        if force_class is not None:
+            return text
+
+
+def rewrite_bare_arm(text, specs, where):
+    """Standalone TU_ARM(var, Tag, name) arms inside hand-written switches."""
+    finder = re.compile(r"\bTU_ARM\(")
+    # Group arm tags by subject spelling to infer each subject's union.
+    subject_tags = {}
+    mask = code_mask(text)
+    for m in finder.finditer(text):
+        if in_mask(mask, m.start()):
+            continue
+        args, _ = scan_args(text, m.end() - 1)
+        subject_tags.setdefault(args[0].strip(), set()).add(args[1].strip())
+
+    offset = 0
+    while True:
+        mask = code_mask(text)
+        m = finder.search(text, offset)
+        if not m:
+            return text
+        if in_mask(mask, m.start()):
+            offset = m.end()
+            continue
+        args, end = scan_args(text, m.end() - 1)
+        var, tag, name = (a.strip() for a in args)
+        subj = subject(var)
+        j = skip_blank(text, end, mask)
+        if text.startswith("{", j):
+            k = block_end(text, j, mask)
+            body = text[j + 1:k - 1]
+            after = k
+        else:
+            depth = 0
+            k = j
+            while k < len(text):
+                if in_mask(mask, k):
+                    k += 1
+                    continue
+                c = text[k]
+                if c in "([{":
+                    depth += 1
+                elif c in ")]}":
+                    depth -= 1
+                elif c == ";" and depth == 0:
+                    break
+                k += 1
+            body = text[j:k + 1]
+            after = k + 1
+            if re.match(r"(?:if|for|while|switch|do)\b", body.lstrip()):
+                print(f"{where}: bare arm with a control statement at offset"
+                      f" {j} - left for hand conversion")
+                offset = m.end()
+                continue
+        cls = infer_class(specs, frozenset(subject_tags[var]), where, [var])
+        if cls is None:
+            offset = m.end()
+            continue
+        indent = line_indent(text, m.start())
+        lines = ["break;", f"{indent}case {cls}::TAG_{tag}: {{"]
+        binder = (f"decltype({subj}.as_{tag}())"
+                  if cls in BY_VALUE_CLASSES else "auto&")
+        lines.append(f"{indent}    {binder} {name} = {subj}.as_{tag}();")
+        if not re.search(r"\b%s\b" % re.escape(name), body):
+            lines.append(f"{indent}    (void){name};")
+        body_lines = body.splitlines()
+        if body_lines and not body_lines[0].strip():
+            body_lines = body_lines[1:]
+        rest = [bl for bl in body_lines[1:] if bl.strip()]
+        common = min((len(bl) - len(bl.lstrip()) for bl in rest), default=0)
+        for pos, bl in enumerate(body_lines):
+            if not bl.strip():
+                lines.append("")
+            elif pos == 0:
+                lines.append(f"{indent}    {bl.strip()}")
+            else:
+                lines.append(f"{indent}    {bl[common:].rstrip()}")
+        lines.append(f"{indent}}}")
+        text = text[:m.start()] + "\n".join(lines) + text[after:]
 
 
 def main():
     if len(sys.argv) < 3:
         raise SystemExit(__doc__)
     mode = sys.argv[1]
+    if mode == "hdr-as":
+        cls, loc = sys.argv[2], sys.argv[3]
+        file_path, line = loc.rsplit(":", 1)
+        p = pathlib.Path(file_path)
+        p.write_text(rewrite_hdr(p.read_text(encoding="utf-8"),
+                                 load_union_specs(), p, force_class=cls,
+                                 start_line=int(line)),
+                     encoding="utf-8")
+        return 0
     for path in sys.argv[2:]:
         p = pathlib.Path(path)
         text = p.read_text(encoding="utf-8")
@@ -603,6 +697,8 @@ def main():
             text = rewrite_match(text, load_union_specs(), path)
         elif mode == "hdr":
             text = rewrite_hdr(text, load_union_specs(), path)
+        elif mode == "arm":
+            text = rewrite_bare_arm(text, load_union_specs(), path)
         else:
             raise SystemExit(f"unknown mode {mode}")
         p.write_text(text, encoding="utf-8")

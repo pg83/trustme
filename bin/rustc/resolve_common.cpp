@@ -143,23 +143,25 @@ namespace {
                         case ResolveItemRefType::TAG_Ast: {
                             auto& iData = realMod.as_Ast();
                             // TODO: What about an enum?
-                            TU_MATCH_HDRA( (*iData), {)
-                            default: {
+                            switch ((*iData).tag()) {
+default: {
                                             // Ignore, keep going
                                         }
-                                        TU_ARMA(Crate, c) {
-                                            if (outPath) {
-                                                *outPath = ASTAbsolutePath(c.name, {});
-                                            }
-                                            if (c.name == "") {
-                                                return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
-                                            }
-                                            ASSERT_BUG(sp, crate.externCrates.count(c.name) > 0, "Unable to find crate `" << c.name << "`");
-                                            return getModuleHir(crate.externCrates.at(c.name).hir->rootModule, path, 1, ignoreLast, outPath);
-                                        }
-                                        TU_ARMA(Module, m) {
-                                            return getModuleAst(m, path, 1, ignoreLast, outPath);
-                                        }
+                                case ASTItem::TAG_Crate: {
+                                    auto& c = (*iData).as_Crate();
+                                    if (outPath) {
+                                        *outPath = ASTAbsolutePath(c.name, {});
+                                    }
+                                    if (c.name == "") {
+                                        return getModuleAst(crate.rootModule_, path, 1, ignoreLast, outPath);
+                                    }
+                                    ASSERT_BUG(sp, crate.externCrates.count(c.name) > 0, "Unable to find crate `" << c.name << "`");
+                                    return getModuleHir(crate.externCrates.at(c.name).hir->rootModule, path, 1, ignoreLast, outPath);
+                                }
+                                case ASTItem::TAG_Module: {
+                                    auto& m = (*iData).as_Module();
+                                    return getModuleAst(m, path, 1, ignoreLast, outPath);
+                                }
                             }
                             break;
                         }

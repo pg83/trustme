@@ -3296,30 +3296,50 @@ break;
     void serialise(const ::Token::Data& td) {
         out.writeTag(td.tag());
         switch (td.tag()) {
-                TU_ARM(td, None, _e) {
+                break;
+                case TokenData::TAG_None: {
+                    auto& _e = td.as_None();
+                    (void)_e;
+
                 }
                 break;
-                TU_ARM(td, String, e) {
+                break;
+                case TokenData::TAG_String: {
+                    auto& e = td.as_String();
                     out.writeString(e);
+
                 }
                 break;
-                TU_ARM(td, Ident, e) {
+                break;
+                case TokenData::TAG_Ident: {
+                    auto& e = td.as_Ident();
                     serialise(e.hygiene);
                     out.writeString(e.name);
+
                 }
                 break;
-                TU_ARM(td, Integer, e) {
+                break;
+                case TokenData::TAG_Integer: {
+                    auto& e = td.as_Integer();
                     out.writeTag(e.datatype);
                     out.writeU128(e.intval);
+
                 }
                 break;
-                TU_ARM(td, Float, e) {
+                break;
+                case TokenData::TAG_Float: {
+                    auto& e = td.as_Float();
                     out.writeTag(e.datatype);
                     out.writeFloatValue(e.floatval);
+
                 }
                 break;
-                TU_ARM(td, Fragment, e)
-                assert(!"Serialising interpolated macro fragment - should have been handled in HIR lowering");
+                break;
+                case TokenData::TAG_Fragment: {
+                    auto& e = td.as_Fragment();
+                    (void)e;
+                    assert(!"Serialising interpolated macro fragment - should have been handled in HIR lowering");
+                }
         }
     }
 

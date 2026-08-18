@@ -4385,17 +4385,19 @@ void ParseImplItem(TokenStream& lex, ASTImpl& impl) {
             for (auto& a : itemAttrs.items) {
                 item.attrs.items.push_back(std::move(a));
             }
-            TU_MATCH_HDRA((item.data), {)
-            default:
+            switch (item.data.tag()) {
+default:
                 TODO(lex.pointSpan(), "Interpolated item into impl: " << item.data.tagStr());
-                TU_ARMA(Function, e) {
+                case ASTItem::TAG_Function: {
+                    auto& e = item.data.as_Function();
                     impl.addFunction(item.span, std::move(item.attrs), item.vis, false, item.name, std::move(e));
+                    break;
                 }
-                // An associated `const` - the only kind of `Static` an impl block can hold, stored as the non-interpolated path stores one.
-                TU_ARMA(Static, e) {
+                case ASTItem::TAG_Static: {
+                    auto& e = item.data.as_Static();
                     impl.addStatic(item.span, std::move(item.attrs), item.vis, false, item.name, std::move(e));
+                    break;
                 }
-                //    }
             }
             return ;
         }
