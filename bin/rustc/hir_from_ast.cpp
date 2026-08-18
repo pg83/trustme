@@ -2720,7 +2720,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
                 item.operands.reserve(e.operands.size());
                 for (auto& operand : e.operands) {
                     switch (operand.tag()) {
-                        case HIRGlobalAsmOperand::TAG_Const: {
+                        case ASTGlobalAsmOperand::TAG_Const: {
                             auto& expr = operand.as_Const();
                             auto value = LowerHIRConstGeneric(*expr);
                             ASSERT_BUG(sp, value.is_Unevaluated(), "global_asm const operand lowered without an expression");
@@ -2728,7 +2728,7 @@ HIRModule AST2HIR::LowerHIRModule(const ASTModule& astMod, HIRItemPath path, ::s
                             item.operands.push_back(HIRGlobalAsmOperand::make_Const({std::move(value), type}));
                             break;
                         }
-                        case HIRGlobalAsmOperand::TAG_Sym: {
+                        case ASTGlobalAsmOperand::TAG_Sym: {
                             auto& sym = operand.as_Sym();
                             item.operands.push_back(HIRGlobalAsmOperand::make_Sym(LowerHIRPath(sp, sym, FromASTPathClass::Value)));
                             break;
@@ -3615,23 +3615,23 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
         std::vector<HIRExprNodeAsm2::Param> params;
         for (auto& p : v.params) {
             switch (p.tag()) {
-                case HIRAsmParam::TAG_Const: {
+                case ASTAsmParam::TAG_Const: {
                     auto& e = p.as_Const();
                     ASSERT_BUG(v.span(), e, "Missing node for ASM Const");
                     params.push_back(lower(e));
                     break;
                 }
-                case HIRAsmParam::TAG_Sym: {
+                case ASTAsmParam::TAG_Sym: {
                     auto& e = p.as_Sym();
                     params.push_back(ctx.LowerHIRPath(v.span(), e, FromASTPathClass::Value));
                     break;
                 }
-                case HIRAsmParam::TAG_Label: {
+                case ASTAsmParam::TAG_Label: {
                     auto& e = p.as_Label();
                     params.push_back(HIRExprNodeAsm2::Param::make_Label({lower(e.code)}));
                     break;
                 }
-                case HIRAsmParam::TAG_RegSingle: {
+                case ASTAsmParam::TAG_RegSingle: {
                     auto& e = p.as_RegSingle();
                     params.push_back(
                         HIRExprNodeAsm2::Param::make_RegSingle({
@@ -3642,7 +3642,7 @@ struct LowerHIRExprNodeVisitor: public ASTNodeVisitor {
                     );
                     break;
                 }
-                case HIRAsmParam::TAG_Reg: {
+                case ASTAsmParam::TAG_Reg: {
                     auto& e = p.as_Reg();
                     params.push_back(HIRExprNodeAsm2::Param::make_Reg({e.dir, e.spec.clone(), e.valIn ? lower(e.valIn) : nullptr, e.valOut ? lower(e.valOut) : nullptr}));
                     break;

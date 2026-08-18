@@ -536,13 +536,13 @@ namespace {
                             switch ((*item).tag()) {
 default:
                                 TODO(sp, "Bind value '" << name << "' for module path " << mp << " : " << item->tagStr());
-                                case ASTItem::TAG_Function: {
+                                case HIRValueItem::TAG_Function: {
                                     auto& e = (*item).as_Function();
                                     (void)e;
                                     bindings.value.set(itemPath, ASTPathBindingValue::make_Function({nullptr}));
                                     break;
                                 }
-                                case ASTItem::TAG_Static: {
+                                case HIRValueItem::TAG_Static: {
                                     auto& e = (*item).as_Static();
                                     (void)e;
                                     bindings.value.set(itemPath, ASTPathBindingValue::make_Static({nullptr}));
@@ -575,36 +575,36 @@ default:
                             switch ((*item).tag()) {
 default:
                                 TODO(sp, "Bind type/mod '" << name << "' for module path " << mp << " : " << item->tagStr());
-                                case ASTPathBindingType::TAG_Module: {
+                                case HIRTypeItem::TAG_Module: {
                                     auto& e = (*item).as_Module();
                                     bindings.type.set(itemPath, ASTPathBindingType::make_Module({nullptr, {&extCrate, &e}}));
                                     break;
                                 }
-                                case ASTPathBindingType::TAG_Trait: {
+                                case HIRTypeItem::TAG_Trait: {
                                     auto& e = (*item).as_Trait();
                                     (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_Trait({nullptr}));
                                     break;
                                 }
-                                case ASTPathBindingType::TAG_TypeAlias: {
+                                case HIRTypeItem::TAG_TypeAlias: {
                                     auto& e = (*item).as_TypeAlias();
                                     (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_TypeAlias({nullptr}));
                                     break;
                                 }
-                                case ASTPathBindingType::TAG_Struct: {
+                                case HIRTypeItem::TAG_Struct: {
                                     auto& e = (*item).as_Struct();
                                     (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_Struct({nullptr}));
                                     break;
                                 }
-                                case ASTPathBindingType::TAG_Enum: {
+                                case HIRTypeItem::TAG_Enum: {
                                     auto& e = (*item).as_Enum();
                                     (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_Enum({nullptr}));
                                     break;
                                 }
-                                case ASTPathBindingType::TAG_Union: {
+                                case HIRTypeItem::TAG_Union: {
                                     auto& e = (*item).as_Union();
                                     (void)e;
                                     bindings.type.set(itemPath, ASTPathBindingType::make_Union({nullptr}));

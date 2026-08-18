@@ -405,7 +405,7 @@ default: {
 default:
                     DEBUG(name << " Not Module, instead " << ti->tagStr());
                     return ResolveModuleRef();
-                    case ASTItem::TAG_Module: {
+                    case HIRTypeItem::TAG_Module: {
                         auto& m = (*ti).as_Module();
                         mod = &m;
                         break;

@@ -1148,17 +1148,17 @@ default:
                     switch (v.tag()) {
 default:
                         TODO(sp, "Resolve external NamedFunction type - " << te->path << " : " << v.tagStr());
-                        case HIRTypeDataNamedFunctionTy::TAG_Function: {
+                        case TypeckValuePtr::TAG_Function: {
                             auto& e = v.as_Function();
                             te->def = e;
                             break;
                         }
-                        case HIRTypeDataNamedFunctionTy::TAG_StructConstructor: {
+                        case TypeckValuePtr::TAG_StructConstructor: {
                             auto& e = v.as_StructConstructor();
                             te->def = e.s;
                             break;
                         }
-                        case HIRTypeDataNamedFunctionTy::TAG_EnumConstructor: {
+                        case TypeckValuePtr::TAG_EnumConstructor: {
                             auto& e = v.as_EnumConstructor();
                             te->def = HIRTypeDataNamedFunctionTy::make_EnumConstructor({e.e, e.v});
                             break;

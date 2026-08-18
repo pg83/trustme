@@ -392,6 +392,7 @@ default:
                                     // TODO: Only allow thin pointers? `c_void` is used in 1.74 libstd
                                     this->completed = true;
                                 }
+                                break;
                         case HIRTypeData::TAG_Primitive: {
                             auto& sE = (*srcTy).as_Primitive();
                             switch (sE) {
