@@ -6455,10 +6455,16 @@ namespace {
         if (v.name != ""
             && (v.operatorKind == TypeckPrimitiveOperator::Shl || v.operatorKind == TypeckPrimitiveOperator::Shr
                 || v.operatorKind == TypeckPrimitiveOperator::ShlAssign || v.operatorKind == TypeckPrimitiveOperator::ShrAssign)) {
-            const auto* leftInfer = context.getType(v.implTy)->opt_Infer();
+            const auto* valueTy = context.getType(v.implTy);
+            if (const auto* borrow = valueTy->opt_Borrow()) {
+                // Only the standard library's forwarding impls apply to a
+                // borrowed primitive, and they yield the referent's type.
+                valueTy = context.getType(borrow->inner);
+            }
+            const auto* leftInfer = valueTy->opt_Infer();
             if (leftInfer && leftInfer->tyClass == HIRInferClass::Integer) {
                 DEBUG("- Shift of an integer literal yields its own type");
-                context.equateTypes(sp, v.leftTy, v.implTy);
+                context.equateTypes(sp, v.leftTy, valueTy);
             }
         }
 
