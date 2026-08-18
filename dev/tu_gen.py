@@ -40,6 +40,7 @@ match-side macros and call sites do not change.
 import pathlib
 import re
 import sys
+import textwrap
 
 IDENT = re.compile(r"[A-Za-z_][A-Za-z0-9_]*\Z")
 
@@ -246,8 +247,8 @@ def emit_header_union(out, union):
         out.line(f"{type_} {name}{suffix};")
     if union.extra.strip():
         out.line()
-        for line in union.extra.strip().splitlines():
-            out.line(line.strip())
+        for line in textwrap.dedent(union.extra).strip().splitlines():
+            out.line(line.rstrip())
     out.close("};")
 
 

@@ -511,148 +511,14 @@ struct ItemAddress {
     }
 };
 
-// Compile-time known values
-TAGGED_UNION_EX(
-    MIRConstant,
-    (),
-    Int,
-    ((Int,
-      struct {
-          S128 v;
-          HIRCoreType t;
-      }),
-     (Uint,
-      struct {
-          U128 v;
-          HIRCoreType t;
-      }),
-     (Float,
-      struct {
-          FloatValue v;
-          HIRCoreType t;
-      }),
-     (Bool,
-      struct {
-          bool v; // NOTE: Defensive to prevent implicit casts
-      }),
-     (Bytes, ::std::vector<::std::uint8_t>), // Byte string
-     (StaticString, ::std::string),          // String
-     // NOTE: These are behind pointers to save inline space (HIR::Path is ~11
-     // words, compared to 4 for MIR::Constant without it)
-     (Const, struct { ::std::unique_ptr<HIRPath> p; }), // `const`
-     (Generic, HIRGenericRef),
-     // ZST function type, NOT its address
-     (Function, struct { ::std::unique_ptr<HIRPath> p; }),
-     // Address within a named allocation
-     (ItemAddr, ItemAddress),
-     (Encoded,
-      struct {
-          HIRTypeRef type;
-          EncodedLiteral value;
-      })),
-    (),
-    (),
-    (friend ::std::ostream & operator<<(::std::ostream& os, const MIRConstant& v); ::Ordering ord(const MIRConstant& b) const; inline bool operator==(const MIRConstant& b) const { return ord(b) == ::OrdEqual; } inline bool operator!=(const MIRConstant& b) const { return ord(b) != ::OrdEqual; } inline bool operator<(const MIRConstant& b) const { return ord(b) == ::OrdLess; } inline bool operator<=(const MIRConstant& b) const { return ord(b) != ::OrdGreater; } inline bool operator>(const MIRConstant& b) const { return ord(b) == ::OrdGreater; } inline bool operator>=(const MIRConstant& b) const { return ord(b) != ::OrdLess; } MIRConstant clone() const;)
-);
+enum class MIRDropKind {
+    SHALLOW,
+    DEEP,
+};
 
-/// Parameter - A value used when a rvalue just reads (doesn't require a lvalue)
-/// Can be either a lvalue (memory address), or a constant
-TAGGED_UNION_EX(
-    MIRParam,
-    (),
-    Constant,
-    ((LValue, MIRLValue),
-     // TODO: Add `Borrow` here (makes some MIR manipulation more complex, but simplifies emitted code)
-     (Borrow,
-      struct {
-          HIRBorrowType type;
-          MIRLValue val;
-      }),
-     (Constant, MIRConstant)),
-    (),
-    (),
-    (MIRParam clone() const; friend ::std::ostream & operator<<(::std::ostream& os, const MIRParam& v); bool operator==(const MIRParam& b) const; inline bool operator!=(const MIRParam& b) const { return !(*this == b); })
-);
+// Definitions generated from mir_mir.tu.
+#include "mir_mir_tu.h"
 
-TAGGED_UNION_EX(
-    MIRRValue,
-    (),
-    Tuple,
-    (
-        // TODO: Split "Use" into "Copy" and "Move" (Where 'move' indicates that the source is unused)
-        (Use, MIRLValue),
-        (Borrow,
-         struct {
-             HIRBorrowType type;
-             bool isRaw;
-             MIRLValue val;
-         }),
-        (Constant, MIRConstant),
-        (SizedArray,
-         struct {
-             MIRParam val;
-             HIRArraySize count;
-         }),
-        // Cast on primitives (thin pointers, integers, floats)
-        (Cast,
-         struct {
-             MIRLValue val;
-             HIRTypeRef type;
-         }),
-        // Binary operation on primitives
-        (BinOp,
-         struct {
-             MIRParam valL;
-             MIRBinOp op;
-             MIRParam valR;
-         }),
-        // Unary operation on primitives
-        (UniOp,
-         struct {
-             MIRLValue val; // NOTE: Not a param, because UniOps can be const propagated
-             MIRUniOp op;
-         }),
-        // Extract the metadata from a DST pointer
-        // NOTE: If used on an array, this yields the array size (for generics)
-        (DstMeta, struct { MIRLValue val; }),
-        // Extract the pointer from a DST pointer (as *const ())
-        (DstPtr, struct { MIRLValue val; }),
-        // Construct a DST pointer from a thin pointer and metadata
-        // OR: (if `meta_val` is `Constant::ItemAddr(nullptr)`) A still-to-be-resolved unsizing coercion
-        (MakeDst,
-         struct {
-             MIRParam ptrVal;
-             MIRParam metaVal;
-         }),
-        (Tuple, struct { ::std::vector<MIRParam> vals; }),
-        // Array literal
-        (Array, struct { ::std::vector<MIRParam> vals; }),
-        // Create a new instance of a union
-        (UnionVariant,
-         struct {
-             HIRGenericPath path;
-             unsigned int index;
-             MIRParam val;
-         }),
-        // Create a new instance of an enum
-        // - Separate from UnionVariant, as the contents is needed when creating the body
-        (EnumVariant,
-         struct {
-             HIRGenericPath path;
-             unsigned int index;
-             ::std::vector<MIRParam> vals;
-         }),
-        // Create a new instance of a struct
-        (Struct,
-         struct {
-             HIRGenericPath path;
-             ::std::vector<MIRParam> vals;
-         })
-    ),
-    (),
-    (),
-    (MIRRValue clone() const;)
-);
 extern ::std::ostream& operator<<(::std::ostream& os, const MIRRValue& x);
 extern bool operator==(const MIRRValue& a, const MIRRValue& b);
 
@@ -660,88 +526,8 @@ static inline bool operator!=(const MIRRValue& a, const MIRRValue& b) {
     return !(a == b);
 }
 
-TAGGED_UNION(MIRCallTarget, Intrinsic, (Value, MIRLValue), (Path, HIRPath), (Intrinsic, struct {
-                 RcString name;
-                 HIRPathParams params;
-             }));
-TAGGED_UNION_EX(MIRSwitchValues, (), Unsigned, ((Unsigned, ::std::vector<uint64_t>), (Signed, ::std::vector<int64_t>), (String, ::std::vector<::std::string>), (ByteString, ::std::vector<::std::vector<uint8_t>>)), (), (), (MIRSwitchValues clone() const; bool operator==(const MIRSwitchValues& x) const; bool operator!=(const MIRSwitchValues& x) const { return !(*this == x); }));
-
-TAGGED_UNION(MIRUnwindAction, Continue, (Continue, struct {}), (Cleanup, MIRBasicBlockId), (Terminate, struct {}), (Unreachable, struct {}));
-
-enum class MIRDropKind {
-    SHALLOW,
-    DEEP,
-};
-
-TAGGED_UNION(MIRAsmParam, Const, (Const, MIRConstant), (Sym, HIRPath), (Reg, struct {
-                 AsmDirection dir;
-                 AsmRegisterSpec spec;
-                 std::unique_ptr<MIRParam> input;
-                 std::unique_ptr<MIRLValue> output;
-             }), (Label, MIRBasicBlockId));
 extern bool operator==(const MIRAsmParam& a, const MIRAsmParam& b);
 
-TAGGED_UNION(
-    MIRTerminator,
-    Incomplete,
-    (Incomplete, struct {}),      // Block isn't complete (ERROR in output)
-    (Return, struct {}),          // Return clealy to caller
-    (UnwindResume, struct {}),    // Resume the currently caught exception
-    (UnwindTerminate, struct {}), // Abort if unwinding reaches this point
-    (Unreachable, struct {}),     // This control-flow edge cannot be reached
-    (Goto, MIRBasicBlockId),      // Jump to another block
-    (If,
-     struct {
-         MIRLValue cond;
-         MIRBasicBlockId bbTrue;
-         MIRBasicBlockId bbFalse;
-     }),
-    (Switch,
-     struct {
-         MIRLValue val;
-         ::std::vector<MIRBasicBlockId> targets;
-         unsigned int validFlag = ~0u;
-         MIRBasicBlockId invalidTarget = ~0u;
-     }),
-    (SwitchValue,
-     struct {
-         MIRLValue val;
-         MIRBasicBlockId defTarget;
-         ::std::vector<MIRBasicBlockId> targets;
-         MIRSwitchValues values;
-     }),
-    (Drop,
-     struct {
-         MIRDropKind kind;
-         MIRLValue slot;
-         unsigned int flagIdx;
-         MIRBasicBlockId target;
-         MIRUnwindAction unwind;
-     }),
-    (Call, struct {
-        MIRBasicBlockId retBlock;
-        MIRUnwindAction unwind;
-        MIRLValue retVal;
-        MIRCallTarget fcn;
-        ::std::vector<MIRParam> args;
-        SourceLocation source;
-        bool tracksCaller = false;
-    }),
-    (TailCall, struct {
-        MIRCallTarget fcn;
-        ::std::vector<MIRParam> args;
-        SourceLocation source;
-        bool tracksCaller = false;
-    }),
-    // Inline assembly with label operands. Unlike statement-form Asm2, this is
-    // a terminator because the assembly can branch to any Label parameter.
-    (Asm2, struct {
-        AsmOptions options;
-        std::vector<AsmLine> lines;
-        ::std::vector<MIRAsmParam> params;
-        MIRBasicBlockId retBlock;
-    })
-);
 extern ::std::ostream& operator<<(::std::ostream& os, const MIRTerminator& x);
 extern bool operator==(const MIRTerminator& a, const MIRTerminator& b);
 
@@ -749,60 +535,6 @@ static inline bool operator!=(const MIRTerminator& a, const MIRTerminator& b) {
     return !(a == b);
 }
 
-TAGGED_UNION(
-    MIRStatement,
-    Asm,
-    // Value assigment
-    (Assign,
-     struct {
-         MIRLValue dst;
-         MIRRValue src;
-     }),
-    // Inline assembly (`llvm_asm!`)
-    (Asm,
-     struct {
-         ::std::string tpl;
-         ::std::vector<::std::pair<::std::string, MIRLValue>> outputs;
-         ::std::vector<::std::pair<::std::string, MIRLValue>> inputs;
-         ::std::vector<::std::string> clobbers;
-         ::std::vector<::std::string> flags;
-     }),
-    // Inline assembly (stabilised)
-    (Asm2,
-     struct {
-         AsmOptions options;
-         std::vector<AsmLine> lines;
-         ::std::vector<MIRAsmParam> params;
-     }),
-    // Update the state of a drop flag
-    (SetDropFlag,
-     struct {
-         unsigned int idx;
-         bool newVal; // If `other` is populated, this indicates that the other value should be negated
-         /// Other drop flag, used for copying/inverting another flag. If `~0u`, then the value of `new_val` is stored
-         unsigned int other;
-     }),
-    // Save a drop flag to a bitset
-    (SaveDropFlag,
-     struct {
-         /// Destination bit-set, an array of unsigned integers (nominally `u8`)
-         MIRLValue slot;
-         /// Destination bit v
-         unsigned int bitIndex;
-         /// Source drop flag index
-         unsigned int idx;
-     }),
-    (LoadDropFlag,
-     struct {
-         /// Destination drop flag index
-         unsigned int idx;
-         /// Source bit-set, an array of unsigned integers (nominally `u8`)
-         MIRLValue slot;
-         /// Source bit index
-         unsigned int bitIndex;
-     }),
-    (ScopeEnd, struct { ::std::vector<unsigned> slots; })
-);
 extern ::std::ostream& operator<<(::std::ostream& os, const MIRStatement& x);
 extern bool operator==(const MIRStatement& a, const MIRStatement& b);
 
