@@ -4,9 +4,10 @@
 #include "hir_type.h"
 
 #include <algorithm>
-#include <unordered_map>
 
 #include <std/str/hash.h>
+#include <std/sym/i_map.h>
+#include <std/mem/obj_pool.h>
 #include <std/rng/split_mix_64.h>
 
 HIRTraitPath::HIRTraitPath()
@@ -148,9 +149,28 @@ namespace {
         return stl::splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
     }
 
-    ::std::unordered_multimap<uint64_t, const HIRSimplePathData*>& pathTable() {
-        static ::std::unordered_multimap<uint64_t, const HIRSimplePathData*> table;
-        return table;
+    // A stored path: the shared data plus the link of the per-hash1 chain.
+    // IntHasher is splitMix64 (a bijection), so a chain only ever holds
+    // entries with the same hash1; they are told apart by hash2 alone.
+    struct PathNode: public HIRSimplePathData {
+        PathNode* next;
+
+        PathNode(uint64_t h1, uint64_t h2, ThinVector<RcString> m, PathNode* next)
+            : HIRSimplePathData{h1, h2, std::move(m)}
+            , next(next)
+        {
+        }
+    };
+
+    struct PathInterner {
+        stl::ObjPool::Ref poolRef = stl::ObjPool::fromMemory();
+        stl::ObjPool* pool = poolRef.mutPtr();
+        stl::IntMap<PathNode*> table{pool};
+    };
+
+    PathInterner& interner() {
+        static PathInterner in;
+        return in;
     }
 
     const HIRSimplePathData* emptyPathData() {
@@ -159,20 +179,27 @@ namespace {
     }
 
     const HIRSimplePathData* findPath(uint64_t h1, uint64_t h2) {
-        auto rng = pathTable().equal_range(h1);
-        for (auto it = rng.first; it != rng.second; ++it) {
-            if (it->second->hash2 == h2) {
-                return it->second;
+        if (auto* head = interner().table.find(h1)) {
+            for (auto* n = *head; n; n = n->next) {
+                if (n->hash2 == h2) {
+                    return n;
+                }
             }
         }
         return nullptr;
     }
 
-    // Entries live until process exit, so member references stay valid.
+    // Entries live as long as the interner pool, so member references stay valid.
     const HIRSimplePathData* addPath(uint64_t h1, uint64_t h2, ThinVector<RcString> members) {
-        auto* d = new HIRSimplePathData{h1, h2, std::move(members)};
-        pathTable().emplace(h1, d);
-        return d;
+        auto& in = interner();
+        auto* head = in.table.find(h1);
+        auto* node = in.pool->make<PathNode>(h1, h2, std::move(members), head ? *head : nullptr);
+        if (head) {
+            *head = node;
+        } else {
+            in.table.insert(h1, node);
+        }
+        return node;
     }
 
     const HIRSimplePathData* internMembers(ThinVector<RcString> members) {
