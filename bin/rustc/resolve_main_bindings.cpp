@@ -1997,7 +1997,23 @@ void ResolveAbsolutePath(/*const*/ Context& context, const Span& sp, Context::Lo
                                 path = std::move(newPath);
                             }
                         } else if (pbe->hir) {
-                            // TODO: Could be in an `impl Trait for Foo`
+                            // The enum came from another crate, so only its HIR
+                            // is here -- the variant list is the same either way.
+                            const auto& enm = *pbe->hir;
+                            auto idx = enm.findVariant(name);
+                            if (idx != SIZE_MAX) {
+                                auto p2 = p.bindings.type.path + name;
+                                auto newPath = std::move(p);
+                                newPath.append(name);
+                                const bool isStruct = enm.data.is_Data() && enm.data.as_Data()[idx].isStruct;
+                                if (isStruct) {
+                                    newPath.bindings.type.set(p2, ASTPathBindingType::make_EnumVar({nullptr, static_cast<unsigned>(idx), &enm}));
+                                } else {
+                                    newPath.bindings.value.set(p2, ASTPathBindingValue::make_EnumVar({nullptr, static_cast<unsigned>(idx), &enm}));
+                                }
+                                DEBUG("UFCS of external enum variant converted to Generic: " << newPath);
+                                path = std::move(newPath);
+                            }
                         } else {
                         }
                     }
