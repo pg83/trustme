@@ -1756,8 +1756,10 @@ bool HIRTypePathBinding::operator==(const HIRTypePathBinding& x) const {
 }
 
 const HIRTraitMarkings* HIRTypePathBinding::getTraitMarkings() const {
+    // A binding that names an item can still be waiting for it: until then
+    // there are no markings to read, the same as for one that names none.
     const HIRTraitMarkings* markingsPtr = nullptr;
-    TU_MATCHA((*this), (tpb), (Unbound, ), (Opaque, ), (ExternType, markingsPtr = &tpb->markings;), (Struct, markingsPtr = &tpb->markings;), (Union, markingsPtr = &tpb->markings;), (Enum, markingsPtr = &tpb->markings;))
+    TU_MATCHA((*this), (tpb), (Unbound, ), (Opaque, ), (ExternType, if (tpb) markingsPtr = &tpb->markings;), (Struct, if (tpb) markingsPtr = &tpb->markings;), (Union, if (tpb) markingsPtr = &tpb->markings;), (Enum, if (tpb) markingsPtr = &tpb->markings;))
     return markingsPtr;
 }
 
@@ -1770,9 +1772,9 @@ const HIRGenericParams* HIRTypePathBinding::getGenerics() const {
         }
         TU_ARMA(ExternType, tpb) {
         }
-        TU_ARMA(Struct, tpb) rv = &tpb->params;
-        TU_ARMA(Union, tpb) rv = &tpb->params;
-        TU_ARMA(Enum, tpb) rv = &tpb->params;
+        TU_ARMA(Struct, tpb) { if (tpb) rv = &tpb->params; }
+        TU_ARMA(Union, tpb) { if (tpb) rv = &tpb->params; }
+        TU_ARMA(Enum, tpb) { if (tpb) rv = &tpb->params; }
     }
     return rv;
 }

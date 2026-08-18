@@ -896,9 +896,9 @@ static int compile(int argc, char* argv[]) {
         // `--emit=metadata` stops here: the crate has been analysed, and what
         // is left only builds it.
         if (params.emitMetadataOnly) {
-            CompilePhaseV("HIR Serialise", [&]() {
-                HIRSerialise(params.outfile + ".hir", *hirCrate);
-            });
+            // Nothing reads what this writes: a crate that depends on this one
+            // is given the rlib the ordinary build produces. Only the file has
+            // to exist.
             { ::std::ofstream marker(params.outfile); }
             return 0;
         }
