@@ -416,7 +416,19 @@ public:
     ASTTrait clone() const;
 };
 
-TAGGED_UNION_EX(ASTEnumVariantData, (), Unit, ((Unit, struct {}), (Tuple, struct { ::std::vector<ASTTupleItem> items; }), (Struct, struct { ::std::vector<ASTStructItem> fields; })), (), (), (public:));
+// Item classes some ASTItem variants name; ASTItem stores through a pointer,
+// so declarations are enough here and the classes follow below.
+class ASTEnum;
+class ASTStruct;
+class ASTUnion;
+class ASTImplDef;
+class ASTImpl;
+struct ASTUseItem;
+class ASTExternBlock;
+class ASTGlobalAsm;
+
+// Definitions generated from ast_ast.tu.
+#include "ast_ast_tu.h"
 
 struct ASTEnumVariant {
     ASTAttributeList attrs;
@@ -483,8 +495,6 @@ public:
 
     ASTEnum clone() const;
 };
-
-TAGGED_UNION_EX(ASTStructData, (), Struct, ((Unit, struct {}), (Tuple, struct { ::std::vector<ASTTupleItem> ents; }), (Struct, struct { ::std::vector<ASTStructItem> ents; })), (), (), (public:));
 
 class ASTStruct {
     ASTGenericParams params_;
@@ -721,12 +731,7 @@ public:
 
 class ASTGlobalAsm {
 public:
-    TAGGED_UNION(
-        Operand,
-        Const,
-        (Const, ASTExprNodeP),
-        (Sym, ASTPath)
-    );
+    using Operand = ASTGlobalAsmOperand;
 
     ::std::vector<AsmLine> lines;
     ::std::vector<Operand> operands;
@@ -853,37 +858,3 @@ public:
         return macros_;
     }
 };
-
-TAGGED_UNION_EX(
-    ASTItem,
-    (),
-    None,
-    ((None, struct {}),
-     (MacroInv, ASTMacroInvocation),
-     // TODO: MacroDefinition
-     (Use, ASTUseItem),
-
-     // Nameless items
-     (ExternBlock, ASTExternBlock),
-     (GlobalAsm, ASTGlobalAsm),
-     (Impl, ASTImpl),
-     (NegImpl, ASTImplDef),
-
-     (Macro, MacroRulesPtr),
-     (Module, ASTModule),
-     (Crate, struct { RcString name; }),
-
-     (Type, ASTTypeAlias),
-     (Struct, ASTStruct),
-     (Enum, ASTEnum),
-     (Union, ASTUnion),
-     (Trait, ASTTrait),
-     (TraitAlias, ASTTraitAlias),
-
-     (Function, ASTFunction),
-     (Static, ASTStatic)),
-
-    (),
-    (),
-    (ASTItem clone() const;)
-);
