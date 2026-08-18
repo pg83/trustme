@@ -97,6 +97,13 @@ void ASTCrate::loadExterns(Settings& settings) {
     // Ensure that all crates passed on the command line are loaded.
     DEBUG("Load from --crate");
     for (const auto& c : settings.crateOverrides) {
+        // A path that names no file is only an error if the crate is used:
+        // `--extern Name=/nowhere` on a crate that never mentions `Name` is
+        // accepted, and a mention of it fails to find the crate as usual.
+        if (c.second != "" && !::std::ifstream(c.second).good()) {
+            DEBUG("Skipping --extern " << c.first << ": " << c.second << " does not exist");
+            continue;
+        }
         auto n = RcString::newInterned(c.first);
         auto realName = this->loadExternCrate(settings, Span(), n);
         settings.implicitCrates.insert(std::make_pair(n, realName));
