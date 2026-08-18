@@ -687,6 +687,10 @@ struct ASTUseItem {
         Span sp; // Span covering just the path (final component)
         ASTPath path;
         RcString name; // If "", this is a glob/wildcard use
+        /// Written as `self` in a use tree (`use m::foo::{self}`). Such an entry
+        /// names what the prefix resolved to -- a module, an enum or a trait --
+        /// and not a value of the same name beside it.
+        bool isSelf = false;
         friend ::std::ostream& operator<<(::std::ostream& os, const ASTUseItem::Ent& x);
     };
 

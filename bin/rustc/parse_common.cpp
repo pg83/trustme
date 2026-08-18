@@ -4657,7 +4657,7 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
                 if (lex.getTokenIf(TOK_RWORD_AS)) {
                     name = getOptionalIdent(lex);
                 }
-                entries.push_back({lex.pointSpan(), ASTPath(path), mv$(name)});
+                entries.push_back({lex.pointSpan(), ASTPath(path), mv$(name), /*isSelf=*/true});
                 return;
             }
             case TOK_BRACE_OPEN:
@@ -4682,7 +4682,7 @@ void ParseUseInner(TokenStream& lex, ::std::vector<ASTUseItem::Ent>& entries, AS
                             }
                             name = path.nodes().back().name();
                         }
-                        entries.push_back({lex.pointSpan(), ASTPath(path), ::std::move(name)});
+                        entries.push_back({lex.pointSpan(), ASTPath(path), ::std::move(name), /*isSelf=*/true});
                     } else {
                         auto savedPath = ASTPath(path);
 

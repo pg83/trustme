@@ -423,7 +423,7 @@ ASTMacroInvocation ASTMacroInvocation::clone() const {
 ASTUseItem ASTUseItem::clone() const {
     decltype(this->entries) entries;
     for (const auto& e : this->entries) {
-        entries.push_back({e.sp, e.path, e.name});
+        entries.push_back({e.sp, e.path, e.name, e.isSelf});
     }
     return ASTUseItem{this->sp, this->isPrelude, mv$(entries)};
 }

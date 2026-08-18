@@ -4392,7 +4392,8 @@ void ResolveIndexModuleBase(const ASTCrate& crate, ASTModule& mod) {
                 }
             }
             // - Values
-            switch (pb.value.binding.tag()) {
+            // `use m::foo::{self}` names the module, not the function beside it.
+            switch (iData.isSelf ? ASTPathBindingValue::TAG_Unbound : pb.value.binding.tag()) {
                 case ASTPathBindingValue::TAG_Unbound: {
                     DEBUG(iData.name << " - Not a value");
                     break;
