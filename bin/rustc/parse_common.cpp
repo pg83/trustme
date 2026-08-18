@@ -4207,9 +4207,10 @@ ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = fal
                 isParams = lex.lookahead(2) != TOK_PLUS;
                 break;
             case TOK_IDENT:
-                // `<Type as Trait>::Assoc` and `<Type>::Assoc`.
-                isParams = lex.lookahead(2) != TOK_RWORD_AS
-                    && !(lex.lookahead(2) == TOK_GT && lex.lookahead(3) == TOK_DOUBLE_COLON);
+                // `<Type as Trait>::Assoc`. A bare `<Type>::Assoc` cannot be
+                // told from `impl<T> ::path::Trait for ..` by lookahead, and
+                // the parameter list is the far more common spelling.
+                isParams = lex.lookahead(2) != TOK_RWORD_AS;
                 break;
             default:
                 isParams = false;
