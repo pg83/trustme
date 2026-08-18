@@ -38,44 +38,8 @@ enum class InvalidType {
     Descoped,
 };
 // NOTE: If there's a optional move and a partial merging, it becomes a partial?
-TAGGED_UNION_EX(
-    VarState,
-    (),
-    Invalid,
-    (
-        // Currently invalid
-        (Invalid, InvalidType),
-        // Partially valid (Map of field states)
-        (Partial,
-         struct {
-             ::std::vector<VarState> innerStates;
-             unsigned int outerFlag; // If ~0u, the outer discriminant is always valid.
-         }),
-        // Partially valid large array: a shared state for untouched elements plus
-        // per-index exceptions. Avoids materialising one state per element (fatal
-        // for e.g. `let [a, ..] = [String::new(); 64_000_000]`).
-        (PartialArray,
-         struct {
-             ::std::unique_ptr<VarState> fillState;
-             ::std::map<unsigned, VarState> otherStates;
-             size_t count;
-         }),
-        (MovedOut,
-         struct {
-             ::std::unique_ptr<VarState> innerState;
-             unsigned int outerFlag; // If ~0u, the outer is always valid. If set, then the outer may have been moved (but inner state still maybe valid)
-         }),
-        // Optionally valid (integer indicates the drop flag index)
-        (Optional, unsigned int),
-        // Fully valid
-        (Valid, struct {})
-    ),
-    (),
-    (),
-    (VarState clone() const; bool operator==(const VarState & x) const; bool operator!=(const VarState & x) const { return !(*this == x); }
-     /// Returns `true` if any drop flags were present (i.e. this is possibly optional)
-     bool getUsedDropFlags(std::set<unsigned>* out) const;)
-);
+// Definitions generated from mir_from_hir.tu.
+#include "mir_from_hir_tu.h"
 extern ::std::ostream& operator<<(::std::ostream& os, const VarState& x);
 
 struct SplitArm {

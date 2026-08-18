@@ -109,55 +109,8 @@ struct TypeErasedType {
 // The sum-type payload of a type. Now an ordinary inline tagged union: it holds
 // only pointers to `ASTType`, so it no longer needs the out-of-line macro
 // stack. Node metadata (span, owning pool) lives on `ASTType`.
-TAGGED_UNION(
-    TypeData,
-    None,
-    (None, struct {}),
-    (Any, struct {}),
-    (Bang, struct {}),
-    (Unit, struct {}),
-    (Macro, struct { ASTMacroInvocation* inv; }),
-    (Primitive, struct { enum eCoreType coreType; }),
-    (Function, struct { TypeFunction info; }),
-    (Tuple, struct { ::std::vector<ASTType*> innerTypes; }),
-    (Borrow,
-     struct {
-         ASTLifetimeRef lifetime;
-         bool isMut;
-         ASTType* inner;
-         /// `&pin mut T` and `&pin const T`, which are `Pin<&mut T>` and
-         /// `Pin<&T>`. Expansion rewrites them, once the core crate is known.
-         bool isPin = false;
-     }),
-    (Pointer,
-     struct {
-         bool isMut;
-         ASTType* inner;
-     }),
-    (Array,
-     struct {
-         ASTType* inner;
-         // If `nullptr` - this is an inferred size
-         ::std::shared_ptr<ASTExprNode> size;
-     }),
-    (Slice, struct { ASTType* inner; }),
-    (Pattern,
-     struct {
-         ASTType* inner;
-         ASTPattern* pattern;
-     }),
-    (Generic,
-     struct {
-         RcString name;
-         unsigned int index;
-     }),
-    (Path, ASTPath*),
-    (TraitObject,
-     struct {
-         ::std::vector<TypeTraitPath> traits;
-         ::std::vector<ASTLifetimeRef> lifetimes;
-     }),
-    (ErasedType, TypeErasedType*));
+// Definitions generated from ast_types.tu.
+#include "ast_types_tu.h"
 
 // Tag markers for the type factories (mirror the old ASTType* constructors).
 namespace ASTTypeTags {

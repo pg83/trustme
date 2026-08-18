@@ -16,6 +16,9 @@ enum class MetadataType {
 
 std::ostream& operator<<(std::ostream& os, const MetadataType& x);
 
+// Definitions generated from hir_typeck_static.tu.
+#include "hir_typeck_static_tu.h"
+
 class StaticTraitResolve: public TraitResolveCommon {
     class NextSolverBridge;
 
@@ -148,34 +151,7 @@ public:
 
     HIRTypeRef getFieldType(const Span& sp, const HIRTypeData* ty, const RcString& name) const;
 
-    TAGGED_UNION(
-        ValuePtr,
-        NotFound,
-        (NotFound, struct {}),
-        (NotYetKnown, struct {}),
-        (Constant, const HIRConstant*),
-        (Static, const HIRStatic*),
-        (Function, const HIRFunction*),
-        (EnumConstructor,
-         struct {
-             const HIREnum* e;
-             size_t v;
-         }),
-        (EnumValue,
-         struct {
-             const HIREnum* e;
-             size_t v;
-         }),
-        (StructConstructor,
-         struct {
-             const HIRSimplePath* p;
-             const HIRStruct* s;
-         }),
-        (StructConstant, struct {
-            const HIRSimplePath* p;
-            const HIRStruct* s;
-        })
-    );
+    using ValuePtr = TypeckValuePtr;
 
     /// `signature_only` - Returns a pointer to an item with the correct signature, not the actual implementation (faster)
     ValuePtr getValue(const Span& sp, const HIRPath& p, MonomorphState& outParams, bool signatureOnly = false, const HIRGenericParams** outImplParamsDef = nullptr) const;

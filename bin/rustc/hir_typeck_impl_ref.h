@@ -6,32 +6,11 @@
 
 class HIRTraitImpl;
 
+// Definitions generated from hir_typeck_impl_ref.tu.
+#include "hir_typeck_impl_ref_tu.h"
+
 struct ImplRef {
-    TAGGED_UNION(
-        Data,
-        TraitImpl,
-        (TraitImpl,
-         struct {
-             HIRPathParams implParams;
-             const HIRTrait* traitPtr;
-             const HIRSimplePath* traitPath;
-             const HIRTraitImpl* impl;
-             mutable HIRTypeRef selfCache;
-         }),
-        (BoundedPtr,
-         struct {
-             const HIRTypeData* type;
-             const HIRPathParams* traitArgs;
-             const HIRTraitPath::assocListT* assoc;
-             HIRBoundConstness constness;
-         }),
-        (Bounded, struct {
-            HIRTypeRef type;
-            HIRPathParams traitArgs;
-            HIRTraitPath::assocListT assoc;
-            HIRBoundConstness constness;
-        })
-    );
+    using Data = ImplRefData;
 
     Data data;
     bool isAmbiguousIdentity_ = false;
