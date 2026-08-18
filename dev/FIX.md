@@ -99,36 +99,24 @@ one root cause: fixing integer inference through an operator took two of them
 and left the rest untouched. Minimise each before grouping.
 
 
-`IntoIterator for Box<[T]>` is four of them (two `into-iter-on-*-lint`, two
-`into-iter-on-boxed-slices-*`) and one bug in the method probe. Two attempts
-that did not help, so that they are not repeated:
+The `IntoIterator for Box<[T]>` family is fixed. What made those four tests
+fail was the probe committing while the receiver was still unknown:
+`Box::new(boxed_slice).into_iter()` probes `Box<_>`, where every step matches
+`IntoIterator` fuzzily, and the by-value step it settled on is wrong once the
+type arrives. A candidate that only matches because the receiver is unknown
+now makes the probe wait, unless it is the only candidate (a lone one is the
+answer whatever the type becomes) or type checking has stabilised, where there
+is nothing left to wait for. Only a type with no inference class at all counts
+as unknown: a literal's type is settled by fallback whatever the method is, and
+pausing on one loses the integer that an index expression needs.
 
-- making the `rustc_skip_during_method_dispatch(boxed_slice)` gate fire for a
-  receiver that is still `Box<_>` only moves the failure one deref step on, to
-  `[T]` taken by value;
-- rejecting a by-value receiver whose type is unsized
-  (`checkMethodReceiver`, `Receiver::Value`) makes a fourth test fail as well.
-
-The probe accepts a by-value `into_iter(self)` candidate on `[T]`, which then
-fails `requireSized` (`hir_typeck_expr_cs.cpp:4662`) instead of the probe moving
-on to the autoref step where `IntoIterator for &[T]` waits.
-
-The same shape stops `self: SmartPtr<Self>` from being found
+`self: SmartPtr<Self>` still fails
 (`arbitrary_self_types_lifetime_elision.rs`, `_niche_deshadowing.rs`): the
-receiver is `SmartPtr<_>` when the probe runs, so the inherent-method cache is
-asked for a path it cannot key on. Offering every impl under that path instead
-was tried: the method is then found, but its `Self` is still an ivar and the
-path cannot be resolved (`Failed to locate function <_>::m`). Both need the
-probe to run again once the receiver is known.
-
-What makes the candidate acceptable is the receiver still holding inference
-variables when the probe runs: `Box::new(boxed_slice).into_iter()` probes
-`Box<_>`, and `Box<_>: IntoIterator` is only fuzzily false. The same bound asked
-after the type is known (`fn f<T: IntoIterator>(_: T); f(b)` with
-`b: Box<Box<[i32]>>`) is correctly rejected, so the trait solver is right and
-the probe is early. rustc re-probes once the receiver is known; this compiler
-commits to the first candidate. Do not add a bounds check to the probe -- the
-bound cannot be decided there.
+receiver is `SmartPtr<_>` when the probe runs, and the inherent-method cache is
+keyed on the receiver's first type argument, so it is asked for a key it does
+not have. Offering every impl under that path was tried: the method is then
+found, but its `Self` is still an ivar and the path cannot be resolved
+(`Failed to locate function <_>::m`).
 
 A `for<T>` binder is only dropped where it quantifies a where predicate. In a
 supertrait list (`trait Foo: for<T> Bar<T>`) or a return type

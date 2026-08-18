@@ -1034,7 +1034,11 @@ namespace {
             // - If running in a mode after stablise (before defaults), fall
             //   back to trait if the inherent is still ambigious.
             ::std::vector<::std::pair<TraitResolution::AutoderefBorrow, HIRPath>> possibleMethods;
+            // Once type checking has stabilised there is nothing left to wait
+            // for, so the probe answers from what is known.
+            this->context.resolve.methodProbeMustDecide = this->isFallback;
             unsigned int derefCount = this->context.resolve.autoderefFindMethod(node.span(), node.traits, node.traitParamIvars, node.traitParamTypeIvars, ty, node.method, possibleMethods);
+            this->context.resolve.methodProbeMustDecide = false;
         tryAgain:
             if (derefCount != ~0u) {
                 DEBUG("possible_methods = " << possibleMethods);

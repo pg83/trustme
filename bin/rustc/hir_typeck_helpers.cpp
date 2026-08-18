@@ -7380,8 +7380,12 @@ TU_ARMA(Alias, ee) {
                     // TODO: Pause on Box<_>?
                     DEBUG(derefCount << ": " << ty);
 
+                    // A candidate that is only a candidate because the receiver
+                    // is not known yet cannot be picked: wait for the type.
+                    bool undecided = false;
+
                     // Non-referenced
-                    if (this->findMethod(sp, traits, ivars, typeIvarCount, ty, methodName, curAccess, AutoderefBorrow::None, possibilities)) {
+                    if (this->findMethod(sp, traits, ivars, typeIvarCount, ty, methodName, curAccess, AutoderefBorrow::None, possibilities, &undecided)) {
                         DEBUG("FOUND *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
                     }
 
@@ -7402,19 +7406,28 @@ TU_ARMA(Alias, ee) {
 
                     // Auto-ref
                     auto borrowTy = crate.types.borrow(HIRBorrowType::Shared, ty);
-                    if (this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Shared, possibilities)) {
+                    if (this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Shared, possibilities, &undecided)) {
                         DEBUG("FOUND & *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
                     }
                     borrowTy = crate.types.borrow(HIRBorrowType::Unique, ty);
-                    if (curAccess >= MethodAccess::Unique && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Unique, possibilities)) {
+                    if (curAccess >= MethodAccess::Unique && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Unique, possibilities, &undecided)) {
                         DEBUG("FOUND &mut *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
                     }
                     borrowTy = crate.types.borrow(HIRBorrowType::Owned, ty);
-                    if (curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Owned, possibilities)) {
+                    if (curAccess >= MethodAccess::Move && this->findMethod(sp, traits, ivars, typeIvarCount, borrowTy, methodName, MethodAccess::Move, AutoderefBorrow::Owned, possibilities, &undecided)) {
                         DEBUG("FOUND &move *{" << derefCount << "}, fcn_path = " << possibilities.back().second);
                     }
                     if (!possibilities.empty()) {
                         collapseToMostSpecificSubtrait();
+                        // A candidate that only matches while the receiver is
+                        // unknown cannot be told from the others: which one is
+                        // right is decided by the type, so wait for it. A lone
+                        // candidate is the answer whatever the type becomes.
+                        if (undecided && possibilities.size() > 1 && !this->methodProbeMustDecide) {
+                            DEBUG("- " << possibilities.size() << " options and the receiver is not known, pausing");
+                            possibilities.clear();
+                            return ~0u;
+                        }
                         DEBUG("FOUND " << possibilities.size() << " options: " << possibilities);
                         return derefCount;
                     }
@@ -7599,7 +7612,7 @@ TU_ARMA(Alias, ee) {
             return ::std::nullopt;
         }
 
-        bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities) const {
+        bool TraitResolution::findMethod(const Span& sp, const tTraitList& traits, const ::std::vector<unsigned>& ivars, unsigned int typeIvarCount, const HIRTypeData* ty, const RcString& methodName, MethodAccess access, AutoderefBorrow borrowType, /* Out -> */ ::std::vector<::std::pair<AutoderefBorrow, HIRPath>>& possibilities, /* Out -> */ bool* outUndecided) const {
             bool rv = false;
             TRACE_FUNCTION_FR("ty=" << ty << ", name=" << methodName << ", access=" << access, rv << " " << possibilities);
             auto cbInfer = this->ivars.callbackResolveInfer();
@@ -7992,18 +8005,49 @@ TU_ARMA(Alias, ee) {
                     auto acceptImpl = [&](auto impl, auto cmp) {
                         return true;
                     };
+                    bool undecided = false;
                     bool implFound = findTraitImplsLegacy(sp, *traitRef.first, traitParams, selfTy, acceptImpl, true, false, true);
+
+                    // A literal's type is decided by fallback whatever the
+                    // method turns out to be, but a type with no class at all
+                    // is only decided by what happens around it: until then a
+                    // fuzzy match says nothing.
+                    const bool receiverIsOpen = visitTyWith(this->ivars.getType(selfTy), [&](const HIRTypeData* inner) {
+                        const auto* r = this->ivars.getType(inner);
+                        const auto* e = r->opt_Infer();
+                        return e && e->tyClass == HIRInferClass::None;
+                    });
 
                     // NOTE: This just detects the presence of a trait impl, not the specifics
                     try {
                         // Keep this an existential probe over the trait arguments.  They are
                         // committed only after the method signature has constrained the shared
                         // inference variables (matching rustc's probe/confirm split).
-                        findTraitImplsCrate(sp, *traitRef.first, nullptr, selfTy, [&](auto impl, auto cmp) {
+                        auto onImpl = [&](ImplRef impl, HIRCompare cmp) {
                             DEBUG("[find_method] " << impl << ", cmp = " << cmp);
+                            // An impl written for a bare type parameter matches
+                            // any receiver, so while the receiver is not known
+                            // it says nothing about this method: it could yet
+                            // become a type whose bounds the impl fails. Report
+                            // that rather than commit to the wrong method.
+                            if (cmp != HIRCompare::Equal && receiverIsOpen) {
+                                DEBUG("[find_method] impl only matches while the receiver is unknown");
+                                undecided = true;
+                            }
                             implFound = true;
                             return true;
-                        });
+                        };
+                        // A receiver with no inference variables left decides
+                        // the question: ask for the impl the way a bound does,
+                        // so that an impl written for a bare type parameter is
+                        // only taken when the bounds it carries hold. While the
+                        // receiver is still unknown the looser search stands,
+                        // since the trait arguments are committed later.
+                        if (!receiverIsOpen) {
+                            findTraitImpls(sp, *traitRef.first, traitParams, selfTy, onImpl);
+                        } else {
+                            findTraitImplsCrate(sp, *traitRef.first, nullptr, selfTy, onImpl);
+                        }
                     } catch (const TraitResolution::RecursionDetected&) {
                         DEBUG("Recursion detected, assuming good");
                         implFound = true;
@@ -8013,6 +8057,9 @@ TU_ARMA(Alias, ee) {
                         possibilities.push_back(::std::make_pair(borrowType, HIRPath(selfTy, HIRGenericPath(*traitRef.first, mv$(traitParams)), methodName, {})));
                         DEBUG("++ " << possibilities.back());
                         rv = true;
+                    }
+                    if (undecided && outUndecided) {
+                        *outUndecided = true;
                     }
                 } else {
                     DEBUG("> Incorrect receiver");
