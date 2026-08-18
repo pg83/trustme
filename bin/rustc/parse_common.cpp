@@ -4189,8 +4189,33 @@ ASTItem ParseImpl(TokenStream& lex, ASTAttributeList& attrs, bool isUnsafe = fal
 
     ASTGenericParams params;
     // 1. (optional) type parameters
-    if (lex.getTokenIf(TOK_LT)) {
-        params = ParseGenericParams(lex);
+    // `impl <Type>::Assoc {}` also starts with `<`, but that is a qualified
+    // path naming the type being implemented, not a parameter list.
+    if (lex.lookahead(0) == TOK_LT) {
+        bool isParams;
+        switch (lex.lookahead(1)) {
+            case TOK_GT:
+            case TOK_RWORD_CONST:
+            case TOK_HASH:
+                isParams = true;
+                break;
+            case TOK_LIFETIME:
+                // `<'a + Trait>::Assoc` is a trait object behind a qualified path.
+                isParams = lex.lookahead(2) != TOK_PLUS;
+                break;
+            case TOK_IDENT:
+                // `<Type as Trait>::Assoc` and `<Type>::Assoc`.
+                isParams = lex.lookahead(2) != TOK_RWORD_AS
+                    && !(lex.lookahead(2) == TOK_GT && lex.lookahead(3) == TOK_DOUBLE_COLON);
+                break;
+            default:
+                isParams = false;
+                break;
+        }
+        if (isParams) {
+            lex.getToken();
+            params = ParseGenericParams(lex);
+        }
     }
     // 2. Either a trait name (with type params), or the type to impl
 
@@ -5681,6 +5706,14 @@ ASTType* ParseTypeInt(TokenStream& lex, bool allowTraitList) {
             ASTHigherRankedBounds hrbs = ParseHRBOpt(lex);
             return ParseTypeTraitObject(lex, mv$(hrbs));
         }
+        // `<'a + Trait>::Assoc` -- a lifetime can only start a bare trait
+        // object, whose first bound is that lifetime.
+        case TOK_LIFETIME:
+            if (allowTraitList) {
+                PUTBACK(tok, lex);
+                return ParseTypeTraitObject(lex, {});
+            }
+            throw ParseErrorUnexpected(lex, tok);
         // <ident> - Either a primitive, or a path
         case TOK_IDENT:
             // TODO: Only allow if the next token isn't `::` or `!`
