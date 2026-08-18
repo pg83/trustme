@@ -96,6 +96,10 @@ struct Ident {
 
     Hygiene hygiene;
     RcString name;
+    /// Was this written as `r#name`? The name is the same either way, but a raw
+    /// identifier prints back as it was written and is a distinct token to a
+    /// macro matcher.
+    bool isRaw = false;
 
     Ident(const char* name);
 
@@ -118,6 +122,10 @@ struct Ident {
 
     bool sameName(const Ident& x) const {
         return this->name == x.name;
+    }
+
+    bool sameToken(const Ident& x) const {
+        return this->name == x.name && this->isRaw == x.isRaw;
     }
 
     bool operator==(const Ident& x) const {

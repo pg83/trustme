@@ -404,7 +404,7 @@ struct EscapedString {
         }
         // Value tokens
         case TOK_IDENT:
-            return data_.as_Ident().name.c_str();
+            return data_.as_Ident().isRaw ? "r#" + ::std::string(data_.as_Ident().name.c_str()) : ::std::string(data_.as_Ident().name.c_str());
         case TOK_LIFETIME:
             return FMT("'" << data_.as_Ident().name.c_str());
         case TOK_INTEGER: {
@@ -831,6 +831,6 @@ bool Token::operator==(const Token& r) const {
     if (type() != r.type()) {
         return false;
     }
-    TU_MATCH(Data, (data_, r.data_), (e, re), (None, return true;), (Ident, return e.sameName(re);), (String, return e == re;), (Integer, return e.datatype == re.datatype && e.intval == re.intval;), (Float, return e.datatype == re.datatype && e.floatval == re.floatval;), (Fragment, assert(!"Token equality on Fragment");))
+    TU_MATCH(Data, (data_, r.data_), (e, re), (None, return true;), (Ident, return e.sameToken(re);), (String, return e == re;), (Integer, return e.datatype == re.datatype && e.intval == re.intval;), (Float, return e.datatype == re.datatype && e.floatval == re.floatval;), (Fragment, assert(!"Token equality on Fragment");))
     throw "";
 }

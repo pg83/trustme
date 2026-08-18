@@ -1242,7 +1242,10 @@ Token Lexer::getTokenIntIdentifier(Codepoint leader, Codepoint leader2, bool par
     }
     // Rust normalises identifiers, so `Résumé` written with a precomposed `é`
     // and with `e` plus a combining acute are the same name.
-    return Token(TOK_IDENT, Ident(this->realGetHygiene(), RcString::newInterned(unicodeNormaliseNfc(str))));
+    auto ident = Ident(this->realGetHygiene(), RcString::newInterned(unicodeNormaliseNfc(str)));
+    // The only caller that asks for no reserved words is the `r#` prefix.
+    ident.isRaw = !parseReservedWord;
+    return Token(TOK_IDENT, mv$(ident));
 }
 
 /// Parse an integer from the input stream

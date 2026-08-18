@@ -4106,10 +4106,19 @@ unsigned HIREvaluator::runTerminator(MIREvalCallStackEntry& localState, const MI
                     }
                 } else if (te->name == "variant_count") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
-                    MIR_ASSERT(state, ty->is_Path(), "`variant_count` on non-enum - " << ty);
-                    MIR_ASSERT(state, ty->as_Path().binding.is_Enum(), "`variant_count` on non-enum - " << ty);
-                    const auto* enm = ty->as_Path().binding.as_Enum();
-                    dst.writeUint(state, TargetGetPointerBits(), enm->numVariants());
+                    // Asking for a type that is not an enum is a lint
+                    // (`enum_intrinsics_non_enums`), not an error: a struct or a
+                    // union is one variant, anything else is none.
+                    size_t count = 0;
+                    if (ty->is_Path()) {
+                        const auto& binding = ty->as_Path().binding;
+                        if (binding.is_Enum()) {
+                            count = binding.as_Enum()->numVariants();
+                        } else if (binding.is_Struct() || binding.is_Union()) {
+                            count = 1;
+                        }
+                    }
+                    dst.writeUint(state, TargetGetPointerBits(), count);
                 } else if (te->name == "assert_zero_valid") {
                     auto ty = localState.monomorphExpand(te->params.types.at(0));
                     MIR_ASSERT(state, !ty->is_Borrow(), "`assert_zero_valid`: Borrow cannot be zero");
