@@ -1,5 +1,7 @@
 #pragma once
 
+#include <std/sys/types.h>
+
 /*
  * A very basic (and probably incomplete) streaming TOML parser
  */
@@ -95,7 +97,7 @@ struct TomlValue {
     };
 
     Type type;
-    uint64_t intValue;
+    u64 intValue;
     ::std::string strValue;
     ::std::vector<TomlValue> subValues;
 
@@ -103,7 +105,7 @@ struct TomlValue {
 
     TomlValue(::std::string s);
 
-    TomlValue(int64_t v);
+    TomlValue(i64 v);
 
     TomlValue(bool v);
 
@@ -111,7 +113,7 @@ struct TomlValue {
 
     bool asBool() const;
 
-    uint64_t asInt() const;
+    u64 asInt() const;
 
     const ::std::vector<TomlValue>& asList() const;
 

@@ -2179,7 +2179,7 @@ namespace {
                     params.values.push_back(HIRValueParamDef());
                     params.values.back().name = ge.name;
                 }
-                return HIRConstGeneric::make_Generic({params.values[rv].name, static_cast<uint32_t>(rv)});
+                return HIRConstGeneric::make_Generic({params.values[rv].name, static_cast<u32>(rv)});
             }
 
             HIRTypeRef monomorphType(const Span& sp, const HIRTypeData* tpl, bool allowInfer = true) const override {

@@ -16,7 +16,7 @@ generate(
         v("Counted", "SampleCounted",
           doc="Instance-counting payload from the context header."),
     ],
-    extra_fields=[("uint8_t", "flags", "0")],
+    extra_fields=[("u8", "flags", "0")],
     extra="""
         int extraProbe() const;
     """,

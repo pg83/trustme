@@ -1,3 +1,4 @@
+#include <std/sys/types.h>
 #include "memory_dump.h"
 #include <iostream>
 #include <cstdint>
@@ -23,15 +24,15 @@ void memoryDump(const char* phase) {
 
         // 1. Enumerate all memory ranges
         struct RangeEnt {
-            uint64_t vStart = 0;
-            uint64_t vEnd = 0;
+            u64 vStart = 0;
+            u64 vEnd = 0;
             char flagsStr[5];
-            uint64_t fileOfs = 0;
+            u64 fileOfs = 0;
             int devMaj = 0;
             int devMin = 0;
             int inode = 0;
             ::std::string name;
-            uint32_t firstChunk;
+            u32 firstChunk;
         };
 
         size_t chunkSize = 1 << 20;
@@ -39,7 +40,7 @@ void memoryDump(const char* phase) {
         size_t chunkCount = 0;
         // - Open `/proc/self/maps`, parse `<start>-<end> <flags> <ofs> <maj>:<minor> <inode> <file_name>`
         {
-            uint64_t lastVaddr = 0;
+            u64 lastVaddr = 0;
             FILE* fp = ::std::fopen("/proc/self/maps", "r");
             while (!feof(fp)) {
                 RangeEnt e;
@@ -112,9 +113,9 @@ void memoryDump(const char* phase) {
         // - Header
         struct DumpFileHdr {
             char magic[12];
-            uint32_t nRanges;
-            uint32_t nChunks;
-            uint32_t chunkSize;
+            u32 nRanges;
+            u32 nChunks;
+            u32 chunkSize;
         } fileHdr;
 
         strcpy(fileHdr.magic, "FullDump\x97\r\n");
@@ -125,13 +126,13 @@ void memoryDump(const char* phase) {
 
         // - Write out the parsed maps
         struct DumpRangeHdr {
-            uint64_t vStart;
-            uint64_t size;
-            uint64_t fileOfs;
+            u64 vStart;
+            u64 size;
+            u64 fileOfs;
 
-            uint16_t nameLength;
-            uint16_t _flags;
-            uint16_t _pad[2];
+            u16 nameLength;
+            u16 _flags;
+            u16 _pad[2];
         };
 
         for (const auto& r : rangeEnts) {
@@ -148,9 +149,9 @@ void memoryDump(const char* phase) {
         }
         // - Write out the content of the maps
         ::std::vector<unsigned char> zlibBuffer(16 * 1024);
-        ::std::vector<uint8_t> buf(chunkSize);
+        ::std::vector<u8> buf(chunkSize);
         size_t chunkCountFlushed = 0;
-        auto flushChunk = [&](uint64_t chunkAddr) {
+        auto flushChunk = [&](u64 chunkAddr) {
     #if DEBUG_MEM_DUMP
             printf("FLUSH %zi @ %li (0x%lx)\n", chunkCountFlushed, ftell(outFp), chunkAddr);
     #endif
@@ -170,7 +171,7 @@ void memoryDump(const char* phase) {
             zstream.next_out = zlibBuffer.data();
 
             zstream.avail_in = buf.size();
-            zstream.next_in = buf.data();
+            zstream.next_in = reinterpret_cast<unsigned char*>(buf.data());
 
             // While there's data to compress
             while (zstream.avail_in > 0) {
@@ -211,7 +212,7 @@ void memoryDump(const char* phase) {
             // Zero the buffer, just to make compression better on partial blocks
             memset(buf.data(), 0, buf.size());
         };
-        uint64_t lastVaddr = 0;
+        u64 lastVaddr = 0;
         for (const auto& r : rangeEnts) {
             if (r.flagsStr[0] == 'r') {
                 if (lastVaddr / chunkSize != r.vStart / chunkSize) {
@@ -239,7 +240,7 @@ void memoryDump(const char* phase) {
                     // Fill whole chunks
                     const auto tailSize = r.vEnd % chunkSize;
                     const auto tailPos = r.vEnd - tailSize;
-                    uint64_t va = r.vStart + headSize;
+                    u64 va = r.vStart + headSize;
                     while (va < tailPos) {
                         memcpy(buf.data(), (const void*)va, chunkSize);
                         flushChunk(va / chunkSize * chunkSize);
@@ -262,8 +263,8 @@ void memoryDump(const char* phase) {
         // - Save/dump register state
         // > PC, and then all 16 amd64 GPRs
         struct RegState {
-            uint64_t pc;
-            uint64_t gprs[16];
+            u64 pc;
+            u64 gprs[16];
         } regs;
 
         // Dwarf ordering: ADCB,SI,DI,BP,SP,r8-15

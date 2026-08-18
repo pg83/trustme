@@ -3169,7 +3169,7 @@ default:
                 }
                 case HIRExprLiteral::TAG_ByteString: {
                     auto& e = node.data.as_ByteString();
-                    auto v = mv$(*reinterpret_cast<::std::vector<uint8_t>*>(&e));
+                    auto v = mv$(*reinterpret_cast<::std::vector<u8>*>(&e));
                     builder.setResult(node.span(), MIRRValue::make_Constant(MIRConstant(mv$(v))));
                     break;
                 }
@@ -5368,8 +5368,8 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             fieldPath.push_back(FIELD_DEREF);
             const auto ptrSize = TargetGetPointerBits() / 8;
             auto ptr = lit.readUint(ptrSize).truncateU64();
-            auto valueSize = uint64_t { 0 };
-            auto sliceLen = uint64_t { 0 };
+            auto valueSize = u64 { 0 };
+            auto sliceLen = u64 { 0 };
             const HIRTypeData* sliceInner = nullptr;
 
             if (e.inner == HIRCoreType::Str) {
@@ -5391,7 +5391,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
             EncodedLiteral inlineValue;
             const EncodedLiteral* value = nullptr;
             auto* relocation = lit.getReloc();
-            auto valueOffset = uint64_t { 0 };
+            auto valueOffset = u64 { 0 };
             if (valueSize == 0 && !relocation) {
                 // A reference to a zero-sized value carries no allocation to
                 // decode. Its address is deliberately irrelevant to a pattern.
@@ -5424,7 +5424,7 @@ void PatternRulesetBuilder::appendFromLit(const Span& sp, EncodedLiteralSlice li
                     value->bytes.begin() + valueOffset + sliceLen
                 )));
             } else if (sliceInner == HIRCoreType::U8) {
-                this->pushRule(PatternRule::make_Value(std::vector<uint8_t>(
+                this->pushRule(PatternRule::make_Value(std::vector<u8>(
                     value->bytes.begin() + valueOffset,
                     value->bytes.begin() + valueOffset + sliceLen
                 )));
@@ -6219,7 +6219,7 @@ default:
                     const auto& bytes = pe.val.as_ByteString().v;
                     ASSERT_BUG(sp, e.inner == HIRCoreType::U8 && e.size.as_Known() == bytes.size(), "Byte string pattern type mismatch - " << pat << " vs " << ty);
                     for (auto byte : bytes) {
-                        this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<uint8_t>(byte)), HIRCoreType::U8})));
+                        this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<u8>(byte)), HIRCoreType::U8})));
                         fieldPath.back()++;
                     }
                     break;
@@ -6262,7 +6262,7 @@ default:
                         // allocate per-element rules - fatal for [T; 64_000_000].
                         if (!pe.trailing.empty()) {
                             ASSERT_BUG(sp, arraySize - pe.trailing.size() < FIELD_INDEX_MAX, "Trailing slice rules after a too-large array gap");
-                            fieldPath.back() = static_cast<uint16_t>(arraySize - pe.trailing.size());
+                            fieldPath.back() = static_cast<u16>(arraySize - pe.trailing.size());
                             for (const auto& subpat : pe.trailing) {
                                 this->appendFrom(sp, subpat, e.inner);
                                 fieldPath.back()++;
@@ -6295,10 +6295,10 @@ default:
                 case HIRPatternData::TAG_Value: {
                     auto& pe = pat.data.as_Value();
                     ASSERT_BUG(sp, pe.val.is_ByteString() && e.inner == HIRCoreType::U8, "Matching slice with non-byte-string value pattern - " << pat);
-                    ::std::vector<uint8_t> data;
+                    ::std::vector<u8> data;
                     data.reserve(pe.val.as_ByteString().v.size());
                     for (auto byte : pe.val.as_ByteString().v) {
-                        data.push_back(static_cast<uint8_t>(byte));
+                        data.push_back(static_cast<u8>(byte));
                     }
                     this->pushRule(PatternRule::make_Value(mv$(data)));
                     break;
@@ -6416,12 +6416,12 @@ default:
                             ASSERT_BUG(sp, ae.size.is_Known() && ae.size.as_Known() == s.size(), "Byte string pattern size mismatch - " << pat << " vs " << e.inner);
                             fieldPath.push_back(0);
                             for (auto c : s) {
-                                this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<uint8_t>(c)), HIRCoreType::U8})));
+                                this->pushRule(PatternRule::make_Value(MIRConstant::make_Uint({U128(static_cast<u8>(c)), HIRCoreType::U8})));
                                 fieldPath.back()++;
                             }
                             fieldPath.pop_back();
                         } else {
-                            ::std::vector<uint8_t> data;
+                            ::std::vector<u8> data;
                             data.reserve(s.size());
                             for (auto c : s) {
                                 data.push_back(c);
@@ -8055,7 +8055,7 @@ void MatchGenGrouped::genDispatch(const ::std::vector<tRulesSubset>& rules, size
             val.wrappers.pop_back();
 
             ::std::vector<MIRBasicBlockId> targets;
-            ::std::vector<::std::vector<uint8_t>> values;
+            ::std::vector<::std::vector<u8>> values;
             size_t tgtOfs = 0;
             for (size_t i = 0; i < rules.size(); i++) {
                 for (size_t j = 1; j < rules[i].size(); j++) {
@@ -8152,7 +8152,7 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const :
                 // TODO: If there are Constant::Const values in the list, they need to come first! (with equality checks)
 
                 ::std::vector<::std::pair<MIRConstant, MIRBasicBlockId>> largeValues;
-                ::std::vector<uint64_t> values;
+                ::std::vector<u64> values;
                 ::std::vector<MIRBasicBlockId> targets;
                 size_t tgtOfs = 0;
                 for (size_t i = 0; i < rules.size(); i++) {
@@ -8210,7 +8210,7 @@ void MatchGenGrouped::genDispatchPrimitive(HIRTypeRef ty, MIRLValue val, const :
                 // NOTE: Rules are currently sorted
                 // TODO: If there are Constant::Const values in the list, they need to come first! (with equality checks)
 
-                ::std::vector<int64_t> values;
+                ::std::vector<i64> values;
                 ::std::vector<MIRBasicBlockId> targets;
                 size_t tgtOfs = 0;
                 for (size_t i = 0; i < rules.size(); i++) {
@@ -11095,9 +11095,9 @@ void MirBuilder::emitArrayElementDropLoop(const Span& sp, const MIRLValue& arrLv
     const auto idxLocal = newUnscopedLocal(usizeTy);
     const auto cmpLocal = newUnscopedLocal(boolTy);
     const auto mkUsize = [](size_t v) {
-        return MIRParam(MIRConstant::make_Uint({U128(static_cast<uint64_t>(v)), HIRCoreType::Usize}));
+        return MIRParam(MIRConstant::make_Uint({U128(static_cast<u64>(v)), HIRCoreType::Usize}));
     };
-    pushStmtAssign(sp, MIRLValue::newLocal(idxLocal), MIRRValue::make_Constant(MIRConstant::make_Uint({U128(static_cast<uint64_t>(start)), HIRCoreType::Usize})), /*update_dest_state=*/false);
+    pushStmtAssign(sp, MIRLValue::newLocal(idxLocal), MIRRValue::make_Constant(MIRConstant::make_Uint({U128(static_cast<u64>(start)), HIRCoreType::Usize})), /*update_dest_state=*/false);
     const auto bbCond = newBbUnlinked();
     const auto bbBody = newBbUnlinked();
     const auto bbNext = newBbUnlinked();

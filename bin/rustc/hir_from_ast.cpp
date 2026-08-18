@@ -1576,7 +1576,7 @@ HIRStruct AST2HIR::LowerHIRStruct(const Span& sp, HIRItemPath path, const ASTStr
             //TODO: Ensure that this second field is PhantomData
         }
 
-        uint64_t TGT_PTR_MAX = TargetGetPointerBits() == 64 ? UINT64_MAX : UINT32_MAX;
+        u64 TGT_PTR_MAX = TargetGetPointerBits() == 64 ? UINT64_MAX : UINT32_MAX;
         U128 min = U128(0), max = U128(UINT64_MAX, UINT64_MAX);
         bool ignore = false;
         if (ty->is_Pointer()) {

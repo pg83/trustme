@@ -2087,8 +2087,8 @@ namespace {
                                 // No auto-sizing, just i32?
                                 rv.fields.push_back(TypeRepr::Field{0, resolve.hirCrate().types.primitive(HIRCoreType::U32)});
                             } else if (!e.variants.empty()) {
-                                int64_t minValue = INT64_MAX;
-                                int64_t maxValue = INT64_MIN;
+                                i64 minValue = INT64_MAX;
+                                i64 maxValue = INT64_MIN;
                                 for (const auto& variant : e.variants) {
                                     const auto value = S128(variant.val).truncateI64();
                                     minValue = std::min(minValue, value);
@@ -2097,7 +2097,7 @@ namespace {
 
                                 HIRCoreType tagType;
                                 if (minValue >= 0) {
-                                    const auto maxUnsigned = static_cast<uint64_t>(maxValue);
+                                    const auto maxUnsigned = static_cast<u64>(maxValue);
                                     if (maxUnsigned <= UINT8_MAX) {
                                         tagType = HIRCoreType::U8;
                                     } else if (maxUnsigned <= UINT16_MAX) {
@@ -2132,7 +2132,7 @@ namespace {
                             vals.push_back(v.val);
                         }
                         DEBUG("vals = " << vals);
-                        rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<uint8_t>(rv.size), {}}, ::std::move(vals)});
+                        rv.variants = TypeRepr::VariantMode::make_Values({{0, static_cast<u8>(rv.size), {}}, ::std::move(vals)});
                     }
 
                 }
@@ -2632,7 +2632,7 @@ namespace {
                 supported = false;
                 return {nfa.uninhabited(), count};
             }
-            uint8_t raw[16] = {};
+            u8 raw[16] = {};
             value.toLeBytes(raw, count);
             auto rv = nfa.empty();
             for (size_t i = 0; i < count; i++) {
@@ -2838,7 +2838,7 @@ namespace {
                 }
                 auto rv = nfa.empty();
                 size_t size = 0;
-                for (uint64_t i = 0; i < array->size.as_Known(); i++) {
+                for (u64 i = 0; i < array->size.as_Known(); i++) {
                     auto element = build(array->inner);
                     if (element.size > SIZE_MAX - size) {
                         supported = false;
@@ -3177,7 +3177,7 @@ TargetArch::Atomics::Atomics(bool u8, bool u16, bool u32, bool u64, bool ptr)
 {
 }
 
-TargetArch::Alignments::Alignments(uint8_t u16, uint8_t u32, uint8_t u64, uint8_t u128, uint8_t f32, uint8_t f64, uint8_t ptr)
+TargetArch::Alignments::Alignments(u8 u16, u8 u32, u8 u64, u8 u128, u8 f32, u8 f64, u8 ptr)
     : u16(u16)
     , u32(u32)
     , u64(u64)

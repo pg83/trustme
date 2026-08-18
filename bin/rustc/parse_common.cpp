@@ -1252,8 +1252,8 @@ ASTExprNodeP ParseExprFC(TokenStream& lex) {
                         if (!foundFractionalIndex || value < FloatValue() || whole >= indexLimit || fractionalIndex >= indexLimit) {
                             throw ParseErrorUnexpected(lex, mv$(tok));
                         }
-                        val = NEWNODE(ASTExprNodeField, ::std::move(val), RcString::newInterned(FMT(static_cast<uint64_t>(whole))));
-                        val = NEWNODE(ASTExprNodeField, ::std::move(val), RcString::newInterned(FMT(static_cast<uint64_t>(fractionalIndex))));
+                        val = NEWNODE(ASTExprNodeField, ::std::move(val), RcString::newInterned(FMT(static_cast<u64>(whole))));
+                        val = NEWNODE(ASTExprNodeField, ::std::move(val), RcString::newInterned(FMT(static_cast<u64>(fractionalIndex))));
                         break;
                     }
                     case TOK_RWORD_AWAIT:
@@ -1680,8 +1680,8 @@ ASTExprNodeP ParseExprValInner(TokenStream& lex) {
                                             if (!foundFractionalIndex || fractionalIndex >= indexLimit) {
                                                 TODO(lex.pointSpan(), "offset_of - invalid tuple indices " << *expr);
                                             }
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<uint64_t>(fractionalIndex)), CORETYPE_ANY));
-                                            exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<uint64_t>(whole)), CORETYPE_ANY));
+                                            exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<u64>(fractionalIndex)), CORETYPE_ANY));
+                                            exprArgs.push_back(NEWNODE(ASTExprNodeInteger, U128(static_cast<u64>(whole)), CORETYPE_ANY));
                                             break;
                                         } else if (const auto* n = cast<const ASTExprNodeField>(expr)) {
                                             exprArgs.push_back(NEWNODE(ASTExprNodeString, n->name.c_str(), {}));

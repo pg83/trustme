@@ -28,7 +28,7 @@ struct TomlToken {
 
     Type type;
     ::std::string data;
-    int64_t intval = 0;
+    i64 intval = 0;
 
     TomlToken(Type ty)
         : type(ty)
@@ -41,7 +41,7 @@ struct TomlToken {
     {
     }
 
-    TomlToken(Type ty, int64_t i)
+    TomlToken(Type ty, i64 i)
         : type(ty)
         , intval(i)
     {
@@ -598,7 +598,7 @@ TomlToken TomlToken::lexFromInner(::std::ifstream& is, unsigned& line) {
                 }
                 is.putback(c);
 
-                int64_t val = 0;
+                i64 val = 0;
                 bool isAllDigit = true;
                 bool isNeg = false;
                 size_t i = 0;
@@ -678,7 +678,7 @@ TomlValue::TomlValue(::std::string s)
 {
 }
 
-TomlValue::TomlValue(int64_t v)
+TomlValue::TomlValue(i64 v)
     : type(Type::Integer)
     , intValue(v)
 {
@@ -704,7 +704,7 @@ bool TomlValue::asBool() const {
     return intValue != 0;
 }
 
-uint64_t TomlValue::asInt() const {
+u64 TomlValue::asInt() const {
     if (type != Type::Integer) {
         throw TypeError{type, Type::Integer};
     }
@@ -758,7 +758,7 @@ TomlFileIter::TomlFileIter(TomlFile& tf)
             break;
         case TomlValue::Type::String:
             os << "\"";
-            for (uint8_t c : x.strValue) {
+            for (u8 c : x.strValue) {
                 switch (c) {
                     case '\n':
                         os << "\\n";
@@ -771,7 +771,7 @@ TomlFileIter::TomlFileIter(TomlFile& tf)
                         break;
                     default:
                         if (0x20 <= c && c <= 0x7F) {
-                            os << c;
+                            os << static_cast<char>(c);
                         } else {
                             static const char* H = "0123456789ABCDEF";
                             os << "\\x" << H[c >> 4] << H[c & 0xF];

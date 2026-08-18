@@ -62,7 +62,7 @@ void HIRSerialiseWriter::open(const ::std::string& filename) {
 
 void HIRSerialiseWriter::write(const void* buf, size_t len) {
     if (inner) {
-        DEBUG("write(" << FMT_CB(ss, for (size_t i = 0; i < len; i++) ss << std::setw(2) << std::setfill('0') << std::hex << unsigned(((const uint8_t*)buf)[i])) << ")");
+        DEBUG("write(" << FMT_CB(ss, for (size_t i = 0; i < len; i++) ss << std::setw(2) << std::setfill('0') << std::hex << unsigned(((const u8*)buf)[i])) << ")");
         inner->write(buf, len);
     } else {
         // No-op, pre caching
@@ -236,7 +236,7 @@ void HIRSerialiseReader::read(void* buf, size_t len) {
         pos += len;
         return;
     }
-    buf = reinterpret_cast<uint8_t*>(buf) + used;
+    buf = reinterpret_cast<u8*>(buf) + used;
     len -= used;
 
     if (len >= buffer.capacity()) {
@@ -315,51 +315,51 @@ size_t HIRSerialiseReaderInner::read(void* buf, size_t len) {
     return len;
 }
 
-void HIRSerialiseWriter::writeU16(uint16_t v) {
-    uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8)};
+void HIRSerialiseWriter::writeU16(u16 v) {
+    u8 buf[] = {static_cast<u8>(v & 0xFF), static_cast<u8>(v >> 8)};
     this->write(buf, 2);
 }
 
-void HIRSerialiseWriter::writeU32(uint32_t v) {
-    uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24)};
+void HIRSerialiseWriter::writeU32(u32 v) {
+    u8 buf[] = {static_cast<u8>(v & 0xFF), static_cast<u8>(v >> 8), static_cast<u8>(v >> 16), static_cast<u8>(v >> 24)};
     this->write(buf, 4);
 }
 
-void HIRSerialiseWriter::writeU64(uint64_t v) {
-    uint8_t buf[] = {static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24), static_cast<uint8_t>(v >> 32), static_cast<uint8_t>(v >> 40), static_cast<uint8_t>(v >> 48), static_cast<uint8_t>(v >> 56)};
+void HIRSerialiseWriter::writeU64(u64 v) {
+    u8 buf[] = {static_cast<u8>(v & 0xFF), static_cast<u8>(v >> 8), static_cast<u8>(v >> 16), static_cast<u8>(v >> 24), static_cast<u8>(v >> 32), static_cast<u8>(v >> 40), static_cast<u8>(v >> 48), static_cast<u8>(v >> 56)};
     this->write(buf, 8);
 }
 
 // Variable-length encoded u64 (for array sizes)
-void HIRSerialiseWriter::writeU64c(uint64_t v) {
+void HIRSerialiseWriter::writeU64c(u64 v) {
     if (v < (1 << 7)) {
-        writeU8(static_cast<uint8_t>(v));
+        writeU8(static_cast<u8>(v));
     } else if (v < (1 << (6 + 16))) {
-        uint8_t buf[] = {
-            static_cast<uint8_t>(0x80 + (v >> 16)), // 0x80 -- 0xBF
-            static_cast<uint8_t>(v >> 8),
-            static_cast<uint8_t>(v & 0xFF)
+        u8 buf[] = {
+            static_cast<u8>(0x80 + (v >> 16)), // 0x80 -- 0xBF
+            static_cast<u8>(v >> 8),
+            static_cast<u8>(v & 0xFF)
         };
         this->write(buf, sizeof buf);
     } else if (v < (1ull << (5 + 32))) {
-        uint8_t buf[] = {
-            static_cast<uint8_t>(0xC0 + (v >> 32)), // 0xC0 -- 0xDF
-            static_cast<uint8_t>(v >> 24),
-            static_cast<uint8_t>(v >> 16),
-            static_cast<uint8_t>(v >> 8),
-            static_cast<uint8_t>(v)
+        u8 buf[] = {
+            static_cast<u8>(0xC0 + (v >> 32)), // 0xC0 -- 0xDF
+            static_cast<u8>(v >> 24),
+            static_cast<u8>(v >> 16),
+            static_cast<u8>(v >> 8),
+            static_cast<u8>(v)
         };
         this->write(buf, sizeof buf);
     } else {
-        uint8_t buf[] = {0xFF, static_cast<uint8_t>(v & 0xFF), static_cast<uint8_t>(v >> 8), static_cast<uint8_t>(v >> 16), static_cast<uint8_t>(v >> 24), static_cast<uint8_t>(v >> 32), static_cast<uint8_t>(v >> 40), static_cast<uint8_t>(v >> 48), static_cast<uint8_t>(v >> 56)};
+        u8 buf[] = {0xFF, static_cast<u8>(v & 0xFF), static_cast<u8>(v >> 8), static_cast<u8>(v >> 16), static_cast<u8>(v >> 24), static_cast<u8>(v >> 32), static_cast<u8>(v >> 40), static_cast<u8>(v >> 48), static_cast<u8>(v >> 56)};
         this->write(buf, sizeof buf);
     }
 }
 
-void HIRSerialiseWriter::writeI64c(int64_t v) {
+void HIRSerialiseWriter::writeI64c(i64 v) {
     // Convert from 2's completement
     bool sign = (v < 0);
-    uint64_t va = (v < 0 ? -v : v);
+    u64 va = (v < 0 ? -v : v);
     va <<= 1;
     va |= (sign ? 1 : 0);
     writeU64c(va);
@@ -383,33 +383,33 @@ void HIRSerialiseWriter::writeFloatValue(FloatValue value) {
 
 void HIRSerialiseWriter::writeTag(unsigned int t) {
     assert(t < 256);
-    writeU8(static_cast<uint8_t>(t));
+    writeU8(static_cast<u8>(t));
 }
 
 void HIRSerialiseWriter::writeCount(size_t c) {
     DEBUG(c);
     if (c < 0xFD) {
-        writeU8(static_cast<uint8_t>(c));
+        writeU8(static_cast<u8>(c));
     } else if (c == ~0u) {
         writeU8(0xFF);
     } else if (c < (1u << 16)) {
         writeU8(0xFD);
-        writeU16(static_cast<uint16_t>(c));
+        writeU16(static_cast<u16>(c));
     } else {
         assert(c < (1u << 31));
         writeU8(0xFE);
-        writeU32(static_cast<uint32_t>(c));
+        writeU32(static_cast<u32>(c));
     }
 }
 
 void HIRSerialiseWriter::writeString(size_t len, const char* s) {
     TRACE_FUNCTION;
     if (len < 128) {
-        writeU8(static_cast<uint8_t>(len));
+        writeU8(static_cast<u8>(len));
     } else {
         assert(len < (1u << (16 + 7)));
-        writeU8(static_cast<uint8_t>(128 + (len >> 16)));
-        writeU16(static_cast<uint16_t>(len & 0xFFFF));
+        writeU8(static_cast<u8>(128 + (len >> 16)));
+        writeU16(static_cast<u16>(len & 0xFFFF));
     }
     this->write(s, len);
 }
@@ -420,15 +420,15 @@ void HIRSerialiseWriter::writeBool(bool v) {
 }
 
 // Core protocol
-void HIRSerialiseWriter::rawWriteUint(uint64_t val) {
+void HIRSerialiseWriter::rawWriteUint(u64 val) {
     if (val < 0xC0) {
-        writeU8(static_cast<uint8_t>(val));
+        writeU8(static_cast<u8>(val));
     } else {
-        uint8_t bytes[8];
-        uint8_t len = 0;
+        u8 bytes[8];
+        u8 len = 0;
         while (val > 0) {
             assert(len < 8);
-            bytes[len] = static_cast<uint8_t>(val);
+            bytes[len] = static_cast<u8>(val);
             val >>= 8;
             len += 1;
         }
@@ -484,28 +484,28 @@ HIRSerialiseWriter::CloseOnDrop HIRSerialiseWriter::openAnonObject() {
     return CloseOnDrop(*this);
 }
 
-uint8_t HIRSerialiseReader::readU8() {
-    uint8_t v;
+u8 HIRSerialiseReader::readU8() {
+    u8 v;
     read(&v, sizeof v);
     return v;
 }
 
-uint16_t HIRSerialiseReader::readU16() {
-    uint8_t buf[2];
+u16 HIRSerialiseReader::readU16() {
+    u8 buf[2];
     read(buf, sizeof buf);
-    return static_cast<uint16_t>(buf[0]) | (static_cast<uint16_t>(buf[1]) << 8);
+    return static_cast<u16>(buf[0]) | (static_cast<u16>(buf[1]) << 8);
 }
 
-uint32_t HIRSerialiseReader::readU32() {
-    uint8_t buf[4];
+u32 HIRSerialiseReader::readU32() {
+    u8 buf[4];
     read(buf, sizeof buf);
-    return static_cast<uint32_t>(buf[0]) | (static_cast<uint32_t>(buf[1]) << 8) | (static_cast<uint32_t>(buf[2]) << 16) | (static_cast<uint32_t>(buf[3]) << 24);
+    return static_cast<u32>(buf[0]) | (static_cast<u32>(buf[1]) << 8) | (static_cast<u32>(buf[2]) << 16) | (static_cast<u32>(buf[3]) << 24);
 }
 
-uint64_t HIRSerialiseReader::readU64() {
-    uint8_t buf[8];
+u64 HIRSerialiseReader::readU64() {
+    u8 buf[8];
     read(buf, sizeof buf);
-    return static_cast<uint64_t>(buf[0]) | (static_cast<uint64_t>(buf[1]) << 8) | (static_cast<uint64_t>(buf[2]) << 16) | (static_cast<uint64_t>(buf[3]) << 24) | (static_cast<uint64_t>(buf[4]) << 32) | (static_cast<uint64_t>(buf[5]) << 40) | (static_cast<uint64_t>(buf[6]) << 48) | (static_cast<uint64_t>(buf[7]) << 56);
+    return static_cast<u64>(buf[0]) | (static_cast<u64>(buf[1]) << 8) | (static_cast<u64>(buf[2]) << 16) | (static_cast<u64>(buf[3]) << 24) | (static_cast<u64>(buf[4]) << 32) | (static_cast<u64>(buf[5]) << 40) | (static_cast<u64>(buf[6]) << 48) | (static_cast<u64>(buf[7]) << 56);
 }
 
 U128 HIRSerialiseReader::readU128() {
@@ -515,38 +515,38 @@ U128 HIRSerialiseReader::readU128() {
 }
 
 // Variable-length encoded u64 (for array sizes)
-uint64_t HIRSerialiseReader::readU64c() {
+u64 HIRSerialiseReader::readU64c() {
     auto v = readU8();
     if (v < (1 << 7)) {
-        return static_cast<uint64_t>(v);
+        return static_cast<u64>(v);
     } else if (v < 0xC0) {
-        uint64_t rv = static_cast<uint64_t>(v & 0x3F) << 16;
-        rv |= static_cast<uint64_t>(readU8()) << 8;
-        rv |= static_cast<uint64_t>(readU8());
+        u64 rv = static_cast<u64>(v & 0x3F) << 16;
+        rv |= static_cast<u64>(readU8()) << 8;
+        rv |= static_cast<u64>(readU8());
         return rv;
     } else if (v < 0xFF) {
-        uint64_t rv = static_cast<uint64_t>(v & 0x3F) << 32;
-        rv |= static_cast<uint64_t>(readU8()) << 24;
-        rv |= static_cast<uint64_t>(readU8()) << 16;
-        rv |= static_cast<uint64_t>(readU8()) << 8;
-        rv |= static_cast<uint64_t>(readU8());
+        u64 rv = static_cast<u64>(v & 0x3F) << 32;
+        rv |= static_cast<u64>(readU8()) << 24;
+        rv |= static_cast<u64>(readU8()) << 16;
+        rv |= static_cast<u64>(readU8()) << 8;
+        rv |= static_cast<u64>(readU8());
         return rv;
     } else {
         return readU64();
     }
 }
 
-int64_t HIRSerialiseReader::readI64c() {
-    uint64_t va = readU64c();
+i64 HIRSerialiseReader::readI64c() {
+    u64 va = readU64c();
     bool sign = (va & 0x1) != 0;
     va >>= 1;
 
     if (va == 0 && sign) {
         return INT64_MIN;
     } else if (sign) {
-        return -static_cast<int64_t>(va);
+        return -static_cast<i64>(va);
     } else {
-        return static_cast<int64_t>(va);
+        return static_cast<i64>(va);
     }
 }
 
@@ -610,16 +610,16 @@ bool HIRSerialiseReader::readBool() {
 }
 
 // Core protocol
-uint64_t HIRSerialiseReader::rawReadUint() {
+u64 HIRSerialiseReader::rawReadUint() {
     auto v = readU8();
     assert(v <= 0xC0 + 8);
     if (v < 0xC0) {
         return v;
     } else {
         size_t len = v - 0xC0;
-        uint64_t rv = 0;
+        u64 rv = 0;
         for (size_t p = 0; p < len; p++) {
-            rv |= static_cast<uint64_t>(readU8()) << (8 * p);
+            rv |= static_cast<u64>(readU8()) << (8 * p);
         }
         return rv;
     }

@@ -470,7 +470,7 @@ public:
             I128
         } repr = Repr::Rust;
         bool isReprC = false;
-        uint64_t alignValue = 0;
+        u64 alignValue = 0;
     } markings;
 
     ASTEnum();
@@ -511,9 +511,9 @@ public:
             Simd,
             Transparent,
         } repr = Repr::Rust;
-        uint64_t alignValue = 0;
+        u64 alignValue = 0;
         // Indicates packing
-        uint64_t maxFieldAlign = 0;
+        u64 maxFieldAlign = 0;
 
         // 1.39 nonzero etc
         bool scalarValidStartSet = false;
@@ -553,7 +553,7 @@ public:
             Transparent,
         } repr = Repr::Rust;
         /// `#[repr(align(N))]`
-        uint64_t alignValue = 0;
+        u64 alignValue = 0;
     } markings;
 
     ASTUnion(ASTGenericParams params, ::std::vector<ASTStructItem> fields);

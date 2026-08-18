@@ -9,14 +9,23 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef uint32_t RUST_CHAR;
-typedef uint8_t RUST_BOOL;
+typedef int8_t i8;
+typedef uint8_t u8;
+typedef int16_t i16;
+typedef uint16_t u16;
+typedef int32_t i32;
+typedef uint32_t u32;
+typedef int64_t i64;
+typedef uint64_t u64;
+
+typedef u32 RUST_CHAR;
+typedef u8 RUST_BOOL;
 typedef struct { void* PTR; size_t META; } SLICE_PTR;
 typedef struct { void* PTR; void* META; } TRAITOBJ_PTR;
 typedef struct { void (*drop)(void*); size_t size; size_t align; } VTABLE_HDR;
 
 struct trustme_panic final { void* rust_exception; };
-struct trustme_caller_location final { SLICE_PTR filename; uint32_t line; uint32_t column; };
+struct trustme_caller_location final { SLICE_PTR filename; u32 line; u32 column; };
 
 #if defined(__clang__)
 #define TRUSTME_MUSTTAIL [[clang::musttail]]
@@ -41,14 +50,14 @@ static inline size_t ALIGN_TO(size_t s, size_t a) { return (s + a - 1) / a * a; 
 #define ALIGNOF(t) __alignof__(t)
 
 static inline void __trustme_volatile_memcpy(void* dst, const void* src, size_t size) {
-    volatile uint8_t* dst_bytes = (volatile uint8_t*)dst;
-    const volatile uint8_t* src_bytes = (const volatile uint8_t*)src;
+    volatile u8* dst_bytes = (volatile u8*)dst;
+    const volatile u8* src_bytes = (const volatile u8*)src;
     for (size_t i = 0; i < size; i++) dst_bytes[i] = src_bytes[i];
 }
 
 static inline void __trustme_volatile_memmove(void* dst, const void* src, size_t size) {
-    volatile uint8_t* dst_bytes = (volatile uint8_t*)dst;
-    const volatile uint8_t* src_bytes = (const volatile uint8_t*)src;
+    volatile u8* dst_bytes = (volatile u8*)dst;
+    const volatile u8* src_bytes = (const volatile u8*)src;
     if ((uintptr_t)dst <= (uintptr_t)src) {
         for (size_t i = 0; i < size; i++) dst_bytes[i] = src_bytes[i];
     } else {
@@ -59,63 +68,63 @@ static inline void __trustme_volatile_memmove(void* dst, const void* src, size_t
     }
 }
 
-static inline void __trustme_volatile_memset(void* dst, uint8_t value, size_t size) {
-    volatile uint8_t* dst_bytes = (volatile uint8_t*)dst;
+static inline void __trustme_volatile_memset(void* dst, u8 value, size_t size) {
+    volatile u8* dst_bytes = (volatile u8*)dst;
     for (size_t i = 0; i < size; i++) dst_bytes[i] = value;
 }
 
 static inline void __trustme_unaligned_volatile_load(void* dst, const void* src, size_t size) {
-    uint8_t* dst_bytes = (uint8_t*)dst;
-    const volatile uint8_t* src_bytes = (const volatile uint8_t*)src;
+    u8* dst_bytes = (u8*)dst;
+    const volatile u8* src_bytes = (const volatile u8*)src;
     for (size_t i = 0; i < size; i++) dst_bytes[i] = src_bytes[i];
 }
 
 static inline void __trustme_unaligned_volatile_store(void* dst, const void* src, size_t size) {
-    volatile uint8_t* dst_bytes = (volatile uint8_t*)dst;
-    const uint8_t* src_bytes = (const uint8_t*)src;
+    volatile u8* dst_bytes = (volatile u8*)dst;
+    const u8* src_bytes = (const u8*)src;
     for (size_t i = 0; i < size; i++) dst_bytes[i] = src_bytes[i];
 }
 
-static inline uint64_t __builtin_clz64(uint64_t v) {
+static inline u64 __builtin_clz64(u64 v) {
     return (v >> 32) != 0 ? __builtin_clz(v >> 32) : 32 + __builtin_clz(v);
 }
 
-static inline uint64_t __builtin_ctz64(uint64_t v) {
+static inline u64 __builtin_ctz64(u64 v) {
     return (v & UINT32_MAX) == 0 ? __builtin_ctz(v >> 32) + 32 : __builtin_ctz(v);
 }
 
-static inline uint8_t __trustme_atomicloop8(volatile uint8_t* slot, uint8_t param, int ordering, uint8_t (*cb)(uint8_t, uint8_t)) {
+static inline u8 __trustme_atomicloop8(volatile u8* slot, u8 param, int ordering, u8 (*cb)(u8, u8)) {
     int ordering_load = ordering == __ATOMIC_RELEASE || ordering == __ATOMIC_ACQ_REL ? __ATOMIC_RELAXED : ordering;
     for (;;) {
-        uint8_t value = __atomic_load_n(slot, ordering_load);
-        uint8_t next = cb(value, param);
+        u8 value = __atomic_load_n(slot, ordering_load);
+        u8 next = cb(value, param);
         if (__atomic_compare_exchange_n(slot, &value, next, false, ordering, ordering_load)) return value;
     }
 }
 
-static inline uint16_t __trustme_atomicloop16(volatile uint16_t* slot, uint16_t param, int ordering, uint16_t (*cb)(uint16_t, uint16_t)) {
+static inline u16 __trustme_atomicloop16(volatile u16* slot, u16 param, int ordering, u16 (*cb)(u16, u16)) {
     int ordering_load = ordering == __ATOMIC_RELEASE || ordering == __ATOMIC_ACQ_REL ? __ATOMIC_RELAXED : ordering;
     for (;;) {
-        uint16_t value = __atomic_load_n(slot, ordering_load);
-        uint16_t next = cb(value, param);
+        u16 value = __atomic_load_n(slot, ordering_load);
+        u16 next = cb(value, param);
         if (__atomic_compare_exchange_n(slot, &value, next, false, ordering, ordering_load)) return value;
     }
 }
 
-static inline uint32_t __trustme_atomicloop32(volatile uint32_t* slot, uint32_t param, int ordering, uint32_t (*cb)(uint32_t, uint32_t)) {
+static inline u32 __trustme_atomicloop32(volatile u32* slot, u32 param, int ordering, u32 (*cb)(u32, u32)) {
     int ordering_load = ordering == __ATOMIC_RELEASE || ordering == __ATOMIC_ACQ_REL ? __ATOMIC_RELAXED : ordering;
     for (;;) {
-        uint32_t value = __atomic_load_n(slot, ordering_load);
-        uint32_t next = cb(value, param);
+        u32 value = __atomic_load_n(slot, ordering_load);
+        u32 next = cb(value, param);
         if (__atomic_compare_exchange_n(slot, &value, next, false, ordering, ordering_load)) return value;
     }
 }
 
-static inline uint64_t __trustme_atomicloop64(volatile uint64_t* slot, uint64_t param, int ordering, uint64_t (*cb)(uint64_t, uint64_t)) {
+static inline u64 __trustme_atomicloop64(volatile u64* slot, u64 param, int ordering, u64 (*cb)(u64, u64)) {
     int ordering_load = ordering == __ATOMIC_RELEASE || ordering == __ATOMIC_ACQ_REL ? __ATOMIC_RELAXED : ordering;
     for (;;) {
-        uint64_t value = __atomic_load_n(slot, ordering_load);
-        uint64_t next = cb(value, param);
+        u64 value = __atomic_load_n(slot, ordering_load);
+        u64 next = cb(value, param);
         if (__atomic_compare_exchange_n(slot, &value, next, false, ordering, ordering_load)) return value;
     }
 }
@@ -123,33 +132,33 @@ static inline uint64_t __trustme_atomicloop64(volatile uint64_t* slot, uint64_t 
 extern "C" {
 
 #if TRUSTME_TARGET_EMULATED_I128
-typedef struct { uint64_t lo, hi; } uint128_t;
-typedef struct { uint64_t lo, hi; } int128_t;
+typedef struct { u64 lo, hi; } uint128_t;
+typedef struct { u64 lo, hi; } int128_t;
 
 static inline uint128_t intrinsic_ctlz_u128(uint128_t v);
 static inline uint128_t int128_to_uint128(int128_t a);
 static inline int128_t uint128_to_int128(uint128_t a);
-static inline uint128_t shl128(uint128_t a, uint32_t b);
-static inline uint128_t shr128(uint128_t a, uint32_t b);
+static inline uint128_t shl128(uint128_t a, u32 b);
+static inline uint128_t shr128(uint128_t a, u32 b);
 
-static inline float make_float(int is_neg, int exp, uint32_t mantissa_bits) {
+static inline float make_float(int is_neg, int exp, u32 mantissa_bits) {
     float result;
-    uint32_t bits = (mantissa_bits & ((1 << 23) - 1)) | ((exp + 127) << 23);
+    u32 bits = (mantissa_bits & ((1 << 23) - 1)) | ((exp + 127) << 23);
     if (is_neg) bits |= 1 << 31;
     memcpy(&result, &bits, sizeof(result));
     return result;
 }
 
-static inline double make_double(int is_neg, int exp, uint32_t mantissa_bits) {
+static inline double make_double(int is_neg, int exp, u32 mantissa_bits) {
     double result;
-    uint64_t bits = (mantissa_bits & ((1ull << 52) - 1)) | ((uint64_t)(exp + 1023) << 52);
+    u64 bits = (mantissa_bits & ((1ull << 52) - 1)) | ((u64)(exp + 1023) << 52);
     if (is_neg) bits |= 1ull << 63;
     memcpy(&result, &bits, 4);
     return result;
 }
 
-static inline uint128_t make128_raw(uint64_t hi, uint64_t lo) { uint128_t result = {lo, hi}; return result; }
-static inline uint128_t make128(uint64_t value) { uint128_t result = {value, 0}; return result; }
+static inline uint128_t make128_raw(u64 hi, u64 lo) { uint128_t result = {lo, hi}; return result; }
+static inline uint128_t make128(u64 value) { uint128_t result = {value, 0}; return result; }
 
 static inline int cmp128(uint128_t a, uint128_t b) {
     if (a.hi != b.hi) return a.hi < b.hi ? -1 : 1;
@@ -235,13 +244,13 @@ static inline uint128_t and128(uint128_t a, uint128_t b) { return make128_raw(a.
 static inline uint128_t or128(uint128_t a, uint128_t b) { return make128_raw(a.hi | b.hi, a.lo | b.lo); }
 static inline uint128_t xor128(uint128_t a, uint128_t b) { return make128_raw(a.hi ^ b.hi, a.lo ^ b.lo); }
 
-static inline uint128_t shl128(uint128_t a, uint32_t b) {
+static inline uint128_t shl128(uint128_t a, u32 b) {
     if (b == 0) return a;
     if (b < 64) return make128_raw((a.hi << b) | (a.lo >> (64 - b)), a.lo << b);
     return make128_raw(a.lo << (b - 64), 0);
 }
 
-static inline uint128_t shr128(uint128_t a, uint32_t b) {
+static inline uint128_t shr128(uint128_t a, u32 b) {
     if (b == 0) return a;
     if (b < 64) return make128_raw(a.hi >> b, (a.lo >> b) | (a.hi << (64 - b)));
     return make128(a.hi >> (b - 64));
@@ -258,23 +267,23 @@ static inline uint128_t intrinsic_cttz_u128(uint128_t v) {
     return make128(v.lo == 0 ? v.hi == 0 ? 128 : __builtin_ctz64(v.hi) + 64 : __builtin_ctz64(v.lo));
 }
 
-static inline int128_t make128s_raw(uint64_t hi, uint64_t lo) { int128_t result = {lo, hi}; return result; }
-static inline int128_t make128s(int64_t value) { return make128s_raw(value < 0 ? UINT64_MAX : 0, (uint64_t)value); }
+static inline int128_t make128s_raw(u64 hi, u64 lo) { int128_t result = {lo, hi}; return result; }
+static inline int128_t make128s(i64 value) { return make128s_raw(value < 0 ? UINT64_MAX : 0, (u64)value); }
 static inline int128_t neg128s(int128_t v) { return make128s_raw(~v.hi + (v.lo == 0), ~v.lo + 1); }
 
 /* A float cast to an integer saturates in Rust, and NaN becomes zero. */
 static inline uint128_t cast_float_to_u128(double v) {
     if (!(v > 0.0)) return make128(0);
     if (v >= 340282366920938463463374607431768211456.0) return make128_raw(UINT64_MAX, UINT64_MAX);
-    uint64_t hi = (uint64_t)(v / 18446744073709551616.0);
-    uint64_t lo = (uint64_t)(v - (double)hi * 18446744073709551616.0);
+    u64 hi = (u64)(v / 18446744073709551616.0);
+    u64 lo = (u64)(v - (double)hi * 18446744073709551616.0);
     return make128_raw(hi, lo);
 }
 
 static inline int128_t cast_float_to_i128(double v) {
     if (!(v == v)) return make128s(0);
     if (v >= 170141183460469231731687303715884105728.0) return make128s_raw(INT64_MAX, UINT64_MAX);
-    if (v <= -170141183460469231731687303715884105728.0) return make128s_raw((uint64_t)INT64_MIN, 0);
+    if (v <= -170141183460469231731687303715884105728.0) return make128s_raw((u64)INT64_MIN, 0);
     const int negative = v < 0.0;
     uint128_t magnitude = cast_float_to_u128(negative ? -v : v);
     int128_t result = uint128_to_int128(magnitude);
@@ -284,11 +293,11 @@ static inline int128_t cast_float_to_i128(double v) {
 static inline float cast128_float(uint128_t v) {
     int leading = intrinsic_ctlz_u128(v).lo;
     uint128_t shifted = shl128(v, leading);
-    uint64_t mantissa = shifted.hi >> ((128 - (23 + 1)) - 64);
-    uint64_t discarded = shr128(shifted, 64 - (23 + 1)).lo | (shifted.lo & 0xFFFFFFFFFF);
-    uint64_t rounded = mantissa + ((discarded - ((discarded >> 63) & ~mantissa)) >> 63);
-    uint64_t exponent = v.lo == 0 && v.hi == 0 ? 0 : (127 - leading) + 127 - 1;
-    uint32_t bits = (exponent << 23) + rounded;
+    u64 mantissa = shifted.hi >> ((128 - (23 + 1)) - 64);
+    u64 discarded = shr128(shifted, 64 - (23 + 1)).lo | (shifted.lo & 0xFFFFFFFFFF);
+    u64 rounded = mantissa + ((discarded - ((discarded >> 63) & ~mantissa)) >> 63);
+    u64 exponent = v.lo == 0 && v.hi == 0 ? 0 : (127 - leading) + 127 - 1;
+    u32 bits = (exponent << 23) + rounded;
     float result;
     memcpy(&result, &bits, sizeof(result));
     return result;
@@ -297,11 +306,11 @@ static inline float cast128_float(uint128_t v) {
 static inline double cast128_double(uint128_t v) {
     int leading = intrinsic_ctlz_u128(v).lo;
     uint128_t shifted = shl128(v, leading);
-    uint64_t mantissa = shifted.hi >> ((128 - (52 + 1)) - 64);
-    uint64_t discarded = shr128(shifted, 64 - (52 + 1)).lo | (shifted.lo & 0x7FF);
-    uint64_t rounded = mantissa + ((discarded - ((discarded >> 63) & ~mantissa)) >> 63);
-    uint64_t exponent = v.lo == 0 && v.hi == 0 ? 0 : (127 - leading) + 1023 - 1;
-    uint64_t bits = (exponent << 52) + rounded;
+    u64 mantissa = shifted.hi >> ((128 - (52 + 1)) - 64);
+    u64 discarded = shr128(shifted, 64 - (52 + 1)).lo | (shifted.lo & 0x7FF);
+    u64 rounded = mantissa + ((discarded - ((discarded >> 63) & ~mantissa)) >> 63);
+    u64 exponent = v.lo == 0 && v.hi == 0 ? 0 : (127 - leading) + 1023 - 1;
+    u64 bits = (exponent << 52) + rounded;
     double result;
     memcpy(&result, &bits, sizeof(result));
     return result;
@@ -321,7 +330,7 @@ static inline double cast128s_double(int128_t v) {
 }
 
 static inline int cmp128s(int128_t a, int128_t b) {
-    if (a.hi != b.hi) return (int64_t)a.hi < (int64_t)b.hi ? -1 : 1;
+    if (a.hi != b.hi) return (i64)a.hi < (i64)b.hi ? -1 : 1;
     if (a.lo != b.lo) return a.lo < b.lo ? -1 : 1;
     return 0;
 }
@@ -371,12 +380,12 @@ static inline int128_t mod128s(int128_t a, int128_t b) { int128_t out; div128s_o
 static inline int128_t and128s(int128_t a, int128_t b) { return make128s_raw(a.hi & b.hi, a.lo & b.lo); }
 static inline int128_t or128s(int128_t a, int128_t b) { return make128s_raw(a.hi | b.hi, a.lo | b.lo); }
 static inline int128_t xor128s(int128_t a, int128_t b) { return make128s_raw(a.hi ^ b.hi, a.lo ^ b.lo); }
-static inline int128_t shl128s(int128_t a, uint32_t b) { uint128_t out = shl128(*(uint128_t*)&a, b); return *(int128_t*)&out; }
+static inline int128_t shl128s(int128_t a, u32 b) { uint128_t out = shl128(*(uint128_t*)&a, b); return *(int128_t*)&out; }
 
-static inline int128_t shr128s(int128_t a, uint32_t b) {
+static inline int128_t shr128s(int128_t a, u32 b) {
     if (b == 0) return a;
-    if (b < 64) return make128s_raw((int64_t)a.hi >> b, (a.lo >> b) | (a.hi << (64 - b)));
-    return make128s((int64_t)a.hi >> (b - 64));
+    if (b < 64) return make128s_raw((i64)a.hi >> b, (a.lo >> b) | (a.hi << (64 - b)));
+    return make128s((i64)a.hi >> (b - 64));
 }
 
 /* Both takers are (hi, lo): the halves must not be exchanged. */
@@ -388,8 +397,8 @@ typedef unsigned __int128 uint128_t;
 typedef signed __int128 int128_t;
 
 static inline uint128_t __builtin_bswap128(uint128_t v) {
-    uint64_t lo = __builtin_bswap64((uint64_t)v);
-    uint64_t hi = __builtin_bswap64((uint64_t)(v >> 64));
+    u64 lo = __builtin_bswap64((u64)v);
+    u64 hi = __builtin_bswap64((u64)(v >> 64));
     return ((uint128_t)lo << 64) | (uint128_t)hi;
 }
 
@@ -445,42 +454,42 @@ static inline size_t trustme_string_search_linear(SLICE_PTR value, size_t count,
     return SIZE_MAX;
 }
 
-static const uint8_t __trustme_revmap[16] = {0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15};
-static inline uint8_t __trustme_bitrev8(uint8_t v) { return v == 0 || v == UINT8_MAX ? v : __trustme_revmap[v >> 4] | (__trustme_revmap[v & 15] << 4); }
-static inline uint16_t __trustme_bitrev16(uint16_t v) { return v == 0 ? 0 : (uint16_t)__trustme_bitrev8(v >> 8) | ((uint16_t)__trustme_bitrev8(v) << 8); }
-static inline uint32_t __trustme_bitrev32(uint32_t v) { return v == 0 ? 0 : (uint32_t)__trustme_bitrev16(v >> 16) | ((uint32_t)__trustme_bitrev16(v) << 16); }
-static inline uint64_t __trustme_bitrev64(uint64_t v) { return v == 0 ? 0 : (uint64_t)__trustme_bitrev32(v >> 32) | ((uint64_t)__trustme_bitrev32(v) << 32); }
+static const u8 __trustme_revmap[16] = {0, 8, 4, 12, 2, 10, 6, 14, 1, 9, 5, 13, 3, 11, 7, 15};
+static inline u8 __trustme_bitrev8(u8 v) { return v == 0 || v == UINT8_MAX ? v : __trustme_revmap[v >> 4] | (__trustme_revmap[v & 15] << 4); }
+static inline u16 __trustme_bitrev16(u16 v) { return v == 0 ? 0 : (u16)__trustme_bitrev8(v >> 8) | ((u16)__trustme_bitrev8(v) << 8); }
+static inline u32 __trustme_bitrev32(u32 v) { return v == 0 ? 0 : (u32)__trustme_bitrev16(v >> 16) | ((u32)__trustme_bitrev16(v) << 16); }
+static inline u64 __trustme_bitrev64(u64 v) { return v == 0 ? 0 : (u64)__trustme_bitrev32(v >> 32) | ((u64)__trustme_bitrev32(v) << 32); }
 
 #if TRUSTME_TARGET_EMULATED_I128
 static inline uint128_t __trustme_bitrev128(uint128_t v) { return make128_raw(__trustme_bitrev64(v.lo), __trustme_bitrev64(v.hi)); }
 static inline uint128_t __trustme_bswap128(uint128_t v) { return make128_raw(__builtin_bswap64(v.lo), __builtin_bswap64(v.hi)); }
 #else
 static inline uint128_t __trustme_bitrev128(uint128_t v) { return v == 0 ? 0 : (uint128_t)__trustme_bitrev64(v >> 64) | ((uint128_t)__trustme_bitrev64(v) << 64); }
-static inline uint128_t __trustme_bswap128(uint128_t v) { return ((uint128_t)__builtin_bswap64((uint64_t)v) << 64) | (uint128_t)__builtin_bswap64((uint64_t)(v >> 64)); }
+static inline uint128_t __trustme_bswap128(uint128_t v) { return ((uint128_t)__builtin_bswap64((u64)v) << 64) | (uint128_t)__builtin_bswap64((u64)(v >> 64)); }
 #endif
 
-static inline uint8_t __trustme_op_umax8(uint8_t a, uint8_t b) { return a > b ? a : b; }
-static inline uint8_t __trustme_op_umin8(uint8_t a, uint8_t b) { return a < b ? a : b; }
-static inline uint8_t __trustme_op_imax8(uint8_t a, uint8_t b) { return (int8_t)a > (int8_t)b ? a : b; }
-static inline uint8_t __trustme_op_imin8(uint8_t a, uint8_t b) { return (int8_t)a < (int8_t)b ? a : b; }
-static inline uint8_t __trustme_op_and_not8(uint8_t a, uint8_t b) { return ~(a & b); }
-static inline uint16_t __trustme_op_umax16(uint16_t a, uint16_t b) { return a > b ? a : b; }
-static inline uint16_t __trustme_op_umin16(uint16_t a, uint16_t b) { return a < b ? a : b; }
-static inline uint16_t __trustme_op_imax16(uint16_t a, uint16_t b) { return (int16_t)a > (int16_t)b ? a : b; }
-static inline uint16_t __trustme_op_imin16(uint16_t a, uint16_t b) { return (int16_t)a < (int16_t)b ? a : b; }
-static inline uint16_t __trustme_op_and_not16(uint16_t a, uint16_t b) { return ~(a & b); }
-static inline uint32_t __trustme_op_umax32(uint32_t a, uint32_t b) { return a > b ? a : b; }
-static inline uint32_t __trustme_op_umin32(uint32_t a, uint32_t b) { return a < b ? a : b; }
-static inline uint32_t __trustme_op_imax32(uint32_t a, uint32_t b) { return (int32_t)a > (int32_t)b ? a : b; }
-static inline uint32_t __trustme_op_imin32(uint32_t a, uint32_t b) { return (int32_t)a < (int32_t)b ? a : b; }
-static inline uint32_t __trustme_op_and_not32(uint32_t a, uint32_t b) { return ~(a & b); }
-static inline uint64_t __trustme_op_umax64(uint64_t a, uint64_t b) { return a > b ? a : b; }
-static inline uint64_t __trustme_op_umin64(uint64_t a, uint64_t b) { return a < b ? a : b; }
-static inline uint64_t __trustme_op_imax64(uint64_t a, uint64_t b) { return (int64_t)a > (int64_t)b ? a : b; }
-static inline uint64_t __trustme_op_imin64(uint64_t a, uint64_t b) { return (int64_t)a < (int64_t)b ? a : b; }
-static inline uint64_t __trustme_op_and_not64(uint64_t a, uint64_t b) { return ~(a & b); }
+static inline u8 __trustme_op_umax8(u8 a, u8 b) { return a > b ? a : b; }
+static inline u8 __trustme_op_umin8(u8 a, u8 b) { return a < b ? a : b; }
+static inline u8 __trustme_op_imax8(u8 a, u8 b) { return (i8)a > (i8)b ? a : b; }
+static inline u8 __trustme_op_imin8(u8 a, u8 b) { return (i8)a < (i8)b ? a : b; }
+static inline u8 __trustme_op_and_not8(u8 a, u8 b) { return ~(a & b); }
+static inline u16 __trustme_op_umax16(u16 a, u16 b) { return a > b ? a : b; }
+static inline u16 __trustme_op_umin16(u16 a, u16 b) { return a < b ? a : b; }
+static inline u16 __trustme_op_imax16(u16 a, u16 b) { return (i16)a > (i16)b ? a : b; }
+static inline u16 __trustme_op_imin16(u16 a, u16 b) { return (i16)a < (i16)b ? a : b; }
+static inline u16 __trustme_op_and_not16(u16 a, u16 b) { return ~(a & b); }
+static inline u32 __trustme_op_umax32(u32 a, u32 b) { return a > b ? a : b; }
+static inline u32 __trustme_op_umin32(u32 a, u32 b) { return a < b ? a : b; }
+static inline u32 __trustme_op_imax32(u32 a, u32 b) { return (i32)a > (i32)b ? a : b; }
+static inline u32 __trustme_op_imin32(u32 a, u32 b) { return (i32)a < (i32)b ? a : b; }
+static inline u32 __trustme_op_and_not32(u32 a, u32 b) { return ~(a & b); }
+static inline u64 __trustme_op_umax64(u64 a, u64 b) { return a > b ? a : b; }
+static inline u64 __trustme_op_umin64(u64 a, u64 b) { return a < b ? a : b; }
+static inline u64 __trustme_op_imax64(u64 a, u64 b) { return (i64)a > (i64)b ? a : b; }
+static inline u64 __trustme_op_imin64(u64 a, u64 b) { return (i64)a < (i64)b ? a : b; }
+static inline u64 __trustme_op_and_not64(u64 a, u64 b) { return ~(a & b); }
 
-static inline bool trustme_x86_cmp_f32(float lhs, float rhs, uint8_t predicate) {
+static inline bool trustme_x86_cmp_f32(float lhs, float rhs, u8 predicate) {
     const bool unordered = __builtin_isnan(lhs) || __builtin_isnan(rhs);
     switch(predicate & 7) {
     case 0: return !unordered && lhs == rhs;
@@ -494,7 +503,7 @@ static inline bool trustme_x86_cmp_f32(float lhs, float rhs, uint8_t predicate) 
     }
 }
 
-static inline bool trustme_x86_cmp_f64(double lhs, double rhs, uint8_t predicate) {
+static inline bool trustme_x86_cmp_f64(double lhs, double rhs, u8 predicate) {
     const bool unordered = __builtin_isnan(lhs) || __builtin_isnan(rhs);
     switch(predicate & 7) {
     case 0: return !unordered && lhs == rhs;
@@ -508,31 +517,31 @@ static inline bool trustme_x86_cmp_f64(double lhs, double rhs, uint8_t predicate
     }
 }
 
-static inline int32_t trustme_x86_f32_to_i32(float input, bool truncate) {
+static inline i32 trustme_x86_f32_to_i32(float input, bool truncate) {
     float value = truncate ? __builtin_truncf(input) : __builtin_nearbyintf(input);
     if (__builtin_isnan(value) || value >= 2147483648.0f || value < -2147483648.0f) return INT32_MIN;
-    return (int32_t)value;
+    return (i32)value;
 }
 
-static inline int64_t trustme_x86_f32_to_i64(float input, bool truncate) {
+static inline i64 trustme_x86_f32_to_i64(float input, bool truncate) {
     float value = truncate ? __builtin_truncf(input) : __builtin_nearbyintf(input);
     if (__builtin_isnan(value) || value >= 9223372036854775808.0 || value < -9223372036854775808.0) return INT64_MIN;
-    return (int64_t)value;
+    return (i64)value;
 }
 
-static inline int32_t trustme_x86_f64_to_i32(double input, bool truncate) {
+static inline i32 trustme_x86_f64_to_i32(double input, bool truncate) {
     double value = truncate ? __builtin_trunc(input) : __builtin_nearbyint(input);
     if (__builtin_isnan(value) || value >= 2147483648.0 || value < -2147483648.0) return INT32_MIN;
-    return (int32_t)value;
+    return (i32)value;
 }
 
-static inline int64_t trustme_x86_f64_to_i64(double input, bool truncate) {
+static inline i64 trustme_x86_f64_to_i64(double input, bool truncate) {
     double value = truncate ? __builtin_trunc(input) : __builtin_nearbyint(input);
     if (__builtin_isnan(value) || value >= 9223372036854775808.0 || value < -9223372036854775808.0) return INT64_MIN;
-    return (int64_t)value;
+    return (i64)value;
 }
 
-static inline float trustme_x86_round_f32(float value, uint8_t mode) {
+static inline float trustme_x86_round_f32(float value, u8 mode) {
     if (mode & 4) return __builtin_nearbyintf(value);
     switch(mode & 3) {
     case 0: return __builtin_roundevenf(value);
@@ -542,7 +551,7 @@ static inline float trustme_x86_round_f32(float value, uint8_t mode) {
     }
 }
 
-static inline double trustme_x86_round_f64(double value, uint8_t mode) {
+static inline double trustme_x86_round_f64(double value, u8 mode) {
     if (mode & 4) return __builtin_nearbyint(value);
     switch(mode & 3) {
     case 0: return __builtin_roundeven(value);
@@ -552,9 +561,9 @@ static inline double trustme_x86_round_f64(double value, uint8_t mode) {
     }
 }
 
-static inline uint32_t trustme_x86_crc32c(uint32_t crc, uint64_t value, unsigned bits) {
+static inline u32 trustme_x86_crc32c(u32 crc, u64 value, unsigned bits) {
     for (unsigned byte = 0; byte < bits / 8; byte++) {
-        crc ^= (uint8_t)value;
+        crc ^= (u8)value;
         value >>= 8;
         for (unsigned bit = 0; bit < 8; bit++) crc = (crc >> 1) ^ (0x82f63b78u & (0u - (crc & 1)));
     }
@@ -562,41 +571,41 @@ static inline uint32_t trustme_x86_crc32c(uint32_t crc, uint64_t value, unsigned
 }
 
 typedef struct {
-    uint32_t mask;
-    uint8_t len1;
-    uint8_t len2;
-    uint8_t count;
+    u32 mask;
+    u8 len1;
+    u8 len2;
+    u8 count;
 } trustme_x86_pcmp_state;
 
-static inline int32_t trustme_x86_pcmp_element(const uint8_t* input, unsigned index, uint8_t control) {
+static inline i32 trustme_x86_pcmp_element(const u8* input, unsigned index, u8 control) {
     if (control & 1) {
-        uint16_t value;
+        u16 value;
         memcpy(&value, input + index * 2, sizeof(value));
-        return control & 2 ? (int16_t)value : value;
+        return control & 2 ? (i16)value : value;
     }
-    return control & 2 ? (int8_t)input[index] : input[index];
+    return control & 2 ? (i8)input[index] : input[index];
 }
 
-static inline uint8_t trustme_x86_pcmp_implicit_length(const uint8_t* input, uint8_t count, uint8_t control) {
-    for (uint8_t i = 0; i < count; i++) if (trustme_x86_pcmp_element(input, i, control) == 0) return i;
+static inline u8 trustme_x86_pcmp_implicit_length(const u8* input, u8 count, u8 control) {
+    for (u8 i = 0; i < count; i++) if (trustme_x86_pcmp_element(input, i, control) == 0) return i;
     return count;
 }
 
-static inline uint8_t trustme_x86_pcmp_explicit_length(int32_t length, uint8_t count) {
-    uint32_t magnitude = length < 0 ? (uint32_t)-(int64_t)length : (uint32_t)length;
-    return magnitude < count ? (uint8_t)magnitude : count;
+static inline u8 trustme_x86_pcmp_explicit_length(i32 length, u8 count) {
+    u32 magnitude = length < 0 ? (u32)-(i64)length : (u32)length;
+    return magnitude < count ? (u8)magnitude : count;
 }
 
 static inline trustme_x86_pcmp_state trustme_x86_pcmp(
     const void* raw1,
-    int32_t explicit_len1,
+    i32 explicit_len1,
     const void* raw2,
-    int32_t explicit_len2,
-    uint8_t control,
+    i32 explicit_len2,
+    u8 control,
     bool explicit_lengths
 ) {
-    const uint8_t* input1 = (const uint8_t*)raw1;
-    const uint8_t* input2 = (const uint8_t*)raw2;
+    const u8* input1 = (const u8*)raw1;
+    const u8* input2 = (const u8*)raw2;
     trustme_x86_pcmp_state state;
     state.count = control & 1 ? 8 : 16;
     state.len1 = explicit_lengths
@@ -605,14 +614,14 @@ static inline trustme_x86_pcmp_state trustme_x86_pcmp(
     state.len2 = explicit_lengths
         ? trustme_x86_pcmp_explicit_length(explicit_len2, state.count)
         : trustme_x86_pcmp_implicit_length(input2, state.count, control);
-    const uint32_t all = (1u << state.count) - 1;
+    const u32 all = (1u << state.count) - 1;
     state.mask = 0;
 
     switch((control >> 2) & 3) {
     case 0:
-        for (uint8_t i = 0; i < state.len2; i++) {
-            int32_t second = trustme_x86_pcmp_element(input2, i, control);
-            for (uint8_t j = 0; j < state.len1; j++) {
+        for (u8 i = 0; i < state.len2; i++) {
+            i32 second = trustme_x86_pcmp_element(input2, i, control);
+            for (u8 j = 0; j < state.len1; j++) {
                 if (trustme_x86_pcmp_element(input1, j, control) == second) {
                     state.mask |= 1u << i;
                     break;
@@ -621,22 +630,22 @@ static inline trustme_x86_pcmp_state trustme_x86_pcmp(
         }
         break;
     case 1: {
-        uint8_t paired_len = state.len1 & (uint8_t)~1;
-        for (uint8_t i = 0; i < state.len2; i++) {
-            int32_t value = trustme_x86_pcmp_element(input2, i, control);
-            for (uint8_t j = 0; j < paired_len; j += 2) {
-                int32_t low = trustme_x86_pcmp_element(input1, j, control);
-                int32_t high = trustme_x86_pcmp_element(input1, j + 1, control);
+        u8 paired_len = state.len1 & (u8)~1;
+        for (u8 i = 0; i < state.len2; i++) {
+            i32 value = trustme_x86_pcmp_element(input2, i, control);
+            for (u8 j = 0; j < paired_len; j += 2) {
+                i32 low = trustme_x86_pcmp_element(input1, j, control);
+                i32 high = trustme_x86_pcmp_element(input1, j + 1, control);
                 if (low <= value && value <= high) state.mask |= 1u << i;
             }
         }
         break;
     }
     case 2: {
-        uint8_t maximum = state.len1 > state.len2 ? state.len1 : state.len2;
-        uint8_t minimum = state.len1 < state.len2 ? state.len1 : state.len2;
+        u8 maximum = state.len1 > state.len2 ? state.len1 : state.len2;
+        u8 minimum = state.len1 < state.len2 ? state.len1 : state.len2;
         state.mask = all ^ ((1u << maximum) - 1);
-        for (uint8_t i = 0; i < minimum; i++) {
+        for (u8 i = 0; i < minimum; i++) {
             if (trustme_x86_pcmp_element(input1, i, control) == trustme_x86_pcmp_element(input2, i, control)) state.mask |= 1u << i;
         }
         break;
@@ -645,9 +654,9 @@ static inline trustme_x86_pcmp_state trustme_x86_pcmp(
         if (state.len1 == 0) {
             state.mask = all;
         } else if (state.len1 <= state.len2) {
-            for (uint8_t i = 0; i + state.len1 <= state.len2; i++) {
+            for (u8 i = 0; i + state.len1 <= state.len2; i++) {
                 bool equal = true;
-                for (uint8_t j = 0; j < state.len1; j++) {
+                for (u8 j = 0; j < state.len1; j++) {
                     if (trustme_x86_pcmp_element(input1, j, control) != trustme_x86_pcmp_element(input2, i + j, control)) {
                         equal = false;
                         break;
@@ -665,22 +674,22 @@ static inline trustme_x86_pcmp_state trustme_x86_pcmp(
     return state;
 }
 
-static inline int32_t trustme_x86_pcmp_index(trustme_x86_pcmp_state state, uint8_t control) {
+static inline i32 trustme_x86_pcmp_index(trustme_x86_pcmp_state state, u8 control) {
     if (state.mask == 0) return state.count;
     return control & 0x40 ? 31 - __builtin_clz(state.mask) : __builtin_ctz(state.mask);
 }
 
-static inline void trustme_x86_pcmp_mask(void* output, trustme_x86_pcmp_state state, uint8_t control) {
+static inline void trustme_x86_pcmp_mask(void* output, trustme_x86_pcmp_state state, u8 control) {
     memset(output, 0, 16);
     if (control & 0x40) {
         if (control & 1) {
-            for (uint8_t i = 0; i < state.count; i++) {
-                uint16_t value = state.mask & (1u << i) ? UINT16_MAX : 0;
-                memcpy((uint8_t*)output + i * sizeof(value), &value, sizeof(value));
+            for (u8 i = 0; i < state.count; i++) {
+                u16 value = state.mask & (1u << i) ? UINT16_MAX : 0;
+                memcpy((u8*)output + i * sizeof(value), &value, sizeof(value));
             }
         } else {
-            uint8_t* bytes = (uint8_t*)output;
-            for (uint8_t i = 0; i < state.count; i++) bytes[i] = state.mask & (1u << i) ? UINT8_MAX : 0;
+            u8* bytes = (u8*)output;
+            for (u8 i = 0; i < state.count; i++) bytes[i] = state.mask & (1u << i) ? UINT8_MAX : 0;
         }
     } else {
         memcpy(output, &state.mask, sizeof(state.mask));
@@ -688,15 +697,15 @@ static inline void trustme_x86_pcmp_mask(void* output, trustme_x86_pcmp_state st
 }
 
 typedef _Float16 f16;
-static inline f16 make_f16_bits(uint16_t bits) { f16 result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
-static inline float make_f32_bits(uint32_t bits) { float result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
-static inline double make_f64_bits(uint64_t bits) { double result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
+static inline f16 make_f16_bits(u16 bits) { f16 result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
+static inline float make_f32_bits(u32 bits) { float result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
+static inline double make_f64_bits(u64 bits) { double result; __builtin_memcpy(&result, &bits, sizeof(result)); return result; }
 
 typedef struct alignas(TRUSTME_TARGET_U128_ALIGN) f128 { uint128_t v; } f128;
 #if TRUSTME_TARGET_EMULATED_I128
-static inline f128 make_f128_bits(uint64_t hi, uint64_t lo) { f128 result = {make128_raw(hi, lo)}; return result; }
+static inline f128 make_f128_bits(u64 hi, u64 lo) { f128 result = {make128_raw(hi, lo)}; return result; }
 #else
-static inline f128 make_f128_bits(uint64_t hi, uint64_t lo) { f128 result = {((uint128_t)hi << 64) | lo}; return result; }
+static inline f128 make_f128_bits(u64 hi, u64 lo) { f128 result = {((uint128_t)hi << 64) | lo}; return result; }
 #endif
 
 #if TRUSTME_TARGET_HAS_NATIVE_F128
@@ -769,11 +778,11 @@ static inline f128 f128_log2(f128 v) { return f128_encode(__builtin_log2f128(f12
 static inline f128 f128_cos(f128 v) { return f128_encode(__builtin_cosf128(f128_decode(v))); }
 static inline f128 f128_sin(f128 v) { return f128_encode(__builtin_sinf128(f128_decode(v))); }
 
-static inline f128 f128_powi(f128 base, int32_t exponent) {
+static inline f128 f128_powi(f128 base, i32 exponent) {
     f128_native factor = f128_decode(base);
     f128_native result = 1.0Q;
     bool negative = exponent < 0;
-    uint32_t power = negative ? 0u - (uint32_t)exponent : (uint32_t)exponent;
+    u32 power = negative ? 0u - (u32)exponent : (u32)exponent;
     while (power != 0) {
         if (power & 1) {
             result *= factor;
@@ -821,7 +830,7 @@ static f128 f128_log10(f128) { abort(); }
 static f128 f128_log2(f128) { abort(); }
 static f128 f128_cos(f128) { abort(); }
 static f128 f128_sin(f128) { abort(); }
-static f128 f128_powi(f128, int32_t) { abort(); }
+static f128 f128_powi(f128, i32) { abort(); }
 #endif
 
 #undef TRUSTME_TARGET_HAS_NATIVE_F128

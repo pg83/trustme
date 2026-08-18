@@ -7,23 +7,23 @@
 
 class U128 {
     friend class S128;
-    uint64_t lo;
-    uint64_t hi;
+    u64 lo;
+    u64 hi;
 
 public:
     U128();
 
-    explicit U128(uint64_t lo, uint64_t hi = 0);
+    explicit U128(u64 lo, u64 hi = 0);
 
     static U128 max() {
         return U128(UINT64_MAX, UINT64_MAX);
     }
 
-    uint64_t getLo() const {
+    u64 getLo() const {
         return lo;
     }
 
-    uint64_t getHi() const {
+    u64 getHi() const {
         return hi;
     }
 
@@ -31,30 +31,30 @@ public:
         return hi == 0;
     }
 
-    uint64_t truncateU64() const {
+    u64 truncateU64() const {
         return lo;
     }
 
-    uint64_t encodeFloat(int bits, int zeroExp) const;
+    u64 encodeFloat(int bits, int zeroExp) const;
 
     double toDouble() const;
 
     float toFloat() const;
 
-    void toLeBytes(uint8_t* dst, size_t maxLen) {
+    void toLeBytes(u8* dst, size_t maxLen) {
         maxLen = maxLen > 16 ? 16 : maxLen;
 #if __LITTLE_ENDIAN__
         memcpy(dst, this, maxLen);
 #else
         for (size_t i = 0; i < maxLen; i++) {
-            dst[i] = static_cast<uint8_t>((*this >> static_cast<unsigned>(i * 8)).truncateU64());
+            dst[i] = static_cast<u8>((*this >> static_cast<unsigned>(i * 8)).truncateU64());
         }
 #endif
     }
 
-    void toBeBytes(uint8_t* dst, size_t maxLen);
+    void toBeBytes(u8* dst, size_t maxLen);
 
-    void fromLeBytes(const uint8_t* src, size_t maxLen) {
+    void fromLeBytes(const u8* src, size_t maxLen) {
         maxLen = maxLen > 16 ? 16 : maxLen;
         *this = U128();
 #if __LITTLE_ENDIAN__
@@ -66,7 +66,7 @@ public:
 #endif
     }
 
-    void fromBeBytes(const uint8_t* src, size_t maxLen);
+    void fromBeBytes(const u8* src, size_t maxLen);
 
     U128 operator~() const {
         return U128(~lo, ~hi);
@@ -228,7 +228,7 @@ class S128 {
 public:
     S128();
 
-    explicit S128(int64_t v);
+    explicit S128(i64 v);
 
     S128(U128 v);
 
@@ -244,7 +244,7 @@ public:
         return inner.hi == ((inner.lo >> 63) ? UINT64_MAX : 0);
     }
 
-    int64_t truncateI64() const;
+    i64 truncateI64() const;
 
     double toDouble() const {
         return (*this < 0 ? -1.0 : 1.0) * this->uAbs().toDouble();
@@ -262,9 +262,9 @@ private:
     void signExtend(size_t nBytes);
 
 public:
-    void fromLeBytes(const uint8_t* src, size_t maxLen);
+    void fromLeBytes(const u8* src, size_t maxLen);
 
-    void fromBeBytes(const uint8_t* src, size_t maxLen);
+    void fromBeBytes(const u8* src, size_t maxLen);
 
     S128 operator~() const {
         return S128(~inner);

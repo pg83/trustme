@@ -67,13 +67,13 @@ struct ScopeDropSlot {
 #define FIELD_INDEX_MAX 0x8000 // Above this is a negative field offset
 
 struct fieldPathT {
-    ::std::vector<uint16_t> data;
+    ::std::vector<u16> data;
 
     size_t size() const {
         return data.size();
     }
 
-    void push_back(uint16_t v) {
+    void push_back(u16 v) {
         data.push_back(v);
     }
 
@@ -81,7 +81,7 @@ struct fieldPathT {
         data.pop_back();
     }
 
-    uint16_t& back() {
+    u16& back() {
         return data.back();
     }
 

@@ -215,7 +215,7 @@ public:
     HIRTypeRef tuple(::std::vector<HIRTypeRef> types);
     HIRTypeRef slice(HIRTypeRef inner);
     HIRTypeRef array(HIRTypeRef inner, HIRArraySize size);
-    HIRTypeRef array(HIRTypeRef inner, uint64_t size);
+    HIRTypeRef array(HIRTypeRef inner, u64 size);
     HIRTypeRef array(HIRTypeRef inner, HIRConstGeneric size);
     HIRTypeRef path(HIRPath path, HIRTypePathBinding binding);
     HIRTypeRef function(HIRTypeDataFunctionPointer ft);

@@ -14,7 +14,7 @@ class Monomorphiser;
 class HirSerialiser;
 class HirDeserialiser;
 
-enum class HIRBoundConstness : uint8_t {
+enum class HIRBoundConstness : u8 {
     Never,
     Always,
     Maybe,
@@ -75,8 +75,8 @@ struct HIRSimplePathData {
     // the interner table; hash2 is what lookups compare instead of the
     // component content. Both support O(1) incremental update on
     // append/pop/replace, which is what makes path mutation cheap.
-    uint64_t hash1;
-    uint64_t hash2;
+    u64 hash1;
+    u64 hash2;
     ThinVector<RcString> members; // [0] = crate name; empty vector = empty path
 };
 

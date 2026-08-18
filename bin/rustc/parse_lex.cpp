@@ -272,7 +272,7 @@ signed int Lexer::getSymbol() {
         const char* const chars = TOKENMAP[i].chars;
         const size_t len = TOKENMAP[i].len;
 
-        if (ofs >= len || static_cast<uint32_t>(chars[ofs]) > ch.v) {
+        if (ofs >= len || static_cast<u32>(chars[ofs]) > ch.v) {
             break;
         }
 
@@ -882,7 +882,7 @@ Token Lexer::getTokenInt() {
                         // Byte constant
                         ch = this->getc();
                         if (ch == '\\') {
-                            uint32_t val = this->parseEscape('\'');
+                            u32 val = this->parseEscape('\'');
                             if (this->getc() != '\'') {
                                 throw CompileErrorGeneric(*this, "Multi-byte character literal");
                             }
@@ -1057,7 +1057,7 @@ Token Lexer::getTokenInt() {
                     auto firstchar = this->getc();
                     if (firstchar.v == '\\') {
                         // Character constant with an escape code
-                        uint32_t val = this->parseEscape('\'');
+                        u32 val = this->parseEscape('\'');
                         if (this->getc() != '\'') {
                             TODO(this->pointSpan(), "Proper error for lex failures - multi-char const?");
                         }
@@ -1479,7 +1479,7 @@ FloatValue Lexer::parseFloat(U128 whole) {
     }
 }
 
-uint32_t Lexer::parseEscape(char enclosing, bool* isByteEscape) {
+u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
     if (isByteEscape) {
         *isByteEscape = false;
     }
@@ -1503,7 +1503,7 @@ uint32_t Lexer::parseEscape(char enclosing, bool* isByteEscape) {
         } break;
         case 'u': {
             // Unicode (up to six hex digits)
-            uint32_t val = 0;
+            u32 val = 0;
             ch = this->getc();
             bool reqCloseBrace = false;
             if (ch == '{') {
@@ -1624,7 +1624,7 @@ Codepoint Lexer::getcNum() {
 }
 
 Codepoint Lexer::getcCp() {
-    uint8_t v1 = this->getcByte();
+    u8 v1 = this->getcByte();
     if (v1 < 128) {
         return {v1};
     } else if ((v1 & 0xC0) == 0x80) {
@@ -1632,42 +1632,42 @@ Codepoint Lexer::getcCp() {
         return {0xFFFE};
     } else if ((v1 & 0xE0) == 0xC0) {
         // Two bytes
-        uint8_t e1 = this->getcByte();
+        u8 e1 = this->getcByte();
         if ((e1 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
 
-        uint32_t outval = ((v1 & 0x1F) << 6) | ((e1 & 0x3F) << 0);
+        u32 outval = ((v1 & 0x1F) << 6) | ((e1 & 0x3F) << 0);
         return {outval};
     } else if ((v1 & 0xF0) == 0xE0) {
         // Three bytes
-        uint8_t e1 = this->getcByte();
+        u8 e1 = this->getcByte();
         if ((e1 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
-        uint8_t e2 = this->getcByte();
+        u8 e2 = this->getcByte();
         if ((e2 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
 
-        uint32_t outval = ((v1 & 0x0F) << 12) | ((e1 & 0x3F) << 6) | ((e2 & 0x3F) << 0);
+        u32 outval = ((v1 & 0x0F) << 12) | ((e1 & 0x3F) << 6) | ((e2 & 0x3F) << 0);
         return {outval};
     } else if ((v1 & 0xF8) == 0xF0) {
         // Four bytes
-        uint8_t e1 = this->getcByte();
+        u8 e1 = this->getcByte();
         if ((e1 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
-        uint8_t e2 = this->getcByte();
+        u8 e2 = this->getcByte();
         if ((e2 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
-        uint8_t e3 = this->getcByte();
+        u8 e3 = this->getcByte();
         if ((e3 & 0xC0) != 0x80) {
             return {0xFFFE};
         }
 
-        uint32_t outval = ((v1 & 0x07) << 18) | ((e1 & 0x3F) << 12) | ((e2 & 0x3F) << 6) | ((e3 & 0x3F) << 0);
+        u32 outval = ((v1 & 0x07) << 18) | ((e1 & 0x3F) << 12) | ((e2 & 0x3F) << 6) | ((e3 & 0x3F) << 0);
         return {outval};
     } else {
         throw CompileErrorGeneric("Invalid UTF-8 (too long)");
@@ -1808,7 +1808,7 @@ Codepoint::Codepoint()
 {
 }
 
-Codepoint::Codepoint(uint32_t v)
+Codepoint::Codepoint(u32 v)
     : v(v)
 {
 }

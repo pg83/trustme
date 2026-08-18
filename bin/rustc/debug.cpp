@@ -98,59 +98,59 @@ extern void debugInitPhases(const char* envVarName, std::initializer_list<const 
                 os << "\\\"";
                 break;
             default:
-                uint8_t v = *s;
+                u8 v = *s;
                 if (v < 0x80) {
                     if (v < ' ' || v > 0x7F) {
                         os << "\\u{" << ::std::hex << (unsigned int)v << "}";
                     } else {
-                        os << v;
+                        os << static_cast<char>(v);
                     }
                 } else if (v < 0xC0)
                     ;
                 else if (v < 0xE0) {
-                    uint32_t val = (uint32_t)(v & 0x1F) << 6;
-                    v = (uint8_t)*++s;
+                    u32 val = (u32)(v & 0x1F) << 6;
+                    v = (u8)*++s;
                     if ((v & 0xC0) != 0x80) {
                         s--;
                         continue;
                     }
-                    val |= (uint32_t)(v & 0x3F) << 0;
+                    val |= (u32)(v & 0x3F) << 0;
                     os << "\\u{" << ::std::hex << val << "}";
                 } else if (v < 0xF0) {
-                    uint32_t val = (uint32_t)(v & 0x0F) << 12;
-                    v = (uint8_t)*++s;
+                    u32 val = (u32)(v & 0x0F) << 12;
+                    v = (u8)*++s;
                     if ((v & 0xC0) != 0x80) {
                         s--;
                         continue;
                     }
-                    val |= (uint32_t)(v & 0x3F) << 6;
-                    v = (uint8_t)*++s;
+                    val |= (u32)(v & 0x3F) << 6;
+                    v = (u8)*++s;
                     if ((v & 0xC0) != 0x80) {
                         s--;
                         continue;
                     }
-                    val |= (uint32_t)(v & 0x3F) << 0;
+                    val |= (u32)(v & 0x3F) << 0;
                     os << "\\u{" << ::std::hex << val << "}";
                 } else if (v < 0xF8) {
-                    uint32_t val = (uint32_t)(v & 0x07) << 18;
-                    v = (uint8_t)*++s;
+                    u32 val = (u32)(v & 0x07) << 18;
+                    v = (u8)*++s;
                     if ((v & 0xC0) != 0x80) {
                         s--;
                         continue;
                     }
-                    val |= (uint32_t)(v & 0x3F) << 12;
-                    v = (uint8_t)*++s;
+                    val |= (u32)(v & 0x3F) << 12;
+                    v = (u8)*++s;
                     if ((v & 0xC0) != 0x80) {
                         s--;
                         continue;
                     }
-                    val |= (uint32_t)(v & 0x3F) << 6;
-                    v = (uint8_t)*++s;
+                    val |= (u32)(v & 0x3F) << 6;
+                    v = (u8)*++s;
                     if ((v & 0xC0) != 0x80) {
                         s--;
                         continue;
                     }
-                    val |= (uint32_t)(v & 0x3F) << 0;
+                    val |= (u32)(v & 0x3F) << 0;
                     os << "\\u{" << ::std::hex << val << "}";
                 }
                 break;

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <std/sys/types.h>
+
 #include <iostream>
 #include <vector>
 #include <map>
@@ -76,6 +78,11 @@ static inline Ordering ord(char l, char r) {
 static inline Ordering ord(unsigned char l, unsigned char r) {
     return (l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess));
 }
+
+static inline Ordering ord(char8_t l, char8_t r) {
+    return (l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess));
+}
+
 
 static inline Ordering ord(unsigned short l, unsigned short r) {
     return (l == r ? OrdEqual : (l > r ? OrdGreater : OrdLess));
@@ -253,6 +260,14 @@ inline Join<T> join(const char* sep, const ::std::vector<T> v) {
 }
 
 namespace std {
+
+    // The standard deletes streaming of char8_t; restore the pre-u8
+    // byte-as-char behaviour (u8 used to be unsigned char, which streams as
+    // a character). Lives in std so it is found ahead of the deleted
+    // overload everywhere, including the container printers below.
+    inline ::std::ostream& operator<<(::std::ostream& os, char8_t v) {
+        return os << static_cast<char>(v);
+    }
 
     template <typename T>
     inline auto operator<<(::std::ostream& os, const T& v) -> decltype(v.fmt(os)) {

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <std/sys/types.h>
+
 // Software implementation of IEEE 754 binary128 (1.15.112).
 // The compiler represents every float value as binary128 so that f32/f64
 // arithmetic sees no double rounding and f128 semantics are exact. This type
@@ -17,32 +19,32 @@
 #include <iosfwd>
 
 class Float128 {
-    uint64_t lo;
-    uint64_t hi;
+    u64 lo;
+    u64 hi;
 
 public:
     Float128();
     Float128(double value);  // implicit: exact widening
 
-    static Float128 fromBits(uint64_t hi, uint64_t lo);
+    static Float128 fromBits(u64 hi, u64 lo);
     // Parse `digits[.digits][(e|E)[+|-]digits]`, correctly rounded
     static Float128 parseDecimal(const char* text);
     static Float128 quietNan();
     static Float128 infinity(bool negative);
 
-    uint64_t bitsHi() const;
-    uint64_t bitsLo() const;
+    u64 bitsHi() const;
+    u64 bitsLo() const;
 
     bool isNan() const;
     bool isInfinite() const;
 
     // Correctly rounded narrowing
-    uint16_t toF16Bits() const;
+    u16 toF16Bits() const;
     explicit operator float() const;
     explicit operator double() const;
     // Truncating, saturating; NaN -> 0
-    explicit operator int64_t() const;
-    explicit operator uint64_t() const;
+    explicit operator i64() const;
+    explicit operator u64() const;
 
     Float128 operator-() const;
     Float128 operator+(const Float128& other) const;

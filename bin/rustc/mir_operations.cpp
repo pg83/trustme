@@ -614,17 +614,17 @@ default:
                 auto e = dataReloc->bytes.end();
 
                 if (te.inner->is_Slice() && te.inner->as_Slice().inner == HIRCoreType::U8) {
-                    ::std::vector<uint8_t> bytestr;
+                    ::std::vector<u8> bytestr;
                     for (auto it = s; it != e; ++it) {
-                        bytestr.push_back(static_cast<uint8_t>(*it));
+                        bytestr.push_back(static_cast<u8>(*it));
                     }
                     auto size = MIRConstant::make_Uint({U128(bytestr.size()), HIRCoreType::Usize});
                     return MIRRValue::make_MakeDst({MIRConstant(mv$(bytestr)), std::move(size)});
                 } else if (te.inner->is_Array() && te.inner->as_Array().inner == HIRCoreType::U8) {
                     // TODO: How does this differ at codegen to the above?
-                    ::std::vector<uint8_t> bytestr;
+                    ::std::vector<u8> bytestr;
                     for (auto it = s; it != e; ++it) {
-                        bytestr.push_back(static_cast<uint8_t>(*it));
+                        bytestr.push_back(static_cast<u8>(*it));
                     }
                     return MIRConstant(mv$(bytestr));
                 } else if (te.inner == HIRCoreType::Str) {
@@ -632,9 +632,9 @@ default:
                 } else {
                     // Get repr, assert that there's only one field and it's a `[u8]` or `str`
                     // Pointer cast
-                    ::std::vector<uint8_t> bytestr;
+                    ::std::vector<u8> bytestr;
                     for (auto it = s; it != e; ++it) {
-                        bytestr.push_back(static_cast<uint8_t>(*it));
+                        bytestr.push_back(static_cast<u8>(*it));
                     }
                     auto size = MIRConstant::make_Uint({U128(bytestr.size()), HIRCoreType::Usize});
                     // Make a `*const [u8]`
@@ -5300,7 +5300,7 @@ bool MIROptimiseConstPropagate(MIRTypeResolve& state, MIRFunction& fcn) {
                                             const auto value = roundFloatValue(vp->v, vp->t);
                                             // NaN fails both comparisons and is left unfolded
                                             if (FloatValue() <= value && value < FloatValue(18446744073709551616.0)) {
-                                                newValue = MIRConstant::make_Uint({H::truncateU(*te, U128(static_cast<uint64_t>(value))), *te});
+                                                newValue = MIRConstant::make_Uint({H::truncateU(*te, U128(static_cast<u64>(value))), *te});
                                             } else {
                                                 // UB: Casting float out of range?
                                             }

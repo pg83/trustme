@@ -1,5 +1,7 @@
 #pragma once
 
+#include <std/sys/types.h>
+
 #include "float128.h"
 
 #include <cstdint>
@@ -29,7 +31,7 @@ std::ostringstream&& operator<<(std::ostringstream&& os, const FloatValue& value
 
 // IEEE binary16 (1.5.10), converted through binary32
 struct F16 {
-    uint16_t v;
+    u16 v;
 
     F16();
     F16(float f);
@@ -39,8 +41,8 @@ struct F16 {
 
 // Raw binary128 bits, the on-disk and codegen representation
 struct F128 {
-    uint64_t lo;
-    uint64_t hi;
+    u64 lo;
+    u64 hi;
 
     F128();
     F128(FloatValue value);

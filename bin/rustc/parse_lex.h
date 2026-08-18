@@ -10,22 +10,22 @@ namespace stl {
 #include <fstream>
 
 struct Codepoint {
-    uint32_t v;
+    u32 v;
 
     Codepoint();
 
-    Codepoint(uint32_t v);
+    Codepoint(u32 v);
 
     bool isspace() const;
     bool isdigit() const;
     bool isxdigit() const;
 
     bool operator==(char x) {
-        return v == static_cast<uint32_t>(x);
+        return v == static_cast<u32>(x);
     }
 
     bool operator!=(char x) {
-        return v != static_cast<uint32_t>(x);
+        return v != static_cast<u32>(x);
     }
 
     bool operator==(Codepoint x) {
@@ -93,7 +93,7 @@ private:
     };
     U128 parseInt(NumMode* numMode);
     FloatValue parseFloat(U128 whole);
-    uint32_t parseEscape(char enclosing, bool* isByteEscape = nullptr);
+    u32 parseEscape(char enclosing, bool* isByteEscape = nullptr);
 
     void pushHygine() override;
 

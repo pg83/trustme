@@ -240,23 +240,23 @@ public:
     bool checkGood();
 
     void sendDone() {
-        this->sendU8(static_cast<uint8_t>(TokenClass::EndOfStream));
+        this->sendU8(static_cast<u8>(TokenClass::EndOfStream));
         dumpFileOut.flush();
         DEBUG("Input tokens sent");
     }
 
     void sendSymbol(const char* val) {
-        this->sendU8(static_cast<uint8_t>(TokenClass::Symbol));
+        this->sendU8(static_cast<u8>(TokenClass::Symbol));
         this->sendBytes(val, ::std::strlen(val));
     }
 
     void sendRword(const char* val) {
-        this->sendU8(static_cast<uint8_t>(TokenClass::Ident));
+        this->sendU8(static_cast<u8>(TokenClass::Ident));
         this->sendBytes(val, ::std::strlen(val));
     }
 
     void sendIdent(const char* val) {
-        this->sendU8(static_cast<uint8_t>(TokenClass::Ident));
+        this->sendU8(static_cast<u8>(TokenClass::Ident));
         if (LexFindReservedWord(val, edition) != TOK_NULL) {
             auto size = ::std::strlen(val);
             this->sendV128u(2 + size);
@@ -272,32 +272,32 @@ public:
     }
 
     void sendLifetime(const char* val) {
-        this->sendU8(static_cast<uint8_t>(TokenClass::Lifetime));
+        this->sendU8(static_cast<u8>(TokenClass::Lifetime));
         this->sendBytes(val, ::std::strlen(val));
     }
 
     void sendString(const ::std::string& s) {
-        this->sendU8(static_cast<uint8_t>(TokenClass::String));
+        this->sendU8(static_cast<u8>(TokenClass::String));
         this->sendBytes(s.data(), s.size());
     }
 
     void sendRawLiteral(const ::std::string& s) {
-        this->sendU8(static_cast<uint8_t>(TokenClass::RawLiteral));
+        this->sendU8(static_cast<u8>(TokenClass::RawLiteral));
         this->sendBytes(s.data(), s.size());
     }
 
     void sendBytestring(const ::std::string& s) {
-        this->sendU8(static_cast<uint8_t>(TokenClass::ByteString));
+        this->sendU8(static_cast<u8>(TokenClass::ByteString));
         this->sendBytes(s.data(), s.size());
     }
 
-    void sendChar(uint32_t ch) {
-        this->sendU8(static_cast<uint8_t>(TokenClass::CharLit));
+    void sendChar(u32 ch) {
+        this->sendU8(static_cast<u8>(TokenClass::CharLit));
         this->sendV128u(ch);
     }
 
     void sendInt(eCoreType ct, U128 v) {
-        uint8_t size;
+        u8 size;
         switch (ct) {
             case CORETYPE_ANY:
                 size = 0;
@@ -327,7 +327,7 @@ public:
                 }
                 if (0)
                     ;
-                this->sendU8(static_cast<uint8_t>(TokenClass::UnsignedInt));
+                this->sendU8(static_cast<u8>(TokenClass::UnsignedInt));
                 this->sendU8(size);
                 break;
             case CORETYPE_INT:
@@ -354,7 +354,7 @@ public:
                 }
                 if (0)
                     ;
-                this->sendU8(static_cast<uint8_t>(TokenClass::SignedInt));
+                this->sendU8(static_cast<u8>(TokenClass::SignedInt));
                 this->sendU8(size);
                 break;
             default:
@@ -364,7 +364,7 @@ public:
     }
 
     void sendFloat(eCoreType ct, FloatValue v) {
-        this->sendU8(static_cast<uint8_t>(TokenClass::Float));
+        this->sendU8(static_cast<u8>(TokenClass::Float));
         switch (ct) {
             case CORETYPE_ANY:
                 this->sendU8(0);
@@ -386,7 +386,7 @@ public:
         this->knownSpans[sp.get()] = index;
         this->sentSpans.insert(index);
 
-        this->sendU8(static_cast<uint8_t>(TokenClass::SpanDef));
+        this->sendU8(static_cast<u8>(TokenClass::SpanDef));
         this->sendV128u(index);
         this->sendV128u(0); // TODO: Parent span
         if (const auto* spP = cast<const SpanInnerSource>(sp.get())) {
@@ -424,16 +424,16 @@ public:
 
 private:
     Token realGetToken_();
-    void sendU8(uint8_t v);
+    void sendU8(u8 v);
     void sendBytes(const void* val, size_t size);
     void sendBytesRaw(const void* val, size_t size);
-    void sendV128u(uint64_t val);
+    void sendV128u(u64 val);
     void sendV128u(U128 val);
 
-    uint8_t recvU8();
+    u8 recvU8();
     ::std::string recvBytes();
     void recvBytesRaw(void* outVoid, size_t len);
-    uint64_t recvV128u();
+    u64 recvV128u();
     U128 recvV128uU128();
 };
 
@@ -2145,12 +2145,12 @@ bool ProcMacroInv::checkGood() {
     return true;
 }
 
-void ProcMacroInv::sendU8(uint8_t v) {
+void ProcMacroInv::sendU8(u8 v) {
     this->sendBytesRaw(&v, 1);
 }
 
 void ProcMacroInv::sendBytes(const void* val, size_t size) {
-    this->sendV128u(static_cast<uint64_t>(size));
+    this->sendV128u(static_cast<u64>(size));
     this->sendBytesRaw(val, size);
 }
 
@@ -2163,24 +2163,24 @@ void ProcMacroInv::sendBytesRaw(const void* val, size_t size) {
     }
 }
 
-void ProcMacroInv::sendV128u(uint64_t val) {
+void ProcMacroInv::sendV128u(u64 val) {
     while (val >= 128) {
-        this->sendU8(static_cast<uint8_t>(val & 0x7F) | 0x80);
+        this->sendU8(static_cast<u8>(val & 0x7F) | 0x80);
         val >>= 7;
     }
-    this->sendU8(static_cast<uint8_t>(val & 0x7F));
+    this->sendU8(static_cast<u8>(val & 0x7F));
 }
 
 void ProcMacroInv::sendV128u(U128 val) {
     while (val >= U128(128)) {
-        this->sendU8(static_cast<uint8_t>(val.truncateU64() & 0x7F) | 0x80);
+        this->sendU8(static_cast<u8>(val.truncateU64() & 0x7F) | 0x80);
         val >>= 7;
     }
-    this->sendU8(static_cast<uint8_t>(val.truncateU64() & 0x7F));
+    this->sendU8(static_cast<u8>(val.truncateU64() & 0x7F));
 }
 
-uint8_t ProcMacroInv::recvU8() {
-    uint8_t v;
+u8 ProcMacroInv::recvU8() {
+    u8 v;
     this->recvBytesRaw(&v, 1);
     return v;
 }
@@ -2197,7 +2197,7 @@ uint8_t ProcMacroInv::recvU8() {
 }
 
 void ProcMacroInv::recvBytesRaw(void* outVoid, size_t len) {
-    uint8_t* val = reinterpret_cast<uint8_t*>(outVoid);
+    u8* val = reinterpret_cast<u8*>(outVoid);
     size_t ofs = 0, rem = len;
     while (rem > 0) {
         auto n = read(this->handles.childStdout, &val[ofs], rem);
@@ -2218,12 +2218,12 @@ void ProcMacroInv::recvBytesRaw(void* outVoid, size_t len) {
     }
 }
 
-uint64_t ProcMacroInv::recvV128u() {
-    uint64_t v = 0;
+u64 ProcMacroInv::recvV128u() {
+    u64 v = 0;
     unsigned ofs = 0;
     for (;;) {
         auto b = recvU8();
-        v |= static_cast<uint64_t>(b & 0x7F) << ofs;
+        v |= static_cast<u64>(b & 0x7F) << ofs;
         if ((b & 0x80) == 0) {
             break;
         }
@@ -2260,7 +2260,7 @@ Token ProcMacroInv::realGetToken_() {
     if (eofHit) {
         return Token(TOK_EOF);
     }
-    uint8_t v = this->recvU8();
+    u8 v = this->recvU8();
 
     switch (static_cast<TokenClass>(v)) {
         case TokenClass::EndOfStream:

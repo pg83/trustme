@@ -20,11 +20,11 @@ namespace {
 
     static int clz128(u128 v) {
         assert(v != 0);
-        uint64_t hi = static_cast<uint64_t>(v >> 64);
+        u64 hi = static_cast<u64>(v >> 64);
         if (hi != 0) {
             return __builtin_clzll(hi);
         }
-        return 64 + __builtin_clzll(static_cast<uint64_t>(v));
+        return 64 + __builtin_clzll(static_cast<u64>(v));
     }
 
     static int bitLength128(u128 v) {
@@ -46,16 +46,16 @@ namespace {
         bool negative;
         // For Finite: value = significand * 2^(exponent - 112),
         // significand normalized to [2^112, 2^113)
-        int32_t exponent;
+        i32 exponent;
         u128 significand;
     };
 
-    static Unpacked unpack(uint64_t hi, uint64_t lo) {
+    static Unpacked unpack(u64 hi, u64 lo) {
         Unpacked r;
         r.negative = (hi >> 63) != 0;
         r.exponent = 0;
         r.significand = 0;
-        const uint32_t biased = static_cast<uint32_t>(hi >> 48) & 0x7FFF;
+        const u32 biased = static_cast<u32>(hi >> 48) & 0x7FFF;
         const u128 fraction = (u128(hi & 0xFFFF'FFFF'FFFFull) << 64) | lo;
         if (biased == 0x7FFF) {
             r.kind = fraction != 0 ? Kind::NotANumber : Kind::Infinity;
@@ -72,7 +72,7 @@ namespace {
         } else {
             r.kind = Kind::Finite;
             r.significand = fraction | implicitBit;
-            r.exponent = static_cast<int32_t>(biased) - exponentBias;
+            r.exponent = static_cast<i32>(biased) - exponentBias;
         }
         return r;
     }
@@ -82,20 +82,20 @@ namespace {
     }
 
     // significand in [0, 2^113); below 2^112 only with exponent == min_exponent
-    static Float128 packFinite(bool negative, int32_t exponent, u128 significand) {
-        uint64_t biased;
+    static Float128 packFinite(bool negative, i32 exponent, u128 significand) {
+        u64 biased;
         if (significand >= implicitBit) {
             assert(min_exponent <= exponent && exponent <= max_exponent);
-            biased = static_cast<uint64_t>(exponent + exponentBias);
+            biased = static_cast<u64>(exponent + exponentBias);
             significand &= fractionMask;
         } else {
             assert(exponent == min_exponent);
             biased = 0;
         }
-        const uint64_t hi = (negative ? 0x8000'0000'0000'0000ull : 0)
+        const u64 hi = (negative ? 0x8000'0000'0000'0000ull : 0)
             | (biased << 48)
-            | static_cast<uint64_t>(significand >> 64);
-        return Float128::fromBits(hi, static_cast<uint64_t>(significand));
+            | static_cast<u64>(significand >> 64);
+        return Float128::fromBits(hi, static_cast<u64>(significand));
     }
 
     static u128 shiftRightSticky(u128 v, unsigned n, bool& sticky) {
@@ -116,7 +116,7 @@ namespace {
 
     // Round to nearest, ties to even. Value = significand * 2^(exponent - 113)
     // for any nonzero significand (normalization happens here).
-    static Float128 roundPack(bool negative, int32_t exponent, u128 significand, bool sticky) {
+    static Float128 roundPack(bool negative, i32 exponent, u128 significand, bool sticky) {
         if (significand == 0) {
             // A sticky remainder alone is far below half an ulp: rounds to zero
             return packZero(negative);
@@ -131,7 +131,7 @@ namespace {
         }
         // significand now in [2^113, 2^114): 113 result bits plus a round bit
         if (exponent < min_exponent) {
-            const int32_t shift = min_exponent - exponent;
+            const i32 shift = min_exponent - exponent;
             significand = shiftRightSticky(significand, shift > 128 ? 128 : static_cast<unsigned>(shift), sticky);
             exponent = min_exponent;
         }
@@ -154,27 +154,27 @@ namespace {
     }
 
     // 128x128 -> 256 bit product as four 64-bit limbs (little-endian)
-    static void multiplyFull(u128 a, u128 b, uint64_t out[4]) {
-        const uint64_t a0 = static_cast<uint64_t>(a);
-        const uint64_t a1 = static_cast<uint64_t>(a >> 64);
-        const uint64_t b0 = static_cast<uint64_t>(b);
-        const uint64_t b1 = static_cast<uint64_t>(b >> 64);
+    static void multiplyFull(u128 a, u128 b, u64 out[4]) {
+        const u64 a0 = static_cast<u64>(a);
+        const u64 a1 = static_cast<u64>(a >> 64);
+        const u64 b0 = static_cast<u64>(b);
+        const u64 b1 = static_cast<u64>(b >> 64);
         const u128 p00 = u128(a0) * b0;
         const u128 p01 = u128(a0) * b1;
         const u128 p10 = u128(a1) * b0;
         const u128 p11 = u128(a1) * b1;
-        const u128 mid = (p00 >> 64) + static_cast<uint64_t>(p01) + static_cast<uint64_t>(p10);
+        const u128 mid = (p00 >> 64) + static_cast<u64>(p01) + static_cast<u64>(p10);
         const u128 high = p11 + (p01 >> 64) + (p10 >> 64) + (mid >> 64);
-        out[0] = static_cast<uint64_t>(p00);
-        out[1] = static_cast<uint64_t>(mid);
-        out[2] = static_cast<uint64_t>(high);
-        out[3] = static_cast<uint64_t>(high >> 64);
+        out[0] = static_cast<u64>(p00);
+        out[1] = static_cast<u64>(mid);
+        out[2] = static_cast<u64>(high);
+        out[3] = static_cast<u64>(high >> 64);
     }
 
     // Arbitrary-precision unsigned integer, little-endian 64-bit limbs.
     // Only what decimal parsing and formatting need.
     class BigUint {
-        std::vector<uint64_t> limbs_;
+        std::vector<u64> limbs_;
 
         void trim() {
             while (!limbs_.empty() && limbs_.back() == 0) {
@@ -188,9 +188,9 @@ namespace {
         static BigUint fromU128(u128 v) {
             BigUint r;
             if (v != 0) {
-                r.limbs_.push_back(static_cast<uint64_t>(v));
+                r.limbs_.push_back(static_cast<u64>(v));
                 if ((v >> 64) != 0) {
-                    r.limbs_.push_back(static_cast<uint64_t>(v >> 64));
+                    r.limbs_.push_back(static_cast<u64>(v >> 64));
                 }
             }
             return r;
@@ -200,31 +200,31 @@ namespace {
             return limbs_.empty();
         }
 
-        void multiplyAddSmall(uint64_t factor, uint64_t addend) {
+        void multiplyAddSmall(u64 factor, u64 addend) {
             u128 carry = addend;
             for (auto& limb : limbs_) {
                 const u128 v = u128(limb) * factor + carry;
-                limb = static_cast<uint64_t>(v);
+                limb = static_cast<u64>(v);
                 carry = v >> 64;
             }
             while (carry != 0) {
-                limbs_.push_back(static_cast<uint64_t>(carry));
+                limbs_.push_back(static_cast<u64>(carry));
                 carry >>= 64;
             }
             trim();
         }
 
         // Returns the remainder
-        uint64_t divideSmall(uint64_t divisor) {
+        u64 divideSmall(u64 divisor) {
             assert(divisor != 0);
             u128 remainder = 0;
             for (size_t i = limbs_.size(); i-- > 0;) {
                 const u128 cur = (remainder << 64) | limbs_[i];
-                limbs_[i] = static_cast<uint64_t>(cur / divisor);
+                limbs_[i] = static_cast<u64>(cur / divisor);
                 remainder = cur % divisor;
             }
             trim();
-            return static_cast<uint64_t>(remainder);
+            return static_cast<u64>(remainder);
         }
 
         void shiftLeft(size_t bits) {
@@ -236,7 +236,7 @@ namespace {
             const size_t oldSize = limbs_.size();
             limbs_.resize(oldSize + whole + (rest != 0 ? 1 : 0), 0);
             for (size_t i = oldSize; i-- > 0;) {
-                const uint64_t limb = limbs_[i];
+                const u64 limb = limbs_[i];
                 if (rest != 0) {
                     limbs_[i + whole + 1] |= limb >> (64 - rest);
                     limbs_[i + whole] = limb << rest;
@@ -269,11 +269,11 @@ namespace {
                 sticky |= limbs_[i] != 0;
             }
             if (rest != 0) {
-                sticky |= (limbs_[whole] & ((uint64_t(1) << rest) - 1)) != 0;
+                sticky |= (limbs_[whole] & ((u64(1) << rest) - 1)) != 0;
             }
             const size_t newSize = limbs_.size() - whole;
             for (size_t i = 0; i < newSize; i++) {
-                uint64_t v = limbs_[i + whole] >> rest;
+                u64 v = limbs_[i + whole] >> rest;
                 if (rest != 0 && i + whole + 1 < limbs_.size()) {
                     v |= limbs_[i + whole + 1] << (64 - rest);
                 }
@@ -314,7 +314,7 @@ namespace {
             std::string reversed;
             BigUint copy = *this;
             while (!copy.isZero()) {
-                uint64_t chunk = copy.divideSmall(10'000'000'000'000'000'000ull);
+                u64 chunk = copy.divideSmall(10'000'000'000'000'000'000ull);
                 const bool more = !copy.isZero();
                 for (int i = 0; i < 19 && (more || chunk != 0); i++) {
                     reversed.push_back(static_cast<char>('0' + chunk % 10));
@@ -326,15 +326,15 @@ namespace {
     };
 
     // 5^27 is the largest power of five below 2^63
-    constexpr uint64_t fivePow27 = 7'450'580'596'923'828'125ull;
+    constexpr u64 fivePow27 = 7'450'580'596'923'828'125ull;
 
-    static void multiplyPow5(BigUint& v, uint64_t power) {
+    static void multiplyPow5(BigUint& v, u64 power) {
         while (power >= 27) {
             v.multiplyAddSmall(fivePow27, 0);
             power -= 27;
         }
-        uint64_t factor = 1;
-        for (uint64_t i = 0; i < power; i++) {
+        u64 factor = 1;
+        for (u64 i = 0; i < power; i++) {
             factor *= 5;
         }
         if (factor != 1) {
@@ -342,13 +342,13 @@ namespace {
         }
     }
 
-    static void dividePow5Sticky(BigUint& v, uint64_t power, bool& sticky) {
+    static void dividePow5Sticky(BigUint& v, u64 power, bool& sticky) {
         while (power >= 27) {
             sticky |= v.divideSmall(fivePow27) != 0;
             power -= 27;
         }
-        uint64_t factor = 1;
-        for (uint64_t i = 0; i < power; i++) {
+        u64 factor = 1;
+        for (u64 i = 0; i < power; i++) {
             factor *= 5;
         }
         if (factor != 1) {
@@ -359,29 +359,29 @@ namespace {
     // Round the value significand * 2^(exponent - 112) (significand
     // normalized to [2^112, 2^113)) into a float/double-shaped format and
     // return the raw target bits (without the sign bit).
-    static uint64_t roundToNarrow(int32_t exponent, u128 significand, int targetMantissaBits, int32_t targetMinExponent, int32_t targetMaxExponent) {
+    static u64 roundToNarrow(i32 exponent, u128 significand, int targetMantissaBits, i32 targetMinExponent, i32 targetMaxExponent) {
         bool sticky = false;
         // Keep target_mantissa_bits + 2 bits: the result plus a round bit
         u128 sig = shiftRightSticky(significand, static_cast<unsigned>(significandBits - (targetMantissaBits + 1)), sticky);
         if (exponent < targetMinExponent) {
-            const int32_t shift = targetMinExponent - exponent;
+            const i32 shift = targetMinExponent - exponent;
             sig = shiftRightSticky(sig, shift > 128 ? 128 : static_cast<unsigned>(shift), sticky);
             exponent = targetMinExponent;
         }
         const bool roundBit = (sig & 1) != 0;
-        uint64_t result = static_cast<uint64_t>(sig >> 1);
+        u64 result = static_cast<u64>(sig >> 1);
         if (roundBit && (sticky || (result & 1) != 0)) {
             result += 1;
         }
-        const uint64_t targetImplicit = uint64_t(1) << targetMantissaBits;
+        const u64 targetImplicit = u64(1) << targetMantissaBits;
         if (result >= targetImplicit * 2) {
             result >>= 1;
             exponent += 1;
         }
-        const uint64_t bias = static_cast<uint64_t>(1 - targetMinExponent);
+        const u64 bias = static_cast<u64>(1 - targetMinExponent);
         if (exponent > targetMaxExponent && result >= targetImplicit) {
             // Overflow to infinity
-            const uint64_t infiniteBiased = static_cast<uint64_t>(targetMaxExponent) + bias + 1;
+            const u64 infiniteBiased = static_cast<u64>(targetMaxExponent) + bias + 1;
             return infiniteBiased << targetMantissaBits;
         }
         if (result == 0) {
@@ -390,31 +390,31 @@ namespace {
         if (result < targetImplicit) {
             return result;  // subnormal: biased exponent 0
         }
-        const uint64_t biased = static_cast<uint64_t>(exponent) + bias;
+        const u64 biased = static_cast<u64>(exponent) + bias;
         return (biased << targetMantissaBits) | (result - targetImplicit);
     }
 
     // floor(|value| / 10^lowest_exponent10) rounded to nearest (ties to
     // even), as decimal digits without leading zeros ("" means zero). This is
     // the shared exact core of every decimal output format.
-    static std::string digitsAt(const Unpacked& value, int64_t lowestExponent10) {
+    static std::string digitsAt(const Unpacked& value, i64 lowestExponent10) {
         assert(value.kind == Kind::Finite);
         // One extra decimal digit plus a sticky bit make the final rounding
         // exact: the extra digit separates above-half from below-half, and
         // sticky distinguishes a true tie
-        const int64_t scale10 = -lowestExponent10 + 1;
-        const int32_t exponent2 = value.exponent - significandBits;
+        const i64 scale10 = -lowestExponent10 + 1;
+        const i32 exponent2 = value.exponent - significandBits;
         bool sticky = false;
         BigUint work = BigUint::fromU128(value.significand);
         if (scale10 > 0) {
-            multiplyPow5(work, static_cast<uint64_t>(scale10));
+            multiplyPow5(work, static_cast<u64>(scale10));
         }
-        const int64_t shift2 = exponent2 + scale10;
+        const i64 shift2 = exponent2 + scale10;
         if (shift2 > 0) {
             work.shiftLeft(static_cast<size_t>(shift2));
         }
         if (scale10 < 0) {
-            dividePow5Sticky(work, static_cast<uint64_t>(-scale10), sticky);
+            dividePow5Sticky(work, static_cast<u64>(-scale10), sticky);
         }
         if (shift2 < 0) {
             work.shiftRightSticky(static_cast<size_t>(-shift2), sticky);
@@ -455,13 +455,13 @@ namespace {
     // Correctly rounded conversion of |value| to `digit_count` significant
     // decimal digits. The first returned digit has weight
     // 10^decimal_exponent.
-    static std::string decimalDigits(const Unpacked& value, int digitCount, int32_t& decimalExponent) {
+    static std::string decimalDigits(const Unpacked& value, int digitCount, i32& decimalExponent) {
         assert(digitCount >= 1);
         // log10(2) ~ 0.30103: first-digit estimate, corrected below
-        int32_t estimate = static_cast<int32_t>((static_cast<int64_t>(value.exponent) * 30103) / 100000);
+        i32 estimate = static_cast<i32>((static_cast<i64>(value.exponent) * 30103) / 100000);
         for (int attempt = 0;; attempt++) {
             assert(attempt < 4);
-            std::string digits = digitsAt(value, static_cast<int64_t>(estimate) - digitCount + 1);
+            std::string digits = digitsAt(value, static_cast<i64>(estimate) - digitCount + 1);
             if (static_cast<int>(digits.size()) != digitCount) {
                 estimate += static_cast<int>(digits.size()) - digitCount;
                 continue;
@@ -471,7 +471,7 @@ namespace {
         }
     }
 
-    static void appendExponent(std::string& out, int32_t decimalExponent) {
+    static void appendExponent(std::string& out, i32 decimalExponent) {
         out.push_back('e');
         out.push_back(decimalExponent < 0 ? '-' : '+');
         std::string digits = std::to_string(decimalExponent < 0 ? -decimalExponent : decimalExponent);
@@ -495,7 +495,7 @@ namespace {
             appendExponent(out, 0);
             return out;
         }
-        int32_t decimalExponent = 0;
+        i32 decimalExponent = 0;
         const std::string digits = decimalDigits(value, precision + 1, decimalExponent);
         out.push_back(digits[0]);
         if (precision > 0) {
@@ -513,7 +513,7 @@ namespace {
         }
         std::string digits;
         if (value.kind != Kind::Zero) {
-            digits = digitsAt(value, -static_cast<int64_t>(precision));
+            digits = digitsAt(value, -static_cast<i64>(precision));
         }
         if (static_cast<int>(digits.size()) <= precision) {
             out.push_back('0');
@@ -544,7 +544,7 @@ namespace {
             out.push_back('0');
             return out;
         }
-        int32_t decimalExponent = 0;
+        i32 decimalExponent = 0;
         std::string digits = decimalDigits(value, significant, decimalExponent);
         while (digits.size() > 1 && digits.back() == '0') {
             digits.pop_back();
@@ -579,12 +579,12 @@ Float128::Float128()
 }
 
 Float128::Float128(double value) {
-    uint64_t bits;
+    u64 bits;
     static_assert(sizeof(bits) == sizeof(value));
     std::memcpy(&bits, &value, sizeof(bits));
     const bool negative = (bits >> 63) != 0;
-    const uint32_t biased = static_cast<uint32_t>(bits >> 52) & 0x7FF;
-    const uint64_t fraction = bits & 0xF'FFFF'FFFF'FFFFull;
+    const u32 biased = static_cast<u32>(bits >> 52) & 0x7FF;
+    const u64 fraction = bits & 0xF'FFFF'FFFF'FFFFull;
     if (biased == 0x7FF) {
         if (fraction != 0) {
             *this = canonicalNan();
@@ -598,22 +598,22 @@ Float128::Float128(double value) {
         *this = packZero(negative);
         return;
     }
-    int32_t exponent;
-    uint64_t significand;
+    i32 exponent;
+    u64 significand;
     if (biased == 0) {
         // Subnormal double: value = fraction * 2^(-1022 - 52)
         const int shift = __builtin_clzll(fraction) - (63 - 52);
         significand = fraction << shift;
         exponent = -1022 - shift;
     } else {
-        significand = fraction | (uint64_t(1) << 52);
-        exponent = static_cast<int32_t>(biased) - 1023;
+        significand = fraction | (u64(1) << 52);
+        exponent = static_cast<i32>(biased) - 1023;
     }
     // Exact: widen 53 significant bits to 113
     *this = packFinite(negative, exponent, u128(significand) << (significandBits - 52));
 }
 
-Float128 Float128::fromBits(uint64_t hi, uint64_t lo) {
+Float128 Float128::fromBits(u64 hi, u64 lo) {
     Float128 r;
     r.hi = hi;
     r.lo = lo;
@@ -628,11 +628,11 @@ Float128 Float128::infinity(bool negative) {
     return fromBits((negative ? 0x8000'0000'0000'0000ull : 0) | 0x7FFF'0000'0000'0000ull, 0);
 }
 
-uint64_t Float128::bitsHi() const {
+u64 Float128::bitsHi() const {
     return hi;
 }
 
-uint64_t Float128::bitsLo() const {
+u64 Float128::bitsLo() const {
     return lo;
 }
 
@@ -644,9 +644,9 @@ bool Float128::isInfinite() const {
     return unpack(hi, lo).kind == Kind::Infinity;
 }
 
-uint16_t Float128::toF16Bits() const {
+u16 Float128::toF16Bits() const {
     const auto value = unpack(hi, lo);
-    uint16_t bits = 0;
+    u16 bits = 0;
     switch (value.kind) {
         case Kind::Zero:
             bits = 0;
@@ -658,7 +658,7 @@ uint16_t Float128::toF16Bits() const {
             bits = 0x7E00;
             break;
         case Kind::Finite:
-            bits = static_cast<uint16_t>(roundToNarrow(value.exponent, value.significand, 10, -14, 15));
+            bits = static_cast<u16>(roundToNarrow(value.exponent, value.significand, 10, -14, 15));
             break;
     }
     if (value.negative) {
@@ -669,7 +669,7 @@ uint16_t Float128::toF16Bits() const {
 
 Float128::operator float() const {
     const auto value = unpack(hi, lo);
-    uint32_t bits = 0;
+    u32 bits = 0;
     switch (value.kind) {
         case Kind::Zero:
             bits = 0;
@@ -681,7 +681,7 @@ Float128::operator float() const {
             bits = 0x7FC0'0000;
             break;
         case Kind::Finite:
-            bits = static_cast<uint32_t>(roundToNarrow(value.exponent, value.significand, 23, -126, 127));
+            bits = static_cast<u32>(roundToNarrow(value.exponent, value.significand, 23, -126, 127));
             break;
     }
     if (value.negative) {
@@ -695,7 +695,7 @@ Float128::operator float() const {
 
 Float128::operator double() const {
     const auto value = unpack(hi, lo);
-    uint64_t bits = 0;
+    u64 bits = 0;
     switch (value.kind) {
         case Kind::Zero:
             bits = 0;
@@ -719,7 +719,7 @@ Float128::operator double() const {
     return result;
 }
 
-Float128::operator int64_t() const {
+Float128::operator i64() const {
     const auto value = unpack(hi, lo);
     switch (value.kind) {
         case Kind::Zero:
@@ -739,11 +739,11 @@ Float128::operator int64_t() const {
         }
         return value.negative ? INT64_MIN : INT64_MAX;
     }
-    const uint64_t magnitude = static_cast<uint64_t>(value.significand >> (significandBits - value.exponent));
-    return value.negative ? -static_cast<int64_t>(magnitude) : static_cast<int64_t>(magnitude);
+    const u64 magnitude = static_cast<u64>(value.significand >> (significandBits - value.exponent));
+    return value.negative ? -static_cast<i64>(magnitude) : static_cast<i64>(magnitude);
 }
 
-Float128::operator uint64_t() const {
+Float128::operator u64() const {
     const auto value = unpack(hi, lo);
     switch (value.kind) {
         case Kind::Zero:
@@ -760,7 +760,7 @@ Float128::operator uint64_t() const {
     if (value.exponent >= 64) {
         return UINT64_MAX;
     }
-    return static_cast<uint64_t>(value.significand >> (significandBits - value.exponent));
+    return static_cast<u64>(value.significand >> (significandBits - value.exponent));
 }
 
 Float128 Float128::operator-() const {
@@ -800,7 +800,7 @@ Float128 Float128::operator+(const Float128& other) const {
     }
     const u128 bigSignificand = big->significand << 3;
     u128 smallSignificand = small->significand << 3;
-    const int32_t diff = big->exponent - small->exponent;
+    const i32 diff = big->exponent - small->exponent;
     bool jam = false;
     smallSignificand = shiftRightSticky(smallSignificand, diff > 128 ? 128 : static_cast<unsigned>(diff), jam);
     smallSignificand |= jam ? 1 : 0;
@@ -837,7 +837,7 @@ Float128 Float128::operator*(const Float128& other) const {
     if (a.kind == Kind::Zero || b.kind == Kind::Zero) {
         return packZero(negative);
     }
-    uint64_t product[4];
+    u64 product[4];
     multiplyFull(a.significand, b.significand, product);
     // value = product * 2^(ea + eb - 224)
     u128 high = (u128(product[3]) << 64) | product[2];
@@ -1074,7 +1074,7 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
     // fmod is exact: reduce the aligned significand one bit of exponent
     // difference at a time
     u128 rem = a.significand;
-    for (int32_t i = a.exponent - b.exponent; i > 0; i--) {
+    for (i32 i = a.exponent - b.exponent; i > 0; i--) {
         if (rem >= b.significand) {
             rem -= b.significand;
         }
@@ -1088,7 +1088,7 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
     }
     // value = rem * 2^(b.exponent - 112), |value| < |denominator|
     const int shortfall = significandBits + 1 - bitLength128(rem);
-    const int32_t exponent = b.exponent - shortfall;
+    const i32 exponent = b.exponent - shortfall;
     if (exponent < min_exponent) {
         // Subnormal result: express as fraction * 2^(min_exponent - 112).
         // fmod of two ulp multiples is an ulp multiple, so a right shift
@@ -1096,7 +1096,7 @@ Float128 Float128::remainder(const Float128& numerator, const Float128& denomina
         if (b.exponent >= min_exponent) {
             return packFinite(a.negative, min_exponent, rem << (b.exponent - min_exponent));
         }
-        const int32_t shift = min_exponent - b.exponent;
+        const i32 shift = min_exponent - b.exponent;
         assert(shift >= 128 || (rem & ((u128(1) << shift) - 1)) == 0);
         return packFinite(a.negative, min_exponent, rem >> shift);
     }
@@ -1134,11 +1134,11 @@ Float128 Float128::maximumNumber(const Float128& a, const Float128& b) {
 Float128 Float128::parseDecimal(const char* text) {
     const char* cursor = text;
     BigUint digits;
-    int64_t fractionDigits = 0;
-    int64_t significantDigits = 0;
+    i64 fractionDigits = 0;
+    i64 significantDigits = 0;
     assert(*cursor == '.' || ('0' <= *cursor && *cursor <= '9'));
     for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
-        digits.multiplyAddSmall(10, static_cast<uint64_t>(*cursor - '0'));
+        digits.multiplyAddSmall(10, static_cast<u64>(*cursor - '0'));
         if (!digits.isZero()) {
             significantDigits += 1;
         }
@@ -1146,14 +1146,14 @@ Float128 Float128::parseDecimal(const char* text) {
     if (*cursor == '.') {
         cursor++;
         for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
-            digits.multiplyAddSmall(10, static_cast<uint64_t>(*cursor - '0'));
+            digits.multiplyAddSmall(10, static_cast<u64>(*cursor - '0'));
             fractionDigits += 1;
             if (!digits.isZero()) {
                 significantDigits += 1;
             }
         }
     }
-    int64_t exponent10 = -fractionDigits;
+    i64 exponent10 = -fractionDigits;
     if (*cursor == 'e' || *cursor == 'E') {
         cursor++;
         bool exponentNegative = false;
@@ -1161,7 +1161,7 @@ Float128 Float128::parseDecimal(const char* text) {
             exponentNegative = *cursor == '-';
             cursor++;
         }
-        int64_t explicitExponent = 0;
+        i64 explicitExponent = 0;
         assert('0' <= *cursor && *cursor <= '9');
         for (; '0' <= *cursor && *cursor <= '9'; cursor++) {
             explicitExponent = explicitExponent * 10 + (*cursor - '0');
@@ -1177,7 +1177,7 @@ Float128 Float128::parseDecimal(const char* text) {
     }
     // Magnitude guards: beyond these the value is certainly out of range
     // (max f128 ~ 1.19e4932, half the smallest subnormal ~ 3.2e-4966)
-    const int64_t topWeight = significantDigits + exponent10;
+    const i64 topWeight = significantDigits + exponent10;
     if (topWeight > 4940) {
         return infinity(false);
     }
@@ -1188,13 +1188,13 @@ Float128 Float128::parseDecimal(const char* text) {
     size_t scaledUp = 0;
     if (exponent10 >= 0) {
         // digits * 10^e = digits * 5^e << e: exact
-        multiplyPow5(digits, static_cast<uint64_t>(exponent10));
+        multiplyPow5(digits, static_cast<u64>(exponent10));
         digits.shiftLeft(static_cast<size_t>(exponent10));
     } else {
         // Divide by 10^-e = 5^-e * 2^-e with a sticky remainder. Scale up
         // first so the quotient keeps at least 116 bits and the round/sticky
         // bits below the top 114 are meaningful (log2(10) ~ 3.322).
-        const uint64_t power = static_cast<uint64_t>(-exponent10);
+        const u64 power = static_cast<u64>(-exponent10);
         const size_t need = 116 + (static_cast<size_t>(power) * 3322 + 999) / 1000 + 1;
         const size_t have = digits.bitLength();
         scaledUp = need > have ? need - have : 0;
@@ -1207,8 +1207,8 @@ Float128 Float128::parseDecimal(const char* text) {
     const u128 significand = digits.topBits(114, sticky);
     // significand = floor(digits / 2^max(0, length - 114)), so
     // value = significand * 2^(max(length, 114) - 114 - scaled_up)
-    const int64_t exponent2 = static_cast<int64_t>(length < 114 ? 114 : length) - 1 - static_cast<int64_t>(scaledUp);
-    return roundPack(false, static_cast<int32_t>(exponent2), significand, sticky);
+    const i64 exponent2 = static_cast<i64>(length < 114 ? 114 : length) - 1 - static_cast<i64>(scaledUp);
+    return roundPack(false, static_cast<i32>(exponent2), significand, sticky);
 }
 
 ::std::ostream& operator<<(::std::ostream& os, const Float128& value) {

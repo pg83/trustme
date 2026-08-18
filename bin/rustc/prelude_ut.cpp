@@ -33,11 +33,11 @@ namespace {
 }
 
 namespace {
-    uint128_t u128(uint64_t hi, uint64_t lo) {
+    uint128_t u128(u64 hi, u64 lo) {
         return make128_raw(hi, lo);
     }
 
-    int128_t i128(uint64_t hi, uint64_t lo) {
+    int128_t i128(u64 hi, u64 lo) {
         return make128s_raw(hi, lo);
     }
 

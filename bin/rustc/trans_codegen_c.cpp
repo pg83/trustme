@@ -251,13 +251,13 @@ namespace {
                     } else {
                         auto startGpath = HIRGenericPath(resolve_.hirCrate().getLangItemPath(Span(), "start"));
                         startGpath.params.types.push_back(mainFcn.returnType);
-                        of << "\treturn " << TransMangle(startGpath) << "(" << TransMangle(HIRGenericPath(mainPath)) << ", argc, (uint8_t**)argv";
+                        of << "\treturn " << TransMangle(startGpath) << "(" << TransMangle(HIRGenericPath(mainPath)) << ", argc, (u8**)argv";
                         of << ", 0"; // `sigpipe` setting
                         // 0: Default, 1: Inherit, 2: SIG_IGN, 3: SIG_DFL
                         of << ");\n";
                     }
                 } else {
-                    of << "\treturn " << TransMangle(HIRGenericPath(cStartPath)) << "(argc, (uint8_t**)argv);\n";
+                    of << "\treturn " << TransMangle(HIRGenericPath(cStartPath)) << "(argc, (u8**)argv);\n";
                 }
                 of << "}\n";
                 of << "extern \"C\" {\n";
@@ -283,7 +283,7 @@ namespace {
                                         out.push_back("uintptr_t");
                                         break;
                                     case AllocatorDataTy::Ptr: // *mut u8
-                                        out.push_back("int8_t*");
+                                        out.push_back("i8*");
                                         break;
                                     case AllocatorDataTy::Usize:
                                         out.push_back("uintptr_t");
@@ -296,7 +296,7 @@ namespace {
                                     case AllocatorDataTy::Unit:
                                         return "void";
                                     case AllocatorDataTy::ResultPtr: // (..., *mut i8) + *mut u8
-                                        return "int8_t*";
+                                        return "i8*";
                                     // - Args
                                     case AllocatorDataTy::Layout: // usize, usize
                                     case AllocatorDataTy::Ptr:    // *mut u8
@@ -368,7 +368,7 @@ namespace {
                             const HIRPath staticPath = HIRGenericPath(allocatorIt->second);
                             of << "\t";
                             if (method.ret != AllocatorDataTy::Unit) {
-                                of << "return reinterpret_cast<int8_t*>(";
+                                of << "return reinterpret_cast<i8*>(";
                             }
                             of << TransMangle(methodPath) << "(&" << TransMangle(staticPath) << ".val";
                             flatArg = 0;
@@ -382,7 +382,7 @@ namespace {
                                         layoutArg += 1;
                                         break;
                                     case AllocatorDataTy::Ptr:
-                                        of << "reinterpret_cast<uint8_t*>(a" << flatArg << ")";
+                                        of << "reinterpret_cast<u8*>(a" << flatArg << ")";
                                         flatArg += 1;
                                         break;
                                     case AllocatorDataTy::Usize:
@@ -407,8 +407,8 @@ namespace {
 
                     {
                         auto oomMethod = crate.getLangItemPathOpt("trustme-alloc_error_handler");
-                        of << "uint8_t __rust_alloc_error_handler_should_panic = 0;\n";
-                        of << "uint8_t __rust_no_alloc_shim_is_unstable = 0;\n";
+                        of << "u8 __rust_alloc_error_handler_should_panic = 0;\n";
+                        of << "u8 __rust_no_alloc_shim_is_unstable = 0;\n";
 
                         auto layoutPath = HIRSimplePath("core", {"alloc", "Layout"});
                         if (oomMethod != HIRSimplePath()) {
@@ -420,7 +420,7 @@ namespace {
                         }
 
                         // Force abort on alloc error, rustc uses `-Zoom={panic,abort}` to select this
-                        of << "uint8_t __rust_alloc_error_handler_should_panic_v2() { return 0; }";
+                        of << "u8 __rust_alloc_error_handler_should_panic_v2() { return 0; }";
                         of << "void __rust_alloc_error_handler(uintptr_t s, uintptr_t a) {\n";
                         if (oomMethod == HIRSimplePath()) {
                             of << "\tvoid __rdl_oom(uintptr_t, uintptr_t);\n";
@@ -439,8 +439,8 @@ namespace {
                     // still be valid when no generated code uses it.
                     const auto& panicImplPath = crate.getLangItemPathOpt("trustme-panic_implementation");
                     if (panicImplPath != HIRSimplePath()) {
-                        of << "uint32_t panic_impl(uintptr_t payload) {";
-                        of << "extern uint32_t " << TransMangle(panicImplPath) << "(uintptr_t payload);";
+                        of << "u32 panic_impl(uintptr_t payload) {";
+                        of << "extern u32 " << TransMangle(panicImplPath) << "(uintptr_t payload);";
                         of << "return " << TransMangle(panicImplPath) << "(payload);";
                         of << "}\n";
                     } else if (!crate.isNoCore) {
@@ -1200,7 +1200,7 @@ default:
                 // Inject padding
                 if (curOfs < offset) {
                     auto n = offset - curOfs;
-                    of << "\tuint8_t _padding" << fld << "[" << n << "];\n";
+                    of << "\tu8 _padding" << fld << "[" << n << "];\n";
                     curOfs += n;
                 }
                 MIR_ASSERT(*mirRes, curOfs == offset, "Current offset doesn't match expected (#" << fld << "): " << curOfs << " != " << offset);
@@ -1214,7 +1214,7 @@ default:
                     of << "unsigned char _" << fld << "[0]";
                     hasUnsized = true;
                 } else if (ty == HIRCoreType::Str) {
-                    of << "uint8_t _" << fld << "[0]";
+                    of << "u8 _" << fld << "[0]";
                     hasUnsized = true;
                 } else if (((*ty).is_Path() && ((*ty).as_Path().binding.is_ExternType()))) {
                     of << "// External";
@@ -1711,7 +1711,7 @@ default:
                 if (isProto) {
                     of << "{ ";
                     emitCtype(type, FMT_CB(ss, ss << "val";));
-                    of << "; uint8_t raw[1]; }";
+                    of << "; u8 raw[1]; }";
                 }
                 of << " " << TransMangle(p);
                 return false;
@@ -1725,7 +1725,7 @@ default:
                     const auto words = size == 0 ? 0 : 1 + (size - 1) / pointerSize;
                     of << "uintptr_t raw[" << words << "];";
                 } else {
-                    of << "uint8_t raw[" << size << "];";
+                    of << "u8 raw[" << size << "];";
                 }
                 of << " }";
             }
@@ -1856,10 +1856,10 @@ default:
                     auto relocIt = encoded.relocations.begin();
                     auto ptrSize = TargetGetPointerBits() / 8;
                     for (size_t i = 0; i < encoded.bytes.size(); i += ptrSize) {
-                        uint64_t v = 0;
+                        u64 v = 0;
                         // little-endian only (big-endian targets are unsupported)
                         for (size_t o = 0; o < ptrSize && i + o < encoded.bytes.size(); o++) {
-                            v |= static_cast<uint64_t>(encoded.bytes[i + o]) << (o * 8);
+                            v |= static_cast<u64>(encoded.bytes[i + o]) << (o * 8);
                         }
 
                         if (i > 0) {
@@ -1919,12 +1919,12 @@ default:
                 of << "make_f16_bits(0x" << ::std::hex << bits.v << "u)" << ::std::dec;
             } else if (ty == HIRCoreType::F32) {
                 const float value = static_cast<float>(v);
-                uint32_t bits;
+                u32 bits;
                 ::std::memcpy(&bits, &value, sizeof(bits));
                 of << "make_f32_bits(0x" << ::std::hex << bits << "u)" << ::std::dec;
             } else if (ty == HIRCoreType::F64) {
                 const double value = static_cast<double>(v);
-                uint64_t bits;
+                u64 bits;
                 ::std::memcpy(&bits, &value, sizeof(bits));
                 of << "make_f64_bits(0x" << ::std::hex << bits << "ull)" << ::std::dec;
             } else if (ty == HIRCoreType::F128) {
@@ -1939,7 +1939,7 @@ default:
             printEscapedStringInner(s.c_str(), s.c_str() + s.size());
         }
 
-        void printEscapedString(const std::vector<uint8_t>& s) {
+        void printEscapedString(const std::vector<u8>& s) {
             const char* start = reinterpret_cast<const char*>(s.data());
             printEscapedStringInner(start, start + s.size());
         }
@@ -1972,13 +1972,13 @@ default:
                         }
                         // Fall through
                     default:
-                        if (' ' <= v && static_cast<uint8_t>(v) < 0x7F) {
+                        if (' ' <= v && static_cast<u8>(v) < 0x7F) {
                             of << v;
                         } else {
-                            if (static_cast<uint8_t>(v) < 16) {
-                                of << "\\x0" << (unsigned int)static_cast<uint8_t>(v);
+                            if (static_cast<u8>(v) < 16) {
+                                of << "\\x0" << (unsigned int)static_cast<u8>(v);
                             } else {
-                                of << "\\x" << (unsigned int)static_cast<uint8_t>(v);
+                                of << "\\x" << (unsigned int)static_cast<u8>(v);
                             }
                             // If the next character is a hex digit, close/reopen the string.
                             if (start != end && isxdigit(static_cast<unsigned char>(*start))) {
@@ -2037,55 +2037,55 @@ default:
                 }
                 // pshufb instruction w/ 128 bit operands
                 else if (item.linkage.name == "llvm.x86.ssse3.pshuf.b.128") {
-                    of << "\tconst uint8_t* src = (const uint8_t*)&arg0;\n"
-                       << "\tconst uint8_t* mask = (const uint8_t*)&arg1;\n"
-                       << "\tuint8_t* dst = (uint8_t*)&rv;\n"
+                    of << "\tconst u8* src = (const u8*)&arg0;\n"
+                       << "\tconst u8* mask = (const u8*)&arg1;\n"
+                       << "\tu8* dst = (u8*)&rv;\n"
                        << "\tfor(int i = 0; i < " << 128 / 8 << "; i ++) dst[i] = (mask[i] < 0x80 ? src[mask[i] & 0xF] : 0);\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.avx2.pshuf.b") {
-                    of << "\tconst uint8_t* src = (const uint8_t*)&arg0;\n"
-                       << "\tconst uint8_t* mask = (const uint8_t*)&arg1;\n"
-                       << "\tuint8_t* dst = (uint8_t*)&rv;\n"
+                    of << "\tconst u8* src = (const u8*)&arg0;\n"
+                       << "\tconst u8* mask = (const u8*)&arg1;\n"
+                       << "\tu8* dst = (u8*)&rv;\n"
                        << "\tfor(int i = 0; i < " << 256 / 8 << "; i ++) dst[i] = (mask[i] < 0x80 ? src[(i & 16) | (mask[i] & 0xF)] : 0);\n"
                        << "\treturn rv;\n";
                 }
                 // Multiply-add intrinsics used by simd-adler32 (via png's flate2)
                 else if (item.linkage.name == "llvm.x86.ssse3.pmadd.ub.sw.128" || item.linkage.name == "llvm.x86.avx2.pmadd.ub.sw") {
                     int n = (item.linkage.name == "llvm.x86.avx2.pmadd.ub.sw" ? 32 : 16);
-                    of << "\tconst uint8_t* a = (const uint8_t*)&arg0;\n"
-                       << "\tconst int8_t* b = (const int8_t*)&arg1;\n"
-                       << "\tint16_t* dst = (int16_t*)&rv;\n"
+                    of << "\tconst u8* a = (const u8*)&arg0;\n"
+                       << "\tconst i8* b = (const i8*)&arg1;\n"
+                       << "\ti16* dst = (i16*)&rv;\n"
                        << "\tfor(int i = 0; i < " << n / 2 << "; i ++) {\n"
-                       << "\t\tint32_t v = (int32_t)a[2*i]*b[2*i] + (int32_t)a[2*i+1]*b[2*i+1];\n"
-                       << "\t\tdst[i] = (int16_t)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));\n"
+                       << "\t\ti32 v = (i32)a[2*i]*b[2*i] + (i32)a[2*i+1]*b[2*i+1];\n"
+                       << "\t\tdst[i] = (i16)(v > 32767 ? 32767 : (v < -32768 ? -32768 : v));\n"
                        << "\t}\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.pmadd.wd" || item.linkage.name == "llvm.x86.avx2.pmadd.wd") {
                     int n = (item.linkage.name == "llvm.x86.avx2.pmadd.wd" ? 16 : 8);
-                    of << "\tconst int16_t* a = (const int16_t*)&arg0;\n"
-                       << "\tconst int16_t* b = (const int16_t*)&arg1;\n"
-                       << "\tint32_t* dst = (int32_t*)&rv;\n"
-                       << "\tfor(int i = 0; i < " << n / 2 << "; i ++) dst[i] = (int32_t)a[2*i]*b[2*i] + (int32_t)a[2*i+1]*b[2*i+1];\n"
+                    of << "\tconst i16* a = (const i16*)&arg0;\n"
+                       << "\tconst i16* b = (const i16*)&arg1;\n"
+                       << "\ti32* dst = (i32*)&rv;\n"
+                       << "\tfor(int i = 0; i < " << n / 2 << "; i ++) dst[i] = (i32)a[2*i]*b[2*i] + (i32)a[2*i+1]*b[2*i+1];\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.psad.bw" || item.linkage.name == "llvm.x86.avx2.psad.bw") {
                     int n = (item.linkage.name == "llvm.x86.avx2.psad.bw" ? 32 : 16);
-                    of << "\tconst uint8_t* a = (const uint8_t*)&arg0;\n"
-                       << "\tconst uint8_t* b = (const uint8_t*)&arg1;\n"
-                       << "\tuint64_t* dst = (uint64_t*)&rv;\n"
+                    of << "\tconst u8* a = (const u8*)&arg0;\n"
+                       << "\tconst u8* b = (const u8*)&arg1;\n"
+                       << "\tu64* dst = (u64*)&rv;\n"
                        << "\tfor(int k = 0; k < " << n / 8 << "; k ++) {\n"
-                       << "\t\tuint64_t sum = 0;\n"
+                       << "\t\tu64 sum = 0;\n"
                        << "\t\tfor(int j = 0; j < 8; j ++) { int d = (int)a[k*8+j] - (int)b[k*8+j]; sum += (d < 0 ? -d : d); }\n"
                        << "\t\tdst[k] = sum;\n"
                        << "\t}\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse.cmp.ps") {
-                    of << "\tfloat lhs[4], rhs[4]; uint32_t result[4];\n"
+                    of << "\tfloat lhs[4], rhs[4]; u32 result[4];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
                        << "\tfor(unsigned i = 0; i < 4; i++) result[i] = trustme_x86_cmp_f32(lhs[i], rhs[i], arg2) ? UINT32_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse.cmp.ss") {
-                    of << "\tfloat lhs[4], rhs[4]; uint32_t result[4];\n"
+                    of << "\tfloat lhs[4], rhs[4]; u32 result[4];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n"
                        << "\tresult[0] = trustme_x86_cmp_f32(lhs[0], rhs[0], arg2) ? UINT32_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
@@ -2147,13 +2147,13 @@ default:
                     else of << "result[i]";
                     of << ";\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.cmp.pd") {
-                    of << "\tdouble lhs[2], rhs[2]; uint64_t result[2];\n"
+                    of << "\tdouble lhs[2], rhs[2]; u64 result[2];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
                        << "\tfor(unsigned i = 0; i < 2; i++) result[i] = trustme_x86_cmp_f64(lhs[i], rhs[i], arg2) ? UINT64_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.cmp.sd") {
-                    of << "\tdouble lhs[2], rhs[2]; uint64_t result[2];\n"
+                    of << "\tdouble lhs[2], rhs[2]; u64 result[2];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, &arg0, sizeof(result));\n"
                        << "\tresult[0] = trustme_x86_cmp_f64(lhs[0], rhs[0], arg2) ? UINT64_MAX : 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
@@ -2187,10 +2187,10 @@ default:
                     const bool inputIsDouble = item.linkage.name == "llvm.x86.sse2.cvtpd2dq" || item.linkage.name == "llvm.x86.sse2.cvttpd2dq";
                     const bool truncate = item.linkage.name == "llvm.x86.sse2.cvttpd2dq" || item.linkage.name == "llvm.x86.sse2.cvttps2dq";
                     if (inputIsDouble) {
-                        of << "\tdouble input[2]; int32_t result[4] = {0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n"
+                        of << "\tdouble input[2]; i32 result[4] = {0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n"
                            << "\tfor(unsigned i = 0; i < 2; i++) result[i] = trustme_x86_f64_to_i32(input[i], " << truncate << ");\n";
                     } else {
-                        of << "\tfloat input[4]; int32_t result[4]; memcpy(input, &arg0, sizeof(input));\n"
+                        of << "\tfloat input[4]; i32 result[4]; memcpy(input, &arg0, sizeof(input));\n"
                            << "\tfor(unsigned i = 0; i < 4; i++) result[i] = trustme_x86_f32_to_i32(input[i], " << truncate << ");\n";
                     }
                     of << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
@@ -2221,17 +2221,17 @@ default:
                        << "\tfor(unsigned i = 0; i < " << (scalar ? 1 : 2) << "; i++) result[i] = lhs[i] " << (isMin ? "<" : ">") << " rhs[i] ? lhs[i] : rhs[i];\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.packssdw.128") {
-                    of << "\tint32_t lhs[4], rhs[4]; int16_t result[8];\n"
+                    of << "\ti32 lhs[4], rhs[4]; i16 result[8];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
-                       << "\tfor(unsigned i = 0; i < 8; i++) { int32_t value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > INT16_MAX ? INT16_MAX : (value < INT16_MIN ? INT16_MIN : (int16_t)value); }\n"
+                       << "\tfor(unsigned i = 0; i < 8; i++) { i32 value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > INT16_MAX ? INT16_MAX : (value < INT16_MIN ? INT16_MIN : (i16)value); }\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.packsswb.128" || item.linkage.name == "llvm.x86.sse2.packuswb.128") {
                     const bool unsignedResult = item.linkage.name == "llvm.x86.sse2.packuswb.128";
-                    of << "\tint16_t lhs[8], rhs[8]; " << (unsignedResult ? "uint8_t" : "int8_t") << " result[16];\n"
+                    of << "\ti16 lhs[8], rhs[8]; " << (unsignedResult ? "u8" : "i8") << " result[16];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
-                       << "\tfor(unsigned i = 0; i < 16; i++) { int16_t value = i < 8 ? lhs[i] : rhs[i - 8]; ";
-                    if (unsignedResult) of << "result[i] = value > UINT8_MAX ? UINT8_MAX : (value < 0 ? 0 : (uint8_t)value);";
-                    else of << "result[i] = value > INT8_MAX ? INT8_MAX : (value < INT8_MIN ? INT8_MIN : (int8_t)value);";
+                       << "\tfor(unsigned i = 0; i < 16; i++) { i16 value = i < 8 ? lhs[i] : rhs[i - 8]; ";
+                    if (unsignedResult) of << "result[i] = value > UINT8_MAX ? UINT8_MAX : (value < 0 ? 0 : (u8)value);";
+                    else of << "result[i] = value > INT8_MAX ? INT8_MAX : (value < INT8_MIN ? INT8_MIN : (i8)value);";
                     of << " }\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.psll.w"
                         || item.linkage.name == "llvm.x86.sse2.psll.d"
@@ -2244,8 +2244,8 @@ default:
                     const bool left = item.linkage.name.compare(14, 4, "psll") == 0;
                     const bool arithmetic = item.linkage.name.compare(14, 4, "psra") == 0;
                     const unsigned bits = item.linkage.name.back() == 'w' ? 16 : (item.linkage.name.back() == 'd' ? 32 : 64);
-                    of << "\tuint64_t count_words[2]; memcpy(count_words, &arg1, sizeof(count_words)); uint64_t count = count_words[0];\n"
-                       << "\tuint" << bits << "_t input[" << 128 / bits << "], result[" << 128 / bits << "]; memcpy(input, &arg0, sizeof(input));\n"
+                    of << "\tu64 count_words[2]; memcpy(count_words, &arg1, sizeof(count_words)); u64 count = count_words[0];\n"
+                       << "\tu" << bits << " input[" << 128 / bits << "], result[" << 128 / bits << "]; memcpy(input, &arg0, sizeof(input));\n"
                        << "\tfor(unsigned i = 0; i < " << 128 / bits << "; i++) {\n";
                     if (arithmetic) {
                         of << "\t\tif(count >= " << bits << ") result[i] = input[i] >> " << bits - 1 << " ? UINT" << bits << "_MAX : 0;\n"
@@ -2270,13 +2270,13 @@ default:
                        << "\tfor(unsigned i = 0; i < 2; i++) result[i] = arg2 & (1 << i) ? sum : 0.0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse41.insertps") {
-                    of << "\tuint32_t lhs[4], rhs[4], result[4];\n"
+                    of << "\tu32 lhs[4], rhs[4], result[4];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs)); memcpy(result, lhs, sizeof(result));\n"
                        << "\tresult[(arg2 >> 4) & 3] = rhs[(arg2 >> 6) & 3];\n"
                        << "\tfor(unsigned i = 0; i < 4; i++) if(arg2 & (1 << i)) result[i] = 0;\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse41.mpsadbw") {
-                    of << "\tuint8_t lhs[16], rhs[16]; uint16_t result[8];\n"
+                    of << "\tu8 lhs[16], rhs[16]; u16 result[8];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
                        << "\tunsigned lhs_start = arg2 & 4 ? 4 : 0; unsigned rhs_start = (arg2 & 3) * 4;\n"
                        << "\tfor(unsigned i = 0; i < 8; i++) {\n"
@@ -2284,19 +2284,19 @@ default:
                        << "\t\tfor(unsigned j = 0; j < 4; j++) { int d = (int)lhs[lhs_start + i + j] - (int)rhs[rhs_start + j]; result[i] += d < 0 ? -d : d; }\n"
                        << "\t}\n\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse41.packusdw") {
-                    of << "\tint32_t lhs[4], rhs[4]; uint16_t result[8];\n"
+                    of << "\ti32 lhs[4], rhs[4]; u16 result[8];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
-                       << "\tfor(unsigned i = 0; i < 8; i++) { int32_t value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > UINT16_MAX ? UINT16_MAX : (value < 0 ? 0 : (uint16_t)value); }\n"
+                       << "\tfor(unsigned i = 0; i < 8; i++) { i32 value = i < 4 ? lhs[i] : rhs[i - 4]; result[i] = value > UINT16_MAX ? UINT16_MAX : (value < 0 ? 0 : (u16)value); }\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse41.phminposuw") {
-                    of << "\tuint16_t input[8], result[8] = {0, 0, 0, 0, 0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n"
+                    of << "\tu16 input[8], result[8] = {0, 0, 0, 0, 0, 0, 0, 0}; memcpy(input, &arg0, sizeof(input));\n"
                        << "\tresult[0] = input[0];\n"
                        << "\tfor(unsigned i = 1; i < 8; i++) if(input[i] < result[0]) { result[0] = input[i]; result[1] = i; }\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse41.ptestz"
                         || item.linkage.name == "llvm.x86.sse41.ptestc"
                         || item.linkage.name == "llvm.x86.sse41.ptestnzc") {
-                    of << "\tuint64_t lhs[2], rhs[2]; memcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
+                    of << "\tu64 lhs[2], rhs[2]; memcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
                        << "\tbool intersection = (lhs[0] & rhs[0]) != 0 || (lhs[1] & rhs[1]) != 0;\n"
                        << "\tbool outside = (~lhs[0] & rhs[0]) != 0 || (~lhs[1] & rhs[1]) != 0;\n";
                     if (item.linkage.name == "llvm.x86.sse41.ptestz") of << "\treturn !intersection;\n";
@@ -2319,7 +2319,7 @@ default:
                     const unsigned bits = item.linkage.name == "llvm.x86.sse42.crc32.32.8" ? 8
                         : (item.linkage.name == "llvm.x86.sse42.crc32.32.16" ? 16
                         : (item.linkage.name == "llvm.x86.sse42.crc32.32.32" ? 32 : 64));
-                    of << "\treturn trustme_x86_crc32c((uint32_t)arg0, arg1, " << bits << ");\n";
+                    of << "\treturn trustme_x86_crc32c((u32)arg0, arg1, " << bits << ");\n";
                 } else if (item.linkage.name.rfind("llvm.x86.sse42.pcmp", 0) == 0) {
                     const bool explicitLengths = item.linkage.name.find("pcmpestr") != ::std::string::npos;
                     const char* control = explicitLengths ? "arg4" : "arg2";
@@ -2364,69 +2364,69 @@ default:
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.ssse3.phadd.d.128" || item.linkage.name == "llvm.x86.ssse3.phsub.d.128") {
                     const char op = item.linkage.name == "llvm.x86.ssse3.phadd.d.128" ? '+' : '-';
-                    of << "\tuint32_t lhs[4], rhs[4], result[4];\n"
+                    of << "\tu32 lhs[4], rhs[4], result[4];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
                        << "\tfor(unsigned i = 0; i < 2; i++) { result[i] = lhs[2*i] " << op << " lhs[2*i+1]; result[i+2] = rhs[2*i] " << op << " rhs[2*i+1]; }\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.ssse3.phadd.w.128" || item.linkage.name == "llvm.x86.ssse3.phsub.w.128") {
                     const char op = item.linkage.name == "llvm.x86.ssse3.phadd.w.128" ? '+' : '-';
-                    of << "\tuint16_t lhs[8], rhs[8], result[8];\n"
+                    of << "\tu16 lhs[8], rhs[8], result[8];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
                        << "\tfor(unsigned i = 0; i < 4; i++) { result[i] = lhs[2*i] " << op << " lhs[2*i+1]; result[i+4] = rhs[2*i] " << op << " rhs[2*i+1]; }\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.ssse3.phadd.sw.128" || item.linkage.name == "llvm.x86.ssse3.phsub.sw.128") {
                     const char op = item.linkage.name == "llvm.x86.ssse3.phadd.sw.128" ? '+' : '-';
-                    of << "\tint16_t lhs[8], rhs[8], result[8];\n"
+                    of << "\ti16 lhs[8], rhs[8], result[8];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
                        << "\tfor(unsigned i = 0; i < 4; i++) {\n"
-                       << "\t\tint32_t a = (int32_t)lhs[2*i] " << op << " lhs[2*i+1]; int32_t b = (int32_t)rhs[2*i] " << op << " rhs[2*i+1];\n"
-                       << "\t\tresult[i] = (int16_t)(a > INT16_MAX ? INT16_MAX : (a < INT16_MIN ? INT16_MIN : a));\n"
-                       << "\t\tresult[i+4] = (int16_t)(b > INT16_MAX ? INT16_MAX : (b < INT16_MIN ? INT16_MIN : b));\n"
+                       << "\t\ti32 a = (i32)lhs[2*i] " << op << " lhs[2*i+1]; i32 b = (i32)rhs[2*i] " << op << " rhs[2*i+1];\n"
+                       << "\t\tresult[i] = (i16)(a > INT16_MAX ? INT16_MAX : (a < INT16_MIN ? INT16_MIN : a));\n"
+                       << "\t\tresult[i+4] = (i16)(b > INT16_MAX ? INT16_MAX : (b < INT16_MIN ? INT16_MIN : b));\n"
                        << "\t}\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.ssse3.pmul.hr.sw.128") {
-                    of << "\tint16_t lhs[8], rhs[8], result[8];\n"
+                    of << "\ti16 lhs[8], rhs[8], result[8];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(rhs, &arg1, sizeof(rhs));\n"
                        << "\tfor(unsigned i = 0; i < 8; i++) {\n"
-                       << "\t\tint32_t value = ((int32_t)lhs[i] * rhs[i] + 0x4000) >> 15;\n"
-                       << "\t\tresult[i] = (int16_t)value;\n"
+                       << "\t\ti32 value = ((i32)lhs[i] * rhs[i] + 0x4000) >> 15;\n"
+                       << "\t\tresult[i] = (i16)value;\n"
                        << "\t}\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.ssse3.psign.b.128") {
-                    of << "\tuint8_t lhs[16], result[16]; int8_t signs[16];\n"
+                    of << "\tu8 lhs[16], result[16]; i8 signs[16];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n"
                        << "\tfor(unsigned i = 0; i < 16; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.ssse3.psign.w.128") {
-                    of << "\tuint16_t lhs[8], result[8]; int16_t signs[8];\n"
+                    of << "\tu16 lhs[8], result[8]; i16 signs[8];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n"
                        << "\tfor(unsigned i = 0; i < 8; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.ssse3.psign.d.128") {
-                    of << "\tuint32_t lhs[4], result[4]; int32_t signs[4];\n"
+                    of << "\tu32 lhs[4], result[4]; i32 signs[4];\n"
                        << "\tmemcpy(lhs, &arg0, sizeof(lhs)); memcpy(signs, &arg1, sizeof(signs));\n"
                        << "\tfor(unsigned i = 0; i < 4; i++) result[i] = signs[i] == 0 ? 0 : (signs[i] < 0 ? 0 - lhs[i] : lhs[i]);\n"
                        << "\tmemcpy(&rv, result, sizeof(result));\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.psrli.d") {
-                    of << "\tconst uint32_t* src = (const uint32_t*)&arg0;\n"
-                       << "\tuint32_t* dst = (uint32_t*)&rv;\n"
+                    of << "\tconst u32* src = (const u32*)&arg0;\n"
+                       << "\tu32* dst = (u32*)&rv;\n"
                        << "\tfor(int i = 0; i < " << 128 / 32 << "; i ++) dst[i] = src[i] >> arg1;\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.pslli.d") {
-                    of << "\tconst uint32_t* src = (const uint32_t*)&arg0;\n"
-                       << "\tuint32_t* dst = (uint32_t*)&rv;\n"
+                    of << "\tconst u32* src = (const u32*)&arg0;\n"
+                       << "\tu32* dst = (u32*)&rv;\n"
                        << "\tfor(int i = 0; i < " << 128 / 32 << "; i ++) dst[i] = src[i] << arg1;\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.pmovmskb.128") {
-                    of << "\tconst uint8_t* src = (const uint8_t*)&arg0;\n"
-                       << "\tuint8_t* dst = (uint8_t*)&rv; *dst = 0;\n"
+                    of << "\tconst u8* src = (const u8*)&arg0;\n"
+                       << "\tu8* dst = (u8*)&rv; *dst = 0;\n"
                        << "\tfor(int i = 0; i < " << 128 / 8 << "; i ++) *dst |= (src[i] >> 7) << i;\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sse2.storeu.dq") {
@@ -2435,40 +2435,40 @@ default:
                 // SHA-NI: the sha2 crate takes this path when runtime detection
                 // reports hardware support; portable C keeps it correct.
                 else if (item.linkage.name == "llvm.x86.sha256rnds2") {
-                    of << "\tconst uint32_t* st_cdgh = (const uint32_t*)&arg0;\n"
-                       << "\tconst uint32_t* st_abef = (const uint32_t*)&arg1;\n"
-                       << "\tconst uint32_t* wk = (const uint32_t*)&arg2;\n"
-                       << "\tuint32_t* dst = (uint32_t*)&rv;\n"
-                       << "\tuint32_t a = st_abef[3], b = st_abef[2], e = st_abef[1], f = st_abef[0];\n"
-                       << "\tuint32_t c = st_cdgh[3], d = st_cdgh[2], g = st_cdgh[1], h = st_cdgh[0];\n"
+                    of << "\tconst u32* st_cdgh = (const u32*)&arg0;\n"
+                       << "\tconst u32* st_abef = (const u32*)&arg1;\n"
+                       << "\tconst u32* wk = (const u32*)&arg2;\n"
+                       << "\tu32* dst = (u32*)&rv;\n"
+                       << "\tu32 a = st_abef[3], b = st_abef[2], e = st_abef[1], f = st_abef[0];\n"
+                       << "\tu32 c = st_cdgh[3], d = st_cdgh[2], g = st_cdgh[1], h = st_cdgh[0];\n"
                        << "\tfor(int i = 0; i < 2; i ++) {\n"
-                       << "\t\tuint32_t ch = (e & f) ^ (~e & g);\n"
-                       << "\t\tuint32_t maj = (a & b) ^ (a & c) ^ (b & c);\n"
-                       << "\t\tuint32_t s0 = (a >> 2 | a << 30) ^ (a >> 13 | a << 19) ^ (a >> 22 | a << 10);\n"
-                       << "\t\tuint32_t s1 = (e >> 6 | e << 26) ^ (e >> 11 | e << 21) ^ (e >> 25 | e << 7);\n"
-                       << "\t\tuint32_t t = ch + s1 + wk[i] + h;\n"
+                       << "\t\tu32 ch = (e & f) ^ (~e & g);\n"
+                       << "\t\tu32 maj = (a & b) ^ (a & c) ^ (b & c);\n"
+                       << "\t\tu32 s0 = (a >> 2 | a << 30) ^ (a >> 13 | a << 19) ^ (a >> 22 | a << 10);\n"
+                       << "\t\tu32 s1 = (e >> 6 | e << 26) ^ (e >> 11 | e << 21) ^ (e >> 25 | e << 7);\n"
+                       << "\t\tu32 t = ch + s1 + wk[i] + h;\n"
                        << "\t\th = g; g = f; f = e; e = t + d; d = c; c = b; b = a; a = t + maj + s0;\n"
                        << "\t}\n"
                        << "\tdst[3] = a; dst[2] = b; dst[1] = e; dst[0] = f;\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sha256msg1") {
-                    of << "\tconst uint32_t* w = (const uint32_t*)&arg0;\n"
-                       << "\tconst uint32_t* w2 = (const uint32_t*)&arg1;\n"
-                       << "\tuint32_t* dst = (uint32_t*)&rv;\n"
+                    of << "\tconst u32* w = (const u32*)&arg0;\n"
+                       << "\tconst u32* w2 = (const u32*)&arg1;\n"
+                       << "\tu32* dst = (u32*)&rv;\n"
                        << "\tfor(int i = 0; i < 4; i ++) {\n"
-                       << "\t\tuint32_t x = (i < 3 ? w[i+1] : w2[0]);\n"
+                       << "\t\tu32 x = (i < 3 ? w[i+1] : w2[0]);\n"
                        << "\t\tdst[i] = w[i] + ((x >> 7 | x << 25) ^ (x >> 18 | x << 14) ^ (x >> 3));\n"
                        << "\t}\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.sha256msg2") {
-                    of << "\tconst uint32_t* w = (const uint32_t*)&arg0;\n"
-                       << "\tconst uint32_t* prev = (const uint32_t*)&arg1;\n"
-                       << "\tuint32_t* dst = (uint32_t*)&rv;\n"
-                       << "\tuint32_t w14 = prev[2], w15 = prev[3];\n"
-                       << "\tuint32_t w16 = w[0] + ((w14 >> 17 | w14 << 15) ^ (w14 >> 19 | w14 << 13) ^ (w14 >> 10));\n"
-                       << "\tuint32_t w17 = w[1] + ((w15 >> 17 | w15 << 15) ^ (w15 >> 19 | w15 << 13) ^ (w15 >> 10));\n"
-                       << "\tuint32_t w18 = w[2] + ((w16 >> 17 | w16 << 15) ^ (w16 >> 19 | w16 << 13) ^ (w16 >> 10));\n"
-                       << "\tuint32_t w19 = w[3] + ((w17 >> 17 | w17 << 15) ^ (w17 >> 19 | w17 << 13) ^ (w17 >> 10));\n"
+                    of << "\tconst u32* w = (const u32*)&arg0;\n"
+                       << "\tconst u32* prev = (const u32*)&arg1;\n"
+                       << "\tu32* dst = (u32*)&rv;\n"
+                       << "\tu32 w14 = prev[2], w15 = prev[3];\n"
+                       << "\tu32 w16 = w[0] + ((w14 >> 17 | w14 << 15) ^ (w14 >> 19 | w14 << 13) ^ (w14 >> 10));\n"
+                       << "\tu32 w17 = w[1] + ((w15 >> 17 | w15 << 15) ^ (w15 >> 19 | w15 << 13) ^ (w15 >> 10));\n"
+                       << "\tu32 w18 = w[2] + ((w16 >> 17 | w16 << 15) ^ (w16 >> 19 | w16 << 13) ^ (w16 >> 10));\n"
+                       << "\tu32 w19 = w[3] + ((w17 >> 17 | w17 << 15) ^ (w17 >> 19 | w17 << 13) ^ (w17 >> 10));\n"
                        << "\tdst[0] = w16; dst[1] = w17; dst[2] = w18; dst[3] = w19;\n"
                        << "\treturn rv;\n";
                 }
@@ -2476,67 +2476,67 @@ default:
                 // may use runtime feature detection, but the generated C++
                 // itself must not require BMI instructions.
                 else if (item.linkage.name == "llvm.x86.bmi.bextr.32") {
-                    of << "\tuint32_t start = arg1 & 0xff;\n"
-                       << "\tuint32_t length = (arg1 >> 8) & 0xff;\n"
+                    of << "\tu32 start = arg1 & 0xff;\n"
+                       << "\tu32 length = (arg1 >> 8) & 0xff;\n"
                        << "\tif(start >= 32 || length == 0) return 0;\n"
                        << "\tif(length > 32 - start) length = 32 - start;\n"
                        << "\treturn (arg0 >> start) & (UINT32_MAX >> (32 - length));\n";
                 } else if (item.linkage.name == "llvm.x86.bmi.bextr.64") {
-                    of << "\tuint64_t start = arg1 & 0xff;\n"
-                       << "\tuint64_t length = (arg1 >> 8) & 0xff;\n"
+                    of << "\tu64 start = arg1 & 0xff;\n"
+                       << "\tu64 length = (arg1 >> 8) & 0xff;\n"
                        << "\tif(start >= 64 || length == 0) return 0;\n"
                        << "\tif(length > 64 - start) length = 64 - start;\n"
                        << "\treturn (arg0 >> start) & (UINT64_MAX >> (64 - length));\n";
                 } else if (item.linkage.name == "llvm.x86.bmi.bzhi.32") {
-                    of << "\tuint32_t index = arg1 & 0xff;\n"
+                    of << "\tu32 index = arg1 & 0xff;\n"
                        << "\tif(index >= 32) return arg0;\n"
                        << "\treturn index == 0 ? 0 : arg0 & (UINT32_MAX >> (32 - index));\n";
                 } else if (item.linkage.name == "llvm.x86.bmi.bzhi.64") {
-                    of << "\tuint64_t index = arg1 & 0xff;\n"
+                    of << "\tu64 index = arg1 & 0xff;\n"
                        << "\tif(index >= 64) return arg0;\n"
                        << "\treturn index == 0 ? 0 : arg0 & (UINT64_MAX >> (64 - index));\n";
                 } else if (item.linkage.name == "llvm.x86.bmi.pext.32") {
                     of << "\trv = 0;\n"
-                       << "\tuint32_t output_bit = 1;\n"
+                       << "\tu32 output_bit = 1;\n"
                        << "\twhile(arg1) {\n"
-                       << "\t\tuint32_t mask_bit = arg1 & -arg1;\n"
+                       << "\t\tu32 mask_bit = arg1 & -arg1;\n"
                        << "\t\tif(arg0 & mask_bit) rv |= output_bit;\n"
                        << "\t\targ1 &= arg1 - 1; output_bit <<= 1;\n"
                        << "\t}\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.bmi.pext.64") {
                     of << "\trv = 0;\n"
-                       << "\tuint64_t output_bit = 1;\n"
+                       << "\tu64 output_bit = 1;\n"
                        << "\twhile(arg1) {\n"
-                       << "\t\tuint64_t mask_bit = arg1 & -arg1;\n"
+                       << "\t\tu64 mask_bit = arg1 & -arg1;\n"
                        << "\t\tif(arg0 & mask_bit) rv |= output_bit;\n"
                        << "\t\targ1 &= arg1 - 1; output_bit <<= 1;\n"
                        << "\t}\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.bmi.pdep.32") {
                     of << "\trv = 0;\n"
-                       << "\tuint32_t input_bit = 1;\n"
+                       << "\tu32 input_bit = 1;\n"
                        << "\twhile(arg1) {\n"
-                       << "\t\tuint32_t mask_bit = arg1 & -arg1;\n"
+                       << "\t\tu32 mask_bit = arg1 & -arg1;\n"
                        << "\t\tif(arg0 & input_bit) rv |= mask_bit;\n"
                        << "\t\targ1 &= arg1 - 1; input_bit <<= 1;\n"
                        << "\t}\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.bmi.pdep.64") {
                     of << "\trv = 0;\n"
-                       << "\tuint64_t input_bit = 1;\n"
+                       << "\tu64 input_bit = 1;\n"
                        << "\twhile(arg1) {\n"
-                       << "\t\tuint64_t mask_bit = arg1 & -arg1;\n"
+                       << "\t\tu64 mask_bit = arg1 & -arg1;\n"
                        << "\t\tif(arg0 & input_bit) rv |= mask_bit;\n"
                        << "\t\targ1 &= arg1 - 1; input_bit <<= 1;\n"
                        << "\t}\n"
                        << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.pclmulqdq") {
-                    of << "\tuint64_t a_words[2], b_words[2], result[2] = {0, 0};\n"
+                    of << "\tu64 a_words[2], b_words[2], result[2] = {0, 0};\n"
                        << "\tmemcpy(a_words, &arg0, sizeof(a_words));\n"
                        << "\tmemcpy(b_words, &arg1, sizeof(b_words));\n"
-                       << "\tuint64_t a = a_words[arg2 & 1];\n"
-                       << "\tuint64_t b = b_words[(arg2 >> 4) & 1];\n"
+                       << "\tu64 a = a_words[arg2 & 1];\n"
+                       << "\tu64 b = b_words[(arg2 >> 4) & 1];\n"
                        << "\tfor(unsigned i = 0; i < 64; i++) {\n"
                        << "\t\tif((b >> i) & 1) {\n"
                        << "\t\t\tresult[0] ^= a << i;\n"
@@ -2561,14 +2561,14 @@ default:
                 }
                 // `fn llvm_addcarryx_u32(a: u8, b: u32, c: u32, d: *mut u8) -> u8`
                 else if (item.linkage.name == "llvm.x86.addcarryx.u32") {
-                    of << "\trv = __builtin_add_overflow(arg1, arg2, (uint32_t*)arg3);\n";
-                    of << "\tif(arg0) rv |= __builtin_add_overflow(*arg3, 1, (uint32_t*)arg3);\n";
+                    of << "\trv = __builtin_add_overflow(arg1, arg2, (u32*)arg3);\n";
+                    of << "\tif(arg0) rv |= __builtin_add_overflow(*arg3, 1, (u32*)arg3);\n";
                     of << "\treturn rv;\n";
                 }
                 // `fn llvm_addcarryx_u64(a: u8, b: u64, c: u64, d: *mut u64) -> u8`
                 else if (item.linkage.name == "llvm.x86.addcarryx.u64") {
-                    of << "\trv = __builtin_add_overflow(arg1, arg2, (uint64_t*)arg3);\n";
-                    of << "\tif(arg0) rv |= __builtin_add_overflow(*arg3, 1, (uint64_t*)arg3);\n";
+                    of << "\trv = __builtin_add_overflow(arg1, arg2, (u64*)arg3);\n";
+                    of << "\tif(arg0) rv |= __builtin_add_overflow(*arg3, 1, (u64*)arg3);\n";
                     of << "\treturn rv;\n";
                 }
                 // `fn llvm_subborrow(a: u8, b: u32, c: u32) -> (u8, u32);`
@@ -2583,9 +2583,9 @@ default:
                     of << "\tif(arg0) rv._0 |= __builtin_sub_overflow(rv._1, 1, &rv._1);\n";
                     of << "\treturn rv;\n";
                 } else if (item.linkage.name == "llvm.x86.xgetbv") {
-                    of << "\tuint32_t lo, hi;\n";
+                    of << "\tu32 lo, hi;\n";
                     of << "\t__asm__ __volatile__ (\"xgetbv\" : \"=a\" (lo), \"=d\" (hi) : \"c\" (arg0) );\n";
-                    of << "\treturn lo | ((uint64_t)hi << 32);\n";
+                    of << "\treturn lo | ((u64)hi << 32);\n";
 
                 } else if (item.linkage.name == "llvm.x86.sse2.pause") {
                     // Just a `PAUSE` instruciton, which is effectively a nop
@@ -3185,7 +3185,7 @@ default:
                         size_t elementSize = 0;
                         MIR_ASSERT(localMirRes, TargetGetSizeOf(sp, resolve_, elementTy, elementSize), "Unknown array element size for " << parentTy);
                         MIR_ASSERT(localMirRes, elementSize == 0, "Non-ZST element in ZST borrow path: " << elementTy);
-                        of << "(void*)( (uint8_t*)";
+                        of << "(void*)( (u8*)";
                         if (parentTy->is_Slice()) {
                             emitDstLvaluePointer(fieldInner);
                             of << ".PTR";
@@ -3218,7 +3218,7 @@ default:
 
                         // If no non-zero fields were found before the end, then do pointer manipulation using the repr
                         if (!found) {
-                            of << "(void*)( (uint8_t*)& ";
+                            of << "(void*)( (u8*)& ";
                             emitLvalue(fieldInner);
                             of << " + " << repr->fields[valFp.as_Field()].offset << ") /*ZST*/";
                         }
@@ -4287,9 +4287,9 @@ default:
 
             struct MaybeSigned64 {
                 bool is_signed;
-                uint64_t v;
+                u64 v;
 
-                MaybeSigned64(bool is_signed, uint64_t v)
+                MaybeSigned64(bool is_signed, u64 v)
                     : is_signed(is_signed)
                     , v(v)
                 {
@@ -4297,7 +4297,7 @@ default:
 
                 void fmt(std::ostream& os) const {
                     if (is_signed) {
-                        os << static_cast<int64_t>(v);
+                        os << static_cast<i64>(v);
                     } else {
                         os << v;
                     }
@@ -4600,7 +4600,7 @@ default:
                 if (emulatedI128) {
                     of << indent << "if(";
                     emitLvalue(val);
-                    of << ".hi != ((int64_t)";
+                    of << ".hi != ((i64)";
                     emitLvalue(val);
                     of << ".lo < 0 ? UINT64_MAX : 0)) { ";
                     cb(SIZE_MAX);
@@ -4608,7 +4608,7 @@ default:
                 }
                 of << indent << (emulatedI128 ? "else " : "") << "switch(";
                 if (emulatedI128) {
-                    of << "(int64_t)";
+                    of << "(i64)";
                 }
                 emitLvalue(val);
                 if (emulatedI128) {
@@ -6357,7 +6357,7 @@ default:
                 emitParam(e.args.at(2));
                 of << ")(";
                 emitParam(e.args.at(1));
-                of << ", (uint8_t*)panic.rust_exception); ";
+                of << ", (u8*)panic.rust_exception); ";
                 emitLvalue(e.retVal);
                 of << " = 1; } }";
             }
@@ -6768,7 +6768,7 @@ default:
                             break;
                         case HIRCoreType::I128:
                             if (options.emulatedI128) {
-                                of << "( (int64_t)(";
+                                of << "( (i64)(";
                                 emitParam(e.args.at(0));
                                 of << ".hi) < 0 ? make128s_raw(-0x7FFFFFFF"
                                       "FFFFFFFFll - 1, 0) : make128s_raw(0x7FFFFFFF"
@@ -6860,7 +6860,7 @@ default:
                             break;
                         case HIRCoreType::I128:
                             if (options.emulatedI128) {
-                                of << "( (int64_t)(";
+                                of << "( (i64)(";
                                 emitParam(e.args.at(0));
                                 of << ".hi) < 0 ? make128s_raw(-0x7FFFFFFF"
                                       "FFFFFFFFll - 1, 0) : make128s_raw(0x7FFFFFFF"
@@ -7000,7 +7000,7 @@ default:
                     case HIRCoreType::I8:
                     case HIRCoreType::U8:
                         of << "{";
-                        of << " uint8_t v = ";
+                        of << " u8 v = ";
                         emitParam(e.args.at(0));
                         of << ";";
                         of << " unsigned shift = ";
@@ -7014,7 +7014,7 @@ default:
                     case HIRCoreType::I16:
                     case HIRCoreType::U16:
                         of << "{";
-                        of << " uint16_t v = ";
+                        of << " u16 v = ";
                         emitParam(e.args.at(0));
                         of << ";";
                         of << " unsigned shift = ";
@@ -7028,7 +7028,7 @@ default:
                     case HIRCoreType::I32:
                     case HIRCoreType::U32:
                         of << "{";
-                        of << " uint32_t v = ";
+                        of << " u32 v = ";
                         emitParam(e.args.at(0));
                         of << ";";
                         of << " unsigned shift = ";
@@ -7042,7 +7042,7 @@ default:
                     case HIRCoreType::I64:
                     case HIRCoreType::U64:
                         of << "{";
-                        of << " uint64_t v = ";
+                        of << " u64 v = ";
                         emitParam(e.args.at(0));
                         of << ";";
                         of << " unsigned shift = ";
@@ -7106,7 +7106,7 @@ default:
                     case HIRCoreType::I8:
                     case HIRCoreType::U8:
                         of << "{";
-                        of << " uint8_t v = ";
+                        of << " u8 v = ";
                         emitParam(e.args.at(0));
                         of << ";";
                         of << " unsigned shift = ";
@@ -7120,7 +7120,7 @@ default:
                     case HIRCoreType::I16:
                     case HIRCoreType::U16:
                         of << "{";
-                        of << " uint16_t v = ";
+                        of << " u16 v = ";
                         emitParam(e.args.at(0));
                         of << ";";
                         of << " unsigned shift = ";
@@ -7134,7 +7134,7 @@ default:
                     case HIRCoreType::I32:
                     case HIRCoreType::U32:
                         of << "{";
-                        of << " uint32_t v = ";
+                        of << " u32 v = ";
                         emitParam(e.args.at(0));
                         of << ";";
                         of << " unsigned shift = ";
@@ -7148,7 +7148,7 @@ default:
                     case HIRCoreType::I64:
                     case HIRCoreType::U64:
                         of << "{";
-                        of << " uint64_t v = ";
+                        of << " u64 v = ";
                         emitParam(e.args.at(0));
                         of << ";";
                         of << " unsigned shift = ";
@@ -7272,9 +7272,9 @@ default:
                     if (name == "ctlz" || name == "ctlz_nonzero") {
                         of << "__builtin_clz(";
                         if (ty == HIRCoreType::U8 || ty == HIRCoreType::I8) {
-                            of << "(uint8_t)(";
+                            of << "(u8)(";
                         } else if (ty == HIRCoreType::U16 || ty == HIRCoreType::I16) {
-                            of << "(uint16_t)(";
+                            of << "(u16)(";
                         }
                         emitParam(e.args.at(0));
                         if (ty == HIRCoreType::U8 || ty == HIRCoreType::I8 || ty == HIRCoreType::U16 || ty == HIRCoreType::I16) {
@@ -7321,7 +7321,7 @@ default:
                     }
                 } else {
                     of << "__builtin_popcountll(";
-                    of << "(uint" << getPrimSize(ty) << "_t)(";
+                    of << "(u" << getPrimSize(ty) << ")(";
                     emitParam(e.args.at(0));
                     of << "))";
                 }
@@ -7594,7 +7594,7 @@ default:
                 }
                 of << "__trustme_volatile_memset((void*)";
                 emitParam(e.args.at(0));
-                of << ", (uint8_t)";
+                of << ", (u8)";
                 emitParam(e.args.at(1));
                 of << ", (size_t)";
                 emitParam(e.args.at(2));
@@ -7642,7 +7642,7 @@ default:
                     of << " = ";
                     emitAtomicRmwCast();
                     of << "__trustme_atomicloop" << getPrimSize(ty) << "(";
-                    of << "(volatile uint" << getPrimSize(ty) << "_t*)";
+                    of << "(volatile u" << getPrimSize(ty) << "*)";
                     emitParam(e.args.at(0));
                     of << ", ";
                     emitAtomicRmwOperand(e.args.at(1));
@@ -7663,7 +7663,7 @@ default:
                     of << " = ";
                     emitAtomicRmwCast();
                     of << "__trustme_atomicloop" << getPrimSize(ty) << "(";
-                    of << "(volatile uint" << getPrimSize(ty) << "_t*)";
+                    of << "(volatile u" << getPrimSize(ty) << "*)";
                     emitParam(e.args.at(0));
                     of << ", ";
                     emitAtomicRmwOperand(e.args.at(1));
@@ -7678,7 +7678,7 @@ default:
                     of << " = ";
                     emitAtomicRmwCast();
                     of << "__trustme_atomicloop" << getPrimSize(ty) << "(";
-                    of << "(volatile uint" << getPrimSize(ty) << "_t*)";
+                    of << "(volatile u" << getPrimSize(ty) << "*)";
                     emitParam(e.args.at(0));
                     of << ", ";
                     emitAtomicRmwOperand(e.args.at(1));
@@ -7865,10 +7865,10 @@ default:
                                 self.of << (itemSize == 4 ? "float" : "double");
                                 break;
                             case Signed:
-                                self.of << "int" << (itemSize * 8) << "_t";
+                                self.of << "i" << (itemSize * 8);
                                 break;
                             case Unsigned:
-                                self.of << "uint" << (itemSize * 8) << "_t";
+                                self.of << "u" << (itemSize * 8);
                                 break;
                         }
                     }
@@ -8039,11 +8039,11 @@ default:
                     auto srcInfo = SimdInfo::forTy(*this, params.types.at(0));
                     size_t sizeOut = 0;
                     TargetGetSizeOf(sp, resolve_, params.types.at(1), sizeOut);
-                    of << "{ uint8_t* out = (uint8_t*)&(";
+                    of << "{ u8* out = (u8*)&(";
                     emitLvalue(e.retVal);
                     of << "); memset(out, 0, " << sizeOut << "); ";
                     for (size_t i = 0; i < srcInfo.count; i++) {
-                        of << "out[" << (i / 8) << "] |= ((((const uint8_t*)&";
+                        of << "out[" << (i / 8) << "] |= ((((const u8*)&";
                         emitParam(e.args.at(0));
                         of << ")[" << (i * srcInfo.itemSize + srcInfo.itemSize - 1) << "] >> 7) & 1) << " << (i % 8) << "; ";
                     }
@@ -8066,10 +8066,10 @@ default:
                     of << "for(int i = 0; i < " << div << "; i++) { int j = ";
                     emitParam(e.args.at(2));
                     of << ".DATA[i];";
-                    of << "((uint" << (sizeVal * 8) << "_t*)&";
+                    of << "((u" << (sizeVal * 8) << "*)&";
                     emitLvalue(e.retVal);
                     of << ")[i]";
-                    of << " = ((uint" << (sizeVal * 8) << "_t*)(j < " << nIn << " ? &";
+                    of << " = ((u" << (sizeVal * 8) << "*)(j < " << nIn << " ? &";
                     emitParam(e.args.at(0));
                     of << " : &";
                     emitParam(e.args.at(1));
@@ -8096,10 +8096,10 @@ default:
                     emitParam(e.args.at(2));
                     of << "._0";
                     of << ".DATA[i];";
-                    of << " ((uint" << (sizeVal * 8) << "_t*)&";
+                    of << " ((u" << (sizeVal * 8) << "*)&";
                     emitLvalue(e.retVal);
                     of << ")[i]";
-                    of << " = ((uint" << (sizeVal * 8) << "_t*)(j < " << nIn << " ? &";
+                    of << " = ((u" << (sizeVal * 8) << "*)(j < " << nIn << " ? &";
                     emitParam(e.args.at(0));
                     of << " : &";
                     emitParam(e.args.at(1));
@@ -8203,9 +8203,9 @@ default:
                         emitParam(e.args.at(0));
                         of << ")[i]";
                     } else {
-                        of << "((uint" << (info.itemSize * 8) << "_t*)&";
+                        of << "((u" << (info.itemSize * 8) << "*)&";
                         emitLvalue(e.retVal);
-                        of << ")[i] = 0 - ((uint" << (info.itemSize * 8) << "_t*)&";
+                        of << ")[i] = 0 - ((u" << (info.itemSize * 8) << "*)&";
                         emitParam(e.args.at(0));
                         of << ")[i]";
                     }
@@ -8752,7 +8752,7 @@ default:
                 const auto words = size == 0 ? 0 : 1 + (size - 1) / pointerSize;
                 of << "uintptr_t raw[" << words << "]";
             } else {
-                of << "uint8_t raw[" << size << "]";
+                of << "u8 raw[" << size << "]";
             }
             of << "; } value = { .raw = {";
 
@@ -8760,9 +8760,9 @@ default:
                 const auto pointerSize = TargetGetPointerBits() / 8;
                 auto relocation = encoded.relocations.begin();
                 for (size_t i = 0; i < encoded.bytes.size(); i += pointerSize) {
-                    uint64_t word = 0;
+                    u64 word = 0;
                     for (size_t byte = 0; byte < pointerSize && i + byte < encoded.bytes.size(); byte++) {
-                        word |= static_cast<uint64_t>(encoded.bytes[i + byte]) << (byte * 8);
+                        word |= static_cast<u64>(encoded.bytes[i + byte]) << (byte * 8);
                     }
                     if (i > 0) {
                         of << ",";
@@ -8810,13 +8810,13 @@ default:
                     switch (c.t) {
                         // TODO: These should already have been truncated/reinterpreted, but just in case.
                         case HIRCoreType::I8:
-                            of << static_cast<int>(static_cast<int8_t>(c.v.truncateI64())); // cast to int, because `int8_t` is printed as a `char`
+                            of << static_cast<int>(static_cast<i8>(c.v.truncateI64())); // cast to int, because `i8` is printed as a `char`
                             break;
                         case HIRCoreType::I16:
-                            of << static_cast<int16_t>(c.v.truncateI64());
+                            of << static_cast<i16>(c.v.truncateI64());
                             break;
                         case HIRCoreType::I32:
-                            of << static_cast<int32_t>(c.v.truncateI64());
+                            of << static_cast<i32>(c.v.truncateI64());
                             break;
                         case HIRCoreType::I64:
                         case HIRCoreType::Isize:
@@ -8932,7 +8932,7 @@ default:
                     const bool hasOffset = c.offset != U128(0);
                     if (hasOffset) {
                         MIR_ASSERT(*mirRes, c.offset.isU64(), "Item address offset is too large: " << c.offset);
-                        of << "((void*)((uint8_t*)";
+                        of << "((void*)((u8*)";
                     }
                     if (c->data.is_UfcsInherent() && c->data.as_UfcsInherent().item == "#type_id") {
                         of << "(void*)&__typeid_" << TransMangle(c->data.as_UfcsInherent().type);
@@ -9053,28 +9053,28 @@ default:
                             of << "intptr_t";
                             break;
                         case HIRCoreType::U8:
-                            of << "uint8_t";
+                            of << "u8";
                             break;
                         case HIRCoreType::I8:
-                            of << "int8_t";
+                            of << "i8";
                             break;
                         case HIRCoreType::U16:
-                            of << "uint16_t";
+                            of << "u16";
                             break;
                         case HIRCoreType::I16:
-                            of << "int16_t";
+                            of << "i16";
                             break;
                         case HIRCoreType::U32:
-                            of << "uint32_t";
+                            of << "u32";
                             break;
                         case HIRCoreType::I32:
-                            of << "int32_t";
+                            of << "i32";
                             break;
                         case HIRCoreType::U64:
-                            of << "uint64_t";
+                            of << "u64";
                             break;
                         case HIRCoreType::I64:
-                            of << "int64_t";
+                            of << "i64";
                             break;
                         case HIRCoreType::U128:
                             of << "uint128_t";
@@ -9449,7 +9449,7 @@ default:
             }
 
             of << (valueMeta == MetadataType::Slice ? "make_sliceptr(" : "make_traitobjptr(");
-            of << "(uint8_t*)";
+            of << "(u8*)";
             emitLvalue(basePointer);
             of << ".PTR";
 

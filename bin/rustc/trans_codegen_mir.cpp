@@ -232,8 +232,8 @@ break;
 
     ::std::ostream& operator<<(::std::ostream& os, const Fmt<MIRConstant>& x) {
         struct H {
-            static uint64_t doubleToU64(double v) {
-                uint64_t rv;
+            static u64 doubleToU64(double v) {
+                u64 rv;
                 ::std::memcpy(&rv, &v, sizeof(double));
                 return rv;
             }
@@ -261,7 +261,7 @@ break;
                     auto vi = H::doubleToU64(static_cast<double>(v.v));
                     bool sign = (vi & (1ull << 63)) != 0;
                     int exp = (vi >> 52) & 0x7FF;
-                    uint64_t frac = vi & ((1ull << 52) - 1);
+                    u64 frac = vi & ((1ull << 52) - 1);
                     os << (sign ? "-" : "+") << "0x1." << ::std::setw(52 / 4) << ::std::setfill('0') << ::std::hex << frac << ::std::dec << "p" << (exp - 1023);
                     os << " " << v.t;
 
@@ -773,7 +773,7 @@ break;
             mirRes = nullptr;
         }
 
-        void emitStrByte(uint8_t b) {
+        void emitStrByte(u8 b) {
             if (b == 0) {
                 of << "\\0";
             } else if (b == '\\') {

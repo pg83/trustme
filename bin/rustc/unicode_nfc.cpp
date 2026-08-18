@@ -1,3 +1,4 @@
+#include <std/sys/types.h>
 #include "unicode_nfc.h"
 
 #include <algorithm>
@@ -6,54 +7,54 @@
 
 namespace {
     struct UnicodeCombining {
-        uint32_t codepoint;
-        uint8_t cls;
+        u32 codepoint;
+        u8 cls;
     };
 
     struct UnicodeDecomposition {
-        uint32_t codepoint;
-        uint32_t first;
+        u32 codepoint;
+        u32 first;
         /// Zero for a singleton decomposition.
-        uint32_t second;
+        u32 second;
     };
 
     struct UnicodeComposition {
-        uint32_t first;
-        uint32_t second;
-        uint32_t composed;
+        u32 first;
+        u32 second;
+        u32 composed;
     };
 
 #include "unicode_nfc_tables.inc"
 
     // Hangul syllables are decomposed and composed arithmetically, not from a
     // table.
-    constexpr uint32_t HANGUL_S_BASE = 0xAC00;
-    constexpr uint32_t HANGUL_L_BASE = 0x1100;
-    constexpr uint32_t HANGUL_V_BASE = 0x1161;
-    constexpr uint32_t HANGUL_T_BASE = 0x11A7;
-    constexpr uint32_t HANGUL_L_COUNT = 19;
-    constexpr uint32_t HANGUL_V_COUNT = 21;
-    constexpr uint32_t HANGUL_T_COUNT = 28;
-    constexpr uint32_t HANGUL_N_COUNT = HANGUL_V_COUNT * HANGUL_T_COUNT;
-    constexpr uint32_t HANGUL_S_COUNT = HANGUL_L_COUNT * HANGUL_N_COUNT;
+    constexpr u32 HANGUL_S_BASE = 0xAC00;
+    constexpr u32 HANGUL_L_BASE = 0x1100;
+    constexpr u32 HANGUL_V_BASE = 0x1161;
+    constexpr u32 HANGUL_T_BASE = 0x11A7;
+    constexpr u32 HANGUL_L_COUNT = 19;
+    constexpr u32 HANGUL_V_COUNT = 21;
+    constexpr u32 HANGUL_T_COUNT = 28;
+    constexpr u32 HANGUL_N_COUNT = HANGUL_V_COUNT * HANGUL_T_COUNT;
+    constexpr u32 HANGUL_S_COUNT = HANGUL_L_COUNT * HANGUL_N_COUNT;
 
-    uint8_t combiningClass(uint32_t codepoint) {
+    u8 combiningClass(u32 codepoint) {
         const auto* found = ::std::lower_bound(::std::begin(COMBINING), ::std::end(COMBINING), codepoint,
-            [](const UnicodeCombining& entry, uint32_t value) {
+            [](const UnicodeCombining& entry, u32 value) {
                 return entry.codepoint < value;
             });
         return found != ::std::end(COMBINING) && found->codepoint == codepoint ? found->cls : 0;
     }
 
-    const UnicodeDecomposition* decompositionOf(uint32_t codepoint) {
+    const UnicodeDecomposition* decompositionOf(u32 codepoint) {
         const auto* found = ::std::lower_bound(::std::begin(DECOMPOSITIONS), ::std::end(DECOMPOSITIONS), codepoint,
-            [](const UnicodeDecomposition& entry, uint32_t value) {
+            [](const UnicodeDecomposition& entry, u32 value) {
                 return entry.codepoint < value;
             });
         return found != ::std::end(DECOMPOSITIONS) && found->codepoint == codepoint ? found : nullptr;
     }
 
-    uint32_t composedPair(uint32_t first, uint32_t second) {
+    u32 composedPair(u32 first, u32 second) {
         if (HANGUL_L_BASE <= first && first < HANGUL_L_BASE + HANGUL_L_COUNT && HANGUL_V_BASE <= second
             && second < HANGUL_V_BASE + HANGUL_V_COUNT) {
             return HANGUL_S_BASE + ((first - HANGUL_L_BASE) * HANGUL_V_COUNT + (second - HANGUL_V_BASE)) * HANGUL_T_COUNT;
@@ -63,7 +64,7 @@ namespace {
             return first + (second - HANGUL_T_BASE);
         }
         const auto* found = ::std::lower_bound(::std::begin(COMPOSITIONS), ::std::end(COMPOSITIONS), first,
-            [](const UnicodeComposition& entry, uint32_t value) {
+            [](const UnicodeComposition& entry, u32 value) {
                 return entry.first < value;
             });
         for (; found != ::std::end(COMPOSITIONS) && found->first == first; ++found) {
@@ -74,9 +75,9 @@ namespace {
         return 0;
     }
 
-    void decomposeInto(uint32_t codepoint, ::std::vector<uint32_t>& out) {
+    void decomposeInto(u32 codepoint, ::std::vector<u32>& out) {
         if (HANGUL_S_BASE <= codepoint && codepoint < HANGUL_S_BASE + HANGUL_S_COUNT) {
-            const uint32_t index = codepoint - HANGUL_S_BASE;
+            const u32 index = codepoint - HANGUL_S_BASE;
             out.push_back(HANGUL_L_BASE + index / HANGUL_N_COUNT);
             out.push_back(HANGUL_V_BASE + (index % HANGUL_N_COUNT) / HANGUL_T_COUNT);
             if (index % HANGUL_T_COUNT != 0) {
@@ -95,7 +96,7 @@ namespace {
     }
 
     /// Sort each run of combining marks by class, keeping equal classes in order.
-    void orderCanonically(::std::vector<uint32_t>& text) {
+    void orderCanonically(::std::vector<u32>& text) {
         for (size_t i = 1; i < text.size(); i++) {
             const auto cls = combiningClass(text[i]);
             if (cls == 0) {
@@ -113,12 +114,12 @@ namespace {
         }
     }
 
-    void compose(::std::vector<uint32_t>& text) {
+    void compose(::std::vector<u32>& text) {
         if (text.empty()) {
             return;
         }
         size_t starter = 0;
-        uint8_t lastClass = combiningClass(text[0]) == 0 ? 0 : 255;
+        u8 lastClass = combiningClass(text[0]) == 0 ? 0 : 255;
         size_t out = 1;
         for (size_t i = 1; i < text.size(); i++) {
             const auto cls = combiningClass(text[i]);
@@ -139,7 +140,7 @@ namespace {
         text.resize(out);
     }
 
-    void appendUtf8(::std::string& out, uint32_t codepoint) {
+    void appendUtf8(::std::string& out, u32 codepoint) {
         if (codepoint < 0x80) {
             out += static_cast<char>(codepoint);
         } else if (codepoint < 0x800) {
@@ -159,13 +160,13 @@ namespace {
 
     /// Decode UTF-8. Malformed input is not this file's business to diagnose: a
     /// bad byte becomes its own codepoint so the text survives unchanged.
-    ::std::vector<uint32_t> decodeUtf8(const ::std::string& text) {
-        ::std::vector<uint32_t> out;
+    ::std::vector<u32> decodeUtf8(const ::std::string& text) {
+        ::std::vector<u32> out;
         out.reserve(text.size());
         for (size_t i = 0; i < text.size();) {
-            const auto lead = static_cast<uint8_t>(text[i]);
+            const auto lead = static_cast<u8>(text[i]);
             size_t length = 1;
-            uint32_t codepoint = lead;
+            u32 codepoint = lead;
             if ((lead & 0xE0) == 0xC0) {
                 length = 2;
                 codepoint = lead & 0x1F;
@@ -183,7 +184,7 @@ namespace {
             }
             bool valid = true;
             for (size_t j = 1; j < length; j++) {
-                const auto next = static_cast<uint8_t>(text[i + j]);
+                const auto next = static_cast<u8>(text[i + j]);
                 if ((next & 0xC0) != 0x80) {
                     valid = false;
                     break;
@@ -203,7 +204,7 @@ namespace {
 
     bool isAscii(const ::std::string& text) {
         for (const char c : text) {
-            if (static_cast<uint8_t>(c) >= 0x80) {
+            if (static_cast<u8>(c) >= 0x80) {
                 return false;
             }
         }
@@ -217,7 +218,7 @@ namespace {
     }
 
     auto codepoints = decodeUtf8(text);
-    ::std::vector<uint32_t> decomposed;
+    ::std::vector<u32> decomposed;
     decomposed.reserve(codepoints.size() * 2);
     for (const auto codepoint : codepoints) {
         decomposeInto(codepoint, decomposed);

@@ -4,7 +4,8 @@
 // everything the payload types need, then includes the generated header.
 // This is the contract every .tu consumer follows — the generated header
 // itself includes nothing.
-#include <cstdint>
+#include <std/sys/types.h>
+
 #include <memory>
 #include <string>
 

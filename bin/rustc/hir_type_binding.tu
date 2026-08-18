@@ -10,7 +10,7 @@ generate(
     doc="Array size used for types AND array literals",
     variants=[
         v("Unevaluated", "HIRConstGeneric", copy=False, doc="Un-evaluated size"),
-        v("Known", "uint64_t", doc="Fully known"),
+        v("Known", "u64", doc="Fully known"),
     ],
     extra="""
         HIRArraySize clone() const;

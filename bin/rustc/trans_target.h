@@ -23,15 +23,15 @@ struct TargetArch {
     } atomics;
 
     struct Alignments {
-        uint8_t u16;
-        uint8_t u32;
-        uint8_t u64;
-        uint8_t u128;
-        uint8_t f32;
-        uint8_t f64;
-        uint8_t ptr;
+        u8 u16;
+        u8 u32;
+        u8 u64;
+        u8 u128;
+        u8 f32;
+        u8 f64;
+        u8 ptr;
 
-        Alignments(uint8_t u16 = 2, uint8_t u32 = 4, uint8_t u64 = 8, uint8_t u128 = 16, uint8_t f32 = 4, uint8_t f64 = 8, uint8_t ptr = 4);
+        Alignments(u8 u16 = 2, u8 u32 = 4, u8 u64 = 8, u8 u128 = 16, u8 f32 = 4, u8 f64 = 8, u8 ptr = 4);
     } alignments;
 };
 

@@ -1064,7 +1064,7 @@ class CConcatExpander: public ExpandProcMacro {
                 rv += vp->value;
             } else if (auto* vp = cast<ASTExprNodeInteger>(v.get())) {
                 if (vp->datatype == CORETYPE_CHAR) {
-                    rv += Codepoint{static_cast<uint32_t>(vp->value.truncateU64())};
+                    rv += Codepoint{static_cast<u32>(vp->value.truncateU64())};
                 } else {
                     rv += FMT(vp->value);
                 }
@@ -1329,7 +1329,7 @@ namespace {
         };
 
         Align align = Align::Unspec;
-        uint32_t alignChar = ' ';
+        u32 alignChar = ' ';
 
         Sign sign = Sign::Unspec;
         bool alternate = false;
@@ -1428,8 +1428,8 @@ namespace {
         FmtArgs args;
     };
 
-    uint32_t parseUtf8(const char* s, int& outLen) {
-        uint8_t v1 = s[0];
+    u32 parseUtf8(const char* s, int& outLen) {
+        u8 v1 = s[0];
         if (v1 < 0x80) {
             outLen = 1;
             return v1;
@@ -1441,44 +1441,44 @@ namespace {
             // Two bytes
             outLen = 2;
 
-            uint8_t e1 = s[1];
+            u8 e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
                 return 0xFFFE;
             }
 
-            uint32_t outval = ((v1 & 0x1F) << 6) | ((e1 & 0x3F) << 0);
+            u32 outval = ((v1 & 0x1F) << 6) | ((e1 & 0x3F) << 0);
             return outval;
         } else if ((v1 & 0xF0) == 0xE0) {
             // Three bytes
             outLen = 3;
-            uint8_t e1 = s[1];
+            u8 e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
                 return 0xFFFE;
             }
-            uint8_t e2 = s[2];
+            u8 e2 = s[2];
             if ((e2 & 0xC0) != 0x80) {
                 return 0xFFFE;
             }
 
-            uint32_t outval = ((v1 & 0x0F) << 12) | ((e1 & 0x3F) << 6) | ((e2 & 0x3F) << 0);
+            u32 outval = ((v1 & 0x0F) << 12) | ((e1 & 0x3F) << 6) | ((e2 & 0x3F) << 0);
             return outval;
         } else if ((v1 & 0xF8) == 0xF0) {
             // Four bytes
             outLen = 4;
-            uint8_t e1 = s[1];
+            u8 e1 = s[1];
             if ((e1 & 0xC0) != 0x80) {
                 return 0xFFFE;
             }
-            uint8_t e2 = s[2];
+            u8 e2 = s[2];
             if ((e2 & 0xC0) != 0x80) {
                 return 0xFFFE;
             }
-            uint8_t e3 = s[3];
+            u8 e3 = s[3];
             if ((e3 & 0xC0) != 0x80) {
                 return 0xFFFE;
             }
 
-            uint32_t outval = ((v1 & 0x07) << 18) | ((e1 & 0x3F) << 12) | ((e2 & 0x3F) << 6) | ((e3 & 0x3F) << 0);
+            u32 outval = ((v1 & 0x07) << 18) | ((e1 & 0x3F) << 12) | ((e2 & 0x3F) << 6) | ((e3 & 0x3F) << 0);
             return outval;
         } else {
             throw ""; // Should be impossible.
@@ -1589,7 +1589,7 @@ namespace {
                     // - Padding character, a single unicode codepoint followed by '<'/'^'/'>'
                     {
                         int nextCI;
-                        uint32_t ch = parseUtf8(s, nextCI);
+                        u32 ch = parseUtf8(s, nextCI);
                         char nextC = s[nextCI];
                         if (s + nextCI <= sEnd && ch != '}' && (nextC == '<' || nextC == '^' || nextC == '>')) {
                             args.alignChar = ch;
@@ -2072,7 +2072,7 @@ namespace {
                             };
                         };
 
-                        uint64_t flags = 0;
+                        u64 flags = 0;
                         // ::core::fmt::FlagV1 (private)
                         switch (frag.args.sign) {
                             case FmtArgs::Sign::Unspec:

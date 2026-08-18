@@ -36,24 +36,24 @@ public:
     void open(const ::std::string& filename);
     void write(const void* data, size_t count);
 
-    void writeU8(uint8_t v) {
+    void writeU8(u8 v) {
         write(reinterpret_cast<const char*>(&v), 1);
     }
 
-    void writeU16(uint16_t v);
+    void writeU16(u16 v);
 
-    void writeU32(uint32_t v);
+    void writeU32(u32 v);
 
-    void writeU64(uint64_t v);
+    void writeU64(u64 v);
 
-    void writeI64(int64_t v) {
-        writeU64(static_cast<uint64_t>(v));
+    void writeI64(i64 v) {
+        writeU64(static_cast<u64>(v));
     }
 
     // Variable-length encoded u64 (for array sizes)
-    void writeU64c(uint64_t v);
+    void writeU64c(u64 v);
 
-    void writeI64c(int64_t v);
+    void writeI64c(i64 v);
 
     void writeU128(U128 v);
 
@@ -80,7 +80,7 @@ public:
     void writeBool(bool v);
 
     // Core protocol
-    void rawWriteUint(uint64_t val);
+    void rawWriteUint(u64 val);
 
     void rawWriteLen(size_t len);
 
@@ -108,7 +108,7 @@ public:
 };
 
 class HIRSerialiseReadBuffer {
-    ::std::vector<uint8_t> backing;
+    ::std::vector<u8> backing;
     unsigned int ofs;
 
 public:
@@ -142,16 +142,16 @@ public:
 
     void read(void* dst, size_t count);
 
-    uint8_t readU8();
+    u8 readU8();
 
-    uint16_t readU16();
+    u16 readU16();
 
-    uint32_t readU32();
+    u32 readU32();
 
-    uint64_t readU64();
+    u64 readU64();
 
-    int64_t readI64() {
-        return static_cast<int64_t>(readU64());
+    i64 readI64() {
+        return static_cast<i64>(readU64());
     }
 
     U128 readU128();
@@ -161,9 +161,9 @@ public:
     }
 
     // Variable-length encoded u64 (for array sizes)
-    uint64_t readU64c();
+    u64 readU64c();
 
-    int64_t readI64c();
+    i64 readI64c();
 
     double readDouble();
 
@@ -182,7 +182,7 @@ public:
     bool readBool();
 
     // Core protocol
-    uint64_t rawReadUint();
+    u64 rawReadUint();
 
     size_t rawReadLen();
 

@@ -11,46 +11,46 @@ using namespace stl;
 
 namespace {
     struct BinaryOpVector {
-        uint64_t aHi, aLo;
-        uint64_t bHi, bLo;
-        uint64_t addHi, addLo;
-        uint64_t subHi, subLo;
-        uint64_t mulHi, mulLo;
-        uint64_t divHi, divLo;
-        uint64_t modHi, modLo;
+        u64 aHi, aLo;
+        u64 bHi, bLo;
+        u64 addHi, addLo;
+        u64 subHi, subLo;
+        u64 mulHi, mulLo;
+        u64 divHi, divLo;
+        u64 modHi, modLo;
     };
 
     struct ConvertVector {
-        uint64_t hi, lo;
-        uint64_t doubleBits;
-        uint32_t floatBits;
-        int64_t asInt64;
-        uint64_t asUint64;
+        u64 hi, lo;
+        u64 doubleBits;
+        u32 floatBits;
+        i64 asInt64;
+        u64 asUint64;
     };
 
     struct ParseVector {
         const char* text;
-        uint64_t hi, lo;
+        u64 hi, lo;
     };
 
     struct RoundingVector {
-        uint64_t hi, lo;
-        uint64_t truncHi, truncLo;
-        uint64_t floorHi, floorLo;
-        uint64_t ceilHi, ceilLo;
-        uint64_t roundHi, roundLo;
-        uint64_t roundEvenHi, roundEvenLo;
+        u64 hi, lo;
+        u64 truncHi, truncLo;
+        u64 floorHi, floorLo;
+        u64 ceilHi, ceilLo;
+        u64 roundHi, roundLo;
+        u64 roundEvenHi, roundEvenLo;
     };
 
     struct FormatVector {
-        uint64_t hi, lo;
+        u64 hi, lo;
         const char* text;
     };
 
 // Generated into the build tree by the `float128_ut_vectors` node
 #include <float128_ut_vectors.inc>
 
-    static bool sameBits(const Float128& value, uint64_t hi, uint64_t lo) {
+    static bool sameBits(const Float128& value, u64 hi, u64 lo) {
         return value.bitsHi() == hi && value.bitsLo() == lo;
     }
 
@@ -60,20 +60,20 @@ namespace {
         return out.str();
     }
 
-    static double doubleFromBits(uint64_t bits) {
+    static double doubleFromBits(u64 bits) {
         double v;
         std::memcpy(&v, &bits, sizeof(v));
         return v;
     }
 
-    static uint64_t bitsFromDouble(double v) {
-        uint64_t bits;
+    static u64 bitsFromDouble(double v) {
+        u64 bits;
         std::memcpy(&bits, &v, sizeof(bits));
         return bits;
     }
 
-    static uint32_t bitsFromFloat(float v) {
-        uint32_t bits;
+    static u32 bitsFromFloat(float v) {
+        u32 bits;
         std::memcpy(&bits, &v, sizeof(bits));
         return bits;
     }
@@ -99,8 +99,8 @@ STD_TEST_SUITE(Float128Vectors) {
             const auto value = Float128::fromBits(v.hi, v.lo);
             STD_INSIST(bitsFromDouble(static_cast<double>(value)) == v.doubleBits);
             STD_INSIST(bitsFromFloat(static_cast<float>(value)) == v.floatBits);
-            STD_INSIST(static_cast<int64_t>(value) == v.asInt64);
-            STD_INSIST(static_cast<uint64_t>(value) == v.asUint64);
+            STD_INSIST(static_cast<i64>(value) == v.asInt64);
+            STD_INSIST(static_cast<u64>(value) == v.asUint64);
         }
     }
 
@@ -264,18 +264,18 @@ STD_TEST_SUITE(Float128Specials) {
     }
 
     STD_TEST(testIntegerSaturation) {
-        STD_INSIST(static_cast<int64_t>(Float128::quietNan()) == 0);
-        STD_INSIST(static_cast<uint64_t>(Float128::quietNan()) == 0);
-        STD_INSIST(static_cast<int64_t>(Float128::infinity(false)) == INT64_MAX);
-        STD_INSIST(static_cast<int64_t>(Float128::infinity(true)) == INT64_MIN);
-        STD_INSIST(static_cast<uint64_t>(Float128::infinity(false)) == UINT64_MAX);
-        STD_INSIST(static_cast<uint64_t>(Float128::infinity(true)) == 0);
-        STD_INSIST(static_cast<uint64_t>(Float128(-1.5)) == 0);
-        STD_INSIST(static_cast<int64_t>(Float128(-1.5)) == -1);
-        STD_INSIST(static_cast<int64_t>(Float128(9.4e18)) == INT64_MAX);
-        STD_INSIST(static_cast<int64_t>(Float128(-9.3e18)) == INT64_MIN);
+        STD_INSIST(static_cast<i64>(Float128::quietNan()) == 0);
+        STD_INSIST(static_cast<u64>(Float128::quietNan()) == 0);
+        STD_INSIST(static_cast<i64>(Float128::infinity(false)) == INT64_MAX);
+        STD_INSIST(static_cast<i64>(Float128::infinity(true)) == INT64_MIN);
+        STD_INSIST(static_cast<u64>(Float128::infinity(false)) == UINT64_MAX);
+        STD_INSIST(static_cast<u64>(Float128::infinity(true)) == 0);
+        STD_INSIST(static_cast<u64>(Float128(-1.5)) == 0);
+        STD_INSIST(static_cast<i64>(Float128(-1.5)) == -1);
+        STD_INSIST(static_cast<i64>(Float128(9.4e18)) == INT64_MAX);
+        STD_INSIST(static_cast<i64>(Float128(-9.3e18)) == INT64_MIN);
         // Exactly -2^63 is representable
-        STD_INSIST(static_cast<int64_t>(Float128(-9223372036854775808.0)) == INT64_MIN);
+        STD_INSIST(static_cast<i64>(Float128(-9223372036854775808.0)) == INT64_MIN);
     }
 
     STD_TEST(testNarrowingEdges) {

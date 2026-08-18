@@ -56,7 +56,7 @@ namespace {
 
     class InstantiateCanonicalTraitResponse final: public Monomorphiser {
         const ::std::vector<::std::pair<RcString, RcString>>& goalNames;
-        const uint64_t instance;
+        const u64 instance;
         mutable ::std::vector<::std::pair<RcString, RcString>> freshNames;
 
         RcString instantiatePlaceholderName(const RcString& canonical) const {
@@ -76,7 +76,7 @@ namespace {
         }
 
     public:
-        InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const ::std::vector<::std::pair<RcString, RcString>>& goalNames, uint64_t instance)
+        InstantiateCanonicalTraitResponse(HIRTypeInterner& types, const ::std::vector<::std::pair<RcString, RcString>>& goalNames, u64 instance)
             : Monomorphiser(types)
             , goalNames(goalNames)
             , instance(instance)
@@ -2577,7 +2577,7 @@ default:
             ::std::vector<CachedGoal*> goalCache;
             ::std::unordered_multimap<size_t, GoalKey*> activeGoalIndex;
             ::std::unordered_multimap<size_t, CachedGoal*> goalCacheIndex;
-            uint64_t responseInstanceCounter = 0;
+            u64 responseInstanceCounter = 0;
 
             struct CanonicalGoal {
                 HIRPathParams params;

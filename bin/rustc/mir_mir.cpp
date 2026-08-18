@@ -1838,7 +1838,7 @@ HIRPath& MIRLValue::Storage::as_Static() {
     return *reinterpret_cast<HIRPath*>(val & ~3llu);
 }
 
-MIRLValue::Wrapper::Wrapper(uint32_t v)
+MIRLValue::Wrapper::Wrapper(u32 v)
     : val(v)
 {
 }

@@ -67,7 +67,7 @@ public:
         return in.readBool();
     }
 
-    uint8_t readU8() {
+    u8 readU8() {
         return in.readU8();
     }
 
@@ -646,7 +646,7 @@ public:
             _(Float, {in.readFloatValue(), static_cast<HIRCoreType>(in.readTag())})
             _(Bool, {in.readBool()})
             case MIRConstant::TAG_Bytes: {
-                ::std::vector<unsigned char> bytes;
+                ::std::vector<u8> bytes;
                 bytes.resize(in.readCount());
                 in.read(bytes.data(), bytes.size());
                 return MIRConstant::make_Bytes(mv$(bytes));
@@ -814,7 +814,7 @@ public:
 
         auto linkage = deserialiseLinkage();
         auto params = deserialiseGenericparams();
-        uint8_t bitflag1 = in.readU8();
+        u8 bitflag1 = in.readU8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         bool isMut;
         bool saveLiteral;
@@ -846,7 +846,7 @@ public:
 
     HIRTraitMarkings deserialiseMarkings() {
         HIRTraitMarkings m;
-        uint8_t bitflag1 = in.readU8();
+        u8 bitflag1 = in.readU8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         BIT(0, m.hasADeref)
         BIT(1, m.isCopy)
@@ -859,7 +859,7 @@ public:
 
     HIRStructMarkings deserialiseStrMarkings() {
         HIRStructMarkings m;
-        uint8_t bitflag1 = in.readU8();
+        u8 bitflag1 = in.readU8();
 #define BIT(i, fld) fld = (bitflag1 & (1 << (i))) != 0;
         BIT(0, m.canUnsize)
         BIT(1, m.isNonzero)
@@ -924,7 +924,7 @@ DEF_D(RcString, return d.readIstring(););
 template <>
 DEF_D(bool, return d.readBool(););
 template <>
-DEF_D(uint8_t, return d.readU8(););
+DEF_D(u8, return d.readU8(););
 
 template <typename T>
 DEF_D(::std::unique_ptr<T>, return d.deserialisePtr<T>();)
@@ -1339,7 +1339,7 @@ HIRConstGeneric HirDeserialiser::deserialiseConstgeneric() {
 
 EncodedLiteral HirDeserialiser::deserialiseEncodedliteral() {
     EncodedLiteral rv;
-    rv.bytes = deserialiseVec<uint8_t>();
+    rv.bytes = deserialiseVec<u8>();
 
     auto nreloc = in.readCount();
     rv.relocations.reserve(nreloc);
@@ -1384,7 +1384,7 @@ MIRBasicBlock HirDeserialiser::deserialiseMirBasicblock() {
 
 AsmOptions HirDeserialiser::deserialiseAsmOptions() {
     AsmOptions o;
-    const uint16_t bitflag1 = in.readU16();
+    const u16 bitflag1 = in.readU16();
 #define BIT(i, fld)            \
     if (bitflag1 & (1 << (i))) \
     fld = true
@@ -1544,14 +1544,14 @@ MIRSwitchValues HirDeserialiser::deserialiseMirSwitchvalues() {
 #define _(x, ...)                  \
     case MIRSwitchValues::TAG_##x: \
         return MIRSwitchValues::make_##x(__VA_ARGS__);
-        _(Unsigned, deserialiseVecC<uint64_t>([&]() {
+        _(Unsigned, deserialiseVecC<u64>([&]() {
             return in.readU64c();
         }))
-        _(Signed, deserialiseVecC<int64_t>([&]() {
+        _(Signed, deserialiseVecC<i64>([&]() {
             return in.readI64c();
         }))
         _(String, deserialiseVec<::std::string>())
-        _(ByteString, deserialiseVec<::std::vector<uint8_t>>())
+        _(ByteString, deserialiseVec<::std::vector<u8>>())
 #undef _
         default:
             BUG(Span(), "Bad tag for MIR::SwitchValues - " << tag);
@@ -2349,7 +2349,7 @@ namespace {
                             os << b;
                         } else {
                             char buf[3];
-                            sprintf(buf, "%02x", static_cast<uint8_t>(b));
+                            sprintf(buf, "%02x", static_cast<u8>(b));
                             os << "\\x" << buf;
                         }
                     }
@@ -2688,15 +2688,15 @@ public:
         out.writeCount(v);
     };
 
-    void serialise(uint8_t v) {
+    void serialise(u8 v) {
         out.writeU8(v);
     };
 
-    void serialise(uint64_t v) {
+    void serialise(u64 v) {
         out.writeU64c(v);
     };
 
-    void serialise(int64_t v) {
+    void serialise(i64 v) {
         out.writeI64c(v);
     };
 
@@ -2868,7 +2868,7 @@ break;
         serialiseGenericpath(path.path);
         serialiseStrmap(path.typeBounds);
         serialiseStrmap(path.traitBounds);
-        out.writeU8(static_cast<uint8_t>(path.constness));
+        out.writeU8(static_cast<u8>(path.constness));
     }
 
     void serialise(const HIRTraitPath::AtyEqual& e) {
@@ -2945,7 +2945,7 @@ break;
                     out.writeTag(2);
                     serialiseType(e.type);
                     serialiseTraitpath(e.trait);
-                    out.writeU8(static_cast<uint8_t>(e.constness));
+                    out.writeU8(static_cast<u8>(e.constness));
                     break;
                 }
                 case HIRGenericBound::TAG_TypeEquality: {
@@ -3463,7 +3463,7 @@ break;
     }
 
     void serialise(const AsmOptions& o) {
-        uint16_t bitflag1 = 0;
+        u16 bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
         bitflag1 |= 1 << (i);
@@ -4007,7 +4007,7 @@ break;
         serialise(item.linkage);
         serialiseGenerics(item.params);
 
-        uint8_t bitflag1 = 0;
+        u8 bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
         bitflag1 |= 1 << (i);
@@ -4084,7 +4084,7 @@ break;
     }
 
     void serialise(const HIRTraitMarkings& m) {
-        uint8_t bitflag1 = 0;
+        u8 bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
         bitflag1 |= 1 << (i);
@@ -4099,7 +4099,7 @@ break;
     }
 
     void serialise(const HIRStructMarkings& m) {
-        uint8_t bitflag1 = 0;
+        u8 bitflag1 = 0;
 #define BIT(i, fld) \
     if (fld)        \
         bitflag1 |= 1 << (i);

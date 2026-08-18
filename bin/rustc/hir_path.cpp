@@ -132,19 +132,19 @@ HIRTraitPath& HIRTraitPath::operator=(HIRTraitPath&&) = default;
 namespace {
     // Component keys must be content-based, not allocation-order-based;
     // the string interner's stored xxh128 half is exactly that, for free.
-    uint64_t contentHash(const RcString& s) {
+    u64 contentHash(const RcString& s) {
         return s.contentHash();
     }
 
     // The two Zobrist keys of a component at a position. Position goes
     // through the mixer (a plain XOR fold would make the hash symmetric).
-    const uint64_t POS_STEP = 0x9E3779B97F4A7C15;
+    const u64 POS_STEP = 0x9E3779B97F4A7C15;
 
-    uint64_t key1(uint64_t ch, size_t i) {
+    u64 key1(u64 ch, size_t i) {
         return stl::splitMix64(ch + (i + 1) * POS_STEP);
     }
 
-    uint64_t key2(uint64_t ch, size_t i) {
+    u64 key2(u64 ch, size_t i) {
         return stl::splitMix64((ch + (i + 1) * POS_STEP) ^ 0xD6E8FEB86659FD93);
     }
 
@@ -154,7 +154,7 @@ namespace {
     struct PathNode: public HIRSimplePathData {
         PathNode* next;
 
-        PathNode(uint64_t h1, uint64_t h2, ThinVector<RcString> m, PathNode* next)
+        PathNode(u64 h1, u64 h2, ThinVector<RcString> m, PathNode* next)
             : HIRSimplePathData{h1, h2, std::move(m)}
             , next(next)
         {
@@ -177,7 +177,7 @@ namespace {
         return &empty;
     }
 
-    const HIRSimplePathData* findPath(uint64_t h1, uint64_t h2) {
+    const HIRSimplePathData* findPath(u64 h1, u64 h2) {
         if (auto* head = interner().table.find(h1)) {
             for (auto* n = *head; n; n = n->next) {
                 if (n->hash2 == h2) {
@@ -189,7 +189,7 @@ namespace {
     }
 
     // Entries live as long as the interner pool, so member references stay valid.
-    const HIRSimplePathData* addPath(uint64_t h1, uint64_t h2, ThinVector<RcString> members) {
+    const HIRSimplePathData* addPath(u64 h1, u64 h2, ThinVector<RcString> members) {
         auto& in = interner();
         auto* head = in.table.find(h1);
         auto* node = in.pool->make<PathNode>(h1, h2, std::move(members), head ? *head : nullptr);
@@ -205,7 +205,7 @@ namespace {
         if (members.empty()) {
             return emptyPathData();
         }
-        uint64_t h1 = 0, h2 = 0;
+        u64 h1 = 0, h2 = 0;
         for (size_t i = 0; i < members.size(); i++) {
             auto ch = contentHash(members[i]);
             h1 ^= key1(ch, i);
@@ -861,8 +861,8 @@ HIRSimplePath::HIRSimplePath(RcString crate, ::std::span<const RcString> compone
         return;
     }
     auto ch = contentHash(crate);
-    uint64_t h1 = key1(ch, 0);
-    uint64_t h2 = key2(ch, 0);
+    u64 h1 = key1(ch, 0);
+    u64 h2 = key2(ch, 0);
     for (size_t i = 0; i < components.size(); i++) {
         ch = contentHash(components[i]);
         h1 ^= key1(ch, i + 1);

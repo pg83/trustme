@@ -32,16 +32,16 @@ struct Reloc {
 struct EncodedLiteral {
     inline static const unsigned PTR_BASE = 0x1000;
 
-    std::vector<uint8_t> bytes;
+    std::vector<u8> bytes;
     std::vector<Reloc> relocations;
 
-    static EncodedLiteral makeUsize(uint64_t v);
+    static EncodedLiteral makeUsize(u64 v);
     EncodedLiteral clone() const;
 
-    void writeUint(size_t ofs, size_t size, uint64_t v);
+    void writeUint(size_t ofs, size_t size, u64 v);
 
-    void writeUsize(size_t ofs, uint64_t v);
-    uint64_t readUsize(size_t ofs) const;
+    void writeUsize(size_t ofs, u64 v);
+    u64 readUsize(size_t ofs) const;
 
     friend ::std::ostream& operator<<(std::ostream& os, const EncodedLiteral& x);
 

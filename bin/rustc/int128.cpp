@@ -4,11 +4,11 @@ U128::U128()
     : lo(0)
     , hi(0) {
 }
-U128::U128(uint64_t lo, uint64_t hi)
+U128::U128(u64 lo, u64 hi)
     : lo(lo)
     , hi(hi) {
 }
-uint64_t U128::encodeFloat(int bits, int zeroExp) const {
+u64 U128::encodeFloat(int bits, int zeroExp) const {
     // Adapted from https://blog.m-ou.se/floats/
     int n;
     {
@@ -21,32 +21,32 @@ uint64_t U128::encodeFloat(int bits, int zeroExp) const {
         n = 128 - nset;
     }
     U128 y = *this << n;
-    uint64_t a = (y.hi >> ((128 - (bits + 1)) - 64));
+    u64 a = (y.hi >> ((128 - (bits + 1)) - 64));
     int s = 64 - (bits + 1); // A shift required to move the bits removed in `a` into the low 64-bits
-    uint64_t b = (y >> s).lo | (y.lo & ((1ull << s) - 1));
-    uint64_t m = a + ((b - (b >> 63 & ~a)) >> 63);
-    uint64_t e = (*this == U128(0)) ? 0 : (127 - n) + zeroExp - 1;
+    u64 b = (y >> s).lo | (y.lo & ((1ull << s) - 1));
+    u64 m = a + ((b - (b >> 63 & ~a)) >> 63);
+    u64 e = (*this == U128(0)) ? 0 : (127 - n) + zeroExp - 1;
     return (e << bits) + m;
 }
 double U128::toDouble() const {
-    uint64_t vi = encodeFloat(52, 1023);
+    u64 vi = encodeFloat(52, 1023);
     double rv;
     memcpy(&rv, &vi, sizeof(rv));
     return rv;
 }
 float U128::toFloat() const {
-    uint32_t vi = static_cast<uint32_t>(encodeFloat(23, 127));
+    u32 vi = static_cast<u32>(encodeFloat(23, 127));
     float rv;
     memcpy(&rv, &vi, sizeof(rv));
     return rv;
 }
-void U128::toBeBytes(uint8_t* dst, size_t maxLen) {
+void U128::toBeBytes(u8* dst, size_t maxLen) {
     maxLen = maxLen > 16 ? 16 : maxLen;
     for (size_t i = 0; i < maxLen; i++) {
-        dst[maxLen - 1 - i] = static_cast<uint8_t>((*this >> static_cast<unsigned>(i * 8)).truncateU64());
+        dst[maxLen - 1 - i] = static_cast<u8>((*this >> static_cast<unsigned>(i * 8)).truncateU64());
     }
 }
-void U128::fromBeBytes(const uint8_t* src, size_t maxLen) {
+void U128::fromBeBytes(const u8* src, size_t maxLen) {
     maxLen = maxLen > 16 ? 16 : maxLen;
     *this = U128();
     for (size_t i = 0; i < maxLen; i++) {
@@ -197,7 +197,7 @@ bool U128::mul128O(U128 a, U128 b, U128* o) {
     o->hi = 0;
     o->lo = 0;
     for (int i = 0; i < 128; i++) {
-        uint64_t m = (1ull << (i % 64));
+        u64 m = (1ull << (i % 64));
         if (a.hi == 0 && a.lo < m) {
             break;
         }
@@ -270,13 +270,13 @@ bool U128::div128O(U128 a, U128 b, U128* q, U128* r) {
 }
 S128::S128() {
 }
-S128::S128(int64_t v)
+S128::S128(i64 v)
     : inner(v, v < 0 ? UINT64_MAX : 0) {
 }
 S128::S128(U128 v)
     : inner(v) {
 }
-int64_t S128::truncateI64() const { /*assert(inner.hi == 0 || inner.hi == UINT64_MAX);*/
+i64 S128::truncateI64() const { /*assert(inner.hi == 0 || inner.hi == UINT64_MAX);*/
     return inner.lo;
 }
 void S128::signExtend(size_t nBytes) {
@@ -285,11 +285,11 @@ void S128::signExtend(size_t nBytes) {
         inner |= U128::max() << static_cast<unsigned>(nBytes * 8);
     }
 }
-void S128::fromLeBytes(const uint8_t* src, size_t maxLen) {
+void S128::fromLeBytes(const u8* src, size_t maxLen) {
     inner.fromLeBytes(src, maxLen);
     signExtend(maxLen);
 }
-void S128::fromBeBytes(const uint8_t* src, size_t maxLen) {
+void S128::fromBeBytes(const u8* src, size_t maxLen) {
     inner.fromBeBytes(src, maxLen);
     signExtend(maxLen);
 }
@@ -342,14 +342,14 @@ S128 S128::operator>>(unsigned bits) const {
         return *this < 0 ? S128(-1) : S128(0);
     }
     if (bits >= 64) {
-        auto lo = static_cast<uint64_t>(static_cast<int64_t>(inner.hi) >> (bits - 64));
+        auto lo = static_cast<u64>(static_cast<i64>(inner.hi) >> (bits - 64));
         return S128(U128(lo, *this < 0 ? UINT64_MAX : 0));
     }
-    return S128(U128(inner.lo >> bits | (inner.hi << (64 - bits)), static_cast<uint64_t>(static_cast<int64_t>(inner.hi) >> bits)));
+    return S128(U128(inner.lo >> bits | (inner.hi << (64 - bits)), static_cast<u64>(static_cast<i64>(inner.hi) >> bits)));
 }
 void S128::fmt(::std::ostream& os) const {
     if (isI64()) {
-        os << static_cast<int64_t>(inner.lo);
+        os << static_cast<i64>(inner.lo);
     } else {
         if (*this < 0) {
             os << '-';
@@ -361,7 +361,7 @@ void S128::fmt(::std::ostream& os) const {
 }
 int S128::cmp128s(U128 a, U128 b) {
     if (a.hi != b.hi) {
-        return (int64_t)a.hi < (int64_t)b.hi ? -1 : 1;
+        return (i64)a.hi < (i64)b.hi ? -1 : 1;
     }
     if (a.lo != b.lo) {
         return a.lo < b.lo ? -1 : 1;

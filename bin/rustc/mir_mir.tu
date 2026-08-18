@@ -14,7 +14,7 @@ generate(
         v("Float", fields=[("FloatValue", "v"), ("HIRCoreType", "t")]),
         v("Bool", fields=[("bool", "v")],
           doc="The dedicated struct is defensive: it prevents implicit casts"),
-        v("Bytes", "::std::vector<::std::uint8_t>", doc="Byte string"),
+        v("Bytes", "::std::vector<u8>", doc="Byte string"),
         v("StaticString", "::std::string", doc="String"),
         v("Const", fields=[("::std::unique_ptr<HIRPath>", "p")], copy=False,
           doc="`const`. Behind a pointer to save inline space (HIRPath is ~11"
@@ -166,10 +166,10 @@ generate(
     default="Unsigned",
     clone=False,
     variants=[
-        v("Unsigned", "::std::vector<uint64_t>"),
-        v("Signed", "::std::vector<int64_t>"),
+        v("Unsigned", "::std::vector<u64>"),
+        v("Signed", "::std::vector<i64>"),
         v("String", "::std::vector<::std::string>"),
-        v("ByteString", "::std::vector<::std::vector<uint8_t>>"),
+        v("ByteString", "::std::vector<::std::vector<u8>>"),
     ],
     extra="""
         MIRSwitchValues clone() const;

@@ -19,11 +19,11 @@ enum HIRGenericGroup {
 struct HIRGenericRef {
     RcString name;
     // 0xFFFF = Self, 0-255 = Type/Trait, 256-511 = Method, 512-767 = Placeholder
-    uint32_t binding;
+    u32 binding;
 
-    HIRGenericRef(RcString name, uint32_t binding);
+    HIRGenericRef(RcString name, u32 binding);
 
-    HIRGenericRef(RcString name, HIRGenericGroup group, uint16_t idx);
+    HIRGenericRef(RcString name, HIRGenericGroup group, u16 idx);
 
     static HIRGenericRef newSelf() {
         return HIRGenericRef(RcString::newInterned("Self"), GENERICSelf);

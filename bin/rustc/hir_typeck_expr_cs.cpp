@@ -13110,8 +13110,8 @@ Context::Context(const WireBoard& wb, const HIRGenericParams* implParams, const 
 
 namespace {
     class RpitOriginMonomorph: public HIRMatchGenerics, public Monomorphiser {
-        ::std::map<uint32_t, HIRTypeRef> typeBindings;
-        ::std::map<uint32_t, HIRConstGeneric> valueBindings;
+        ::std::map<u32, HIRTypeRef> typeBindings;
+        ::std::map<u32, HIRConstGeneric> valueBindings;
 
     public:
         explicit RpitOriginMonomorph(HIRTypeInterner& types)

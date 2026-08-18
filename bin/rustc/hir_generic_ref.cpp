@@ -1,12 +1,12 @@
 #include "hir_generic_ref.h"
 
-HIRGenericRef::HIRGenericRef(RcString name, uint32_t binding)
+HIRGenericRef::HIRGenericRef(RcString name, u32 binding)
     : name(::std::move(name))
     , binding(binding)
 {
 }
 
-HIRGenericRef::HIRGenericRef(RcString name, HIRGenericGroup group, uint16_t idx)
+HIRGenericRef::HIRGenericRef(RcString name, HIRGenericGroup group, u16 idx)
     : name(::std::move(name))
     , binding(group * 256 + idx)
 {

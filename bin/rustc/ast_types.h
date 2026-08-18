@@ -25,7 +25,7 @@ class ASTMacroInvocation;
 class ASTPattern;
 struct ASTType;
 
-enum class ASTBoundConstness : uint8_t {
+enum class ASTBoundConstness : u8 {
     Never,
     Always,
     Maybe,

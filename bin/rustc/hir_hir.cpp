@@ -2100,7 +2100,7 @@ HIREncodedLiteralPtr::~HIREncodedLiteralPtr() {
 }
 
 // ---
-EncodedLiteral EncodedLiteral::makeUsize(uint64_t v) {
+EncodedLiteral EncodedLiteral::makeUsize(u64 v) {
     EncodedLiteral rv;
     rv.bytes.resize(8); // 64-bit pointers only (32-bit targets are unsupported)
     rv.writeUsize(0, v);
@@ -2121,22 +2121,22 @@ EncodedLiteral EncodedLiteral::clone() const {
     return rv;
 }
 
-void EncodedLiteral::writeUint(size_t ofs, size_t size, uint64_t v) {
+void EncodedLiteral::writeUint(size_t ofs, size_t size, u64 v) {
     assert(ofs + size <= bytes.size());
     for (size_t i = 0; i < size; i++) {
         size_t bit = i * 8; // little-endian only (big-endian targets are unsupported)
         if (bit < 64) {
-            auto b = static_cast<uint8_t>(v >> bit);
+            auto b = static_cast<u8>(v >> bit);
             bytes[ofs + i] = b;
         }
     }
 }
 
-void EncodedLiteral::writeUsize(size_t ofs, uint64_t v) {
+void EncodedLiteral::writeUsize(size_t ofs, u64 v) {
     this->writeUint(ofs, 8, v); // 64-bit pointers only
 }
 
-uint64_t EncodedLiteral::readUsize(size_t ofs) const {
+u64 EncodedLiteral::readUsize(size_t ofs) const {
     return EncodedLiteralSlice(*this).slice(ofs).readUint(8).truncateU64(); // 64-bit pointers only
 }
 

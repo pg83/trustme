@@ -11,7 +11,7 @@
 /// the table and stays lexicographic: RcString keys ordered maps whose
 /// iteration order leaks into the output.
 class RcString {
-    uint32_t id;
+    u32 id;
 
 public:
     RcString()
@@ -52,9 +52,9 @@ public:
     char back() const;
 
     /// The first xxh128 half from the intern table; free to read, content-based.
-    uint64_t contentHash() const;
+    u64 contentHash() const;
 
-    uint32_t rawId() const {
+    u32 rawId() const {
         return id;
     }
 
@@ -121,7 +121,7 @@ public:
     int compare(size_t o, size_t l, const char* s) const;
 };
 
-static_assert(sizeof(RcString) == sizeof(uint32_t));
+static_assert(sizeof(RcString) == sizeof(u32));
 
 namespace std {
     static inline bool operator==(const string& a, const ::RcString& b) {

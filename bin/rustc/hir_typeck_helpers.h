@@ -174,7 +174,7 @@ private:
     };
 
     mutable ::std::vector<LegacyTraitGoal> legacyTraitGoalStack;
-    mutable uint64_t freshImplPlaceholderCounter = 0;
+    mutable u64 freshImplPlaceholderCounter = 0;
     mutable ::std::map<std::string, HIRTypeRef> eatCache;
     mutable ::std::vector<HIRTypeRef> eatActiveStack;
     // Owned by the crate ObjPool.  TraitResolution only keeps a stable

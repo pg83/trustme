@@ -942,17 +942,17 @@ namespace {
         throw "";
     }
 
-    void addTypeFlags(uint32_t& flags, HIRTypeRef type) {
+    void addTypeFlags(u32& flags, HIRTypeRef type) {
         flags |= type->flags;
     }
 
-    uint32_t typeFlags(const HIRPathParams& params);
+    u32 typeFlags(const HIRPathParams& params);
 
-    uint32_t typeFlags(const HIRGenericPath& path) {
+    u32 typeFlags(const HIRGenericPath& path) {
         return typeFlags(path.params);
     }
 
-    uint32_t typeFlags(const HIRTraitPath& trait) {
+    u32 typeFlags(const HIRTraitPath& trait) {
         auto flags = typeFlags(trait.path);
         for (const auto& bound : trait.typeBounds) {
             flags |= typeFlags(bound.second.sourceTrait);
@@ -969,8 +969,8 @@ namespace {
         return flags;
     }
 
-    uint32_t typeFlags(const HIRPathParams& params) {
-        uint32_t flags = 0;
+    u32 typeFlags(const HIRPathParams& params) {
+        u32 flags = 0;
         for (const auto type : params.types) {
             addTypeFlags(flags, type);
         }
@@ -984,8 +984,8 @@ namespace {
         return flags;
     }
 
-    uint32_t typeFlags(const HIRPath& path) {
-        uint32_t flags = 0;
+    u32 typeFlags(const HIRPath& path) {
+        u32 flags = 0;
         switch (path.data.tag()) {
             case HIRPathData::TAG_Generic: {
                 auto& e = path.data.as_Generic();
@@ -1016,8 +1016,8 @@ namespace {
         return flags;
     }
 
-    uint32_t typeFlags(const HIRTypeData& type) {
-        uint32_t flags = 0;
+    u32 typeFlags(const HIRTypeData& type) {
+        u32 flags = 0;
         switch (type.tag()) {
             case HIRTypeData::TAG_Infer: {
                 flags |= HIRTypeData::HAS_TYPE_INFER;
@@ -1509,7 +1509,7 @@ HIRTypeRef HIRTypeInterner::array(HIRTypeRef inner, HIRArraySize size) {
     return intern(HIRTypeData::make_Array({inner, mv$(size)}));
 }
 
-HIRTypeRef HIRTypeInterner::array(HIRTypeRef inner, uint64_t size) {
+HIRTypeRef HIRTypeInterner::array(HIRTypeRef inner, u64 size) {
     assert(size != ~0u);
     return intern(HIRTypeData::make_Array({inner, size}));
 }

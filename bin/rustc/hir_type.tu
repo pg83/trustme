@@ -38,10 +38,10 @@ generate(
         ], copy=False),
     ],
     extra_fields=[
-        ("uint32_t", "flags", "0"),
+        ("u32", "flags", "0"),
     ],
     extra="""
-        enum HIRTypeFlags : uint32_t {
+        enum HIRTypeFlags : u32 {
             HAS_TYPE_INFER = 1u << 0,
             HAS_TYPE_PARAM = 1u << 1,
             HAS_UNEVALUATED_CONST = 1u << 3,

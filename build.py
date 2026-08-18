@@ -244,6 +244,7 @@ node_cast_test = program(
     name="node_cast_test",
     srcs=["$(S)/tst/unit/test_node_cast.cpp"],
     output="$(B)/tst/unit/node_cast_test",
+    deps=[platform_libstd],
 )
 
 ident_ordering_test = program(

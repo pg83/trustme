@@ -103,9 +103,9 @@ struct MIRLValue {
     };
 
     class Wrapper {
-        uint32_t val;
+        u32 val;
 
-        Wrapper(uint32_t v);
+        Wrapper(u32 v);
 
     public:
         static Wrapper newDeref() {
@@ -122,11 +122,11 @@ struct MIRLValue {
 
         static Wrapper newIndex(unsigned idx);
 
-        uint32_t getInner() const {
+        u32 getInner() const {
             return val;
         }
 
-        static Wrapper fromInner(uint32_t v) {
+        static Wrapper fromInner(u32 v) {
             return Wrapper(v);
         }
 

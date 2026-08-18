@@ -323,11 +323,11 @@ public:
     virtual void fmt(::std::ostream& os, size_t ofs, size_t len) const = 0;
 
     virtual size_t size() const = 0;
-    virtual const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const = 0;
-    virtual void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const = 0;
+    virtual const u8* getBytes(size_t ofs, size_t len, bool checkMask) const = 0;
+    virtual void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const = 0;
 
     virtual bool isWritable() const = 0;
-    virtual uint8_t* extWriteBytes(size_t ofs, size_t len) = 0;
+    virtual u8* extWriteBytes(size_t ofs, size_t len) = 0;
 
     void writeBytes(size_t ofs, const void* data, size_t len) {
         memcpy(extWriteBytes(ofs, len), data, len);
@@ -428,7 +428,7 @@ private:
 };
 
 /// Helper: Print a 2-digit hex value (without updating the stream state)
-void putbHex(std::ostream& os, uint8_t v) {
+void putbHex(std::ostream& os, u8 v) {
     char tmp[3];
     tmp[0] = "0123456789ABCDEF"[v >> 4];
     tmp[1] = "0123456789ABCDEF"[v & 0xF];
@@ -441,11 +441,11 @@ class MIREvalConstant final: public IValue {
     friend struct stl::Embed<MIREvalConstant>;
     friend class MIREvalConstantPtr;
     unsigned const length;
-    const uint8_t* const data;
+    const u8* const data;
 
     MIREvalConstant(const void* data, size_t len)
         : length(len)
-        , data(reinterpret_cast<const uint8_t*>(data))
+        , data(reinterpret_cast<const u8*>(data))
     {
     }
 
@@ -469,14 +469,14 @@ public:
         return length;
     }
 
-    const uint8_t* getBytes(size_t ofs, size_t len, bool /*check_mask*/) const override {
+    const u8* getBytes(size_t ofs, size_t len, bool /*check_mask*/) const override {
         if (!(ofs <= length) || !(len <= length) || !(ofs + len <= length)) {
             return nullptr;
         }
         return data + ofs;
     }
 
-    void readMask(uint8_t* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const {
+    void readMask(u8* dst, size_t dstOfs, size_t /*ofs*/, size_t len) const {
         dst += dstOfs / 8;
         dstOfs %= 8;
         if (dstOfs != 0) {
@@ -494,7 +494,7 @@ public:
         return false;
     }
 
-    uint8_t* extWriteBytes(size_t ofs, size_t len) override {
+    u8* extWriteBytes(size_t ofs, size_t len) override {
         abort();
     }
 
@@ -530,9 +530,9 @@ private:
     bool isGlobal;
     size_t heapAlignment;
     std::vector<Reloc> relocations;
-    uint8_t* data;
+    u8* data;
 
-    MIREvalAllocation(uint8_t* data, size_t len, const HIRTypeData* ty)
+    MIREvalAllocation(u8* data, size_t len, const HIRTypeData* ty)
         : length(len)
         , isReadonly(false)
         , type_(ty)
@@ -578,7 +578,7 @@ public:
         return length;
     }
 
-    const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const override {
+    const u8* getBytes(size_t ofs, size_t len, bool checkMask) const override {
         if (!(ofs <= length) || !(len <= length) || !(ofs + len <= length)) {
             return nullptr;
         }
@@ -606,7 +606,7 @@ public:
         return this->data + ofs;
     }
 
-    void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const {
+    void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const {
         assert(ofs <= length);
         assert(len <= length);
         assert(ofs + len <= length);
@@ -632,7 +632,7 @@ public:
             }
             // Tail entires (partial byte)
             if (len > 0) {
-                uint8_t mask = (0xFF >> (8 - len));
+                u8 mask = (0xFF >> (8 - len));
                 *dst = (*dst & ~mask) | (*src & mask);
             }
         }
@@ -642,7 +642,7 @@ public:
         return !isReadonly;
     }
 
-    uint8_t* extWriteBytes(size_t ofs, size_t len) override {
+    u8* extWriteBytes(size_t ofs, size_t len) override {
         ASSERT_BUG(Span(), ofs <= length && len <= length && ofs + len <= length, "OOB write: " << ofs << "+" << len << " out of " << length);
         // Set the mask
         {
@@ -737,11 +737,11 @@ public:
     }
 
 private:
-    uint8_t* getMask() {
+    u8* getMask() {
         return data + length;
     }
 
-    const uint8_t* getMask() const {
+    const u8* getMask() const {
         return data + length;
     }
 };
@@ -786,26 +786,26 @@ public:
         return encoded;
     }
 
-    const uint8_t* getBytes(size_t ofs, size_t len, bool checkMask) const override {
+    const u8* getBytes(size_t ofs, size_t len, bool checkMask) const override {
         if (encoded) {
             assert(ofs <= encoded->bytes.size());
             assert(len <= encoded->bytes.size());
             assert(ofs + len <= encoded->bytes.size());
             if (encoded->bytes.size() == 0) {
                 // Empty vectors can have a null data pointer
-                return reinterpret_cast<const uint8_t*>("");
+                return reinterpret_cast<const u8*>("");
             }
             return encoded->bytes.data() + ofs;
         } else {
             if (len == 0 && ofs == 0) {
-                static uint8_t null;
+                static u8 null;
                 return &null;
             }
             return nullptr;
         }
     }
 
-    void readMask(uint8_t* dst, size_t dstOfs, size_t ofs, size_t len) const override {
+    void readMask(u8* dst, size_t dstOfs, size_t ofs, size_t len) const override {
         dst += dstOfs / 8;
         dstOfs %= 8;
         if (dstOfs != 0) {
@@ -823,7 +823,7 @@ public:
         return false;
     }
 
-    uint8_t* extWriteBytes(size_t ofs, size_t len) override {
+    u8* extWriteBytes(size_t ofs, size_t len) override {
         abort();
     }
 
@@ -871,12 +871,12 @@ namespace {
             if (highPart >= twoPow64) {
                 return maxValue;
             }
-            const uint64_t high = static_cast<uint64_t>(highPart);
-            const uint64_t low = static_cast<uint64_t>(v - static_cast<double>(high) * twoPow64);
+            const u64 high = static_cast<u64>(highPart);
+            const u64 low = static_cast<u64>(v - static_cast<double>(high) * twoPow64);
             const U128 value = (U128(high) << 64) | U128(low);
             return value > maxValue ? maxValue : value;
         }
-        const U128 value(static_cast<uint64_t>(v));
+        const U128 value(static_cast<u64>(v));
         return value > maxValue ? maxValue : value;
     }
 
@@ -899,8 +899,8 @@ namespace {
 
 class MIREvalValueRef {
     MIREvalRelocPtr storage;
-    uint32_t ofs;
-    uint32_t len;
+    u32 ofs;
+    u32 len;
 
 public:
     MIREvalValueRef()
@@ -1008,19 +1008,19 @@ public:
         }
     }
 
-    uint8_t* extWriteBytes(const MIRTypeResolve& state, size_t len) {
+    u8* extWriteBytes(const MIRTypeResolve& state, size_t len) {
         ensureLive(state);
         MIR_ASSERT(state, storage, "Writing to invalid slot");
         MIR_ASSERT(state, storage.asValue().isWritable(), "Writing to read-only slot");
         if (len > 0) {
             return storage.asValue().extWriteBytes(ofs, len);
         } else {
-            static uint8_t emptyBuf;
+            static u8 emptyBuf;
             return &emptyBuf;
         }
     }
 
-    void writeByte(const MIRTypeResolve& state, uint8_t v) {
+    void writeByte(const MIRTypeResolve& state, u8 v) {
         writeBytes(state, &v, 1);
     }
 
@@ -1047,7 +1047,7 @@ public:
         }
     }
 
-    void writeUint(const MIRTypeResolve& state, unsigned bits, uint64_t v) {
+    void writeUint(const MIRTypeResolve& state, unsigned bits, u64 v) {
         assert(bits <= 64);
         writeUint(state, bits, U128(v));
     }
@@ -1062,7 +1062,7 @@ public:
         v.getInner().toLeBytes(extWriteBytes(state, nBytes), nBytes); // little-endian only
     }
 
-    void writePtr(const MIRTypeResolve& state, uint64_t val, MIREvalRelocPtr reloc) {
+    void writePtr(const MIRTypeResolve& state, u64 val, MIREvalRelocPtr reloc) {
         writeUint(state, TargetGetPointerBits(), U128(val));
         storage.asValue().setReloc(ofs, std::move(reloc));
     }
@@ -1071,7 +1071,7 @@ public:
         storage.asValue().setReloc(ofs, std::move(reloc));
     }
 
-    const uint8_t* extReadBytes(const MIRTypeResolve& state, size_t len) const {
+    const u8* extReadBytes(const MIRTypeResolve& state, size_t len) const {
         ensureLive(state);
         MIR_ASSERT(state, storage, "");
         MIR_ASSERT(state, len >= 1, "");
@@ -1128,11 +1128,11 @@ public:
         return rv;
     }
 
-    uint64_t readUsize(const MIRTypeResolve& state) const {
+    u64 readUsize(const MIRTypeResolve& state) const {
         return readUint(state, TargetGetPointerBits()).truncateU64();
     }
 
-    std::pair<uint64_t, MIREvalRelocPtr> readPtr(const MIRTypeResolve& state) const {
+    std::pair<u64, MIREvalRelocPtr> readPtr(const MIRTypeResolve& state) const {
         return std::make_pair(readUsize(state), storage.asValue().getReloc(ofs));
     }
 
@@ -1175,7 +1175,7 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const St
     if (!TargetGetSizeOf(Span(), resolve, ty, len)) {
         throw Defer();
     }
-    auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len + 7) / 8)));
+    auto* data = static_cast<u8*>(pool->allocate(len + ((len + 7) / 8)));
     MIREvalAllocationPtr rv;
     // TODO: Include the current location from `state` in the allocation header
     rv.ptr = pool->make<MIREvalAllocation>(data, len, ty);
@@ -1183,14 +1183,14 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocate(stl::ObjPool* pool, const St
 }
 
 MIREvalAllocationPtr MIREvalAllocationPtr::allocateScratch(stl::ObjPool* pool, size_t size) {
-    auto* data = static_cast<uint8_t*>(pool->allocate(size + ((size + 7) / 8)));
+    auto* data = static_cast<u8*>(pool->allocate(size + ((size + 7) / 8)));
     MIREvalAllocationPtr rv;
     rv.ptr = pool->make<MIREvalAllocation>(data, size, HIRTypeRef());
     return rv;
 }
 
 MIREvalAllocationPtr MIREvalAllocationPtr::allocateHeap(stl::ObjPool* pool, size_t size, size_t alignment) {
-    auto* data = static_cast<uint8_t*>(pool->allocate(size + ((size + 7) / 8)));
+    auto* data = static_cast<u8*>(pool->allocate(size + ((size + 7) / 8)));
     MIREvalAllocationPtr rv;
     rv.ptr = pool->make<MIREvalAllocation>(data, size, HIRTypeRef());
     rv->isConstHeap = true;
@@ -1199,7 +1199,7 @@ MIREvalAllocationPtr MIREvalAllocationPtr::allocateHeap(stl::ObjPool* pool, size
 }
 
 MIREvalAllocationPtr MIREvalAllocationPtr::allocateRo(stl::ObjPool* pool, const void* dataIn, size_t len) {
-    auto* data = static_cast<uint8_t*>(pool->allocate(len + ((len + 7) / 8)));
+    auto* data = static_cast<u8*>(pool->allocate(len + ((len + 7) / 8)));
     MIREvalAllocationPtr rv;
     rv.ptr = pool->make<MIREvalAllocation>(data, len, HIRTypeRef());
     rv->writeBytes(0, dataIn, len);
@@ -1401,7 +1401,7 @@ namespace {
 
         U128 mask(U128 v) const {
             if (bits < 64) {
-                uint64_t maskVal = (static_cast<uint64_t>(1ull) << bits) - 1;
+                u64 maskVal = (static_cast<u64>(1ull) << bits) - 1;
                 assert(maskVal != 0);
                 return U128(v.getLo() & maskVal);
             } else if (bits == 64) {
@@ -1804,7 +1804,7 @@ public:
         }
     }
 
-    MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, uint64_t* rawAddress = nullptr) {
+    MIREvalValueRef getLval(const MIRLValue& lv, MIREvalValueRef* meta = nullptr, u64* rawAddress = nullptr) {
         HIRTypeRef tmpTy = nullptr;
         const HIRTypeData* typ = nullptr;
         MIREvalValueRef metadata;
@@ -2148,7 +2148,7 @@ public:
     /// Write a borrow of the given lvalue
     void writeBorrow(MIREvalValueRef dst, HIRBorrowType bt, const MIRLValue& lv) {
         MIREvalValueRef meta;
-        uint64_t rawAddress = 0;
+        u64 rawAddress = 0;
         auto val = this->getLval(lv, &meta, &rawAddress);
         if (rawAddress) {
             dst.writePtr(state, rawAddress, MIREvalRelocPtr());
@@ -2279,13 +2279,13 @@ public:
                             return U128(F16(value).v);
                         case 32: {
                             const float narrowed = static_cast<float>(value);
-                            uint32_t raw;
+                            u32 raw;
                             memcpy(&raw, &narrowed, sizeof(raw));
                             return U128(raw);
                         }
                         case 64: {
                             const double narrowed = static_cast<double>(value);
-                            uint64_t raw;
+                            u64 raw;
                             memcpy(&raw, &narrowed, sizeof(raw));
                             return U128(raw);
                         }
@@ -2366,7 +2366,7 @@ public:
             abort();
     }
 
-    std::pair<uint64_t, MIREvalRelocPtr> readParamPtr(const MIRParam& p) const {
+    std::pair<u64, MIREvalRelocPtr> readParamPtr(const MIRParam& p) const {
             switch (p.tag()) {
                 case MIRParam::TAG_LValue: {
                     auto& e = p.as_LValue();
@@ -2375,7 +2375,7 @@ public:
                 case MIRParam::TAG_Borrow: {
                     auto& e = p.as_Borrow();
                     MIREvalValueRef meta;
-                    uint64_t rawAddress = 0;
+                    u64 rawAddress = 0;
                     auto value = const_cast<MIREvalCallStackEntry*>(this)->getLval(e.val, &meta, &rawAddress);
                     if (rawAddress) {
                         return ::std::make_pair(rawAddress, MIREvalRelocPtr());
@@ -2407,7 +2407,7 @@ public:
 namespace {
     void resolveStaticPointer(
         MIREvalCallStackEntry& localState,
-        ::std::pair<uint64_t, MIREvalRelocPtr>& value
+        ::std::pair<u64, MIREvalRelocPtr>& value
     ) {
         if (const auto* staticRef = value.second.asStaticref()) {
             value.second = MIREvalRelocPtr(localState.getStaticref(staticRef->path().clone()));
@@ -2425,7 +2425,7 @@ namespace {
 
     MIREvalValueRef pointerBytes(
         MIREvalCallStackEntry& localState,
-        ::std::pair<uint64_t, MIREvalRelocPtr> pointer,
+        ::std::pair<u64, MIREvalRelocPtr> pointer,
         size_t length,
         const char* intrinsic
     ) {
@@ -2433,15 +2433,15 @@ namespace {
         resolveStaticPointer(localState, pointer);
         MIR_ASSERT(state, pointer.second, "`" << intrinsic << "` cannot access an absolute pointer");
         MIR_ASSERT(state, pointer.first >= EncodedLiteral::PTR_BASE, "Invalid pointer passed to `" << intrinsic << "`");
-        const uint64_t offset = pointer.first - EncodedLiteral::PTR_BASE;
+        const u64 offset = pointer.first - EncodedLiteral::PTR_BASE;
         MIR_ASSERT(state, offset <= pointer.second.asValue().size(), "Pointer passed to `" << intrinsic << "` is out of bounds");
         MIR_ASSERT(state, length <= pointer.second.asValue().size() - offset, "Memory range passed to `" << intrinsic << "` is out of bounds");
         return MIREvalValueRef(pointer.second, offset).slice(0, length);
     }
 
-    uint8_t pointerGuaranteedCmp(
-        const ::std::pair<uint64_t, MIREvalRelocPtr>& left,
-        const ::std::pair<uint64_t, MIREvalRelocPtr>& right
+    u8 pointerGuaranteedCmp(
+        const ::std::pair<u64, MIREvalRelocPtr>& left,
+        const ::std::pair<u64, MIREvalRelocPtr>& right
     ) {
         if (!left.second && !right.second) {
             return left.first == right.first ? 1 : 0;
@@ -2463,7 +2463,7 @@ namespace {
 
         // A pointer within (or one byte past) a live allocation is definitely
         // non-null.  Wrapping pointers outside that range remain unknown.
-        const uint64_t offset = relocated.first - EncodedLiteral::PTR_BASE;
+        const u64 offset = relocated.first - EncodedLiteral::PTR_BASE;
         return offset <= relocated.second.asValue().size() ? 0 : 2;
     }
 
@@ -3585,7 +3585,7 @@ default:
 
                 if (const auto* te = e.fcn.opt_Intrinsic()) {
                     auto dst = localState.getLval(e.retVal);
-                    auto readTraitObjectVtableUsize = [&](size_t field) -> uint64_t {
+                    auto readTraitObjectVtableUsize = [&](size_t field) -> u64 {
                         MIR_ASSERT(state, field == 1 || field == 2, "Invalid vtable header field " << field);
                         const size_t ptrSize = TargetGetPointerBits() / 8;
                         auto arg = localState.getLval(e.args.at(0).as_LValue());
@@ -3744,14 +3744,14 @@ default:
                         auto ti = TypeInfo::forType(ty);
                         auto val = localState.readParamUint(ti.bits, e.args.at(0));
                         struct H {
-                            static uint16_t bswap16(uint16_t v) {
+                            static u16 bswap16(u16 v) {
                                 return (v >> 8) | (v << 8);
                             }
-                            static uint32_t bswap32(uint32_t v) {
-                                return bswap16(v >> 16) | (static_cast<uint32_t>(bswap16(static_cast<uint16_t>(v))) << 16);
+                            static u32 bswap32(u32 v) {
+                                return bswap16(v >> 16) | (static_cast<u32>(bswap16(static_cast<u16>(v))) << 16);
                             }
-                            static uint64_t bswap64(uint64_t v) {
-                                return bswap32(v >> 32) | (static_cast<uint64_t>(bswap32(static_cast<uint32_t>(v))) << 32);
+                            static u64 bswap64(u64 v) {
+                                return bswap32(v >> 32) | (static_cast<u64>(bswap32(static_cast<u32>(v))) << 32);
                             }
                             static U128 bswap128(U128 v) {
                                 return U128(bswap64((v >> 64).truncateU64()), bswap64(v.truncateU64()));
@@ -3954,7 +3954,7 @@ default:
                     } else if (te->name == "three_way_compare") {
                         HIRTypeRef tmp;
                         auto ti = TypeInfo::forType(state.getParamType(tmp, e.args.at(0)));
-                        int64_t result;
+                        i64 result;
                         if (ti.ty == TypeInfo::Signed) {
                             auto lhs = localState.readParamSint(ti.bits, e.args.at(0));
                             auto rhs = localState.readParamSint(ti.bits, e.args.at(1));
@@ -4078,11 +4078,11 @@ default:
                         }
                         auto leftPtr = localState.readParamPtr(e.args.at(0));
                         auto rightPtr = localState.readParamPtr(e.args.at(1));
-                        auto isAligned = [&](const ::std::pair<uint64_t, MIREvalRelocPtr>& pointer) {
+                        auto isAligned = [&](const ::std::pair<u64, MIREvalRelocPtr>& pointer) {
                             if (pointer.second && pointer.first < EncodedLiteral::PTR_BASE) {
                                 return false;
                             }
-                            const uint64_t address = pointer.second
+                            const u64 address = pointer.second
                                 ? pointer.first - EncodedLiteral::PTR_BASE
                                 : pointer.first;
                             return alignment == 0 || address % alignment == 0;
@@ -4174,24 +4174,24 @@ default:
                                 "Out-of-bounds pointer passed to `" << te->name << "`");
                         }
 
-                        int64_t byteDistance;
+                        i64 byteDistance;
                         if (pointer.first >= base.first) {
-                            const uint64_t magnitude = pointer.first - base.first;
-                            MIR_ASSERT(state, magnitude <= static_cast<uint64_t>(INT64_MAX), "Pointer distance overflows isize in `" << te->name << "`");
-                            byteDistance = static_cast<int64_t>(magnitude);
+                            const u64 magnitude = pointer.first - base.first;
+                            MIR_ASSERT(state, magnitude <= static_cast<u64>(INT64_MAX), "Pointer distance overflows isize in `" << te->name << "`");
+                            byteDistance = static_cast<i64>(magnitude);
                         } else {
-                            const uint64_t magnitude = base.first - pointer.first;
+                            const u64 magnitude = base.first - pointer.first;
                             MIR_ASSERT(state, te->name != "ptr_offset_from_unsigned", "Negative pointer distance in `ptr_offset_from_unsigned`");
-                            MIR_ASSERT(state, magnitude <= static_cast<uint64_t>(INT64_MAX), "Pointer distance underflows isize in `" << te->name << "`");
-                            byteDistance = -static_cast<int64_t>(magnitude);
+                            MIR_ASSERT(state, magnitude <= static_cast<u64>(INT64_MAX), "Pointer distance underflows isize in `" << te->name << "`");
+                            byteDistance = -static_cast<i64>(magnitude);
                         }
                         MIR_ASSERT(state, pointer.second || byteDistance == 0,
                             "`" << te->name << "` called on distinct absolute pointers");
-                        MIR_ASSERT(state, byteDistance % static_cast<int64_t>(elementSize) == 0,
+                        MIR_ASSERT(state, byteDistance % static_cast<i64>(elementSize) == 0,
                             "Pointer distance is not a multiple of the element size in `" << te->name << "`");
-                        const int64_t elementDistance = byteDistance / static_cast<int64_t>(elementSize);
+                        const i64 elementDistance = byteDistance / static_cast<i64>(elementSize);
                         if (te->name == "ptr_offset_from_unsigned") {
-                            dst.writeUint(state, TargetGetPointerBits(), U128(static_cast<uint64_t>(elementDistance)));
+                            dst.writeUint(state, TargetGetPointerBits(), U128(static_cast<u64>(elementDistance)));
                         } else {
                             dst.writeSint(state, TargetGetPointerBits(), S128(elementDistance));
                         }
@@ -4338,7 +4338,7 @@ default:
                             return value.truncateU64();
                         };
                         auto readAlignment = [&](size_t argument) {
-                            uint64_t alignment = readUsize(argument);
+                            u64 alignment = readUsize(argument);
                             // rustc_abi::Align treats zero as one and inherits
                             // LLVM's maximum supported alignment of 2^29.
                             if (alignment == 0) {
@@ -4352,8 +4352,8 @@ default:
 
                         if (strcmp(intrinsic, "const_allocate") == 0) {
                             MIR_ASSERT(state, e.args.size() == 2, "invalid const_allocate signature");
-                            const uint64_t size = readUsize(0);
-                            const uint64_t alignment = readAlignment(1);
+                            const u64 size = readUsize(0);
+                            const u64 alignment = readAlignment(1);
                             MIR_ASSERT(state, size <= SIZE_MAX, "const_allocate size is too large");
                             MIR_ASSERT(state, alignment <= SIZE_MAX, "const_allocate alignment is too large");
                             auto allocation = MIREvalAllocationPtr::allocateHeap(localState.valuePool, size, alignment);
@@ -4361,8 +4361,8 @@ default:
                         } else if (strcmp(intrinsic, "const_deallocate") == 0) {
                             MIR_ASSERT(state, e.args.size() == 3, "invalid const_deallocate signature");
                             auto pointer = localState.readParamPtr(e.args.at(0));
-                            const uint64_t size = readUsize(1);
-                            const uint64_t alignment = readAlignment(2);
+                            const u64 size = readUsize(1);
+                            const u64 alignment = readAlignment(2);
                             if (auto* allocation = pointer.second.asAllocation(); allocation && allocation->isConstHeapAllocation()) {
                                 MIR_ASSERT(state, pointer.first == EncodedLiteral::PTR_BASE, "const_deallocate pointer is not at the start of its allocation");
                                 MIR_ASSERT(state, allocation->isAlive(), "const_deallocate of an already deallocated allocation");

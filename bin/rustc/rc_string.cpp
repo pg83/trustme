@@ -19,15 +19,15 @@ namespace {
     struct InternedString {
         const char* begin;
         const char* end;
-        uint64_t hash1;
-        uint64_t hash2;
+        u64 hash1;
+        u64 hash2;
     };
 
     struct StrInterner {
         stl::ObjPool::Ref poolRef = stl::ObjPool::fromMemory();
         stl::ObjPool* pool = poolRef.mutPtr();
         stl::Vector<InternedString> strs;
-        stl::Vector<uint32_t> slots; // values are ids; 0 = empty slot
+        stl::Vector<u32> slots; // values are ids; 0 = empty slot
         size_t mask;
         size_t used = 0;
 
@@ -42,10 +42,10 @@ namespace {
         }
 
         void grow() {
-            stl::Vector<uint32_t> next;
+            stl::Vector<u32> next;
             next.zero((mask + 1) * 2);
             const size_t nextMask = (mask + 1) * 2 - 1;
-            for (uint32_t id = 1; id < strs.length(); id++) {
+            for (u32 id = 1; id < strs.length(); id++) {
                 size_t i = strs[id].hash1 & nextMask;
                 while (next[i]) {
                     i = (i + 1) & nextMask;
@@ -56,13 +56,13 @@ namespace {
             mask = nextMask;
         }
 
-        uint32_t intern(const char* s, size_t len) {
+        u32 intern(const char* s, size_t len) {
             if (len == 0) {
                 return 0;
             }
             const auto h = XXH3_128bits(s, len);
             size_t i = h.high64 & mask;
-            while (uint32_t id = slots[i]) {
+            while (u32 id = slots[i]) {
                 const auto& e = strs[id];
                 if (e.hash1 == h.high64 && e.hash2 == h.low64) {
                     return id;
@@ -74,7 +74,7 @@ namespace {
             ::std::memcpy(data, s, len);
             data[len] = '\0';
 
-            const auto id = static_cast<uint32_t>(strs.length());
+            const auto id = static_cast<u32>(strs.length());
             strs.pushBack(InternedString{data, data + len, h.high64, h.low64});
             slots.mut(i) = id;
             used += 1;
@@ -90,7 +90,7 @@ namespace {
         return in;
     }
 
-    const InternedString& ent(uint32_t id) {
+    const InternedString& ent(u32 id) {
         return interner().strs[id];
     }
 }
@@ -124,7 +124,7 @@ char RcString::back() const {
     return *(ent(id).end - 1);
 }
 
-uint64_t RcString::contentHash() const {
+u64 RcString::contentHash() const {
     return ent(id).hash1;
 }
 
