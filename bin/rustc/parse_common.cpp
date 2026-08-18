@@ -4502,6 +4502,26 @@ ASTNamed<ASTItem> ParseExternBlockItem(TokenStream& lex, const std::string& abi)
         }
     }
 
+    // An already-parsed `$item:item` fragment stands here too.
+    if (lex.lookahead(0) == TOK_INTERPOLATED_ITEM) {
+        tok = lex.getToken();
+        auto item = tok.takeFragItem();
+        // Attributes are parsed before the fragment is seen, so without this
+        // transfer they are dropped.
+        for (auto& a : metaItems.items) {
+            item.attrs.items.push_back(std::move(a));
+        }
+        switch (item.data.tag()) {
+            case ASTItem::TAG_Function:
+            case ASTItem::TAG_Static:
+            case ASTItem::TAG_Type:
+                break;
+            default:
+                ERROR(lex.pointSpan(), E0000, "Item of type " << item.data.tagStr() << " is not allowed in an extern block");
+        }
+        return item;
+    }
+
     auto vis = ParsePublicity(lex);
     if (GET_TOK(tok, lex) == TOK_IDENT) {
         if (tok.ident() == "safe") {

@@ -1032,6 +1032,12 @@ namespace {
             if (lex.consumeIf(TOK_LIFETIME)) {
                 continue;
             }
+            // A path fragment stands for a trait here, but a type fragment does
+            // not: `impl $ty` is not a type, so an arm asking for one does not
+            // match and the next arm gets its turn.
+            if (lex.next() == TOK_INTERPOLATED_TYPE) {
+                return false;
+            }
             if (!consumePath(lex, true)) {
                 return false;
             }
