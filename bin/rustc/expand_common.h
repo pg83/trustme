@@ -12,21 +12,8 @@ class ASTPath;
 class ExpandProcMacro;
 class ExpandDecorator;
 
-TAGGED_UNION_EX(MacroRef, (), None, ((None, struct {}), (MacroRules, const MacroRules*), (BuiltinProcMacro, /*const*/ ExpandProcMacro*), (ExternalProcMacro, const HIRProcMacro*)), (), (), (MacroRef clone() const {
-                    switch (tag()) {
-                        case TAGDEAD:
-                            abort();
-                        case TAG_None:
-                            return make_None({});
-                        case TAG_MacroRules:
-                            return as_MacroRules();
-                        case TAG_BuiltinProcMacro:
-                            return as_BuiltinProcMacro();
-                        case TAG_ExternalProcMacro:
-                            return as_ExternalProcMacro();
-                    }
-                    abort();
-                }));
+// Definitions generated from expand_common.tu.
+#include "expand_common_tu.h"
 extern MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTAttributeName& path);
 extern MacroRef ExpandLookupMacro(const Span& miSpan, const WireBoard& wb, const ASTCrate& crate, LList<const ASTModule*> modstack, const ASTPath& path);
 

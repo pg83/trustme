@@ -62,13 +62,8 @@ enum class AsmRegisterClass {
     //bpf_wreg,
 };
 
-TAGGED_UNION_EX(AsmRegisterSpec, (), Explicit, ((Class, AsmRegisterClass), (Explicit, std::string)), (), (), (AsmRegisterSpec clone() const {
-                TU_MATCH_HDRA((*this),{)
-                TU_ARMA(Class, e)   return e;
-        TU_ARMA(Explicit, e) return e;
-                }
-                throw "";
-                }));
+// Definitions generated from hir_asm.tu.
+#include "hir_asm_tu.h"
 
 bool operator==(const AsmRegisterSpec& a, const AsmRegisterSpec& b);
 

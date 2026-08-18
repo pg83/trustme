@@ -13,26 +13,8 @@ struct WireBoard;
 
 class MacroExpander;
 class SimplePatEnt;
+class MacroExpansionEnt;
 
-TAGGED_UNION(MacroExpansionConcatEnt, Named, (Named, unsigned int), (Ident, Ident));
-TAGGED_UNION(
-    MacroExpansionEnt,
-    Token,
-    // TODO: have a "raw" stream instead of just tokens
-    (Token, Token),
-    // TODO: Have a flag on `NamedValue` that indicates that it is the only/last usage of this particular value (at this level)
-    // NOTE: This is a 2:30 bitfield - with the high range indicating $crate
-    (NamedValue, unsigned int),
-    (Concat, std::vector<MacroExpansionConcatEnt>),
-    (Loop, struct {
-        /// Contained entries
-        ::std::vector<MacroExpansionEnt> entries;
-        /// Token used to join iterations
-        Token joiner;
-        /// List of loop indexes that control this loop
-        ::std::set<unsigned int> controllingInputLoops;
-    })
-);
 extern ::std::ostream& operator<<(::std::ostream& os, const MacroExpansionEnt& x);
 extern void MacroRulesNormaliseFragments(const WireBoard& wb, ::std::vector<MacroExpansionEnt>& contents);
 static const unsigned int NAMEDVALUE_VALMASK = ((1 << 30) - 1);
@@ -108,34 +90,8 @@ struct SimplePatIfCheck {
 };
 
 /// Simple pattern entry for macro_rules! arm patterns
-TAGGED_UNION(
-    SimplePatEnt,
-    End,
-    // End of the pattern stream (expects EOF, and terminates the match process)
-    (End, struct {}),
-    // Start a loop (pushes a zero count to the loop stack)
-    (LoopStart, struct { unsigned index; }),
-    // Increment loop iteration counter
-    (LoopNext, struct {/*unsigned index;*/}),
-    // Pop from the loop stack
-    (LoopEnd, struct {/*unsigned index;*/}),
-    // Jump to a new point of execution
-    (Jump, struct { size_t jumpTarget; }),
-    // Expect a specific token, erroring/failing the arm if nt met
-    (ExpectTok, Token),
-    // Expect a pattern match
-    (ExpectPat,
-     struct {
-         MacroPatEnt::Type type;
-         unsigned int idx;
-     }),
-    // Compare the head of the input stream and poke the pattern stream
-    (If, struct {
-        bool isEqual;
-        size_t jumpTarget;
-        ::std::vector<SimplePatIfCheck> ents;
-    })
-);
+// Definitions generated from macro_rules_macro_rules.tu.
+#include "macro_rules_macro_rules_tu.h"
 
 extern ::std::ostream& operator<<(::std::ostream& os, const SimplePatEnt& x);
 
