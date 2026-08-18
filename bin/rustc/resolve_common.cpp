@@ -178,6 +178,13 @@ default: {
                                 DEBUG("Enum");
                                 return ResolveModuleRef();
                             }
+                            if (iEntPtr->is_Trait()) {
+                                // A trait is not a module, but an associated item
+                                // of one can be imported; the caller looks the
+                                // name up in the trait itself.
+                                DEBUG("Trait");
+                                return ResolveModuleRef();
+                            }
 
                             //}
                             ASSERT_BUG(sp, iEntPtr->is_Module(), "Expected Module, got " << iEntPtr->tagStr() << " for " << name << " in [" << baseNodes << "]");

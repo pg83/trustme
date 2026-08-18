@@ -1547,7 +1547,10 @@ u32 Lexer::parseEscape(char enclosing, bool* isByteEscape) {
             return '\t';
         case '\r':
         case '\n':
-            while (ch.isspace()) {
+            // A line continuation skips the four characters Rust calls
+            // whitespace here, not everything a locale would: a form feed or a
+            // no-break space after it stays in the string.
+            while (ch == ' ' || ch == '\t' || ch == '\n' || ch == '\r') {
                 ch = this->getc();
             }
             if (ch == '\\') {

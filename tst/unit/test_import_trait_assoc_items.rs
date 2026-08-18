@@ -5,6 +5,8 @@
 use A::{DEFAULT, new};
 use B::*;
 use std::default::Default::default;
+// A trait from another crate stands as a prefix under 2018-style resolution too.
+use core::iter::Iterator::count;
 
 trait A: Sized {
     const DEFAULT: Option<Self> = None;
@@ -37,4 +39,5 @@ fn main() {
     assert!(none.is_none());
     let zero: u32 = default();
     assert_eq!(zero, 0);
+    assert_eq!(count(0..4), 4);
 }

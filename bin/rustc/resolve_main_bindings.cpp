@@ -6039,6 +6039,32 @@ default:
                 bool is_enum = false;
                 auto ptr = getHirModenumByPath(span, crate, e.path, is_enum);
                 if (!ptr) {
+                    // The import may name a trait, whose associated items can be
+                    // imported (`import_trait_associated_functions`).
+                    const auto& extCrate = *crate.externCrates.at(e.path.crateName()).hir;
+                    const auto& ti = extCrate.getTypeitemByPath(span, e.path, /*ignore_crate*/ true, /*ignore_last*/ false);
+                    if (const auto* tr = ti.opt_Trait()) {
+                        i += 1;
+                        if (i != nodes.size() - 1) {
+                            ERROR(span, E0000, "Encountered trait at unexpected location in import");
+                        }
+                        const auto& name = nodes[i].name();
+                        ap.crate = e.path.crateName();
+                        ap.nodes = e.path.componentsVec();
+                        ap.nodes.push_back(name);
+                        const bool isValue = tr->values.count(name) != 0;
+                        const bool isType = tr->types.count(name) != 0;
+                        if (!isValue && !isType) {
+                            ERROR(span, E0000, "Unable to find associated item " << name << " of trait in " << path);
+                        }
+                        if (isValue) {
+                            rv.value.set(ap, ASTPathBindingValue::make_Static({nullptr, nullptr}));
+                        }
+                        if (isType) {
+                            rv.type.set(ap, ASTPathBindingType::make_TypeAlias({nullptr}));
+                        }
+                        return rv;
+                    }
                     BUG(span, "Path component " << nodes[i].name() << " pointed to non-module (" << path << ")");
                 }
                 if (is_enum) {
