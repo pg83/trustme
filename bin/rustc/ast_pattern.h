@@ -46,90 +46,22 @@ class ASTPattern;
 /// belongs to unmatchable.
 extern bool PatternContainsNever(const ASTPattern& pat);
 
+struct ASTPatternTuplePat {
+    ::std::vector<ASTPattern> start;
+    bool hasWildcard;
+    ::std::vector<ASTPattern> end;
+};
+
+// Definitions generated from ast_pattern.tu.
+#include "ast_pattern_tu.h"
+
 class ASTPattern {
 public:
-    TAGGED_UNION(
-        Value,
-        Invalid,
-        (Invalid, struct {}),
-        (Integer,
-         struct {
-             enum eCoreType type;
-             U128 value; // Signed numbers are encoded as 2's complement
-         }),
-        (Float,
-         struct {
-             enum eCoreType type;
-             FloatValue value;
-         }),
-        (String, ::std::string),
-        (ByteString, struct { ::std::string v; }),
-        (Named, ASTPath)
-    );
+    using Value = ASTPatternValue;
 
-    struct TuplePat {
-        ::std::vector<ASTPattern> start;
-        bool hasWildcard;
-        ::std::vector<ASTPattern> end;
-    };
+    using TuplePat = ASTPatternTuplePat;
 
-    TAGGED_UNION(
-        Data,
-        Any,
-        (MaybeBind, struct { Ident name; }),
-        (Macro, struct { unique_ptr<ASTMacroInvocation> inv; }),
-        (Any, struct {}),
-        /// `!`, which matches a value of an uninhabited type. No such value
-        /// exists, so the arm or binding it appears in is never reached.
-        (Never, struct {}),
-        (Box, struct { unique_ptr<ASTPattern> sub; }),
-        (Deref, struct { unique_ptr<ASTPattern> sub; }),
-        (Ref,
-         struct {
-             bool mut;
-             unique_ptr<ASTPattern> sub;
-         }),
-        /// `pat if expr`, which matches only when the expression holds. It is
-        /// lifted into the arm's guard before anything but expansion sees it.
-        (Guard,
-         struct {
-             unique_ptr<ASTPattern> sub;
-             ASTExprNodeP cond;
-         }),
-        (Value,
-         struct {
-             Value start;
-             Value end;
-         }),
-        (ValueLeftInc,
-         struct {
-             Value start;
-             Value end;
-         }),
-        (Tuple, TuplePat),
-        (StructTuple,
-         struct {
-             ASTPath path;
-             TuplePat tupPat;
-         }),
-        (Struct,
-         struct {
-             ASTPath path;
-             ::std::vector<ASTStructPatternEntry> subPatterns;
-             bool isExhaustive;
-         }),
-        (Slice, struct { ::std::vector<ASTPattern> subPats; }),
-        (SplitSlice,
-         struct {
-             ::std::vector<ASTPattern> leading;
-             ASTPatternBinding extraBind;
-             ::std::vector<ASTPattern> trailing;
-             /// A second `..`, which parses but means nothing. Only code that is
-             /// kept has to be rejected, so the diagnostic waits for lowering.
-             bool extraRest = false;
-         }),
-        (Or, std::vector<ASTPattern>)
-    );
+    using Data = ASTPatternData;
 
 private:
     Span span_;
