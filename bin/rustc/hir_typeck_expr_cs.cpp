@@ -4103,9 +4103,16 @@ void Context::handlePattern(const Span& sp, HIRPattern& pat, const HIRTypeData* 
 
         // - Create variables, assigning new ivars for all of them.
         MatchErgonomicsRevisit::createBindings(sp, *this, pat);
-        // - Add a revisit for the outer pattern (saving the current target type as well as the pattern)
+        // - Try the pattern right away: if the matched type is already known, the
+        //   bindings get their real types before the body is visited. A binding
+        //   left as a bare ivar until the revisit runs would instead be decided
+        //   by its first use, which is wrong for a `!` binding (every use of it
+        //   coerces separately).
         DEBUG("Handle match ergonomics - " << pat << " with " << type);
-        this->addRevisitAdv(box$((MatchErgonomicsRevisit{sp, isIrrefutable, type, pat})));
+        auto revisit = box$((MatchErgonomicsRevisit{sp, isIrrefutable, type, pat}));
+        if (!revisit->revisit(*this, false)) {
+            this->addRevisitAdv(mv$(revisit));
+        }
         return;
     }
 
