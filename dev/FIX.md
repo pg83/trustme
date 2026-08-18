@@ -111,8 +111,16 @@ that did not help, so that they are not repeated:
 
 The probe accepts a by-value `into_iter(self)` candidate on `[T]`, which then
 fails `requireSized` (`hir_typeck_expr_cs.cpp:4662`) instead of the probe moving
-on to the autoref step where `IntoIterator for &[T]` waits. Find why that
-candidate is accepted before changing the gate again.
+on to the autoref step where `IntoIterator for &[T]` waits.
+
+What makes the candidate acceptable is the receiver still holding inference
+variables when the probe runs: `Box::new(boxed_slice).into_iter()` probes
+`Box<_>`, and `Box<_>: IntoIterator` is only fuzzily false. The same bound asked
+after the type is known (`fn f<T: IntoIterator>(_: T); f(b)` with
+`b: Box<Box<[i32]>>`) is correctly rejected, so the trait solver is right and
+the probe is early. rustc re-probes once the receiver is known; this compiler
+commits to the first candidate. Do not add a bounds check to the probe -- the
+bound cannot be decided there.
 
 A `for<T>` binder is only dropped where it quantifies a where predicate. In a
 supertrait list (`trait Foo: for<T> Bar<T>`) or a return type
