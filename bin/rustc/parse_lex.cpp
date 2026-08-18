@@ -1003,32 +1003,39 @@ Token Lexer::getTokenInt() {
                     }
                     unsigned int level = 0;
                     while (true) {
-                        if (ch == '/') {
+                        // A `*` or a `/` that does not open or close a comment
+                        // is an ordinary character, and the one after it has to
+                        // be looked at again: a run of `*`s ends a comment on
+                        // whichever of them the `/` follows.
+                        if (ch == '*') {
+                            auto next = this->getc();
+                            if (next == '/') {
+                                if (level == 0) {
+                                    break;
+                                }
+                                level--;
+                                str.push_back('*');
+                                str.push_back('/');
+                                ch = this->getc();
+                            } else {
+                                str.push_back('*');
+                                ch = next;
+                            }
+                        } else if (ch == '/') {
+                            auto next = this->getc();
+                            if (next == '*') {
+                                level++;
+                                str.push_back('/');
+                                str.push_back('*');
+                                ch = this->getc();
+                            } else {
+                                str.push_back('/');
+                                ch = next;
+                            }
+                        } else {
                             str += ch;
                             ch = this->getc();
-                            if (ch == '*') {
-                                level++;
-                            }
-                            str += ch;
-                        } else {
-                            if (ch == '*') {
-                                ch = this->getc();
-                                if (ch == '/') {
-                                    if (level == 0) {
-                                        break;
-                                    }
-                                    level--;
-                                    str.push_back('*');
-                                    str.push_back('/');
-                                } else {
-                                    str.push_back('*');
-                                    str += ch;
-                                }
-                            } else {
-                                str += ch;
-                            }
                         }
-                        ch = this->getc();
                     }
                     if (isDoc || isPdoc) {
                         //# [ doc = "commment data" ]
@@ -1062,7 +1069,10 @@ Token Lexer::getTokenInt() {
                         if (ch == '\'') {
                             // Character constant
                             return this->withLiteralSuffix(Token(U128(firstchar.v), CORETYPE_CHAR));
-                        } else if (firstchar == 'r' && ch == '#') {
+                        }
+                        // A raw lifetime needs raw identifiers, which arrived in
+                        // Rust 2021: before that `'r#lt` is three tokens.
+                        else if (firstchar == 'r' && ch == '#' && this->editionAfter(ASTEdition::Rust2018)) {
                             ::std::string str;
                             ch = this->getc();
                             if (!issym(ch)) {
